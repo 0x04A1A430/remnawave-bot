@@ -3,6 +3,7 @@ from aiogram.fsm.state import State, StatesGroup
 class RegistrationStates(StatesGroup):
     waiting_for_language = State()
     waiting_for_rules_accept = State()
+    waiting_for_privacy_policy_accept = State()
     waiting_for_referral_code = State()
 
 class SubscriptionStates(StatesGroup):
@@ -95,6 +96,7 @@ class AdminStates(StatesGroup):
     editing_user_devices = State()
     editing_user_traffic = State()
     editing_user_referrals = State()
+    editing_user_referral_percent = State()
 
     editing_rules_page = State()
     editing_privacy_policy = State()

@@ -2285,6 +2285,9 @@ async def show_sync_options(
         "• При полной синхронизации подписки пользователей, отсутствующих в панели, будут деактивированы\n"
         "• Рекомендуется делать полную синхронизацию ежедневно\n"
         "• Баланс пользователей НЕ удаляется\n\n"
+        "⬆️ <b>Обратная синхронизация:</b>\n"
+        "• Отправляет активных пользователей из бота в панель\n"
+        "• Используйте при сбоях панели или для восстановления данных\n\n"
         + "\n".join(status_lines)
     )
 
@@ -2293,6 +2296,12 @@ async def show_sync_options(
             types.InlineKeyboardButton(
                 text="🔄 Запустить полную синхронизацию",
                 callback_data="sync_all_users",
+            )
+        ],
+        [
+            types.InlineKeyboardButton(
+                text="⬆️ Синхронизация в панель",
+                callback_data="sync_to_panel",
             )
         ],
         [
@@ -2651,6 +2660,50 @@ async def sync_all_users(
     await callback.message.edit_text(
         text,
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def sync_users_to_panel(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+):
+    await callback.message.edit_text(
+        "⬆️ Выполняется синхронизация данных бота в панель Remnawave...\n\n"
+        "Это может занять несколько минут.",
+        reply_markup=None,
+    )
+
+    remnawave_service = RemnaWaveService()
+    stats = await remnawave_service.sync_users_to_panel(db)
+
+    if stats["errors"] == 0:
+        status_emoji = "✅"
+        status_text = "успешно завершена"
+    else:
+        status_emoji = "⚠️" if (stats["created"] + stats["updated"]) > 0 else "❌"
+        status_text = "завершена с предупреждениями" if status_emoji == "⚠️" else "завершена с ошибками"
+
+    text = (
+        f"{status_emoji} <b>Синхронизация в панель {status_text}</b>\n\n"
+        "📊 <b>Результаты:</b>\n"
+        f"• 🆕 Создано: {stats['created']}\n"
+        f"• 🔄 Обновлено: {stats['updated']}\n"
+        f"• ❌ Ошибок: {stats['errors']}"
+    )
+
+    keyboard = [
+        [types.InlineKeyboardButton(text="🔄 Повторить", callback_data="sync_to_panel")],
+        [types.InlineKeyboardButton(text="🔄 Полная синхронизация", callback_data="sync_all_users")],
+        [types.InlineKeyboardButton(text="⬅️ К синхронизации", callback_data="admin_rw_sync")],
+    ]
+
+    await callback.message.edit_text(
+        text,
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
     )
     await callback.answer()
 
@@ -3126,6 +3179,7 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(cancel_auto_sync_schedule, F.data == "remnawave_auto_sync_cancel")
     dp.callback_query.register(run_auto_sync_now, F.data == "remnawave_auto_sync_run")
     dp.callback_query.register(sync_all_users, F.data == "sync_all_users")
+    dp.callback_query.register(sync_users_to_panel, F.data == "sync_to_panel")
     dp.callback_query.register(show_squad_migration_menu, F.data == "admin_rw_migration")
     dp.callback_query.register(paginate_migration_source, F.data.startswith("admin_migration_source_page_"))
     dp.callback_query.register(handle_migration_source_selection, F.data.startswith("admin_migration_source_"))

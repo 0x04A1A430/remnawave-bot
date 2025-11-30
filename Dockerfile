@@ -14,7 +14,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 
 FROM python:3.13-slim
 
-ARG VERSION="v2.7.0"
+ARG VERSION="v2.8.0"
 ARG BUILD_DATE
 ARG VCS_REF
 

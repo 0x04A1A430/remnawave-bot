@@ -8,6 +8,7 @@ from sqlalchemy.exc import MissingGreenlet
 
 from app.config import settings
 from app.database.crud.promo_group import get_promo_group_by_id
+from app.database.crud.subscription_event import create_subscription_event
 from app.database.crud.user import get_user_by_id
 from app.database.crud.transaction import get_transaction_by_id
 from app.database.models import (
@@ -91,6 +92,51 @@ class AdminNotificationService:
         if telegram_id is None:
             return "IDUnknown"
         return f"ID{telegram_id}"
+
+    async def _record_subscription_event(
+        self,
+        db: AsyncSession,
+        *,
+        event_type: str,
+        user: User,
+        subscription: Subscription | None,
+        transaction: Transaction | None = None,
+        amount_kopeks: int | None = None,
+        message: str | None = None,
+        extra: Dict[str, Any] | None = None,
+        occurred_at: datetime | None = None,
+    ) -> None:
+        """Persist subscription-related event for external dashboards."""
+
+        try:
+            await create_subscription_event(
+                db,
+                user_id=user.id,
+                event_type=event_type,
+                subscription_id=subscription.id if subscription else None,
+                transaction_id=transaction.id if transaction else None,
+                amount_kopeks=amount_kopeks,
+                currency=None,
+                message=message,
+                occurred_at=occurred_at,
+                extra=extra or None,
+            )
+        except Exception:
+            logger.error(
+                "Не удалось сохранить событие подписки (%s) для пользователя %s",
+                event_type,
+                getattr(user, "id", "unknown"),
+                exc_info=True,
+            )
+
+            try:
+                await db.rollback()
+            except Exception:
+                logger.error(
+                    "Не удалось выполнить rollback после ошибки события подписки пользователя %s",
+                    getattr(user, "id", "unknown"),
+                    exc_info=True,
+                )
 
     def _format_promo_group_discounts(self, promo_group: PromoGroup) -> List[str]:
         discount_lines: List[str] = []
@@ -194,10 +240,27 @@ class AdminNotificationService:
         *,
         charged_amount_kopeks: Optional[int] = None,
     ) -> bool:
-        if not self._is_enabled():
-            return False
-        
         try:
+            await self._record_subscription_event(
+                db,
+                event_type="activation",
+                user=user,
+                subscription=subscription,
+                transaction=None,
+                amount_kopeks=charged_amount_kopeks,
+                message="Trial activation",
+                occurred_at=datetime.utcnow(),
+                extra={
+                    "charged_amount_kopeks": charged_amount_kopeks,
+                    "trial_duration_days": settings.TRIAL_DURATION_DAYS,
+                    "traffic_limit_gb": settings.TRIAL_TRAFFIC_LIMIT_GB,
+                    "device_limit": subscription.device_limit,
+                },
+            )
+
+            if not self._is_enabled():
+                return False
+
             user_status = "🆕 Новый" if not user.has_had_paid_subscription else "🔄 Существующий"
             referrer_info = await self._get_referrer_info(db, user.referred_by_id)
             promo_group = await self._get_user_promo_group(db, user)
@@ -255,10 +318,28 @@ class AdminNotificationService:
         was_trial_conversion: bool = False,
         amount_kopeks: Optional[int] = None,
     ) -> bool:
-        if not self._is_enabled():
-            return False
-        
         try:
+            total_amount = amount_kopeks if amount_kopeks is not None else (transaction.amount_kopeks if transaction else 0)
+
+            await self._record_subscription_event(
+                db,
+                event_type="purchase",
+                user=user,
+                subscription=subscription,
+                transaction=transaction,
+                amount_kopeks=total_amount,
+                message="Subscription purchase",
+                occurred_at=(transaction.completed_at or transaction.created_at) if transaction else datetime.utcnow(),
+                extra={
+                    "period_days": period_days,
+                    "was_trial_conversion": was_trial_conversion,
+                    "payment_method": self._get_payment_method_display(transaction.payment_method) if transaction else "Баланс",
+                },
+            )
+
+            if not self._is_enabled():
+                return False
+
             event_type = "🔄 КОНВЕРСИЯ ИЗ ТРИАЛА" if was_trial_conversion else "💎 ПОКУПКА ПОДПИСКИ"
 
             if was_trial_conversion:
@@ -275,7 +356,6 @@ class AdminNotificationService:
             promo_block = self._format_promo_group_block(promo_group)
             user_display = self._get_user_display(user)
 
-            total_amount = amount_kopeks if amount_kopeks is not None else (transaction.amount_kopeks if transaction else 0)
             transaction_id = transaction.id if transaction else "—"
 
             message = f"""💎 <b>{event_type}</b>
@@ -469,11 +549,38 @@ class AdminNotificationService:
         promo_group: PromoGroup | None,
         db: AsyncSession | None = None,
     ) -> bool:
+        logger.info("Начинаем отправку уведомления о пополнении баланса")
+
+        if db:
+            try:
+                await self._record_subscription_event(
+                    db,
+                    event_type="balance_topup",
+                    user=user,
+                    subscription=subscription,
+                    transaction=transaction,
+                    amount_kopeks=transaction.amount_kopeks,
+                    message="Balance top-up",
+                    occurred_at=transaction.completed_at or transaction.created_at,
+                    extra={
+                        "status": topup_status,
+                        "balance_before": old_balance,
+                        "balance_after": user.balance_kopeks,
+                        "referrer_info": referrer_info,
+                        "promo_group_id": getattr(promo_group, "id", None),
+                        "promo_group_name": getattr(promo_group, "name", None),
+                    },
+                )
+            except Exception:
+                logger.error(
+                    "Не удалось сохранить событие пополнения баланса пользователя %s",
+                    getattr(user, "id", "unknown"),
+                    exc_info=True,
+                )
+
         if not self._is_enabled():
             return False
 
-        logger.info("Начинаем отправку уведомления о пополнении баланса")
-        
         try:
             logger.info("Пытаемся создать сообщение уведомления")
             message = self._build_balance_topup_message(
@@ -567,18 +674,36 @@ class AdminNotificationService:
         new_end_date: datetime | None = None,
         balance_after: int | None = None,
     ) -> bool:
-        if not self._is_enabled():
-            return False
-
         try:
+            current_end_date = new_end_date or subscription.end_date
+            current_balance = balance_after if balance_after is not None else user.balance_kopeks
+
+            await self._record_subscription_event(
+                db,
+                event_type="renewal",
+                user=user,
+                subscription=subscription,
+                transaction=transaction,
+                amount_kopeks=transaction.amount_kopeks,
+                message="Subscription renewed",
+                occurred_at=transaction.completed_at or transaction.created_at,
+                extra={
+                    "extended_days": extended_days,
+                    "previous_end_date": old_end_date.isoformat(),
+                    "new_end_date": current_end_date.isoformat(),
+                    "payment_method": transaction.payment_method,
+                    "balance_after": current_balance,
+                },
+            )
+
+            if not self._is_enabled():
+                return False
+
             payment_method = self._get_payment_method_display(transaction.payment_method)
             servers_info = await self._get_servers_info(subscription.connected_squads)
             promo_group = await self._get_user_promo_group(db, user)
             promo_block = self._format_promo_group_block(promo_group)
             user_display = self._get_user_display(user)
-
-            current_end_date = new_end_date or subscription.end_date
-            current_balance = balance_after if balance_after is not None else user.balance_kopeks
 
             message = f"""⏰ <b>ПРОДЛЕНИЕ ПОДПИСКИ</b>
 
@@ -619,7 +744,41 @@ class AdminNotificationService:
         user: User,
         promocode_data: Dict[str, Any],
         effect_description: str,
+        balance_before_kopeks: int | None = None,
+        balance_after_kopeks: int | None = None,
     ) -> bool:
+        try:
+            await self._record_subscription_event(
+                db,
+                event_type="promocode_activation",
+                user=user,
+                subscription=None,
+                transaction=None,
+                amount_kopeks=promocode_data.get("balance_bonus_kopeks"),
+                message="Promocode activation",
+                occurred_at=datetime.utcnow(),
+                extra={
+                    "code": promocode_data.get("code"),
+                    "type": promocode_data.get("type"),
+                    "subscription_days": promocode_data.get("subscription_days"),
+                    "balance_bonus_kopeks": promocode_data.get("balance_bonus_kopeks"),
+                    "description": effect_description,
+                    "valid_until": (
+                        promocode_data.get("valid_until").isoformat()
+                        if isinstance(promocode_data.get("valid_until"), datetime)
+                        else promocode_data.get("valid_until")
+                    ),
+                    "balance_before_kopeks": balance_before_kopeks,
+                    "balance_after_kopeks": balance_after_kopeks,
+                },
+            )
+        except Exception:
+            logger.error(
+                "Не удалось сохранить событие активации промокода пользователя %s",
+                getattr(user, "id", "unknown"),
+                exc_info=True,
+            )
+
         if not self._is_enabled():
             return False
 
@@ -666,6 +825,13 @@ class AdminNotificationService:
             message_lines.extend(
                 [
                     "",
+                    "💼 <b>Баланс:</b>",
+                    (
+                        f"{settings.format_price(balance_before_kopeks)} → {settings.format_price(balance_after_kopeks)}"
+                        if balance_before_kopeks is not None and balance_after_kopeks is not None
+                        else "ℹ️ Баланс не изменился"
+                    ),
+                    "",
                     "📝 <b>Эффект:</b>",
                     effect_description.strip() or "✅ Промокод активирован",
                     "",
@@ -686,6 +852,31 @@ class AdminNotificationService:
         campaign: AdvertisingCampaign,
         user: Optional[User] = None,
     ) -> bool:
+        if user:
+            try:
+                await self._record_subscription_event(
+                    db,
+                    event_type="referral_link_visit",
+                    user=user,
+                    subscription=None,
+                    transaction=None,
+                    amount_kopeks=None,
+                    message="Referral link visit",
+                    occurred_at=datetime.utcnow(),
+                    extra={
+                        "campaign_id": campaign.id,
+                        "campaign_name": campaign.name,
+                        "start_parameter": campaign.start_parameter,
+                        "was_registered": bool(user),
+                    },
+                )
+            except Exception:
+                logger.error(
+                    "Не удалось сохранить событие перехода по кампании для пользователя %s",
+                    getattr(user, "id", "unknown"),
+                    exc_info=True,
+                )
+
         if not self._is_enabled():
             return False
 
@@ -744,6 +935,33 @@ class AdminNotificationService:
         initiator: Optional[User] = None,
         automatic: bool = False,
     ) -> bool:
+        try:
+            await self._record_subscription_event(
+                db,
+                event_type="promo_group_change",
+                user=user,
+                subscription=None,
+                transaction=None,
+                message="Promo group change",
+                occurred_at=datetime.utcnow(),
+                extra={
+                    "old_group_id": getattr(old_group, "id", None),
+                    "old_group_name": getattr(old_group, "name", None),
+                    "new_group_id": new_group.id,
+                    "new_group_name": new_group.name,
+                    "reason": reason,
+                    "initiator_id": getattr(initiator, "id", None),
+                    "initiator_telegram_id": getattr(initiator, "telegram_id", None),
+                    "automatic": automatic,
+                },
+            )
+        except Exception:
+            logger.error(
+                "Не удалось сохранить событие смены промогруппы пользователя %s",
+                getattr(user, "id", "unknown"),
+                exc_info=True,
+            )
+
         if not self._is_enabled():
             return False
 

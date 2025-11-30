@@ -38,9 +38,28 @@ class PaymentCommonMixin:
         texts = get_texts(user.language if user else "ru")
 
         # Определяем статус подписки, чтобы показать подходящую кнопку.
-        has_active_subscription = bool(
-            user and user.subscription and not user.subscription.is_trial and user.subscription.is_active
-        )
+        has_active_subscription = False
+        subscription = None
+        if user:
+            try:
+                subscription = user.subscription
+                has_active_subscription = bool(
+                    subscription
+                    and not getattr(subscription, "is_trial", False)
+                    and getattr(subscription, "is_active", False)
+                )
+            except MissingGreenlet as error:
+                logger.warning(
+                    "Не удалось лениво загрузить подписку пользователя %s при построении клавиатуры после пополнения: %s",
+                    getattr(user, "id", None),
+                    error,
+                )
+            except Exception as error:  # pragma: no cover - защитный код
+                logger.error(
+                    "Ошибка загрузки подписки пользователя %s при построении клавиатуры после пополнения: %s",
+                    getattr(user, "id", None),
+                    error,
+                )
 
         # Создаем основную кнопку: если есть активная подписка - продлить, иначе купить
         first_button = build_miniapp_or_callback_button(
@@ -86,7 +105,7 @@ class PaymentCommonMixin:
                 ])
             else:
                 draft_exists = await has_subscription_checkout_draft(user.id)
-                if should_offer_checkout_resume(user, draft_exists):
+                if should_offer_checkout_resume(user, draft_exists, subscription=subscription):
                     keyboard_rows.append([
                         build_miniapp_or_callback_button(
                             text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,

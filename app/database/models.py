@@ -541,7 +541,11 @@ class PromoGroup(Base):
             "traffic": self.traffic_discount_percent,
             "devices": self.device_discount_percent,
         }
-        percent = mapping.get(category, 0)
+        percent = mapping.get(category) or 0
+
+        if percent == 0 and self.is_default:
+            base_period_discount = self._get_period_discount(period_days)
+            percent = max(percent, base_period_discount)
 
         return max(0, min(100, percent))
 
@@ -591,6 +595,7 @@ class User(Base):
     lifetime_used_traffic_bytes = Column(BigInteger, default=0)
     auto_promo_group_assigned = Column(Boolean, nullable=False, default=False)
     auto_promo_group_threshold_kopeks = Column(BigInteger, nullable=False, default=0)
+    referral_commission_percent = Column(Integer, nullable=True)
     promo_offer_discount_percent = Column(Integer, nullable=False, default=0)
     promo_offer_discount_source = Column(String(100), nullable=True)
     promo_offer_discount_expires_at = Column(DateTime, nullable=True)
@@ -1076,6 +1081,30 @@ class SentNotification(Base):
 
     user = relationship("User", backref="sent_notifications")
     subscription = relationship("Subscription", backref="sent_notifications")
+
+
+class SubscriptionEvent(Base):
+    __tablename__ = "subscription_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    event_type = Column(String(50), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    subscription_id = Column(
+        Integer, ForeignKey("subscriptions.id", ondelete="SET NULL"), nullable=True
+    )
+    transaction_id = Column(
+        Integer, ForeignKey("transactions.id", ondelete="SET NULL"), nullable=True
+    )
+    amount_kopeks = Column(Integer, nullable=True)
+    currency = Column(String(16), nullable=True)
+    message = Column(Text, nullable=True)
+    occurred_at = Column(DateTime, nullable=False, default=func.now())
+    extra = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=func.now())
+
+    user = relationship("User", backref="subscription_events")
+    subscription = relationship("Subscription", backref="subscription_events")
+    transaction = relationship("Transaction", backref="subscription_events")
 
 
 class DiscountOffer(Base):

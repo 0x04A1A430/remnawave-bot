@@ -12,6 +12,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - bot_network
+      - remnawave-network  # Подключаем к сети панели
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-remnawave_user} -d ${POSTGRES_DB:-remnawave_bot}"]
       interval: 30s
@@ -28,6 +29,7 @@ services:
       - redis_data:/data
     networks:
       - bot_network
+      - remnawave-network  # Подключаем к сети панели
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 30s
@@ -53,28 +55,21 @@ services:
       POSTGRES_DB: "${POSTGRES_DB:-remnawave_bot}"
       POSTGRES_USER: "${POSTGRES_USER:-remnawave_user}"
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-secure_password_123}"
-      
       REDIS_URL: "redis://redis:6379/0"
-      
       TZ: "Europe/Moscow"
       LOCALES_PATH: "${LOCALES_PATH:-/app/locales}"
     volumes:
-      # Логи
       - ./logs:/app/logs:rw
-      # Данные приложения (для SQLite в случае переключения)
       - ./data:/app/data:rw
       - ./locales:/app/locales:rw
-      # Конфигурация приложения
-      # - ./app-config.json:/app/app-config.json:ro
-      # Timezone
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
-      # Логотип для сообщений
       - ./vpn_logo.png:/app/vpn_logo.png:ro
     ports:
       - "${WEB_API_PORT:-8080}:8080"
     networks:
       - bot_network
+      - remnawave-network  # Подключаем к сети панели
     healthcheck:
       test: ["CMD-SHELL", "python -c 'import requests; requests.get(\"http://localhost:8080/health\", timeout=5)' || exit 1"]
       interval: 60s
@@ -95,3 +90,7 @@ networks:
       config:
         - subnet: 172.20.0.0/16
           gateway: 172.20.0.1
+  
+  remnawave-network:
+    name: remnawave-network
+    external: true  # Используем существующую сеть панели

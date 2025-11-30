@@ -124,10 +124,13 @@ def _safe_int(value: Optional[object], default: int = 0) -> int:
 
 
 async def _prepare_auto_extend_context(
+    db: AsyncSession,
     user: User,
     cart_data: dict,
 ) -> Optional[AutoExtendContext]:
-    subscription = getattr(user, "subscription", None)
+    from app.database.crud.subscription import get_subscription_by_user_id
+
+    subscription = await get_subscription_by_user_id(db, user.id)
     if subscription is None:
         logger.info(
             "🔁 Автопокупка: у пользователя %s нет активной подписки для продления",
@@ -233,7 +236,7 @@ async def _auto_extend_subscription(
     bot: Optional[Bot] = None,
 ) -> bool:
     try:
-        prepared = await _prepare_auto_extend_context(user, cart_data)
+        prepared = await _prepare_auto_extend_context(db, user, cart_data)
     except Exception as error:  # pragma: no cover - defensive logging
         logger.error(
             "❌ Автопокупка: ошибка подготовки данных продления для пользователя %s: %s",

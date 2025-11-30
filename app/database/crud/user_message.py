@@ -5,7 +5,8 @@ from typing import Optional, List
 from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.models import UserMessage
+from app.database.models import User, UserMessage
+from app.utils.validators import sanitize_html, validate_html_tags
 
 logger = logging.getLogger(__name__)
 
@@ -13,15 +14,25 @@ logger = logging.getLogger(__name__)
 async def create_user_message(
     db: AsyncSession,
     message_text: str,
-    created_by: int,
+    created_by: Optional[int] = None,
     is_active: bool = True,
     sort_order: int = 0
 ) -> UserMessage:
+    is_valid, error_message = validate_html_tags(message_text)
+    if not is_valid:
+        raise ValueError(error_message)
+
+    resolved_creator = created_by
+
+    if created_by is not None:
+        result = await db.execute(select(User.id).where(User.id == created_by))
+        resolved_creator = result.scalar_one_or_none()
+
     message = UserMessage(
         message_text=message_text,
         is_active=is_active,
         sort_order=sort_order,
-        created_by=created_by
+        created_by=resolved_creator,
     )
     
     db.add(message)
@@ -55,25 +66,33 @@ async def get_random_active_message(db: AsyncSession) -> Optional[str]:
         return None
     
     random_message = random.choice(active_messages)
-    return random_message.message_text
+    return sanitize_html(random_message.message_text)
 
 
 async def get_all_user_messages(
     db: AsyncSession,
     offset: int = 0,
-    limit: int = 50
+    limit: int = 50,
+    include_inactive: bool = True,
 ) -> List[UserMessage]:
+    query = select(UserMessage).order_by(UserMessage.created_at.desc())
+    if not include_inactive:
+        query = query.where(UserMessage.is_active == True)
+
     result = await db.execute(
-        select(UserMessage)
-        .order_by(UserMessage.created_at.desc())
+        query
         .offset(offset)
         .limit(limit)
     )
     return result.scalars().all()
 
 
-async def get_user_messages_count(db: AsyncSession) -> int:
-    result = await db.execute(select(func.count(UserMessage.id)))
+async def get_user_messages_count(db: AsyncSession, include_inactive: bool = True) -> int:
+    query = select(func.count(UserMessage.id))
+    if not include_inactive:
+        query = query.where(UserMessage.is_active == True)
+
+    result = await db.execute(query)
     return result.scalar()
 
 
@@ -88,8 +107,11 @@ async def update_user_message(
     
     if not message:
         return None
-    
+
     if message_text is not None:
+        is_valid, error_message = validate_html_tags(message_text)
+        if not is_valid:
+            raise ValueError(error_message)
         message.message_text = message_text
     
     if is_active is not None:

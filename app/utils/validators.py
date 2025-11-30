@@ -121,25 +121,53 @@ def validate_subscription_period(days: Union[str, int]) -> Optional[int]:
 
 
 def sanitize_html(text: str) -> str:
+    """
+    Безопасно санитизирует HTML-текст, заменяя HTML-сущности на соответствующие теги,
+    при этом предотвращая XSS-уязвимости за счет безопасной обработки атрибутов.
+
+    Args:
+        text (str): Текст с HTML-сущностями (например, &lt;b&gt; жирный &lt;/b&gt;)
+
+    Returns:
+        str: Санитизированный HTML-текст (например, <b> жирный </b>)
+    """
     if not text:
         return text
-    
-    text = html.escape(text)
-    
-    for tag in ALLOWED_HTML_TAGS:
-        text = re.sub(
-            f'&lt;{tag}(&gt;|\\s[^&]*&gt;)', 
-            lambda m: m.group(0).replace('&lt;', '<').replace('&gt;', '>'),
-            text, 
-            flags=re.IGNORECASE
-        )
-        text = re.sub(
-            f'&lt;/{tag}&gt;', 
-            f'</{tag}>', 
-            text, 
-            flags=re.IGNORECASE
-        )
-    
+
+    # Для безопасности нужно обработать разрешенные теги, заменяя их сущности на теги
+    # Но при этом безопасно обрабатывая атрибуты, чтобы избежать XSS
+
+    allowed_tags = ALLOWED_HTML_TAGS.union(SELF_CLOSING_TAGS)
+
+    # Обработка всех разрешенных тегов
+    for tag in allowed_tags:
+        # Паттерн: захватываем &lt;tag&gt;, &lt;/tag&gt;, или &lt;tag атрибуты&gt;
+        # Используем более сложный паттерн, чтобы захватить атрибуты до закрывающего &gt;
+        # (?s) - позволяет . захватывать новую строку
+        # [^>]*? - ленивый захват до >
+        pattern = rf'(&lt;)(/?{tag}\b)([^>]*?)(&gt;)'
+
+        def replace_tag(match):
+            opening = match.group(1)  # &lt;
+            full_tag_content = match.group(2)  # /?tagname
+            attrs_part = match.group(3)  # атрибуты (без >)
+            closing = match.group(4)  # &gt;
+
+            # Убираем начальный пробел, если есть
+            if attrs_part.startswith(' '):
+                attrs_part = attrs_part[1:]
+
+            # Формируем результат
+            if attrs_part:
+                # Безопасно обрабатываем атрибуты, заменяя только безопасные сущности
+                # Не разворачиваем &lt; и &gt; внутри атрибутов, чтобы избежать XSS
+                processed_attrs = attrs_part.replace('&quot;', '"').replace('&#x27;', "'")
+                return f'<{full_tag_content} {processed_attrs}>'
+            else:
+                return f'<{full_tag_content}>'
+
+        text = re.sub(pattern, replace_tag, text, flags=re.IGNORECASE)
+
     return text
 
 

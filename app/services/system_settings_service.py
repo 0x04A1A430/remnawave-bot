@@ -254,6 +254,7 @@ class BotConfigurationService:
         "SIMPLE_SUBSCRIPTION_TRAFFIC_GB": "SIMPLE_SUBSCRIPTION",
         "SIMPLE_SUBSCRIPTION_SQUAD_UUID": "SIMPLE_SUBSCRIPTION",
         "DISABLE_TOPUP_BUTTONS": "PAYMENT",
+        "SUPPORT_TOPUP_ENABLED": "PAYMENT",
         "ENABLE_NOTIFICATIONS": "NOTIFICATIONS",
         "NOTIFICATION_RETRY_ATTEMPTS": "NOTIFICATIONS",
         "NOTIFICATION_CACHE_HOURS": "NOTIFICATIONS",
@@ -503,6 +504,22 @@ class BotConfigurationService:
             "example": "10",
             "warning": "Слишком малый интервал может привести к частым обращениям к платёжным API.",
             "dependencies": "PAYMENT_VERIFICATION_AUTO_CHECK_ENABLED",
+        },
+        "BASE_PROMO_GROUP_PERIOD_DISCOUNTS_ENABLED": {
+            "description": (
+                "Включает применение базовых скидок на периоды подписок в групповых промо."
+            ),
+            "format": "Булево значение.",
+            "example": "true",
+            "warning": "Скидки применяются только если указаны корректные пары периодов и процентов.",
+        },
+        "BASE_PROMO_GROUP_PERIOD_DISCOUNTS": {
+            "description": (
+                "Список скидок для групп: каждая пара задаёт дни периода и процент скидки."
+            ),
+            "format": "Через запятую пары вида &lt;дней&gt;:&lt;скидка&gt;.",
+            "example": "30:10,60:20,90:30,180:50,360:65",
+            "warning": "Некорректные записи будут проигнорированы. Процент ограничен 0-100.",
         },
         "AUTO_PURCHASE_AFTER_TOPUP_ENABLED": {
             "description": (

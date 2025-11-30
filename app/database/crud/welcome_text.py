@@ -1,10 +1,10 @@
 import logging
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import select, update
+from sqlalchemy import select, update, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.models import WelcomeText
+from app.database.models import User, WelcomeText
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +44,37 @@ async def get_current_welcome_text_settings(db: AsyncSession) -> dict:
         'is_enabled': True,
         'id': None
     }
+
+
+async def get_welcome_text_by_id(db: AsyncSession, welcome_text_id: int) -> Optional[WelcomeText]:
+    result = await db.execute(
+        select(WelcomeText).where(WelcomeText.id == welcome_text_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def list_welcome_texts(
+    db: AsyncSession,
+    *,
+    include_inactive: bool = True,
+    limit: int = 50,
+    offset: int = 0,
+):
+    query = select(WelcomeText).order_by(WelcomeText.updated_at.desc())
+    if not include_inactive:
+        query = query.where(WelcomeText.is_active == True)
+
+    result = await db.execute(query.limit(limit).offset(offset))
+    return result.scalars().all()
+
+
+async def count_welcome_texts(db: AsyncSession, *, include_inactive: bool = True) -> int:
+    query = select(func.count(WelcomeText.id))
+    if not include_inactive:
+        query = query.where(WelcomeText.is_active == True)
+
+    result = await db.execute(query)
+    return result.scalar()
 
 async def toggle_welcome_text_status(db: AsyncSession, admin_id: int) -> bool:
     try:
@@ -112,6 +143,87 @@ async def set_welcome_text(db: AsyncSession, text_content: str, admin_id: int) -
         logger.error(f"Ошибка при установке приветственного текста: {e}")
         await db.rollback()
         return False
+
+
+async def create_welcome_text(
+    db: AsyncSession,
+    *,
+    text_content: str,
+    created_by: Optional[int] = None,
+    is_enabled: bool = True,
+    is_active: bool = True,
+) -> WelcomeText:
+    resolved_creator = created_by
+
+    if created_by is not None:
+        result = await db.execute(select(User.id).where(User.id == created_by))
+        resolved_creator = result.scalar_one_or_none()
+
+    if is_active:
+        await db.execute(update(WelcomeText).values(is_active=False))
+
+    welcome_text = WelcomeText(
+        text_content=text_content,
+        is_active=is_active,
+        is_enabled=is_enabled,
+        created_by=resolved_creator,
+    )
+
+    db.add(welcome_text)
+    await db.commit()
+    await db.refresh(welcome_text)
+
+    logger.info(
+        "✅ Создан приветственный текст ID %s (активный=%s, включен=%s)",
+        welcome_text.id,
+        welcome_text.is_active,
+        welcome_text.is_enabled,
+    )
+    return welcome_text
+
+
+async def update_welcome_text(
+    db: AsyncSession,
+    welcome_text: WelcomeText,
+    *,
+    text_content: Optional[str] = None,
+    is_enabled: Optional[bool] = None,
+    is_active: Optional[bool] = None,
+) -> WelcomeText:
+    if is_active:
+        await db.execute(
+            update(WelcomeText)
+            .where(WelcomeText.id != welcome_text.id)
+            .values(is_active=False)
+        )
+
+    if text_content is not None:
+        welcome_text.text_content = text_content
+
+    if is_enabled is not None:
+        welcome_text.is_enabled = is_enabled
+
+    if is_active is not None:
+        welcome_text.is_active = is_active
+
+    welcome_text.updated_at = datetime.utcnow()
+
+    await db.commit()
+    await db.refresh(welcome_text)
+
+    logger.info(
+        "📝 Обновлен приветственный текст ID %s (активный=%s, включен=%s)",
+        welcome_text.id,
+        welcome_text.is_active,
+        welcome_text.is_enabled,
+    )
+    return welcome_text
+
+
+async def delete_welcome_text(db: AsyncSession, welcome_text: WelcomeText) -> None:
+    await db.delete(welcome_text)
+    await db.commit()
+    logger.info("🗑️ Удален приветственный текст ID %s", welcome_text.id)
 
 async def get_current_welcome_text_or_default() -> str:
     return (

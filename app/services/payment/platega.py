@@ -128,6 +128,7 @@ class PlategaPaymentMixin:
             "status": status,
             "expires_at": expires_at,
             "correlation_id": correlation_id,
+            "payload": payload_token,
         }
 
     async def process_platega_webhook(
@@ -335,6 +336,16 @@ class PlategaPaymentMixin:
             logger.error("Пользователь %s не найден для Platega", payment.user_id)
             return payment
 
+        # Убеждаемся, что промогруппы загружены в асинхронном контексте,
+        # чтобы избежать попыток ленивой загрузки без greenlet
+        await db.refresh(user, attribute_names=["promo_group", "user_promo_groups"])
+        for user_promo_group in getattr(user, "user_promo_groups", []):
+            await db.refresh(user_promo_group, attribute_names=["promo_group"])
+
+        promo_group = user.get_primary_promo_group()
+        subscription = getattr(user, "subscription", None)
+        referrer_info = format_referrer_info(user)
+
         transaction_external_id = (
             str(payload.get("id"))
             if isinstance(payload, dict) and payload.get("id")
@@ -392,10 +403,6 @@ class PlategaPaymentMixin:
         user.updated_at = datetime.utcnow()
         await db.commit()
         await db.refresh(user)
-
-        promo_group = user.get_primary_promo_group()
-        subscription = getattr(user, "subscription", None)
-        referrer_info = format_referrer_info(user)
         topup_status = "🆕 Первое пополнение" if was_first_topup else "🔄 Пополнение"
 
         try:

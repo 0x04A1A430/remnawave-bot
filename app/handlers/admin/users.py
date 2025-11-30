@@ -32,6 +32,7 @@ from app.services.admin_notification_service import AdminNotificationService
 from app.database.crud.promo_group import get_promo_groups_with_counts
 from app.utils.decorators import admin_required, error_handler
 from app.utils.formatters import format_datetime, format_time_ago
+from app.utils.user_utils import get_effective_referral_commission_percent
 from app.services.remnawave_service import RemnaWaveService
 from app.external.remnawave_api import TrafficLimitStrategy
 from app.database.crud.server_squad import (
@@ -1536,6 +1537,9 @@ async def _build_user_referrals_view(
 
     referrals = await get_referrals(db, user_id)
 
+    effective_percent = get_effective_referral_commission_percent(user)
+    default_percent = settings.REFERRAL_COMMISSION_PERCENT
+
     header = texts.t(
         "ADMIN_USER_REFERRALS_TITLE",
         "🤝 <b>Рефералы пользователя</b>",
@@ -1550,6 +1554,24 @@ async def _build_user_referrals_view(
     )
 
     lines: List[str] = [header, summary]
+
+    if user.referral_commission_percent is None:
+        lines.append(
+            texts.t(
+                "ADMIN_USER_REFERRAL_COMMISSION_DEFAULT",
+                "• Процент комиссии: {percent}% (стандартное значение)",
+            ).format(percent=effective_percent)
+        )
+    else:
+        lines.append(
+            texts.t(
+                "ADMIN_USER_REFERRAL_COMMISSION_CUSTOM",
+                "• Индивидуальный процент: {percent}% (стандарт: {default_percent}%)",
+            ).format(
+                percent=user.referral_commission_percent,
+                default_percent=default_percent,
+            )
+        )
 
     if referrals:
         lines.append(
@@ -1607,6 +1629,15 @@ async def _build_user_referrals_view(
             [
                 InlineKeyboardButton(
                     text=texts.t(
+                        "ADMIN_USER_REFERRAL_COMMISSION_EDIT_BUTTON",
+                        "📈 Изменить процент",
+                    ),
+                    callback_data=f"admin_user_referral_percent_{user_id}",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=texts.t(
                         "ADMIN_USER_REFERRALS_EDIT_BUTTON",
                         "✏️ Редактировать",
                     ),
@@ -1636,12 +1667,12 @@ async def show_user_referrals(
     user_id = int(callback.data.split('_')[-1])
 
     current_state = await state.get_state()
-    if current_state == AdminStates.editing_user_referrals:
+    if current_state in {AdminStates.editing_user_referrals, AdminStates.editing_user_referral_percent}:
         data = await state.get_data()
         preserved_data = {
             key: value
             for key, value in data.items()
-            if key not in {"editing_referrals_user_id", "referrals_message_id"}
+            if key not in {"editing_referrals_user_id", "referrals_message_id", "editing_referral_percent_user_id"}
         }
         await state.clear()
         if preserved_data:
@@ -1659,6 +1690,256 @@ async def show_user_referrals(
         reply_markup=keyboard,
     )
     await callback.answer()
+
+
+@admin_required
+@error_handler
+async def start_edit_referral_percent(
+    callback: types.CallbackQuery,
+    db_user: User,
+    state: FSMContext,
+    db: AsyncSession,
+):
+    user_id = int(callback.data.split('_')[-1])
+
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        await callback.answer("❌ Пользователь не найден", show_alert=True)
+        return
+
+    texts = get_texts(db_user.language)
+
+    effective_percent = get_effective_referral_commission_percent(user)
+    default_percent = settings.REFERRAL_COMMISSION_PERCENT
+
+    prompt = texts.t(
+        "ADMIN_USER_REFERRAL_COMMISSION_PROMPT",
+        (
+            "📈 <b>Индивидуальный процент реферальной комиссии</b>\n\n"
+            "Текущее значение: {current}%\n"
+            "Стандартное значение: {default}%\n\n"
+            "Отправьте новое значение от 0 до 100 или слово 'стандарт' для сброса."
+        ),
+    ).format(current=effective_percent, default=default_percent)
+
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="5%",
+                    callback_data=f"admin_user_referral_percent_set_{user_id}_5",
+                ),
+                InlineKeyboardButton(
+                    text="10%",
+                    callback_data=f"admin_user_referral_percent_set_{user_id}_10",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="15%",
+                    callback_data=f"admin_user_referral_percent_set_{user_id}_15",
+                ),
+                InlineKeyboardButton(
+                    text="20%",
+                    callback_data=f"admin_user_referral_percent_set_{user_id}_20",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text=texts.t(
+                        "ADMIN_USER_REFERRAL_COMMISSION_RESET_BUTTON",
+                        "♻️ Сбросить на стандартный",
+                    ),
+                    callback_data=f"admin_user_referral_percent_reset_{user_id}",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=texts.BACK,
+                    callback_data=f"admin_user_referrals_{user_id}",
+                )
+            ],
+        ]
+    )
+
+    await state.update_data(editing_referral_percent_user_id=user_id)
+    await state.set_state(AdminStates.editing_user_referral_percent)
+
+    await callback.message.edit_text(
+        prompt,
+        reply_markup=keyboard,
+    )
+    await callback.answer()
+
+
+async def _update_referral_commission_percent(
+    db: AsyncSession,
+    user_id: int,
+    percent: Optional[int],
+    admin_id: int,
+) -> Tuple[bool, Optional[int]]:
+    try:
+        user = await get_user_by_id(db, user_id)
+        if not user:
+            return False, None
+
+        user.referral_commission_percent = percent
+        user.updated_at = datetime.utcnow()
+
+        await db.commit()
+
+        effective = get_effective_referral_commission_percent(user)
+
+        logger.info(
+            "Админ %s обновил реферальный процент пользователя %s: %s",
+            admin_id,
+            user_id,
+            percent,
+        )
+
+        return True, effective
+    except Exception as e:
+        logger.error(
+            "Ошибка обновления реферального процента пользователя %s: %s",
+            user_id,
+            e,
+        )
+        try:
+            await db.rollback()
+        except Exception as rollback_error:
+            logger.error("Ошибка отката транзакции: %s", rollback_error)
+        return False, None
+
+
+async def _render_referrals_after_update(
+    callback: types.CallbackQuery,
+    db: AsyncSession,
+    db_user: User,
+    user_id: int,
+    success_message: str,
+):
+    view = await _build_user_referrals_view(db, db_user.language, user_id)
+    if view:
+        text, keyboard = view
+        text = f"{success_message}\n\n" + text
+        await callback.message.edit_text(text, reply_markup=keyboard)
+    else:
+        await callback.message.edit_text(success_message)
+
+
+@admin_required
+@error_handler
+async def set_referral_percent_button(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    parts = callback.data.split('_')
+
+    if "reset" in parts:
+        user_id = int(parts[-1])
+        percent_value: Optional[int] = None
+    else:
+        user_id = int(parts[-2])
+        percent_value = int(parts[-1])
+
+    texts = get_texts(db_user.language)
+
+    success, effective_percent = await _update_referral_commission_percent(
+        db,
+        user_id,
+        percent_value,
+        db_user.id,
+    )
+
+    if not success:
+        await callback.answer("❌ Не удалось обновить процент", show_alert=True)
+        return
+
+    await state.clear()
+
+    success_message = texts.t(
+        "ADMIN_USER_REFERRAL_COMMISSION_UPDATED",
+        "✅ Процент обновлён: {percent}%",
+    ).format(percent=effective_percent)
+
+    await _render_referrals_after_update(callback, db, db_user, user_id, success_message)
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def process_referral_percent_input(
+    message: types.Message,
+    db_user: User,
+    state: FSMContext,
+    db: AsyncSession,
+):
+    data = await state.get_data()
+    user_id = data.get("editing_referral_percent_user_id")
+
+    if not user_id:
+        await message.answer("❌ Не удалось определить пользователя")
+        return
+
+    raw_text = message.text.strip()
+    normalized = raw_text.lower()
+
+    percent_value: Optional[int]
+
+    if normalized in {"стандарт", "standard", "default"}:
+        percent_value = None
+    else:
+        normalized_number = raw_text.replace(',', '.').strip()
+        try:
+            percent_float = float(normalized_number)
+        except (TypeError, ValueError):
+            await message.answer(
+                get_texts(db_user.language).t(
+                    "ADMIN_USER_REFERRAL_COMMISSION_INVALID",
+                    "❌ Введите число от 0 до 100 или слово 'стандарт'",
+                )
+            )
+            return
+
+        percent_value = int(round(percent_float))
+
+        if percent_value < 0 or percent_value > 100:
+            await message.answer(
+                get_texts(db_user.language).t(
+                    "ADMIN_USER_REFERRAL_COMMISSION_INVALID",
+                    "❌ Введите число от 0 до 100 или слово 'стандарт'",
+                )
+            )
+            return
+
+    texts = get_texts(db_user.language)
+
+    success, effective_percent = await _update_referral_commission_percent(
+        db,
+        int(user_id),
+        percent_value,
+        db_user.id,
+    )
+
+    if not success:
+        await message.answer("❌ Не удалось обновить процент")
+        return
+
+    await state.clear()
+
+    success_message = texts.t(
+        "ADMIN_USER_REFERRAL_COMMISSION_UPDATED",
+        "✅ Процент обновлён: {percent}%",
+    ).format(percent=effective_percent)
+
+    view = await _build_user_referrals_view(db, db_user.language, int(user_id))
+    if view:
+        text, keyboard = view
+        await message.answer(f"{success_message}\n\n{text}", reply_markup=keyboard)
+    else:
+        await message.answer(success_message)
 
 
 @admin_required
@@ -4619,6 +4900,24 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         show_user_referrals,
         F.data.startswith("admin_user_referrals_") & ~F.data.contains("_edit")
+    )
+
+    dp.callback_query.register(
+        start_edit_referral_percent,
+        F.data.startswith("admin_user_referral_percent_")
+        & ~F.data.contains("_set_")
+        & ~F.data.contains("_reset")
+    )
+
+    dp.callback_query.register(
+        set_referral_percent_button,
+        F.data.startswith("admin_user_referral_percent_set_")
+        | F.data.startswith("admin_user_referral_percent_reset_")
+    )
+
+    dp.message.register(
+        process_referral_percent_input,
+        AdminStates.editing_user_referral_percent,
     )
 
     dp.callback_query.register(

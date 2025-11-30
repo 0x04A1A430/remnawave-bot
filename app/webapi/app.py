@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
+from app.webapi.docs import add_redoc_endpoint
 
 from .middleware import RequestLoggingMiddleware
 from .routes import (
@@ -13,14 +14,19 @@ from .routes import (
     config,
     health,
     main_menu_buttons,
+    media,
     miniapp,
+    partners,
     polls,
     promocodes,
     promo_groups,
     promo_offers,
+    user_messages,
+    welcome_texts,
     pages,
     remnawave,
     servers,
+    subscription_events,
     stats,
     subscriptions,
     tickets,
@@ -46,7 +52,11 @@ OPENAPI_TAGS = [
     },
     {
         "name": "main-menu",
-        "description": "Управление кнопками главного меню Telegram-бота.",
+        "description": "Управление кнопками и сообщениями главного меню Telegram-бота.",
+    },
+    {
+        "name": "welcome-texts",
+        "description": "Создание, редактирование и управление приветственными текстами.",
     },
     {
         "name": "users",
@@ -97,8 +107,16 @@ OPENAPI_TAGS = [
         ),
     },
     {
+        "name": "media",
+        "description": "Загрузка файлов в Telegram и получение ссылок на медиа.",
+    },
+    {
         "name": "miniapp",
         "description": "Endpoint для Telegram Mini App с информацией о подписке пользователя.",
+    },
+    {
+        "name": "partners",
+        "description": "Просмотр участников реферальной программы, их доходов и рефералов.",
     },
     {
         "name": "polls",
@@ -107,6 +125,14 @@ OPENAPI_TAGS = [
     {
         "name": "pages",
         "description": "Управление контентом публичных страниц: оферта, политика, FAQ и правила.",
+    },
+    {
+        "name": "notifications",
+        "description": (
+            "Получение и просмотр уведомлений о покупках, активациях и продлениях подписок, "
+            "пополнениях баланса, активациях промокодов, переходах по реферальным ссылкам и "
+            "сменах промогрупп пользователей для административной панели."
+        ),
     },
 ]
 
@@ -119,9 +145,16 @@ def create_web_api_app() -> FastAPI:
         title=settings.WEB_API_TITLE,
         version=settings.WEB_API_VERSION,
         docs_url=docs_config.get("docs_url"),
-        redoc_url=docs_config.get("redoc_url"),
+        redoc_url=None,
         openapi_url=docs_config.get("openapi_url"),
         swagger_ui_parameters={"persistAuthorization": True},
+    )
+
+    add_redoc_endpoint(
+        app,
+        redoc_url=docs_config.get("redoc_url"),
+        openapi_url=docs_config.get("openapi_url"),
+        title=settings.WEB_API_TITLE,
     )
 
     allowed_origins = settings.get_web_api_allowed_origins()
@@ -151,6 +184,16 @@ def create_web_api_app() -> FastAPI:
         prefix="/main-menu/buttons",
         tags=["main-menu"],
     )
+    app.include_router(
+        user_messages.router,
+        prefix="/main-menu/messages",
+        tags=["main-menu"],
+    )
+    app.include_router(
+        welcome_texts.router,
+        prefix="/welcome-texts",
+        tags=["welcome-texts"],
+    )
     app.include_router(pages.router, prefix="/pages", tags=["pages"])
     app.include_router(promocodes.router, prefix="/promo-codes", tags=["promo-codes"])
     app.include_router(broadcasts.router, prefix="/broadcasts", tags=["broadcasts"])
@@ -158,8 +201,15 @@ def create_web_api_app() -> FastAPI:
     app.include_router(campaigns.router, prefix="/campaigns", tags=["campaigns"])
     app.include_router(tokens.router, prefix="/tokens", tags=["auth"])
     app.include_router(remnawave.router, prefix="/remnawave", tags=["remnawave"])
+    app.include_router(media.router, tags=["media"])
     app.include_router(miniapp.router, prefix="/miniapp", tags=["miniapp"])
+    app.include_router(partners.router, prefix="/partners", tags=["partners"])
     app.include_router(polls.router, prefix="/polls", tags=["polls"])
     app.include_router(logs.router, prefix="/logs", tags=["logs"])
+    app.include_router(
+        subscription_events.router,
+        prefix="/notifications/subscriptions",
+        tags=["notifications"],
+    )
 
     return app

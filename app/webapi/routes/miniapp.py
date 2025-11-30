@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
 import logging
 import re
 import math
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP, ROUND_FLOOR, ROUND_UP
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from uuid import uuid4
 from typing import Any, Callable, Collection, Dict, List, Optional, Tuple, Union
 
@@ -64,6 +66,7 @@ from app.services.remnawave_service import (
 from app.services.payment_service import PaymentService, get_wata_payment_by_link_id
 from app.services.promo_offer_service import promo_offer_service
 from app.services.promocode_service import PromoCodeService
+from app.services.maintenance_service import maintenance_service
 from app.services.subscription_service import SubscriptionService
 from app.services.subscription_renewal_service import (
     SubscriptionRenewalChargeError,
@@ -96,6 +99,7 @@ from app.utils.telegram_webapp import (
     parse_webapp_init_data,
 )
 from app.utils.user_utils import (
+    get_effective_referral_commission_percent,
     get_detailed_referral_list,
     get_user_referral_summary,
 )
@@ -114,6 +118,7 @@ from ..schemas.miniapp import (
     MiniAppDevice,
     MiniAppDeviceRemovalRequest,
     MiniAppDeviceRemovalResponse,
+    MiniAppMaintenanceStatusResponse,
     MiniAppFaq,
     MiniAppFaqItem,
     MiniAppLegalDocuments,
@@ -124,6 +129,7 @@ from ..schemas.miniapp import (
     MiniAppPaymentMethod,
     MiniAppPaymentMethodsRequest,
     MiniAppPaymentMethodsResponse,
+    MiniAppPaymentOption,
     MiniAppPaymentStatusQuery,
     MiniAppPaymentStatusRequest,
     MiniAppPaymentStatusResponse,
@@ -191,6 +197,57 @@ renewal_service = SubscriptionRenewalService()
 _CRYPTOBOT_MIN_USD = 1.0
 _CRYPTOBOT_MAX_USD = 1000.0
 _CRYPTOBOT_FALLBACK_RATE = 95.0
+
+
+@router.get("/app-config.json")
+async def get_app_config() -> Dict[str, Any]:
+    data = _load_app_config_data()
+    if data is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="App config not found")
+
+    return data
+
+
+def _get_app_config_candidate_files() -> List[Path]:
+    seen: set[Path] = set()
+    candidates: List[Path] = []
+
+    def _add_candidate(path: Path) -> None:
+        resolved = path.resolve()
+        if resolved not in seen:
+            seen.add(resolved)
+            candidates.append(resolved)
+
+    cwd = Path.cwd()
+    _add_candidate(cwd / "miniapp" / "app-config.json")
+    _add_candidate(cwd / "app-config.json")
+
+    current = Path(__file__).resolve()
+    for parent in current.parents:
+        _add_candidate(parent / "miniapp" / "app-config.json")
+        _add_candidate(parent / "app-config.json")
+
+    _add_candidate(Path("/var/www/remnawave-miniapp/app-config.json"))
+
+    return candidates
+
+
+def _load_app_config_data() -> Optional[Dict[str, Any]]:
+    for path in _get_app_config_candidate_files():
+        if not path.is_file():
+            continue
+
+        try:
+            with path.open("r", encoding="utf-8") as file:
+                data = json.load(file)
+        except (OSError, json.JSONDecodeError) as error:
+            logger.warning("Failed to load app-config from %s: %s", path, error)
+            continue
+
+        if isinstance(data, dict):
+            return data
+
+    return None
 
 _DECIMAL_ONE_HUNDRED = Decimal(100)
 _DECIMAL_CENT = Decimal("0.01")
@@ -625,6 +682,23 @@ def _build_mulenpay_iframe_config() -> Optional[MiniAppPaymentIframeConfig]:
 
 
 @router.post(
+    "/maintenance/status",
+    response_model=MiniAppMaintenanceStatusResponse,
+)
+async def get_maintenance_status(
+    payload: MiniAppSubscriptionRequest,
+    db: AsyncSession = Depends(get_db_session),
+) -> MiniAppMaintenanceStatusResponse:
+    _, _ = await _resolve_user_from_init_data(db, payload.init_data)
+    status_info = maintenance_service.get_status_info()
+    return MiniAppMaintenanceStatusResponse(
+        is_active=bool(status_info.get("is_active")),
+        message=maintenance_service.get_maintenance_message(),
+        reason=status_info.get("reason"),
+    )
+
+
+@router.post(
     "/payments/methods",
     response_model=MiniAppPaymentMethodsResponse,
 )
@@ -707,6 +781,24 @@ async def get_payment_methods(
                 min_amount_kopeks=settings.PAL24_MIN_AMOUNT_KOPEKS,
                 max_amount_kopeks=settings.PAL24_MAX_AMOUNT_KOPEKS,
                 integration_type=MiniAppPaymentIntegrationType.REDIRECT,
+                options=[
+                    MiniAppPaymentOption(
+                        id="sbp",
+                        icon="🏦",
+                        title_key="topup.method.pal24.option.sbp.title",
+                        description_key="topup.method.pal24.option.sbp.description",
+                        title="Faster Payments (SBP)",
+                        description="Instant SBP transfer with no fees.",
+                    ),
+                    MiniAppPaymentOption(
+                        id="card",
+                        icon="💳",
+                        title_key="topup.method.pal24.option.card.title",
+                        description_key="topup.method.pal24.option.card.description",
+                        title="Bank card",
+                        description="Pay with a bank card via PayPalych.",
+                    ),
+                ],
             )
         )
 
@@ -720,6 +812,37 @@ async def get_payment_methods(
                 min_amount_kopeks=settings.WATA_MIN_AMOUNT_KOPEKS,
                 max_amount_kopeks=settings.WATA_MAX_AMOUNT_KOPEKS,
                 integration_type=MiniAppPaymentIntegrationType.REDIRECT,
+            )
+        )
+
+    if settings.is_platega_enabled() and settings.get_platega_active_methods():
+        platega_methods = settings.get_platega_active_methods()
+        definitions = settings.get_platega_method_definitions()
+        options: List[MiniAppPaymentOption] = []
+
+        for method_code in platega_methods:
+            info = definitions.get(method_code, {})
+            options.append(
+                MiniAppPaymentOption(
+                    id=str(method_code),
+                    icon=info.get("icon") or ("🏦" if method_code == 2 else "💳"),
+                    title_key=f"topup.method.platega.option.{method_code}.title",
+                    description_key=f"topup.method.platega.option.{method_code}.description",
+                    title=info.get("title") or info.get("name") or f"Platega {method_code}",
+                    description=info.get("description") or info.get("name"),
+                )
+            )
+
+        methods.append(
+            MiniAppPaymentMethod(
+                id="platega",
+                icon="💳",
+                requires_amount=True,
+                currency=settings.PLATEGA_CURRENCY,
+                min_amount_kopeks=settings.PLATEGA_MIN_AMOUNT_KOPEKS,
+                max_amount_kopeks=settings.PLATEGA_MAX_AMOUNT_KOPEKS,
+                integration_type=MiniAppPaymentIntegrationType.REDIRECT,
+                options=options,
             )
         )
 
@@ -768,10 +891,11 @@ async def get_payment_methods(
         "yookassa": 3,
         "mulenpay": 4,
         "pal24": 5,
-        "wata": 6,
-        "cryptobot": 7,
-        "heleket": 8,
-        "tribute": 9,
+        "platega": 6,
+        "wata": 7,
+        "cryptobot": 8,
+        "heleket": 9,
+        "tribute": 10,
     }
     methods.sort(key=lambda item: order_map.get(item.id, 99))
 
@@ -944,6 +1068,54 @@ async def create_payment_link(
             extra={
                 "local_payment_id": result.get("local_payment_id"),
                 "payment_id": result.get("mulen_payment_id"),
+                "requested_at": _current_request_timestamp(),
+            },
+        )
+
+    if method == "platega":
+        if not settings.is_platega_enabled() or not settings.get_platega_active_methods():
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Payment method is unavailable")
+        if amount_kopeks is None or amount_kopeks <= 0:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Amount must be positive")
+        if amount_kopeks < settings.PLATEGA_MIN_AMOUNT_KOPEKS:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Amount is below minimum")
+        if amount_kopeks > settings.PLATEGA_MAX_AMOUNT_KOPEKS:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Amount exceeds maximum")
+
+        active_methods = settings.get_platega_active_methods()
+        method_option = payload.payment_option or str(active_methods[0])
+        try:
+            method_code = int(str(method_option).strip())
+        except (TypeError, ValueError):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Invalid Platega payment option")
+
+        if method_code not in active_methods:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Selected Platega method is unavailable")
+
+        payment_service = PaymentService()
+        result = await payment_service.create_platega_payment(
+            db=db,
+            user_id=user.id,
+            amount_kopeks=amount_kopeks,
+            description=settings.get_balance_payment_description(amount_kopeks),
+            language=user.language or settings.DEFAULT_LANGUAGE,
+            payment_method_code=method_code,
+        )
+
+        redirect_url = result.get("redirect_url") if result else None
+        if not result or not redirect_url:
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail="Failed to create payment")
+
+        return MiniAppPaymentCreateResponse(
+            method=method,
+            payment_url=redirect_url,
+            amount_kopeks=amount_kopeks,
+            extra={
+                "local_payment_id": result.get("local_payment_id"),
+                "payment_id": result.get("transaction_id"),
+                "correlation_id": result.get("correlation_id"),
+                "selected_option": str(method_code),
+                "payload": result.get("payload"),
                 "requested_at": _current_request_timestamp(),
             },
         )
@@ -1242,6 +1414,8 @@ async def _resolve_payment_status_entry(
         )
     if method == "mulenpay":
         return await _resolve_mulenpay_payment_status(payment_service, db, user, query)
+    if method == "platega":
+        return await _resolve_platega_payment_status(payment_service, db, user, query)
     if method == "wata":
         return await _resolve_wata_payment_status(payment_service, db, user, query)
     if method == "pal24":
@@ -1391,6 +1565,85 @@ async def _resolve_mulenpay_payment_status(
             "payload": query.payload,
             "started_at": query.started_at,
         },
+    )
+
+
+async def _resolve_platega_payment_status(
+    payment_service: PaymentService,
+    db: AsyncSession,
+    user: User,
+    query: MiniAppPaymentStatusQuery,
+) -> MiniAppPaymentStatusResult:
+    from app.database.crud.platega import (
+        get_platega_payment_by_correlation_id,
+        get_platega_payment_by_id,
+        get_platega_payment_by_transaction_id,
+    )
+
+    payment = None
+    local_id = query.local_payment_id
+    if local_id:
+        payment = await get_platega_payment_by_id(db, local_id)
+
+    if not payment and query.payment_id:
+        payment = await get_platega_payment_by_transaction_id(db, query.payment_id)
+
+    if not payment and query.payload:
+        correlation = str(query.payload).replace("platega:", "")
+        payment = await get_platega_payment_by_correlation_id(db, correlation)
+
+    if not payment or payment.user_id != user.id:
+        return MiniAppPaymentStatusResult(
+            method="platega",
+            status="pending",
+            is_paid=False,
+            amount_kopeks=query.amount_kopeks,
+            message="Payment not found",
+            extra={
+                "local_payment_id": query.local_payment_id,
+                "payment_id": query.payment_id,
+                "payload": query.payload,
+                "started_at": query.started_at,
+            },
+        )
+
+    status_info = await payment_service.get_platega_payment_status(db, payment.id)
+    refreshed_payment = (status_info or {}).get("payment") or payment
+
+    status_raw = (status_info or {}).get("status") or getattr(payment, "status", None)
+    is_paid_flag = bool((status_info or {}).get("is_paid") or getattr(payment, "is_paid", False))
+    status_value = _classify_status(status_raw, is_paid_flag)
+
+    completed_at = (
+        getattr(refreshed_payment, "paid_at", None)
+        or getattr(refreshed_payment, "updated_at", None)
+        or getattr(refreshed_payment, "created_at", None)
+    )
+
+    extra: Dict[str, Any] = {
+        "local_payment_id": refreshed_payment.id,
+        "payment_id": refreshed_payment.platega_transaction_id,
+        "correlation_id": refreshed_payment.correlation_id,
+        "status": status_raw,
+        "is_paid": getattr(refreshed_payment, "is_paid", False),
+        "payload": query.payload,
+        "started_at": query.started_at,
+    }
+
+    if status_info and status_info.get("remote"):
+        extra["remote"] = status_info.get("remote")
+
+    return MiniAppPaymentStatusResult(
+        method="platega",
+        status=status_value,
+        is_paid=status_value == "paid",
+        amount_kopeks=refreshed_payment.amount_kopeks,
+        currency=refreshed_payment.currency,
+        completed_at=completed_at,
+        transaction_id=refreshed_payment.transaction_id,
+        external_id=refreshed_payment.platega_transaction_id,
+        message=None,
+        extra=extra,
     )
 
 
@@ -2447,7 +2700,12 @@ async def _build_referral_info(
     minimum_topup_kopeks = int(referral_settings.get("minimum_topup_kopeks") or 0)
     first_topup_bonus_kopeks = int(referral_settings.get("first_topup_bonus_kopeks") or 0)
     inviter_bonus_kopeks = int(referral_settings.get("inviter_bonus_kopeks") or 0)
-    commission_percent = float(referral_settings.get("commission_percent") or 0)
+    commission_percent = float(
+        get_effective_referral_commission_percent(user)
+        if user
+        else referral_settings.get("commission_percent")
+        or 0
+    )
 
     terms = MiniAppReferralTerms(
         minimum_topup_kopeks=minimum_topup_kopeks,

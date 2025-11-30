@@ -1760,9 +1760,11 @@ async def select_devices(
     )
 
     countries = await _get_available_countries(db_user.promo_group_id)
+    # Проверяем, что ключ 'countries' существует в данных перед доступом к нему
+    selected_countries = data.get('countries', [])
     countries_price = sum(
         c['price_kopeks'] for c in countries
-        if c['uuid'] in data['countries']
+        if c['uuid'] in selected_countries
     )
 
     devices_price = max(0, devices - settings.DEFAULT_DEVICE_LIMIT) * settings.PRICE_PER_DEVICE
@@ -1821,9 +1823,15 @@ async def confirm_purchase(
 
     countries = await _get_available_countries(db_user.promo_group_id)
 
-    months_in_period = data.get(
-        'months_in_period', calculate_months_from_days(data['period_days'])
-    )
+    period_days = data.get('period_days')
+    if period_days is None:
+        await callback.message.edit_text(
+            texts.t("SUBSCRIPTION_PURCHASE_ERROR", "Ошибка при оформлении подписки. Попробуйте начать сначала."),
+            reply_markup=get_back_keyboard(db_user.language)
+        )
+        await callback.answer()
+        return
+    months_in_period = data.get('months_in_period', calculate_months_from_days(period_days))
 
     base_price = data.get('base_price')
     base_price_original = data.get('base_price_original')
@@ -1831,10 +1839,10 @@ async def confirm_purchase(
     base_discount_total = data.get('base_discount_total')
 
     if base_price is None:
-        base_price_original = PERIOD_PRICES[data['period_days']]
+        base_price_original = PERIOD_PRICES[period_days]
         base_discount_percent = db_user.get_promo_discount(
             "period",
-            data['period_days'],
+            period_days,
         )
         base_price, base_discount_total = apply_percentage_discount(
             base_price_original,
@@ -1842,11 +1850,11 @@ async def confirm_purchase(
         )
     else:
         if base_price_original is None:
-            base_price_original = PERIOD_PRICES[data['period_days']]
+            base_price_original = PERIOD_PRICES[period_days]
         if base_discount_percent is None:
             base_discount_percent = db_user.get_promo_discount(
                 "period",
-                data['period_days'],
+                period_days,
             )
         if base_discount_total is None:
             _, base_discount_total = apply_percentage_discount(
@@ -1859,14 +1867,16 @@ async def confirm_purchase(
         countries_price_per_month = 0
         per_month_prices: List[int] = []
         for country in countries:
-            if country['uuid'] in data['countries']:
+            # Проверяем, что ключ 'countries' существует в данных перед доступом к нему
+            selected_countries = data.get('countries', [])
+            if country['uuid'] in selected_countries:
                 server_price_per_month = country['price_kopeks']
                 countries_price_per_month += server_price_per_month
                 per_month_prices.append(server_price_per_month)
 
         servers_discount_percent = db_user.get_promo_discount(
             "servers",
-            data['period_days'],
+            period_days,
         )
         total_servers_price = 0
         total_servers_discount = 0
@@ -1928,7 +1938,7 @@ async def confirm_purchase(
         else:
             devices_discount_percent = db_user.get_promo_discount(
                 "devices",
-                data['period_days'],
+                period_days,
             )
             discounted_devices_price_per_month, discount_per_month = apply_percentage_discount(
                 devices_price_per_month,
@@ -1944,9 +1954,15 @@ async def confirm_purchase(
         )
     else:
         final_traffic_gb = data.get('final_traffic_gb', data.get('traffic_gb'))
-        traffic_price_per_month = data.get(
-            'traffic_price_per_month', settings.get_traffic_price(data['traffic_gb'])
-        )
+        traffic_gb = data.get('traffic_gb')
+        if traffic_gb is not None:
+            traffic_price_per_month = data.get(
+                'traffic_price_per_month', settings.get_traffic_price(traffic_gb)
+            )
+        else:
+            traffic_price_per_month = data.get(
+                'traffic_price_per_month', 0
+            )
 
     if 'traffic_discount_percent' in data:
         traffic_discount_percent = data.get('traffic_discount_percent', 0)
@@ -1960,7 +1976,7 @@ async def confirm_purchase(
     else:
         traffic_discount_percent = db_user.get_promo_discount(
             "traffic",
-            data['period_days'],
+            period_days,
         )
         discounted_traffic_price_per_month, discount_per_month = apply_percentage_discount(
             traffic_price_per_month,
@@ -1971,7 +1987,7 @@ async def confirm_purchase(
 
     total_servers_price = data.get('total_servers_price', total_countries_price)
 
-    cached_total_price = data['total_price']
+    cached_total_price = data.get('total_price', 0)
     cached_promo_discount_value = data.get('promo_offer_discount_value', 0)
 
     validation_total_price = data.get('total_price_before_promo_offer')
@@ -2181,10 +2197,10 @@ async def confirm_purchase(
                         trial_duration_days=trial_duration,
                         payment_method="balance",
                         first_payment_amount_kopeks=final_price,
-                        first_paid_period_days=data['period_days']
+                        first_paid_period_days=period_days
                     )
                     logger.info(
-                        f"Записана конверсия: {trial_duration} дн. триал → {data['period_days']} дн. платная за {final_price / 100}₽")
+                        f"Записана конверсия: {trial_duration} дн. триал → {period_days} дн. платная за {final_price / 100}₽")
                 except Exception as conversion_error:
                     logger.error(f"Ошибка записи конверсии: {conversion_error}")
 
@@ -2193,10 +2209,37 @@ async def confirm_purchase(
             existing_subscription.traffic_limit_gb = final_traffic_gb
             if should_update_devices:
                 existing_subscription.device_limit = selected_devices
-            existing_subscription.connected_squads = data['countries']
+            # Проверяем, что при обновлении существующей подписки есть хотя бы одна страна
+            selected_countries = data.get('countries', [])
+            if not selected_countries:
+                # В случае если подписка уже существовала, не разрешаем отключать все страны
+                # Если подписка новая, разрешаем, но обычно через UI пользователь должен выбрать хотя бы один сервер
+                if existing_subscription and existing_subscription.connected_squads is not None:
+                    # Проверим, что в данных есть информация о том, что это обновление существующей подписки
+                    # или что-то указывает, что не нужно отключать все страны
+                    pass  # Для простоты в этом случае просто проверим, что список стран не пустой
+                else:
+                    # Для новой подписки разрешаем пустой список, если не является обновлением
+                    pass
+
+                # Но для безопасности - если список стран пустой, проверим, что это разрешено
+                # иначе вернем ошибку
+                if not selected_countries:
+                    texts = get_texts(db_user.language)
+                    await callback.message.edit_text(
+                        texts.t(
+                            "COUNTRIES_MINIMUM_REQUIRED",
+                            "❌ Нельзя отключить все страны. Должна быть подключена хотя бы одна страна."
+                        ),
+                        reply_markup=get_back_keyboard(db_user.language)
+                    )
+                    await callback.answer()
+                    return
+
+            existing_subscription.connected_squads = selected_countries
 
             existing_subscription.start_date = current_time
-            existing_subscription.end_date = current_time + timedelta(days=data['period_days']) + bonus_period
+            existing_subscription.end_date = current_time + timedelta(days=period_days) + bonus_period
             existing_subscription.updated_at = current_time
 
             existing_subscription.traffic_used_gb = 0.0
@@ -2222,12 +2265,29 @@ async def confirm_purchase(
             if resolved_device_limit is None and devices_selection_enabled:
                 resolved_device_limit = default_device_limit
 
+            # Проверяем, что для новой подписки также есть хотя бы одна страна, если пользователь проходит через интерфейс стран
+            new_subscription_countries = data.get('countries', [])
+            if not new_subscription_countries:
+                # Проверяем, была ли это покупка через интерфейс стран, и если да, то требуем хотя бы одну страну
+                # Если в данных явно указано, что это интерфейс стран, или есть другие признаки - требуем страну
+                # Для упрощения - проверим, что страна обязательна, если идет через UI стран
+                texts = get_texts(db_user.language)
+                await callback.message.edit_text(
+                    texts.t(
+                        "COUNTRIES_MINIMUM_REQUIRED",
+                        "❌ Нельзя отключить все страны. Должна быть подключена хотя бы одна страна."
+                    ),
+                    reply_markup=get_back_keyboard(db_user.language)
+                )
+                await callback.answer()
+                return
+
             subscription = await create_paid_subscription_with_traffic_mode(
                 db=db,
                 user_id=db_user.id,
-                duration_days=data['period_days'],
+                duration_days=period_days,
                 device_limit=resolved_device_limit,
-                connected_squads=data['countries'],
+                connected_squads=new_subscription_countries,
                 traffic_gb=final_traffic_gb
             )
 
@@ -2237,7 +2297,7 @@ async def confirm_purchase(
         from app.database.crud.server_squad import get_server_ids_by_uuids, add_user_to_servers
         from app.database.crud.subscription import add_subscription_servers
 
-        server_ids = await get_server_ids_by_uuids(db, data['countries'])
+        server_ids = await get_server_ids_by_uuids(db, data.get('countries', []))
 
         if server_ids:
             await add_subscription_servers(db, subscription, server_ids, server_prices)
@@ -2278,13 +2338,13 @@ async def confirm_purchase(
             user_id=db_user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
             amount_kopeks=final_price,
-            description=f"Подписка на {data['period_days']} дней ({months_in_period} мес)"
+            description=f"Подписка на {period_days} дней ({months_in_period} мес)"
         )
-    
+
         try:
             notification_service = AdminNotificationService(callback.bot)
             await notification_service.send_subscription_purchase_notification(
-                db, db_user, subscription, transaction, data['period_days'], was_trial_conversion
+                db, db_user, subscription, transaction, period_days, was_trial_conversion
             )
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления о покупке: {e}")

@@ -195,6 +195,7 @@ class Settings(BaseSettings):
     YOOKASSA_MAX_AMOUNT_KOPEKS: int = 1000000
     YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED: bool = False
     DISABLE_TOPUP_BUTTONS: bool = False
+    SUPPORT_TOPUP_ENABLED: bool = True
     PAYMENT_VERIFICATION_AUTO_CHECK_ENABLED: bool = False
     PAYMENT_VERIFICATION_AUTO_CHECK_INTERVAL_MINUTES: int = 10
 
@@ -932,9 +933,12 @@ class Settings(BaseSettings):
         return value
     
     def is_yookassa_enabled(self) -> bool:
-        return (self.YOOKASSA_ENABLED and 
-                self.YOOKASSA_SHOP_ID is not None and 
+        return (self.YOOKASSA_ENABLED and
+                self.YOOKASSA_SHOP_ID is not None and
                 self.YOOKASSA_SECRET_KEY is not None)
+
+    def is_support_topup_enabled(self) -> bool:
+        return bool(self.SUPPORT_TOPUP_ENABLED)
     
     def get_yookassa_return_url(self) -> str:
         if self.YOOKASSA_RETURN_URL:
@@ -1333,13 +1337,13 @@ class Settings(BaseSettings):
             packages = []
             config_str = self.TRAFFIC_PACKAGES_CONFIG.strip()
             
-            logger.info(f"CONFIG STRING: '{config_str}'")
-            
+            logger.debug(f"CONFIG STRING: '{config_str}'")
+
             if not config_str:
-                logger.info("CONFIG EMPTY, USING FALLBACK")
+                logger.debug("CONFIG EMPTY, USING FALLBACK")
                 return self._get_fallback_traffic_packages()
-            
-            logger.info("PARSING CONFIG...")
+
+            logger.debug("PARSING CONFIG...")
             
             for package_config in config_str.split(','):
                 package_config = package_config.strip()
@@ -1363,7 +1367,7 @@ class Settings(BaseSettings):
                 except ValueError:
                     continue
             
-            logger.info(f"PARSED {len(packages)} packages from config")
+            logger.debug(f"PARSED {len(packages)} packages from config")
             return packages if packages else self._get_fallback_traffic_packages()
             
         except Exception as e:

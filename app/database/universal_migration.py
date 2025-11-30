@@ -2742,6 +2742,35 @@ async def fix_foreign_keys_for_user_deletion():
         logger.error(f"Ошибка обновления внешних ключей: {e}")
         return False
 
+async def add_referral_commission_percent_column() -> bool:
+    column_exists = await check_column_exists('users', 'referral_commission_percent')
+    if column_exists:
+        logger.info("ℹ️ Колонка referral_commission_percent уже существует")
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'sqlite':
+                alter_sql = "ALTER TABLE users ADD COLUMN referral_commission_percent INTEGER NULL"
+            elif db_type == 'postgresql':
+                alter_sql = "ALTER TABLE users ADD COLUMN referral_commission_percent INTEGER NULL"
+            elif db_type == 'mysql':
+                alter_sql = "ALTER TABLE users ADD COLUMN referral_commission_percent INT NULL"
+            else:
+                logger.error(f"Неподдерживаемый тип БД для добавления referral_commission_percent: {db_type}")
+                return False
+
+            await conn.execute(text(alter_sql))
+            logger.info("✅ Добавлена колонка referral_commission_percent в таблицу users")
+            return True
+
+    except Exception as error:
+        logger.error(f"Ошибка добавления referral_commission_percent: {error}")
+        return False
+
+
 async def add_referral_system_columns():
     logger.info("=== МИГРАЦИЯ РЕФЕРАЛЬНОЙ СИСТЕМЫ ===")
     
@@ -2865,6 +2894,94 @@ async def create_subscription_conversions_table():
             
     except Exception as e:
         logger.error(f"Ошибка создания таблицы subscription_conversions: {e}")
+        return False
+
+
+async def create_subscription_events_table():
+    table_exists = await check_table_exists("subscription_events")
+    if table_exists:
+        logger.info("Таблица subscription_events уже существует")
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == "sqlite":
+                create_sql = """
+                CREATE TABLE subscription_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    event_type VARCHAR(50) NOT NULL,
+                    user_id INTEGER NOT NULL,
+                    subscription_id INTEGER NULL,
+                    transaction_id INTEGER NULL,
+                    amount_kopeks INTEGER NULL,
+                    currency VARCHAR(16) NULL,
+                    message TEXT NULL,
+                    occurred_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    extra JSON NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                    FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE SET NULL,
+                    FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE SET NULL
+                );
+
+                CREATE INDEX ix_subscription_events_event_type ON subscription_events(event_type);
+                CREATE INDEX ix_subscription_events_user_id ON subscription_events(user_id);
+                """
+
+            elif db_type == "postgresql":
+                create_sql = """
+                CREATE TABLE subscription_events (
+                    id SERIAL PRIMARY KEY,
+                    event_type VARCHAR(50) NOT NULL,
+                    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    subscription_id INTEGER NULL REFERENCES subscriptions(id) ON DELETE SET NULL,
+                    transaction_id INTEGER NULL REFERENCES transactions(id) ON DELETE SET NULL,
+                    amount_kopeks INTEGER NULL,
+                    currency VARCHAR(16) NULL,
+                    message TEXT NULL,
+                    occurred_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    extra JSON NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE INDEX ix_subscription_events_event_type ON subscription_events(event_type);
+                CREATE INDEX ix_subscription_events_user_id ON subscription_events(user_id);
+                """
+
+            elif db_type == "mysql":
+                create_sql = """
+                CREATE TABLE subscription_events (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    event_type VARCHAR(50) NOT NULL,
+                    user_id INT NOT NULL,
+                    subscription_id INT NULL,
+                    transaction_id INT NULL,
+                    amount_kopeks INT NULL,
+                    currency VARCHAR(16) NULL,
+                    message TEXT NULL,
+                    occurred_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    extra JSON NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                    FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE SET NULL,
+                    FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE SET NULL
+                );
+
+                CREATE INDEX ix_subscription_events_event_type ON subscription_events(event_type);
+                CREATE INDEX ix_subscription_events_user_id ON subscription_events(user_id);
+                """
+            else:
+                logger.error(f"Неподдерживаемый тип БД для создания таблицы subscription_events: {db_type}")
+                return False
+
+            await conn.execute(text(create_sql))
+            logger.info("✅ Таблица subscription_events успешно создана")
+            return True
+
+    except Exception as e:
+        logger.error(f"Ошибка создания таблицы subscription_events: {e}")
         return False
 
 async def fix_subscription_duplicates_universal():
@@ -3721,6 +3838,12 @@ async def run_universal_migration():
         if not referral_migration_success:
             logger.warning("⚠️ Проблемы с миграцией реферальной системы")
 
+        commission_column_ready = await add_referral_commission_percent_column()
+        if commission_column_ready:
+            logger.info("✅ Колонка referral_commission_percent готова")
+        else:
+            logger.warning("⚠️ Проблемы с колонкой referral_commission_percent")
+
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ SYSTEM_SETTINGS ===")
         system_settings_ready = await create_system_settings_table()
         if system_settings_ready:
@@ -4052,7 +4175,14 @@ async def run_universal_migration():
             logger.info("✅ Таблица subscription_conversions готова")
         else:
             logger.warning("⚠️ Проблемы с таблицей subscription_conversions")
-        
+
+        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ SUBSCRIPTION_EVENTS ===")
+        events_created = await create_subscription_events_table()
+        if events_created:
+            logger.info("✅ Таблица subscription_events готова")
+        else:
+            logger.warning("⚠️ Проблемы с таблицей subscription_events")
+
         async with engine.begin() as conn:
             total_subs = await conn.execute(text("SELECT COUNT(*) FROM subscriptions"))
             unique_users = await conn.execute(text("SELECT COUNT(DISTINCT user_id) FROM subscriptions"))
@@ -4089,6 +4219,7 @@ async def run_universal_migration():
                 logger.info("✅ CryptoBot таблица готова")
                 logger.info("✅ Heleket таблица готова")
                 logger.info("✅ Таблица конверсий подписок создана")
+                logger.info("✅ Таблица событий подписок создана")
                 logger.info("✅ Таблица welcome_texts с полем is_enabled готова")
                 logger.info("✅ Медиа поля в broadcast_history добавлены")
                 logger.info("✅ Дубликаты подписок исправлены")
@@ -4112,6 +4243,7 @@ async def check_migration_status():
             "broadcast_history_media_fields": False,
             "subscription_duplicates": False,
             "subscription_conversions_table": False,
+            "subscription_events_table": False,
             "promo_groups_table": False,
             "server_promo_groups_table": False,
             "server_squads_trial_column": False,
@@ -4126,6 +4258,7 @@ async def check_migration_status():
             "users_promo_offer_discount_percent_column": False,
             "users_promo_offer_discount_source_column": False,
             "users_promo_offer_discount_expires_column": False,
+            "users_referral_commission_percent_column": False,
             "subscription_crypto_link_column": False,
             "discount_offers_table": False,
             "discount_offers_effect_column": False,
@@ -4145,6 +4278,7 @@ async def check_migration_status():
         status["privacy_policies_table"] = await check_table_exists('privacy_policies')
         status["public_offers_table"] = await check_table_exists('public_offers')
         status["subscription_conversions_table"] = await check_table_exists('subscription_conversions')
+        status["subscription_events_table"] = await check_table_exists('subscription_events')
         status["promo_groups_table"] = await check_table_exists('promo_groups')
         status["server_promo_groups_table"] = await check_table_exists('server_squad_promo_groups')
         status["server_squads_trial_column"] = await check_column_exists('server_squads', 'is_trial_eligible')
@@ -4167,6 +4301,7 @@ async def check_migration_status():
         status["users_promo_offer_discount_percent_column"] = await check_column_exists('users', 'promo_offer_discount_percent')
         status["users_promo_offer_discount_source_column"] = await check_column_exists('users', 'promo_offer_discount_source')
         status["users_promo_offer_discount_expires_column"] = await check_column_exists('users', 'promo_offer_discount_expires_at')
+        status["users_referral_commission_percent_column"] = await check_column_exists('users', 'referral_commission_percent')
         status["subscription_crypto_link_column"] = await check_column_exists('subscriptions', 'subscription_crypto_link')
         
         media_fields_exist = (
@@ -4200,6 +4335,7 @@ async def check_migration_status():
             "welcome_texts_is_enabled_column": "Поле is_enabled в welcome_texts",
             "broadcast_history_media_fields": "Медиа поля в broadcast_history",
             "subscription_conversions_table": "Таблица конверсий подписок",
+            "subscription_events_table": "Таблица событий подписок",
             "subscription_duplicates": "Отсутствие дубликатов подписок",
             "promo_groups_table": "Таблица промо-групп",
             "server_promo_groups_table": "Связи серверов и промогрупп",
@@ -4213,6 +4349,7 @@ async def check_migration_status():
             "users_promo_offer_discount_percent_column": "Колонка процента промо-скидки у пользователей",
             "users_promo_offer_discount_source_column": "Колонка источника промо-скидки у пользователей",
             "users_promo_offer_discount_expires_column": "Колонка срока действия промо-скидки у пользователей",
+            "users_referral_commission_percent_column": "Колонка процента реферальной комиссии у пользователей",
             "subscription_crypto_link_column": "Колонка subscription_crypto_link в subscriptions",
             "discount_offers_table": "Таблица discount_offers",
             "discount_offers_effect_column": "Колонка effect_type в discount_offers",
