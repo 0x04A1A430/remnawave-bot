@@ -56,14 +56,7 @@ class TelegramStarsMixin:
 
             # Если количество звёзд не задано, вычисляем его из курса.
             if stars_amount is None:
-                rate = Decimal(str(settings.get_stars_rate()))
-                if rate <= 0:
-                    raise ValueError("Stars rate must be positive")
-
-                normalized_stars = (amount_rubles / rate).to_integral_value(
-                    rounding=ROUND_FLOOR
-                )
-                stars_amount = int(normalized_stars) or 1
+                stars_amount = settings.rubles_to_stars(float(amount_rubles))
 
             if stars_amount <= 0:
                 raise ValueError("Stars amount must be positive")
