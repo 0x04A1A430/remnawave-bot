@@ -94,15 +94,38 @@ async def show_balance_menu(
     db: AsyncSession
 ):
     texts = get_texts(db_user.language)
-    
+
     balance_text = texts.BALANCE_INFO.format(
         balance=texts.format_price(db_user.balance_kopeks)
     )
-    
-    await callback.message.edit_text(
-        balance_text,
-        reply_markup=get_balance_keyboard(db_user.language)
-    )
+
+    reply_markup = get_balance_keyboard(db_user.language)
+
+    try:
+        if callback.message and callback.message.text:
+            await callback.message.edit_text(
+                balance_text,
+                reply_markup=reply_markup
+            )
+        elif callback.message and callback.message.caption:
+            await callback.message.edit_caption(
+                balance_text,
+                reply_markup=reply_markup
+            )
+        else:
+            await callback.message.answer(
+                balance_text,
+                reply_markup=reply_markup
+            )
+    except TelegramBadRequest as error:
+        logger.warning(
+            "Failed to edit balance message, sending a new one instead: %s",
+            error,
+        )
+        await callback.message.answer(
+            balance_text,
+            reply_markup=reply_markup
+        )
     await callback.answer()
 
 
