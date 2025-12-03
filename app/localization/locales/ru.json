@@ -1099,6 +1099,8 @@
   "PAYMENT_METHOD_SUPPORT_NAME": "🛠️ <b>Через поддержку</b>",
   "PAYMENT_METHOD_TRIBUTE_DESCRIPTION": "через Tribute",
   "PAYMENT_METHOD_TRIBUTE_NAME": "💳 <b>Банковская карта</b>",
+  "PAYMENT_METHOD_HELEKET_DESCRIPTION": "через Heleket",
+  "PAYMENT_METHOD_HELEKET_NAME": "🪙 <b>Криптовалюта (Heleket)</b>",
   "PAYMENT_METHOD_YOOKASSA_DESCRIPTION": "через YooKassa",
   "PAYMENT_METHOD_YOOKASSA_NAME": "💳 <b>Банковская карта</b>",
   "PAYMENT_METHOD_YOOKASSA_SBP_DESCRIPTION": "через систему быстрых платежей YooKassa",
