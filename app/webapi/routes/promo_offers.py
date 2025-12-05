@@ -17,6 +17,7 @@ from app.database.crud.promo_offer_template import (
     list_promo_offer_templates,
     update_promo_offer_template,
 )
+from app.database.crud.user import get_user_by_telegram_id
 from app.database.models import DiscountOffer, PromoOfferLog, PromoOfferTemplate, Subscription, User
 
 from ..dependencies import get_db_session, require_api_token
@@ -144,20 +145,35 @@ async def list_promo_offers(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     user_id: Optional[int] = Query(None, ge=1),
+    telegram_id: Optional[int] = Query(None, ge=1),
     notification_type: Optional[str] = Query(None, min_length=1),
     is_active: Optional[bool] = Query(None),
 ) -> PromoOfferListResponse:
+    resolved_user_id = user_id
+    if telegram_id is not None:
+        user = await get_user_by_telegram_id(db, telegram_id)
+        if not user:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="User not found")
+
+        if resolved_user_id and resolved_user_id != user.id:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail="telegram_id does not match the provided user_id",
+            )
+
+        resolved_user_id = user.id
+
     offers = await list_discount_offers(
         db,
         offset=offset,
         limit=limit,
-        user_id=user_id,
+        user_id=resolved_user_id,
         notification_type=notification_type,
         is_active=is_active,
     )
     total = await count_discount_offers(
         db,
-        user_id=user_id,
+        user_id=resolved_user_id,
         notification_type=notification_type,
         is_active=is_active,
     )
@@ -187,7 +203,26 @@ async def create_promo_offer(
     if not payload.effect_type.strip():
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "effect_type must not be empty")
 
-    user = await db.get(User, payload.user_id)
+    target_user_id = payload.user_id
+    user: Optional[User] = None
+    if payload.telegram_id is not None:
+        user = await get_user_by_telegram_id(db, payload.telegram_id)
+        if not user:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+
+        if target_user_id and target_user_id != user.id:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Provided user_id does not match telegram_id",
+            )
+
+        target_user_id = user.id
+
+    if target_user_id is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "user_id or telegram_id is required")
+
+    if user is None:
+        user = await db.get(User, target_user_id)
     if not user:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
 
@@ -195,12 +230,12 @@ async def create_promo_offer(
         subscription = await db.get(Subscription, payload.subscription_id)
         if not subscription:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Subscription not found")
-        if subscription.user_id != payload.user_id:
+        if subscription.user_id != target_user_id:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Subscription does not belong to the user")
 
     offer = await upsert_discount_offer(
         db,
-        user_id=payload.user_id,
+        user_id=target_user_id,
         subscription_id=payload.subscription_id,
         notification_type=payload.notification_type.strip(),
         discount_percent=payload.discount_percent,
