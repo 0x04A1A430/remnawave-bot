@@ -50,7 +50,8 @@ class PromoOfferListResponse(BaseModel):
 
 
 class PromoOfferCreateRequest(BaseModel):
-    user_id: int
+    user_id: Optional[int] = Field(None, ge=1)
+    telegram_id: Optional[int] = Field(None, ge=1)
     notification_type: str = Field(..., min_length=1)
     valid_hours: int = Field(..., ge=1, description="Срок действия предложения в часах")
     discount_percent: int = Field(0, ge=0)
