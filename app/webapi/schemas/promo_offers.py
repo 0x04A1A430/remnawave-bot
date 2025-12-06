@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, ClassVar, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 
 
 class PromoOfferUserInfo(BaseModel):
@@ -59,6 +59,65 @@ class PromoOfferCreateRequest(BaseModel):
     subscription_id: Optional[int] = None
     effect_type: str = Field("percent_discount", min_length=1)
     extra_data: Dict[str, Any] = Field(default_factory=dict)
+
+
+class PromoOfferBroadcastRequest(PromoOfferCreateRequest):
+    target: Optional[str] = Field(
+        None,
+        description=(
+            "Категория пользователей для рассылки. Поддерживает те же сегменты, что "
+            "и API рассылок (all, active, trial, custom_today и т.д.)."
+        ),
+    )
+
+    _ALLOWED_TARGETS: ClassVar[set[str]] = {
+        "all",
+        "active",
+        "trial",
+        "no",
+        "expiring",
+        "expired",
+        "active_zero",
+        "trial_zero",
+        "zero",
+    }
+    _CUSTOM_TARGETS: ClassVar[set[str]] = {
+        "today",
+        "week",
+        "month",
+        "active_today",
+        "inactive_week",
+        "inactive_month",
+        "referrals",
+        "direct",
+    }
+    _TARGET_ALIASES: ClassVar[dict[str, str]] = {
+        "no_sub": "no",
+    }
+
+    @validator("target")
+    def validate_target(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+
+        normalized = value.strip().lower()
+        normalized = cls._TARGET_ALIASES.get(normalized, normalized)
+
+        if normalized in cls._ALLOWED_TARGETS:
+            return normalized
+
+        if normalized.startswith("custom_"):
+            criteria = normalized[len("custom_"):]
+            if criteria in cls._CUSTOM_TARGETS:
+                return normalized
+
+        raise ValueError("Unsupported target value")
+
+
+class PromoOfferBroadcastResponse(BaseModel):
+    created_offers: int
+    user_ids: List[int]
+    target: Optional[str] = None
 
 
 class PromoOfferTemplateResponse(BaseModel):
