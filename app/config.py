@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import logging
+import math
 import os
 import re
 import html
@@ -1284,7 +1285,7 @@ class Settings(BaseSettings):
         return stars * self.get_stars_rate()
     
     def rubles_to_stars(self, rubles: float) -> int:
-        return max(1, int(rubles / self.get_stars_rate()))
+        return max(1, math.ceil(rubles / self.get_stars_rate()))
 
     def get_admin_notifications_chat_id(self) -> Optional[int]:
         if not self.ADMIN_NOTIFICATIONS_CHAT_ID:
