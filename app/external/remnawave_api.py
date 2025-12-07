@@ -647,13 +647,29 @@ class RemnaWaveAPI:
         # Парсим userTraffic из нового формата API
         user_traffic = self._parse_user_traffic(user_data.get('userTraffic'))
 
+        # Получаем status с fallback на ACTIVE
+        status_str = user_data.get('status') or 'ACTIVE'
+        try:
+            status = UserStatus(status_str)
+        except ValueError:
+            logger.warning(f"Неизвестный статус пользователя: {status_str}, используем ACTIVE")
+            status = UserStatus.ACTIVE
+
+        # Получаем trafficLimitStrategy с fallback
+        strategy_str = user_data.get('trafficLimitStrategy') or 'NO_RESET'
+        try:
+            traffic_strategy = TrafficLimitStrategy(strategy_str)
+        except ValueError:
+            logger.warning(f"Неизвестная стратегия трафика: {strategy_str}, используем NO_RESET")
+            traffic_strategy = TrafficLimitStrategy.NO_RESET
+
         return RemnaWaveUser(
             uuid=user_data['uuid'],
             short_uuid=user_data['shortUuid'],
             username=user_data['username'],
-            status=UserStatus(user_data.get('status', 'ACTIVE')),
+            status=status,
             traffic_limit_bytes=user_data.get('trafficLimitBytes', 0),
-            traffic_limit_strategy=TrafficLimitStrategy(user_data.get('trafficLimitStrategy', 'NO_RESET')),
+            traffic_limit_strategy=traffic_strategy,
             expire_at=datetime.fromisoformat(user_data['expireAt'].replace('Z', '+00:00')),
             telegram_id=user_data.get('telegramId'),
             email=user_data.get('email'),
