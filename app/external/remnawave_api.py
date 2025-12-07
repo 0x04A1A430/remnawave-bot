@@ -28,13 +28,21 @@ class TrafficLimitStrategy(Enum):
 
 
 @dataclass
+class UserTraffic:
+    """Данные о трафике пользователя (новая структура API)"""
+    used_traffic_bytes: int
+    lifetime_used_traffic_bytes: int
+    online_at: Optional[datetime] = None
+    first_connected_at: Optional[datetime] = None
+    last_connected_node_uuid: Optional[str] = None
+
+
+@dataclass
 class RemnaWaveUser:
     uuid: str
     short_uuid: str
     username: str
     status: UserStatus
-    used_traffic_bytes: int
-    lifetime_used_traffic_bytes: int 
     traffic_limit_bytes: int
     traffic_limit_strategy: TrafficLimitStrategy
     expire_at: datetime
@@ -47,18 +55,47 @@ class RemnaWaveUser:
     active_internal_squads: List[Dict[str, str]]
     created_at: datetime
     updated_at: datetime
+    user_traffic: Optional[UserTraffic] = None
     sub_last_user_agent: Optional[str] = None
     sub_last_opened_at: Optional[datetime] = None
-    online_at: Optional[datetime] = None
     sub_revoked_at: Optional[datetime] = None
     last_traffic_reset_at: Optional[datetime] = None
     trojan_password: Optional[str] = None
     vless_uuid: Optional[str] = None
     ss_password: Optional[str] = None
-    first_connected_at: Optional[datetime] = None
     last_triggered_threshold: int = 0
     happ_link: Optional[str] = None
     happ_crypto_link: Optional[str] = None
+    external_squad_uuid: Optional[str] = None
+    id: Optional[int] = None
+
+    @property
+    def used_traffic_bytes(self) -> int:
+        """Обратная совместимость: получение used_traffic_bytes из user_traffic"""
+        if self.user_traffic:
+            return self.user_traffic.used_traffic_bytes
+        return 0
+
+    @property
+    def lifetime_used_traffic_bytes(self) -> int:
+        """Обратная совместимость: получение lifetime_used_traffic_bytes из user_traffic"""
+        if self.user_traffic:
+            return self.user_traffic.lifetime_used_traffic_bytes
+        return 0
+
+    @property
+    def online_at(self) -> Optional[datetime]:
+        """Обратная совместимость: получение online_at из user_traffic"""
+        if self.user_traffic:
+            return self.user_traffic.online_at
+        return None
+
+    @property
+    def first_connected_at(self) -> Optional[datetime]:
+        """Обратная совместимость: получение first_connected_at из user_traffic"""
+        if self.user_traffic:
+            return self.user_traffic.first_connected_at
+        return None
 
 
 @dataclass
@@ -68,6 +105,9 @@ class RemnaWaveInternalSquad:
     members_count: int
     inbounds_count: int
     inbounds: List[Dict[str, Any]]
+    view_position: int = 0
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 
 @dataclass
@@ -586,42 +626,57 @@ class RemnaWaveAPI:
             return False
     
     
+    def _parse_user_traffic(self, traffic_data: Optional[Dict]) -> Optional[UserTraffic]:
+        """Парсит данные трафика из нового формата API"""
+        if not traffic_data:
+            return None
+
+        return UserTraffic(
+            used_traffic_bytes=int(traffic_data.get('usedTrafficBytes', 0)),
+            lifetime_used_traffic_bytes=int(traffic_data.get('lifetimeUsedTrafficBytes', 0)),
+            online_at=self._parse_optional_datetime(traffic_data.get('onlineAt')),
+            first_connected_at=self._parse_optional_datetime(traffic_data.get('firstConnectedAt')),
+            last_connected_node_uuid=traffic_data.get('lastConnectedNodeUuid')
+        )
+
     def _parse_user(self, user_data: Dict) -> RemnaWaveUser:
         happ_data = user_data.get('happ') or {}
         happ_link = happ_data.get('link') or happ_data.get('url')
         happ_crypto_link = happ_data.get('cryptoLink') or happ_data.get('crypto_link')
 
+        # Парсим userTraffic из нового формата API
+        user_traffic = self._parse_user_traffic(user_data.get('userTraffic'))
+
         return RemnaWaveUser(
             uuid=user_data['uuid'],
             short_uuid=user_data['shortUuid'],
             username=user_data['username'],
-            status=UserStatus(user_data['status']),
-            used_traffic_bytes=int(user_data['usedTrafficBytes']),
-            lifetime_used_traffic_bytes=int(user_data['lifetimeUsedTrafficBytes']),
-            traffic_limit_bytes=user_data['trafficLimitBytes'],
-            traffic_limit_strategy=TrafficLimitStrategy(user_data['trafficLimitStrategy']),
+            status=UserStatus(user_data.get('status', 'ACTIVE')),
+            traffic_limit_bytes=user_data.get('trafficLimitBytes', 0),
+            traffic_limit_strategy=TrafficLimitStrategy(user_data.get('trafficLimitStrategy', 'NO_RESET')),
             expire_at=datetime.fromisoformat(user_data['expireAt'].replace('Z', '+00:00')),
             telegram_id=user_data.get('telegramId'),
             email=user_data.get('email'),
             hwid_device_limit=user_data.get('hwidDeviceLimit'),
             description=user_data.get('description'),
             tag=user_data.get('tag'),
-            subscription_url=user_data['subscriptionUrl'],
-            active_internal_squads=user_data['activeInternalSquads'],
+            subscription_url=user_data.get('subscriptionUrl', ''),
+            active_internal_squads=user_data.get('activeInternalSquads', []),
             created_at=datetime.fromisoformat(user_data['createdAt'].replace('Z', '+00:00')),
             updated_at=datetime.fromisoformat(user_data['updatedAt'].replace('Z', '+00:00')),
+            user_traffic=user_traffic,
             sub_last_user_agent=user_data.get('subLastUserAgent'),
             sub_last_opened_at=self._parse_optional_datetime(user_data.get('subLastOpenedAt')),
-            online_at=self._parse_optional_datetime(user_data.get('onlineAt')),
             sub_revoked_at=self._parse_optional_datetime(user_data.get('subRevokedAt')),
             last_traffic_reset_at=self._parse_optional_datetime(user_data.get('lastTrafficResetAt')),
             trojan_password=user_data.get('trojanPassword'),
             vless_uuid=user_data.get('vlessUuid'),
             ss_password=user_data.get('ssPassword'),
-            first_connected_at=self._parse_optional_datetime(user_data.get('firstConnectedAt')),
             last_triggered_threshold=user_data.get('lastTriggeredThreshold', 0),
             happ_link=happ_link,
-            happ_crypto_link=happ_crypto_link
+            happ_crypto_link=happ_crypto_link,
+            external_squad_uuid=user_data.get('externalSquadUuid'),
+            id=user_data.get('id')
         )
 
     def _parse_optional_datetime(self, date_str: Optional[str]) -> Optional[datetime]:
@@ -630,12 +685,16 @@ class RemnaWaveAPI:
         return None
     
     def _parse_internal_squad(self, squad_data: Dict) -> RemnaWaveInternalSquad:
+        info = squad_data.get('info', {})
         return RemnaWaveInternalSquad(
             uuid=squad_data['uuid'],
             name=squad_data['name'],
-            members_count=squad_data['info']['membersCount'],
-            inbounds_count=squad_data['info']['inboundsCount'],
-            inbounds=squad_data['inbounds']
+            members_count=info.get('membersCount', 0),
+            inbounds_count=info.get('inboundsCount', 0),
+            inbounds=squad_data.get('inbounds', []),
+            view_position=squad_data.get('viewPosition', 0),
+            created_at=self._parse_optional_datetime(squad_data.get('createdAt')),
+            updated_at=self._parse_optional_datetime(squad_data.get('updatedAt'))
         )
     
     def _parse_node(self, node_data: Dict) -> RemnaWaveNode:
