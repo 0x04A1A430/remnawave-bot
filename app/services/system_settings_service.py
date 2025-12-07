@@ -220,6 +220,7 @@ class BotConfigurationService:
         "PRICE_90_DAYS": "SUBSCRIPTION_PRICES",
         "PRICE_180_DAYS": "SUBSCRIPTION_PRICES",
         "PRICE_360_DAYS": "SUBSCRIPTION_PRICES",
+        "PAID_SUBSCRIPTION_USER_TAG": "SUBSCRIPTION_PRICES",
         "TRAFFIC_PACKAGES_CONFIG": "TRAFFIC_PACKAGES",
         "BASE_PROMO_GROUP_PERIOD_DISCOUNTS_ENABLED": "SUBSCRIPTIONS_CORE",
         "BASE_PROMO_GROUP_PERIOD_DISCOUNTS": "SUBSCRIPTIONS_CORE",
@@ -227,6 +228,7 @@ class BotConfigurationService:
         "DEFAULT_AUTOPAY_DAYS_BEFORE": "AUTOPAY",
         "MIN_BALANCE_FOR_AUTOPAY_KOPEKS": "AUTOPAY",
         "TRIAL_WARNING_HOURS": "TRIAL",
+        "TRIAL_USER_TAG": "TRIAL",
         "SUPPORT_USERNAME": "SUPPORT",
         "SUPPORT_MENU_ENABLED": "SUPPORT",
         "SUPPORT_SYSTEM_MODE": "SUPPORT",
@@ -642,6 +644,24 @@ class BotConfigurationService:
             "example": "123456789",
             "warning": "Несовпадение ID блокирует обновление токена, предотвращая его подмену на другом боте.",
             "dependencies": "Результат вызова getMe() в Telegram Bot API",
+        },
+        "TRIAL_USER_TAG": {
+            "description": (
+                "Тег, который бот передаст пользователю при активации триальной подписки в панели RemnaWave."
+            ),
+            "format": "До 16 символов: заглавные A-Z, цифры и подчёркивание.",
+            "example": "TRIAL_USER",
+            "warning": "Неверный формат будет проигнорирован при создании пользователя.",
+            "dependencies": "Активация триала и включенная интеграция с RemnaWave",
+        },
+        "PAID_SUBSCRIPTION_USER_TAG": {
+            "description": (
+                "Тег, который бот ставит пользователю при покупке платной подписки в панели RemnaWave."
+            ),
+            "format": "До 16 символов: заглавные A-Z, цифры и подчёркивание.",
+            "example": "PAID_USER",
+            "warning": "Если тег не задан или невалиден, существующий тег не будет изменён.",
+            "dependencies": "Оплата подписки и интеграция с RemnaWave",
         },
     }
 
