@@ -132,6 +132,13 @@ class SubscriptionService:
 
         self._last_config_signature = config_signature
 
+    @staticmethod
+    def _resolve_user_tag(subscription: Subscription) -> Optional[str]:
+        if getattr(subscription, "is_trial", False):
+            return settings.get_trial_user_tag()
+
+        return settings.get_paid_subscription_user_tag()
+
     @property
     def is_configured(self) -> bool:
         return self._config_error is None
@@ -173,7 +180,9 @@ class SubscriptionService:
             if not validation_success:
                 logger.error(f"Ошибка валидации подписки для пользователя {user.telegram_id}")
                 return None
-            
+
+            user_tag = self._resolve_user_tag(subscription)
+
             async with self.get_api_client() as api:
                 hwid_limit = resolve_hwid_device_limit_for_payload(subscription)
                 existing_users = await api.get_user_by_telegram_id(user.telegram_id)
@@ -200,6 +209,9 @@ class SubscriptionService:
                         ),
                         active_internal_squads=subscription.connected_squads,
                     )
+
+                    if user_tag is not None:
+                        update_kwargs['tag'] = user_tag
 
                     if hwid_limit is not None:
                         update_kwargs['hwid_device_limit'] = hwid_limit
@@ -235,6 +247,9 @@ class SubscriptionService:
                         ),
                         active_internal_squads=subscription.connected_squads,
                     )
+
+                    if user_tag is not None:
+                        create_kwargs['tag'] = user_tag
 
                     if hwid_limit is not None:
                         create_kwargs['hwid_device_limit'] = hwid_limit
@@ -288,15 +303,17 @@ class SubscriptionService:
             is_actually_active = (subscription.status == SubscriptionStatus.ACTIVE.value and 
                                  subscription.end_date > current_time)
             
-            if (subscription.status == SubscriptionStatus.ACTIVE.value and 
+            if (subscription.status == SubscriptionStatus.ACTIVE.value and
                 subscription.end_date <= current_time):
-                
+
                 subscription.status = SubscriptionStatus.EXPIRED.value
                 subscription.updated_at = current_time
                 await db.commit()
                 is_actually_active = False
                 logger.info(f"🔔 Статус подписки {subscription.id} автоматически изменен на 'expired'")
-            
+
+            user_tag = self._resolve_user_tag(subscription)
+
             async with self.get_api_client() as api:
                 hwid_limit = resolve_hwid_device_limit_for_payload(subscription)
 
@@ -313,6 +330,9 @@ class SubscriptionService:
                     ),
                     active_internal_squads=subscription.connected_squads,
                 )
+
+                if user_tag is not None:
+                    update_kwargs['tag'] = user_tag
 
                 if hwid_limit is not None:
                     update_kwargs['hwid_device_limit'] = hwid_limit
