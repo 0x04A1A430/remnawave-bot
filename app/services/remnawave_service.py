@@ -46,6 +46,26 @@ from app.utils.timezone import get_local_timezone
 logger = logging.getLogger(__name__)
 
 
+def _get_user_traffic_bytes(panel_user: Dict[str, Any]) -> int:
+    """Извлекает usedTrafficBytes из панельного пользователя (совместимо с новым и старым API)"""
+    # Новый формат: userTraffic.usedTrafficBytes
+    user_traffic = panel_user.get('userTraffic')
+    if user_traffic and isinstance(user_traffic, dict):
+        return user_traffic.get('usedTrafficBytes', 0)
+    # Старый формат: usedTrafficBytes напрямую
+    return panel_user.get('usedTrafficBytes', 0)
+
+
+def _get_lifetime_traffic_bytes(panel_user: Dict[str, Any]) -> int:
+    """Извлекает lifetimeUsedTrafficBytes из панельного пользователя (совместимо с новым и старым API)"""
+    # Новый формат: userTraffic.lifetimeUsedTrafficBytes
+    user_traffic = panel_user.get('userTraffic')
+    if user_traffic and isinstance(user_traffic, dict):
+        return user_traffic.get('lifetimeUsedTrafficBytes', 0)
+    # Старый формат: lifetimeUsedTrafficBytes напрямую
+    return panel_user.get('lifetimeUsedTrafficBytes', 0)
+
+
 _UUID_MAP_MISSING = object()
 
 
@@ -1463,10 +1483,10 @@ class RemnaWaveService:
         
             traffic_limit_bytes = panel_user.get('trafficLimitBytes', 0)
             traffic_limit_gb = traffic_limit_bytes // (1024**3) if traffic_limit_bytes > 0 else 0
-        
-            used_traffic_bytes = panel_user.get('usedTrafficBytes', 0)
+
+            used_traffic_bytes = _get_user_traffic_bytes(panel_user)
             traffic_used_gb = used_traffic_bytes / (1024**3)
-        
+
             active_squads = panel_user.get('activeInternalSquads', [])
             squad_uuids = []
             if isinstance(active_squads, list):
@@ -1568,10 +1588,10 @@ class RemnaWaveService:
             if subscription.status != new_status:
                 subscription.status = new_status
                 logger.debug(f"Обновлен статус подписки: {new_status}")
-        
-            used_traffic_bytes = panel_user.get('usedTrafficBytes', 0)
+
+            used_traffic_bytes = _get_user_traffic_bytes(panel_user)
             traffic_used_gb = used_traffic_bytes / (1024**3)
-        
+
             if abs(subscription.traffic_used_gb - traffic_used_gb) > 0.01:
                 subscription.traffic_used_gb = traffic_used_gb
                 logger.debug(f"Обновлен использованный трафик: {traffic_used_gb} GB")
