@@ -20,6 +20,8 @@ DEFAULT_DISPLAY_NAME_BANNED_KEYWORDS = [
     "joingroup",
 ]
 
+USER_TAG_PATTERN = re.compile(r"^[A-Z0-9_]{1,16}$")
+
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +91,7 @@ class Settings(BaseSettings):
     TRIAL_ADD_REMAINING_DAYS_TO_PAID: bool = False
     TRIAL_PAYMENT_ENABLED: bool = False
     TRIAL_ACTIVATION_PRICE: int = 0
+    TRIAL_USER_TAG: Optional[str] = None
     DEFAULT_TRAFFIC_LIMIT_GB: int = 100
     DEFAULT_DEVICE_LIMIT: int = 1
     DEFAULT_TRAFFIC_RESET_STRATEGY: str = "MONTH"
@@ -120,6 +123,7 @@ class Settings(BaseSettings):
     PRICE_90_DAYS: int = 269000
     PRICE_180_DAYS: int = 499000
     PRICE_360_DAYS: int = 899000
+    PAID_SUBSCRIPTION_USER_TAG: Optional[str] = None
 
     PRICE_TRAFFIC_5GB: int = 2000
     PRICE_TRAFFIC_10GB: int = 3500
@@ -777,12 +781,47 @@ class Settings(BaseSettings):
     
     def kopeks_to_rubles(self, kopeks: int) -> float:
         return kopeks / 100
-    
+
     def rubles_to_kopeks(self, rubles: float) -> int:
         return int(rubles * 100)
-    
+
+    @staticmethod
+    def _normalize_user_tag(value: Optional[str], setting_name: str) -> Optional[str]:
+        if value is None:
+            return None
+
+        cleaned = str(value).strip().upper()
+        if not cleaned:
+            return None
+
+        if len(cleaned) > 16:
+            logger.warning(
+                "Некорректная длина %s: максимум 16 символов, получено %s",
+                setting_name,
+                len(cleaned),
+            )
+            return None
+
+        if not USER_TAG_PATTERN.fullmatch(cleaned):
+            logger.warning(
+                "Некорректный формат %s: допустимы только A-Z, 0-9 и подчёркивание",
+                setting_name,
+            )
+            return None
+
+        return cleaned
+
     def get_trial_warning_hours(self) -> int:
         return self.TRIAL_WARNING_HOURS
+
+    def get_trial_user_tag(self) -> Optional[str]:
+        return self._normalize_user_tag(self.TRIAL_USER_TAG, "TRIAL_USER_TAG")
+
+    def get_paid_subscription_user_tag(self) -> Optional[str]:
+        return self._normalize_user_tag(
+            self.PAID_SUBSCRIPTION_USER_TAG,
+            "PAID_SUBSCRIPTION_USER_TAG",
+        )
 
     def get_bot_username(self) -> Optional[str]:
         username = getattr(self, "BOT_USERNAME", None)

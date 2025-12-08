@@ -32,6 +32,19 @@ class RemnaWaveNode(BaseModel):
     users_online: Optional[int] = None
     traffic_used_bytes: Optional[int] = None
     traffic_limit_bytes: Optional[int] = None
+    last_status_change: Optional[datetime] = None
+    last_status_message: Optional[str] = None
+    xray_uptime: Optional[str] = None
+    is_traffic_tracking_active: bool = False
+    traffic_reset_day: Optional[int] = None
+    notify_percent: Optional[int] = None
+    consumption_multiplier: float = 1.0
+    cpu_count: Optional[int] = None
+    cpu_model: Optional[str] = None
+    total_ram: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    provider_uuid: Optional[str] = None
 
 
 class RemnaWaveNodeListResponse(BaseModel):

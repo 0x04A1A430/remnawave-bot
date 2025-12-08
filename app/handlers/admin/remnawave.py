@@ -1316,7 +1316,29 @@ async def show_node_details(
    
    status_emoji = "🟢" if node["is_node_online"] else "🔴"
    xray_emoji = "✅" if node["is_xray_running"] else "❌"
-   
+
+   status_change = (
+       format_datetime(node["last_status_change"])
+       if node.get("last_status_change")
+       else "—"
+   )
+   created_at = (
+       format_datetime(node["created_at"])
+       if node.get("created_at")
+       else "—"
+   )
+   updated_at = (
+       format_datetime(node["updated_at"])
+       if node.get("updated_at")
+       else "—"
+   )
+   notify_percent = (
+       f"{node['notify_percent']}%" if node.get("notify_percent") is not None else "—"
+   )
+   cpu_info = node.get("cpu_model") or "—"
+   if node.get("cpu_count"):
+       cpu_info = f"{node['cpu_count']}x {cpu_info}"
+
    text = f"""
 🖥️ <b>Нода: {node['name']}</b>
 
@@ -1325,15 +1347,29 @@ async def show_node_details(
 - Xray: {xray_emoji} {'Запущен' if node['is_xray_running'] else 'Остановлен'}
 - Подключена: {'📡 Да' if node['is_connected'] else '📵 Нет'}
 - Отключена: {'❌ Да' if node['is_disabled'] else '✅ Нет'}
+- Изменение статуса: {status_change}
+- Сообщение: {node.get('last_status_message') or '—'}
+- Uptime Xray: {node.get('xray_uptime') or '—'}
 
 <b>Информация:</b>
 - Адрес: {node['address']}
 - Страна: {node['country_code']}
 - Пользователей онлайн: {node['users_online']}
+- CPU: {cpu_info}
+- RAM: {node.get('total_ram') or '—'}
+- Провайдер: {node.get('provider_uuid') or '—'}
 
 <b>Трафик:</b>
 - Использовано: {format_bytes(node['traffic_used_bytes'])}
 - Лимит: {format_bytes(node['traffic_limit_bytes']) if node['traffic_limit_bytes'] else 'Без лимита'}
+- Трекинг: {'✅ Активен' if node.get('is_traffic_tracking_active') else '❌ Отключен'}
+- День сброса: {node.get('traffic_reset_day') or '—'}
+- Уведомления: {notify_percent}
+- Множитель: {node.get('consumption_multiplier') or 1}
+
+<b>Метаданные:</b>
+- Создана: {created_at}
+- Обновлена: {updated_at}
 """
    
    await callback.message.edit_text(
@@ -1350,28 +1386,18 @@ async def manage_node(
    db_user: User,
    db: AsyncSession
 ):
-   action, node_uuid = callback.data.split('_')[1], callback.data.split('_')[-1]
-   
-   remnawave_service = RemnaWaveService()
-   success = await remnawave_service.manage_node(node_uuid, action)
-   
-   if success:
-       action_text = {"enable": "включена", "disable": "отключена", "restart": "перезагружена"}
-       await callback.answer(f"✅ Нода {action_text.get(action, 'обработана')}")
-   else:
-       await callback.answer("❌ Ошибка выполнения действия", show_alert=True)
-   
-   await show_node_details(
-       types.CallbackQuery(
-           id=callback.id,
-           from_user=callback.from_user,
-           chat_instance=callback.chat_instance,
-           data=f"admin_node_manage_{node_uuid}",
-           message=callback.message
-       ),
-       db_user,
-       db
-   )
+    action, node_uuid = callback.data.split('_')[1], callback.data.split('_')[-1]
+
+    remnawave_service = RemnaWaveService()
+    success = await remnawave_service.manage_node(node_uuid, action)
+
+    if success:
+        action_text = {"enable": "включена", "disable": "отключена", "restart": "перезагружена"}
+        await callback.answer(f"✅ Нода {action_text.get(action, 'обработана')}")
+    else:
+        await callback.answer("❌ Ошибка выполнения действия", show_alert=True)
+
+    await show_node_details(callback, db_user, db)
 
 @admin_required
 @error_handler
@@ -1407,10 +1433,32 @@ async def show_node_statistics(
             if stats.get('nodeUuid') == node_uuid:
                 node_realtime = stats
                 break
-        
+
+        status_change = (
+            format_datetime(node["last_status_change"])
+            if node.get("last_status_change")
+            else "—"
+        )
+        created_at = (
+            format_datetime(node["created_at"])
+            if node.get("created_at")
+            else "—"
+        )
+        updated_at = (
+            format_datetime(node["updated_at"])
+            if node.get("updated_at")
+            else "—"
+        )
+        notify_percent = (
+            f"{node['notify_percent']}%" if node.get("notify_percent") is not None else "—"
+        )
+        cpu_info = node.get("cpu_model") or "—"
+        if node.get("cpu_count"):
+            cpu_info = f"{node['cpu_count']}x {cpu_info}"
+
         status_emoji = "🟢" if node["is_node_online"] else "🔴"
         xray_emoji = "✅" if node["is_xray_running"] else "❌"
-        
+
         text = f"""
 📊 <b>Статистика ноды: {node['name']}</b>
 
@@ -1418,10 +1466,26 @@ async def show_node_statistics(
 - Онлайн: {status_emoji} {'Да' if node['is_node_online'] else 'Нет'}
 - Xray: {xray_emoji} {'Запущен' if node['is_xray_running'] else 'Остановлен'}
 - Пользователей онлайн: {node['users_online'] or 0}
+- Изменение статуса: {status_change}
+- Сообщение: {node.get('last_status_message') or '—'}
+- Uptime Xray: {node.get('xray_uptime') or '—'}
+
+<b>Ресурсы:</b>
+- CPU: {cpu_info}
+- RAM: {node.get('total_ram') or '—'}
+- Провайдер: {node.get('provider_uuid') or '—'}
 
 <b>Трафик:</b>
 - Использовано: {format_bytes(node['traffic_used_bytes'] or 0)}
 - Лимит: {format_bytes(node['traffic_limit_bytes']) if node['traffic_limit_bytes'] else 'Без лимита'}
+- Трекинг: {'✅ Активен' if node.get('is_traffic_tracking_active') else '❌ Отключен'}
+- День сброса: {node.get('traffic_reset_day') or '—'}
+- Уведомления: {notify_percent}
+- Множитель: {node.get('consumption_multiplier') or 1}
+
+<b>Метаданные:</b>
+- Создана: {created_at}
+- Обновлена: {updated_at}
 """
 
         if node_realtime:
@@ -1456,18 +1520,25 @@ async def show_node_statistics(
         
     except Exception as e:
         logger.error(f"Ошибка получения статистики ноды {node_uuid}: {e}")
-        
+
         text = f"""
 📊 <b>Статистика ноды: {node['name']}</b>
 
 <b>Статус:</b>
-- Онлайн: {status_emoji} {'Да' if node['is_node_online'] else 'Нет'}  
+- Онлайн: {status_emoji} {'Да' if node['is_node_online'] else 'Нет'}
 - Xray: {xray_emoji} {'Запущен' if node['is_xray_running'] else 'Остановлен'}
 - Пользователей онлайн: {node['users_online'] or 0}
+- Изменение статуса: {format_datetime(node.get('last_status_change')) if node.get('last_status_change') else '—'}
+- Сообщение: {node.get('last_status_message') or '—'}
+- Uptime Xray: {node.get('xray_uptime') or '—'}
 
 <b>Трафик:</b>
 - Использовано: {format_bytes(node['traffic_used_bytes'] or 0)}
 - Лимит: {format_bytes(node['traffic_limit_bytes']) if node['traffic_limit_bytes'] else 'Без лимита'}
+- Трекинг: {'✅ Активен' if node.get('is_traffic_tracking_active') else '❌ Отключен'}
+- День сброса: {node.get('traffic_reset_day') or '—'}
+- Уведомления: {node.get('notify_percent') or '—'}
+- Множитель: {node.get('consumption_multiplier') or 1}
 
 ⚠️ <b>Детальная статистика временно недоступна</b>
 Возможные причины:
@@ -1566,17 +1637,11 @@ async def manage_squad_action(
             await callback.answer("❌ Ошибка удаления сквада", show_alert=True)
         return
     
-    await show_squad_details(
-        types.CallbackQuery(
-            id=callback.id,
-            from_user=callback.from_user,
-            chat_instance=callback.chat_instance,
-            data=f"admin_squad_manage_{squad_uuid}",
-            message=callback.message
-        ),
-        db_user,
-        db
-    )
+    refreshed_callback = callback.model_copy(
+        update={"data": f"admin_squad_manage_{squad_uuid}"}
+    ).as_(callback.bot)
+
+    await show_squad_details(refreshed_callback, db_user, db)
 
 @admin_required
 @error_handler
@@ -1734,15 +1799,11 @@ async def cancel_squad_rename(
     
     await state.clear()
     
-    new_callback = types.CallbackQuery(
-        id=callback.id,
-        from_user=callback.from_user,
-        chat_instance=callback.chat_instance,
-        data=f"squad_edit_{squad_uuid}",
-        message=callback.message
-    )
-    
-    await show_squad_edit_menu(new_callback, db_user, db)
+    refreshed_callback = callback.model_copy(
+        update={"data": f"squad_edit_{squad_uuid}"}
+    ).as_(callback.bot)
+
+    await show_squad_edit_menu(refreshed_callback, db_user, db)
 
 @admin_required
 @error_handler
@@ -1953,15 +2014,11 @@ async def show_squad_edit_menu_short(
         await callback.answer("❌ Сквад не найден", show_alert=True)
         return
     
-    new_callback = types.CallbackQuery(
-        id=callback.id,
-        from_user=callback.from_user,
-        chat_instance=callback.chat_instance,
-        data=f"squad_edit_{full_squad_uuid}",
-        message=callback.message
-    )
-    
-    await show_squad_edit_menu(new_callback, db_user, db)
+    refreshed_callback = callback.model_copy(
+        update={"data": f"squad_edit_{full_squad_uuid}"}
+    ).as_(callback.bot)
+
+    await show_squad_edit_menu(refreshed_callback, db_user, db)
 
 @admin_required
 @error_handler
