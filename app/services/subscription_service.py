@@ -11,6 +11,7 @@ from app.external.remnawave_api import (
     TrafficLimitStrategy, RemnaWaveAPIError
 )
 from app.database.crud.user import get_user_by_id
+from app.utils.internal_squads import resolve_user_internal_squads
 from app.utils.pricing_utils import (
     calculate_months_from_days,
     get_remaining_months,
@@ -207,7 +208,9 @@ class SubscriptionService:
                             username=user.username,
                             telegram_id=user.telegram_id
                         ),
-                        active_internal_squads=subscription.connected_squads,
+                        active_internal_squads=resolve_user_internal_squads(
+                            user, subscription
+                        ),
                     )
 
                     if user_tag is not None:
@@ -245,7 +248,9 @@ class SubscriptionService:
                             username=user.username,
                             telegram_id=user.telegram_id
                         ),
-                        active_internal_squads=subscription.connected_squads,
+                        active_internal_squads=resolve_user_internal_squads(
+                            user, subscription
+                        ),
                     )
 
                     if user_tag is not None:
@@ -328,7 +333,9 @@ class SubscriptionService:
                         username=user.username,
                         telegram_id=user.telegram_id
                     ),
-                    active_internal_squads=subscription.connected_squads,
+                    active_internal_squads=resolve_user_internal_squads(
+                        user, subscription
+                    ),
                 )
 
                 if user_tag is not None:

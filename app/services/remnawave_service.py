@@ -42,6 +42,7 @@ from app.database.models import (
 from app.utils.subscription_utils import (
     resolve_hwid_device_limit_for_payload,
 )
+from app.utils.internal_squads import resolve_user_internal_squads
 from app.utils.timezone import get_local_timezone
 
 logger = logging.getLogger(__name__)
@@ -181,6 +182,70 @@ class RemnaWaveService:
             raise RemnaWaveConfigurationError(
                 self._config_error or "RemnaWave API не настроен"
             )
+
+    async def resolve_internal_squad_uuids(self, identifiers: List[str]) -> List[str]:
+        """Конвертирует названия/UUID сквадов в UUID через панель RemnaWave."""
+
+        if not identifiers:
+            return []
+
+        cleaned: List[str] = []
+        seen = set()
+
+        for ident in identifiers:
+            if not ident:
+                continue
+
+            value = str(ident).strip()
+            if not value or value in seen:
+                continue
+
+            seen.add(value)
+            cleaned.append(value)
+
+        if not cleaned:
+            return []
+
+        try:
+            async with self.get_api_client() as api:
+                squads = await api.get_internal_squads()
+        except Exception as error:
+            logger.error("❌ Не удалось получить список Internal Squads: %s", error)
+            return []
+
+        name_to_uuid = {squad.name.lower(): squad.uuid for squad in squads}
+        uuid_set = {squad.uuid for squad in squads}
+
+        resolved: List[str] = []
+        for value in cleaned:
+            if value in uuid_set:
+                resolved.append(value)
+                continue
+
+            mapped = name_to_uuid.get(value.lower())
+            if mapped:
+                resolved.append(mapped)
+            else:
+                logger.warning("⚠️ Неизвестный Internal Squad: %s", value)
+
+        return resolved
+
+    async def normalize_active_internal_squads(self, active_squads: List[Any]) -> List[str]:
+        """Приводит входные данные о сквадах (имя/UUID/словарь) к списку UUID."""
+
+        identifiers: List[str] = []
+
+        for squad in active_squads or []:
+            identifier = None
+            if isinstance(squad, dict):
+                identifier = squad.get('uuid') or squad.get('name')
+            else:
+                identifier = squad
+
+            if identifier:
+                identifiers.append(str(identifier))
+
+        return await self.resolve_internal_squad_uuids(identifiers)
 
     def _ensure_user_remnawave_uuid(
         self,
@@ -1017,6 +1082,7 @@ class RemnaWaveService:
                             uuid=subscription.user.remnawave_uuid,
                             active_internal_squads=new_squads,
                         )
+                        subscription.user.active_internal_squads = new_squads
                         panel_updated += 1
                     except Exception as error:
                         panel_failed += 1
@@ -1506,14 +1572,9 @@ class RemnaWaveService:
             traffic_used_gb = used_traffic_bytes / (1024**3)
 
             active_squads = panel_user.get('activeInternalSquads', [])
-            squad_uuids = []
-            if isinstance(active_squads, list):
-                for squad in active_squads:
-                    if isinstance(squad, dict) and 'uuid' in squad:
-                        squad_uuids.append(squad['uuid'])
-                    elif isinstance(squad, str):
-                        squad_uuids.append(squad)
-        
+            squad_uuids = await self.normalize_active_internal_squads(active_squads)
+            user.active_internal_squads = squad_uuids
+
             subscription_data = {
                 'user_id': user.id,
                 'status': status.value,
@@ -1647,16 +1708,11 @@ class RemnaWaveService:
             )
             if panel_crypto_link and subscription.subscription_crypto_link != panel_crypto_link:
                 subscription.subscription_crypto_link = panel_crypto_link
-        
+
             active_squads = panel_user.get('activeInternalSquads', [])
-            squad_uuids = []
-            if isinstance(active_squads, list):
-                for squad in active_squads:
-                    if isinstance(squad, dict) and 'uuid' in squad:
-                        squad_uuids.append(squad['uuid'])
-                    elif isinstance(squad, str):
-                        squad_uuids.append(squad)
-        
+            squad_uuids = await self.normalize_active_internal_squads(active_squads)
+            user.active_internal_squads = squad_uuids
+
             current_squads = set(subscription.connected_squads or [])
             new_squads = set(squad_uuids)
             
@@ -1694,6 +1750,7 @@ class RemnaWaveService:
                         try:
                             subscription = user.subscription
                             hwid_limit = resolve_hwid_device_limit_for_payload(subscription)
+                            active_squads = resolve_user_internal_squads(user, subscription)
 
                             expire_at = self._safe_expire_at_for_panel(subscription.end_date)
                             status = UserStatus.ACTIVE if subscription.is_active else UserStatus.DISABLED
@@ -1716,7 +1773,7 @@ class RemnaWaveService:
                                     username=user.username,
                                     telegram_id=user.telegram_id
                                 ),
-                                active_internal_squads=subscription.connected_squads,
+                                active_internal_squads=active_squads,
                             )
 
                             if hwid_limit is not None:
@@ -1730,7 +1787,7 @@ class RemnaWaveService:
                                     traffic_limit_bytes=create_kwargs['traffic_limit_bytes'],
                                     traffic_limit_strategy=TrafficLimitStrategy.MONTH,
                                     description=create_kwargs['description'],
-                                    active_internal_squads=subscription.connected_squads,
+                                    active_internal_squads=active_squads,
                                 )
 
                                 if hwid_limit is not None:

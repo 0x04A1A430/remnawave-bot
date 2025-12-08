@@ -585,6 +585,7 @@ class User(Base):
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
     last_activity = Column(DateTime, default=func.now())
     remnawave_uuid = Column(String(255), nullable=True, unique=True)
+    active_internal_squads = Column(JSON, nullable=True)
     broadcasts = relationship("BroadcastHistory", back_populates="admin")
     referrals = relationship("User", backref="referrer", remote_side=[id], foreign_keys="User.referred_by_id")
     subscription = relationship("Subscription", back_populates="user", uselist=False)
