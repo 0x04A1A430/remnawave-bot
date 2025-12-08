@@ -1397,12 +1397,14 @@ async def manage_node(
    else:
        await callback.answer("❌ Ошибка выполнения действия", show_alert=True)
    
-   refreshed_callback = callback.model_copy(
-       update={"data": f"admin_node_manage_{node_uuid}"}
-   )
-
    await show_node_details(
-       refreshed_callback,
+       types.CallbackQuery(
+           id=callback.id,
+           from_user=callback.from_user,
+           chat_instance=callback.chat_instance,
+           data=f"admin_node_manage_{node_uuid}",
+           message=callback.message
+       ),
        db_user,
        db
    )
