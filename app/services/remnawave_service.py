@@ -780,7 +780,20 @@ class RemnaWaveService:
                     "is_xray_running": node.is_xray_running,
                     "users_online": node.users_online or 0,
                     "traffic_used_bytes": node.traffic_used_bytes or 0,
-                    "traffic_limit_bytes": node.traffic_limit_bytes or 0
+                    "traffic_limit_bytes": node.traffic_limit_bytes or 0,
+                    "last_status_change": node.last_status_change,
+                    "last_status_message": node.last_status_message,
+                    "xray_uptime": node.xray_uptime,
+                    "is_traffic_tracking_active": node.is_traffic_tracking_active,
+                    "traffic_reset_day": node.traffic_reset_day,
+                    "notify_percent": node.notify_percent,
+                    "consumption_multiplier": node.consumption_multiplier,
+                    "cpu_count": node.cpu_count,
+                    "cpu_model": node.cpu_model,
+                    "total_ram": node.total_ram,
+                    "created_at": node.created_at,
+                    "updated_at": node.updated_at,
+                    "provider_uuid": node.provider_uuid,
                 }
                 
         except Exception as e:
