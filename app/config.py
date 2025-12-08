@@ -91,7 +91,6 @@ class Settings(BaseSettings):
     TRIAL_PAYMENT_ENABLED: bool = False
     TRIAL_ACTIVATION_PRICE: int = 0
     TRIAL_USER_TAG: Optional[str] = None
-    TRIAL_INTERNAL_SQUADS: Optional[str] = None
     DEFAULT_TRAFFIC_LIMIT_GB: int = 100
     DEFAULT_DEVICE_LIMIT: int = 1
     DEFAULT_TRAFFIC_RESET_STRATEGY: str = "MONTH"
@@ -816,28 +815,6 @@ class Settings(BaseSettings):
 
     def get_trial_user_tag(self) -> Optional[str]:
         return self._normalize_user_tag(self.TRIAL_USER_TAG, "TRIAL_USER_TAG")
-
-    def get_trial_internal_squads(self) -> list[str]:
-        raw_value = self.TRIAL_INTERNAL_SQUADS
-        if raw_value is None:
-            return []
-
-        if isinstance(raw_value, str):
-            items = [item.strip() for item in re.split(r"[,\n]", raw_value) if item.strip()]
-        elif isinstance(raw_value, (list, tuple, set)):
-            items = [str(item).strip() for item in raw_value if str(item).strip()]
-        else:
-            return []
-
-        seen = set()
-        unique_items: list[str] = []
-        for item in items:
-            lowered = item.lower()
-            if lowered in seen:
-                continue
-            seen.add(lowered)
-            unique_items.append(item)
-        return unique_items
 
     def get_paid_subscription_user_tag(self) -> Optional[str]:
         return self._normalize_user_tag(

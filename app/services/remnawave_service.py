@@ -846,59 +846,32 @@ class RemnaWaveService:
         except Exception as e:
             logger.error(f"Error updating squad inbounds: {e}")
             return False
-
-    @staticmethod
-    def _serialize_internal_squad(squad) -> Dict[str, Any]:
-        inbounds = [
-            asdict(inbound) if is_dataclass(inbound) else inbound
-            for inbound in getattr(squad, "inbounds", []) or []
-        ]
-        return {
-            'uuid': getattr(squad, 'uuid', ''),
-            'name': getattr(squad, 'name', ''),
-            'members_count': getattr(squad, 'members_count', 0),
-            'inbounds_count': getattr(squad, 'inbounds_count', 0),
-            'inbounds': inbounds,
-        }
-
+    
     async def get_all_squads(self) -> List[Dict[str, Any]]:
-
+        
         try:
             async with self.get_api_client() as api:
                 squads = await api.get_internal_squads()
 
                 result = []
                 for squad in squads:
-                    result.append(self._serialize_internal_squad(squad))
-
+                    inbounds = [
+                        asdict(inbound) if is_dataclass(inbound) else inbound
+                        for inbound in squad.inbounds or []
+                    ]
+                    result.append({
+                        'uuid': squad.uuid,
+                        'name': squad.name,
+                        'members_count': squad.members_count,
+                        'inbounds_count': squad.inbounds_count,
+                        'inbounds': inbounds,
+                    })
+                
                 logger.info(f"✅ Получено {len(result)} сквадов из Remnawave")
                 return result
-
+                
         except Exception as e:
             logger.error(f"Ошибка получения сквадов из Remnawave: {e}")
-            return []
-
-    async def get_internal_squad(self, uuid: str) -> Optional[Dict[str, Any]]:
-        try:
-            async with self.get_api_client() as api:
-                squad = await api.get_internal_squad_by_uuid(uuid)
-                if not squad:
-                    return None
-                return self._serialize_internal_squad(squad)
-        except Exception as error:
-            logger.error("Ошибка получения internal squad %s: %s", uuid, error)
-            return None
-
-    async def get_internal_squad_accessible_nodes(self, uuid: str) -> List[Dict[str, Any]]:
-        try:
-            async with self.get_api_client() as api:
-                nodes = await api.get_internal_squad_accessible_nodes(uuid)
-                return [
-                    asdict(node) if is_dataclass(node) else node
-                    for node in nodes or []
-                ]
-        except Exception as error:
-            logger.error("Ошибка получения нод internal squad %s: %s", uuid, error)
             return []
     
     async def create_squad(self, name: str, inbounds: List[str]) -> Optional[str]:
@@ -1731,12 +1704,6 @@ class RemnaWaveService:
                                 telegram_id=user.telegram_id,
                             )
 
-                            internal_squads = (
-                                list(user.active_internal_squads or [])
-                                if user.active_internal_squads is not None
-                                else list(subscription.connected_squads or [])
-                            )
-
                             create_kwargs = dict(
                                 username=username,
                                 expire_at=expire_at,
@@ -1749,7 +1716,7 @@ class RemnaWaveService:
                                     username=user.username,
                                     telegram_id=user.telegram_id
                                 ),
-                                active_internal_squads=internal_squads,
+                                active_internal_squads=subscription.connected_squads,
                             )
 
                             if hwid_limit is not None:
@@ -1763,7 +1730,7 @@ class RemnaWaveService:
                                     traffic_limit_bytes=create_kwargs['traffic_limit_bytes'],
                                     traffic_limit_strategy=TrafficLimitStrategy.MONTH,
                                     description=create_kwargs['description'],
-                                    active_internal_squads=internal_squads,
+                                    active_internal_squads=subscription.connected_squads,
                                 )
 
                                 if hwid_limit is not None:

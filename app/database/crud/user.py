@@ -2,7 +2,7 @@ import logging
 import secrets
 import string
 from datetime import datetime, timedelta
-from typing import Optional, List, Dict, Iterable
+from typing import Optional, List, Dict
 from sqlalchemy import select, and_, or_, func, case, nullslast, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload, joinedload
@@ -32,26 +32,6 @@ def generate_referral_code() -> str:
     alphabet = string.ascii_letters + string.digits
     code_suffix = ''.join(secrets.choice(alphabet) for _ in range(8))
     return f"ref{code_suffix}"
-
-
-def _normalize_internal_squads(value: Optional[Iterable[str]]) -> Optional[list[str]]:
-    if value is None:
-        return None
-
-    try:
-        items = [str(item).strip() for item in value if str(item).strip()]
-    except TypeError:
-        return None
-
-    seen = set()
-    normalized: list[str] = []
-    for item in items:
-        lowered = item.lower()
-        if lowered in seen:
-            continue
-        seen.add(lowered)
-        normalized.append(item)
-    return normalized
 
 
 async def get_user_by_id(db: AsyncSession, user_id: int) -> Optional[User]:
@@ -191,8 +171,7 @@ async def create_user_no_commit(
     last_name: str = None,
     language: str = "ru",
     referred_by_id: int = None,
-    referral_code: str = None,
-    active_internal_squads: Optional[Iterable[str]] = None,
+    referral_code: str = None
 ) -> User:
     """
     Создает пользователя без немедленного коммита для пакетной обработки
@@ -218,7 +197,6 @@ async def create_user_no_commit(
         has_had_paid_subscription=False,
         has_made_first_topup=False,
         promo_group_id=promo_group_id,
-        active_internal_squads=_normalize_internal_squads(active_internal_squads),
     )
 
     db.add(user)
@@ -244,8 +222,7 @@ async def create_user(
     last_name: str = None,
     language: str = "ru",
     referred_by_id: int = None,
-    referral_code: str = None,
-    active_internal_squads: Optional[Iterable[str]] = None,
+    referral_code: str = None
 ) -> User:
     
     if not referral_code:
@@ -271,7 +248,6 @@ async def create_user(
             has_had_paid_subscription=False,
             has_made_first_topup=False,
             promo_group_id=promo_group_id,
-            active_internal_squads=_normalize_internal_squads(active_internal_squads),
         )
 
         db.add(user)
@@ -319,8 +295,6 @@ async def update_user(
     for field, value in kwargs.items():
         if field in ("first_name", "last_name"):
             value = sanitize_telegram_name(value)
-        if field == "active_internal_squads":
-            value = _normalize_internal_squads(value)
         if hasattr(user, field):
             setattr(user, field, value)
     
