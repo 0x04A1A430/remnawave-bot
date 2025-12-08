@@ -1386,28 +1386,18 @@ async def manage_node(
    db_user: User,
    db: AsyncSession
 ):
-   action, node_uuid = callback.data.split('_')[1], callback.data.split('_')[-1]
-   
-   remnawave_service = RemnaWaveService()
-   success = await remnawave_service.manage_node(node_uuid, action)
-   
-   if success:
-       action_text = {"enable": "включена", "disable": "отключена", "restart": "перезагружена"}
-       await callback.answer(f"✅ Нода {action_text.get(action, 'обработана')}")
-   else:
-       await callback.answer("❌ Ошибка выполнения действия", show_alert=True)
-   
-   await show_node_details(
-       types.CallbackQuery(
-           id=callback.id,
-           from_user=callback.from_user,
-           chat_instance=callback.chat_instance,
-           data=f"admin_node_manage_{node_uuid}",
-           message=callback.message
-       ),
-       db_user,
-       db
-   )
+    action, node_uuid = callback.data.split('_')[1], callback.data.split('_')[-1]
+
+    remnawave_service = RemnaWaveService()
+    success = await remnawave_service.manage_node(node_uuid, action)
+
+    if success:
+        action_text = {"enable": "включена", "disable": "отключена", "restart": "перезагружена"}
+        await callback.answer(f"✅ Нода {action_text.get(action, 'обработана')}")
+    else:
+        await callback.answer("❌ Ошибка выполнения действия", show_alert=True)
+
+    await show_node_details(callback, db_user, db)
 
 @admin_required
 @error_handler
