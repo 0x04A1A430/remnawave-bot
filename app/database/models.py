@@ -600,6 +600,7 @@ class User(Base):
     promo_offer_discount_source = Column(String(100), nullable=True)
     promo_offer_discount_expires_at = Column(DateTime, nullable=True)
     last_remnawave_sync = Column(DateTime, nullable=True)
+    active_internal_squads = Column(JSON, nullable=True)
     trojan_password = Column(String(255), nullable=True)
     vless_uuid = Column(String(255), nullable=True)
     ss_password = Column(String(255), nullable=True)

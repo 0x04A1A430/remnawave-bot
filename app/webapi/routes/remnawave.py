@@ -14,6 +14,8 @@ from app.database.crud.server_squad import (
 from ..dependencies import get_db_session, require_api_token
 from ..schemas.remnawave import (
     RemnaWaveConnectionStatus,
+    RemnaWaveAccessibleNode,
+    RemnaWaveAccessibleNodeListResponse,
     RemnaWaveGenericSyncResponse,
     RemnaWaveInboundsResponse,
     RemnaWaveNode,
@@ -150,8 +152,50 @@ async def get_system_statistics(
     if not stats or "system" not in stats:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Не удалось получить статистику RemnaWave")
 
-    stats["last_updated"] = _parse_last_updated(stats.get("last_updated"))
-    return RemnaWaveSystemStatsResponse(**stats)
+        stats["last_updated"] = _parse_last_updated(stats.get("last_updated"))
+        return RemnaWaveSystemStatsResponse(**stats)
+
+
+@router.get("/internal-squads", response_model=RemnaWaveSquadListResponse)
+async def list_internal_squads(
+    _: Any = Security(require_api_token),
+) -> RemnaWaveSquadListResponse:
+    service = _get_service()
+    _ensure_service_configured(service)
+
+    squads = await service.get_all_squads()
+    items = [RemnaWaveSquad(**squad) for squad in squads]
+    return RemnaWaveSquadListResponse(items=items, total=len(items))
+
+
+@router.get("/internal-squads/{squad_uuid}", response_model=RemnaWaveSquad)
+async def get_internal_squad(
+    squad_uuid: str,
+    _: Any = Security(require_api_token),
+) -> RemnaWaveSquad:
+    service = _get_service()
+    _ensure_service_configured(service)
+
+    squad = await service.get_internal_squad(squad_uuid)
+    if not squad:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Squad not found")
+    return RemnaWaveSquad(**squad)
+
+
+@router.get(
+    "/internal-squads/{squad_uuid}/nodes",
+    response_model=RemnaWaveAccessibleNodeListResponse,
+)
+async def get_internal_squad_nodes(
+    squad_uuid: str,
+    _: Any = Security(require_api_token),
+) -> RemnaWaveAccessibleNodeListResponse:
+    service = _get_service()
+    _ensure_service_configured(service)
+
+    nodes = await service.get_internal_squad_accessible_nodes(squad_uuid)
+    items = [RemnaWaveAccessibleNode(**node) for node in nodes]
+    return RemnaWaveAccessibleNodeListResponse(items=items, total=len(items))
 
 
 @router.get("/nodes", response_model=RemnaWaveNodeListResponse)

@@ -312,7 +312,11 @@ class MonitoringService:
                         username=user.username,
                         telegram_id=user.telegram_id
                     ),
-                    active_internal_squads=subscription.connected_squads,
+                    active_internal_squads=(
+                        list(user.active_internal_squads or [])
+                        if user.active_internal_squads is not None
+                        else list(subscription.connected_squads or [])
+                    ),
                 )
 
                 if hwid_limit is not None:
