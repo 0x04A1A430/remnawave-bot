@@ -3,6 +3,7 @@ import logging
 import re
 from contextlib import AsyncExitStack, asynccontextmanager
 from datetime import datetime, timedelta
+from dataclasses import asdict, is_dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 from zoneinfo import ZoneInfo
@@ -851,15 +852,19 @@ class RemnaWaveService:
         try:
             async with self.get_api_client() as api:
                 squads = await api.get_internal_squads()
-                
+
                 result = []
                 for squad in squads:
+                    inbounds = [
+                        asdict(inbound) if is_dataclass(inbound) else inbound
+                        for inbound in squad.inbounds or []
+                    ]
                     result.append({
                         'uuid': squad.uuid,
                         'name': squad.name,
                         'members_count': squad.members_count,
                         'inbounds_count': squad.inbounds_count,
-                        'inbounds': squad.inbounds
+                        'inbounds': inbounds,
                     })
                 
                 logger.info(f"✅ Получено {len(result)} сквадов из Remnawave")
@@ -1860,12 +1865,16 @@ class RemnaWaveService:
             async with self.get_api_client() as api:
                 squad = await api.get_internal_squad_by_uuid(squad_uuid)
                 if squad:
+                    inbounds = [
+                        asdict(inbound) if is_dataclass(inbound) else inbound
+                        for inbound in squad.inbounds or []
+                    ]
                     return {
                         'uuid': squad.uuid,
                         'name': squad.name,
                         'members_count': squad.members_count,
                         'inbounds_count': squad.inbounds_count,
-                        'inbounds': squad.inbounds
+                        'inbounds': inbounds
                     }
                 return None
         except Exception as e:
