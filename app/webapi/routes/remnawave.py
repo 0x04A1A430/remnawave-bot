@@ -93,6 +93,19 @@ def _serialize_node(node_data: Dict[str, Any]) -> RemnaWaveNode:
         users_online=node_data.get("users_online"),
         traffic_used_bytes=node_data.get("traffic_used_bytes"),
         traffic_limit_bytes=node_data.get("traffic_limit_bytes"),
+        last_status_change=_parse_last_updated(node_data.get("last_status_change")),
+        last_status_message=node_data.get("last_status_message"),
+        xray_uptime=node_data.get("xray_uptime"),
+        is_traffic_tracking_active=bool(node_data.get("is_traffic_tracking_active", False)),
+        traffic_reset_day=node_data.get("traffic_reset_day"),
+        notify_percent=node_data.get("notify_percent"),
+        consumption_multiplier=float(node_data.get("consumption_multiplier", 1.0)),
+        cpu_count=node_data.get("cpu_count"),
+        cpu_model=node_data.get("cpu_model"),
+        total_ram=node_data.get("total_ram"),
+        created_at=_parse_last_updated(node_data.get("created_at")),
+        updated_at=_parse_last_updated(node_data.get("updated_at")),
+        provider_uuid=node_data.get("provider_uuid"),
     )
 
 
