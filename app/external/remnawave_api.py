@@ -99,15 +99,39 @@ class RemnaWaveUser:
 
 
 @dataclass
+class RemnaWaveInbound:
+    """Структура inbound для Internal Squad"""
+    uuid: str
+    profile_uuid: str
+    tag: str
+    type: str
+    network: Optional[str] = None
+    security: Optional[str] = None
+    port: Optional[int] = None
+    raw_inbound: Optional[Any] = None
+
+
+@dataclass
 class RemnaWaveInternalSquad:
     uuid: str
     name: str
     members_count: int
     inbounds_count: int
-    inbounds: List[Dict[str, Any]]
+    inbounds: List[RemnaWaveInbound]
     view_position: int = 0
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+
+@dataclass
+class RemnaWaveAccessibleNode:
+    """Доступная нода для Internal Squad"""
+    uuid: str
+    node_name: str
+    country_code: str
+    config_profile_uuid: str
+    config_profile_name: str
+    active_inbounds: List[str]
 
 
 @dataclass
@@ -127,6 +151,20 @@ class RemnaWaveNode:
     node_version: Optional[str] = None
     view_position: int = 0
     tags: Optional[List[str]] = None
+    # Новые поля API
+    last_status_change: Optional[datetime] = None
+    last_status_message: Optional[str] = None
+    xray_uptime: Optional[str] = None
+    is_traffic_tracking_active: bool = False
+    traffic_reset_day: Optional[int] = None
+    notify_percent: Optional[int] = None
+    consumption_multiplier: float = 1.0
+    cpu_count: Optional[int] = None
+    cpu_model: Optional[str] = None
+    total_ram: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    provider_uuid: Optional[str] = None
 
     @property
     def is_node_online(self) -> bool:
@@ -498,8 +536,38 @@ class RemnaWaveAPI:
     async def delete_internal_squad(self, uuid: str) -> bool:
         response = await self._make_request('DELETE', f'/api/internal-squads/{uuid}')
         return response['response']['isDeleted']
-    
-    
+
+    async def get_internal_squad_accessible_nodes(self, uuid: str) -> List[RemnaWaveAccessibleNode]:
+        """Получает список доступных нод для Internal Squad"""
+        try:
+            response = await self._make_request('GET', f'/api/internal-squads/{uuid}/accessible-nodes')
+            return [self._parse_accessible_node(node) for node in response['response']['accessibleNodes']]
+        except RemnaWaveAPIError as e:
+            if e.status_code == 404:
+                return []
+            raise
+
+    async def add_users_to_internal_squad(self, uuid: str) -> bool:
+        """Добавляет всех пользователей в Internal Squad (bulk action)"""
+        response = await self._make_request('POST', f'/api/internal-squads/{uuid}/bulk-actions/add-users')
+        return response['response']['eventSent']
+
+    async def remove_users_from_internal_squad(self, uuid: str) -> bool:
+        """Удаляет всех пользователей из Internal Squad (bulk action)"""
+        response = await self._make_request('POST', f'/api/internal-squads/{uuid}/bulk-actions/remove-users')
+        return response['response']['eventSent']
+
+    async def reorder_internal_squads(self, items: List[Dict[str, Any]]) -> List[RemnaWaveInternalSquad]:
+        """
+        Изменяет порядок Internal Squads
+        items: список словарей с uuid и viewPosition
+        Пример: [{'uuid': '...', 'viewPosition': 0}, {'uuid': '...', 'viewPosition': 1}]
+        """
+        data = {'items': items}
+        response = await self._make_request('POST', '/api/internal-squads/actions/reorder', data)
+        return [self._parse_internal_squad(squad) for squad in response['response']['internalSquads']]
+
+
     async def get_all_nodes(self) -> List[RemnaWaveNode]:
         response = await self._make_request('GET', '/api/nodes')
         return [self._parse_node(node) for node in response['response']]
@@ -714,19 +782,45 @@ class RemnaWaveAPI:
             return datetime.fromisoformat(date_str.replace('Z', '+00:00'))
         return None
     
+    def _parse_inbound(self, inbound_data: Dict) -> RemnaWaveInbound:
+        """Парсит данные inbound"""
+        return RemnaWaveInbound(
+            uuid=inbound_data['uuid'],
+            profile_uuid=inbound_data['profileUuid'],
+            tag=inbound_data['tag'],
+            type=inbound_data['type'],
+            network=inbound_data.get('network'),
+            security=inbound_data.get('security'),
+            port=inbound_data.get('port'),
+            raw_inbound=inbound_data.get('rawInbound')
+        )
+
     def _parse_internal_squad(self, squad_data: Dict) -> RemnaWaveInternalSquad:
         info = squad_data.get('info', {})
+        inbounds_raw = squad_data.get('inbounds', [])
+        inbounds = [self._parse_inbound(ib) for ib in inbounds_raw] if inbounds_raw else []
         return RemnaWaveInternalSquad(
             uuid=squad_data['uuid'],
             name=squad_data['name'],
             members_count=info.get('membersCount', 0),
             inbounds_count=info.get('inboundsCount', 0),
-            inbounds=squad_data.get('inbounds', []),
+            inbounds=inbounds,
             view_position=squad_data.get('viewPosition', 0),
             created_at=self._parse_optional_datetime(squad_data.get('createdAt')),
             updated_at=self._parse_optional_datetime(squad_data.get('updatedAt'))
         )
-    
+
+    def _parse_accessible_node(self, node_data: Dict) -> RemnaWaveAccessibleNode:
+        """Парсит данные доступной ноды для Internal Squad"""
+        return RemnaWaveAccessibleNode(
+            uuid=node_data['uuid'],
+            node_name=node_data['nodeName'],
+            country_code=node_data['countryCode'],
+            config_profile_uuid=node_data['configProfileUuid'],
+            config_profile_name=node_data['configProfileName'],
+            active_inbounds=node_data.get('activeInbounds', [])
+        )
+
     def _parse_node(self, node_data: Dict) -> RemnaWaveNode:
         return RemnaWaveNode(
             uuid=node_data['uuid'],
@@ -743,7 +837,21 @@ class RemnaWaveAPI:
             xray_version=node_data.get('xrayVersion'),
             node_version=node_data.get('nodeVersion'),
             view_position=node_data.get('viewPosition', 0),
-            tags=node_data.get('tags', [])
+            tags=node_data.get('tags', []),
+            # Новые поля API
+            last_status_change=self._parse_optional_datetime(node_data.get('lastStatusChange')),
+            last_status_message=node_data.get('lastStatusMessage'),
+            xray_uptime=node_data.get('xrayUptime'),
+            is_traffic_tracking_active=node_data.get('isTrafficTrackingActive', False),
+            traffic_reset_day=node_data.get('trafficResetDay'),
+            notify_percent=node_data.get('notifyPercent'),
+            consumption_multiplier=node_data.get('consumptionMultiplier', 1.0),
+            cpu_count=node_data.get('cpuCount'),
+            cpu_model=node_data.get('cpuModel'),
+            total_ram=node_data.get('totalRam'),
+            created_at=self._parse_optional_datetime(node_data.get('createdAt')),
+            updated_at=self._parse_optional_datetime(node_data.get('updatedAt')),
+            provider_uuid=node_data.get('providerUuid')
         )
     
     def _parse_subscription_info(self, data: Dict) -> SubscriptionInfo:
