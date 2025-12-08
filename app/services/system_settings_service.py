@@ -654,6 +654,15 @@ class BotConfigurationService:
             "warning": "Неверный формат будет проигнорирован при создании пользователя.",
             "dependencies": "Активация триала и включенная интеграция с RemnaWave",
         },
+        "TRIAL_INTERNAL_SQUADS": {
+            "description": (
+                "Список internal squads, которые нужно назначать пользователям с триальной подпиской."
+            ),
+            "format": "Укажите названия сквадов через запятую или с новой строки.",
+            "example": "Default, Trial Access",
+            "warning": "При оплате подписки эти сквады будут сброшены.",
+            "dependencies": "RemnaWave API и активированный триал",
+        },
         "PAID_SUBSCRIPTION_USER_TAG": {
             "description": (
                 "Тег, который бот ставит пользователю при покупке платной подписки в панели RemnaWave."

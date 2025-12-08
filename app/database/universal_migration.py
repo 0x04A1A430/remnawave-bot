@@ -1489,6 +1489,40 @@ async def ensure_user_promo_offer_discount_columns():
         return False
 
 
+async def ensure_user_internal_squads_column() -> bool:
+    try:
+        column_exists = await check_column_exists('users', 'active_internal_squads')
+        if column_exists:
+            return True
+
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'sqlite':
+                column_def = 'JSON NULL'
+            elif db_type == 'postgresql':
+                column_def = 'JSONB NULL'
+            elif db_type == 'mysql':
+                column_def = 'JSON NULL'
+            else:
+                raise ValueError(f"Unsupported database type: {db_type}")
+
+            await conn.execute(
+                text(
+                    f"ALTER TABLE users ADD COLUMN active_internal_squads {column_def}"
+                )
+            )
+
+        logger.info("✅ Добавлена колонка active_internal_squads в таблицу users")
+        return True
+    except Exception as error:
+        logger.error(
+            "Ошибка добавления колонки active_internal_squads в users: %s",
+            error,
+        )
+        return False
+
+
 async def ensure_promo_offer_template_active_duration_column() -> bool:
     try:
         column_exists = await check_column_exists('promo_offer_templates', 'active_discount_hours')
@@ -3967,6 +4001,12 @@ async def run_universal_migration():
         else:
             logger.warning("⚠️ Не удалось обновить пользовательские промо-скидки")
 
+        internal_squads_ready = await ensure_user_internal_squads_column()
+        if internal_squads_ready:
+            logger.info("✅ Колонка active_internal_squads для users готова")
+        else:
+            logger.warning("⚠️ Не удалось обновить колонку active_internal_squads для users")
+
         effect_types_updated = await migrate_discount_offer_effect_types()
         if effect_types_updated:
             logger.info("✅ Типы эффектов промо-предложений обновлены")
@@ -4267,6 +4307,7 @@ async def check_migration_status():
             "promo_offer_templates_active_discount_column": False,
             "promo_offer_logs_table": False,
             "subscription_temporary_access_table": False,
+            "users_active_internal_squads_column": False,
         }
         
         status["has_made_first_topup_column"] = await check_column_exists('users', 'has_made_first_topup')
@@ -4303,6 +4344,7 @@ async def check_migration_status():
         status["users_promo_offer_discount_expires_column"] = await check_column_exists('users', 'promo_offer_discount_expires_at')
         status["users_referral_commission_percent_column"] = await check_column_exists('users', 'referral_commission_percent')
         status["subscription_crypto_link_column"] = await check_column_exists('subscriptions', 'subscription_crypto_link')
+        status["users_active_internal_squads_column"] = await check_column_exists('users', 'active_internal_squads')
         
         media_fields_exist = (
             await check_column_exists('broadcast_history', 'has_media') and

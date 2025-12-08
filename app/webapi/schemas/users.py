@@ -49,6 +49,7 @@ class UserResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     last_activity: Optional[datetime] = None
+    active_internal_squads: List[str] = Field(default_factory=list)
     promo_group: Optional[PromoGroupSummary] = None
     subscription: Optional[SubscriptionSummary] = None
 
@@ -68,6 +69,7 @@ class UserCreateRequest(BaseModel):
     language: str = "ru"
     referred_by_id: Optional[int] = None
     promo_group_id: Optional[int] = None
+    active_internal_squads: Optional[List[str]] = Field(default=None)
 
 
 class UserUpdateRequest(BaseModel):
@@ -80,6 +82,7 @@ class UserUpdateRequest(BaseModel):
     referral_code: Optional[str] = None
     has_had_paid_subscription: Optional[bool] = None
     has_made_first_topup: Optional[bool] = None
+    active_internal_squads: Optional[List[str]] = Field(default=None)
 
 
 class BalanceUpdateRequest(BaseModel):

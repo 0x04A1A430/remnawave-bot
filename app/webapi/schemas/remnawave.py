@@ -137,6 +137,20 @@ class RemnaWaveSquadListResponse(BaseModel):
     total: int
 
 
+class RemnaWaveAccessibleNode(BaseModel):
+    uuid: str
+    node_name: str
+    country_code: str
+    config_profile_uuid: str
+    config_profile_name: str
+    active_inbounds: List[str] = Field(default_factory=list)
+
+
+class RemnaWaveAccessibleNodeListResponse(BaseModel):
+    items: List[RemnaWaveAccessibleNode]
+    total: int
+
+
 class RemnaWaveSquadCreateRequest(BaseModel):
     name: str
     inbound_uuids: List[str] = Field(default_factory=list)

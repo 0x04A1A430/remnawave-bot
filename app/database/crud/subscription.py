@@ -72,6 +72,20 @@ async def create_trial_subscription(
 
     end_date = datetime.utcnow() + timedelta(days=duration_days)
 
+    trial_internal_squads = settings.get_trial_internal_squads()
+    trial_user: Optional[User] = None
+    if trial_internal_squads:
+        try:
+            trial_user = await db.get(User, user_id)
+            if trial_user is not None:
+                trial_user.active_internal_squads = trial_internal_squads
+        except Exception as error:
+            logger.warning(
+                "Не удалось применить internal squads для триала пользователя %s: %s",
+                user_id,
+                error,
+            )
+
     subscription = Subscription(
         user_id=user_id,
         status=SubscriptionStatus.ACTIVE.value,
@@ -131,9 +145,29 @@ async def create_paid_subscription(
 ) -> Subscription:
 
     end_date = datetime.utcnow() + timedelta(days=duration_days)
-    
+
     if device_limit is None:
         device_limit = settings.DEFAULT_DEVICE_LIMIT
+
+    trial_internal_squads = settings.get_trial_internal_squads()
+    if trial_internal_squads:
+        try:
+            paid_user = await db.get(User, user_id)
+            if paid_user and paid_user.active_internal_squads:
+                current_set = {
+                    str(item).strip().lower()
+                    for item in paid_user.active_internal_squads
+                    if str(item).strip()
+                }
+                trial_set = {item.lower() for item in trial_internal_squads}
+                if current_set == trial_set:
+                    paid_user.active_internal_squads = []
+        except Exception as error:
+            logger.warning(
+                "Не удалось сбросить trial internal squads при покупке для пользователя %s: %s",
+                user_id,
+                error,
+            )
 
     subscription = Subscription(
         user_id=user_id,
