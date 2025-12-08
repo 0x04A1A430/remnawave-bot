@@ -3650,6 +3650,36 @@ async def add_promo_group_priority_column() -> bool:
         return False
 
 
+async def add_user_active_internal_squads_column() -> bool:
+    """Добавляет колонку active_internal_squads в таблицу users."""
+    column_exists = await check_column_exists('users', 'active_internal_squads')
+    if column_exists:
+        logger.info("Колонка active_internal_squads уже существует в users")
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'sqlite':
+                column_def = 'JSON'
+            elif db_type == 'postgresql':
+                column_def = 'JSONB'
+            else:
+                column_def = 'JSON'
+
+            await conn.execute(
+                text(f"ALTER TABLE users ADD COLUMN active_internal_squads {column_def}")
+            )
+
+        logger.info("✅ Добавлена колонка active_internal_squads в users")
+        return True
+
+    except Exception as error:
+        logger.error(f"Ошибка добавления колонки active_internal_squads: {error}")
+        return False
+
+
 async def create_user_promo_groups_table() -> bool:
     """Создает таблицу user_promo_groups для связи Many-to-Many между users и promo_groups."""
     table_exists = await check_table_exists("user_promo_groups")
@@ -3992,6 +4022,13 @@ async def run_universal_migration():
             logger.info("✅ Колонка priority в promo_groups готова")
         else:
             logger.warning("⚠️ Проблемы с добавлением priority в promo_groups")
+
+        logger.info("=== ДОБАВЛЕНИЕ INTERNAL SQUADS ДЛЯ USERS ===")
+        internal_squads_ready = await add_user_active_internal_squads_column()
+        if internal_squads_ready:
+            logger.info("✅ Колонка active_internal_squads в users готова")
+        else:
+            logger.warning("⚠️ Проблемы с добавлением active_internal_squads в users")
 
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ USER_PROMO_GROUPS ===")
         user_promo_groups_ready = await create_user_promo_groups_table()

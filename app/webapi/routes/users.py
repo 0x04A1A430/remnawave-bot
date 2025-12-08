@@ -17,6 +17,7 @@ from app.database.crud.user import (
     update_user,
 )
 from app.database.models import PromoGroup, Subscription, User, UserStatus
+from app.services.remnawave_service import RemnaWaveService
 
 from ..dependencies import get_db_session, require_api_token
 from ..schemas.users import (
@@ -30,6 +31,7 @@ from ..schemas.users import (
 )
 
 router = APIRouter()
+remnawave_service = RemnaWaveService()
 
 
 def _serialize_promo_group(group: Optional[PromoGroup]) -> Optional[PromoGroupSummary]:
@@ -90,6 +92,7 @@ def _serialize_user(user: User) -> UserResponse:
         last_activity=user.last_activity,
         promo_group=_serialize_promo_group(promo_group),
         subscription=_serialize_subscription(subscription),
+        active_internal_squads=list(getattr(user, "active_internal_squads", []) or []),
     )
 
 
@@ -197,6 +200,12 @@ async def create_user_endpoint(
     if existing:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "User with this telegram_id already exists")
 
+    active_squads = None
+    if payload.active_internal_squads is not None:
+        active_squads = await remnawave_service.resolve_internal_squad_uuids(
+            payload.active_internal_squads
+        )
+
     user = await create_user(
         db,
         telegram_id=payload.telegram_id,
@@ -205,6 +214,7 @@ async def create_user_endpoint(
         last_name=payload.last_name,
         language=payload.language,
         referred_by_id=payload.referred_by_id,
+        active_internal_squads=active_squads,
     )
 
     if payload.promo_group_id and payload.promo_group_id != user.promo_group_id:
@@ -249,6 +259,10 @@ async def update_user_endpoint(
         updates["has_had_paid_subscription"] = payload.has_had_paid_subscription
     if payload.has_made_first_topup is not None:
         updates["has_made_first_topup"] = payload.has_made_first_topup
+    if payload.active_internal_squads is not None:
+        updates["active_internal_squads"] = await remnawave_service.resolve_internal_squad_uuids(
+            payload.active_internal_squads
+        )
 
     if payload.status is not None:
         try:

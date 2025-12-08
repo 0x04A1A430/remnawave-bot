@@ -32,6 +32,7 @@ from app.services.admin_notification_service import AdminNotificationService
 from app.database.crud.promo_group import get_promo_groups_with_counts
 from app.utils.decorators import admin_required, error_handler
 from app.utils.formatters import format_datetime, format_time_ago
+from app.utils.internal_squads import resolve_user_internal_squads
 from app.utils.user_utils import get_effective_referral_commission_percent
 from app.services.remnawave_service import RemnaWaveService
 from app.external.remnawave_api import TrafficLimitStrategy
@@ -3401,7 +3402,7 @@ async def _show_servers_for_user(
         user = await get_user_by_id(db, user_id)
         current_squads = []
         if user and user.subscription:
-            current_squads = user.subscription.connected_squads or []
+            current_squads = resolve_user_internal_squads(user, user.subscription)
         
         all_servers, _ = await get_all_server_squads(db, available_only=False)
         
@@ -3490,18 +3491,19 @@ async def toggle_user_server(
         if not server:
             await callback.answer("❌ Сервер не найден", show_alert=True)
             return
-        
+
         subscription = user.subscription
-        current_squads = list(subscription.connected_squads or [])
-        
+        current_squads = resolve_user_internal_squads(user, subscription)
+
         if server.squad_uuid in current_squads:
             current_squads.remove(server.squad_uuid)
             action_text = "удален"
         else:
             current_squads.append(server.squad_uuid)
             action_text = "добавлен"
-        
+
         subscription.connected_squads = current_squads
+        user.active_internal_squads = current_squads
         subscription.updated_at = datetime.utcnow()
         await db.commit()
         await db.refresh(subscription)
@@ -4590,8 +4592,10 @@ async def admin_buy_subscription_execute(
                 from app.services.remnawave_service import RemnaWaveService
                 from app.external.remnawave_api import UserStatus, TrafficLimitStrategy
                 remnawave_service = RemnaWaveService()
-                
+
                 hwid_limit = resolve_hwid_device_limit_for_payload(subscription)
+                active_squads = resolve_user_internal_squads(target_user, subscription)
+                target_user.active_internal_squads = active_squads
 
                 if target_user.remnawave_uuid:
                     async with remnawave_service.get_api_client() as api:
@@ -4606,7 +4610,7 @@ async def admin_buy_subscription_execute(
                                 username=target_user.username,
                                 telegram_id=target_user.telegram_id
                             ),
-                            active_internal_squads=subscription.connected_squads,
+                            active_internal_squads=active_squads,
                         )
 
                         if hwid_limit is not None:
@@ -4632,7 +4636,7 @@ async def admin_buy_subscription_execute(
                                 username=target_user.username,
                                 telegram_id=target_user.telegram_id
                             ),
-                            active_internal_squads=subscription.connected_squads,
+                            active_internal_squads=active_squads,
                         )
 
                         if hwid_limit is not None:

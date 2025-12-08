@@ -38,6 +38,7 @@ from app.database.crud.user import (
     subtract_user_balance,
     cleanup_expired_promo_offer_discounts,
 )
+from app.utils.internal_squads import resolve_user_internal_squads
 from app.utils.timezone import format_local_datetime
 from app.utils.subscription_utils import (
     resolve_hwid_device_limit_for_payload,
@@ -312,7 +313,9 @@ class MonitoringService:
                         username=user.username,
                         telegram_id=user.telegram_id
                     ),
-                    active_internal_squads=subscription.connected_squads,
+                    active_internal_squads=resolve_user_internal_squads(
+                        user, subscription
+                    ),
                 )
 
                 if hwid_limit is not None:
