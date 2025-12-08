@@ -118,11 +118,25 @@ class RemnaWaveNode:
     country_code: str
     is_connected: bool
     is_disabled: bool
-    is_node_online: bool
-    is_xray_running: bool
     users_online: Optional[int]
     traffic_used_bytes: Optional[int]
     traffic_limit_bytes: Optional[int]
+    port: Optional[int] = None
+    is_connecting: bool = False
+    xray_version: Optional[str] = None
+    node_version: Optional[str] = None
+    view_position: int = 0
+    tags: Optional[List[str]] = None
+
+    @property
+    def is_node_online(self) -> bool:
+        """Обратная совместимость: is_node_online = is_connected"""
+        return self.is_connected
+
+    @property
+    def is_xray_running(self) -> bool:
+        """Обратная совместимость: xray работает если нода подключена"""
+        return self.is_connected
 
 
 @dataclass
@@ -718,14 +732,18 @@ class RemnaWaveAPI:
             uuid=node_data['uuid'],
             name=node_data['name'],
             address=node_data['address'],
-            country_code=node_data['countryCode'],
-            is_connected=node_data['isConnected'],
-            is_disabled=node_data['isDisabled'],
-            is_node_online=node_data['isNodeOnline'],
-            is_xray_running=node_data['isXrayRunning'],
+            country_code=node_data.get('countryCode', ''),
+            is_connected=node_data.get('isConnected', False),
+            is_disabled=node_data.get('isDisabled', False),
             users_online=node_data.get('usersOnline'),
             traffic_used_bytes=node_data.get('trafficUsedBytes'),
-            traffic_limit_bytes=node_data.get('trafficLimitBytes')
+            traffic_limit_bytes=node_data.get('trafficLimitBytes'),
+            port=node_data.get('port'),
+            is_connecting=node_data.get('isConnecting', False),
+            xray_version=node_data.get('xrayVersion'),
+            node_version=node_data.get('nodeVersion'),
+            view_position=node_data.get('viewPosition', 0),
+            tags=node_data.get('tags', [])
         )
     
     def _parse_subscription_info(self, data: Dict) -> SubscriptionInfo:
