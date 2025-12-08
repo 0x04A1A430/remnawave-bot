@@ -139,63 +139,6 @@ class SubscriptionService:
 
         return settings.get_paid_subscription_user_tag()
 
-    @staticmethod
-    def _normalize_internal_squads(value: Optional[Iterable[str]]) -> Optional[list[str]]:
-        if value is None:
-            return None
-
-        try:
-            items = [str(item).strip() for item in value if str(item).strip()]
-        except TypeError:
-            return None
-
-        seen = set()
-        normalized: list[str] = []
-        for item in items:
-            lowered = item.lower()
-            if lowered in seen:
-                continue
-            seen.add(lowered)
-            normalized.append(item)
-        return normalized
-
-    @staticmethod
-    def _select_internal_squads(user: User, subscription: Subscription) -> Optional[list[str]]:
-        if user.active_internal_squads is not None:
-            return SubscriptionService._normalize_internal_squads(user.active_internal_squads)
-        return SubscriptionService._normalize_internal_squads(subscription.connected_squads)
-
-    async def _resolve_internal_squad_uuids(
-        self,
-        api: RemnaWaveAPI,
-        squads: Optional[Iterable[str]],
-    ) -> Optional[list[str]]:
-        normalized = self._normalize_internal_squads(squads)
-        if normalized is None:
-            return None
-        if not normalized:
-            return []
-
-        try:
-            available = await api.get_internal_squads()
-            uuid_lookup = {squad.uuid.lower(): squad.uuid for squad in available}
-            name_lookup = {squad.name.lower(): squad.uuid for squad in available}
-        except Exception as error:
-            logger.warning("Не удалось получить список internal squads: %s", error)
-            return normalized
-
-        resolved: list[str] = []
-        for item in normalized:
-            lowered = item.lower()
-            if lowered in uuid_lookup:
-                resolved.append(uuid_lookup[lowered])
-                continue
-            if lowered in name_lookup:
-                resolved.append(name_lookup[lowered])
-                continue
-            logger.warning("Не удалось сопоставить internal squad '%s' с панелью", item)
-        return resolved
-
     @property
     def is_configured(self) -> bool:
         return self._config_error is None
@@ -232,24 +175,16 @@ class SubscriptionService:
             if not user:
                 logger.error(f"Пользователь {subscription.user_id} не найден")
                 return None
-
+            
             validation_success = await self.validate_and_clean_subscription(db, subscription, user)
             if not validation_success:
                 logger.error(f"Ошибка валидации подписки для пользователя {user.telegram_id}")
                 return None
 
             user_tag = self._resolve_user_tag(subscription)
-            requested_internal_squads = self._select_internal_squads(user, subscription)
 
             async with self.get_api_client() as api:
                 hwid_limit = resolve_hwid_device_limit_for_payload(subscription)
-                resolved_internal_squads = await self._resolve_internal_squad_uuids(
-                    api,
-                    requested_internal_squads,
-                )
-                internal_squads_payload = (
-                    resolved_internal_squads if resolved_internal_squads is not None else []
-                )
                 existing_users = await api.get_user_by_telegram_id(user.telegram_id)
                 if existing_users:
                     logger.info(f"🔄 Найден существующий пользователь в панели для {user.telegram_id}")
@@ -272,7 +207,7 @@ class SubscriptionService:
                             username=user.username,
                             telegram_id=user.telegram_id
                         ),
-                        active_internal_squads=internal_squads_payload,
+                        active_internal_squads=subscription.connected_squads,
                     )
 
                     if user_tag is not None:
@@ -310,7 +245,7 @@ class SubscriptionService:
                             username=user.username,
                             telegram_id=user.telegram_id
                         ),
-                        active_internal_squads=internal_squads_payload,
+                        active_internal_squads=subscription.connected_squads,
                     )
 
                     if user_tag is not None:
@@ -378,17 +313,9 @@ class SubscriptionService:
                 logger.info(f"🔔 Статус подписки {subscription.id} автоматически изменен на 'expired'")
 
             user_tag = self._resolve_user_tag(subscription)
-            requested_internal_squads = self._select_internal_squads(user, subscription)
 
             async with self.get_api_client() as api:
                 hwid_limit = resolve_hwid_device_limit_for_payload(subscription)
-                resolved_internal_squads = await self._resolve_internal_squad_uuids(
-                    api,
-                    requested_internal_squads,
-                )
-                internal_squads_payload = (
-                    resolved_internal_squads if resolved_internal_squads is not None else []
-                )
 
                 update_kwargs = dict(
                     uuid=user.remnawave_uuid,
@@ -401,7 +328,7 @@ class SubscriptionService:
                         username=user.username,
                         telegram_id=user.telegram_id
                     ),
-                    active_internal_squads=internal_squads_payload,
+                    active_internal_squads=subscription.connected_squads,
                 )
 
                 if user_tag is not None:

@@ -88,7 +88,6 @@ def _serialize_user(user: User) -> UserResponse:
         created_at=user.created_at,
         updated_at=user.updated_at,
         last_activity=user.last_activity,
-        active_internal_squads=list(user.active_internal_squads or []),
         promo_group=_serialize_promo_group(promo_group),
         subscription=_serialize_subscription(subscription),
     )
@@ -206,7 +205,6 @@ async def create_user_endpoint(
         last_name=payload.last_name,
         language=payload.language,
         referred_by_id=payload.referred_by_id,
-        active_internal_squads=payload.active_internal_squads,
     )
 
     if payload.promo_group_id and payload.promo_group_id != user.promo_group_id:
@@ -264,9 +262,6 @@ async def update_user_endpoint(
         if not promo_group:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Promo group not found")
         updates["promo_group_id"] = promo_group.id
-
-    if payload.active_internal_squads is not None:
-        updates["active_internal_squads"] = payload.active_internal_squads
 
     if payload.referral_code is not None and payload.referral_code != found_user.referral_code:
         existing_code_owner = await get_user_by_referral_code(db, payload.referral_code)

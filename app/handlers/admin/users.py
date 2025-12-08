@@ -4606,11 +4606,7 @@ async def admin_buy_subscription_execute(
                                 username=target_user.username,
                                 telegram_id=target_user.telegram_id
                             ),
-                            active_internal_squads=(
-                                list(target_user.active_internal_squads or [])
-                                if target_user.active_internal_squads is not None
-                                else list(subscription.connected_squads or [])
-                            ),
+                            active_internal_squads=subscription.connected_squads,
                         )
 
                         if hwid_limit is not None:
@@ -4636,11 +4632,7 @@ async def admin_buy_subscription_execute(
                                 username=target_user.username,
                                 telegram_id=target_user.telegram_id
                             ),
-                            active_internal_squads=(
-                                list(target_user.active_internal_squads or [])
-                                if target_user.active_internal_squads is not None
-                                else list(subscription.connected_squads or [])
-                            ),
+                            active_internal_squads=subscription.connected_squads,
                         )
 
                         if hwid_limit is not None:
