@@ -304,9 +304,13 @@ async def create_squad(
     service = _get_service()
     _ensure_service_configured(service)
 
-    success = await service.create_squad(payload.name, payload.inbound_uuids)
+    squad_uuid = await service.create_squad(payload.name, payload.inbound_uuids)
+
+    success = squad_uuid is not None
     detail = "Сквад успешно создан" if success else "Не удалось создать сквад"
-    return RemnaWaveOperationResponse(success=success, detail=detail)
+    data = {"uuid": squad_uuid} if success else None
+
+    return RemnaWaveOperationResponse(success=success, detail=detail, data=data)
 
 
 @router.patch("/squads/{squad_uuid}", response_model=RemnaWaveOperationResponse)
