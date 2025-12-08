@@ -1386,28 +1386,18 @@ async def manage_node(
    db_user: User,
    db: AsyncSession
 ):
-   action, node_uuid = callback.data.split('_')[1], callback.data.split('_')[-1]
-   
-   remnawave_service = RemnaWaveService()
-   success = await remnawave_service.manage_node(node_uuid, action)
-   
-   if success:
-       action_text = {"enable": "включена", "disable": "отключена", "restart": "перезагружена"}
-       await callback.answer(f"✅ Нода {action_text.get(action, 'обработана')}")
-   else:
-       await callback.answer("❌ Ошибка выполнения действия", show_alert=True)
-   
-   await show_node_details(
-       types.CallbackQuery(
-           id=callback.id,
-           from_user=callback.from_user,
-           chat_instance=callback.chat_instance,
-           data=f"admin_node_manage_{node_uuid}",
-           message=callback.message
-       ),
-       db_user,
-       db
-   )
+    action, node_uuid = callback.data.split('_')[1], callback.data.split('_')[-1]
+
+    remnawave_service = RemnaWaveService()
+    success = await remnawave_service.manage_node(node_uuid, action)
+
+    if success:
+        action_text = {"enable": "включена", "disable": "отключена", "restart": "перезагружена"}
+        await callback.answer(f"✅ Нода {action_text.get(action, 'обработана')}")
+    else:
+        await callback.answer("❌ Ошибка выполнения действия", show_alert=True)
+
+    await show_node_details(callback, db_user, db)
 
 @admin_required
 @error_handler
@@ -1647,17 +1637,11 @@ async def manage_squad_action(
             await callback.answer("❌ Ошибка удаления сквада", show_alert=True)
         return
     
-    await show_squad_details(
-        types.CallbackQuery(
-            id=callback.id,
-            from_user=callback.from_user,
-            chat_instance=callback.chat_instance,
-            data=f"admin_squad_manage_{squad_uuid}",
-            message=callback.message
-        ),
-        db_user,
-        db
-    )
+    refreshed_callback = callback.model_copy(
+        update={"data": f"admin_squad_manage_{squad_uuid}"}
+    ).as_(callback.bot)
+
+    await show_squad_details(refreshed_callback, db_user, db)
 
 @admin_required
 @error_handler
@@ -1815,15 +1799,11 @@ async def cancel_squad_rename(
     
     await state.clear()
     
-    new_callback = types.CallbackQuery(
-        id=callback.id,
-        from_user=callback.from_user,
-        chat_instance=callback.chat_instance,
-        data=f"squad_edit_{squad_uuid}",
-        message=callback.message
-    )
-    
-    await show_squad_edit_menu(new_callback, db_user, db)
+    refreshed_callback = callback.model_copy(
+        update={"data": f"squad_edit_{squad_uuid}"}
+    ).as_(callback.bot)
+
+    await show_squad_edit_menu(refreshed_callback, db_user, db)
 
 @admin_required
 @error_handler
@@ -2034,15 +2014,11 @@ async def show_squad_edit_menu_short(
         await callback.answer("❌ Сквад не найден", show_alert=True)
         return
     
-    new_callback = types.CallbackQuery(
-        id=callback.id,
-        from_user=callback.from_user,
-        chat_instance=callback.chat_instance,
-        data=f"squad_edit_{full_squad_uuid}",
-        message=callback.message
-    )
-    
-    await show_squad_edit_menu(new_callback, db_user, db)
+    refreshed_callback = callback.model_copy(
+        update={"data": f"squad_edit_{full_squad_uuid}"}
+    ).as_(callback.bot)
+
+    await show_squad_edit_menu(refreshed_callback, db_user, db)
 
 @admin_required
 @error_handler
