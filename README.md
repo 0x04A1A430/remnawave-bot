@@ -272,7 +272,7 @@ services:
     networks:
       - bot_network
     healthcheck:
-      test: ["CMD-SHELL", "python -c 'import requests; requests.get(\"http://localhost:8080/health\", timeout=5)' || exit 1"]
+      test: ["CMD-SHELL", "python -c \"import requests, os; requests.get('http://localhost:8080/health', headers={'X-API-Key': os.environ.get('WEB_API_DEFAULT_TOKEN')}, timeout=5) or exit(1)\""]
       interval: 60s
       timeout: 10s
       retries: 3
@@ -400,7 +400,7 @@ services:
       - bot_network
       - remnawave-network  # Подключаем к сети панели
     healthcheck:
-      test: ["CMD-SHELL", "python -c 'import requests; requests.get(\"http://localhost:8080/health\", timeout=5)' || exit 1"]
+      test: ["CMD-SHELL", "python -c \"import requests, os; requests.get('http://localhost:8080/health', headers={'X-API-Key': os.environ.get('WEB_API_DEFAULT_TOKEN')}, timeout=5) or exit(1)\""]
       interval: 60s
       timeout: 10s
       retries: 3
@@ -971,7 +971,7 @@ PLATEGA_SECRET=your_secret_key
 PLATEGA_RETURN_URL=https://your-domain.com/payments/success
 PLATEGA_FAILED_URL=https://your-domain.com/payments/failed
 PLATEGA_ACTIVE_METHODS=2,10,11
-PLATEGA_MIN_AMOUNT_KOPEKS=10000
+PLATEGA_MIN_AMOUNT_KOPEKS=100
 PLATEGA_MAX_AMOUNT_KOPEKS=5000000
 PLATEGA_CURRENCY=RUB
 PLATEGA_WEBHOOK_PATH=/platega-webhook
