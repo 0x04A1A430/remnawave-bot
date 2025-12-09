@@ -2,7 +2,16 @@ from __future__ import annotations
 
 from typing import Any, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, Security, status
+from fastapi import (
+    APIRouter,
+    Body,
+    Depends,
+    HTTPException,
+    Query,
+    Response,
+    Security,
+    status,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -233,6 +242,57 @@ async def list_faq_pages(
     )
 
 
+@router.get("/faq/status", response_model=FaqStatusResponse)
+async def get_faq_status(
+    _: object = Security(require_api_token),
+    db: AsyncSession = Depends(get_db_session),
+    language: str = Query("ru", min_length=2, max_length=10),
+    fallback: bool = Query(True),
+) -> FaqStatusResponse:
+    requested_lang = FaqService.normalize_language(language)
+    setting = await FaqService.get_setting(db, requested_lang, fallback=fallback)
+
+    if not setting:
+        return FaqStatusResponse(
+            requested_language=requested_lang,
+            language=requested_lang,
+            is_enabled=False,
+        )
+
+    return FaqStatusResponse(
+        requested_language=requested_lang,
+        language=setting.language,
+        is_enabled=bool(setting.is_enabled),
+    )
+
+
+@router.put("/faq/status", response_model=FaqStatusResponse)
+async def update_faq_status(
+    payload: Optional[FaqStatusUpdateRequest] = Body(None),
+    language: str = Query("ru", min_length=2, max_length=10),
+    is_enabled: Optional[bool] = Query(None),
+    _: object = Security(require_api_token),
+    db: AsyncSession = Depends(get_db_session),
+) -> FaqStatusResponse:
+    resolved_language = FaqService.normalize_language(
+        payload.language if payload and payload.language else language
+    )
+
+    enabled_status = payload.is_enabled if payload else is_enabled
+    if enabled_status is None:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "Parameter 'is_enabled' is required"
+        )
+
+    setting = await FaqService.set_enabled(db, resolved_language, enabled_status)
+
+    return FaqStatusResponse(
+        requested_language=resolved_language,
+        language=setting.language,
+        is_enabled=bool(setting.is_enabled),
+    )
+
+
 @router.post("/faq", response_model=FaqPageResponse, status_code=status.HTTP_201_CREATED)
 async def create_faq_page(
     payload: FaqPageCreateRequest,
@@ -363,46 +423,6 @@ async def reorder_faq_pages(
         is_enabled=bool(setting.is_enabled) if setting else False,
         total=len(serialized),
         items=serialized,
-    )
-
-
-@router.get("/faq/status", response_model=FaqStatusResponse)
-async def get_faq_status(
-    _: object = Security(require_api_token),
-    db: AsyncSession = Depends(get_db_session),
-    language: str = Query("ru", min_length=2, max_length=10),
-    fallback: bool = Query(True),
-) -> FaqStatusResponse:
-    requested_lang = FaqService.normalize_language(language)
-    setting = await FaqService.get_setting(db, requested_lang, fallback=fallback)
-
-    if not setting:
-        return FaqStatusResponse(
-            requested_language=requested_lang,
-            language=requested_lang,
-            is_enabled=False,
-        )
-
-    return FaqStatusResponse(
-        requested_language=requested_lang,
-        language=setting.language,
-        is_enabled=bool(setting.is_enabled),
-    )
-
-
-@router.put("/faq/status", response_model=FaqStatusResponse)
-async def update_faq_status(
-    payload: FaqStatusUpdateRequest,
-    _: object = Security(require_api_token),
-    db: AsyncSession = Depends(get_db_session),
-) -> FaqStatusResponse:
-    lang = FaqService.normalize_language(payload.language)
-    setting = await FaqService.set_enabled(db, lang, payload.is_enabled)
-
-    return FaqStatusResponse(
-        requested_language=lang,
-        language=setting.language,
-        is_enabled=bool(setting.is_enabled),
     )
 
 
