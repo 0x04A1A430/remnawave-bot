@@ -321,6 +321,18 @@ def get_admin_users_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
             )
         ],
         [
+            InlineKeyboardButton(
+                text=_t(texts, "ADMIN_USERS_BLACKLIST", "🔐 Черный список"),
+                callback_data="admin_blacklist_settings"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=_t(texts, "ADMIN_USERS_BULK_BAN", "🛑 Массовый бан"),
+                callback_data="admin_bulk_ban_start"
+            )
+        ],
+        [
             InlineKeyboardButton(text=texts.BACK, callback_data="admin_submenu_users")
         ]
     ])

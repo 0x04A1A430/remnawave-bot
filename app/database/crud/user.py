@@ -119,6 +119,25 @@ async def get_user_by_referral_code(db: AsyncSession, referral_code: str) -> Opt
     return user
 
 
+async def get_user_by_remnawave_uuid(db: AsyncSession, remnawave_uuid: str) -> Optional[User]:
+    result = await db.execute(
+        select(User)
+        .options(
+            selectinload(User.subscription),
+            selectinload(User.promo_group),
+            selectinload(User.referrer),
+        )
+        .where(User.remnawave_uuid == remnawave_uuid)
+    )
+    user = result.scalar_one_or_none()
+
+    if user and user.subscription:
+        # Загружаем дополнительные зависимости для subscription
+        _ = user.subscription.is_active
+
+    return user
+
+
 async def create_unique_referral_code(db: AsyncSession) -> str:
     max_attempts = 10
     
