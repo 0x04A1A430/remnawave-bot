@@ -2271,8 +2271,15 @@ async def confirm_purchase(
 
             existing_subscription.connected_squads = selected_countries
 
-            existing_subscription.start_date = current_time
-            existing_subscription.end_date = current_time + timedelta(days=period_days) + bonus_period
+            # Если подписка еще активна, продлеваем от текущей даты окончания,
+            # иначе начинаем новый период с текущего момента
+            extension_base_date = current_time
+            if existing_subscription.end_date and existing_subscription.end_date > current_time:
+                extension_base_date = existing_subscription.end_date
+            else:
+                existing_subscription.start_date = current_time
+
+            existing_subscription.end_date = extension_base_date + timedelta(days=period_days) + bonus_period
             existing_subscription.updated_at = current_time
 
             existing_subscription.traffic_used_gb = 0.0

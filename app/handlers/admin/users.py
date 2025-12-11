@@ -4559,10 +4559,13 @@ async def admin_buy_subscription_execute(
                         target_user.telegram_id,
                     )
 
-            if subscription.end_date <= current_time:
+            extension_base_date = current_time
+            if subscription.end_date and subscription.end_date > current_time:
+                extension_base_date = subscription.end_date
+            else:
                 subscription.start_date = current_time
 
-            subscription.end_date = current_time + timedelta(days=period_days) + bonus_period
+            subscription.end_date = extension_base_date + timedelta(days=period_days) + bonus_period
             subscription.status = SubscriptionStatus.ACTIVE.value
             subscription.updated_at = current_time
 
