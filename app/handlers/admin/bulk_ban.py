@@ -60,8 +60,17 @@ async def process_bulk_ban_list(
     """
     Обработка списка Telegram ID и выполнение массовой блокировки
     """
+    if not message.text:
+        await message.answer(
+            "❌ Отправьте текстовое сообщение со списком Telegram ID",
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                [types.InlineKeyboardButton(text="🔙 Назад", callback_data="admin_users")]
+            ])
+        )
+        return
+
     input_text = message.text.strip()
-    
+
     if not input_text:
         await message.answer(
             "❌ Введите корректный список Telegram ID",
@@ -152,7 +161,7 @@ async def process_bulk_ban_list(
     await state.clear()
 
 
-async def register_bulk_ban_handlers(dp):
+def register_bulk_ban_handlers(dp):
     """
     Регистрация обработчиков команд для массовой блокировки
     """
@@ -165,5 +174,5 @@ async def register_bulk_ban_handlers(dp):
     # Обработчик текстового сообщения с ID для блокировки
     dp.message.register(
         process_bulk_ban_list,
-        lambda m: m.text and AdminStates.waiting_for_bulk_ban_list
+        AdminStates.waiting_for_bulk_ban_list
     )

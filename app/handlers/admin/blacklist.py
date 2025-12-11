@@ -25,6 +25,8 @@ async def show_blacklist_settings(
     """
     Показывает настройки черного списка
     """
+    logger.info(f"Вызван обработчик show_blacklist_settings для пользователя {callback.from_user.id}")
+
     is_enabled = blacklist_service.is_blacklist_check_enabled()
     github_url = blacklist_service.get_blacklist_github_url()
     blacklist_count = len(await blacklist_service.get_all_blacklisted_users())
@@ -324,7 +326,7 @@ async def process_blacklist_url(
     await state.clear()
 
 
-async def register_blacklist_handlers(dp):
+def register_blacklist_handlers(dp):
     """
     Регистрация обработчиков черного списка
     """
