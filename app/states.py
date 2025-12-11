@@ -142,6 +142,7 @@ class AdminStates(StatesGroup):
     viewing_user_from_spending_list = State()
     viewing_user_from_purchases_list = State()
     viewing_user_from_campaign_list = State()
+    viewing_user_from_ready_to_renew_list = State()
 
 class SupportStates(StatesGroup):
     waiting_for_message = State()
