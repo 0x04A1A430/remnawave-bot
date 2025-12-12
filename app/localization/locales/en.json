@@ -1290,7 +1290,7 @@
   "SUBSCRIPTION_CONNECT_DEVICE_MESSAGE_HIDDEN": "📱 <b>Connect subscription</b>\n\nℹ️ The subscription link is available via the buttons below or in the “My subscription” section.\n\n💡 <b>Choose your device</b> to get detailed setup instructions:",
   "SUBSCRIPTION_CONNECT_LINK_MESSAGE": "🚀 <b>Connect subscription</b>\n\n🔗 Tap the button below to open the subscription link:",
   "SUBSCRIPTION_CONNECT_LINK_PROMPT": "📱 Copy the link and add it to your VPN app",
-  "SUBSCRIPTION_CONNECT_LINK_SECTION": "🔗 <b>Connection link:</b>\n<code>{subscription_url}</code>",
+  "SUBSCRIPTION_CONNECT_LINK_SECTION": "🔗 <b>Connection link:</b>\n{subscription_url}",
   "SUBSCRIPTION_CONNECT_MINIAPP_MESSAGE": "📱 <b>Connect subscription</b>\n\n🚀 Tap the button below to open the subscription in the Telegram mini app:",
   "SUBSCRIPTION_DEVICE_APPS_NOT_FOUND": "❌ No apps found for this device",
   "SUBSCRIPTION_DEVICE_FEATURED_APP": "📋 <b>Recommended app:</b> {app_name}",
