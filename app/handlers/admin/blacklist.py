@@ -3,12 +3,14 @@
 """
 import logging
 from aiogram import types
+from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import User
 from app.services.blacklist_service import blacklist_service
+from app.states import BlacklistStates
 from app.utils.decorators import admin_required, error_handler
 from app.keyboards.admin import get_admin_users_keyboard
 
@@ -253,7 +255,7 @@ async def start_set_blacklist_url(
         ])
     )
     
-    await state.set_state("waiting_for_blacklist_url")
+    await state.set_state(BlacklistStates.waiting_for_blacklist_url)
     await callback.answer()
 
 
@@ -267,6 +269,10 @@ async def process_blacklist_url(
     """
     Обрабатывает введенный URL к черному списку
     """
+    # Обрабатываем сообщение только если бот ожидает ввод URL
+    if await state.get_state() != BlacklistStates.waiting_for_blacklist_url.state:
+        return
+
     url = message.text.strip()
     
     # В реальной реализации нужно сохранить URL в систему настроек
@@ -361,5 +367,5 @@ def register_blacklist_handlers(dp):
     # Обработчик сообщений для установки URL (работает только в нужном состоянии)
     dp.message.register(
         process_blacklist_url,
-        lambda m: True  # Фильтр будет внутри функции
+        StateFilter(BlacklistStates.waiting_for_blacklist_url)
     )
