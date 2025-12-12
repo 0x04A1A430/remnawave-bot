@@ -321,6 +321,18 @@ def get_admin_users_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
             )
         ],
         [
+            InlineKeyboardButton(
+                text=_t(texts, "ADMIN_USERS_BLACKLIST", "🔐 Черный список"),
+                callback_data="admin_blacklist_settings"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=_t(texts, "ADMIN_USERS_BULK_BAN", "🛑 Массовый бан"),
+                callback_data="admin_bulk_ban_start"
+            )
+        ],
+        [
             InlineKeyboardButton(text=texts.BACK, callback_data="admin_submenu_users")
         ]
     ])
@@ -358,6 +370,12 @@ def get_admin_users_filters_keyboard(language: str = "ru") -> InlineKeyboardMark
             InlineKeyboardButton(
                 text=_t(texts, "ADMIN_USERS_FILTER_PURCHASES", "🛒 По количеству покупок"),
                 callback_data="admin_users_purchases_filter"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=_t(texts, "ADMIN_USERS_FILTER_RENEW_READY", "♻️ Готовы к продлению"),
+                callback_data="admin_users_ready_to_renew_filter"
             )
         ],
         [

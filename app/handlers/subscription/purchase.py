@@ -51,6 +51,7 @@ from app.services.user_cart_service import user_cart_service
 from app.localization.texts import get_texts
 from app.services.admin_notification_service import AdminNotificationService
 from app.services.remnawave_service import RemnaWaveConfigurationError, RemnaWaveService
+from app.services.blacklist_service import blacklist_service
 from app.services.subscription_checkout_service import (
     clear_subscription_checkout_draft,
     get_subscription_checkout_draft,
@@ -995,7 +996,7 @@ async def save_cart_and_redirect_to_topup(
         'return_to_cart': True,
         'user_id': db_user.id
     }
-    
+
     await user_cart_service.save_user_cart(db_user.id, cart_data)
 
     await callback.message.edit_text(
@@ -1020,7 +1021,7 @@ async def return_to_saved_cart(
 ):
     # Получаем данные корзины из Redis
     cart_data = await user_cart_service.get_user_cart(db_user.id)
-    
+
     if not cart_data:
         await callback.answer("❌ Сохраненная корзина не найдена", show_alert=True)
         return
@@ -1347,6 +1348,25 @@ async def confirm_extend_subscription(
         db_user: User,
         db: AsyncSession
 ):
+    # Проверяем, находится ли пользователь в черном списке
+    is_blacklisted, blacklist_reason = await blacklist_service.is_user_blacklisted(
+        callback.from_user.id,
+        callback.from_user.username
+    )
+
+    if is_blacklisted:
+        logger.warning(f"🚫 Пользователь {callback.from_user.id} находится в черном списке: {blacklist_reason}")
+        try:
+            await callback.answer(
+                f"🚫 Продление подписки невозможно\n\n"
+                f"Причина: {blacklist_reason}\n\n"
+                f"Если вы считаете, что это ошибка, обратитесь в поддержку.",
+                show_alert=True
+            )
+        except Exception as e:
+            logger.error(f"Ошибка при отправке сообщения о блокировке: {e}")
+        return
+
     from app.services.admin_notification_service import AdminNotificationService
 
     days = int(callback.data.split('_')[2])
@@ -1528,7 +1548,7 @@ async def confirm_extend_subscription(
             'description': f"Продление подписки на {days} дней",
             'consume_promo_offer': bool(promo_component["discount"] > 0),
         }
-        
+
         await user_cart_service.save_user_cart(db_user.id, cart_data)
 
         await callback.message.edit_text(
@@ -1810,6 +1830,25 @@ async def confirm_purchase(
         db: AsyncSession
 ):
     from app.services.admin_notification_service import AdminNotificationService
+
+    # Проверяем, находится ли пользователь в черном списке
+    is_blacklisted, blacklist_reason = await blacklist_service.is_user_blacklisted(
+        callback.from_user.id,
+        callback.from_user.username
+    )
+
+    if is_blacklisted:
+        logger.warning(f"🚫 Пользователь {callback.from_user.id} находится в черном списке: {blacklist_reason}")
+        try:
+            await callback.answer(
+                f"🚫 Покупка подписки невозможна\n\n"
+                f"Причина: {blacklist_reason}\n\n"
+                f"Если вы считаете, что это ошибка, обратитесь в поддержку.",
+                show_alert=True
+            )
+        except Exception as e:
+            logger.error(f"Ошибка при отправке сообщения о блокировке: {e}")
+        return
 
     data = await state.get_data()
     texts = get_texts(db_user.language)
@@ -2101,7 +2140,7 @@ async def confirm_purchase(
             'return_to_cart': True,
             'user_id': db_user.id
         }
-        
+
         await user_cart_service.save_user_cart(db_user.id, cart_data)
 
         await callback.message.edit_text(
@@ -2210,36 +2249,37 @@ async def confirm_purchase(
             if should_update_devices:
                 existing_subscription.device_limit = selected_devices
             # Проверяем, что при обновлении существующей подписки есть хотя бы одна страна
-            selected_countries = data.get('countries', [])
+            selected_countries = data.get('countries')
             if not selected_countries:
-                # В случае если подписка уже существовала, не разрешаем отключать все страны
-                # Если подписка новая, разрешаем, но обычно через UI пользователь должен выбрать хотя бы один сервер
-                if existing_subscription and existing_subscription.connected_squads is not None:
-                    # Проверим, что в данных есть информация о том, что это обновление существующей подписки
-                    # или что-то указывает, что не нужно отключать все страны
-                    pass  # Для простоты в этом случае просто проверим, что список стран не пустой
-                else:
-                    # Для новой подписки разрешаем пустой список, если не является обновлением
-                    pass
+                # Иногда после возврата к оформлению из сохраненной корзины список стран не передается.
+                # В таком случае повторно используем текущие подключенные страны подписки.
+                selected_countries = existing_subscription.connected_squads or []
+                if selected_countries:
+                    data['countries'] = selected_countries  # чтобы далее использовать фактический список стран
 
-                # Но для безопасности - если список стран пустой, проверим, что это разрешено
-                # иначе вернем ошибку
-                if not selected_countries:
-                    texts = get_texts(db_user.language)
-                    await callback.message.edit_text(
-                        texts.t(
-                            "COUNTRIES_MINIMUM_REQUIRED",
-                            "❌ Нельзя отключить все страны. Должна быть подключена хотя бы одна страна."
-                        ),
-                        reply_markup=get_back_keyboard(db_user.language)
-                    )
-                    await callback.answer()
-                    return
+            if not selected_countries:
+                texts = get_texts(db_user.language)
+                await callback.message.edit_text(
+                    texts.t(
+                        "COUNTRIES_MINIMUM_REQUIRED",
+                        "❌ Нельзя отключить все страны. Должна быть подключена хотя бы одна страна."
+                    ),
+                    reply_markup=get_back_keyboard(db_user.language)
+                )
+                await callback.answer()
+                return
 
             existing_subscription.connected_squads = selected_countries
 
-            existing_subscription.start_date = current_time
-            existing_subscription.end_date = current_time + timedelta(days=period_days) + bonus_period
+            # Если подписка еще активна, продлеваем от текущей даты окончания,
+            # иначе начинаем новый период с текущего момента
+            extension_base_date = current_time
+            if existing_subscription.end_date and existing_subscription.end_date > current_time:
+                extension_base_date = existing_subscription.end_date
+            else:
+                existing_subscription.start_date = current_time
+
+            existing_subscription.end_date = extension_base_date + timedelta(days=period_days) + bonus_period
             existing_subscription.updated_at = current_time
 
             existing_subscription.traffic_used_gb = 0.0
@@ -2266,7 +2306,7 @@ async def confirm_purchase(
                 resolved_device_limit = default_device_limit
 
             # Проверяем, что для новой подписки также есть хотя бы одна страна, если пользователь проходит через интерфейс стран
-            new_subscription_countries = data.get('countries', [])
+            new_subscription_countries = data.get('countries')
             if not new_subscription_countries:
                 # Проверяем, была ли это покупка через интерфейс стран, и если да, то требуем хотя бы одну страну
                 # Если в данных явно указано, что это интерфейс стран, или есть другие признаки - требуем страну
@@ -2304,11 +2344,11 @@ async def confirm_purchase(
             await add_user_to_servers(db, server_ids)
 
             logger.info(f"Сохранены цены серверов за весь период: {server_prices}")
-    
+
         await db.refresh(db_user)
-    
+
         subscription_service = SubscriptionService()
-    
+
         if db_user.remnawave_uuid:
             remnawave_user = await subscription_service.update_remnawave_user(
                 db,
@@ -2323,7 +2363,7 @@ async def confirm_purchase(
                 reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT,
                 reset_reason="покупка подписки",
             )
-    
+
         if not remnawave_user:
             logger.error(f"Не удалось создать/обновить RemnaWave пользователя для {db_user.telegram_id}")
             remnawave_user = await subscription_service.create_remnawave_user(
@@ -2332,7 +2372,7 @@ async def confirm_purchase(
                 reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT,
                 reset_reason="покупка подписки (повторная попытка)",
             )
-    
+
         transaction = await create_transaction(
             db=db,
             user_id=db_user.id,
@@ -2939,7 +2979,7 @@ def register_handlers(dp: Dispatcher):
         show_device_connection_help,
         F.data == "device_connection_help"
     )
-    
+
     # Регистрируем обработчик для простой покупки
     dp.callback_query.register(
         handle_simple_subscription_purchase,
@@ -2954,12 +2994,31 @@ async def handle_simple_subscription_purchase(
     db: AsyncSession,
 ):
     """Обрабатывает простую покупку подписки."""
+    # Проверяем, находится ли пользователь в черном списке
+    is_blacklisted, blacklist_reason = await blacklist_service.is_user_blacklisted(
+        callback.from_user.id,
+        callback.from_user.username
+    )
+
+    if is_blacklisted:
+        logger.warning(f"🚫 Пользователь {callback.from_user.id} находится в черном списке: {blacklist_reason}")
+        try:
+            await callback.answer(
+                f"🚫 Простая покупка подписки невозможна\n\n"
+                f"Причина: {blacklist_reason}\n\n"
+                f"Если вы считаете, что это ошибка, обратитесь в поддержку.",
+                show_alert=True
+            )
+        except Exception as e:
+            logger.error(f"Ошибка при отправке сообщения о блокировке: {e}")
+        return
+
     texts = get_texts(db_user.language)
-    
+
     if not settings.SIMPLE_SUBSCRIPTION_ENABLED:
         await callback.answer("❌ Простая покупка подписки временно недоступна", show_alert=True)
         return
-    
+
     # Определяем ограничение по устройствам для текущего режима
     simple_device_limit = resolve_simple_subscription_device_limit()
 
@@ -2989,10 +3048,10 @@ async def handle_simple_subscription_purchase(
         "traffic_limit_gb": settings.SIMPLE_SUBSCRIPTION_TRAFFIC_GB,
         "squad_uuid": settings.SIMPLE_SUBSCRIPTION_SQUAD_UUID
     }
-    
+
     # Сохраняем параметры в состояние
     await state.update_data(subscription_params=subscription_params)
-    
+
     # Проверяем баланс пользователя
     user_balance_kopeks = getattr(db_user, "balance_kopeks", 0)
     # Рассчитываем цену подписки
@@ -3017,7 +3076,7 @@ async def handle_simple_subscription_purchase(
         if subscription_params["traffic_limit_gb"] == 0
         else f"{subscription_params['traffic_limit_gb']} ГБ"
     )
-    
+
     if user_balance_kopeks >= price_kopeks:
         # Если баланс достаточный, предлагаем оплатить с баланса
         simple_lines = [
@@ -3040,7 +3099,7 @@ async def handle_simple_subscription_purchase(
         ])
 
         message_text = "\n".join(simple_lines)
-        
+
         keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
             [types.InlineKeyboardButton(text="✅ Оплатить с баланса", callback_data="simple_subscription_pay_with_balance")],
             [types.InlineKeyboardButton(text="💳 Другие способы оплаты", callback_data="simple_subscription_other_payment_methods")],
@@ -3068,19 +3127,19 @@ async def handle_simple_subscription_purchase(
         ])
 
         message_text = "\n".join(simple_lines)
-        
+
         keyboard = _get_simple_subscription_payment_keyboard(db_user.language)
-    
+
     await callback.message.edit_text(
         message_text,
         reply_markup=keyboard,
         parse_mode="HTML"
     )
-    
+
     await state.set_state(SubscriptionStates.waiting_for_simple_subscription_payment_method)
     await callback.answer()
 
-    
+
 
 
 async def _calculate_simple_subscription_price(
@@ -3105,14 +3164,14 @@ def _get_simple_subscription_payment_keyboard(language: str) -> types.InlineKeyb
     """Создает клавиатуру с методами оплаты для простой подписки."""
     texts = get_texts(language)
     keyboard = []
-    
+
     # Добавляем доступные методы оплаты
     if settings.TELEGRAM_STARS_ENABLED:
         keyboard.append([types.InlineKeyboardButton(
             text="⭐ Telegram Stars",
             callback_data="simple_subscription_stars"
         )])
-    
+
     if settings.is_yookassa_enabled():
         yookassa_methods = []
         if settings.YOOKASSA_SBP_ENABLED:
@@ -3126,38 +3185,38 @@ def _get_simple_subscription_payment_keyboard(language: str) -> types.InlineKeyb
         ))
         if yookassa_methods:
             keyboard.append(yookassa_methods)
-    
+
     if settings.is_cryptobot_enabled():
         keyboard.append([types.InlineKeyboardButton(
             text="🪙 CryptoBot",
             callback_data="simple_subscription_cryptobot"
         )])
-    
+
     if settings.is_mulenpay_enabled():
         mulenpay_name = settings.get_mulenpay_display_name()
         keyboard.append([types.InlineKeyboardButton(
             text=f"💳 {mulenpay_name}",
             callback_data="simple_subscription_mulenpay"
         )])
-    
+
     if settings.is_pal24_enabled():
         keyboard.append([types.InlineKeyboardButton(
             text="💳 PayPalych",
             callback_data="simple_subscription_pal24"
         )])
-    
+
     if settings.is_wata_enabled():
         keyboard.append([types.InlineKeyboardButton(
             text="💳 WATA",
             callback_data="simple_subscription_wata"
         )])
-    
+
     # Кнопка назад
     keyboard.append([types.InlineKeyboardButton(
         text=texts.BACK,
         callback_data="subscription_purchase"
     )])
-    
+
     return types.InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
@@ -3179,9 +3238,9 @@ async def _extend_existing_subscription(
     from app.services.subscription_service import SubscriptionService
     from app.utils.pricing_utils import calculate_months_from_days
     from datetime import datetime, timedelta
-    
+
     texts = get_texts(db_user.language)
-    
+
     # Рассчитываем цену подписки
     subscription_params = {
         "period_days": period_days,
@@ -3205,7 +3264,7 @@ async def _extend_existing_subscription(
         price_breakdown.get("servers_price", 0),
         price_breakdown.get("total_discount", 0),
     )
-    
+
     # Проверяем баланс пользователя
     if db_user.balance_kopeks < price_kopeks:
         missing_kopeks = price_kopeks - db_user.balance_kopeks
@@ -3223,7 +3282,7 @@ async def _extend_existing_subscription(
             balance=texts.format_price(db_user.balance_kopeks),
             missing=texts.format_price(missing_kopeks),
         )
-        
+
         # Подготовим данные для сохранения в корзину
         from app.services.user_cart_service import user_cart_service
         cart_data = {
@@ -3241,9 +3300,9 @@ async def _extend_existing_subscription(
             'squad_uuid': squad_uuid,
             'consume_promo_offer': False,
         }
-        
+
         await user_cart_service.save_user_cart(db_user.id, cart_data)
-        
+
         await callback.message.edit_text(
             message_text,
             reply_markup=get_insufficient_balance_keyboard(
@@ -3255,7 +3314,7 @@ async def _extend_existing_subscription(
         )
         await callback.answer()
         return
-    
+
     # Списываем средства
     success = await subtract_user_balance(
         db,
@@ -3264,15 +3323,15 @@ async def _extend_existing_subscription(
         f"Продление подписки на {period_days} дней",
         consume_promo_offer=False,  # Простая покупка не использует промо-скидки
     )
-    
+
     if not success:
         await callback.answer("⚠ Ошибка списания средств", show_alert=True)
         return
-    
+
     # Обновляем параметры подписки
     current_time = datetime.utcnow()
     old_end_date = current_subscription.end_date
-    
+
     # Обновляем параметры в зависимости от типа текущей подписки
     if current_subscription.is_trial:
         # При продлении триальной подписки переводим её в обычную
@@ -3296,7 +3355,7 @@ async def _extend_existing_subscription(
         if squad_uuid and squad_uuid not in current_subscription.connected_squads:
             # Используем += для безопасного добавления в список SQLAlchemy
             current_subscription.connected_squads = current_subscription.connected_squads + [squad_uuid]
-    
+
     # Продлеваем подписку
     if current_subscription.end_date > current_time:
         # Если подписка ещё активна, добавляем дни к текущей дате окончания
@@ -3304,15 +3363,15 @@ async def _extend_existing_subscription(
     else:
         # Если подписка уже истекла, начинаем от текущего времени
         new_end_date = current_time + timedelta(days=period_days)
-    
+
     current_subscription.end_date = new_end_date
     current_subscription.updated_at = current_time
-    
+
     # Сохраняем изменения
     await db.commit()
     await db.refresh(current_subscription)
     await db.refresh(db_user)
-    
+
     # Обновляем пользователя в Remnawave
     subscription_service = SubscriptionService()
     try:
@@ -3328,7 +3387,7 @@ async def _extend_existing_subscription(
             logger.error("⚠ ОШИБКА ОБНОВЛЕНИЯ REMNAWAVE")
     except Exception as e:
         logger.error(f"⚠ ИСКЛЮЧЕНИЕ ПРИ ОБНОВЛЕНИИ REMNAWAVE: {e}")
-    
+
     # Создаём транзакцию
     transaction = await create_transaction(
         db=db,
@@ -3337,7 +3396,7 @@ async def _extend_existing_subscription(
         amount_kopeks=price_kopeks,
         description=f"Продление подписки на {period_days} дней"
     )
-    
+
     # Отправляем уведомление админу
     try:
         notification_service = AdminNotificationService(callback.bot)
@@ -3353,7 +3412,7 @@ async def _extend_existing_subscription(
         )
     except Exception as e:
         logger.error(f"Ошибка отправки уведомления о продлении: {e}")
-    
+
     # Отправляем сообщение пользователю
     success_message = (
         "✅ Подписка успешно продлена!\n\n"
@@ -3361,15 +3420,15 @@ async def _extend_existing_subscription(
         f"Действует до: {format_local_datetime(new_end_date, '%d.%m.%Y %H:%M')}\n\n"
         f"💰 Списано: {texts.format_price(price_kopeks)}"
     )
-    
+
     # Если это была триальная подписка, добавляем информацию о преобразовании
     if current_subscription.is_trial:
         success_message += "\n🎯 Триальная подписка преобразована в платную"
-    
+
     await callback.message.edit_text(
         success_message,
         reply_markup=get_back_keyboard(db_user.language)
     )
-    
+
     logger.info(f"✅ Пользователь {db_user.telegram_id} продлил подписку на {period_days} дней за {price_kopeks / 100}₽")
     await callback.answer()

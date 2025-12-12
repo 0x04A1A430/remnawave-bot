@@ -1451,6 +1451,50 @@ class AdminNotificationService:
             return str(value)
         return str(value)
 
+    async def send_bulk_ban_notification(
+        self,
+        admin_user_id: int,
+        successfully_banned: int,
+        not_found: int,
+        errors: int,
+        admin_name: str = "Администратор"
+    ) -> bool:
+        """Отправляет уведомление о массовой блокировке пользователей"""
+        if not self._is_enabled():
+            return False
+
+        try:
+            message_lines = [
+                "🛑 <b>МАССОВАЯ БЛОКИРОВКА ПОЛЬЗОВАТЕЛЕЙ</b>",
+                "",
+                f"👮 <b>Администратор:</b> {admin_name}",
+                f"🆔 <b>ID администратора:</b> {admin_user_id}",
+                "",
+                "📊 <b>Результаты:</b>",
+                f"✅ Успешно заблокировано: {successfully_banned}",
+                f"❌ Не найдено: {not_found}",
+                f"💥 Ошибок: {errors}"
+            ]
+
+            total_processed = successfully_banned + not_found + errors
+            if total_processed > 0:
+                success_rate = (successfully_banned / total_processed) * 100
+                message_lines.append(f"📈 Успешность: {success_rate:.1f}%")
+
+            message_lines.extend(
+                [
+                    "",
+                    f"⏰ <i>{format_local_datetime(datetime.utcnow(), '%d.%m.%Y %H:%M:%S')}</i>",
+                ]
+            )
+
+            message = "\n".join(message_lines)
+            return await self._send_message(message)
+
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления о массовой блокировке: {e}")
+            return False
+
     async def send_ticket_event_notification(
         self,
         text: str,
@@ -1468,3 +1512,49 @@ class AdminNotificationService:
         if not (self._is_enabled() and runtime_enabled):
             return False
         return await self._send_message(text, reply_markup=keyboard, ticket_event=True)
+
+    async def send_suspicious_traffic_notification(
+        self,
+        message: str,
+        bot: Bot,
+        topic_id: Optional[int] = None
+    ) -> bool:
+        """
+        Отправляет уведомление о подозрительной активности трафика
+
+        Args:
+            message: текст уведомления
+            bot: экземпляр бота для отправки сообщения
+            topic_id: ID топика для отправки уведомления (если не указан, использует стандартный)
+        """
+        if not self.chat_id:
+            logger.warning("ADMIN_NOTIFICATIONS_CHAT_ID не настроен")
+            return False
+
+        # Используем специальный топик для подозрительной активности, если он задан
+        notification_topic_id = topic_id or self.topic_id
+
+        try:
+            message_kwargs = {
+                'chat_id': self.chat_id,
+                'text': message,
+                'parse_mode': 'HTML',
+                'disable_web_page_preview': True
+            }
+
+            if notification_topic_id:
+                message_kwargs['message_thread_id'] = notification_topic_id
+
+            await bot.send_message(**message_kwargs)
+            logger.info(f"Уведомление о подозрительной активности отправлено в чат {self.chat_id}, топик {notification_topic_id}")
+            return True
+
+        except TelegramForbiddenError:
+            logger.error(f"Бот не имеет прав для отправки в чат {self.chat_id}")
+            return False
+        except TelegramBadRequest as e:
+            logger.error(f"Ошибка отправки уведомления о подозрительной активности: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"Неожиданная ошибка при отправке уведомления о подозрительной активности: {e}")
+            return False

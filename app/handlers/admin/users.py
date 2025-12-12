@@ -301,6 +301,137 @@ async def show_users_list_by_balance(
 
 @admin_required
 @error_handler
+async def show_users_ready_to_renew(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+    page: int = 1
+):
+    """Показывает пользователей с истекшей подпиской и балансом >= порога."""
+    await state.set_state(AdminStates.viewing_user_from_ready_to_renew_list)
+
+    texts = get_texts(db_user.language)
+    threshold = getattr(
+        settings,
+        "SUBSCRIPTION_RENEWAL_BALANCE_THRESHOLD_KOPEKS",
+        20000,
+    )
+
+    user_service = UserService()
+    users_data = await user_service.get_users_ready_to_renew(
+        db,
+        min_balance_kopeks=threshold,
+        page=page,
+        limit=10,
+    )
+
+    amount_text = settings.format_price(threshold)
+    header = texts.t(
+        "ADMIN_USERS_FILTER_RENEW_READY_TITLE",
+        "♻️ Пользователи готовы к продлению",
+    )
+    description = texts.t(
+        "ADMIN_USERS_FILTER_RENEW_READY_DESC",
+        "Подписка истекла, а на балансе осталось {amount} или больше.",
+    ).format(amount=amount_text)
+
+    if not users_data["users"]:
+        empty_text = texts.t(
+            "ADMIN_USERS_FILTER_RENEW_READY_EMPTY",
+            "Сейчас нет пользователей, которые подходят под этот фильтр.",
+        )
+        await callback.message.edit_text(
+            f"{header}\n\n{description}\n\n{empty_text}",
+            reply_markup=get_admin_users_keyboard(db_user.language),
+        )
+        await callback.answer()
+        return
+
+    text = f"{header}\n\n{description}\n\n"
+    text += "Нажмите на пользователя для управления:"
+
+    keyboard = []
+    current_time = datetime.utcnow()
+
+    for user in users_data["users"]:
+        subscription = user.subscription
+        status_emoji = "✅" if user.status == UserStatus.ACTIVE.value else "🚫"
+        subscription_emoji = "❌"
+        expired_days = "?"
+
+        if subscription:
+            if subscription.is_trial:
+                subscription_emoji = "🎁"
+            elif subscription.is_active:
+                subscription_emoji = "💎"
+            else:
+                subscription_emoji = "⏰"
+
+            if subscription.end_date:
+                delta = current_time - subscription.end_date
+                expired_days = delta.days
+
+        button_text = (
+            f"{status_emoji} {subscription_emoji} {user.full_name}"
+            f" | 💰 {settings.format_price(user.balance_kopeks)}"
+            f" | ⏰ {expired_days}д ист."
+        )
+
+        if len(button_text) > 60:
+            short_name = user.full_name
+            if len(short_name) > 20:
+                short_name = short_name[:17] + "..."
+            button_text = (
+                f"{status_emoji} {subscription_emoji} {short_name}"
+                f" | 💰 {settings.format_price(user.balance_kopeks)}"
+            )
+
+        keyboard.append([
+            types.InlineKeyboardButton(
+                text=button_text,
+                callback_data=f"admin_user_manage_{user.id}",
+            )
+        ])
+
+    if users_data["total_pages"] > 1:
+        pagination_row = get_admin_pagination_keyboard(
+            users_data["current_page"],
+            users_data["total_pages"],
+            "admin_users_ready_to_renew_list",
+            "admin_users_ready_to_renew_filter",
+            db_user.language,
+        ).inline_keyboard[0]
+        keyboard.append(pagination_row)
+
+    keyboard.extend([
+        [
+            types.InlineKeyboardButton(
+                text="🔍 Поиск",
+                callback_data="admin_users_search",
+            ),
+            types.InlineKeyboardButton(
+                text="📊 Статистика",
+                callback_data="admin_users_stats",
+            ),
+        ],
+        [
+            types.InlineKeyboardButton(
+                text="⬅️ Назад",
+                callback_data="admin_users",
+            )
+        ],
+    ])
+
+    await callback.message.edit_text(
+        text,
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
 async def show_users_list_by_traffic(
     callback: types.CallbackQuery,
     db_user: User,
@@ -857,6 +988,22 @@ async def handle_users_purchases_list_pagination(
     except (ValueError, IndexError) as e:
         logger.error(f"Ошибка парсинга номера страницы: {e}")
         await show_users_list_by_purchases(callback, db_user, db, state, 1)
+
+
+@admin_required
+@error_handler
+async def handle_users_ready_to_renew_pagination(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext
+):
+    try:
+        page = int(callback.data.split('_')[-1])
+        await show_users_ready_to_renew(callback, db_user, db, state, page)
+    except (ValueError, IndexError) as e:
+        logger.error(f"Ошибка парсинга номера страницы: {e}")
+        await show_users_ready_to_renew(callback, db_user, db, state, 1)
 
 
 @admin_required
@@ -1502,6 +1649,8 @@ async def show_user_management(
         back_callback = "admin_users_purchases_filter"
     elif current_state == AdminStates.viewing_user_from_campaign_list:
         back_callback = "admin_users_campaign_filter"
+    elif current_state == AdminStates.viewing_user_from_ready_to_renew_list:
+        back_callback = "admin_users_ready_to_renew_filter"
     
     # Базовая клавиатура профиля
     kb = get_user_management_keyboard(user.id, user.status, db_user.language, back_callback)
@@ -4559,10 +4708,13 @@ async def admin_buy_subscription_execute(
                         target_user.telegram_id,
                     )
 
-            if subscription.end_date <= current_time:
+            extension_base_date = current_time
+            if subscription.end_date and subscription.end_date > current_time:
+                extension_base_date = subscription.end_date
+            else:
                 subscription.start_date = current_time
 
-            subscription.end_date = current_time + timedelta(days=period_days) + bonus_period
+            subscription.end_date = extension_base_date + timedelta(days=period_days) + bonus_period
             subscription.status = SubscriptionStatus.ACTIVE.value
             subscription.updated_at = current_time
 
@@ -4858,6 +5010,11 @@ def register_handlers(dp: Dispatcher):
     )
 
     dp.callback_query.register(
+        handle_users_ready_to_renew_pagination,
+        F.data.startswith("admin_users_ready_to_renew_list_page_")
+    )
+
+    dp.callback_query.register(
         handle_users_campaign_list_pagination,
         F.data.startswith("admin_users_campaign_list_page_")
     )
@@ -5127,6 +5284,11 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         show_users_list_by_purchases,
         F.data == "admin_users_purchases_filter"
+    )
+    
+    dp.callback_query.register(
+        show_users_ready_to_renew,
+        F.data == "admin_users_ready_to_renew_filter"
     )
 
     dp.callback_query.register(

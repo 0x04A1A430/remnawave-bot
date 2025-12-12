@@ -155,12 +155,24 @@ class Settings(BaseSettings):
     REFERRAL_PROGRAM_ENABLED: bool = True
     REFERRAL_NOTIFICATIONS_ENABLED: bool = True
     REFERRAL_NOTIFICATION_RETRY_ATTEMPTS: int = 3
-    
+
+    BLACKLIST_CHECK_ENABLED: bool = False
+    BLACKLIST_GITHUB_URL: Optional[str] = None
+    BLACKLIST_UPDATE_INTERVAL_HOURS: int = 24
+    BLACKLIST_IGNORE_ADMINS: bool = True
+
+    # Настройки мониторинга трафика
+    TRAFFIC_MONITORING_ENABLED: bool = False
+    TRAFFIC_THRESHOLD_GB_PER_DAY: float = 10.0  # Порог трафика в ГБ за сутки
+    TRAFFIC_MONITORING_INTERVAL_HOURS: int = 24  # Интервал проверки в часах (по умолчанию - раз в сутки)
+    SUSPICIOUS_NOTIFICATIONS_TOPIC_ID: Optional[int] = None
+
     AUTOPAY_WARNING_DAYS: str = "3,1"
 
     DEFAULT_AUTOPAY_ENABLED: bool = False
     DEFAULT_AUTOPAY_DAYS_BEFORE: int = 3
     MIN_BALANCE_FOR_AUTOPAY_KOPEKS: int = 10000  
+    SUBSCRIPTION_RENEWAL_BALANCE_THRESHOLD_KOPEKS: int = 20000  
     
     MONITORING_INTERVAL: int = 60
     INACTIVE_USER_DELETE_MONTHS: int = 3
