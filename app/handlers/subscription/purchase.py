@@ -376,10 +376,19 @@ async def show_subscription_info(
             and actual_status in ["trial_active", "paid_active"]
             and not hide_subscription_link
     ):
+        subscription_link_display = subscription_link
+
+        if settings.is_happ_cryptolink_mode():
+            subscription_link_display = (
+                f"<blockquote expandable><code>{subscription_link}</code></blockquote>"
+            )
+        else:
+            subscription_link_display = f"<code>{subscription_link}</code>"
+
         message += "\n\n" + texts.t(
             "SUBSCRIPTION_CONNECT_LINK_SECTION",
-            "🔗 <b>Ссылка для подключения:</b>\n<code>{subscription_url}</code>",
-        ).format(subscription_url=subscription_link)
+            "🔗 <b>Ссылка для подключения:</b>\n{subscription_url}",
+        ).format(subscription_url=subscription_link_display)
         message += "\n\n" + texts.t(
             "SUBSCRIPTION_CONNECT_LINK_PROMPT",
             "📱 Скопируйте ссылку и добавьте в ваше VPN приложение",
