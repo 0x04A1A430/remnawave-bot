@@ -391,12 +391,14 @@ class RemnaWaveAPI:
             data['activeInternalSquads'] = active_internal_squads
             
         response = await self._make_request('POST', '/api/users', data)
-        return self._parse_user(response['response'])
+        user = self._parse_user(response['response'])
+        return await self.enrich_user_with_happ_link(user)
     
     async def get_user_by_uuid(self, uuid: str) -> Optional[RemnaWaveUser]:
         try:
             response = await self._make_request('GET', f'/api/users/{uuid}')
-            return self._parse_user(response['response'])
+            user = self._parse_user(response['response'])
+            return await self.enrich_user_with_happ_link(user)
         except RemnaWaveAPIError as e:
             if e.status_code == 404:
                 return None
@@ -408,7 +410,8 @@ class RemnaWaveAPI:
             users_data = response.get('response', [])
             if not users_data:
                 return []
-            return [self._parse_user(user) for user in users_data]
+            users = [self._parse_user(user) for user in users_data]
+            return [await self.enrich_user_with_happ_link(u) for u in users]
         except RemnaWaveAPIError as e:
             if e.status_code == 404:
                 return []
@@ -417,7 +420,8 @@ class RemnaWaveAPI:
     async def get_user_by_username(self, username: str) -> Optional[RemnaWaveUser]:
         try:
             response = await self._make_request('GET', f'/api/users/by-username/{username}')
-            return self._parse_user(response['response'])
+            user = self._parse_user(response['response'])
+            return await self.enrich_user_with_happ_link(user)
         except RemnaWaveAPIError as e:
             if e.status_code == 404:
                 return None
@@ -461,38 +465,57 @@ class RemnaWaveAPI:
             data['activeInternalSquads'] = active_internal_squads
             
         response = await self._make_request('PATCH', '/api/users', data)
-        return self._parse_user(response['response'])
-    
+        user = self._parse_user(response['response'])
+        return await self.enrich_user_with_happ_link(user)
+
     async def delete_user(self, uuid: str) -> bool:
         response = await self._make_request('DELETE', f'/api/users/{uuid}')
         return response['response']['isDeleted']
     
     async def enable_user(self, uuid: str) -> RemnaWaveUser:
         response = await self._make_request('POST', f'/api/users/{uuid}/actions/enable')
-        return self._parse_user(response['response'])
-    
+        user = self._parse_user(response['response'])
+        return await self.enrich_user_with_happ_link(user)
+
     async def disable_user(self, uuid: str) -> RemnaWaveUser:
         response = await self._make_request('POST', f'/api/users/{uuid}/actions/disable')
-        return self._parse_user(response['response'])
-    
+        user = self._parse_user(response['response'])
+        return await self.enrich_user_with_happ_link(user)
+
     async def reset_user_traffic(self, uuid: str) -> RemnaWaveUser:
         response = await self._make_request('POST', f'/api/users/{uuid}/actions/reset-traffic')
-        return self._parse_user(response['response'])
-    
+        user = self._parse_user(response['response'])
+        return await self.enrich_user_with_happ_link(user)
+
     async def revoke_user_subscription(self, uuid: str, new_short_uuid: Optional[str] = None) -> RemnaWaveUser:
         data = {}
         if new_short_uuid:
             data['shortUuid'] = new_short_uuid
-            
+
         response = await self._make_request('POST', f'/api/users/{uuid}/actions/revoke', data)
-        return self._parse_user(response['response'])
+        user = self._parse_user(response['response'])
+        return await self.enrich_user_with_happ_link(user)
     
-    async def get_all_users(self, start: int = 0, size: int = 100) -> Dict[str, Any]:
+    async def get_all_users(self, start: int = 0, size: int = 100, enrich_happ_links: bool = False) -> Dict[str, Any]:
+        """
+        Получает список всех пользователей.
+
+        Args:
+            start: Смещение для пагинации
+            size: Размер страницы
+            enrich_happ_links: Если True, для каждого пользователя будет запрошена
+                              зашифрованная happ ссылка (медленно для больших списков)
+        """
         params = {'start': start, 'size': size}
         response = await self._make_request('GET', '/api/users', params=params)
-        
+
+        users = [self._parse_user(user) for user in response['response']['users']]
+
+        if enrich_happ_links:
+            users = [await self.enrich_user_with_happ_link(u) for u in users]
+
         return {
-            'users': [self._parse_user(user) for user in response['response']['users']],
+            'users': users,
             'total': response['response']['total']
         }
     
@@ -600,7 +623,13 @@ class RemnaWaveAPI:
     
     async def get_subscription_info(self, short_uuid: str) -> SubscriptionInfo:
         response = await self._make_request('GET', f'/api/sub/{short_uuid}/info')
-        return self._parse_subscription_info(response['response'])
+        info = self._parse_subscription_info(response['response'])
+        # Обогащаем happ_crypto_link если его нет но есть subscription_url
+        if not info.happ_crypto_link and info.subscription_url:
+            encrypted = await self.encrypt_happ_crypto_link(info.subscription_url)
+            if encrypted:
+                info.happ_crypto_link = encrypted
+        return info
     
     async def get_subscription_by_short_uuid(self, short_uuid: str) -> str:
         async with self.session.get(f"{self.base_url}/api/sub/{short_uuid}") as response:
@@ -706,8 +735,35 @@ class RemnaWaveAPI:
         except Exception as e:
             logger.error(f"Ошибка удаления устройства {device_hwid}: {e}")
             return False
-    
-    
+
+    async def encrypt_happ_crypto_link(self, link_to_encrypt: str) -> Optional[str]:
+        """
+        Шифрует ссылку подписки через API Remnawave.
+        Возвращает зашифрованную happ:// ссылку или None при ошибке.
+        """
+        try:
+            data = {"linkToEncrypt": link_to_encrypt}
+            response = await self._make_request('POST', '/api/system/tools/happ/encrypt', data)
+            return response.get('response', {}).get('encryptedLink')
+        except RemnaWaveAPIError as e:
+            logger.warning(f"Не удалось зашифровать happ ссылку: {e.message}")
+            return None
+        except Exception as e:
+            logger.warning(f"Ошибка при шифровании happ ссылки: {e}")
+            return None
+
+    async def enrich_user_with_happ_link(self, user: RemnaWaveUser) -> RemnaWaveUser:
+        """
+        Обогащает объект пользователя зашифрованной happ ссылкой,
+        если она отсутствует но есть subscription_url.
+        """
+        if not user.happ_crypto_link and user.subscription_url:
+            encrypted = await self.encrypt_happ_crypto_link(user.subscription_url)
+            if encrypted:
+                user.happ_crypto_link = encrypted
+        return user
+
+
     def _parse_user_traffic(self, traffic_data: Optional[Dict]) -> Optional[UserTraffic]:
         """Парсит данные трафика из нового формата API"""
         if not traffic_data:
