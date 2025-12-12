@@ -38,6 +38,7 @@ class PromoCodeStates(StatesGroup):
 class AdminStates(StatesGroup):
     
     waiting_for_user_search = State()
+    waiting_for_bulk_ban_list = State()
     sending_user_message = State()
     editing_user_balance = State()
     extending_subscription = State()
@@ -141,6 +142,7 @@ class AdminStates(StatesGroup):
     viewing_user_from_spending_list = State()
     viewing_user_from_purchases_list = State()
     viewing_user_from_campaign_list = State()
+    viewing_user_from_ready_to_renew_list = State()
 
 class SupportStates(StatesGroup):
     waiting_for_message = State()

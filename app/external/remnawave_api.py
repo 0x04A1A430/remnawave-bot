@@ -685,6 +685,25 @@ class RemnaWaveAPI:
     async def get_nodes_realtime_usage(self) -> List[Dict[str, Any]]:
         response = await self._make_request('GET', '/api/nodes/usage/realtime')
         return response['response']
+
+    async def get_user_stats_usage(self, user_uuid: str, start_date: str, end_date: str) -> Dict[str, Any]:
+        """
+        Получает статистику использования трафика пользователем за указанный период
+
+        Args:
+            user_uuid: UUID пользователя
+            start_date: Начальная дата в формате ISO (например, "2025-12-09T00:00:00.000Z")
+            end_date: Конечная дата в формате ISO (например, "2025-12-09T23:59:59.999Z")
+
+        Returns:
+            Словарь с информацией о трафике пользователя за указанный период
+        """
+        params = {
+            'start': start_date,
+            'end': end_date
+        }
+        response = await self._make_request('GET', f'/api/users/stats/usage/{user_uuid}/range', params=params)
+        return response
     
     
     async def get_user_devices(self, user_uuid: str) -> Dict[str, Any]:

@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import delete, select, update, func
+from sqlalchemy.orm import selectinload
 from aiogram import Bot, types
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from app.database.crud.user import (
@@ -216,6 +217,60 @@ class UserService:
                 "total_count": 0,
                 "has_next": False,
                 "has_prev": False
+            }
+
+    async def get_users_ready_to_renew(
+        self,
+        db: AsyncSession,
+        min_balance_kopeks: int,
+        page: int = 1,
+        limit: int = 20,
+    ) -> Dict[str, Any]:
+        """Возвращает пользователей с истекшей подпиской и достаточным балансом."""
+        try:
+            offset = (page - 1) * limit
+            now = datetime.utcnow()
+
+            base_filters = [
+                User.balance_kopeks >= min_balance_kopeks,
+                Subscription.end_date.isnot(None),
+                Subscription.end_date <= now,
+            ]
+
+            query = (
+                select(User)
+                .options(selectinload(User.subscription))
+                .join(Subscription, Subscription.user_id == User.id)
+                .where(*base_filters)
+                .order_by(User.balance_kopeks.desc(), Subscription.end_date.asc())
+                .offset(offset)
+                .limit(limit)
+            )
+            result = await db.execute(query)
+            users = result.scalars().all()
+
+            count_query = (
+                select(func.count(User.id))
+                .join(Subscription, Subscription.user_id == User.id)
+                .where(*base_filters)
+            )
+            total_count = (await db.execute(count_query)).scalar() or 0
+            total_pages = (total_count + limit - 1) // limit if total_count else 0
+
+            return {
+                "users": users,
+                "current_page": page,
+                "total_pages": total_pages,
+                "total_count": total_count,
+            }
+
+        except Exception as e:
+            logger.error(f"Ошибка получения пользователей для продления: {e}")
+            return {
+                "users": [],
+                "current_page": 1,
+                "total_pages": 1,
+                "total_count": 0,
             }
 
     async def get_user_spending_stats_map(

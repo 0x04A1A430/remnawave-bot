@@ -31,6 +31,8 @@ from app.handlers import polls as user_polls
 from app.handlers import simple_subscription
 from app.handlers.admin import (
     main as admin_main,
+    blacklist as admin_blacklist,
+    bulk_ban as admin_bulk_ban,
     users as admin_users,
     subscriptions as admin_subscriptions,
     promocodes as admin_promocodes,
@@ -176,6 +178,8 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     admin_faq.register_handlers(dp)
     admin_payments.register_handlers(dp)
     admin_trials.register_handlers(dp)
+    admin_bulk_ban.register_bulk_ban_handlers(dp)
+    admin_blacklist.register_blacklist_handlers(dp)
     common.register_handlers(dp)
     register_stars_handlers(dp)
     user_polls.register_handlers(dp)

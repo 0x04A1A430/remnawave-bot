@@ -711,6 +711,10 @@
   "ADMIN_USERS_FILTERS": "⚙️ Filters",
   "ADMIN_USERS_FILTER_ACTIVITY": "🕒 By activity",
   "ADMIN_USERS_FILTER_BALANCE": "💰 By balance",
+  "ADMIN_USERS_FILTER_RENEW_READY": "♻️ Ready to renew",
+  "ADMIN_USERS_FILTER_RENEW_READY_TITLE": "♻️ Users ready to renew",
+  "ADMIN_USERS_FILTER_RENEW_READY_DESC": "Their subscription expired and the balance still has {amount} or more.",
+  "ADMIN_USERS_FILTER_RENEW_READY_EMPTY": "No users match this filter right now.",
   "ADMIN_USERS_FILTER_CAMPAIGN": "📢 By campaign",
   "ADMIN_USERS_FILTER_PURCHASES": "🛒 By purchases",
   "ADMIN_USERS_FILTER_SPENDING": "💳 By spending",
@@ -1528,5 +1532,7 @@
   "POLL_EMPTY": "Poll is not available yet.",
   "POLL_ERROR": "Unable to process the poll. Please try again later.",
   "POLL_COMPLETED": "🙏 Thanks for completing the poll!",
-  "POLL_REWARD_GRANTED": "Reward {amount} has been credited to your balance."
+  "POLL_REWARD_GRANTED": "Reward {amount} has been credited to your balance.",
+  "ADMIN_USERS_BULK_BAN": "🛑 Bulk Ban",
+  "ADMIN_USERS_BLACKLIST": "🔐 Blacklist"
 }

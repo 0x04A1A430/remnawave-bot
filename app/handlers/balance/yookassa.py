@@ -10,6 +10,7 @@ from app.config import settings
 from app.database.models import User
 from app.keyboards.inline import get_back_keyboard
 from app.localization.texts import get_texts
+from app.services.blacklist_service import blacklist_service
 from app.services.payment_service import PaymentService
 from app.utils.decorators import error_handler
 from app.states import BalanceStates
@@ -133,8 +134,26 @@ async def process_yookassa_payment_amount(
     amount_kopeks: int,
     state: FSMContext
 ):
+    # Проверяем, находится ли пользователь в черном списке
+    is_blacklisted, blacklist_reason = await blacklist_service.is_user_blacklisted(
+        message.from_user.id,
+        message.from_user.username
+    )
+
+    if is_blacklisted:
+        logger.warning(f"🚫 Пользователь {message.from_user.id} находится в черном списке: {blacklist_reason}")
+        try:
+            await message.answer(
+                f"🚫 Оплата невозможна\n\n"
+                f"Причина: {blacklist_reason}\n\n"
+                f"Если вы считаете, что это ошибка, обратитесь в поддержку."
+            )
+        except Exception as e:
+            logger.error(f"Ошибка при отправке сообщения о блокировке: {e}")
+        return
+
     texts = get_texts(db_user.language)
-    
+
     if not settings.is_yookassa_enabled():
         await message.answer("❌ Оплата через YooKassa временно недоступна")
         return
@@ -261,8 +280,26 @@ async def process_yookassa_sbp_payment_amount(
     amount_kopeks: int,
     state: FSMContext
 ):
+    # Проверяем, находится ли пользователь в черном списке
+    is_blacklisted, blacklist_reason = await blacklist_service.is_user_blacklisted(
+        message.from_user.id,
+        message.from_user.username
+    )
+
+    if is_blacklisted:
+        logger.warning(f"🚫 Пользователь {message.from_user.id} находится в черном списке: {blacklist_reason}")
+        try:
+            await message.answer(
+                f"🚫 Оплата невозможна\n\n"
+                f"Причина: {blacklist_reason}\n\n"
+                f"Если вы считаете, что это ошибка, обратитесь в поддержку."
+            )
+        except Exception as e:
+            logger.error(f"Ошибка при отправке сообщения о блокировке: {e}")
+        return
+
     texts = get_texts(db_user.language)
-    
+
     if not settings.is_yookassa_enabled() or not settings.YOOKASSA_SBP_ENABLED:
         await message.answer("❌ Оплата через СБП временно недоступна")
         return

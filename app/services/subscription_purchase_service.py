@@ -1110,8 +1110,14 @@ class MiniAppSubscriptionPurchaseService:
             subscription.traffic_limit_gb = pricing.selection.traffic_value
             subscription.device_limit = pricing.selection.devices
             subscription.connected_squads = pricing.selection.servers
-            subscription.start_date = now
-            subscription.end_date = now + timedelta(days=pricing.selection.period.days) + bonus_period
+
+            extension_base_date = now
+            if subscription.end_date and subscription.end_date > now:
+                extension_base_date = subscription.end_date
+            else:
+                subscription.start_date = now
+
+            subscription.end_date = extension_base_date + timedelta(days=pricing.selection.period.days) + bonus_period
             subscription.updated_at = now
             subscription.traffic_used_gb = 0.0
 
@@ -1229,4 +1235,3 @@ class SubscriptionPurchaseService:
 
 
 purchase_service = MiniAppSubscriptionPurchaseService()
-
