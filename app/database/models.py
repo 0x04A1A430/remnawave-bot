@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time, date
 from typing import Optional, List, Dict, Any
 from enum import Enum
 
@@ -7,6 +7,8 @@ from sqlalchemy import (
     Integer,
     String,
     DateTime,
+    Date,
+    Time,
     Boolean,
     Text,
     ForeignKey,
@@ -16,6 +18,7 @@ from sqlalchemy import (
     UniqueConstraint,
     Index,
     Table,
+    SmallInteger,
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, Mapped, mapped_column
@@ -955,6 +958,130 @@ class ReferralEarning(Base):
     @property
     def amount_rubles(self) -> float:
         return self.amount_kopeks / 100
+
+
+class ReferralContest(Base):
+    __tablename__ = "referral_contests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    prize_text = Column(Text, nullable=True)
+    contest_type = Column(String(50), nullable=False, default="referral_paid")
+    start_at = Column(DateTime, nullable=False)
+    end_at = Column(DateTime, nullable=False)
+    daily_summary_time = Column(Time, nullable=False, default=time(hour=12, minute=0))
+    timezone = Column(String(64), nullable=False, default="UTC")
+    is_active = Column(Boolean, nullable=False, default=True)
+    last_daily_summary_date = Column(Date, nullable=True)
+    final_summary_sent = Column(Boolean, nullable=False, default=False)
+    created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    creator = relationship("User", backref="created_referral_contests")
+    events = relationship(
+        "ReferralContestEvent",
+        back_populates="contest",
+        cascade="all, delete-orphan",
+    )
+
+    def __repr__(self):
+        return f"<ReferralContest id={self.id} title='{self.title}'>"
+
+
+class ReferralContestEvent(Base):
+    __tablename__ = "referral_contest_events"
+    __table_args__ = (
+        UniqueConstraint(
+            "contest_id",
+            "referral_id",
+            name="uq_referral_contest_referral",
+        ),
+        Index("idx_referral_contest_referrer", "contest_id", "referrer_id"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    contest_id = Column(Integer, ForeignKey("referral_contests.id", ondelete="CASCADE"), nullable=False)
+    referrer_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    referral_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    event_type = Column(String(50), nullable=False)
+    amount_kopeks = Column(Integer, nullable=False, default=0)
+    occurred_at = Column(DateTime, nullable=False, default=func.now())
+
+    contest = relationship("ReferralContest", back_populates="events")
+    referrer = relationship("User", foreign_keys=[referrer_id])
+    referral = relationship("User", foreign_keys=[referral_id])
+
+    def __repr__(self):
+        return (
+            f"<ReferralContestEvent contest={self.contest_id} "
+            f"referrer={self.referrer_id} referral={self.referral_id}>"
+        )
+
+
+class ContestTemplate(Base):
+    __tablename__ = "contest_templates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False)
+    slug = Column(String(50), nullable=False, unique=True, index=True)
+    description = Column(Text, nullable=True)
+    prize_days = Column(Integer, nullable=False, default=1)
+    max_winners = Column(Integer, nullable=False, default=1)
+    attempts_per_user = Column(Integer, nullable=False, default=1)
+    times_per_day = Column(Integer, nullable=False, default=1)
+    schedule_times = Column(String(255), nullable=True)  # CSV of HH:MM in local TZ
+    cooldown_hours = Column(Integer, nullable=False, default=24)
+    payload = Column(JSON, nullable=True)
+    is_enabled = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    rounds = relationship("ContestRound", back_populates="template")
+
+
+class ContestRound(Base):
+    __tablename__ = "contest_rounds"
+    __table_args__ = (
+        Index("idx_contest_round_status", "status"),
+        Index("idx_contest_round_template", "template_id"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    template_id = Column(Integer, ForeignKey("contest_templates.id", ondelete="CASCADE"), nullable=False)
+    starts_at = Column(DateTime, nullable=False)
+    ends_at = Column(DateTime, nullable=False)
+    status = Column(String(20), nullable=False, default="active")  # active, finished
+    payload = Column(JSON, nullable=True)
+    winners_count = Column(Integer, nullable=False, default=0)
+    max_winners = Column(Integer, nullable=False, default=1)
+    attempts_per_user = Column(Integer, nullable=False, default=1)
+    message_id = Column(BigInteger, nullable=True)
+    chat_id = Column(BigInteger, nullable=True)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    template = relationship("ContestTemplate", back_populates="rounds")
+    attempts = relationship("ContestAttempt", back_populates="round", cascade="all, delete-orphan")
+
+
+class ContestAttempt(Base):
+    __tablename__ = "contest_attempts"
+    __table_args__ = (
+        UniqueConstraint("round_id", "user_id", name="uq_round_user_attempt"),
+        Index("idx_contest_attempt_round", "round_id"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    round_id = Column(Integer, ForeignKey("contest_rounds.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    answer = Column(Text, nullable=True)
+    is_winner = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime, default=func.now())
+
+    round = relationship("ContestRound", back_populates="attempts")
+    user = relationship("User")
 
 
 class Squad(Base):

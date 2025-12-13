@@ -47,6 +47,8 @@ from app.handlers.admin import (
     maintenance as admin_maintenance,
     promo_groups as admin_promo_groups,
     campaigns as admin_campaigns,
+    contests as admin_contests,
+    daily_contests as admin_daily_contests,
     promo_offers as admin_promo_offers,
     user_messages as admin_user_messages,
     updates as admin_updates,
@@ -63,6 +65,7 @@ from app.handlers.admin import (
     payments as admin_payments,
     trials as admin_trials,
 )
+from app.handlers import contests as user_contests
 from app.handlers.stars_payments import register_stars_handlers
 
 from app.utils.message_patch import patch_message_methods
@@ -162,6 +165,8 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     admin_polls.register_handlers(dp)
     admin_promo_groups.register_handlers(dp)
     admin_campaigns.register_handlers(dp)
+    admin_contests.register_handlers(dp)
+    admin_daily_contests.register_handlers(dp)
     admin_promo_offers.register_handlers(dp)
     admin_maintenance.register_handlers(dp)
     admin_user_messages.register_handlers(dp)
@@ -182,6 +187,7 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     admin_blacklist.register_blacklist_handlers(dp)
     common.register_handlers(dp)
     register_stars_handlers(dp)
+    user_contests.register_handlers(dp)
     user_polls.register_handlers(dp)
     simple_subscription.register_simple_subscription_handlers(dp)
     logger.info("⭐ Зарегистрированы обработчики Telegram Stars платежей")
