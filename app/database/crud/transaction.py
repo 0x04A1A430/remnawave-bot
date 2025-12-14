@@ -50,6 +50,21 @@ async def create_transaction(
             user_id,
             exc,
         )
+    if type == TransactionType.SUBSCRIPTION_PAYMENT:
+        try:
+            from app.services.referral_contest_service import referral_contest_service
+
+            await referral_contest_service.on_subscription_payment(
+                db,
+                user_id,
+                amount_kopeks,
+            )
+        except Exception as exc:
+            logger.debug(
+                "Не удалось записать событие конкурса для пользователя %s: %s",
+                user_id,
+                exc,
+            )
 
     return transaction
 

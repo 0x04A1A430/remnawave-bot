@@ -25,6 +25,7 @@ from .routes import (
     welcome_texts,
     pages,
     remnawave,
+    contests,
     servers,
     subscription_events,
     stats,
@@ -134,6 +135,10 @@ OPENAPI_TAGS = [
             "сменах промогрупп пользователей для административной панели."
         ),
     },
+    {
+        "name": "contests",
+        "description": "Управление конкурсами: реферальными и ежедневными играми/раундами.",
+    },
 ]
 
 
@@ -179,6 +184,7 @@ def create_web_api_app() -> FastAPI:
     app.include_router(promo_groups.router, prefix="/promo-groups", tags=["promo-groups"])
     app.include_router(promo_offers.router, prefix="/promo-offers", tags=["promo-offers"])
     app.include_router(servers.router, prefix="/servers", tags=["servers"])
+    app.include_router(contests.router, prefix="/contests", tags=["contests"])
     app.include_router(
         main_menu_buttons.router,
         prefix="/main-menu/buttons",

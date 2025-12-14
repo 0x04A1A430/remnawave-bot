@@ -1383,6 +1383,427 @@ async def create_discount_offers_table():
         return False
 
 
+async def create_referral_contests_table() -> bool:
+    table_exists = await check_table_exists("referral_contests")
+    if table_exists:
+        logger.info("Таблица referral_contests уже существует")
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == "sqlite":
+                await conn.execute(text("""
+                    CREATE TABLE referral_contests (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        title VARCHAR(255) NOT NULL,
+                        description TEXT NULL,
+                        prize_text TEXT NULL,
+                        contest_type VARCHAR(50) NOT NULL DEFAULT 'referral_paid',
+                        start_at DATETIME NOT NULL,
+                        end_at DATETIME NOT NULL,
+                        daily_summary_time TIME NOT NULL DEFAULT '12:00:00',
+                        timezone VARCHAR(64) NOT NULL DEFAULT 'UTC',
+                        is_active BOOLEAN NOT NULL DEFAULT 1,
+                        last_daily_summary_date DATE NULL,
+                        final_summary_sent BOOLEAN NOT NULL DEFAULT 0,
+                        created_by INTEGER NULL REFERENCES users(id) ON DELETE SET NULL,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+            elif db_type == "postgresql":
+                await conn.execute(text("""
+                    CREATE TABLE referral_contests (
+                        id SERIAL PRIMARY KEY,
+                        title VARCHAR(255) NOT NULL,
+                        description TEXT NULL,
+                        prize_text TEXT NULL,
+                        contest_type VARCHAR(50) NOT NULL DEFAULT 'referral_paid',
+                        start_at TIMESTAMP NOT NULL,
+                        end_at TIMESTAMP NOT NULL,
+                        daily_summary_time TIME NOT NULL DEFAULT '12:00:00',
+                        timezone VARCHAR(64) NOT NULL DEFAULT 'UTC',
+                        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                        last_daily_summary_date DATE NULL,
+                        final_summary_sent BOOLEAN NOT NULL DEFAULT FALSE,
+                        created_by INTEGER NULL REFERENCES users(id) ON DELETE SET NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+            elif db_type == "mysql":
+                await conn.execute(text("""
+                    CREATE TABLE referral_contests (
+                        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+                        title VARCHAR(255) NOT NULL,
+                        description TEXT NULL,
+                        prize_text TEXT NULL,
+                        contest_type VARCHAR(50) NOT NULL DEFAULT 'referral_paid',
+                        start_at DATETIME NOT NULL,
+                        end_at DATETIME NOT NULL,
+                        daily_summary_time TIME NOT NULL DEFAULT '12:00:00',
+                        timezone VARCHAR(64) NOT NULL DEFAULT 'UTC',
+                        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                        last_daily_summary_date DATE NULL,
+                        final_summary_sent BOOLEAN NOT NULL DEFAULT FALSE,
+                        created_by INTEGER NULL,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                        CONSTRAINT fk_referral_contest_creator FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
+                    )
+                """))
+            else:
+                raise ValueError(f"Unsupported database type: {db_type}")
+
+        logger.info("✅ Таблица referral_contests создана")
+        return True
+    except Exception as error:
+        logger.error(f"Ошибка создания таблицы referral_contests: {error}")
+        return False
+
+
+async def create_referral_contest_events_table() -> bool:
+    table_exists = await check_table_exists("referral_contest_events")
+    if table_exists:
+        logger.info("Таблица referral_contest_events уже существует")
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == "sqlite":
+                await conn.execute(text("""
+                    CREATE TABLE referral_contest_events (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        contest_id INTEGER NOT NULL,
+                        referrer_id INTEGER NOT NULL,
+                        referral_id INTEGER NOT NULL,
+                        event_type VARCHAR(50) NOT NULL,
+                        amount_kopeks INTEGER NOT NULL DEFAULT 0,
+                        occurred_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY(contest_id) REFERENCES referral_contests(id) ON DELETE CASCADE,
+                        FOREIGN KEY(referrer_id) REFERENCES users(id) ON DELETE CASCADE,
+                        FOREIGN KEY(referral_id) REFERENCES users(id) ON DELETE CASCADE,
+                        UNIQUE(contest_id, referral_id)
+                    )
+                """))
+                await conn.execute(text("""
+                    CREATE INDEX IF NOT EXISTS idx_referral_contest_referrer
+                    ON referral_contest_events (contest_id, referrer_id)
+                """))
+            elif db_type == "postgresql":
+                await conn.execute(text("""
+                    CREATE TABLE referral_contest_events (
+                        id SERIAL PRIMARY KEY,
+                        contest_id INTEGER NOT NULL REFERENCES referral_contests(id) ON DELETE CASCADE,
+                        referrer_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                        referral_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                        event_type VARCHAR(50) NOT NULL,
+                        amount_kopeks INTEGER NOT NULL DEFAULT 0,
+                        occurred_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT uq_referral_contest_referral UNIQUE (contest_id, referral_id)
+                    )
+                """))
+                await conn.execute(text("""
+                    CREATE INDEX IF NOT EXISTS idx_referral_contest_referrer
+                    ON referral_contest_events (contest_id, referrer_id)
+                """))
+            elif db_type == "mysql":
+                await conn.execute(text("""
+                    CREATE TABLE referral_contest_events (
+                        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+                        contest_id INTEGER NOT NULL,
+                        referrer_id INTEGER NOT NULL,
+                        referral_id INTEGER NOT NULL,
+                        event_type VARCHAR(50) NOT NULL,
+                        amount_kopeks INTEGER NOT NULL DEFAULT 0,
+                        occurred_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT fk_referral_contest FOREIGN KEY(contest_id) REFERENCES referral_contests(id) ON DELETE CASCADE,
+                        CONSTRAINT fk_referral_contest_referrer FOREIGN KEY(referrer_id) REFERENCES users(id) ON DELETE CASCADE,
+                        CONSTRAINT fk_referral_contest_referral FOREIGN KEY(referral_id) REFERENCES users(id) ON DELETE CASCADE,
+                        CONSTRAINT uq_referral_contest_referral UNIQUE (contest_id, referral_id)
+                    )
+                """))
+                await conn.execute(text("""
+                    CREATE INDEX idx_referral_contest_referrer
+                    ON referral_contest_events (contest_id, referrer_id)
+                """))
+            else:
+                raise ValueError(f"Unsupported database type: {db_type}")
+
+        logger.info("✅ Таблица referral_contest_events создана")
+        return True
+    except Exception as error:
+        logger.error(f"Ошибка создания таблицы referral_contest_events: {error}")
+        return False
+
+
+async def create_contest_templates_table() -> bool:
+    table_exists = await check_table_exists("contest_templates")
+    if table_exists:
+        logger.info("Таблица contest_templates уже существует")
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == "sqlite":
+                await conn.execute(text("""
+                    CREATE TABLE contest_templates (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name VARCHAR(100) NOT NULL,
+                        slug VARCHAR(50) NOT NULL UNIQUE,
+                        description TEXT NULL,
+                        prize_days INTEGER NOT NULL DEFAULT 1,
+                        max_winners INTEGER NOT NULL DEFAULT 1,
+                        attempts_per_user INTEGER NOT NULL DEFAULT 1,
+                        times_per_day INTEGER NOT NULL DEFAULT 1,
+                        schedule_times VARCHAR(255) NULL,
+                        cooldown_hours INTEGER NOT NULL DEFAULT 24,
+                        payload TEXT NULL,
+                        is_enabled BOOLEAN NOT NULL DEFAULT 1,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+            elif db_type == "postgresql":
+                await conn.execute(text("""
+                    CREATE TABLE contest_templates (
+                        id SERIAL PRIMARY KEY,
+                        name VARCHAR(100) NOT NULL,
+                        slug VARCHAR(50) NOT NULL UNIQUE,
+                        description TEXT NULL,
+                        prize_days INTEGER NOT NULL DEFAULT 1,
+                        max_winners INTEGER NOT NULL DEFAULT 1,
+                        attempts_per_user INTEGER NOT NULL DEFAULT 1,
+                        times_per_day INTEGER NOT NULL DEFAULT 1,
+                        schedule_times VARCHAR(255) NULL,
+                        cooldown_hours INTEGER NOT NULL DEFAULT 24,
+                        payload JSON NULL,
+                        is_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+            elif db_type == "mysql":
+                await conn.execute(text("""
+                    CREATE TABLE contest_templates (
+                        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+                        name VARCHAR(100) NOT NULL,
+                        slug VARCHAR(50) NOT NULL UNIQUE,
+                        description TEXT NULL,
+                        prize_days INTEGER NOT NULL DEFAULT 1,
+                        max_winners INTEGER NOT NULL DEFAULT 1,
+                        attempts_per_user INTEGER NOT NULL DEFAULT 1,
+                        times_per_day INTEGER NOT NULL DEFAULT 1,
+                        schedule_times VARCHAR(255) NULL,
+                        cooldown_hours INTEGER NOT NULL DEFAULT 24,
+                        payload JSON NULL,
+                        is_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                    )
+                """))
+            else:
+                raise ValueError(f"Unsupported database type: {db_type}")
+
+        logger.info("✅ Таблица contest_templates создана")
+        return True
+    except Exception as error:
+        logger.error(f"Ошибка создания таблицы contest_templates: {error}")
+        return False
+
+
+async def create_contest_rounds_table() -> bool:
+    table_exists = await check_table_exists("contest_rounds")
+    if table_exists:
+        logger.info("Таблица contest_rounds уже существует")
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == "sqlite":
+                await conn.execute(text("""
+                    CREATE TABLE contest_rounds (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        template_id INTEGER NOT NULL,
+                        starts_at DATETIME NOT NULL,
+                        ends_at DATETIME NOT NULL,
+                        status VARCHAR(20) NOT NULL DEFAULT 'active',
+                        payload TEXT NULL,
+                        winners_count INTEGER NOT NULL DEFAULT 0,
+                        max_winners INTEGER NOT NULL DEFAULT 1,
+                        attempts_per_user INTEGER NOT NULL DEFAULT 1,
+                        message_id BIGINT NULL,
+                        chat_id BIGINT NULL,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY(template_id) REFERENCES contest_templates(id) ON DELETE CASCADE
+                    )
+                """))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_contest_round_status ON contest_rounds(status)"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_contest_round_template ON contest_rounds(template_id)"))
+            elif db_type == "postgresql":
+                await conn.execute(text("""
+                    CREATE TABLE contest_rounds (
+                        id SERIAL PRIMARY KEY,
+                        template_id INTEGER NOT NULL REFERENCES contest_templates(id) ON DELETE CASCADE,
+                        starts_at TIMESTAMP NOT NULL,
+                        ends_at TIMESTAMP NOT NULL,
+                        status VARCHAR(20) NOT NULL DEFAULT 'active',
+                        payload JSON NULL,
+                        winners_count INTEGER NOT NULL DEFAULT 0,
+                        max_winners INTEGER NOT NULL DEFAULT 1,
+                        attempts_per_user INTEGER NOT NULL DEFAULT 1,
+                        message_id BIGINT NULL,
+                        chat_id BIGINT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_contest_round_status ON contest_rounds(status)"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_contest_round_template ON contest_rounds(template_id)"))
+            elif db_type == "mysql":
+                await conn.execute(text("""
+                    CREATE TABLE contest_rounds (
+                        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+                        template_id INTEGER NOT NULL,
+                        starts_at DATETIME NOT NULL,
+                        ends_at DATETIME NOT NULL,
+                        status VARCHAR(20) NOT NULL DEFAULT 'active',
+                        payload JSON NULL,
+                        winners_count INTEGER NOT NULL DEFAULT 0,
+                        max_winners INTEGER NOT NULL DEFAULT 1,
+                        attempts_per_user INTEGER NOT NULL DEFAULT 1,
+                        message_id BIGINT NULL,
+                        chat_id BIGINT NULL,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                        CONSTRAINT fk_contest_round_template FOREIGN KEY(template_id) REFERENCES contest_templates(id) ON DELETE CASCADE
+                    )
+                """))
+                await conn.execute(text("CREATE INDEX idx_contest_round_status ON contest_rounds(status)"))
+                await conn.execute(text("CREATE INDEX idx_contest_round_template ON contest_rounds(template_id)"))
+            else:
+                raise ValueError(f"Unsupported database type: {db_type}")
+
+        logger.info("✅ Таблица contest_rounds создана")
+        return True
+    except Exception as error:
+        logger.error(f"Ошибка создания таблицы contest_rounds: {error}")
+        return False
+
+
+async def create_contest_attempts_table() -> bool:
+    table_exists = await check_table_exists("contest_attempts")
+    if table_exists:
+        logger.info("Таблица contest_attempts уже существует")
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == "sqlite":
+                await conn.execute(text("""
+                    CREATE TABLE contest_attempts (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        round_id INTEGER NOT NULL,
+                        user_id INTEGER NOT NULL,
+                        answer TEXT NULL,
+                        is_winner BOOLEAN NOT NULL DEFAULT 0,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY(round_id) REFERENCES contest_rounds(id) ON DELETE CASCADE,
+                        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+                        UNIQUE(round_id, user_id)
+                    )
+                """))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_contest_attempt_round ON contest_attempts(round_id)"))
+            elif db_type == "postgresql":
+                await conn.execute(text("""
+                    CREATE TABLE contest_attempts (
+                        id SERIAL PRIMARY KEY,
+                        round_id INTEGER NOT NULL REFERENCES contest_rounds(id) ON DELETE CASCADE,
+                        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                        answer TEXT NULL,
+                        is_winner BOOLEAN NOT NULL DEFAULT FALSE,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT uq_round_user_attempt UNIQUE(round_id, user_id)
+                    )
+                """))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_contest_attempt_round ON contest_attempts(round_id)"))
+            elif db_type == "mysql":
+                await conn.execute(text("""
+                    CREATE TABLE contest_attempts (
+                        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+                        round_id INTEGER NOT NULL,
+                        user_id INTEGER NOT NULL,
+                        answer TEXT NULL,
+                        is_winner BOOLEAN NOT NULL DEFAULT FALSE,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT fk_contest_attempt_round FOREIGN KEY(round_id) REFERENCES contest_rounds(id) ON DELETE CASCADE,
+                        CONSTRAINT fk_contest_attempt_user FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+                        CONSTRAINT uq_round_user_attempt UNIQUE(round_id, user_id)
+                    )
+                """))
+                await conn.execute(text("CREATE INDEX idx_contest_attempt_round ON contest_attempts(round_id)"))
+            else:
+                raise ValueError(f"Unsupported database type: {db_type}")
+
+        logger.info("✅ Таблица contest_attempts создана")
+        return True
+    except Exception as error:
+        logger.error(f"Ошибка создания таблицы contest_attempts: {error}")
+        return False
+
+
+async def ensure_referral_contest_type_column() -> bool:
+    column_exists = await check_column_exists("referral_contests", "contest_type")
+    if column_exists:
+        logger.info("Колонка contest_type в referral_contests уже существует")
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == "sqlite":
+                await conn.execute(
+                    text(
+                        "ALTER TABLE referral_contests "
+                        "ADD COLUMN contest_type VARCHAR(50) NOT NULL DEFAULT 'referral_paid'"
+                    )
+                )
+            elif db_type == "postgresql":
+                await conn.execute(
+                    text(
+                        "ALTER TABLE referral_contests "
+                        "ADD COLUMN contest_type VARCHAR(50) NOT NULL DEFAULT 'referral_paid'"
+                    )
+                )
+            elif db_type == "mysql":
+                await conn.execute(
+                    text(
+                        "ALTER TABLE referral_contests "
+                        "ADD COLUMN contest_type VARCHAR(50) NOT NULL DEFAULT 'referral_paid'"
+                    )
+                )
+            else:
+                raise ValueError(f"Unsupported database type: {db_type}")
+
+        logger.info("✅ Колонка contest_type в referral_contests добавлена")
+        return True
+    except Exception as error:
+        logger.error(f"Ошибка добавления contest_type в referral_contests: {error}")
+        return False
+
+
 async def ensure_discount_offer_columns():
     try:
         effect_exists = await check_column_exists('discount_offers', 'effect_type')
@@ -3961,6 +4382,43 @@ async def run_universal_migration():
         else:
             logger.warning("⚠️ Не удалось обновить колонки discount_offers")
 
+        logger.info("=== СОЗДАНИЕ ТАБЛИЦ ДЛЯ РЕФЕРАЛЬНЫХ КОНКУРСОВ ===")
+        contests_table_ready = await create_referral_contests_table()
+        if contests_table_ready:
+            logger.info("✅ Таблица referral_contests готова")
+        else:
+            logger.warning("⚠️ Проблемы с таблицей referral_contests")
+
+        contest_events_ready = await create_referral_contest_events_table()
+        if contest_events_ready:
+            logger.info("✅ Таблица referral_contest_events готова")
+        else:
+            logger.warning("⚠️ Проблемы с таблицей referral_contest_events")
+
+        contest_type_ready = await ensure_referral_contest_type_column()
+        if contest_type_ready:
+            logger.info("✅ Колонка contest_type для referral_contests готова")
+        else:
+            logger.warning("⚠️ Не удалось добавить contest_type в referral_contests")
+
+        contest_templates_ready = await create_contest_templates_table()
+        if contest_templates_ready:
+            logger.info("✅ Таблица contest_templates готова")
+        else:
+            logger.warning("⚠️ Проблемы с таблицей contest_templates")
+
+        contest_rounds_ready = await create_contest_rounds_table()
+        if contest_rounds_ready:
+            logger.info("✅ Таблица contest_rounds готова")
+        else:
+            logger.warning("⚠️ Проблемы с таблицей contest_rounds")
+
+        contest_attempts_ready = await create_contest_attempts_table()
+        if contest_attempts_ready:
+            logger.info("✅ Таблица contest_attempts готова")
+        else:
+            logger.warning("⚠️ Проблемы с таблицей contest_attempts")
+
         user_discount_columns_ready = await ensure_user_promo_offer_discount_columns()
         if user_discount_columns_ready:
             logger.info("✅ Колонки пользовательских промо-скидок готовы")
@@ -4263,6 +4721,12 @@ async def check_migration_status():
             "discount_offers_table": False,
             "discount_offers_effect_column": False,
             "discount_offers_extra_column": False,
+            "referral_contests_table": False,
+            "referral_contest_events_table": False,
+            "referral_contest_type_column": False,
+            "contest_templates_table": False,
+            "contest_rounds_table": False,
+            "contest_attempts_table": False,
             "promo_offer_templates_table": False,
             "promo_offer_templates_active_discount_column": False,
             "promo_offer_logs_table": False,
@@ -4286,6 +4750,12 @@ async def check_migration_status():
         status["discount_offers_table"] = await check_table_exists('discount_offers')
         status["discount_offers_effect_column"] = await check_column_exists('discount_offers', 'effect_type')
         status["discount_offers_extra_column"] = await check_column_exists('discount_offers', 'extra_data')
+        status["referral_contests_table"] = await check_table_exists('referral_contests')
+        status["referral_contest_events_table"] = await check_table_exists('referral_contest_events')
+        status["referral_contest_type_column"] = await check_column_exists('referral_contests', 'contest_type')
+        status["contest_templates_table"] = await check_table_exists('contest_templates')
+        status["contest_rounds_table"] = await check_table_exists('contest_rounds')
+        status["contest_attempts_table"] = await check_table_exists('contest_attempts')
         status["promo_offer_templates_table"] = await check_table_exists('promo_offer_templates')
         status["promo_offer_templates_active_discount_column"] = await check_column_exists('promo_offer_templates', 'active_discount_hours')
         status["promo_offer_logs_table"] = await check_table_exists('promo_offer_logs')
@@ -4354,6 +4824,12 @@ async def check_migration_status():
             "discount_offers_table": "Таблица discount_offers",
             "discount_offers_effect_column": "Колонка effect_type в discount_offers",
             "discount_offers_extra_column": "Колонка extra_data в discount_offers",
+            "referral_contests_table": "Таблица referral_contests",
+            "referral_contest_events_table": "Таблица referral_contest_events",
+            "referral_contest_type_column": "Колонка contest_type в referral_contests",
+            "contest_templates_table": "Таблица contest_templates",
+            "contest_rounds_table": "Таблица contest_rounds",
+            "contest_attempts_table": "Таблица contest_attempts",
             "promo_offer_templates_table": "Таблица promo_offer_templates",
             "promo_offer_templates_active_discount_column": "Колонка active_discount_hours в promo_offer_templates",
             "promo_offer_logs_table": "Таблица promo_offer_logs",

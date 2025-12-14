@@ -32,6 +32,8 @@ from app.localization.loader import ensure_locale_templates
 from app.services.system_settings_service import bot_configuration_service
 from app.services.external_admin_service import ensure_external_admin_token
 from app.services.broadcast_service import broadcast_service
+from app.services.referral_contest_service import referral_contest_service
+from app.services.contest_rotation_service import contest_rotation_service
 from app.utils.startup_timeline import StartupTimeline
 from app.utils.timezone import TimezoneAwareFormatter
 
@@ -174,6 +176,7 @@ async def main():
             admin_notification_service = AdminNotificationService(bot)
             version_service.bot = bot
             version_service.set_notification_service(admin_notification_service)
+            referral_contest_service.set_bot(bot)
             stage.log(f"Репозиторий версий: {version_service.repo}")
             stage.log(f"Текущая версия: {version_service.current_version}")
             stage.success("Мониторинг, уведомления и рассылки подключены")
@@ -210,6 +213,37 @@ async def main():
             except Exception as e:
                 stage.warning(f"Ошибка запуска сервиса отчетов: {e}")
                 logger.error(f"❌ Ошибка запуска сервиса отчетов: {e}")
+
+        async with timeline.stage(
+            "Реферальные конкурсы",
+            "🏆",
+            success_message="Сервис конкурсов готов",
+        ) as stage:
+            try:
+                await referral_contest_service.start()
+                if referral_contest_service.is_running():
+                    stage.log("Автосводки по конкурсам запущены")
+                else:
+                    stage.skip("Сервис конкурсов выключен настройками")
+            except Exception as e:
+                stage.warning(f"Ошибка запуска сервиса конкурсов: {e}")
+                logger.error(f"❌ Ошибка запуска сервиса конкурсов: {e}")
+
+        async with timeline.stage(
+            "Ротация игр",
+            "🎲",
+            success_message="Мини-игры готовы",
+        ) as stage:
+            try:
+                contest_rotation_service.set_bot(bot)
+                await contest_rotation_service.start()
+                if contest_rotation_service.is_running():
+                    stage.log("Ротационные игры запущены")
+                else:
+                    stage.skip("Ротация игр выключена настройками")
+            except Exception as e:
+                stage.warning(f"Ошибка запуска ротации игр: {e}")
+                logger.error(f"❌ Ошибка запуска ротации игр: {e}")
 
         async with timeline.stage(
             "Автосинхронизация RemnaWave",
@@ -594,11 +628,23 @@ async def main():
         except Exception as e:
             logger.error(f"Ошибка остановки сервиса отчетов: {e}")
 
+        logger.info("ℹ️ Остановка сервиса конкурсов...")
+        try:
+            await referral_contest_service.stop()
+        except Exception as e:
+            logger.error(f"Ошибка остановки сервиса конкурсов: {e}")
+
         logger.info("ℹ️ Остановка сервиса автосинхронизации RemnaWave...")
         try:
             await remnawave_sync_service.stop()
         except Exception as e:
             logger.error(f"Ошибка остановки автосинхронизации RemnaWave: {e}")
+
+        logger.info("ℹ️ Остановка ротации игр...")
+        try:
+            await contest_rotation_service.stop()
+        except Exception as e:
+            logger.error(f"Ошибка остановки ротации игр: {e}")
 
         logger.info("ℹ️ Остановка сервиса бекапов...")
         try:

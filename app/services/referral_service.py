@@ -50,6 +50,13 @@ async def process_referral_registration(
             reason="referral_registration_pending"
         )
 
+        try:
+            from app.services.referral_contest_service import referral_contest_service
+
+            await referral_contest_service.on_referral_registration(db, new_user_id)
+        except Exception as exc:
+            logger.debug("Не удалось записать конкурсную регистрацию: %s", exc)
+
         if bot:
             commission_percent = get_effective_referral_commission_percent(referrer)
             referral_notification = (
