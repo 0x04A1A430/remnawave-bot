@@ -5,6 +5,8 @@ from . import (
     bot_configuration,
     bulk_ban,
     campaigns,
+    daily_contests,
+    contests,
     faq,
     main,
     maintenance,

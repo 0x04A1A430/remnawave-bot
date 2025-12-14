@@ -45,6 +45,23 @@ def admin_required(func: Callable) -> Callable:
     return wrapper
 
 
+def auth_required(func: Callable) -> Callable:
+    """
+    Простая проверка на наличие пользователя в апдейте. Middleware уже подтягивает db_user,
+    но здесь страхуемся от вызовов без from_user.
+    """
+    @functools.wraps(func)
+    async def wrapper(event: types.Update, *args, **kwargs) -> Any:
+        user = None
+        if isinstance(event, (types.Message, types.CallbackQuery)):
+            user = event.from_user
+        if not user:
+            logger.warning("auth_required: нет from_user, пропускаем")
+            return
+        return await func(event, *args, **kwargs)
+    return wrapper
+
+
 def error_handler(func: Callable) -> Callable:
     
     @functools.wraps(func)

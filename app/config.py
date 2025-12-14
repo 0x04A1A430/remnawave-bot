@@ -156,6 +156,11 @@ class Settings(BaseSettings):
     REFERRAL_NOTIFICATIONS_ENABLED: bool = True
     REFERRAL_NOTIFICATION_RETRY_ATTEMPTS: int = 3
 
+    # Конкурсы (глобальный флаг, будет расширяться под разные типы)
+    CONTESTS_ENABLED: bool = False
+    # Для обратной совместимости со старыми конфигами
+    REFERRAL_CONTESTS_ENABLED: bool = False
+
     BLACKLIST_CHECK_ENABLED: bool = False
     BLACKLIST_GITHUB_URL: Optional[str] = None
     BLACKLIST_UPDATE_INTERVAL_HOURS: int = 24
@@ -1189,6 +1194,16 @@ class Settings(BaseSettings):
         if self.is_happ_cryptolink_mode():
             return False
         return self.HIDE_SUBSCRIPTION_LINK
+
+    def is_contests_enabled(self) -> bool:
+        if getattr(self, "CONTESTS_ENABLED", False):
+            return True
+        # legacy fallback
+        return bool(getattr(self, "REFERRAL_CONTESTS_ENABLED", False))
+
+    def is_referral_contests_enabled(self) -> bool:
+        # kept for backward compatibility
+        return self.is_contests_enabled()
 
     def get_happ_cryptolink_redirect_template(self) -> Optional[str]:
         template = (self.HAPP_CRYPTOLINK_REDIRECT_TEMPLATE or "").strip()
