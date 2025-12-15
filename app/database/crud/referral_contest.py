@@ -25,6 +25,7 @@ async def create_referral_contest(
     start_at: datetime,
     end_at: datetime,
     daily_summary_time: time,
+    daily_summary_times: Optional[str] = None,
     timezone_name: str,
     created_by: Optional[int] = None,
 ) -> ReferralContest:
@@ -36,6 +37,7 @@ async def create_referral_contest(
         start_at=start_at,
         end_at=end_at,
         daily_summary_time=daily_summary_time,
+        daily_summary_times=daily_summary_times,
         timezone=timezone_name or "UTC",
         created_by=created_by,
     )
@@ -250,8 +252,11 @@ async def mark_daily_summary_sent(
     db: AsyncSession,
     contest: ReferralContest,
     summary_date: date,
+    summary_dt_utc: Optional[datetime] = None,
 ) -> ReferralContest:
     contest.last_daily_summary_date = summary_date
+    if summary_dt_utc:
+        contest.last_daily_summary_at = summary_dt_utc
     await db.commit()
     await db.refresh(contest)
     return contest
@@ -266,3 +271,11 @@ async def mark_final_summary_sent(
     await db.commit()
     await db.refresh(contest)
     return contest
+
+
+async def delete_referral_contest(
+    db: AsyncSession,
+    contest: ReferralContest,
+) -> None:
+    await db.delete(contest)
+    await db.commit()

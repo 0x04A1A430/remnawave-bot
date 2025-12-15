@@ -1404,9 +1404,11 @@ async def create_referral_contests_table() -> bool:
                         start_at DATETIME NOT NULL,
                         end_at DATETIME NOT NULL,
                         daily_summary_time TIME NOT NULL DEFAULT '12:00:00',
+                        daily_summary_times VARCHAR(255) NULL,
                         timezone VARCHAR(64) NOT NULL DEFAULT 'UTC',
                         is_active BOOLEAN NOT NULL DEFAULT 1,
                         last_daily_summary_date DATE NULL,
+                        last_daily_summary_at DATETIME NULL,
                         final_summary_sent BOOLEAN NOT NULL DEFAULT 0,
                         created_by INTEGER NULL REFERENCES users(id) ON DELETE SET NULL,
                         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -1424,9 +1426,11 @@ async def create_referral_contests_table() -> bool:
                         start_at TIMESTAMP NOT NULL,
                         end_at TIMESTAMP NOT NULL,
                         daily_summary_time TIME NOT NULL DEFAULT '12:00:00',
+                        daily_summary_times VARCHAR(255) NULL,
                         timezone VARCHAR(64) NOT NULL DEFAULT 'UTC',
                         is_active BOOLEAN NOT NULL DEFAULT TRUE,
                         last_daily_summary_date DATE NULL,
+                        last_daily_summary_at TIMESTAMP NULL,
                         final_summary_sent BOOLEAN NOT NULL DEFAULT FALSE,
                         created_by INTEGER NULL REFERENCES users(id) ON DELETE SET NULL,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -1444,9 +1448,11 @@ async def create_referral_contests_table() -> bool:
                         start_at DATETIME NOT NULL,
                         end_at DATETIME NOT NULL,
                         daily_summary_time TIME NOT NULL DEFAULT '12:00:00',
+                        daily_summary_times VARCHAR(255) NULL,
                         timezone VARCHAR(64) NOT NULL DEFAULT 'UTC',
                         is_active BOOLEAN NOT NULL DEFAULT TRUE,
                         last_daily_summary_date DATE NULL,
+                        last_daily_summary_at DATETIME NULL,
                         final_summary_sent BOOLEAN NOT NULL DEFAULT FALSE,
                         created_by INTEGER NULL,
                         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -1538,7 +1544,38 @@ async def create_referral_contest_events_table() -> bool:
         return True
     except Exception as error:
         logger.error(f"Ошибка создания таблицы referral_contest_events: {error}")
-        return False
+    return False
+
+
+async def ensure_referral_contest_summary_columns() -> bool:
+    ok = True
+    for column in ["daily_summary_times", "last_daily_summary_at"]:
+        exists = await check_column_exists("referral_contests", column)
+        if exists:
+            logger.info("Колонка %s в referral_contests уже существует", column)
+            continue
+        try:
+            async with engine.begin() as conn:
+                db_type = await get_database_type()
+                if db_type == "postgresql":
+                    await conn.execute(
+                        text(
+                            f"ALTER TABLE referral_contests ADD COLUMN {column} "
+                            + ("VARCHAR(255)" if column == "daily_summary_times" else "TIMESTAMP")
+                        )
+                    )
+                else:
+                    await conn.execute(
+                        text(
+                            f"ALTER TABLE referral_contests ADD COLUMN {column} "
+                            + ("VARCHAR(255)" if column == "daily_summary_times" else "DATETIME")
+                        )
+                    )
+            logger.info("✅ Колонка %s в referral_contests добавлена", column)
+        except Exception as error:
+            ok = False
+            logger.error("Ошибка добавления %s в referral_contests: %s", column, error)
+    return ok
 
 
 async def create_contest_templates_table() -> bool:
@@ -4401,6 +4438,12 @@ async def run_universal_migration():
         else:
             logger.warning("⚠️ Не удалось добавить contest_type в referral_contests")
 
+        contest_summary_ready = await ensure_referral_contest_summary_columns()
+        if contest_summary_ready:
+            logger.info("✅ Колонки daily_summary_times/last_daily_summary_at готовы")
+        else:
+            logger.warning("⚠️ Не удалось обновить колонки сводок для referral_contests")
+
         contest_templates_ready = await create_contest_templates_table()
         if contest_templates_ready:
             logger.info("✅ Таблица contest_templates готова")
@@ -4724,6 +4767,8 @@ async def check_migration_status():
             "referral_contests_table": False,
             "referral_contest_events_table": False,
             "referral_contest_type_column": False,
+            "referral_contest_summary_times_column": False,
+            "referral_contest_last_summary_at_column": False,
             "contest_templates_table": False,
             "contest_rounds_table": False,
             "contest_attempts_table": False,
@@ -4753,6 +4798,8 @@ async def check_migration_status():
         status["referral_contests_table"] = await check_table_exists('referral_contests')
         status["referral_contest_events_table"] = await check_table_exists('referral_contest_events')
         status["referral_contest_type_column"] = await check_column_exists('referral_contests', 'contest_type')
+        status["referral_contest_summary_times_column"] = await check_column_exists('referral_contests', 'daily_summary_times')
+        status["referral_contest_last_summary_at_column"] = await check_column_exists('referral_contests', 'last_daily_summary_at')
         status["contest_templates_table"] = await check_table_exists('contest_templates')
         status["contest_rounds_table"] = await check_table_exists('contest_rounds')
         status["contest_attempts_table"] = await check_table_exists('contest_attempts')
@@ -4827,6 +4874,8 @@ async def check_migration_status():
             "referral_contests_table": "Таблица referral_contests",
             "referral_contest_events_table": "Таблица referral_contest_events",
             "referral_contest_type_column": "Колонка contest_type в referral_contests",
+            "referral_contest_summary_times_column": "Колонка daily_summary_times в referral_contests",
+            "referral_contest_last_summary_at_column": "Колонка last_daily_summary_at в referral_contests",
             "contest_templates_table": "Таблица contest_templates",
             "contest_rounds_table": "Таблица contest_rounds",
             "contest_attempts_table": "Таблица contest_attempts",
