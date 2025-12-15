@@ -85,13 +85,6 @@ async def handle_connect_subscription(
 ):
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
-
-    if subscription:
-        try:
-            await db.refresh(subscription)
-        except Exception:
-            pass
-
     subscription_link = get_display_subscription_link(subscription)
     hide_subscription_link = settings.should_hide_subscription_link()
 
@@ -257,13 +250,6 @@ async def handle_open_subscription_link(
 ):
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
-
-    if subscription:
-        try:
-            await db.refresh(subscription)
-        except Exception:
-            pass
-
     subscription_link = get_display_subscription_link(subscription)
 
     if not subscription_link:
