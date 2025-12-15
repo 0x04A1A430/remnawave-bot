@@ -61,7 +61,9 @@ async def show_daily_contests(
 
     keyboard_rows = []
     if templates:
-        keyboard_rows.append([types.InlineKeyboardButton(text="🚀 Запустить все активные конкурсы", callback_data="admin_daily_start_all")])
+        keyboard_rows.append([types.InlineKeyboardButton(text="❌ Закрыть все активные раунды", callback_data="admin_daily_close_all")])
+        keyboard_rows.append([types.InlineKeyboardButton(text="� Сбросить попытки во всех активных раундах", callback_data="admin_daily_reset_all_attempts")])
+        keyboard_rows.append([types.InlineKeyboardButton(text="� Запустить все активные конкурсы", callback_data="admin_daily_start_all")])
     for tpl in templates:
         keyboard_rows.append(
             [
@@ -187,8 +189,8 @@ async def manual_start_round(
         return
 
     # Проверяем, есть ли уже активный раунд для этого шаблона
-    from app.database.crud.contest import get_active_round_by_template
-    exists = await get_active_round_by_template(db, tpl.id)
+    from app.database.crud.contest import get_active_rounds
+    exists = await get_active_rounds(db, tpl.id)
     if exists:
         await callback.answer(texts.t("ADMIN_ROUND_ALREADY_ACTIVE", "Раунд уже активен."), show_alert=True)
         await show_daily_contest(callback, db_user, db)
@@ -434,6 +436,51 @@ async def start_all_contests(
 
 @admin_required
 @error_handler
+async def close_all_rounds(
+    callback: types.CallbackQuery,
+    db_user,
+    db: AsyncSession,
+):
+    texts = get_texts(db_user.language)
+    from app.database.crud.contest import get_active_rounds
+    active_rounds = await get_active_rounds(db)
+    if not active_rounds:
+        await callback.answer("Нет активных раундов", show_alert=True)
+        return
+
+    for rnd in active_rounds:
+        rnd.status = "finished"
+    await db.commit()
+
+    await callback.answer(f"Закрыто раундов: {len(active_rounds)}", show_alert=True)
+    await show_daily_contests(callback, db_user, db)
+
+
+@admin_required
+@error_handler
+async def reset_all_attempts(
+    callback: types.CallbackQuery,
+    db_user,
+    db: AsyncSession,
+):
+    texts = get_texts(db_user.language)
+    from app.database.crud.contest import get_active_rounds
+    active_rounds = await get_active_rounds(db)
+    if not active_rounds:
+        await callback.answer("Нет активных раундов", show_alert=True)
+        return
+
+    total_deleted = 0
+    for rnd in active_rounds:
+        deleted = await clear_attempts(db, rnd.id)
+        total_deleted += deleted
+
+    await callback.answer(f"Попытки сброшены: {total_deleted}", show_alert=True)
+    await show_daily_contests(callback, db_user, db)
+
+
+@admin_required
+@error_handler
 async def reset_attempts(
     callback: types.CallbackQuery,
     db_user,
@@ -452,8 +499,36 @@ async def reset_attempts(
         await callback.answer("Нет активного раунда", show_alert=True)
         return
 
-    await clear_attempts(db, round_obj.id)
-    await callback.answer("Попытки сброшены", show_alert=True)
+    deleted_count = await clear_attempts(db, round_obj.id)
+    await callback.answer(f"Попытки сброшены: {deleted_count}", show_alert=True)
+    await show_daily_contest(callback, db_user, db)
+
+
+@admin_required
+@error_handler
+async def close_round(
+    callback: types.CallbackQuery,
+    db_user,
+    db: AsyncSession,
+):
+    texts = get_texts(db_user.language)
+    template_id = int(callback.data.split("_")[-1])
+    tpl = await _get_template(db, template_id)
+    if not tpl:
+        await callback.answer(texts.t("ADMIN_CONTEST_NOT_FOUND", "Конкурс не найден."), show_alert=True)
+        return
+
+    from app.database.crud.contest import get_active_round_by_template
+    round_obj = await get_active_round_by_template(db, tpl.id)
+    if not round_obj:
+        await callback.answer("Нет активного раунда", show_alert=True)
+        return
+
+    round_obj.status = "finished"
+    await db.commit()
+    await db.refresh(round_obj)
+
+    await callback.answer("Раунд закрыт", show_alert=True)
     await show_daily_contest(callback, db_user, db)
 
 
@@ -461,10 +536,13 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(show_daily_contests, F.data == "admin_contests_daily")
     dp.callback_query.register(show_daily_contest, F.data.startswith("admin_daily_contest_"))
     dp.callback_query.register(toggle_daily_contest, F.data.startswith("admin_daily_toggle_"))
+    dp.callback_query.register(start_all_contests, F.data == "admin_daily_start_all")
     dp.callback_query.register(start_round_now, F.data.startswith("admin_daily_start_"))
     dp.callback_query.register(manual_start_round, F.data.startswith("admin_daily_manual_"))
-    dp.callback_query.register(start_all_contests, F.data == "admin_daily_start_all")
+    dp.callback_query.register(close_all_rounds, F.data == "admin_daily_close_all")
+    dp.callback_query.register(reset_all_attempts, F.data == "admin_daily_reset_all_attempts")
     dp.callback_query.register(reset_attempts, F.data.startswith("admin_daily_reset_attempts_"))
+    dp.callback_query.register(close_round, F.data.startswith("admin_daily_close_"))
     dp.callback_query.register(prompt_edit_field, F.data.startswith("admin_daily_edit_"))
     dp.callback_query.register(edit_payload, F.data.startswith("admin_daily_payload_"))
 

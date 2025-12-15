@@ -189,8 +189,11 @@ async def create_attempt(
     return attempt
 
 
-async def clear_attempts(db: AsyncSession, round_id: int) -> None:
-    await db.execute(delete(ContestAttempt).where(ContestAttempt.round_id == round_id))
+async def clear_attempts(db: AsyncSession, round_id: int) -> int:
+    result = await db.execute(delete(ContestAttempt).where(ContestAttempt.round_id == round_id))
+    deleted_count = result.rowcount
+    await db.commit()
+    return deleted_count
 
 
 async def list_winners(db: AsyncSession, round_id: int) -> Sequence[Tuple[User, ContestAttempt]]:

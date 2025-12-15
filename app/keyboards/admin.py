@@ -583,6 +583,9 @@ def get_daily_contest_manage_keyboard(
                 InlineKeyboardButton(text=_t(texts, "ADMIN_RESET_ATTEMPTS", "🔄 Сбросить попытки"), callback_data=f"admin_daily_reset_attempts_{template_id}"),
             ],
             [
+                InlineKeyboardButton(text=_t(texts, "ADMIN_CLOSE_ROUND", "❌ Закрыть раунд"), callback_data=f"admin_daily_close_{template_id}"),
+            ],
+            [
                 InlineKeyboardButton(text=texts.BACK, callback_data="admin_contests_daily"),
             ],
         ]
