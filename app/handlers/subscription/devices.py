@@ -1,6 +1,7 @@
 import base64
 import json
 import logging
+import math
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Tuple, Optional
 from urllib.parse import quote
@@ -80,6 +81,27 @@ from app.utils.promo_offer import (
 
 from .common import _get_addon_discount_percent_for_user, _get_period_hint_from_subscription, format_additional_section, get_apps_for_device, get_device_name, get_step_description, logger
 from .countries import _get_available_countries
+
+
+def _format_cooldown_duration(seconds: int, language: str) -> str:
+    total_minutes = max(1, math.ceil(seconds / 60))
+    days, remainder_minutes = divmod(total_minutes, 60 * 24)
+    hours, minutes = divmod(remainder_minutes, 60)
+
+    language_code = (language or "ru").split("-")[0].lower()
+    if language_code == "en":
+        day_label, hour_label, minute_label = "d", "h", "m"
+    else:
+        day_label, hour_label, minute_label = "д", "ч", "м"
+
+    parts: list[str] = []
+    if days:
+        parts.append(f"{days}{day_label}")
+    if hours or days:
+        parts.append(f"{hours}{hour_label}")
+    parts.append(f"{minutes}{minute_label}")
+
+    return " ".join(parts)
 
 async def get_current_devices_detailed(db_user: User) -> dict:
     try:
@@ -772,6 +794,30 @@ async def handle_all_devices_reset_from_management(
         from app.services.remnawave_service import RemnaWaveService
         service = RemnaWaveService()
 
+        subscription = getattr(db_user, "subscription", None)
+        cooldown_remaining = (
+            service.get_devices_reset_cooldown_remaining(subscription)
+            if subscription
+            else None
+        )
+
+        if cooldown_remaining:
+            remaining_seconds = int(cooldown_remaining.total_seconds())
+            cooldown = settings.get_happ_cryptolink_reset_cooldown()
+            cooldown_seconds = int(cooldown.total_seconds()) if cooldown else remaining_seconds
+
+            await callback.answer(
+                texts.t(
+                    "DEVICE_RESET_COOLDOWN",
+                    "⏳ Сброс устройств доступен раз в {cooldown}. Попробуйте через {remaining}.",
+                ).format(
+                    cooldown=_format_cooldown_duration(cooldown_seconds, db_user.language),
+                    remaining=_format_cooldown_duration(remaining_seconds, db_user.language),
+                ),
+                show_alert=True,
+            )
+            return
+
         async with service.get_api_client() as api:
             devices_response = await api._make_request('GET', f'/api/hwid/devices/{db_user.remnawave_uuid}')
 
@@ -818,6 +864,15 @@ async def handle_all_devices_reset_from_management(
                 else:
                     failed_count += 1
                     logger.warning(f"⚠️ У устройства нет HWID: {device}")
+
+            if success_count > 0:
+                try:
+                    await service.refresh_happ_subscription_after_reset(db, db_user)
+                except Exception as refresh_error:
+                    logger.warning(
+                        "⚠️ Не удалось обновить Happ ссылку после сброса устройств: %s",
+                        refresh_error,
+                    )
 
             if success_count > 0:
                 if failed_count == 0:

@@ -926,6 +926,7 @@
 "DEVICE_RESET_ALL_DONE":"ℹ️所有设备已重置",
 "DEVICE_RESET_ALL_FAILED_MESSAGE":"❌<b>重置设备失败</b>\n\n请稍后再试或联系技术支持。\n\n总设备数：{total}",
 "DEVICE_RESET_ALL_SUCCESS_MESSAGE":"✅<b>所有设备已成功重置！</b>\n\n🔄已重置：{count}台设备\n📱您现在可以重新连接您的设备\n\n💡使用“我的订阅”部分中的链接重新连接",
+"DEVICE_RESET_COOLDOWN":"⏳设备重置每隔{cooldown}可用一次。请在{remaining}后再试。",
 "DEVICE_RESET_ERROR":"❌重置设备失败",
 "DEVICE_RESET_ID_FAILED":"❌获取设备ID失败",
 "DEVICE_RESET_INVALID_REQUEST":"❌错误：请求无效",
