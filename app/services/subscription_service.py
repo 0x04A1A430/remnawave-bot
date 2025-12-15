@@ -20,7 +20,6 @@ from app.utils.pricing_utils import (
 from app.utils.subscription_utils import (
     resolve_hwid_device_limit_for_payload,
 )
-from app.utils.happ_cryptolink_utils import generate_limited_happ_link
 
 logger = logging.getLogger(__name__)
 
@@ -161,49 +160,6 @@ class SubscriptionService:
         assert self.api is not None
         async with self.api as api:
             yield api
-
-    async def _build_happ_crypto_link(
-        self,
-        api: RemnaWaveAPI,
-        subscription: Subscription,
-        base_subscription_url: Optional[str],
-        panel_crypto_link: Optional[str],
-    ) -> Optional[str]:
-        if not settings.is_happ_cryptolink_mode():
-            return panel_crypto_link
-
-        if not settings.is_happ_cryptolink_limited_links_enabled():
-            return panel_crypto_link
-
-        provider_code, auth_key = settings.get_happ_cryptolink_credentials()
-        if not provider_code or not auth_key:
-            logger.debug("⚙️ Данные для лимитированных ссылок Happ не заданы")
-            return panel_crypto_link
-
-        base_link = (base_subscription_url or "").strip()
-        if not base_link:
-            logger.warning("⚠️ Базовая ссылка подписки для Happ отсутствует")
-            return panel_crypto_link
-
-        install_limit = settings.get_happ_cryptolink_install_limit(subscription.device_limit)
-        if not install_limit:
-            logger.debug("⚙️ Лимит установок для Happ не задан")
-            return panel_crypto_link
-
-        limited_link = await generate_limited_happ_link(
-            base_link,
-            settings.get_happ_cryptolink_add_install_url(),
-            provider_code,
-            auth_key,
-            install_limit,
-        )
-
-        if not limited_link:
-            logger.warning("⚠️ Не удалось сгенерировать лимитированную Happ ссылку")
-            return panel_crypto_link
-
-        encrypted_link = await api.encrypt_happ_crypto_link(limited_link)
-        return encrypted_link or limited_link
     
     async def create_remnawave_user(
         self,
@@ -310,15 +266,7 @@ class SubscriptionService:
 
                 subscription.remnawave_short_uuid = updated_user.short_uuid
                 subscription.subscription_url = updated_user.subscription_url
-
-                crypto_link = await self._build_happ_crypto_link(
-                    api,
-                    subscription,
-                    updated_user.subscription_url,
-                    updated_user.happ_crypto_link,
-                )
-
-                subscription.subscription_crypto_link = crypto_link or updated_user.happ_crypto_link
+                subscription.subscription_crypto_link = updated_user.happ_crypto_link
                 user.remnawave_uuid = updated_user.uuid
                 
                 await db.commit()
@@ -400,15 +348,7 @@ class SubscriptionService:
                     )
 
                 subscription.subscription_url = updated_user.subscription_url
-
-                crypto_link = await self._build_happ_crypto_link(
-                    api,
-                    subscription,
-                    updated_user.subscription_url,
-                    updated_user.happ_crypto_link,
-                )
-
-                subscription.subscription_crypto_link = crypto_link or updated_user.happ_crypto_link
+                subscription.subscription_crypto_link = updated_user.happ_crypto_link
                 await db.commit()
                 
                 status_text = "активным" if is_actually_active else "истёкшим"

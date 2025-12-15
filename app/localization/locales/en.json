@@ -982,7 +982,6 @@
   "DEVICE_RESET_ALL_DONE": "ℹ️ All devices have been reset",
   "DEVICE_RESET_ALL_FAILED_MESSAGE": "❌ <b>Couldn't reset devices</b>\n\nPlease try again later or contact support.\n\nTotal devices: {total}",
   "DEVICE_RESET_ALL_SUCCESS_MESSAGE": "✅ <b>All devices have been reset!</b>\n\n🔄 Reset: {count} devices\n📱 You can now reconnect your devices\n\n💡 Use the link from the 'My subscription' section to reconnect",
-  "DEVICE_RESET_COOLDOWN": "⏳ Device reset is available every {cooldown}. Try again in {remaining}.",
   "DEVICE_RESET_ERROR": "❌ Failed to reset the device",
   "DEVICE_RESET_ID_FAILED": "❌ Unable to get device ID",
   "DEVICE_RESET_INVALID_REQUEST": "❌ Error: invalid request",
