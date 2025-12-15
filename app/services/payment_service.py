@@ -30,6 +30,7 @@ from app.services.payment import (
 )
 from app.services.yookassa_service import YooKassaService
 from app.services.wata_service import WataService
+from app.services.nalogo_service import NaloGoService
 
 logger = logging.getLogger(__name__)
 
@@ -300,6 +301,7 @@ class PaymentService(
             PlategaService() if settings.is_platega_enabled() else None
         )
         self.wata_service = WataService() if settings.is_wata_enabled() else None
+        self.nalogo_service = NaloGoService() if settings.is_nalogo_enabled() else None
 
         mulenpay_name = settings.get_mulenpay_display_name()
         logger.debug(
