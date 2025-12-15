@@ -3120,6 +3120,33 @@ async def add_subscription_crypto_link_column() -> bool:
         return False
 
 
+async def add_last_devices_reset_column() -> bool:
+    column_exists = await check_column_exists('subscriptions', 'last_devices_reset_at')
+    if column_exists:
+        logger.info("ℹ️ Колонка last_devices_reset_at уже существует")
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'sqlite':
+                await conn.execute(text("ALTER TABLE subscriptions ADD COLUMN last_devices_reset_at DATETIME"))
+            elif db_type == 'postgresql':
+                await conn.execute(text("ALTER TABLE subscriptions ADD COLUMN last_devices_reset_at TIMESTAMP"))
+            elif db_type == 'mysql':
+                await conn.execute(text("ALTER TABLE subscriptions ADD COLUMN last_devices_reset_at DATETIME"))
+            else:
+                logger.error(f"Неподдерживаемый тип БД для добавления last_devices_reset_at: {db_type}")
+                return False
+
+        logger.info("✅ Добавлена колонка last_devices_reset_at в таблицу subscriptions")
+        return True
+    except Exception as e:
+        logger.error(f"Ошибка добавления колонки last_devices_reset_at: {e}")
+        return False
+
+
 async def fix_foreign_keys_for_user_deletion():
     try:
         async with engine.begin() as conn:
@@ -4541,6 +4568,13 @@ async def run_universal_migration():
         else:
             logger.warning("⚠️ Проблемы с добавлением колонки subscription_crypto_link")
 
+        logger.info("=== ДОБАВЛЕНИЕ КОЛОНКИ LAST_DEVICES_RESET_AT ДЛЯ ПОДПИСОК ===")
+        devices_reset_column_added = await add_last_devices_reset_column()
+        if devices_reset_column_added:
+            logger.info("✅ Колонка last_devices_reset_at готова")
+        else:
+            logger.warning("⚠️ Проблемы с добавлением колонки last_devices_reset_at")
+
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ АУДИТА ПОДДЕРЖКИ ===")
         try:
             async with engine.begin() as conn:
@@ -4702,6 +4736,7 @@ async def check_migration_status():
             "subscription_duplicates": False,
             "subscription_conversions_table": False,
             "subscription_events_table": False,
+            "subscription_last_devices_reset_column": False,
             "promo_groups_table": False,
             "server_promo_groups_table": False,
             "server_squads_trial_column": False,
@@ -4773,6 +4808,7 @@ async def check_migration_status():
         status["users_promo_offer_discount_expires_column"] = await check_column_exists('users', 'promo_offer_discount_expires_at')
         status["users_referral_commission_percent_column"] = await check_column_exists('users', 'referral_commission_percent')
         status["subscription_crypto_link_column"] = await check_column_exists('subscriptions', 'subscription_crypto_link')
+        status["subscription_last_devices_reset_column"] = await check_column_exists('subscriptions', 'last_devices_reset_at')
         
         media_fields_exist = (
             await check_column_exists('broadcast_history', 'has_media') and
@@ -4821,6 +4857,7 @@ async def check_migration_status():
             "users_promo_offer_discount_expires_column": "Колонка срока действия промо-скидки у пользователей",
             "users_referral_commission_percent_column": "Колонка процента реферальной комиссии у пользователей",
             "subscription_crypto_link_column": "Колонка subscription_crypto_link в subscriptions",
+            "subscription_last_devices_reset_column": "Колонка last_devices_reset_at в subscriptions",
             "discount_offers_table": "Таблица discount_offers",
             "discount_offers_effect_column": "Колонка effect_type в discount_offers",
             "discount_offers_extra_column": "Колонка extra_data в discount_offers",
