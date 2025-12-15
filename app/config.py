@@ -1326,10 +1326,18 @@ class Settings(BaseSettings):
         except (ValueError, AttributeError):
             return [30, 90, 180]
 
-    def get_balance_payment_description(self, amount_kopeks: int) -> str:
+    def get_balance_payment_description(self, amount_kopeks: int, telegram_user_id: Optional[int] = None) -> str:
+        # Базовое описание
+        description = f"{self.PAYMENT_BALANCE_DESCRIPTION} на {self.format_price(amount_kopeks)}"
+        
+        # Если передан user_id, добавляем его
+        if telegram_user_id is not None:
+            description += f" (ID {telegram_user_id})"
+        
+        # Формируем финальную строку по шаблону
         return self.PAYMENT_BALANCE_TEMPLATE.format(
             service_name=self.PAYMENT_SERVICE_NAME,
-            description=f"{self.PAYMENT_BALANCE_DESCRIPTION} на {self.format_price(amount_kopeks)}"
+            description=description
         )
     
     def get_subscription_payment_description(self, period_days: int, amount_kopeks: int) -> str:
