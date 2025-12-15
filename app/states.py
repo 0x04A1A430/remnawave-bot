@@ -98,6 +98,7 @@ class AdminStates(StatesGroup):
     creating_referral_contest_start = State()
     creating_referral_contest_end = State()
     creating_referral_contest_time = State()
+    editing_referral_contest_summary_times = State()
     editing_daily_contest_field = State()
     editing_daily_contest_value = State()
     

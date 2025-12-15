@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, time, timezone
 from typing import Dict, List, Optional
 
 from aiogram import Bot
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -15,7 +16,7 @@ from app.database.crud.contest import (
     upsert_template,
 )
 from app.database.database import AsyncSessionLocal
-from app.database.models import ContestTemplate
+from app.database.models import ContestTemplate, SubscriptionStatus, User
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,7 @@ DEFAULT_TEMPLATES = [
         "times_per_day": 2,
         "schedule_times": "10:00,18:00",
         "payload": {"rows": 3, "cols": 3},
+        "is_enabled": False,
     },
     {
         "slug": GAME_LOCKS,
@@ -51,6 +53,7 @@ DEFAULT_TEMPLATES = [
         "times_per_day": 2,
         "schedule_times": "09:00,19:00",
         "payload": {"buttons": 20},
+        "is_enabled": False,
     },
     {
         "slug": GAME_CIPHER,
@@ -62,6 +65,7 @@ DEFAULT_TEMPLATES = [
         "times_per_day": 2,
         "schedule_times": "12:00,20:00",
         "payload": {"words": ["VPN", "SERVER", "PROXY", "XRAY"]},
+        "is_enabled": False,
     },
     {
         "slug": GAME_SERVER,
@@ -73,6 +77,7 @@ DEFAULT_TEMPLATES = [
         "times_per_day": 1,
         "schedule_times": "15:00",
         "payload": {"flags": ["🇸🇪","🇸🇬","🇺🇸","🇷🇺","🇩🇪","🇯🇵","🇧🇷","🇦🇺","🇨🇦","🇫🇷"]},
+        "is_enabled": False,
     },
     {
         "slug": GAME_BLITZ,
@@ -84,6 +89,7 @@ DEFAULT_TEMPLATES = [
         "times_per_day": 2,
         "schedule_times": "11:00,21:00",
         "payload": {"timeout_seconds": 10},
+        "is_enabled": False,
     },
     {
         "slug": GAME_EMOJI,
@@ -95,6 +101,7 @@ DEFAULT_TEMPLATES = [
         "times_per_day": 1,
         "schedule_times": "13:00",
         "payload": {"pairs": [{"question": "🔐📡🌐", "answer": "VPN"}]},
+        "is_enabled": False,
     },
     {
         "slug": GAME_ANAGRAM,
@@ -106,6 +113,7 @@ DEFAULT_TEMPLATES = [
         "times_per_day": 1,
         "schedule_times": "17:00",
         "payload": {"words": ["SERVER", "XRAY", "VPN"]},
+        "is_enabled": False,
     },
 ]
 
@@ -199,6 +207,8 @@ class ContestRotationService:
                     exists = await get_active_round_by_template(db, tpl.id)
                     if exists:
                         continue
+                    # Анонс перед созданием раунда
+                    await self._announce_round_start(tpl, starts_at_local, ends_at_local)
                     payload = self._build_payload_for_template(tpl)
                     round_obj = await create_round(
                         db,
@@ -242,6 +252,122 @@ class ContestRotationService:
             shuffled = "".join(random.sample(word, len(word)))
             return {"letters": shuffled, "answer": word}
         return payload
+
+    async def _announce_round_start(
+        self,
+        tpl: ContestTemplate,
+        starts_at_local: datetime,
+        ends_at_local: datetime,
+    ) -> None:
+        if not self.bot:
+            return
+
+        tz = settings.TIMEZONE or "UTC"
+        starts_txt = starts_at_local.strftime("%d.%m %H:%M")
+        ends_txt = ends_at_local.strftime("%d.%m %H:%M")
+        text = (
+            f"🎲 Стартует игра: <b>{tpl.name}</b>\n"
+            f"Приз: {tpl.prize_days} дн. подписки • Победителей: {tpl.max_winners}\n"
+            f"Попыток/польз: {tpl.attempts_per_user}\n\n"
+            "Участвовать могут только с активной или триальной подпиской."
+        )
+
+        await asyncio.gather(
+            self._send_channel_announce(text),
+            self._broadcast_to_users(text),
+            return_exceptions=True,
+        )
+
+    async def _send_channel_announce(self, text: str) -> None:
+        if not self.bot:
+            return
+        channel_id_raw = settings.CHANNEL_SUB_ID
+        if not channel_id_raw:
+            return
+        try:
+            channel_id = int(channel_id_raw)
+        except Exception:
+            channel_id = channel_id_raw
+
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🎲 Играть", callback_data="contests_menu")]
+        ])
+
+        try:
+            await self.bot.send_message(
+                chat_id=channel_id,
+                text=text,
+                disable_web_page_preview=True,
+                reply_markup=keyboard,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.error("Не удалось отправить анонс в канал %s: %s", channel_id_raw, exc)
+
+    async def _broadcast_to_users(self, text: str) -> None:
+        """Отправляет анонс всем пользователям с активной/триальной подпиской."""
+        if not self.bot:
+            return
+
+        try:
+            batch_size = 500
+            offset = 0
+            sent = failed = 0
+
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🎲 Играть", callback_data="contests_menu")]
+            ])
+
+            while True:
+                async with AsyncSessionLocal() as db:
+                    users_batch = await self._load_users_batch(db, offset, batch_size)
+                if not users_batch:
+                    break
+                offset += batch_size
+
+                tasks = []
+                semaphore = asyncio.Semaphore(15)
+
+                async def _send(u: User):
+                    nonlocal sent, failed
+                    async with semaphore:
+                        try:
+                            await self.bot.send_message(
+                                chat_id=u.telegram_id,
+                                text=text,
+                                disable_web_page_preview=True,
+                                reply_markup=keyboard,
+                            )
+                            sent += 1
+                        except Exception:
+                            failed += 1
+                        await asyncio.sleep(0.02)
+
+                for user in users_batch:
+                    tasks.append(asyncio.create_task(_send(user)))
+
+                await asyncio.gather(*tasks, return_exceptions=True)
+
+            logger.info("Анонс игр: отправлено=%s, ошибок=%s", sent, failed)
+        except Exception as exc:  # noqa: BLE001
+            logger.error("Ошибка рассылки анонса игр пользователям: %s", exc)
+
+    async def _load_users_batch(self, db: AsyncSession, offset: int, limit: int) -> List[User]:
+        from app.database.crud.user import get_users_list
+
+        users = await get_users_list(
+            db,
+            offset=offset,
+            limit=limit,
+            status=None,
+        )
+        allowed: List[User] = []
+        for u in users:
+            sub = getattr(u, "subscription", None)
+            if not sub:
+                continue
+            if sub.status in {SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value}:
+                allowed.append(u)
+        return allowed
 
 
 contest_rotation_service = ContestRotationService()

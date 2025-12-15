@@ -2,7 +2,7 @@ import logging
 from datetime import datetime
 from typing import List, Optional, Sequence, Tuple
 
-from sqlalchemy import and_, desc, func, select
+from sqlalchemy import and_, delete, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -47,6 +47,7 @@ async def upsert_template(
     schedule_times: Optional[str] = None,
     cooldown_hours: int = 24,
     payload: Optional[dict] = None,
+    is_enabled: Optional[bool] = None,
 ) -> ContestTemplate:
     template = await get_template_by_slug(db, slug)
     if not template:
@@ -62,7 +63,8 @@ async def upsert_template(
     template.schedule_times = schedule_times
     template.cooldown_hours = cooldown_hours
     template.payload = payload or {}
-    template.is_enabled = True
+    if is_enabled is not None:
+        template.is_enabled = is_enabled
     await db.commit()
     await db.refresh(template)
     return template
@@ -137,7 +139,7 @@ async def get_active_round_by_template(db: AsyncSession, template_id: int) -> Op
         )
         .order_by(desc(ContestRound.starts_at))
     )
-    return result.scalar_one_or_none()
+    return result.scalars().first()
 
 
 async def finish_round(db: AsyncSession, round_obj: ContestRound) -> ContestRound:
@@ -187,11 +189,8 @@ async def create_attempt(
     return attempt
 
 
-async def count_attempts(db: AsyncSession, round_id: int) -> int:
-    result = await db.execute(
-        select(func.count(ContestAttempt.id)).where(ContestAttempt.round_id == round_id)
-    )
-    return int(result.scalar_one())
+async def clear_attempts(db: AsyncSession, round_id: int) -> None:
+    await db.execute(delete(ContestAttempt).where(ContestAttempt.round_id == round_id))
 
 
 async def list_winners(db: AsyncSession, round_id: int) -> Sequence[Tuple[User, ContestAttempt]]:

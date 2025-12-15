@@ -971,9 +971,11 @@ class ReferralContest(Base):
     start_at = Column(DateTime, nullable=False)
     end_at = Column(DateTime, nullable=False)
     daily_summary_time = Column(Time, nullable=False, default=time(hour=12, minute=0))
+    daily_summary_times = Column(String(255), nullable=True)  # CSV HH:MM
     timezone = Column(String(64), nullable=False, default="UTC")
     is_active = Column(Boolean, nullable=False, default=True)
     last_daily_summary_date = Column(Date, nullable=True)
+    last_daily_summary_at = Column(DateTime, nullable=True)
     final_summary_sent = Column(Boolean, nullable=False, default=False)
     created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime, default=func.now())

@@ -562,6 +562,7 @@ def get_daily_contest_manage_keyboard(
             [
                 InlineKeyboardButton(text=toggle_text, callback_data=f"admin_daily_toggle_{template_id}"),
                 InlineKeyboardButton(text=_t(texts, "ADMIN_CONTEST_START_NOW", "🚀 Запустить раунд"), callback_data=f"admin_daily_start_{template_id}"),
+                InlineKeyboardButton(text=_t(texts, "ADMIN_CONTEST_START_MANUAL", "🧪 Ручной старт"), callback_data=f"admin_daily_manual_{template_id}"),
             ],
             [
                 InlineKeyboardButton(text=_t(texts, "ADMIN_EDIT_PRIZE", "🏅 Приз (дни)"), callback_data=f"admin_daily_edit_{template_id}_prize_days"),
@@ -579,6 +580,9 @@ def get_daily_contest_manage_keyboard(
                 InlineKeyboardButton(text=_t(texts, "ADMIN_EDIT_PAYLOAD", "🧩 Payload"), callback_data=f"admin_daily_payload_{template_id}"),
             ],
             [
+                InlineKeyboardButton(text=_t(texts, "ADMIN_RESET_ATTEMPTS", "🔄 Сбросить попытки"), callback_data=f"admin_daily_reset_attempts_{template_id}"),
+            ],
+            [
                 InlineKeyboardButton(text=texts.BACK, callback_data="admin_contests_daily"),
             ],
         ]
@@ -588,6 +592,7 @@ def get_referral_contest_manage_keyboard(
     contest_id: int,
     *,
     is_active: bool,
+    can_delete: bool = False,
     language: str = "ru",
 ) -> InlineKeyboardMarkup:
     texts = get_texts(language)
@@ -597,26 +602,45 @@ def get_referral_contest_manage_keyboard(
         else _t(texts, "ADMIN_CONTEST_ENABLE", "▶️ Запустить")
     )
 
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
+    rows = [
+        [
+            InlineKeyboardButton(
+                text=_t(texts, "ADMIN_CONTEST_LEADERBOARD", "📊 Лидеры"),
+                callback_data=f"admin_contest_leaderboard_{contest_id}",
+            ),
+            InlineKeyboardButton(
+                text=toggle_text,
+                callback_data=f"admin_contest_toggle_{contest_id}",
+            ),
+        ],
+        [
+            InlineKeyboardButton(
+                text=_t(texts, "ADMIN_CONTEST_EDIT_SUMMARY_TIMES", "🕒 Итоги в день"),
+                callback_data=f"admin_contest_edit_times_{contest_id}",
+            ),
+        ],
+    ]
+
+    if can_delete:
+        rows.append(
             [
                 InlineKeyboardButton(
-                    text=_t(texts, "ADMIN_CONTEST_LEADERBOARD", "📊 Лидеры"),
-                    callback_data=f"admin_contest_leaderboard_{contest_id}",
-                ),
-                InlineKeyboardButton(
-                    text=toggle_text,
-                    callback_data=f"admin_contest_toggle_{contest_id}",
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    text=_t(texts, "ADMIN_BACK_TO_LIST", "⬅️ К списку"),
-                    callback_data="admin_contests_list",
+                    text=_t(texts, "ADMIN_CONTEST_DELETE", "🗑 Удалить"),
+                    callback_data=f"admin_contest_delete_{contest_id}",
                 )
-            ],
+            ]
+        )
+
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text=_t(texts, "ADMIN_BACK_TO_LIST", "⬅️ К списку"),
+                callback_data="admin_contests_list",
+            )
         ]
     )
+
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def get_campaign_management_keyboard(

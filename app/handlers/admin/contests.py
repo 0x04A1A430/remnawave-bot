@@ -1,6 +1,6 @@
 import logging
 import math
-from datetime import datetime, timezone
+from datetime import datetime, timezone, time
 from zoneinfo import ZoneInfo
 
 from aiogram import Dispatcher, F, types
@@ -16,6 +16,8 @@ from app.database.crud.referral_contest import (
     get_referral_contests_count,
     list_referral_contests,
     toggle_referral_contest,
+    update_referral_contest,
+    delete_referral_contest,
 )
 from app.keyboards.admin import (
     get_admin_contests_keyboard,
@@ -57,10 +59,11 @@ def _format_contest_summary(contest, texts, tz: ZoneInfo) -> str:
     )
 
     summary_time = contest.daily_summary_time.strftime("%H:%M") if contest.daily_summary_time else "12:00"
+    summary_times = contest.daily_summary_times or summary_time
     parts = [
         f"{status}",
         f"Период: <b>{period}</b>",
-        f"Дневная сводка: <b>{summary_time}</b>",
+        f"Дневная сводка: <b>{summary_times}</b>",
     ]
     if contest.prize_text:
         parts.append(texts.t("ADMIN_CONTEST_PRIZE", "Приз: {prize}").format(prize=contest.prize_text))
@@ -86,6 +89,18 @@ def _parse_time(value: str):
         return datetime.strptime(value.strip(), "%H:%M").time()
     except ValueError:
         return None
+
+
+def _parse_times(value: str) -> list[time]:
+    times: list[time] = []
+    for part in value.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        parsed = _parse_time(part)
+        if parsed:
+            times.append(parsed)
+    return times
 
 
 @admin_required
@@ -247,7 +262,14 @@ async def show_contest_details(
     await callback.message.edit_text(
         "\n".join(lines),
         reply_markup=get_referral_contest_manage_keyboard(
-            contest.id, is_active=contest.is_active, language=db_user.language
+            contest.id,
+            is_active=contest.is_active,
+            can_delete=(
+                not contest.is_active
+                and (contest.end_at.replace(tzinfo=timezone.utc) if contest.end_at.tzinfo is None else contest.end_at)
+                < datetime.now(timezone.utc)
+            ),
+            language=db_user.language,
         ),
     )
     await callback.answer()
@@ -276,6 +298,111 @@ async def toggle_contest(
 
     await toggle_referral_contest(db, contest, not contest.is_active)
     await show_contest_details(callback, db_user, db)
+
+
+@admin_required
+@error_handler
+async def prompt_edit_summary_times(
+    callback: types.CallbackQuery,
+    db_user,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    texts = get_texts(db_user.language)
+    contest_id = int(callback.data.split("_")[-1])
+    contest = await get_referral_contest(db, contest_id)
+    if not contest:
+        await callback.answer(texts.t("ADMIN_CONTEST_NOT_FOUND", "Конкурс не найден."), show_alert=True)
+        return
+    await state.set_state(AdminStates.editing_referral_contest_summary_times)
+    await state.update_data(contest_id=contest_id)
+    kb = types.InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                types.InlineKeyboardButton(
+                    text=texts.BACK,
+                    callback_data=f"admin_contest_view_{contest_id}",
+                )
+            ]
+        ]
+    )
+    await callback.message.edit_text(
+        texts.t(
+            "ADMIN_CONTEST_ENTER_DAILY_TIME",
+            "Во сколько отправлять ежедневные итоги? Формат ЧЧ:ММ или несколько через запятую (12:00,18:00).",
+        ),
+        reply_markup=kb,
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def process_edit_summary_times(
+    message: types.Message,
+    state: FSMContext,
+    db_user,
+    db: AsyncSession,
+):
+    texts = get_texts(db_user.language)
+    data = await state.get_data()
+    contest_id = data.get("contest_id")
+    if not contest_id:
+        await message.answer(texts.ERROR)
+        await state.clear()
+        return
+
+    times = _parse_times(message.text or "")
+    summary_time = times[0] if times else _parse_time(message.text or "")
+    if not summary_time:
+        await message.answer(
+            texts.t("ADMIN_CONTEST_INVALID_TIME", "Не удалось распознать время. Формат: 12:00 или 12:00,18:00")
+        )
+        await state.clear()
+        return
+
+    contest = await get_referral_contest(db, int(contest_id))
+    if not contest:
+        await message.answer(texts.t("ADMIN_CONTEST_NOT_FOUND", "Конкурс не найден."))
+        await state.clear()
+        return
+
+    await update_referral_contest(
+        db,
+        contest,
+        daily_summary_time=summary_time,
+        daily_summary_times=",".join(t.strftime("%H:%M") for t in times) if times else None,
+    )
+
+    await message.answer(texts.t("ADMIN_UPDATED", "Обновлено"))
+    await state.clear()
+
+
+@admin_required
+@error_handler
+async def delete_contest(
+    callback: types.CallbackQuery,
+    db_user,
+    db: AsyncSession,
+):
+    texts = get_texts(db_user.language)
+    contest_id = int(callback.data.split("_")[-1])
+    contest = await get_referral_contest(db, contest_id)
+    if not contest:
+        await callback.answer(texts.t("ADMIN_CONTEST_NOT_FOUND", "Конкурс не найден."), show_alert=True)
+        return
+
+    now_utc = datetime.utcnow()
+    if contest.is_active or contest.end_at > now_utc:
+        await callback.answer(
+            texts.t("ADMIN_CONTEST_DELETE_RESTRICT", "Удалять можно только завершённые конкурсы."),
+            show_alert=True,
+        )
+        return
+
+    await delete_referral_contest(db, contest)
+    await callback.answer(texts.t("ADMIN_CONTEST_DELETED", "Конкурс удалён."), show_alert=True)
+    await list_contests(callback, db_user, db)
 
 
 @admin_required
@@ -474,12 +601,13 @@ async def process_end_date(message: types.Message, state: FSMContext, db_user, d
 @admin_required
 @error_handler
 async def finalize_contest_creation(message: types.Message, state: FSMContext, db_user, db: AsyncSession):
-    summary_time = _parse_time(message.text)
+    times = _parse_times(message.text or "")
+    summary_time = times[0] if times else _parse_time(message.text)
     texts = get_texts(db_user.language)
 
     if not summary_time:
         await message.answer(
-            texts.t("ADMIN_CONTEST_INVALID_TIME", "Не удалось распознать время. Формат: 12:00")
+            texts.t("ADMIN_CONTEST_INVALID_TIME", "Не удалось распознать время. Формат: 12:00 или 12:00,18:00")
         )
         return
 
@@ -514,6 +642,7 @@ async def finalize_contest_creation(message: types.Message, state: FSMContext, d
         start_at=start_at,
         end_at=end_at,
         daily_summary_time=summary_time,
+        daily_summary_times=",".join(t.strftime("%H:%M") for t in times) if times else None,
         timezone_name=tz.key,
         created_by=db_user.id,
     )
@@ -537,6 +666,8 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(list_contests, F.data.startswith("admin_contests_list_page_"))
     dp.callback_query.register(show_contest_details, F.data.startswith("admin_contest_view_"))
     dp.callback_query.register(toggle_contest, F.data.startswith("admin_contest_toggle_"))
+    dp.callback_query.register(prompt_edit_summary_times, F.data.startswith("admin_contest_edit_times_"))
+    dp.callback_query.register(delete_contest, F.data.startswith("admin_contest_delete_"))
     dp.callback_query.register(show_leaderboard, F.data.startswith("admin_contest_leaderboard_"))
     dp.callback_query.register(start_contest_creation, F.data == "admin_contests_create")
     dp.callback_query.register(select_contest_mode, F.data.in_(["admin_contest_mode_paid", "admin_contest_mode_registered"]))
@@ -547,3 +678,4 @@ def register_handlers(dp: Dispatcher):
     dp.message.register(process_start_date, AdminStates.creating_referral_contest_start)
     dp.message.register(process_end_date, AdminStates.creating_referral_contest_end)
     dp.message.register(finalize_contest_creation, AdminStates.creating_referral_contest_time)
+    dp.message.register(process_edit_summary_times, AdminStates.editing_referral_contest_summary_times)
