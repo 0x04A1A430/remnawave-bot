@@ -682,9 +682,7 @@ class Subscription(Base):
     subscription_crypto_link = Column(String, nullable=True)
 
     device_limit = Column(Integer, default=1)
-
-    last_devices_reset_at = Column(DateTime, nullable=True)
-
+    
     connected_squads = Column(JSON, default=list)
     
     autopay_enabled = Column(Boolean, default=False)

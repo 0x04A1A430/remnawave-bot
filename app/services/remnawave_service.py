@@ -17,7 +17,6 @@ from sqlalchemy import and_, cast, delete, func, select, update, String
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.utils.happ_cryptolink_utils import generate_limited_happ_link
 from app.database.crud.user import (
     create_user_no_commit,
     get_users_list,
@@ -237,49 +236,6 @@ class RemnaWaveService:
         assert self.api is not None
         async with self.api as api:
             yield api
-
-    async def _build_happ_crypto_link(
-        self,
-        api: RemnaWaveAPI,
-        subscription: "Subscription",
-        base_subscription_url: Optional[str],
-        panel_crypto_link: Optional[str],
-    ) -> Optional[str]:
-        if not settings.is_happ_cryptolink_mode():
-            return panel_crypto_link
-
-        if not settings.is_happ_cryptolink_limited_links_enabled():
-            return panel_crypto_link
-
-        provider_code, auth_key = settings.get_happ_cryptolink_credentials()
-        if not provider_code or not auth_key:
-            logger.debug("⚙️ Нет данных для генерации лимитированной Happ ссылки")
-            return panel_crypto_link
-
-        base_link = (base_subscription_url or "").strip()
-        if not base_link:
-            logger.warning("⚠️ Базовая ссылка подписки Happ отсутствует")
-            return panel_crypto_link
-
-        install_limit = settings.get_happ_cryptolink_install_limit(getattr(subscription, "device_limit", None))
-        if not install_limit:
-            logger.debug("⚙️ Лимит установок Happ не задан")
-            return panel_crypto_link
-
-        limited_link = await generate_limited_happ_link(
-            base_link,
-            settings.get_happ_cryptolink_add_install_url(),
-            provider_code,
-            auth_key,
-            install_limit,
-        )
-
-        if not limited_link:
-            logger.warning("⚠️ Не удалось создать лимитированную Happ ссылку")
-            return panel_crypto_link
-
-        encrypted_link = await api.encrypt_happ_crypto_link(limited_link)
-        return encrypted_link or limited_link
 
     def _now_utc(self) -> datetime:
         """Возвращает текущее время в UTC без привязки к часовому поясу."""
@@ -2050,79 +2006,6 @@ class RemnaWaveService:
         except Exception as e:
             logger.error(f"Ошибка валидации данных пользователя: {e}")
             return False
-
-    def get_devices_reset_cooldown_remaining(self, subscription: "Subscription") -> Optional[timedelta]:
-        if not settings.is_happ_cryptolink_mode() or not settings.is_happ_cryptolink_limited_links_enabled():
-            return None
-
-        cooldown = settings.get_happ_cryptolink_reset_cooldown()
-        if not cooldown:
-            return None
-
-        last_reset = getattr(subscription, "last_devices_reset_at", None)
-        if not last_reset:
-            return None
-
-        now = datetime.utcnow()
-        next_allowed = last_reset + cooldown
-        if now >= next_allowed:
-            return None
-
-        return next_allowed - now
-
-    async def refresh_happ_subscription_after_reset(
-        self,
-        db: AsyncSession,
-        user: "User",
-    ) -> Optional[str]:
-        if not settings.is_happ_cryptolink_mode() or not settings.is_happ_cryptolink_limited_links_enabled():
-            return None
-
-        if not getattr(user, "remnawave_uuid", None):
-            logger.debug("⚙️ Нет RemnaWave UUID для обновления Happ ссылки")
-            return None
-
-        subscription = getattr(user, "subscription", None)
-        if not subscription:
-            logger.debug("⚙️ У пользователя нет подписки для обновления Happ ссылки")
-            return None
-
-        try:
-            async with self.get_api_client() as api:
-                revoked_user = await api.revoke_user_subscription(user.remnawave_uuid)
-
-                subscription.remnawave_short_uuid = revoked_user.short_uuid
-                subscription.subscription_url = revoked_user.subscription_url
-
-                crypto_link = await self._build_happ_crypto_link(
-                    api,
-                    subscription,
-                    revoked_user.subscription_url,
-                    revoked_user.happ_crypto_link,
-                )
-
-                subscription.subscription_crypto_link = crypto_link or revoked_user.happ_crypto_link
-                subscription.last_devices_reset_at = datetime.utcnow()
-
-                await db.commit()
-
-                logger.info(
-                    "🔄 Обновлена Happ ссылка после сброса устройств пользователя %s",
-                    getattr(user, "telegram_id", "?"),
-                )
-
-                return subscription.subscription_crypto_link
-
-        except Exception as error:
-            logger.error(
-                "❌ Ошибка обновления Happ ссылки после сброса устройств: %s",
-                error,
-            )
-            try:
-                await db.rollback()
-            except Exception:
-                pass
-            return None
 
     async def force_cleanup_user_data(self, db: AsyncSession, user: User) -> bool:
         try:
