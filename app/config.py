@@ -6,7 +6,7 @@ import os
 import re
 import html
 from collections import defaultdict
-from datetime import time
+from datetime import time, timedelta
 from typing import Dict, List, Optional, Union
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
@@ -339,6 +339,12 @@ class Settings(BaseSettings):
     MINIAPP_SERVICE_DESCRIPTION_RU: str = "Безопасное и быстрое подключение"
     CONNECT_BUTTON_HAPP_DOWNLOAD_ENABLED: bool = False
     HAPP_CRYPTOLINK_REDIRECT_TEMPLATE: Optional[str] = None
+    HAPP_CRYPTOLINK_LIMITED_LINKS_ENABLED: bool = False
+    HAPP_CRYPTOLINK_PROVIDER_CODE: Optional[str] = None
+    HAPP_CRYPTOLINK_AUTH_KEY: Optional[str] = None
+    HAPP_CRYPTOLINK_INSTALL_LIMIT: int = 0
+    HAPP_CRYPTOLINK_API_BASE_URL: str = "https://api.happ-proxy.com"
+    HAPP_CRYPTOLINK_RESET_COOLDOWN_MINUTES: int = 0
     HAPP_DOWNLOAD_LINK_IOS: Optional[str] = None
     HAPP_DOWNLOAD_LINK_ANDROID: Optional[str] = None
     HAPP_DOWNLOAD_LINK_MACOS: Optional[str] = None
@@ -1187,6 +1193,50 @@ class Settings(BaseSettings):
 
     def is_happ_download_button_enabled(self) -> bool:
         return self.is_happ_cryptolink_mode() and self.CONNECT_BUTTON_HAPP_DOWNLOAD_ENABLED
+
+    def is_happ_cryptolink_limited_links_enabled(self) -> bool:
+        if not self.is_happ_cryptolink_mode():
+            return False
+
+        if not self.HAPP_CRYPTOLINK_LIMITED_LINKS_ENABLED:
+            return False
+
+        provider_code, auth_key = self.get_happ_cryptolink_credentials()
+        return bool(provider_code and auth_key)
+
+    def get_happ_cryptolink_credentials(self) -> tuple[Optional[str], Optional[str]]:
+        provider_code = (self.HAPP_CRYPTOLINK_PROVIDER_CODE or "").strip()
+        auth_key = (self.HAPP_CRYPTOLINK_AUTH_KEY or "").strip()
+        return provider_code or None, auth_key or None
+
+    def get_happ_cryptolink_install_limit(self, fallback_limit: Optional[int] = None) -> Optional[int]:
+        try:
+            limit = int(self.HAPP_CRYPTOLINK_INSTALL_LIMIT)
+        except (TypeError, ValueError):
+            limit = 0
+
+        if limit <= 0:
+            limit = fallback_limit or 0
+
+        if limit <= 0:
+            return None
+
+        return limit
+
+    def get_happ_cryptolink_add_install_url(self) -> str:
+        base_url = (self.HAPP_CRYPTOLINK_API_BASE_URL or "").rstrip("/")
+        return f"{base_url}/api/add-install"
+
+    def get_happ_cryptolink_reset_cooldown(self) -> Optional[timedelta]:
+        try:
+            minutes = int(self.HAPP_CRYPTOLINK_RESET_COOLDOWN_MINUTES)
+        except (TypeError, ValueError):
+            minutes = 0
+
+        if minutes <= 0:
+            return None
+
+        return timedelta(minutes=max(1, minutes))
 
     def should_hide_subscription_link(self) -> bool:
         """Returns True when subscription links must be hidden from the interface."""

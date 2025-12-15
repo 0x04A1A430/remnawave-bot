@@ -4004,8 +4004,16 @@ async def reset_user_devices(
         remnawave_service = RemnaWaveService()
         async with remnawave_service.get_api_client() as api:
             success = await api.reset_user_devices(user.remnawave_uuid)
-        
+
         if success:
+            try:
+                await remnawave_service.refresh_happ_subscription_after_reset(db, user)
+            except Exception as refresh_error:
+                logger.warning(
+                    "⚠️ Не удалось обновить Happ ссылку после сброса устройств: %s",
+                    refresh_error,
+                )
+
             await callback.message.edit_text(
                 "✅ Устройства пользователя успешно сброшены",
                 reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
