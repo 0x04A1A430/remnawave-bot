@@ -330,6 +330,8 @@ class Settings(BaseSettings):
 
     MAIN_MENU_MODE: str = "default"
     CONNECT_BUTTON_MODE: str = "guide"
+    ADMIN_WEB_PANEL_ENABLED: bool = True
+    ADMIN_WEB_PANEL_URL: str = "https://bedolagam.ru"
     MINIAPP_CUSTOM_URL: str = ""
     MINIAPP_STATIC_PATH: str = "miniapp"
     MINIAPP_PURCHASE_URL: str = ""
@@ -855,6 +857,13 @@ class Settings(BaseSettings):
 
     def is_text_main_menu_mode(self) -> bool:
         return self.get_main_menu_mode() == "text"
+
+    def get_admin_web_panel_url(self) -> Optional[str]:
+        value = (getattr(self, "ADMIN_WEB_PANEL_URL", None) or "").strip()
+        return value or None
+
+    def is_admin_web_panel_enabled(self) -> bool:
+        return bool(self.ADMIN_WEB_PANEL_ENABLED and self.get_admin_web_panel_url())
 
     def get_main_menu_miniapp_url(self) -> Optional[str]:
         for candidate in [self.MINIAPP_CUSTOM_URL, self.MINIAPP_PURCHASE_URL]:

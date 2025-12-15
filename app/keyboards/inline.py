@@ -270,9 +270,21 @@ def _build_text_main_menu_keyboard(
         ])
 
     if is_admin:
-        keyboard_rows.append([
+        admin_buttons = [
             InlineKeyboardButton(text=texts.MENU_ADMIN, callback_data="admin_panel")
-        ])
+        ]
+
+        if settings.is_admin_web_panel_enabled():
+            admin_web_url = settings.get_admin_web_panel_url()
+            if admin_web_url:
+                admin_buttons.append(
+                    InlineKeyboardButton(
+                        text=texts.t("MENU_ADMIN_WEB", "🌐 Вебадминка"),
+                        web_app=types.WebAppInfo(url=admin_web_url),
+                    )
+                )
+
+        keyboard_rows.append(admin_buttons)
     elif is_moderator:
         keyboard_rows.append([
             InlineKeyboardButton(text="🧑‍⚖️ Модерация", callback_data="moderator_panel")
@@ -471,9 +483,22 @@ def get_main_menu_keyboard(
     if is_admin:
         if settings.DEBUG:
             print("DEBUG KEYBOARD: Админ кнопка ДОБАВЛЕНА!")
-        keyboard.append([
+
+        admin_buttons = [
             InlineKeyboardButton(text=texts.MENU_ADMIN, callback_data="admin_panel")
-        ])
+        ]
+
+        if settings.is_admin_web_panel_enabled():
+            admin_web_url = settings.get_admin_web_panel_url()
+            if admin_web_url:
+                admin_buttons.append(
+                    InlineKeyboardButton(
+                        text=texts.t("MENU_ADMIN_WEB", "🌐 Вебадминка"),
+                        web_app=types.WebAppInfo(url=admin_web_url),
+                    )
+                )
+
+        keyboard.append(admin_buttons)
     else:
         if settings.DEBUG:
             print("DEBUG KEYBOARD: Админ кнопка НЕ добавлена")

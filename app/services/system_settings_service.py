@@ -320,6 +320,7 @@ class BotConfigurationService:
         "HAPP_": "HAPP",
         "SKIP_": "SKIP",
         "MINIAPP_": "MINIAPP",
+        "ADMIN_WEB_PANEL_": "EXTERNAL_ADMIN",
         "MONITORING_": "MONITORING",
         "NOTIFICATION_": "NOTIFICATIONS",
         "SERVER_STATUS": "SERVER_STATUS",
@@ -457,6 +458,18 @@ class BotConfigurationService:
             "description": "Объём трафика, включённый в простую подписку (0 = безлимит).",
             "format": "Выберите пакет трафика.",
             "example": "Безлимит",
+        },
+        "ADMIN_WEB_PANEL_ENABLED": {
+            "description": "Показывает кнопку веб-админки в главном меню администраторов.",
+            "format": "Булево значение.",
+            "example": "true",
+            "warning": "Кнопка доступна только администраторам и требует валидного URL.",
+        },
+        "ADMIN_WEB_PANEL_URL": {
+            "description": "Ссылка для открытия веб-админки в Telegram Mini App.",
+            "format": "Полный URL с https://",
+            "example": "https://bedolagam.ru",
+            "warning": "URL должен быть доступен из Telegram, иначе кнопка будет скрыта.",
         },
         "SIMPLE_SUBSCRIPTION_SQUAD_UUID": {
             "description": (
