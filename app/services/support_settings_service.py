@@ -219,3 +219,17 @@ class SupportSettingsService:
             return cls._save()
         return True
 
+    # NaloGO receipts
+    @classmethod
+    def is_nalogo_receipts_enabled(cls) -> bool:
+        cls._load()
+        if "nalogo_receipts_enabled" in cls._data:
+            return bool(cls._data["nalogo_receipts_enabled"])
+        return bool(settings.NALOGO_RECEIPTS_ENABLED)
+
+    @classmethod
+    def set_nalogo_receipts_enabled(cls, enabled: bool) -> bool:
+        cls._load()
+        cls._data["nalogo_receipts_enabled"] = bool(enabled)
+        return cls._save()
+
