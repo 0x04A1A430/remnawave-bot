@@ -952,6 +952,10 @@ class YooKassaPaymentMixin:
                     payment.amount_kopeks / 100,
                 )
 
+            # Создаем чек через NaloGO для пополнения баланса
+            if not is_simple_subscription and hasattr(self, "nalogo_service") and self.nalogo_service:
+                await self._create_nalogo_receipt(payment)
+
             return True
 
         except Exception as error:
@@ -1001,6 +1005,38 @@ class YooKassaPaymentMixin:
             )
 
         return updated_metadata
+
+    async def _create_nalogo_receipt(
+        self,
+        payment: "YooKassaPayment",
+    ) -> None:
+        """Создание чека через NaloGO для успешного платежа."""
+        if not hasattr(self, "nalogo_service") or not self.nalogo_service:
+            logger.debug("NaloGO сервис не инициализирован, чек не создан")
+            return
+
+        try:
+            amount_rubles = payment.amount_kopeks / 100
+            receipt_name = "Интернет-сервис - Пополнение баланса"
+
+            receipt_uuid = await self.nalogo_service.create_receipt(
+                name=receipt_name,
+                amount=amount_rubles,
+                quantity=1
+            )
+
+            if receipt_uuid:
+                logger.info(f"Чек NaloGO создан для платежа {payment.yookassa_payment_id}: {receipt_uuid}")
+            else:
+                logger.warning(f"Не удалось создать чек NaloGO для платежа {payment.yookassa_payment_id}")
+
+        except Exception as error:
+            logger.error(
+                "Ошибка создания чека NaloGO для платежа %s: %s",
+                payment.yookassa_payment_id,
+                error,
+                exc_info=True,
+            )
 
     async def process_yookassa_webhook(
         self,

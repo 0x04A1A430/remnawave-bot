@@ -109,19 +109,28 @@ class ReferralContestService:
         start_local = self._to_local(contest.start_at, tz)
         end_local = self._to_local(contest.end_at, tz)
 
-        summary_time = contest.daily_summary_time or time(hour=12, minute=0)
-        summary_dt = datetime.combine(now_local.date(), summary_time, tzinfo=tz)
-
         if now_local.date() < start_local.date() or now_local.date() > end_local.date():
             return
 
-        if now_local < summary_dt:
-            return
+        summary_times = self._get_summary_times(contest)
+        for summary_time in summary_times:
+            summary_dt = datetime.combine(now_local.date(), summary_time, tzinfo=tz)
+            summary_dt_utc = summary_dt.astimezone(timezone.utc).replace(tzinfo=None)
 
-        if contest.last_daily_summary_date == now_local.date():
-            return
+            if now_utc < summary_dt_utc:
+                continue
+            last_sent = contest.last_daily_summary_at
+            if last_sent and last_sent >= summary_dt_utc:
+                continue
 
-        await self._send_summary(db, contest, now_utc, now_local.date(), is_final=False)
+            await self._send_summary(
+                db,
+                contest,
+                now_utc,
+                now_local.date(),
+                is_final=False,
+                summary_dt_utc=summary_dt_utc,
+            )
 
     async def _maybe_send_final_summary(
         self,
@@ -134,7 +143,8 @@ class ReferralContestService:
 
         tz = self._get_timezone(contest)
         end_local = self._to_local(contest.end_at, tz)
-        summary_time = contest.daily_summary_time or time(hour=12, minute=0)
+        summary_times = self._get_summary_times(contest)
+        summary_time = summary_times[-1] if summary_times else time(hour=12, minute=0)
         summary_dt = datetime.combine(end_local.date(), summary_time, tzinfo=tz)
         summary_dt_utc = summary_dt.astimezone(timezone.utc).replace(tzinfo=None)
 
@@ -154,6 +164,7 @@ class ReferralContestService:
         target_date: date,
         *,
         is_final: bool,
+        summary_dt_utc: Optional[datetime] = None,
     ) -> None:
         tz = self._get_timezone(contest)
         day_start_local = datetime.combine(target_date, time.min, tzinfo=tz)
@@ -194,7 +205,7 @@ class ReferralContestService:
         if is_final:
             await mark_final_summary_sent(db, contest)
         else:
-            await mark_daily_summary_sent(db, contest, target_date)
+            await mark_daily_summary_sent(db, contest, target_date, summary_dt_utc)
 
     async def _notify_participants(
         self,
@@ -386,6 +397,28 @@ class ReferralContestService:
         except Exception:  # noqa: BLE001
             logger.warning("Не удалось загрузить TZ %s, используем UTC", tz_name)
             return ZoneInfo("UTC")
+
+    def _parse_times(self, times_str: Optional[str]) -> list[time]:
+        if not times_str:
+            return []
+        parsed: list[time] = []
+        for part in times_str.split(","):
+            part = part.strip()
+            if not part:
+                continue
+            try:
+                parsed.append(datetime.strptime(part, "%H:%M").time())
+            except Exception:
+                continue
+        return parsed
+
+    def _get_summary_times(self, contest: ReferralContest) -> list[time]:
+        times = self._parse_times(contest.daily_summary_times)
+        if not times and contest.daily_summary_time:
+            times.append(contest.daily_summary_time)
+        if not times:
+            times.append(time(hour=12, minute=0))
+        return sorted(times)
 
     def _to_local(self, dt_value: datetime, tz: ZoneInfo) -> datetime:
         base = dt_value

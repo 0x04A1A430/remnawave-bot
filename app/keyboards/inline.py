@@ -432,18 +432,24 @@ def get_main_menu_keyboard(
         InlineKeyboardButton(text=texts.MENU_PROMOCODE, callback_data="menu_promocode")
     )
     
-    # Добавляем кнопку рефералов только если программа включена
+    # Добавляем кнопку рефералов, только если программа включена
     if settings.is_referral_program_enabled():
         paired_buttons.append(
             InlineKeyboardButton(text=texts.MENU_REFERRALS, callback_data="menu_referrals")
         )
 
-    # Support button is configurable (runtime via service)
+    # Добавляем кнопку конкурсов
+    if settings.CONTESTS_BUTTON_VISIBLE:
+        paired_buttons.append(
+            InlineKeyboardButton(text=texts.t("CONTESTS_BUTTON", "🎲 Конкурсы"), callback_data="contests_menu")
+        )
+
     try:
         from app.services.support_settings_service import SupportSettingsService
         support_enabled = SupportSettingsService.is_support_menu_enabled()
     except Exception:
         support_enabled = settings.SUPPORT_MENU_ENABLED
+
     if support_enabled:
         paired_buttons.append(
             InlineKeyboardButton(text=texts.MENU_SUPPORT, callback_data="menu_support")

@@ -158,6 +158,7 @@ class Settings(BaseSettings):
 
     # Конкурсы (глобальный флаг, будет расширяться под разные типы)
     CONTESTS_ENABLED: bool = False
+    CONTESTS_BUTTON_VISIBLE: bool = False
     # Для обратной совместимости со старыми конфигами
     REFERRAL_CONTESTS_ENABLED: bool = False
 
@@ -219,6 +220,12 @@ class Settings(BaseSettings):
     SUPPORT_TOPUP_ENABLED: bool = True
     PAYMENT_VERIFICATION_AUTO_CHECK_ENABLED: bool = False
     PAYMENT_VERIFICATION_AUTO_CHECK_INTERVAL_MINUTES: int = 10
+
+    NALOGO_ENABLED: bool = False
+    NALOGO_INN: Optional[str] = None
+    NALOGO_PASSWORD: Optional[str] = None
+    NALOGO_DEVICE_ID: Optional[str] = None
+    NALOGO_STORAGE_PATH: str = "./nalogo_tokens.json"
 
     AUTO_PURCHASE_AFTER_TOPUP_ENABLED: bool = False
 
@@ -993,6 +1000,11 @@ class Settings(BaseSettings):
                 self.YOOKASSA_SHOP_ID is not None and
                 self.YOOKASSA_SECRET_KEY is not None)
 
+    def is_nalogo_enabled(self) -> bool:
+        return (self.NALOGO_ENABLED and
+                self.NALOGO_INN is not None and
+                self.NALOGO_PASSWORD is not None)
+
     def is_support_topup_enabled(self) -> bool:
         return bool(self.SUPPORT_TOPUP_ENABLED)
     
@@ -1326,10 +1338,18 @@ class Settings(BaseSettings):
         except (ValueError, AttributeError):
             return [30, 90, 180]
 
-    def get_balance_payment_description(self, amount_kopeks: int) -> str:
+    def get_balance_payment_description(self, amount_kopeks: int, telegram_user_id: Optional[int] = None) -> str:
+        # Базовое описание
+        description = f"{self.PAYMENT_BALANCE_DESCRIPTION} на {self.format_price(amount_kopeks)}"
+        
+        # Если передан user_id, добавляем его
+        if telegram_user_id is not None:
+            description += f" (ID {telegram_user_id})"
+        
+        # Формируем финальную строку по шаблону
         return self.PAYMENT_BALANCE_TEMPLATE.format(
             service_name=self.PAYMENT_SERVICE_NAME,
-            description=f"{self.PAYMENT_BALANCE_DESCRIPTION} на {self.format_price(amount_kopeks)}"
+            description=description
         )
     
     def get_subscription_payment_description(self, period_days: int, amount_kopeks: int) -> str:

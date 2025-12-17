@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, time
 from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Security, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Security, status, Response
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, selectinload
@@ -28,6 +28,7 @@ from app.database.crud.referral_contest import (
     list_referral_contests,
     toggle_referral_contest,
     update_referral_contest,
+    delete_referral_contest,
 )
 from app.database.models import (
     ContestAttempt,
@@ -137,14 +138,38 @@ def _serialize_referral_contest(contest: ReferralContest) -> ReferralContestResp
         start_at=contest.start_at,
         end_at=contest.end_at,
         daily_summary_time=contest.daily_summary_time,
+        daily_summary_times=contest.daily_summary_times,
         timezone=contest.timezone,
         is_active=contest.is_active,
         last_daily_summary_date=contest.last_daily_summary_date,
+        last_daily_summary_at=contest.last_daily_summary_at,
         final_summary_sent=contest.final_summary_sent,
         created_by=contest.created_by,
         created_at=contest.created_at,
         updated_at=contest.updated_at,
     )
+
+
+def _parse_times_str(times_str: Optional[str]) -> List[time]:
+    if not times_str:
+        return []
+    parsed: List[time] = []
+    for part in times_str.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            parsed.append(datetime.strptime(part, "%H:%M").time())
+        except Exception:
+            continue
+    return parsed
+
+
+def _primary_time(times_str: Optional[str], fallback: Optional[time]) -> time:
+    parsed = _parse_times_str(times_str)
+    if parsed:
+        return parsed[0]
+    return fallback or time(hour=12)
 
 
 def _serialize_leaderboard_item(row) -> ReferralContestLeaderboardItem:
@@ -261,6 +286,9 @@ async def start_round_now(
     if not tpl:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Template not found")
 
+    if not tpl.is_enabled:
+        tpl = await update_template_fields(db, tpl, is_enabled=True)
+
     existing = await get_active_round_by_template(db, tpl.id)
     if existing and not payload.force:
         raise HTTPException(
@@ -290,6 +318,11 @@ async def start_round_now(
         payload=round_payload,
     )
     round_obj.template = tpl
+    await contest_rotation_service._announce_round_start(  # type: ignore[attr-defined]
+        tpl,
+        starts_at,
+        ends_at,
+    )
     return _serialize_round(round_obj)
 
 
@@ -474,6 +507,8 @@ async def create_referral(
     if end_at <= start_at:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "end_at must be after start_at")
 
+    summary_time = _primary_time(payload.daily_summary_times, payload.daily_summary_time)
+
     contest = await create_referral_contest(
         db,
         title=payload.title,
@@ -482,7 +517,8 @@ async def create_referral(
         contest_type=payload.contest_type,
         start_at=start_at,
         end_at=end_at,
-        daily_summary_time=payload.daily_summary_time,
+        daily_summary_time=summary_time,
+        daily_summary_times=payload.daily_summary_times,
         timezone_name=payload.timezone,
         created_by=payload.created_by,
     )
@@ -540,6 +576,11 @@ async def update_referral(
         fields["start_at"] = _to_utc_naive(fields["start_at"], fields.get("timezone") or contest.timezone)
     if "end_at" in fields:
         fields["end_at"] = _to_utc_naive(fields["end_at"], fields.get("timezone") or contest.timezone)
+    if "daily_summary_times" in fields:
+        fields["daily_summary_time"] = _primary_time(fields["daily_summary_times"], fields.get("daily_summary_time") or contest.daily_summary_time)
+    elif "daily_summary_time" in fields:
+        # ensure type is time (pydantic provides time)
+        pass
 
     new_start = fields.get("start_at", contest.start_at)
     new_end = fields.get("end_at", contest.end_at)
@@ -568,6 +609,29 @@ async def toggle_referral(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Contest not found")
     contest = await toggle_referral_contest(db, contest, is_active)
     return _serialize_referral_contest(contest)
+
+
+@router.delete(
+    "/referral/{contest_id}",
+    status_code=status.HTTP_200_OK,
+    tags=["contests"],
+)
+async def delete_referral(
+    contest_id: int,
+    _: Any = Security(require_api_token),
+    db: AsyncSession = Depends(get_db_session),
+) -> Dict[str, str]:
+    contest = await get_referral_contest(db, contest_id)
+    if not contest:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Contest not found")
+    now_utc = datetime.utcnow()
+    if contest.is_active or contest.end_at > now_utc:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Можно удалять только завершённые конкурсы",
+        )
+    await delete_referral_contest(db, contest)
+    return {"status": "deleted"}
 
 
 @router.get(
