@@ -1984,7 +1984,7 @@ async def test_payment_provider(
             return
 
         amount_kopeks = 10 * 100
-        description = settings.get_balance_payment_description(amount_kopeks)
+        description = settings.get_balance_payment_description(amount_kopeks, telegram_user_id=db_user.telegram_id),
         payment_result = await payment_service.create_yookassa_payment(
             db=db,
             user_id=db_user.id,
