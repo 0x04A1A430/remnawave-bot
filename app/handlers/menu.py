@@ -39,7 +39,7 @@ from app.services.privacy_policy_service import PrivacyPolicyService
 from app.services.public_offer_service import PublicOfferService
 from app.services.faq_service import FaqService
 from app.utils.timezone import format_local_datetime
-from app.utils.pricing_utils import format_period_description
+from app.handlers.subscription.traffic import handle_add_traffic
 
 logger = logging.getLogger(__name__)
 
@@ -518,6 +518,7 @@ async def show_faq_pages(
     await callback.message.edit_text(
         caption,
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=buttons),
+        disable_web_page_preview=settings.DISABLE_WEB_PAGE_PREVIEW,
     )
     await callback.answer()
 
@@ -654,6 +655,7 @@ async def show_faq_page(
     await callback.message.edit_text(
         message_text,
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows),
+        disable_web_page_preview=settings.DISABLE_WEB_PAGE_PREVIEW,
     )
     await callback.answer()
 
@@ -772,6 +774,7 @@ async def show_privacy_policy(
     await callback.message.edit_text(
         message_text,
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows),
+        disable_web_page_preview=settings.DISABLE_WEB_PAGE_PREVIEW,
     )
     await callback.answer()
 
@@ -891,6 +894,7 @@ async def show_public_offer(
     await callback.message.edit_text(
         message_text,
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows),
+        disable_web_page_preview=settings.DISABLE_WEB_PAGE_PREVIEW,
     )
     await callback.answer()
 
@@ -1285,4 +1289,9 @@ def register_handlers(dp: Dispatcher):
         process_language_change,
         F.data.startswith("language_select:"),
         StateFilter(None)
+    )
+
+    dp.callback_query.register(
+        handle_add_traffic,
+        F.data == "buy_traffic"
     )
