@@ -439,9 +439,10 @@ def get_main_menu_keyboard(
         )
 
     # Добавляем кнопку конкурсов
-    paired_buttons.append(
-        InlineKeyboardButton(text=texts.t("CONTESTS_BUTTON", "🎲 Конкурсы"), callback_data="contests_menu")
-    )
+    if settings.CONTESTS_BUTTON_VISIBLE:
+        paired_buttons.append(
+            InlineKeyboardButton(text=texts.t("CONTESTS_BUTTON", "🎲 Конкурсы"), callback_data="contests_menu")
+        )
 
     try:
         from app.services.support_settings_service import SupportSettingsService
