@@ -175,7 +175,7 @@ async def process_yookassa_payment_amount(
             db=db,
             user_id=db_user.id,
             amount_kopeks=amount_kopeks,
-            description=settings.get_balance_payment_description(amount_kopeks),
+            description=settings.get_balance_payment_description(amount_kopeks, telegram_user_id=db_user.telegram_id),
             receipt_email=None,
             receipt_phone=None,
             metadata={
@@ -321,7 +321,7 @@ async def process_yookassa_sbp_payment_amount(
             db=db,
             user_id=db_user.id,
             amount_kopeks=amount_kopeks,
-            description=settings.get_balance_payment_description(amount_kopeks),
+            description=settings.get_balance_payment_description(amount_kopeks, telegram_user_id=db_user.telegram_id),
             receipt_email=None,
             receipt_phone=None,
             metadata={
