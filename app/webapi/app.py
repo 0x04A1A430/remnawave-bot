@@ -15,6 +15,7 @@ from .routes import (
     health,
     main_menu_buttons,
     media,
+    menu_layout,
     miniapp,
     partners,
     polls,
@@ -55,6 +56,10 @@ OPENAPI_TAGS = [
     {
         "name": "main-menu",
         "description": "Управление кнопками и сообщениями главного меню Telegram-бота.",
+    },
+    {
+        "name": "menu-layout",
+        "description": "API конструктор меню: управление расположением и настройками кнопок.",
     },
     {
         "name": "welcome-texts",
@@ -191,6 +196,11 @@ def create_web_api_app() -> FastAPI:
         main_menu_buttons.router,
         prefix="/main-menu/buttons",
         tags=["main-menu"],
+    )
+    app.include_router(
+        menu_layout.router,
+        prefix="/menu-layout",
+        tags=["menu-layout"],
     )
     app.include_router(
         user_messages.router,
