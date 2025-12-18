@@ -507,6 +507,12 @@ class MonitoringService:
         if not settings.CHANNEL_IS_REQUIRED_SUB:
             return
 
+        if not settings.CHANNEL_DISABLE_TRIAL_ON_UNSUBSCRIBE:
+            logger.debug(
+                "ℹ️ Проверка отписок от канала отключена — деактивация триальных подписок не требуется"
+            )
+            return
+
         channel_id = settings.CHANNEL_SUB_ID
         if not channel_id:
             return
