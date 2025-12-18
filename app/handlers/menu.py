@@ -1223,6 +1223,18 @@ async def get_main_menu_text(user, texts, db: AsyncSession):
     return base_text
 
 
+async def handle_activate_button(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    texts = get_texts(db_user.language)
+    await callback.answer(
+        texts.t("ACTIVATION_SUCCESS", "✅ Активация выполнена!"),
+        show_alert=True,
+    )
+
+
 def register_handlers(dp: Dispatcher):
     
     dp.callback_query.register(
@@ -1294,4 +1306,9 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         handle_add_traffic,
         F.data == "buy_traffic"
+    )
+
+    dp.callback_query.register(
+        handle_activate_button,
+        F.data == "activate_button"
     )
