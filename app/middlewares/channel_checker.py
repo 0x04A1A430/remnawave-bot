@@ -108,7 +108,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
             elif member.status in self.BAD_MEMBER_STATUS:
                 logger.info(f"❌ Пользователь {telegram_id} не подписан на канал (статус: {member.status})")
 
-                if telegram_id:
+                if telegram_id and settings.CHANNEL_DISABLE_TRIAL_ON_UNSUBSCRIBE:
                     await self._deactivate_trial_subscription(telegram_id)
 
                 await self._capture_start_payload(state, event, bot)
@@ -254,6 +254,13 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                 break
 
     async def _deactivate_trial_subscription(self, telegram_id: int) -> None:
+        if not settings.CHANNEL_DISABLE_TRIAL_ON_UNSUBSCRIBE:
+            logger.debug(
+                "ℹ️ Пропускаем деактивацию подписки пользователя %s: отключение при отписке выключено",
+                telegram_id,
+            )
+            return
+
         async for db in get_db():
             try:
                 user = await get_user_by_telegram_id(db, telegram_id)

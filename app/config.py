@@ -54,6 +54,7 @@ class Settings(BaseSettings):
     CHANNEL_SUB_ID: Optional[str] = None
     CHANNEL_LINK: Optional[str] = None
     CHANNEL_IS_REQUIRED_SUB: bool = False
+    CHANNEL_DISABLE_TRIAL_ON_UNSUBSCRIBE: bool = True
     
     DATABASE_URL: Optional[str] = None
     
