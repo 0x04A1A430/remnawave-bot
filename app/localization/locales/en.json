@@ -3,6 +3,7 @@
   "ADDON_INSUFFICIENT_FUNDS_MESSAGE": "⚠️ <b>Insufficient funds</b>\n\nService price: {required}\nBalance: {balance}\nMissing: {missing}\n\nChoose a top-up method. The amount will be filled in automatically.",
   "ADD_COUNTRIES_BUTTON": "🌐 Add countries",
   "ADD_TRAFFIC_PROMPT": "📈 <b>Add traffic to your subscription</b>\n\nCurrent limit: {current_traffic}\nChoose extra traffic:",
+  "BUY_TRAFFIC_BUTTON": "📈 Buy more traffic",
   "ADMIN_BACK_TO_ADMIN": "⬅️ Back to admin",
   "ADMIN_BACK_TO_LIST": "⬅️ Back to list",
   "ADMIN_BACK_TO_MAIN": "🏠 Back to main menu",
