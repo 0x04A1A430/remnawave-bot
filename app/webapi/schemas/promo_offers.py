@@ -74,12 +74,22 @@ class PromoOfferBroadcastRequest(PromoOfferCreateRequest):
         "all",
         "active",
         "trial",
+        "trial_ending",
+        "trial_expired",
         "no",
         "expiring",
+        "expiring_subscribers",
         "expired",
+        "expired_subscribers",
+        "canceled_subscribers",
         "active_zero",
         "trial_zero",
         "zero",
+        "autopay_failed",
+        "low_balance",
+        "inactive_30d",
+        "inactive_60d",
+        "inactive_90d",
     }
     _CUSTOM_TARGETS: ClassVar[set[str]] = {
         "today",
@@ -93,6 +103,9 @@ class PromoOfferBroadcastRequest(PromoOfferCreateRequest):
     }
     _TARGET_ALIASES: ClassVar[dict[str, str]] = {
         "no_sub": "no",
+        "all_users": "all",
+        "active_subscribers": "active",
+        "trial_users": "trial",
     }
 
     @validator("target")

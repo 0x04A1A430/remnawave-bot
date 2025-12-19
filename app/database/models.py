@@ -1782,3 +1782,48 @@ class MainMenuButton(Base):
             f"<MainMenuButton id={self.id} text='{self.text}' "
             f"action={self.action_type} visibility={self.visibility} active={self.is_active}>"
         )
+
+
+class MenuLayoutHistory(Base):
+    """История изменений конфигурации меню."""
+    __tablename__ = "menu_layout_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    config_json = Column(Text, nullable=False)  # Полная конфигурация в JSON
+    action = Column(String(50), nullable=False)  # update, reset, import
+    changes_summary = Column(Text, nullable=True)  # Краткое описание изменений
+    user_info = Column(String(255), nullable=True)  # Информация о пользователе/токене
+    created_at = Column(DateTime, default=func.now(), index=True)
+
+    __table_args__ = (
+        Index("ix_menu_layout_history_created", "created_at"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<MenuLayoutHistory id={self.id} action='{self.action}' created_at={self.created_at}>"
+
+
+class ButtonClickLog(Base):
+    """Логи кликов по кнопкам меню."""
+    __tablename__ = "button_click_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    button_id = Column(String(100), nullable=False, index=True)  # ID кнопки
+    user_id = Column(BigInteger, ForeignKey("users.telegram_id", ondelete="SET NULL"), nullable=True, index=True)
+    callback_data = Column(String(255), nullable=True)  # callback_data кнопки
+    clicked_at = Column(DateTime, default=func.now(), index=True)
+
+    # Дополнительная информация
+    button_type = Column(String(20), nullable=True)  # builtin, callback, url, mini_app
+    button_text = Column(String(255), nullable=True)  # Текст кнопки на момент клика
+
+    __table_args__ = (
+        Index("ix_button_click_logs_button_date", "button_id", "clicked_at"),
+        Index("ix_button_click_logs_user_date", "user_id", "clicked_at"),
+    )
+
+    # Связи
+    user = relationship("User", foreign_keys=[user_id])
+
+    def __repr__(self) -> str:
+        return f"<ButtonClickLog id={self.id} button='{self.button_id}' user={self.user_id} at={self.clicked_at}>"
