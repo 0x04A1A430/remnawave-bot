@@ -63,8 +63,13 @@ async def get_main_menu_keyboard_async(
         # Заполняем данными из подписки
         if subscription:
             # Дни до окончания подписки
-            if hasattr(subscription, 'ends_at') and subscription.ends_at:
-                days_left = (subscription.ends_at - datetime.now()).days
+            if hasattr(subscription, 'days_left'):
+                # Используем свойство из модели, которое правильно вычисляет дни в UTC
+                subscription_days_left = subscription.days_left
+            elif hasattr(subscription, 'end_date') and subscription.end_date:
+                # Fallback: вычисляем вручную, используя UTC
+                from datetime import datetime
+                days_left = (subscription.end_date - datetime.utcnow()).days
                 subscription_days_left = max(0, days_left)
             
             # Трафик
@@ -75,8 +80,8 @@ async def get_main_menu_keyboard_async(
                 traffic_left_gb = max(0, subscription.traffic_limit_gb - (subscription.traffic_used_gb or 0))
             
             # Автоплатеж
-            if hasattr(subscription, 'has_autopay'):
-                has_autopay = subscription.has_autopay
+            if hasattr(subscription, 'autopay_enabled'):
+                has_autopay = subscription.autopay_enabled
 
         # Получаем данные пользователя
         if user:
