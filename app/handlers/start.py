@@ -417,6 +417,7 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
 
         keyboard = await get_main_menu_keyboard_async(
             db=db,
+            user=user,
             language=user.language,
             is_admin=is_admin,
             has_had_paid_subscription=user.has_had_paid_subscription,
@@ -1072,6 +1073,7 @@ async def complete_registration_from_callback(
         try:
             keyboard = await get_main_menu_keyboard_async(
                 db=db,
+                user=existing_user,
                 language=existing_user.language,
                 is_admin=is_admin,
                 has_had_paid_subscription=existing_user.has_had_paid_subscription,
@@ -1254,6 +1256,7 @@ async def complete_registration_from_callback(
         try:
             keyboard = await get_main_menu_keyboard_async(
                 db=db,
+                user=user,
                 language=user.language,
                 is_admin=is_admin,
                 has_had_paid_subscription=user.has_had_paid_subscription,
@@ -1350,6 +1353,7 @@ async def complete_registration(
         try:
             keyboard = await get_main_menu_keyboard_async(
                 db=db,
+                user=existing_user,
                 language=existing_user.language,
                 is_admin=is_admin,
                 has_had_paid_subscription=existing_user.has_had_paid_subscription,
@@ -1555,6 +1559,7 @@ async def complete_registration(
         try:
             keyboard = await get_main_menu_keyboard_async(
                 db=db,
+                user=user,
                 language=user.language,
                 is_admin=is_admin,
                 has_had_paid_subscription=user.has_had_paid_subscription,
@@ -1888,6 +1893,7 @@ async def required_sub_channel_check(
 
             keyboard = await get_main_menu_keyboard_async(
                 db=db,
+                user=user,
                 language=user.language,
                 is_admin=is_admin,
                 has_had_paid_subscription=user.has_had_paid_subscription,

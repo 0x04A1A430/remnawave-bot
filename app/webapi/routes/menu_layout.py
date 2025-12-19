@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, List
+from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Response, Security, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,14 +17,29 @@ from ..dependencies import get_db_session, require_api_token
 from ..schemas.menu_layout import (
     AddCustomButtonRequest,
     AddRowRequest,
+    AvailableCallback,
+    AvailableCallbacksResponse,
     BuiltinButtonInfo,
     BuiltinButtonsListResponse,
+    ButtonClickStats,
+    ButtonClickStatsResponse,
     ButtonConditions,
     ButtonUpdateRequest,
+    DynamicPlaceholder,
+    DynamicPlaceholdersResponse,
     MenuButtonConfig,
+    MenuClickStatsResponse,
     MenuLayoutConfig,
+    MenuLayoutExportResponse,
+    MenuLayoutHistoryEntry,
+    MenuLayoutHistoryResponse,
+    MenuLayoutImportRequest,
+    MenuLayoutImportResponse,
     MenuLayoutResponse,
+    MenuLayoutRollbackRequest,
     MenuLayoutUpdateRequest,
+    MenuLayoutValidateRequest,
+    MenuLayoutValidateResponse,
     MenuPreviewButton,
     MenuPreviewRequest,
     MenuPreviewResponse,
@@ -37,6 +52,7 @@ from ..schemas.menu_layout import (
     RowsReorderRequest,
     SwapButtonsRequest,
     SwapButtonsResponse,
+    ValidationError,
 )
 
 
@@ -64,6 +80,7 @@ def _serialize_config(config: dict, is_enabled: bool, updated_at) -> MenuLayoutR
             type=btn_data["type"],
             builtin_id=btn_data.get("builtin_id"),
             text=btn_data.get("text", {}),
+            icon=btn_data.get("icon"),
             action=btn_data.get("action", ""),
             enabled=btn_data.get("enabled", True),
             visibility=btn_data.get("visibility", "all"),
@@ -73,6 +90,8 @@ def _serialize_config(config: dict, is_enabled: bool, updated_at) -> MenuLayoutR
             dynamic_text=btn_data.get("dynamic_text", False),
             open_mode=btn_data.get("open_mode", "callback"),
             webapp_url=btn_data.get("webapp_url"),
+            description=btn_data.get("description"),
+            sort_order=btn_data.get("sort_order"),
         )
 
     return MenuLayoutResponse(
@@ -183,6 +202,7 @@ async def update_button(
             type=button["type"],
             builtin_id=button.get("builtin_id"),
             text=button.get("text", {}),
+            icon=button.get("icon"),
             action=button.get("action", ""),
             enabled=button.get("enabled", True),
             visibility=button.get("visibility", "all"),
@@ -192,6 +212,7 @@ async def update_button(
             dynamic_text=button.get("dynamic_text", False),
             open_mode=button.get("open_mode", "callback"),
             webapp_url=button.get("webapp_url"),
+            description=button.get("description"),
         )
     except KeyError as e:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(e)) from e
@@ -273,16 +294,19 @@ async def add_custom_button(
     _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> MenuButtonConfig:
-    """Добавить кастомную кнопку (URL или MiniApp)."""
+    """Добавить кастомную кнопку (URL, MiniApp или callback)."""
     try:
         button_config = {
             "type": payload.type.value,
             "text": payload.text,
+            "icon": payload.icon,
             "action": payload.action,
             "visibility": payload.visibility.value,
             "conditions": payload.conditions.model_dump(exclude_none=True)
             if payload.conditions
             else None,
+            "dynamic_text": payload.dynamic_text,
+            "description": payload.description,
         }
         button = await MenuLayoutService.add_custom_button(
             db, payload.id, button_config, payload.row_id
@@ -292,6 +316,7 @@ async def add_custom_button(
             type=button["type"],
             builtin_id=button.get("builtin_id"),
             text=button.get("text", {}),
+            icon=button.get("icon"),
             action=button.get("action", ""),
             enabled=button.get("enabled", True),
             visibility=button.get("visibility", "all"),
@@ -301,6 +326,7 @@ async def add_custom_button(
             dynamic_text=button.get("dynamic_text", False),
             open_mode=button.get("open_mode", "callback"),
             webapp_url=button.get("webapp_url"),
+            description=button.get("description"),
         )
     except ValueError as e:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e)) from e
@@ -464,3 +490,318 @@ async def swap_buttons(
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(e)) from e
     except ValueError as e:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e)) from e
+
+
+# --- Новые эндпоинты ---
+
+
+@router.get("/available-callbacks", response_model=AvailableCallbacksResponse)
+async def list_available_callbacks(
+    _: Any = Security(require_api_token),
+    db: AsyncSession = Depends(get_db_session),
+) -> AvailableCallbacksResponse:
+    """Получить список всех доступных callback_data для создания кнопок."""
+    callbacks = await MenuLayoutService.get_available_callbacks(db)
+
+    items = [
+        AvailableCallback(
+            callback_data=cb["callback_data"],
+            name=cb["name"],
+            description=cb.get("description"),
+            category=cb["category"],
+            default_text=cb.get("default_text"),
+            default_icon=cb.get("default_icon"),
+            requires_subscription=cb.get("requires_subscription", False),
+            is_in_menu=cb.get("is_in_menu", False),
+        )
+        for cb in callbacks
+    ]
+
+    categories = list(set(cb["category"] for cb in callbacks))
+
+    return AvailableCallbacksResponse(
+        items=items,
+        total=len(items),
+        categories=sorted(categories),
+    )
+
+
+@router.get("/placeholders", response_model=DynamicPlaceholdersResponse)
+async def list_dynamic_placeholders(
+    _: Any = Security(require_api_token),
+) -> DynamicPlaceholdersResponse:
+    """Получить список доступных динамических плейсхолдеров для текста кнопок."""
+    placeholders = MenuLayoutService.get_dynamic_placeholders()
+
+    items = [
+        DynamicPlaceholder(
+            placeholder=p["placeholder"],
+            description=p["description"],
+            example=p["example"],
+            category=p["category"],
+        )
+        for p in placeholders
+    ]
+
+    return DynamicPlaceholdersResponse(items=items, total=len(items))
+
+
+@router.get("/export", response_model=MenuLayoutExportResponse)
+async def export_menu_layout(
+    _: Any = Security(require_api_token),
+    db: AsyncSession = Depends(get_db_session),
+) -> MenuLayoutExportResponse:
+    """Экспортировать конфигурацию меню."""
+    from datetime import datetime
+
+    export_data = await MenuLayoutService.export_config(db)
+
+    rows = []
+    for row_data in export_data.get("rows", []):
+        rows.append(
+            MenuRowConfig(
+                id=row_data["id"],
+                buttons=row_data.get("buttons", []),
+                conditions=ButtonConditions(**row_data["conditions"])
+                if row_data.get("conditions")
+                else None,
+                max_per_row=row_data.get("max_per_row", 2),
+            )
+        )
+
+    buttons = {}
+    for btn_id, btn_data in export_data.get("buttons", {}).items():
+        buttons[btn_id] = MenuButtonConfig(
+            type=btn_data["type"],
+            builtin_id=btn_data.get("builtin_id"),
+            text=btn_data.get("text", {}),
+            icon=btn_data.get("icon"),
+            action=btn_data.get("action", ""),
+            enabled=btn_data.get("enabled", True),
+            visibility=btn_data.get("visibility", "all"),
+            conditions=ButtonConditions(**btn_data["conditions"])
+            if btn_data.get("conditions")
+            else None,
+            dynamic_text=btn_data.get("dynamic_text", False),
+            open_mode=btn_data.get("open_mode", "callback"),
+            webapp_url=btn_data.get("webapp_url"),
+            description=btn_data.get("description"),
+        )
+
+    return MenuLayoutExportResponse(
+        version=export_data.get("version", 1),
+        rows=rows,
+        buttons=buttons,
+        exported_at=datetime.now(),
+    )
+
+
+@router.post("/import", response_model=MenuLayoutImportResponse)
+async def import_menu_layout(
+    payload: MenuLayoutImportRequest,
+    _: Any = Security(require_api_token),
+    db: AsyncSession = Depends(get_db_session),
+) -> MenuLayoutImportResponse:
+    """Импортировать конфигурацию меню."""
+    import_data = {
+        "version": payload.version,
+        "rows": [row.model_dump() for row in payload.rows],
+        "buttons": {btn_id: btn.model_dump() for btn_id, btn in payload.buttons.items()},
+    }
+
+    result = await MenuLayoutService.import_config(db, import_data, payload.merge_mode)
+
+    return MenuLayoutImportResponse(
+        success=result["success"],
+        imported_rows=result["imported_rows"],
+        imported_buttons=result["imported_buttons"],
+        warnings=result["warnings"],
+    )
+
+
+@router.post("/validate", response_model=MenuLayoutValidateResponse)
+async def validate_menu_layout(
+    payload: MenuLayoutValidateRequest,
+    _: Any = Security(require_api_token),
+    db: AsyncSession = Depends(get_db_session),
+) -> MenuLayoutValidateResponse:
+    """Валидировать конфигурацию меню без сохранения."""
+    # Если данные не переданы, валидируем текущую конфигурацию
+    if payload.rows is None and payload.buttons is None:
+        config = await MenuLayoutService.get_config(db)
+    else:
+        config = {
+            "rows": [row.model_dump() for row in payload.rows] if payload.rows else [],
+            "buttons": {btn_id: btn.model_dump() for btn_id, btn in payload.buttons.items()}
+            if payload.buttons
+            else {},
+        }
+
+    result = MenuLayoutService.validate_config(config)
+
+    return MenuLayoutValidateResponse(
+        is_valid=result["is_valid"],
+        errors=[
+            ValidationError(
+                field=e["field"],
+                message=e["message"],
+                severity=e["severity"],
+            )
+            for e in result["errors"]
+        ],
+        warnings=[
+            ValidationError(
+                field=w["field"],
+                message=w["message"],
+                severity=w["severity"],
+            )
+            for w in result["warnings"]
+        ],
+    )
+
+
+# --- Эндпоинты истории изменений ---
+
+
+@router.get("/history", response_model=MenuLayoutHistoryResponse)
+async def get_menu_layout_history(
+    limit: int = 50,
+    offset: int = 0,
+    _: Any = Security(require_api_token),
+    db: AsyncSession = Depends(get_db_session),
+) -> MenuLayoutHistoryResponse:
+    """Получить историю изменений меню."""
+    entries = await MenuLayoutService.get_history(db, limit, offset)
+    total = await MenuLayoutService.get_history_count(db)
+
+    return MenuLayoutHistoryResponse(
+        items=[
+            MenuLayoutHistoryEntry(
+                id=entry["id"],
+                created_at=entry["created_at"],
+                action=entry["action"],
+                changes_summary=entry["changes_summary"] or "",
+                user_info=entry["user_info"],
+            )
+            for entry in entries
+        ],
+        total=total,
+    )
+
+
+@router.get("/history/{history_id}")
+async def get_history_entry(
+    history_id: int,
+    _: Any = Security(require_api_token),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """Получить конкретную запись истории с полной конфигурацией."""
+    entry = await MenuLayoutService.get_history_entry(db, history_id)
+    if not entry:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"History entry {history_id} not found")
+
+    return {
+        "id": entry["id"],
+        "action": entry["action"],
+        "changes_summary": entry["changes_summary"],
+        "user_info": entry["user_info"],
+        "created_at": entry["created_at"].isoformat() if entry["created_at"] else None,
+        "config": entry["config"],
+    }
+
+
+@router.post("/history/{history_id}/rollback", response_model=MenuLayoutResponse)
+async def rollback_to_history(
+    history_id: int,
+    _: Any = Security(require_api_token),
+    db: AsyncSession = Depends(get_db_session),
+) -> MenuLayoutResponse:
+    """Откатить конфигурацию к записи из истории."""
+    try:
+        config = await MenuLayoutService.rollback_to_history(db, history_id)
+        updated_at = await MenuLayoutService.get_config_updated_at(db)
+        return _serialize_config(config, settings.MENU_LAYOUT_ENABLED, updated_at)
+    except KeyError as e:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(e)) from e
+
+
+# --- Эндпоинты статистики кликов ---
+
+
+@router.get("/stats", response_model=MenuClickStatsResponse)
+async def get_menu_click_stats(
+    days: int = 30,
+    _: Any = Security(require_api_token),
+    db: AsyncSession = Depends(get_db_session),
+) -> MenuClickStatsResponse:
+    """Получить общую статистику кликов по всем кнопкам."""
+    from datetime import datetime, timedelta
+
+    stats = await MenuLayoutService.get_all_buttons_stats(db, days)
+    total_clicks = await MenuLayoutService.get_total_clicks(db, days)
+
+    now = datetime.now()
+    period_start = now - timedelta(days=days)
+
+    return MenuClickStatsResponse(
+        items=[
+            ButtonClickStats(
+                button_id=s["button_id"],
+                clicks_total=s["clicks_total"],
+                unique_users=s["unique_users"],
+                last_click_at=s["last_click_at"],
+            )
+            for s in stats
+        ],
+        total_clicks=total_clicks,
+        period_start=period_start,
+        period_end=now,
+    )
+
+
+@router.get("/stats/buttons/{button_id}", response_model=ButtonClickStatsResponse)
+async def get_button_click_stats(
+    button_id: str,
+    days: int = 30,
+    _: Any = Security(require_api_token),
+    db: AsyncSession = Depends(get_db_session),
+) -> ButtonClickStatsResponse:
+    """Получить статистику кликов по конкретной кнопке."""
+    stats = await MenuLayoutService.get_button_stats(db, button_id, days)
+    clicks_by_day = await MenuLayoutService.get_button_clicks_by_day(db, button_id, days)
+
+    return ButtonClickStatsResponse(
+        button_id=button_id,
+        stats=ButtonClickStats(
+            button_id=stats["button_id"],
+            clicks_total=stats["clicks_total"],
+            clicks_today=stats["clicks_today"],
+            clicks_week=stats["clicks_week"],
+            clicks_month=stats["clicks_month"],
+            unique_users=stats["unique_users"],
+            last_click_at=stats["last_click_at"],
+        ),
+        clicks_by_day=clicks_by_day,
+    )
+
+
+@router.post("/stats/log-click")
+async def log_button_click(
+    button_id: str,
+    user_id: Optional[int] = None,
+    callback_data: Optional[str] = None,
+    button_type: Optional[str] = None,
+    button_text: Optional[str] = None,
+    _: Any = Security(require_api_token),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """Записать клик по кнопке (для внешней интеграции)."""
+    await MenuLayoutService.log_button_click(
+        db,
+        button_id=button_id,
+        user_id=user_id,
+        callback_data=callback_data,
+        button_type=button_type,
+        button_text=button_text,
+    )
+    return {"success": True}

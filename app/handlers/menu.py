@@ -201,6 +201,7 @@ async def show_main_menu(
 
     keyboard = await get_main_menu_keyboard_async(
         db=db,
+        user=db_user,
         language=db_user.language,
         is_admin=is_admin,
         is_moderator=is_moderator,
@@ -1067,6 +1068,7 @@ async def handle_back_to_menu(
 
     keyboard = await get_main_menu_keyboard_async(
         db=db,
+        user=db_user,
         language=db_user.language,
         is_admin=is_admin,
         is_moderator=is_moderator,
