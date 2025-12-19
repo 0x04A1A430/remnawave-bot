@@ -27,6 +27,7 @@ from .routes import (
     remnawave,
     contests,
     servers,
+    support_settings,
     subscription_events,
     stats,
     subscriptions,
@@ -180,6 +181,7 @@ def create_web_api_app() -> FastAPI:
     app.include_router(users.router, prefix="/users", tags=["users"])
     app.include_router(subscriptions.router, prefix="/subscriptions", tags=["subscriptions"])
     app.include_router(tickets.router, prefix="/tickets", tags=["support"])
+    app.include_router(support_settings.router, prefix="/settings/support", tags=["support-settings"])
     app.include_router(transactions.router, prefix="/transactions", tags=["transactions"])
     app.include_router(promo_groups.router, prefix="/promo-groups", tags=["promo-groups"])
     app.include_router(promo_offers.router, prefix="/promo-offers", tags=["promo-offers"])

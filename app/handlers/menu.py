@@ -39,7 +39,7 @@ from app.services.privacy_policy_service import PrivacyPolicyService
 from app.services.public_offer_service import PublicOfferService
 from app.services.faq_service import FaqService
 from app.utils.timezone import format_local_datetime
-from app.utils.pricing_utils import format_period_description
+from app.handlers.subscription.traffic import handle_add_traffic
 
 logger = logging.getLogger(__name__)
 
@@ -518,6 +518,7 @@ async def show_faq_pages(
     await callback.message.edit_text(
         caption,
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=buttons),
+        disable_web_page_preview=settings.DISABLE_WEB_PAGE_PREVIEW,
     )
     await callback.answer()
 
@@ -654,6 +655,7 @@ async def show_faq_page(
     await callback.message.edit_text(
         message_text,
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows),
+        disable_web_page_preview=settings.DISABLE_WEB_PAGE_PREVIEW,
     )
     await callback.answer()
 
@@ -772,6 +774,7 @@ async def show_privacy_policy(
     await callback.message.edit_text(
         message_text,
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows),
+        disable_web_page_preview=settings.DISABLE_WEB_PAGE_PREVIEW,
     )
     await callback.answer()
 
@@ -891,6 +894,7 @@ async def show_public_offer(
     await callback.message.edit_text(
         message_text,
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows),
+        disable_web_page_preview=settings.DISABLE_WEB_PAGE_PREVIEW,
     )
     await callback.answer()
 
@@ -1219,6 +1223,85 @@ async def get_main_menu_text(user, texts, db: AsyncSession):
     return base_text
 
 
+async def handle_activate_button(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    texts = get_texts(db_user.language)
+    
+    # Получить подписку пользователя
+    from app.database.crud.subscription import get_subscription_by_user_id
+    subscription = await get_subscription_by_user_id(db, db_user.id)
+    
+    if subscription and subscription.status == "ACTIVE" and subscription.end_date > datetime.utcnow():
+        await callback.answer(
+            texts.t("SUBSCRIPTION_ALREADY_ACTIVE", "✅ Подписка уже активна!"),
+            show_alert=True,
+        )
+        return
+    
+    # Параметры из подписки или дефолтные
+    device_limit = subscription.device_limit if subscription else settings.DEFAULT_DEVICE_LIMIT
+    traffic_limit_gb = subscription.traffic_limit_gb if subscription else 0
+    connected_squads = subscription.connected_squads if subscription else []
+    
+    # Получить IDs серверов из UUIDs
+    from app.database.crud.server_squad import get_server_ids_by_uuids
+    server_ids = await get_server_ids_by_uuids(db, connected_squads) if connected_squads else []
+    
+    balance = db_user.balance_kopeks
+    available_periods = [int(p) for p in settings.AVAILABLE_SUBSCRIPTION_PERIODS]
+    
+    best_period = None
+    best_price = 0
+    
+    from app.services.subscription_service import SubscriptionService
+    subscription_service = SubscriptionService()
+    
+    # Найти максимальный период, цена которого <= баланса
+    for period in sorted(available_periods, reverse=True):
+        price, _ = await subscription_service.calculate_subscription_price_with_months(
+            period,
+            traffic_limit_gb,
+            server_ids,
+            device_limit,
+            db,
+            user=db_user
+        )
+        if price <= balance:
+            best_period = period
+            best_price = price
+            break
+    
+    if best_period:
+        # Создать новую подписку
+        from app.database.crud.subscription import create_paid_subscription
+        new_subscription = await create_paid_subscription(
+            db,
+            db_user.id,
+            best_period,
+            traffic_limit_gb=traffic_limit_gb,
+            device_limit=device_limit,
+            connected_squads=connected_squads,
+            update_server_counters=True
+        )
+        
+        # Списать деньги
+        db_user.balance_kopeks -= best_price
+        await db.commit()
+        
+        await callback.answer(
+            texts.t("ACTIVATION_SUCCESS", f"✅ Подписка активирована на {best_period} дней за {best_price//100} руб!"),
+            show_alert=True,
+        )
+    else:
+        await callback.answer(
+            texts.t("INSUFFICIENT_FUNDS", "❌ Недостаточно средств для активации подписки"),
+            show_alert=True,
+        )
+
+
 def register_handlers(dp: Dispatcher):
     
     dp.callback_query.register(
@@ -1285,4 +1368,14 @@ def register_handlers(dp: Dispatcher):
         process_language_change,
         F.data.startswith("language_select:"),
         StateFilter(None)
+    )
+
+    dp.callback_query.register(
+        handle_add_traffic,
+        F.data == "buy_traffic"
+    )
+
+    dp.callback_query.register(
+        handle_activate_button,
+        F.data == "activate_button"
     )

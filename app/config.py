@@ -168,6 +168,13 @@ class Settings(BaseSettings):
     BLACKLIST_UPDATE_INTERVAL_HOURS: int = 24
     BLACKLIST_IGNORE_ADMINS: bool = True
 
+    # Настройки простой покупки
+    SIMPLE_SUBSCRIPTION_ENABLED: bool = True
+    SIMPLE_SUBSCRIPTION_PERIOD_DAYS: int = 30
+    SIMPLE_SUBSCRIPTION_DEVICE_LIMIT: int = 1
+    SIMPLE_SUBSCRIPTION_TRAFFIC_GB: int = 0  # 0 означает безлимит
+    SIMPLE_SUBSCRIPTION_SQUAD_UUID: Optional[str] = None
+
     # Настройки мониторинга трафика
     TRAFFIC_MONITORING_ENABLED: bool = False
     TRAFFIC_THRESHOLD_GB_PER_DAY: float = 10.0  # Порог трафика в ГБ за сутки
@@ -223,6 +230,7 @@ class Settings(BaseSettings):
     PAYMENT_VERIFICATION_AUTO_CHECK_INTERVAL_MINUTES: int = 10
 
     NALOGO_ENABLED: bool = False
+    NALOGO_RECEIPTS_ENABLED: bool = False
     NALOGO_INN: Optional[str] = None
     NALOGO_PASSWORD: Optional[str] = None
     NALOGO_DEVICE_ID: Optional[str] = None
@@ -230,12 +238,10 @@ class Settings(BaseSettings):
 
     AUTO_PURCHASE_AFTER_TOPUP_ENABLED: bool = False
 
-    # Настройки простой покупки
-    SIMPLE_SUBSCRIPTION_ENABLED: bool = False
-    SIMPLE_SUBSCRIPTION_PERIOD_DAYS: int = 30
-    SIMPLE_SUBSCRIPTION_DEVICE_LIMIT: int = 1
-    SIMPLE_SUBSCRIPTION_TRAFFIC_GB: int = 0  # 0 означает безлимит
-    SIMPLE_SUBSCRIPTION_SQUAD_UUID: Optional[str] = None
+    # Отключение превью ссылок в сообщениях бота
+    DISABLE_WEB_PAGE_PREVIEW: bool = False
+    ACTIVATE_BUTTON_VISIBLE: bool = False
+    ACTIVATE_BUTTON_TEXT: str = "активировать"
     PAYMENT_BALANCE_DESCRIPTION: str = "Пополнение баланса"
     PAYMENT_SUBSCRIPTION_DESCRIPTION: str = "Оплата подписки"
     PAYMENT_SERVICE_NAME: str = "Интернет-сервис"
