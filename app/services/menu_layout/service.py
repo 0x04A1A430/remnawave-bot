@@ -870,8 +870,8 @@ class MenuLayoutService:
             text = text.replace("{username}", context.username or "User")
 
         # Дней до окончания подписки
-        if "{subscription_days}" in text:
-            text = text.replace("{subscription_days}", str(context.subscription_days_left))
+        if "{subscription_days_left}" in text:
+            text = text.replace("{subscription_days_left}", str(context.subscription_days_left))
 
         # Использованный трафик
         if "{traffic_used}" in text:
