@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, List
 
-from fastapi import APIRouter, Depends, HTTPException, Security, status
+from fastapi import APIRouter, Depends, HTTPException, Response, Security, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -161,10 +161,14 @@ async def update_button(
         updates = payload.model_dump(exclude_unset=True)
         # Конвертируем visibility в строку если есть
         if "visibility" in updates and updates["visibility"] is not None:
-            updates["visibility"] = updates["visibility"].value
-        # Конвертируем conditions в dict если есть
+            if hasattr(updates["visibility"], "value"):
+                updates["visibility"] = updates["visibility"].value
+        # Конвертируем conditions - убираем None значения если это dict
         if "conditions" in updates and updates["conditions"] is not None:
-            updates["conditions"] = updates["conditions"].model_dump(exclude_none=True)
+            if isinstance(updates["conditions"], dict):
+                updates["conditions"] = {k: v for k, v in updates["conditions"].items() if v is not None}
+            elif hasattr(updates["conditions"], "model_dump"):
+                updates["conditions"] = updates["conditions"].model_dump(exclude_none=True)
 
         button = await MenuLayoutService.update_button(db, button_id, updates)
 
@@ -238,15 +242,16 @@ async def add_row(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e)) from e
 
 
-@router.delete("/rows/{row_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/rows/{row_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 async def delete_row(
     row_id: str,
     _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
-) -> None:
+) -> Response:
     """Удалить строку."""
     try:
         await MenuLayoutService.delete_row(db, row_id)
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
     except KeyError as e:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(e)) from e
 
@@ -290,15 +295,16 @@ async def add_custom_button(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e)) from e
 
 
-@router.delete("/buttons/{button_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/buttons/{button_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 async def delete_custom_button(
     button_id: str,
     _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
-) -> None:
+) -> Response:
     """Удалить кастомную кнопку."""
     try:
         await MenuLayoutService.delete_custom_button(db, button_id)
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
     except KeyError as e:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(e)) from e
     except ValueError as e:
