@@ -37,6 +37,7 @@ async def get_main_menu_keyboard_async(
     *,
     is_moderator: bool = False,
     custom_buttons: Optional[list[InlineKeyboardButton]] = None,
+    user=None,  # Добавляем параметр пользователя для получения данных
 ) -> InlineKeyboardMarkup:
     """
     Асинхронная версия get_main_menu_keyboard с поддержкой конструктора меню.
@@ -46,6 +47,63 @@ async def get_main_menu_keyboard_async(
     """
     if settings.MENU_LAYOUT_ENABLED:
         from app.services.menu_layout_service import MenuLayoutService, MenuContext
+        from datetime import datetime
+
+        # Получаем данные для плейсхолдеров
+        subscription_days_left = 0
+        traffic_used_gb = 0.0
+        traffic_left_gb = 0.0
+        referral_count = 0
+        referral_earnings_kopeks = 0
+        registration_days = 0
+        promo_group_id = None
+        has_autopay = False
+        username = ""
+
+        # Заполняем данными из подписки
+        if subscription:
+            # Дни до окончания подписки
+            if hasattr(subscription, 'ends_at') and subscription.ends_at:
+                days_left = (subscription.ends_at - datetime.now()).days
+                subscription_days_left = max(0, days_left)
+            
+            # Трафик
+            if hasattr(subscription, 'traffic_used_gb'):
+                traffic_used_gb = subscription.traffic_used_gb or 0.0
+            
+            if hasattr(subscription, 'traffic_limit_gb') and subscription.traffic_limit_gb:
+                traffic_left_gb = max(0, subscription.traffic_limit_gb - (subscription.traffic_used_gb or 0))
+            
+            # Автоплатеж
+            if hasattr(subscription, 'has_autopay'):
+                has_autopay = subscription.has_autopay
+
+        # Получаем данные пользователя
+        if user:
+            # Имя пользователя
+            if hasattr(user, 'username') and user.username:
+                username = user.username
+            elif hasattr(user, 'first_name') and user.first_name:
+                username = user.first_name
+            
+            # Дни с регистрации
+            if hasattr(user, 'created_at') and user.created_at:
+                registration_days = (datetime.now() - user.created_at).days
+            
+            # ID промо-группы
+            if hasattr(user, 'promo_group_id'):
+                promo_group_id = user.promo_group_id
+
+        # Получаем данные о рефералах из БД (если нужно)
+        try:
+            from app.database.crud.referral import get_user_referral_count
+            if user and hasattr(user, 'id'):
+                referral_data = await get_user_referral_count(db, user.id)
+                if referral_data:
+                    referral_count = referral_data.get('count', 0)
+                    referral_earnings_kopeks = referral_data.get('earnings_kopeks', 0)
+        except Exception as e:
+            logger.error(f"Error getting referral data: {e}")
 
         context = MenuContext(
             language=language,
@@ -59,6 +117,16 @@ async def get_main_menu_keyboard_async(
             show_resume_checkout=show_resume_checkout,
             has_saved_cart=has_saved_cart,
             custom_buttons=custom_buttons or [],
+            # Добавляем данные для плейсхолдеров
+            username=username,
+            subscription_days_left=subscription_days_left,
+            traffic_used_gb=traffic_used_gb,
+            traffic_left_gb=traffic_left_gb,
+            referral_count=referral_count,
+            referral_earnings_kopeks=referral_earnings_kopeks,
+            registration_days=registration_days,
+            promo_group_id=promo_group_id,
+            has_autopay=has_autopay,
         )
 
         return await MenuLayoutService.build_keyboard(db, context)
