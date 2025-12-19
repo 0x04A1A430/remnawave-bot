@@ -23,6 +23,62 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+async def get_main_menu_keyboard_async(
+    db: AsyncSession,
+    language: str = DEFAULT_LANGUAGE,
+    is_admin: bool = False,
+    has_had_paid_subscription: bool = False,
+    has_active_subscription: bool = False,
+    subscription_is_active: bool = False,
+    balance_kopeks: int = 0,
+    subscription=None,
+    show_resume_checkout: bool = False,
+    has_saved_cart: bool = False,
+    *,
+    is_moderator: bool = False,
+    custom_buttons: Optional[list[InlineKeyboardButton]] = None,
+) -> InlineKeyboardMarkup:
+    """
+    Асинхронная версия get_main_menu_keyboard с поддержкой конструктора меню.
+
+    Если MENU_LAYOUT_ENABLED=True, использует конфигурацию из БД.
+    Иначе делегирует в синхронную версию.
+    """
+    if settings.MENU_LAYOUT_ENABLED:
+        from app.services.menu_layout_service import MenuLayoutService, MenuContext
+
+        context = MenuContext(
+            language=language,
+            is_admin=is_admin,
+            is_moderator=is_moderator,
+            has_active_subscription=has_active_subscription,
+            subscription_is_active=subscription_is_active,
+            has_had_paid_subscription=has_had_paid_subscription,
+            balance_kopeks=balance_kopeks,
+            subscription=subscription,
+            show_resume_checkout=show_resume_checkout,
+            has_saved_cart=has_saved_cart,
+            custom_buttons=custom_buttons or [],
+        )
+
+        return await MenuLayoutService.build_keyboard(db, context)
+
+    # Fallback на синхронную версию
+    return get_main_menu_keyboard(
+        language=language,
+        is_admin=is_admin,
+        has_had_paid_subscription=has_had_paid_subscription,
+        has_active_subscription=has_active_subscription,
+        subscription_is_active=subscription_is_active,
+        balance_kopeks=balance_kopeks,
+        subscription=subscription,
+        show_resume_checkout=show_resume_checkout,
+        has_saved_cart=has_saved_cart,
+        is_moderator=is_moderator,
+        custom_buttons=custom_buttons,
+    )
+
+
 def _get_localized_value(values, language: str, default_language: str = "en") -> str:
     if not isinstance(values, dict):
         return ""

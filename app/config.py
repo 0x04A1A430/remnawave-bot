@@ -175,6 +175,9 @@ class Settings(BaseSettings):
     SIMPLE_SUBSCRIPTION_TRAFFIC_GB: int = 0  # 0 означает безлимит
     SIMPLE_SUBSCRIPTION_SQUAD_UUID: Optional[str] = None
 
+    # Настройки конструктора меню (API)
+    MENU_LAYOUT_ENABLED: bool = False  # Включить управление меню через API
+
     # Настройки мониторинга трафика
     TRAFFIC_MONITORING_ENABLED: bool = False
     TRAFFIC_THRESHOLD_GB_PER_DAY: float = 10.0  # Порог трафика в ГБ за сутки
