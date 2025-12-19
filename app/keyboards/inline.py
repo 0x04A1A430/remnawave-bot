@@ -445,7 +445,7 @@ def get_main_menu_keyboard(
         )
 
     # Добавляем кнопку конкурсов
-    if settings.CONTESTS_BUTTON_VISIBLE:
+    if settings.CONTESTS_ENABLED and settings.CONTESTS_BUTTON_VISIBLE:
         paired_buttons.append(
             InlineKeyboardButton(text=texts.t("CONTESTS_BUTTON", "🎲 Конкурсы"), callback_data="contests_menu")
         )
@@ -459,6 +459,12 @@ def get_main_menu_keyboard(
     if support_enabled:
         paired_buttons.append(
             InlineKeyboardButton(text=texts.MENU_SUPPORT, callback_data="menu_support")
+        )
+
+    # Добавляем кнопку активации
+    if settings.ACTIVATE_BUTTON_VISIBLE:
+        paired_buttons.append(
+            InlineKeyboardButton(text=settings.ACTIVATE_BUTTON_TEXT, callback_data="activate_button")
         )
 
     paired_buttons.append(
