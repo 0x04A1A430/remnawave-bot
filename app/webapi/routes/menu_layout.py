@@ -71,6 +71,8 @@ def _serialize_config(config: dict, is_enabled: bool, updated_at) -> MenuLayoutR
             if btn_data.get("conditions")
             else None,
             dynamic_text=btn_data.get("dynamic_text", False),
+            open_mode=btn_data.get("open_mode", "callback"),
+            webapp_url=btn_data.get("webapp_url"),
         )
 
     return MenuLayoutResponse(
@@ -143,6 +145,7 @@ async def list_builtin_buttons(
                 if btn_info.get("default_conditions")
                 else None,
                 supports_dynamic_text=btn_info.get("supports_dynamic_text", False),
+                supports_direct_open=btn_info.get("supports_direct_open", False),
             )
         )
 
@@ -163,6 +166,10 @@ async def update_button(
         if "visibility" in updates and updates["visibility"] is not None:
             if hasattr(updates["visibility"], "value"):
                 updates["visibility"] = updates["visibility"].value
+        # Конвертируем open_mode в строку если есть
+        if "open_mode" in updates and updates["open_mode"] is not None:
+            if hasattr(updates["open_mode"], "value"):
+                updates["open_mode"] = updates["open_mode"].value
         # Конвертируем conditions - убираем None значения если это dict
         if "conditions" in updates and updates["conditions"] is not None:
             if isinstance(updates["conditions"], dict):
@@ -183,6 +190,8 @@ async def update_button(
             if button.get("conditions")
             else None,
             dynamic_text=button.get("dynamic_text", False),
+            open_mode=button.get("open_mode", "callback"),
+            webapp_url=button.get("webapp_url"),
         )
     except KeyError as e:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(e)) from e
@@ -290,6 +299,8 @@ async def add_custom_button(
             if button.get("conditions")
             else None,
             dynamic_text=button.get("dynamic_text", False),
+            open_mode=button.get("open_mode", "callback"),
+            webapp_url=button.get("webapp_url"),
         )
     except ValueError as e:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e)) from e

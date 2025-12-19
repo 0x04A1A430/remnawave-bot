@@ -135,6 +135,8 @@ DEFAULT_MENU_CONFIG: Dict[str, Any] = {
             "visibility": "subscribers",
             "conditions": None,
             "dynamic_text": False,
+            "open_mode": "callback",  # "callback" или "direct"
+            "webapp_url": None,  # URL для Mini App при open_mode="direct"
         },
         "happ_download": {
             "type": "builtin",
@@ -308,6 +310,7 @@ BUILTIN_BUTTONS_INFO = [
         "callback_data": "subscription_connect",
         "default_conditions": {"has_active_subscription": True, "subscription_is_active": True},
         "supports_dynamic_text": False,
+        "supports_direct_open": True,  # Может открывать Mini App напрямую
     },
     {
         "id": "happ_download",
@@ -1021,6 +1024,8 @@ class MenuLayoutService:
         button_type = button_config.get("type", "builtin")
         text_config = button_config.get("text", {})
         action = button_config.get("action", "")
+        open_mode = button_config.get("open_mode", "callback")
+        webapp_url = button_config.get("webapp_url")
 
         # Получаем текст
         text = cls._get_localized_text(text_config, context.language)
@@ -1039,8 +1044,15 @@ class MenuLayoutService:
                 text=text, web_app=types.WebAppInfo(url=action)
             )
         else:
-            # builtin - callback_data
-            return InlineKeyboardButton(text=text, callback_data=action)
+            # builtin - проверяем open_mode
+            if open_mode == "direct" and webapp_url:
+                # Прямое открытие Mini App через WebAppInfo
+                return InlineKeyboardButton(
+                    text=text, web_app=types.WebAppInfo(url=webapp_url)
+                )
+            else:
+                # Стандартный callback_data
+                return InlineKeyboardButton(text=text, callback_data=action)
 
     @classmethod
     async def build_keyboard(

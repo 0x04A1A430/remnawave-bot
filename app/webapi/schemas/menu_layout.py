@@ -26,6 +26,13 @@ class ButtonVisibility(str, Enum):
     SUBSCRIBERS = "subscribers"  # Только подписчикам
 
 
+class ButtonOpenMode(str, Enum):
+    """Режим открытия кнопки."""
+
+    CALLBACK = "callback"  # Отправляет callback_data боту (по умолчанию)
+    DIRECT = "direct"  # Сразу открывает Mini App через WebAppInfo
+
+
 class ButtonConditions(BaseModel):
     """Условия показа кнопки."""
 
@@ -96,6 +103,14 @@ class MenuButtonConfig(BaseModel):
     dynamic_text: bool = Field(
         default=False, description="Текст содержит плейсхолдеры ({balance} и т.д.)"
     )
+    open_mode: ButtonOpenMode = Field(
+        default=ButtonOpenMode.CALLBACK,
+        description="Режим открытия: callback (через бота) или direct (сразу Mini App)",
+    )
+    webapp_url: Optional[str] = Field(
+        default=None,
+        description="URL для Mini App при open_mode=direct",
+    )
 
     model_config = ConfigDict(extra="forbid")
 
@@ -156,6 +171,9 @@ class BuiltinButtonInfo(BaseModel):
     supports_dynamic_text: bool = Field(
         default=False, description="Поддерживает ли динамический текст"
     )
+    supports_direct_open: bool = Field(
+        default=False, description="Поддерживает ли прямое открытие Mini App"
+    )
 
 
 class BuiltinButtonsListResponse(BaseModel):
@@ -196,6 +214,12 @@ class ButtonUpdateRequest(BaseModel):
     )
     action: Optional[str] = Field(
         default=None, description="Новый action (для URL/MiniApp кнопок)"
+    )
+    open_mode: Optional[ButtonOpenMode] = Field(
+        default=None, description="Режим открытия: callback или direct"
+    )
+    webapp_url: Optional[str] = Field(
+        default=None, description="URL для Mini App при open_mode=direct"
     )
 
     model_config = ConfigDict(extra="forbid")
