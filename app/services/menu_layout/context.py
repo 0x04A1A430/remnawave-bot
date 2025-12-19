@@ -25,7 +25,7 @@ class MenuContext:
     custom_buttons: List[InlineKeyboardButton] = field(default_factory=list)
     # Расширенные поля для плейсхолдеров и условий
     username: str = ""
-    subscription_days_left: int = 0
+    subscription_days: int = 0
     traffic_used_gb: float = 0.0
     traffic_left_gb: float = 0.0
     referral_count: int = 0

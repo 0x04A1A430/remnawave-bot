@@ -493,7 +493,7 @@ AVAILABLE_CALLBACKS: List[Dict[str, Any]] = [
 DYNAMIC_PLACEHOLDERS: List[Dict[str, str]] = [
     {"placeholder": "{balance}", "description": "Баланс пользователя", "example": "1 500 ₽", "category": "user"},
     {"placeholder": "{username}", "description": "Имя пользователя", "example": "John", "category": "user"},
-    {"placeholder": "{subscription_days_left}", "description": "Дней до окончания подписки", "example": "14", "category": "subscription"},
+    {"placeholder": "{subscription_days}", "description": "Дней до окончания подписки", "example": "14", "category": "subscription"},
     {"placeholder": "{traffic_used}", "description": "Использованный трафик", "example": "5.2 GB", "category": "subscription"},
     {"placeholder": "{traffic_left}", "description": "Оставшийся трафик", "example": "94.8 GB", "category": "subscription"},
     {"placeholder": "{referral_count}", "description": "Количество рефералов", "example": "12", "category": "referral"},
