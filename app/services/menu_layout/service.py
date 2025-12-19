@@ -790,13 +790,13 @@ class MenuLayoutService:
         # has_subscription_days_left - минимум дней до окончания
         min_sub_days = conditions.get("has_subscription_days_left")
         if min_sub_days is not None:
-            if context.subscription_days_left < min_sub_days:
+            if context.subscription_days < min_sub_days:
                 return False
 
         # max_subscription_days_left
         max_sub_days = conditions.get("max_subscription_days_left")
         if max_sub_days is not None:
-            if context.subscription_days_left > max_sub_days:
+            if context.subscription_days > max_sub_days:
                 return False
 
         # is_trial_user
@@ -871,7 +871,7 @@ class MenuLayoutService:
 
         # Дней до окончания подписки
         if "{subscription_days}" in text:
-            text = text.replace("{subscription_days}", str(context.subscription_days_left))
+            text = text.replace("{subscription_days}", str(context.subscription_days))
 
         # Использованный трафик
         if "{traffic_used}" in text:
