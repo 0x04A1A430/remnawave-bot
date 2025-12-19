@@ -119,7 +119,7 @@ async def get_main_menu_keyboard_async(
             custom_buttons=custom_buttons or [],
             # Добавляем данные для плейсхолдеров
             username=username,
-            subscription_days_left=subscription_days_left,
+            subscription_days=subscription_days_left,
             traffic_used_gb=traffic_used_gb,
             traffic_left_gb=traffic_left_gb,
             referral_count=referral_count,
