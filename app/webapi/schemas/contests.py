@@ -192,3 +192,20 @@ class ReferralContestEventListResponse(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class ReferralContestParticipant(BaseModel):
+    referrer_id: int
+    full_name: str
+    total_referrals: int
+    paid_referrals: int
+    unpaid_referrals: int
+    total_paid_amount: int
+
+
+class ReferralContestDetailedStatsResponse(BaseModel):
+    total_participants: int
+    total_invited: int
+    total_paid_amount: int
+    total_unpaid: int
+    participants: List[ReferralContestParticipant]

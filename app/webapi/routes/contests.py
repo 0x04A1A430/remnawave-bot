@@ -51,11 +51,13 @@ from app.webapi.schemas.contests import (
     ContestTemplateUpdateRequest,
     ReferralContestCreateRequest,
     ReferralContestDetailResponse,
+    ReferralContestDetailedStatsResponse,
     ReferralContestEventListResponse,
     ReferralContestEventResponse,
     ReferralContestEventUser,
     ReferralContestLeaderboardItem,
     ReferralContestListResponse,
+    ReferralContestParticipant,
     ReferralContestResponse,
     ReferralContestUpdateRequest,
     StartRoundRequest,
@@ -676,3 +678,22 @@ async def list_referral_events(
         limit=limit,
         offset=offset,
     )
+
+
+@router.get(
+    "/referral/{contest_id}/detailed-stats",
+    response_model=ReferralContestDetailedStatsResponse,
+    tags=["contests"],
+)
+async def get_referral_detailed_stats(
+    contest_id: int,
+    _: Any = Security(require_api_token),
+    db: AsyncSession = Depends(get_db_session),
+) -> ReferralContestDetailedStatsResponse:
+    contest = await get_referral_contest(db, contest_id)
+    if not contest:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Contest not found")
+
+    from app.services.referral_contest_service import referral_contest_service
+    stats = await referral_contest_service.get_detailed_contest_stats(db, contest_id)
+    return ReferralContestDetailedStatsResponse(**stats)

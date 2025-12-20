@@ -40,7 +40,7 @@
     "created_by": 1
   }
   ```
-- `GET /contests/referral/{id}` — детали + `total_events`, `leaderboard`.
+- `GET /contests/referral/{id}/detailed-stats` — детальная статистика конкурса с разбивкой по участникам (total_participants, total_invited, total_paid_amount, total_unpaid, participants).
 - `PATCH /contests/referral/{id}` — частичное обновление (те же поля + `final_summary_sent`, `is_active`, `daily_summary_times` с несколькими временами через запятую).
 - `POST /contests/referral/{id}/toggle?is_active=true|false` — быстро включить/остановить.
 - `GET /contests/referral/{id}/events?limit&offset` — события (referrer/referral, тип, суммы).
