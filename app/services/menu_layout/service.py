@@ -270,10 +270,44 @@ class MenuLayoutService:
         config = config.copy()
         buttons = config.get("buttons", {})
 
+        # Улучшенное определение кнопки connect для разных форматов ID
+        actual_button_id = button_id
         if button_id not in buttons:
-            raise KeyError(f"Button '{button_id}' not found")
+            # Пробуем найти кнопку connect по разным форматам
+            if "connect" in button_id.lower():
+                # Проверяем разные варианты: connect, callback:connect и т.д.
+                for key in buttons.keys():
+                    if key == "connect" or buttons[key].get("builtin_id") == "connect":
+                        actual_button_id = key
+                        logger.info(
+                            f"🔗 Найдена кнопка connect по ID '{button_id}' -> '{actual_button_id}'"
+                        )
+                        break
+                else:
+                    # Если не нашли, пробуем найти по builtin_id
+                    for key, button in buttons.items():
+                        if button.get("builtin_id") == "connect" or "connect" in str(button.get("builtin_id", "")).lower():
+                            actual_button_id = key
+                            logger.info(
+                                f"🔗 Найдена кнопка connect по builtin_id '{button_id}' -> '{actual_button_id}'"
+                            )
+                            break
+                    else:
+                        raise KeyError(f"Button '{button_id}' not found")
 
-        button = buttons[button_id].copy()
+        if actual_button_id not in buttons:
+            raise KeyError(f"Button '{actual_button_id}' not found")
+
+        button = buttons[actual_button_id].copy()
+        
+        # Логирование для отладки
+        if "connect" in actual_button_id.lower() or button.get("builtin_id") == "connect":
+            logger.info(
+                f"🔗 Обновление кнопки connect (ID: {actual_button_id}): "
+                f"open_mode={updates.get('open_mode')}, "
+                f"action={updates.get('action')}, "
+                f"webapp_url={updates.get('webapp_url')}"
+            )
 
         # Применяем обновления
         if "text" in updates and updates["text"] is not None:
@@ -296,12 +330,16 @@ class MenuLayoutService:
             # Для URL/MiniApp/callback кнопок можно менять action
             if button.get("type") in ("url", "mini_app", "callback"):
                 button["action"] = updates["action"]
+            # Для builtin кнопок можно менять action, если open_mode == "direct"
+            # Это позволяет указать URL Mini App в поле action для кнопки connect
+            elif button.get("type") == "builtin" and updates.get("open_mode") == "direct":
+                button["action"] = updates["action"]
         if "open_mode" in updates and updates["open_mode"] is not None:
             button["open_mode"] = updates["open_mode"]
         if "webapp_url" in updates:
             button["webapp_url"] = updates["webapp_url"]
 
-        buttons[button_id] = button
+        buttons[actual_button_id] = button
         config["buttons"] = buttons
 
         await cls.save_config(db, config)
@@ -905,11 +943,28 @@ class MenuLayoutService:
     ) -> Optional[InlineKeyboardButton]:
         """Построить кнопку из конфигурации."""
         button_type = button_config.get("type", "builtin")
+        button_id = button_config.get("builtin_id") or button_config.get("id", "")
         text_config = button_config.get("text", {})
         action = button_config.get("action", "")
         open_mode = button_config.get("open_mode", "callback")
         webapp_url = button_config.get("webapp_url")
         icon = button_config.get("icon", "")
+        
+        # Логирование для отладки кнопки connect
+        is_connect_button = (
+            button_id == "connect" or 
+            "connect" in str(button_id).lower() or
+            action == "subscription_connect" or
+            "connect" in str(action).lower()
+        )
+        
+        if is_connect_button:
+            logger.info(
+                f"🔗 Построение кнопки connect: "
+                f"button_id={button_id}, type={button_type}, "
+                f"open_mode={open_mode}, action={action}, "
+                f"webapp_url={webapp_url}"
+            )
 
         # Получаем текст
         text = cls._get_localized_text(text_config, context.language)
@@ -936,13 +991,51 @@ class MenuLayoutService:
             return InlineKeyboardButton(text=text, callback_data=action)
         else:
             # builtin - проверяем open_mode
-            if open_mode == "direct" and webapp_url:
+            if open_mode == "direct":
                 # Прямое открытие Mini App через WebAppInfo
-                return InlineKeyboardButton(
-                    text=text, web_app=types.WebAppInfo(url=webapp_url)
-                )
+                # Используем webapp_url, если указан, иначе action (если это URL)
+                url = webapp_url or action
+                
+                # Для кнопки connect: если URL не указан или это callback_data,
+                # пытаемся получить URL из подписки пользователя
+                if is_connect_button and (not url or not (url.startswith("http://") or url.startswith("https://"))):
+                    if context.subscription:
+                        from app.utils.subscription_utils import get_display_subscription_link
+                        subscription_url = get_display_subscription_link(context.subscription)
+                        if subscription_url:
+                            url = subscription_url
+                            logger.info(
+                                f"🔗 Кнопка connect: получен URL из подписки: {url[:50]}..."
+                            )
+                    # Если все еще нет URL, пробуем использовать настройку MINIAPP_CUSTOM_URL
+                    if not url or not (url.startswith("http://") or url.startswith("https://")):
+                        if settings.MINIAPP_CUSTOM_URL:
+                            url = settings.MINIAPP_CUSTOM_URL
+                            logger.info(
+                                f"🔗 Кнопка connect: использован MINIAPP_CUSTOM_URL: {url[:50]}..."
+                            )
+                
+                # Проверяем, что это действительно URL
+                if url and (url.startswith("http://") or url.startswith("https://")):
+                    logger.info(
+                        f"🔗 Кнопка connect: open_mode=direct, используем URL: {url[:50]}..."
+                    )
+                    return InlineKeyboardButton(
+                        text=text, web_app=types.WebAppInfo(url=url)
+                    )
+                else:
+                    logger.warning(
+                        f"🔗 Кнопка connect: open_mode=direct, но URL не найден. "
+                        f"webapp_url={webapp_url}, action={action}, "
+                        f"subscription_url={'есть' if context.subscription else 'нет'}"
+                    )
+                    # Fallback на callback_data
+                    return InlineKeyboardButton(text=text, callback_data=action)
             else:
                 # Стандартный callback_data
+                logger.debug(
+                    f"Кнопка connect: open_mode={open_mode}, используем callback_data: {action}"
+                )
                 return InlineKeyboardButton(text=text, callback_data=action)
 
     # --- Построение клавиатуры ---
