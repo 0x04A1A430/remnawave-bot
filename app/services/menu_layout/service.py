@@ -1258,3 +1258,66 @@ class MenuLayoutService:
     ) -> int:
         """Получить общее количество кликов за период."""
         return await MenuLayoutStatsService.get_total_clicks(db, days)
+
+    @classmethod
+    async def get_stats_by_button_type(
+        cls,
+        db: AsyncSession,
+        days: int = 30,
+    ) -> List[Dict[str, Any]]:
+        """Получить статистику кликов по типам кнопок."""
+        return await MenuLayoutStatsService.get_stats_by_button_type(db, days)
+
+    @classmethod
+    async def get_clicks_by_hour(
+        cls,
+        db: AsyncSession,
+        button_id: Optional[str] = None,
+        days: int = 30,
+    ) -> List[Dict[str, Any]]:
+        """Получить статистику кликов по часам дня."""
+        return await MenuLayoutStatsService.get_clicks_by_hour(db, button_id, days)
+
+    @classmethod
+    async def get_clicks_by_weekday(
+        cls,
+        db: AsyncSession,
+        button_id: Optional[str] = None,
+        days: int = 30,
+    ) -> List[Dict[str, Any]]:
+        """Получить статистику кликов по дням недели."""
+        return await MenuLayoutStatsService.get_clicks_by_weekday(db, button_id, days)
+
+    @classmethod
+    async def get_top_users(
+        cls,
+        db: AsyncSession,
+        button_id: Optional[str] = None,
+        limit: int = 10,
+        days: int = 30,
+    ) -> List[Dict[str, Any]]:
+        """Получить топ пользователей по количеству кликов."""
+        return await MenuLayoutStatsService.get_top_users(db, button_id, limit, days)
+
+    @classmethod
+    async def get_period_comparison(
+        cls,
+        db: AsyncSession,
+        button_id: Optional[str] = None,
+        current_days: int = 7,
+        previous_days: int = 7,
+    ) -> Dict[str, Any]:
+        """Сравнить статистику текущего и предыдущего периода."""
+        return await MenuLayoutStatsService.get_period_comparison(
+            db, button_id, current_days, previous_days
+        )
+
+    @classmethod
+    async def get_user_click_sequences(
+        cls,
+        db: AsyncSession,
+        user_id: int,
+        limit: int = 50,
+    ) -> List[Dict[str, Any]]:
+        """Получить последовательности кликов пользователя."""
+        return await MenuLayoutStatsService.get_click_sequences(db, user_id, limit)
