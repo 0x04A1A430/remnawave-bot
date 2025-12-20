@@ -304,13 +304,21 @@ class MenuLayoutStatsService:
         )
 
         weekday_names = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"]
+        
+        # Создаем словарь для быстрого доступа по weekday
+        stats_dict = {
+            int(row.weekday): row.count
+            for row in result.all()
+        }
+        
+        # Возвращаем все дни недели, даже если count = 0
         return [
             {
-                "weekday": int(row.weekday),
-                "weekday_name": weekday_names[int(row.weekday)],
-                "count": row.count
+                "weekday": weekday,
+                "weekday_name": weekday_names[weekday],
+                "count": stats_dict.get(weekday, 0)
             }
-            for row in result.all()
+            for weekday in range(7)
         ]
 
     @classmethod
