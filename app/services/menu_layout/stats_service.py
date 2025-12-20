@@ -264,9 +264,16 @@ class MenuLayoutStatsService:
             .order_by(func.extract('hour', ButtonClickLog.clicked_at))
         )
 
-        return [
-            {"hour": int(row.hour), "count": row.count}
+        # Создаем словарь для быстрого доступа по часу
+        stats_dict = {
+            int(row.hour): row.count
             for row in result.all()
+        }
+        
+        # Возвращаем все 24 часа, даже если count = 0
+        return [
+            {"hour": hour, "count": stats_dict.get(hour, 0)}
+            for hour in range(24)
         ]
 
     @classmethod
