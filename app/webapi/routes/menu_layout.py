@@ -844,10 +844,16 @@ async def get_stats_by_button_type(
 ) -> ButtonTypeStatsResponse:
     """Получить статистику кликов по типам кнопок (builtin, callback, url, mini_app)."""
     try:
+        # Отладка: проверяем сколько записей в таблице
+        from sqlalchemy import text
+        count_result = await db.execute(text("SELECT COUNT(*) FROM button_click_logs"))
+        total_in_table = count_result.scalar()
+        logger.info(f"📊 DEBUG: Всего записей в button_click_logs: {total_in_table}")
+
         stats = await MenuLayoutService.get_stats_by_button_type(db, days)
         total_clicks = sum(s["clicks_total"] for s in stats)
-        
-        logger.debug(f"Stats by type: {len(stats)} types, total_clicks={total_clicks}")
+
+        logger.info(f"📊 Stats by type: {len(stats)} types, total_clicks={total_clicks}")
         
         return ButtonTypeStatsResponse(
             items=[
