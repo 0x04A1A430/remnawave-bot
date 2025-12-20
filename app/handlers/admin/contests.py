@@ -683,7 +683,8 @@ async def show_detailed_stats(
     from app.services.referral_contest_service import referral_contest_service
     stats = await referral_contest_service.get_detailed_contest_stats(db, contest_id)
 
-    lines = [
+    # Общее сообщение с основной статистикой
+    general_lines = [
         "📈 <b>Детальная статистика конкурса</b>",
         f"🏆 {contest.title}",
         "",
@@ -692,21 +693,72 @@ async def show_detailed_stats(
         f"💰 Оплатили подписок: <b>{stats['total_paid_amount'] // 100} руб.</b>",
         f"❌ Не оплатили: <b>{stats['total_unpaid']}</b>",
         "",
-        "📊 По участникам:",
+        "📊 Детали по участникам ниже:",
     ]
 
-    for p in stats['participants']:
-        lines.append(
-            f"• {p['full_name']}: приглашено {p['total_referrals']}, оплатили {p['paid_referrals']}, не оплатили {p['unpaid_referrals']}, сумма {p['total_paid_amount'] // 100} руб."
-        )
-
     await callback.message.edit_text(
-        "\n".join(lines),
+        "\n".join(general_lines),
         reply_markup=get_referral_contest_manage_keyboard(
             contest_id, is_active=contest.is_active, language=db_user.language
         ),
     )
+
+    # Пагинация участников
+    if stats['participants']:
+        await show_detailed_stats_page(callback, db_user, db, contest_id=contest_id, page=1, stats=stats)
+    else:
+        await callback.message.reply_text("📊 Нет участников с рефералами.")
+
     await callback.answer()
+
+
+@admin_required
+@error_handler
+async def show_detailed_stats_page(
+    callback: types.CallbackQuery,
+    db_user,
+    db: AsyncSession,
+    contest_id: int = None,
+    page: int = 1,
+    stats: dict = None,
+):
+    if contest_id is None or stats is None:
+        # Парсим из callback.data
+        parts = callback.data.split("_")
+        contest_id = int(parts[-2])
+        page = int(parts[-1])
+
+        # Получаем stats если не переданы
+        from app.services.referral_contest_service import referral_contest_service
+        stats = await referral_contest_service.get_detailed_contest_stats(db, contest_id)
+
+    participants = stats['participants']
+    total_participants = len(participants)
+    PAGE_SIZE = 10
+    total_pages = math.ceil(total_participants / PAGE_SIZE)
+
+    page = max(1, min(page, total_pages))
+    offset = (page - 1) * PAGE_SIZE
+    page_participants = participants[offset:offset + PAGE_SIZE]
+
+    lines = [f"📊 По участникам (страница {page}/{total_pages}):"]
+    for p in page_participants:
+        lines.append(
+            f"• {p['full_name']}: приглашено {p['total_referrals']}, оплатили {p['paid_referrals']}, не оплатили {p['unpaid_referrals']}, сумма {p['total_paid_amount'] // 100} руб."
+        )
+
+    pagination = get_admin_pagination_keyboard(
+        page,
+        total_pages,
+        f"admin_contest_detailed_stats_page_{contest_id}",
+        back_callback=f"admin_contest_view_{contest_id}",
+        language=db_user.language,
+    )
+
+    await callback.message.reply_text(
+        "\n".join(lines),
+        reply_markup=pagination,
+    )
 
 
 def register_handlers(dp: Dispatcher):
@@ -720,6 +772,7 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(delete_contest, F.data.startswith("admin_contest_delete_"))
     dp.callback_query.register(show_leaderboard, F.data.startswith("admin_contest_leaderboard_"))
     dp.callback_query.register(show_detailed_stats, F.data.startswith("admin_contest_detailed_stats_"))
+    dp.callback_query.register(show_detailed_stats_page, F.data.startswith("admin_contest_detailed_stats_page_"))
     dp.callback_query.register(start_contest_creation, F.data == "admin_contests_create")
     dp.callback_query.register(select_contest_mode, F.data.in_(["admin_contest_mode_paid", "admin_contest_mode_registered"]))
 

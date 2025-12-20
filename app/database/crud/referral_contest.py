@@ -248,6 +248,16 @@ async def get_contest_events_count(
     return int(result.scalar_one())
 
 
+async def get_contest_events(
+    db: AsyncSession,
+    contest_id: int,
+) -> List[ReferralContestEvent]:
+    result = await db.execute(
+        select(ReferralContestEvent).where(ReferralContestEvent.contest_id == contest_id)
+    )
+    return list(result.scalars().all())
+
+
 async def mark_daily_summary_sent(
     db: AsyncSession,
     contest: ReferralContest,
