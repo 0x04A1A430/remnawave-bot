@@ -771,6 +771,9 @@ async def get_menu_click_stats(
             ButtonClickStats(
                 button_id=s["button_id"],
                 clicks_total=s["clicks_total"],
+                clicks_today=s.get("clicks_today", 0),
+                clicks_week=s.get("clicks_week", 0),
+                clicks_month=s.get("clicks_month", 0),
                 unique_users=s["unique_users"],
                 last_click_at=s["last_click_at"],
             )

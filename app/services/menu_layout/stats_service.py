@@ -148,16 +148,34 @@ class MenuLayoutStatsService:
         days: int = 30,
     ) -> List[Dict[str, Any]]:
         """Получить статистику по всем кнопкам."""
-        start_date = datetime.now() - timedelta(days=days)
+        now = datetime.now()
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        week_ago = now - timedelta(days=7)
+        month_ago = now - timedelta(days=days)
 
+        # Для производительности используем один запрос с подзапросами через CASE
         result = await db.execute(
             select(
                 ButtonClickLog.button_id,
+                # Общее количество кликов (все клики без фильтра по датам)
                 func.count(ButtonClickLog.id).label("clicks_total"),
+                # Уникальные пользователи (все время)
                 func.count(func.distinct(ButtonClickLog.user_id)).label("unique_users"),
-                func.max(ButtonClickLog.clicked_at).label("last_click_at")
+                # Последний клик (все время)
+                func.max(ButtonClickLog.clicked_at).label("last_click_at"),
+                # Подсчет кликов за сегодня
+                func.sum(
+                    case((ButtonClickLog.clicked_at >= today_start, 1), else_=0)
+                ).label("clicks_today"),
+                # Подсчет кликов за неделю
+                func.sum(
+                    case((ButtonClickLog.clicked_at >= week_ago, 1), else_=0)
+                ).label("clicks_week"),
+                # Подсчет кликов за месяц
+                func.sum(
+                    case((ButtonClickLog.clicked_at >= month_ago, 1), else_=0)
+                ).label("clicks_month"),
             )
-            .where(ButtonClickLog.clicked_at >= start_date)
             .group_by(ButtonClickLog.button_id)
             .order_by(desc(func.count(ButtonClickLog.id)))
         )
@@ -166,6 +184,9 @@ class MenuLayoutStatsService:
             {
                 "button_id": row.button_id,
                 "clicks_total": row.clicks_total,
+                "clicks_today": row.clicks_today or 0,
+                "clicks_week": row.clicks_week or 0,
+                "clicks_month": row.clicks_month or 0,
                 "unique_users": row.unique_users,
                 "last_click_at": row.last_click_at,
             }
