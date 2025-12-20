@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Response, Security, status
@@ -12,6 +13,8 @@ from app.services.menu_layout_service import (
     MenuContext,
     MenuLayoutService,
 )
+
+logger = logging.getLogger(__name__)
 
 from ..dependencies import get_db_session, require_api_token
 from ..schemas.menu_layout import (
@@ -837,20 +840,26 @@ async def get_stats_by_button_type(
     db: AsyncSession = Depends(get_db_session),
 ) -> ButtonTypeStatsResponse:
     """Получить статистику кликов по типам кнопок (builtin, callback, url, mini_app)."""
-    stats = await MenuLayoutService.get_stats_by_button_type(db, days)
-    total_clicks = sum(s["clicks_total"] for s in stats)
-    
-    return ButtonTypeStatsResponse(
-        items=[
-            ButtonTypeStats(
-                button_type=s["button_type"],
-                clicks_total=s["clicks_total"],
-                unique_users=s["unique_users"],
-            )
-            for s in stats
-        ],
-        total_clicks=total_clicks,
-    )
+    try:
+        stats = await MenuLayoutService.get_stats_by_button_type(db, days)
+        total_clicks = sum(s["clicks_total"] for s in stats)
+        
+        logger.debug(f"Stats by type: {len(stats)} types, total_clicks={total_clicks}")
+        
+        return ButtonTypeStatsResponse(
+            items=[
+                ButtonTypeStats(
+                    button_type=s["button_type"],
+                    clicks_total=s["clicks_total"],
+                    unique_users=s["unique_users"],
+                )
+                for s in stats
+            ],
+            total_clicks=total_clicks,
+        )
+    except Exception as e:
+        logger.error(f"Error getting stats by type: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
 @router.get("/stats/by-hour", response_model=HourlyStatsResponse)
@@ -904,20 +913,26 @@ async def get_top_users(
     db: AsyncSession = Depends(get_db_session),
 ) -> TopUsersResponse:
     """Получить топ пользователей по количеству кликов."""
-    stats = await MenuLayoutService.get_top_users(db, button_id, limit, days)
-    
-    return TopUsersResponse(
-        items=[
-            TopUserStats(
-                user_id=s["user_id"],
-                clicks_count=s["clicks_count"],
-                last_click_at=s["last_click_at"],
-            )
-            for s in stats
-        ],
-        button_id=button_id,
-        limit=limit,
-    )
+    try:
+        stats = await MenuLayoutService.get_top_users(db, button_id, limit, days)
+        
+        logger.debug(f"Top users: {len(stats)} users, button_id={button_id}, limit={limit}, days={days}")
+        
+        return TopUsersResponse(
+            items=[
+                TopUserStats(
+                    user_id=s["user_id"],
+                    clicks_count=s["clicks_count"],
+                    last_click_at=s["last_click_at"],
+                )
+                for s in stats
+            ],
+            button_id=button_id,
+            limit=limit,
+        )
+    except Exception as e:
+        logger.error(f"Error getting top users: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
 @router.get("/stats/compare", response_model=PeriodComparisonResponse)
@@ -929,16 +944,22 @@ async def get_period_comparison(
     db: AsyncSession = Depends(get_db_session),
 ) -> PeriodComparisonResponse:
     """Сравнить статистику текущего и предыдущего периода."""
-    comparison = await MenuLayoutService.get_period_comparison(
-        db, button_id, current_days, previous_days
-    )
-    
-    return PeriodComparisonResponse(
-        current_period=comparison["current_period"],
-        previous_period=comparison["previous_period"],
-        change=comparison["change"],
-        button_id=button_id,
-    )
+    try:
+        comparison = await MenuLayoutService.get_period_comparison(
+            db, button_id, current_days, previous_days
+        )
+        
+        logger.debug(f"Period comparison: button_id={button_id}, current_days={current_days}, previous_days={previous_days}, trend={comparison.get('change', {}).get('trend')}")
+        
+        return PeriodComparisonResponse(
+            current_period=comparison["current_period"],
+            previous_period=comparison["previous_period"],
+            change=comparison["change"],
+            button_id=button_id,
+        )
+    except Exception as e:
+        logger.error(f"Error getting period comparison: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
 @router.get("/stats/users/{user_id}/sequences", response_model=UserClickSequencesResponse)
@@ -949,17 +970,23 @@ async def get_user_click_sequences(
     db: AsyncSession = Depends(get_db_session),
 ) -> UserClickSequencesResponse:
     """Получить последовательности кликов пользователя."""
-    sequences = await MenuLayoutService.get_user_click_sequences(db, user_id, limit)
-    
-    return UserClickSequencesResponse(
-        user_id=user_id,
-        items=[
-            UserClickSequence(
-                button_id=s["button_id"],
-                button_text=s["button_text"],
-                clicked_at=s["clicked_at"],
-            )
-            for s in sequences
-        ],
-        total=len(sequences),
-    )
+    try:
+        sequences = await MenuLayoutService.get_user_click_sequences(db, user_id, limit)
+        
+        logger.debug(f"User sequences: user_id={user_id}, limit={limit}, found={len(sequences)} sequences")
+        
+        return UserClickSequencesResponse(
+            user_id=user_id,
+            items=[
+                UserClickSequence(
+                    button_id=s["button_id"],
+                    button_text=s["button_text"],
+                    clicked_at=s["clicked_at"],
+                )
+                for s in sequences
+            ],
+            total=len(sequences),
+        )
+    except Exception as e:
+        logger.error(f"Error getting user sequences: user_id={user_id}, error={e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")

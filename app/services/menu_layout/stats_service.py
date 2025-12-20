@@ -407,7 +407,7 @@ class MenuLayoutStatsService:
                 ButtonClickLog.clicked_at,
             )
             .where(ButtonClickLog.user_id == user_id)
-            .order_by(ButtonClickLog.clicked_at)
+            .order_by(desc(ButtonClickLog.clicked_at))
             .limit(limit)
         )
 
