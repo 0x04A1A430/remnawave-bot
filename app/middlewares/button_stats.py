@@ -21,33 +21,35 @@ class ButtonStatsMiddleware(BaseMiddleware):
         data: Dict[str, Any]
     ) -> Any:
         """Перехватывает CallbackQuery и логирует клики по кнопкам."""
-        
+
         # Обрабатываем только CallbackQuery
         if not isinstance(event, CallbackQuery):
             return await handler(event, data)
-        
+
         # Пропускаем, если статистика отключена
         if not settings.MENU_LAYOUT_ENABLED:
             return await handler(event, data)
-        
+
         # Логируем клик асинхронно, не блокируя обработку
         try:
             # Получаем callback_data
             callback_data = event.data
             if not callback_data:
                 return await handler(event, data)
-            
+
             # Получаем user_id
             user_id = event.from_user.id if event.from_user else None
-            
+
             # Определяем тип кнопки по callback_data
             button_type = self._determine_button_type(callback_data)
-            
+
             # Получаем текст кнопки, если возможно
             button_text = None
             if event.message and hasattr(event.message, 'reply_markup'):
                 button_text = self._extract_button_text(event.message.reply_markup, callback_data)
-            
+
+            logger.info(f"📊 ButtonStats: клик user={user_id}, button={callback_data[:50]}, type={button_type}")
+
             # Логируем в фоне, не блокируя обработку
             # Используем asyncio.create_task для фоновой задачи
             import asyncio
@@ -62,7 +64,7 @@ class ButtonStatsMiddleware(BaseMiddleware):
             )
         except Exception as e:
             # Не прерываем обработку при ошибке логирования
-            logger.debug(f"Ошибка логирования клика по кнопке: {e}")
+            logger.error(f"Ошибка логирования клика по кнопке: {e}", exc_info=True)
         
         # Продолжаем обработку
         return await handler(event, data)
@@ -104,7 +106,7 @@ class ButtonStatsMiddleware(BaseMiddleware):
             async with AsyncSessionLocal() as db:
                 try:
                     from app.services.menu_layout_service import MenuLayoutService
-                    
+
                     await MenuLayoutService.log_button_click(
                         db,
                         button_id=button_id,
@@ -113,8 +115,9 @@ class ButtonStatsMiddleware(BaseMiddleware):
                         button_type=button_type,
                         button_text=button_text
                     )
+                    logger.info(f"✅ ButtonStats: записано в БД button={button_id[:30]}, user={user_id}")
                 except Exception as e:
-                    logger.error(f"Ошибка логирования клика по кнопке {button_id}: {e}")
+                    logger.error(f"❌ Ошибка записи клика в БД {button_id}: {e}", exc_info=True)
         except Exception as e:
-            logger.error(f"Ошибка создания сессии БД для логирования клика: {e}")
+            logger.error(f"❌ Ошибка создания сессии БД для логирования клика: {e}", exc_info=True)
 
