@@ -277,7 +277,7 @@ class ReferralContestService:
             f"Название: <b>{contest.title}</b>",
             f"Статус: {'финал' if is_final else 'дневная сводка'}",
             f"Временная зона: <code>{tz.key}</code>",
-            f"Всего участников: <b>{len(leaderboard)}</b>",
+            f"Всего рефералов: <b>{total_events}</b>",
             "",
             "Топ участников:",
         ]
@@ -389,6 +389,61 @@ class ReferralContestService:
                 lines.append(f"До окончания: ~{hours_left} ч.")
 
         return "\n".join(lines)
+
+    async def get_detailed_contest_stats(self, db: AsyncSession, contest_id: int) -> dict:
+        from app.database.crud.referral_contest import get_contest_events, get_contest_leaderboard
+        from app.database.crud.user import get_user_by_id
+
+        leaderboard = list(await get_contest_leaderboard(db, contest_id))
+        total_participants = len(leaderboard)
+
+        # Get all events for the contest
+        events = await get_contest_events(db, contest_id)
+
+        # Total invited: unique referral_ids from events
+        invited_set = set(event.referral_id for event in events)
+        total_invited = len(invited_set)
+
+        # Paid events: events with event_type == 'subscription_purchase'
+        paid_events = [e for e in events if e.event_type == 'subscription_purchase']
+        total_paid_amount = sum(e.amount_kopeks for e in paid_events)
+
+        # Paid referrals: unique referral_ids from paid events
+        paid_referrals_set = set(e.referral_id for e in paid_events)
+        total_paid_referrals = len(paid_referrals_set)
+
+        total_unpaid = total_invited - total_paid_referrals
+
+        # Per participant stats
+        participants_stats = []
+        for user, score, _ in leaderboard:
+            referrer_id = user.id
+            # Total referrals for this referrer
+            referrer_events = [e for e in events if e.referrer_id == referrer_id]
+            total_referrals = len(set(e.referral_id for e in referrer_events))
+
+            # Paid referrals for this referrer
+            paid_referrer_events = [e for e in referrer_events if e.event_type == 'subscription_purchase']
+            paid_referrals = len(set(e.referral_id for e in paid_referrer_events))
+            unpaid_referrals = total_referrals - paid_referrals
+            total_paid_amount_for_referrer = sum(e.amount_kopeks for e in paid_referrer_events)
+
+            participants_stats.append({
+                'referrer_id': referrer_id,
+                'full_name': user.full_name,
+                'total_referrals': total_referrals,
+                'paid_referrals': paid_referrals,
+                'unpaid_referrals': unpaid_referrals,
+                'total_paid_amount': total_paid_amount_for_referrer,
+            })
+
+        return {
+            'total_participants': total_participants,
+            'total_invited': total_invited,
+            'total_paid_amount': total_paid_amount,
+            'total_unpaid': total_unpaid,
+            'participants': participants_stats,
+        }
 
     def _get_timezone(self, contest: ReferralContest) -> ZoneInfo:
         tz_name = contest.timezone or settings.TIMEZONE

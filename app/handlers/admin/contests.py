@@ -659,6 +659,56 @@ async def finalize_contest_creation(message: types.Message, state: FSMContext, d
     )
 
 
+@admin_required
+@error_handler
+async def show_detailed_stats(
+    callback: types.CallbackQuery,
+    db_user,
+    db: AsyncSession,
+):
+    if not settings.is_contests_enabled():
+        await callback.answer(
+            get_texts(db_user.language).t("ADMIN_CONTESTS_DISABLED", "Конкурсы отключены."),
+            show_alert=True,
+        )
+        return
+
+    contest_id = int(callback.data.split("_")[-1])
+    contest = await get_referral_contest(db, contest_id)
+
+    if not contest:
+        await callback.answer("Конкурс не найден.", show_alert=True)
+        return
+
+    from app.services.referral_contest_service import referral_contest_service
+    stats = await referral_contest_service.get_detailed_contest_stats(db, contest_id)
+
+    lines = [
+        "📈 <b>Детальная статистика конкурса</b>",
+        f"🏆 {contest.title}",
+        "",
+        f"👥 Участников: <b>{stats['total_participants']}</b>",
+        f"📨 Приглашено рефералов: <b>{stats['total_invited']}</b>",
+        f"💰 Оплатили подписок: <b>{stats['total_paid_amount'] // 100} руб.</b>",
+        f"❌ Не оплатили: <b>{stats['total_unpaid']}</b>",
+        "",
+        "📊 По участникам:",
+    ]
+
+    for p in stats['participants']:
+        lines.append(
+            f"• {p['full_name']}: приглашено {p['total_referrals']}, оплатили {p['paid_referrals']}, не оплатили {p['unpaid_referrals']}, сумма {p['total_paid_amount'] // 100} руб."
+        )
+
+    await callback.message.edit_text(
+        "\n".join(lines),
+        reply_markup=get_referral_contest_manage_keyboard(
+            contest_id, is_active=contest.is_active, language=db_user.language
+        ),
+    )
+    await callback.answer()
+
+
 def register_handlers(dp: Dispatcher):
     dp.callback_query.register(show_contests_menu, F.data == "admin_contests")
     dp.callback_query.register(show_referral_contests_menu, F.data == "admin_contests_referral")
@@ -669,6 +719,7 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(prompt_edit_summary_times, F.data.startswith("admin_contest_edit_times_"))
     dp.callback_query.register(delete_contest, F.data.startswith("admin_contest_delete_"))
     dp.callback_query.register(show_leaderboard, F.data.startswith("admin_contest_leaderboard_"))
+    dp.callback_query.register(show_detailed_stats, F.data.startswith("admin_contest_detailed_stats_"))
     dp.callback_query.register(start_contest_creation, F.data == "admin_contests_create")
     dp.callback_query.register(select_contest_mode, F.data.in_(["admin_contest_mode_paid", "admin_contest_mode_registered"]))
 
