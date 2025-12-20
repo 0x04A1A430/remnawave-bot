@@ -436,7 +436,7 @@ async def show_leaderboard(
         texts.t("ADMIN_CONTEST_LEADERBOARD_TITLE", "📊 Топ участников:"),
     ]
     for idx, (user, score, _) in enumerate(leaderboard, start=1):
-        lines.append(f"{idx}. {user.full_name} — {score}")
+        lines.append(f"{idx}. {user.full_name} ({user.telegram_id}) — {score}")
 
     await callback.message.edit_text(
         "\n".join(lines),
@@ -685,15 +685,13 @@ async def show_detailed_stats(
 
     # Общее сообщение с основной статистикой
     general_lines = [
-        "📈 <b>Детальная статистика конкурса</b>",
+        "📈 <b>Статистика конкурса</b>",
         f"🏆 {contest.title}",
         "",
         f"👥 Участников: <b>{stats['total_participants']}</b>",
         f"📨 Приглашено рефералов: <b>{stats['total_invited']}</b>",
         f"💰 Оплатили подписок: <b>{stats['total_paid_amount'] // 100} руб.</b>",
         f"❌ Не оплатили: <b>{stats['total_unpaid']}</b>",
-        "",
-        "📊 Детали по участникам ниже:",
     ]
 
     await callback.message.edit_text(
@@ -702,12 +700,6 @@ async def show_detailed_stats(
             contest_id, is_active=contest.is_active, language=db_user.language
         ),
     )
-
-    # Пагинация участников
-    if stats['participants']:
-        await show_detailed_stats_page(callback, db_user, db, contest_id=contest_id, page=1, stats=stats)
-    else:
-        await callback.message.reply_text("📊 Нет участников с рефералами.")
 
     await callback.answer()
 
@@ -723,10 +715,10 @@ async def show_detailed_stats_page(
     stats: dict = None,
 ):
     if contest_id is None or stats is None:
-        # Парсим из callback.data
+        # Парсим из callback.data: admin_contest_detailed_stats_page_{contest_id}_page_{page}
         parts = callback.data.split("_")
-        contest_id = int(parts[-2])
-        page = int(parts[-1])
+        contest_id = int(parts[5])  # contest_id после page
+        page = int(parts[7])  # page после второго page
 
         # Получаем stats если не переданы
         from app.services.referral_contest_service import referral_contest_service
@@ -743,9 +735,14 @@ async def show_detailed_stats_page(
 
     lines = [f"📊 По участникам (страница {page}/{total_pages}):"]
     for p in page_participants:
-        lines.append(
-            f"• {p['full_name']}: приглашено {p['total_referrals']}, оплатили {p['paid_referrals']}, не оплатили {p['unpaid_referrals']}, сумма {p['total_paid_amount'] // 100} руб."
-        )
+        lines.extend([
+            f"• <b>{p['full_name']}</b>",
+            f"  📨 Приглашено: {p['total_referrals']}",
+            f"  💰 Оплатили: {p['paid_referrals']}",
+            f"  ❌ Не оплатили: {p['unpaid_referrals']}",
+            f"  💵 Сумма: {p['total_paid_amount'] // 100} руб.",
+            ""  # Пустая строка для разделения
+        ])
 
     pagination = get_admin_pagination_keyboard(
         page,
@@ -755,10 +752,12 @@ async def show_detailed_stats_page(
         language=db_user.language,
     )
 
-    await callback.message.reply_text(
+    await callback.message.edit_text(
         "\n".join(lines),
         reply_markup=pagination,
     )
+
+    await callback.answer()
 
 
 def register_handlers(dp: Dispatcher):

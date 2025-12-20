@@ -264,10 +264,14 @@ async def _continue_registration_after_language(
         return
 
     rules_text = await get_rules(language)
-    await target_message.answer(
-        rules_text,
-        reply_markup=get_rules_keyboard(language)
-    )
+    try:
+        await target_message.answer(
+            rules_text,
+            reply_markup=get_rules_keyboard(language)
+        )
+    except TelegramForbiddenError:
+        logger.warning(f"⚠️ Пользователь {callback.from_user.id if callback else message.from_user.id} заблокировал бота, пропускаем отправку правил")
+        return
     await state.set_state(RegistrationStates.waiting_for_rules_accept)
     logger.info("📋 LANGUAGE: Правила отправлены после выбора языка")
 
