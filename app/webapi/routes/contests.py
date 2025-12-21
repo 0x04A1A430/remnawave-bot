@@ -264,7 +264,7 @@ async def update_daily_template(
     if not tpl:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Template not found")
 
-    update_fields = payload.dict(exclude_none=True)
+    update_fields = payload.model_dump(exclude_none=True)
     if not update_fields:
         return _serialize_template(tpl)
 
@@ -551,7 +551,7 @@ async def get_referral(
     leaderboard = [_serialize_leaderboard_item(row) for row in leaderboard_rows]
 
     return ReferralContestDetailResponse(
-        **_serialize_referral_contest(contest).dict(),
+        **_serialize_referral_contest(contest).model_dump(),
         total_events=int(total_events),
         leaderboard=leaderboard,
     )
@@ -572,7 +572,7 @@ async def update_referral(
     if not contest:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Contest not found")
 
-    fields = payload.dict(exclude_none=True)
+    fields = payload.model_dump(exclude_none=True)
 
     if "start_at" in fields:
         fields["start_at"] = _to_utc_naive(fields["start_at"], fields.get("timezone") or contest.timezone)
