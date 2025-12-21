@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Security, status
@@ -14,6 +15,7 @@ from app.database.crud.user import (
     update_user,
 )
 from app.database.models import User
+from app.services.partner_stats_service import PartnerStatsService
 from app.utils.user_utils import (
     get_detailed_referral_list,
     get_effective_referral_commission_percent,
@@ -21,13 +23,33 @@ from app.utils.user_utils import (
 
 from ..dependencies import get_db_session, require_api_token
 from ..schemas.partners import (
+    ChangeData,
+    DailyStats,
+    DailyStatsResponse,
+    EarningsByPeriod,
+    GlobalPartnerStats,
+    GlobalPartnerSummary,
+    NewReferralsByPeriod,
+    PartnerReferralCommissionUpdate,
     PartnerReferralItem,
     PartnerReferralList,
-    PartnerReferralCommissionUpdate,
     PartnerReferrerDetail,
     PartnerReferrerItem,
     PartnerReferrerListResponse,
+    PayoutsByPeriod,
+    PeriodChange,
+    PeriodComparisonResponse,
+    PeriodData,
+    ReferralsCountByPeriod,
+    ReferrerDetailedStats,
+    ReferrerSummary,
+    TopReferralItem,
+    TopReferralsResponse,
+    TopReferrerItem,
+    TopReferrersResponse,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -197,3 +219,158 @@ async def update_referrer_commission(
 
     stats = await get_user_referral_stats(db, user.id)
     return _serialize_referrer(user, stats)
+
+
+# ============================================================================
+# РАСШИРЕННАЯ СТАТИСТИКА ПАРТНЁРОВ
+# ============================================================================
+
+
+@router.get("/stats", response_model=GlobalPartnerStats)
+async def get_global_partner_stats(
+    days: int = Query(30, ge=1, le=365),
+    _: Any = Security(require_api_token),
+    db: AsyncSession = Depends(get_db_session),
+) -> GlobalPartnerStats:
+    """Глобальная статистика партнёрской программы."""
+    data = await PartnerStatsService.get_global_partner_stats(db, days)
+
+    return GlobalPartnerStats(
+        summary=GlobalPartnerSummary(**data["summary"]),
+        payouts=PayoutsByPeriod(**data["payouts"]),
+        new_referrals=NewReferralsByPeriod(**data["new_referrals"]),
+    )
+
+
+@router.get("/stats/daily", response_model=DailyStatsResponse)
+async def get_global_daily_stats(
+    days: int = Query(30, ge=1, le=365),
+    _: Any = Security(require_api_token),
+    db: AsyncSession = Depends(get_db_session),
+) -> DailyStatsResponse:
+    """Глобальная статистика по дням."""
+    data = await PartnerStatsService.get_global_daily_stats(db, days)
+
+    return DailyStatsResponse(
+        items=[DailyStats(**item) for item in data],
+        days=days,
+        user_id=None,
+    )
+
+
+@router.get("/stats/top-referrers", response_model=TopReferrersResponse)
+async def get_top_referrers(
+    limit: int = Query(10, ge=1, le=100),
+    days: Optional[int] = Query(None, ge=1, le=365),
+    _: Any = Security(require_api_token),
+    db: AsyncSession = Depends(get_db_session),
+) -> TopReferrersResponse:
+    """Топ рефереров по заработку."""
+    data = await PartnerStatsService.get_top_referrers(db, limit, days)
+
+    return TopReferrersResponse(
+        items=[TopReferrerItem(**item) for item in data],
+        days=days,
+    )
+
+
+@router.get("/referrers/{user_id}/stats", response_model=ReferrerDetailedStats)
+async def get_referrer_detailed_stats(
+    user_id: int,
+    _: Any = Security(require_api_token),
+    db: AsyncSession = Depends(get_db_session),
+) -> ReferrerDetailedStats:
+    """Детальная статистика реферера."""
+    user = await get_user_by_telegram_id(db, user_id)
+    if not user:
+        user = await get_user_by_id(db, user_id)
+
+    if not user:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+
+    data = await PartnerStatsService.get_referrer_detailed_stats(db, user.id)
+
+    return ReferrerDetailedStats(
+        user_id=data["user_id"],
+        summary=ReferrerSummary(**data["summary"]),
+        earnings=EarningsByPeriod(**data["earnings"]),
+        referrals_count=ReferralsCountByPeriod(**data["referrals_count"]),
+    )
+
+
+@router.get("/referrers/{user_id}/stats/daily", response_model=DailyStatsResponse)
+async def get_referrer_daily_stats(
+    user_id: int,
+    days: int = Query(30, ge=1, le=365),
+    _: Any = Security(require_api_token),
+    db: AsyncSession = Depends(get_db_session),
+) -> DailyStatsResponse:
+    """Статистика реферера по дням."""
+    user = await get_user_by_telegram_id(db, user_id)
+    if not user:
+        user = await get_user_by_id(db, user_id)
+
+    if not user:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+
+    data = await PartnerStatsService.get_referrer_daily_stats(db, user.id, days)
+
+    return DailyStatsResponse(
+        items=[DailyStats(**item) for item in data],
+        days=days,
+        user_id=user.id,
+    )
+
+
+@router.get("/referrers/{user_id}/stats/top-referrals", response_model=TopReferralsResponse)
+async def get_referrer_top_referrals(
+    user_id: int,
+    limit: int = Query(10, ge=1, le=100),
+    _: Any = Security(require_api_token),
+    db: AsyncSession = Depends(get_db_session),
+) -> TopReferralsResponse:
+    """Топ рефералов реферера по принесённому доходу."""
+    user = await get_user_by_telegram_id(db, user_id)
+    if not user:
+        user = await get_user_by_id(db, user_id)
+
+    if not user:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+
+    data = await PartnerStatsService.get_referrer_top_referrals(db, user.id, limit)
+
+    return TopReferralsResponse(
+        items=[TopReferralItem(**item) for item in data],
+        user_id=user.id,
+    )
+
+
+@router.get("/referrers/{user_id}/stats/compare", response_model=PeriodComparisonResponse)
+async def get_referrer_period_comparison(
+    user_id: int,
+    current_days: int = Query(7, ge=1, le=365),
+    previous_days: int = Query(7, ge=1, le=365),
+    _: Any = Security(require_api_token),
+    db: AsyncSession = Depends(get_db_session),
+) -> PeriodComparisonResponse:
+    """Сравнение периодов для реферера."""
+    user = await get_user_by_telegram_id(db, user_id)
+    if not user:
+        user = await get_user_by_id(db, user_id)
+
+    if not user:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+
+    data = await PartnerStatsService.get_referrer_period_comparison(
+        db, user.id, current_days, previous_days
+    )
+
+    return PeriodComparisonResponse(
+        current_period=PeriodData(**data["current_period"]),
+        previous_period=PeriodData(**data["previous_period"]),
+        change=PeriodChange(
+            referrals=ChangeData(**data["change"]["referrals"]),
+            earnings=ChangeData(**data["change"]["earnings"]),
+        ),
+        user_id=user.id,
+    )
