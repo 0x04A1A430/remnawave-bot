@@ -5,14 +5,49 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import select, func, and_, desc, case
+from sqlalchemy import select, func, and_, desc, case, Integer
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database.models import ButtonClickLog
 
 
 class MenuLayoutStatsService:
     """Сервис для сбора и анализа статистики кликов по кнопкам."""
+
+    @classmethod
+    def _is_sqlite(cls) -> bool:
+        """Проверить, используется ли SQLite."""
+        return settings.is_sqlite()
+
+    @classmethod
+    def _get_hour_expr(cls, column):
+        """Получить выражение для извлечения часа (совместимо с SQLite и PostgreSQL)."""
+        if cls._is_sqlite():
+            # SQLite: strftime('%H', column) возвращает строку
+            return func.cast(func.strftime('%H', column), Integer)
+        else:
+            # PostgreSQL: EXTRACT(hour FROM column)
+            return func.extract('hour', column)
+
+    @classmethod
+    def _get_weekday_expr(cls, column):
+        """Получить выражение для дня недели (0=Пн, 6=Вс) совместимо с SQLite и PostgreSQL."""
+        if cls._is_sqlite():
+            # SQLite: strftime('%w', column) возвращает 0=воскресенье, 1-6=пн-сб
+            # Преобразуем: 0->6, 1->0, 2->1, ..., 6->5
+            dow = func.cast(func.strftime('%w', column), Integer)
+            return case(
+                (dow == 0, 6),
+                else_=dow - 1
+            )
+        else:
+            # PostgreSQL: EXTRACT(dow FROM column) возвращает 0=воскресенье, 1-6=пн-сб
+            dow = func.extract('dow', column)
+            return case(
+                (dow == 0, 6),
+                else_=dow - 1
+            )
 
     @classmethod
     async def log_button_click(
@@ -44,7 +79,7 @@ class MenuLayoutStatsService:
         days: int = 30,
     ) -> Dict[str, Any]:
         """Получить статистику кликов по конкретной кнопке."""
-        now = datetime.now()
+        now = datetime.utcnow()
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         week_ago = now - timedelta(days=7)
         month_ago = now - timedelta(days=days)
@@ -120,7 +155,7 @@ class MenuLayoutStatsService:
         days: int = 30,
     ) -> List[Dict[str, Any]]:
         """Получить статистику кликов по дням."""
-        start_date = datetime.now() - timedelta(days=days)
+        start_date = datetime.utcnow() - timedelta(days=days)
 
         # Группировка по дате
         result = await db.execute(
@@ -148,7 +183,7 @@ class MenuLayoutStatsService:
         days: int = 30,
     ) -> List[Dict[str, Any]]:
         """Получить статистику по всем кнопкам."""
-        now = datetime.now()
+        now = datetime.utcnow()
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         week_ago = now - timedelta(days=7)
         month_ago = now - timedelta(days=days)
@@ -200,7 +235,7 @@ class MenuLayoutStatsService:
         days: int = 30,
     ) -> int:
         """Получить общее количество кликов за период."""
-        start_date = datetime.now() - timedelta(days=days)
+        start_date = datetime.utcnow() - timedelta(days=days)
 
         result = await db.execute(
             select(func.count(ButtonClickLog.id))
@@ -215,7 +250,7 @@ class MenuLayoutStatsService:
         days: int = 30,
     ) -> List[Dict[str, Any]]:
         """Получить статистику кликов по типам кнопок."""
-        start_date = datetime.now() - timedelta(days=days)
+        start_date = datetime.utcnow() - timedelta(days=days)
 
         result = await db.execute(
             select(
@@ -248,10 +283,13 @@ class MenuLayoutStatsService:
         days: int = 30,
     ) -> List[Dict[str, Any]]:
         """Получить статистику кликов по часам дня."""
-        start_date = datetime.now() - timedelta(days=days)
+        start_date = datetime.utcnow() - timedelta(days=days)
+
+        # Используем helper-метод для совместимости с SQLite и PostgreSQL
+        hour_expr = cls._get_hour_expr(ButtonClickLog.clicked_at).label("hour")
 
         query = select(
-            func.extract('hour', ButtonClickLog.clicked_at).label("hour"),
+            hour_expr,
             func.count(ButtonClickLog.id).label("count")
         ).where(ButtonClickLog.clicked_at >= start_date)
 
@@ -260,8 +298,8 @@ class MenuLayoutStatsService:
 
         result = await db.execute(
             query
-            .group_by(func.extract('hour', ButtonClickLog.clicked_at))
-            .order_by(func.extract('hour', ButtonClickLog.clicked_at))
+            .group_by(hour_expr)
+            .order_by(hour_expr)
         )
 
         # Создаем словарь для быстрого доступа по часу
@@ -269,7 +307,7 @@ class MenuLayoutStatsService:
             int(row.hour): row.count
             for row in result.all()
         }
-        
+
         # Возвращаем все 24 часа, даже если count = 0
         return [
             {"hour": hour, "count": stats_dict.get(hour, 0)}
@@ -284,17 +322,14 @@ class MenuLayoutStatsService:
         days: int = 30,
     ) -> List[Dict[str, Any]]:
         """Получить статистику кликов по дням недели.
-        
-        PostgreSQL DOW возвращает 0=воскресенье, 1=понедельник, ..., 6=суббота
-        Преобразуем в 0=понедельник, 6=воскресенье для удобства.
-        """
-        start_date = datetime.now() - timedelta(days=days)
 
-        # Используем CASE для преобразования: 0 (воскресенье) -> 6, остальные -1
-        weekday_expr = case(
-            (func.extract('dow', ButtonClickLog.clicked_at) == 0, 6),
-            else_=func.extract('dow', ButtonClickLog.clicked_at) - 1
-        ).label("weekday")
+        Возвращает 0=понедельник, 6=воскресенье.
+        Поддерживает как PostgreSQL, так и SQLite.
+        """
+        start_date = datetime.utcnow() - timedelta(days=days)
+
+        # Используем helper-метод для совместимости с SQLite и PostgreSQL
+        weekday_expr = cls._get_weekday_expr(ButtonClickLog.clicked_at).label("weekday")
 
         query = select(
             weekday_expr,
@@ -337,7 +372,7 @@ class MenuLayoutStatsService:
         days: int = 30,
     ) -> List[Dict[str, Any]]:
         """Получить топ пользователей по количеству кликов."""
-        start_date = datetime.now() - timedelta(days=days)
+        start_date = datetime.utcnow() - timedelta(days=days)
 
         query = select(
             ButtonClickLog.user_id,
@@ -376,7 +411,7 @@ class MenuLayoutStatsService:
         previous_days: int = 7,
     ) -> Dict[str, Any]:
         """Сравнить статистику текущего и предыдущего периода."""
-        now = datetime.now()
+        now = datetime.utcnow()
         current_start = now - timedelta(days=current_days)
         previous_start = current_start - timedelta(days=previous_days)
         previous_end = current_start
