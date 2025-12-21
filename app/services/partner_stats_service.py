@@ -10,12 +10,9 @@ from sqlalchemy import and_, case, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import (
-    Payment,
     ReferralEarning,
     Subscription,
     SubscriptionStatus,
-    Transaction,
-    TransactionType,
     User,
 )
 
