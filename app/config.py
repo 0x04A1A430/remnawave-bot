@@ -186,6 +186,8 @@ class Settings(BaseSettings):
 
     AUTOPAY_WARNING_DAYS: str = "3,1"
 
+    ENABLE_AUTOPAY: bool = False
+
     DEFAULT_AUTOPAY_ENABLED: bool = False
     DEFAULT_AUTOPAY_DAYS_BEFORE: int = 3
     MIN_BALANCE_FOR_AUTOPAY_KOPEKS: int = 10000  

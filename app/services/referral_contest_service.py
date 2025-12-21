@@ -277,7 +277,7 @@ class ReferralContestService:
             f"Название: <b>{contest.title}</b>",
             f"Статус: {'финал' if is_final else 'дневная сводка'}",
             f"Временная зона: <code>{tz.key}</code>",
-            f"Всего участников: <b>{len(leaderboard)}</b>",
+            f"Всего рефералов: <b>{total_events}</b>",
             "",
             "Топ участников:",
         ]
@@ -285,7 +285,7 @@ class ReferralContestService:
         if leaderboard:
             for idx, (user, score, _) in enumerate(leaderboard[:5], start=1):
                 name = user.full_name
-                lines.append(f"{idx}. {name} — {score}")
+                lines.append(f"{idx}. {name} ({user.telegram_id}) — {score}")
         else:
             lines.append("Пока нет участников.")
 
@@ -389,6 +389,67 @@ class ReferralContestService:
                 lines.append(f"До окончания: ~{hours_left} ч.")
 
         return "\n".join(lines)
+
+    async def get_detailed_contest_stats(self, db: AsyncSession, contest_id: int) -> dict:
+        from app.database.crud.referral_contest import get_contest_events, get_contest_leaderboard, get_referral_contest
+        from app.database.crud.user import get_user_by_id
+        from app.database.models import User, Subscription
+        from sqlalchemy import select
+
+        contest = await get_referral_contest(db, contest_id)
+        if not contest:
+            return {
+                'total_participants': 0,
+                'total_invited': 0,
+                'total_paid_amount': 0,
+                'total_unpaid': 0,
+                'participants': [],
+            }
+
+        # Get leaderboard to get scores
+        leaderboard = await get_contest_leaderboard(db, contest_id)
+        if not leaderboard:
+            return {
+                'total_participants': 0,
+                'total_invited': 0,
+                'total_paid_amount': 0,
+                'total_unpaid': 0,
+                'participants': [],
+            }
+
+        # Create dict of referrer_id -> (score, amount)
+        scores = {user.id: (score, amount) for user, score, amount in leaderboard}
+
+        total_participants = len(scores)
+        total_invited = sum(score for score, _ in scores.values())
+        total_paid_amount = sum(amount for _, amount in scores.values())
+        total_unpaid = 0
+
+        participants_stats = []
+        for referrer_id, (score, amount) in scores.items():
+            user = await get_user_by_id(db, referrer_id)
+            if not user:
+                continue
+
+            participants_stats.append({
+                'referrer_id': referrer_id,
+                'full_name': user.full_name,
+                'total_referrals': score,
+                'paid_referrals': score,
+                'unpaid_referrals': 0,
+                'total_paid_amount': amount,
+            })
+
+        # Sort by total_referrals descending
+        participants_stats.sort(key=lambda p: p['total_referrals'], reverse=True)
+
+        return {
+            'total_participants': total_participants,
+            'total_invited': total_invited,
+            'total_paid_amount': total_paid_amount,
+            'total_unpaid': total_unpaid,
+            'participants': participants_stats,
+        }
 
     def _get_timezone(self, contest: ReferralContest) -> ZoneInfo:
         tz_name = contest.timezone or settings.TIMEZONE

@@ -618,6 +618,12 @@ def get_referral_contest_manage_keyboard(
         ],
         [
             InlineKeyboardButton(
+                text="📈 Детальная статистика",
+                callback_data=f"admin_contest_detailed_stats_{contest_id}",
+            ),
+        ],
+        [
+            InlineKeyboardButton(
                 text=_t(texts, "ADMIN_CONTEST_EDIT_SUMMARY_TIMES", "🕒 Итоги в день"),
                 callback_data=f"admin_contest_edit_times_{contest_id}",
             ),
