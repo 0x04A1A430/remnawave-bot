@@ -391,10 +391,7 @@ class ReferralContestService:
         return "\n".join(lines)
 
     async def get_detailed_contest_stats(self, db: AsyncSession, contest_id: int) -> dict:
-        from app.database.crud.referral_contest import get_contest_events, get_contest_leaderboard, get_referral_contest
-        from app.database.crud.user import get_user_by_id
-        from app.database.models import User, Subscription
-        from sqlalchemy import select
+        from app.database.crud.referral_contest import get_contest_leaderboard, get_referral_contest
 
         contest = await get_referral_contest(db, contest_id)
         if not contest:
@@ -406,7 +403,7 @@ class ReferralContestService:
                 'participants': [],
             }
 
-        # Get leaderboard to get scores
+        # Get leaderboard - already includes User objects
         leaderboard = await get_contest_leaderboard(db, contest_id)
         if not leaderboard:
             return {
@@ -417,31 +414,22 @@ class ReferralContestService:
                 'participants': [],
             }
 
-        # Create dict of referrer_id -> (score, amount)
-        scores = {user.id: (score, amount) for user, score, amount in leaderboard}
-
-        total_participants = len(scores)
-        total_invited = sum(score for score, _ in scores.values())
-        total_paid_amount = sum(amount for _, amount in scores.values())
+        total_participants = len(leaderboard)
+        total_invited = sum(score for _, score, _ in leaderboard)
+        total_paid_amount = sum(amount for _, _, amount in leaderboard)
         total_unpaid = 0
 
+        # Build participants stats directly from leaderboard (already has User objects)
         participants_stats = []
-        for referrer_id, (score, amount) in scores.items():
-            user = await get_user_by_id(db, referrer_id)
-            if not user:
-                continue
-
+        for user, score, amount in leaderboard:
             participants_stats.append({
-                'referrer_id': referrer_id,
+                'referrer_id': user.id,
                 'full_name': user.full_name,
                 'total_referrals': score,
                 'paid_referrals': score,
                 'unpaid_referrals': 0,
                 'total_paid_amount': amount,
             })
-
-        # Sort by total_referrals descending
-        participants_stats.sort(key=lambda p: p['total_referrals'], reverse=True)
 
         return {
             'total_participants': total_participants,
