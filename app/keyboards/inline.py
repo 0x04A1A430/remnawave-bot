@@ -1,7 +1,7 @@
 from typing import List, Optional
 from aiogram import types
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from datetime import datetime
+from datetime import datetime, timezone
 from app.database.models import User
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -68,8 +68,8 @@ async def get_main_menu_keyboard_async(
                 subscription_days_left = subscription.days_left
             elif hasattr(subscription, 'end_date') and subscription.end_date:
                 # Fallback: вычисляем вручную, используя UTC
-                from datetime import datetime
-                days_left = (subscription.end_date - datetime.utcnow()).days
+                now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+                days_left = (subscription.end_date - now_utc).days
                 subscription_days_left = max(0, days_left)
             
             # Трафик
@@ -93,7 +93,8 @@ async def get_main_menu_keyboard_async(
             
             # Дни с регистрации
             if hasattr(user, 'created_at') and user.created_at:
-                registration_days = (datetime.utcnow() - user.created_at).days
+                now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+                registration_days = (now_utc - user.created_at).days
             
             # ID промо-группы
             if hasattr(user, 'promo_group_id'):
