@@ -6,7 +6,7 @@ import asyncio
 import copy
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from aiogram import types
@@ -96,7 +96,7 @@ class MenuLayoutService:
             "version": config.get("version", 1),
             "rows": config.get("rows", []),
             "buttons": config.get("buttons", {}),
-            "exported_at": datetime.utcnow().isoformat(),
+            "exported_at": datetime.now(timezone.utc).isoformat(),
         }
 
     @classmethod
