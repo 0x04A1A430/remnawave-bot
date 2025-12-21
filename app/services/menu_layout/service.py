@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import logging
 from datetime import datetime
@@ -52,7 +53,7 @@ class MenuLayoutService:
     @classmethod
     def get_default_config(cls) -> Dict[str, Any]:
         """Получить дефолтную конфигурацию."""
-        return DEFAULT_MENU_CONFIG.copy()
+        return copy.deepcopy(DEFAULT_MENU_CONFIG)
 
     @classmethod
     def get_builtin_buttons_info(cls) -> List[Dict[str, Any]]:
@@ -95,7 +96,7 @@ class MenuLayoutService:
             "version": config.get("version", 1),
             "rows": config.get("rows", []),
             "buttons": config.get("buttons", {}),
-            "exported_at": datetime.now().isoformat(),
+            "exported_at": datetime.utcnow().isoformat(),
         }
 
     @classmethod
@@ -871,6 +872,31 @@ class MenuLayoutService:
 
     # --- Форматирование текста ---
 
+    # Список всех поддерживаемых плейсхолдеров
+    _PLACEHOLDERS = (
+        "{balance}",
+        "{username}",
+        "{subscription_days}",
+        "{traffic_used}",
+        "{traffic_left}",
+        "{referral_count}",
+        "{referral_earnings}",
+    )
+
+    @classmethod
+    def _text_has_placeholders(cls, text_config: Dict[str, str]) -> bool:
+        """Проверить, содержит ли текст динамические плейсхолдеры."""
+        if not text_config or not isinstance(text_config, dict):
+            return False
+
+        for lang_text in text_config.values():
+            if not isinstance(lang_text, str):
+                continue
+            for placeholder in cls._PLACEHOLDERS:
+                if placeholder in lang_text:
+                    return True
+        return False
+
     @classmethod
     def _get_localized_text(
         cls,
@@ -940,10 +966,19 @@ class MenuLayoutService:
         button_config: Dict[str, Any],
         context: MenuContext,
         texts: Any,
+        button_id: str = "",
     ) -> Optional[InlineKeyboardButton]:
-        """Построить кнопку из конфигурации."""
+        """Построить кнопку из конфигурации.
+
+        Args:
+            button_config: Конфигурация кнопки
+            context: Контекст пользователя
+            texts: Локализованные тексты
+            button_id: ID кнопки (ключ в словаре buttons)
+        """
         button_type = button_config.get("type", "builtin")
-        button_id = button_config.get("builtin_id") or button_config.get("id", "")
+        # Используем переданный button_id или fallback на builtin_id
+        effective_button_id = button_id or button_config.get("builtin_id", "")
         text_config = button_config.get("text", {})
         action = button_config.get("action", "")
         open_mode = button_config.get("open_mode", "callback")
@@ -952,16 +987,16 @@ class MenuLayoutService:
         
         # Логирование для отладки кнопки connect
         is_connect_button = (
-            button_id == "connect" or 
-            "connect" in str(button_id).lower() or
+            effective_button_id == "connect" or
+            "connect" in str(effective_button_id).lower() or
             action == "subscription_connect" or
             "connect" in str(action).lower()
         )
-        
+
         if is_connect_button:
             logger.info(
                 f"🔗 Построение кнопки connect: "
-                f"button_id={button_id}, type={button_type}, "
+                f"button_id={effective_button_id}, type={button_type}, "
                 f"open_mode={open_mode}, action={action}, "
                 f"webapp_url={webapp_url}"
             )
@@ -1083,8 +1118,8 @@ class MenuLayoutService:
                 if not cls._evaluate_conditions(button_conditions, context):
                     continue
 
-                # Строим кнопку
-                button = cls._build_button(button_cfg, context, texts)
+                # Строим кнопку (передаём button_id для кастомных кнопок)
+                button = cls._build_button(button_cfg, context, texts, button_id=button_id)
                 if button:
                     row_buttons.append(button)
 
