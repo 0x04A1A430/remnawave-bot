@@ -130,13 +130,10 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     dp.callback_query.middleware(ThrottlingMiddleware())
     
     # Middleware для автоматического логирования кликов по кнопкам
-    logger.info(f"📊 MENU_LAYOUT_ENABLED = {settings.MENU_LAYOUT_ENABLED}")
     if settings.MENU_LAYOUT_ENABLED:
         button_stats_middleware = ButtonStatsMiddleware()
         dp.callback_query.middleware(button_stats_middleware)
-        logger.info("📊 ButtonStatsMiddleware активирован - автоматическое логирование кликов включено")
-    else:
-        logger.warning("⚠️ ButtonStatsMiddleware ОТКЛЮЧЕН - MENU_LAYOUT_ENABLED=False")
+        logger.info("📊 ButtonStatsMiddleware активирован")
 
     if settings.CHANNEL_IS_REQUIRED_SUB:
         from app.middlewares.channel_checker import ChannelCheckerMiddleware

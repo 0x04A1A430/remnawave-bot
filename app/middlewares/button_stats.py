@@ -48,8 +48,6 @@ class ButtonStatsMiddleware(BaseMiddleware):
             if event.message and hasattr(event.message, 'reply_markup'):
                 button_text = self._extract_button_text(event.message.reply_markup, callback_data)
 
-            logger.info(f"📊 ButtonStats: клик user={user_id}, button={callback_data[:50]}, type={button_type}")
-
             # Логируем в фоне, не блокируя обработку
             # Используем asyncio.create_task для фоновой задачи
             import asyncio
@@ -115,9 +113,8 @@ class ButtonStatsMiddleware(BaseMiddleware):
                         button_type=button_type,
                         button_text=button_text
                     )
-                    logger.info(f"✅ ButtonStats: записано в БД button={button_id[:30]}, user={user_id}")
                 except Exception as e:
-                    logger.error(f"❌ Ошибка записи клика в БД {button_id}: {e}", exc_info=True)
+                    logger.debug(f"Ошибка записи клика в БД {button_id}: {e}")
         except Exception as e:
-            logger.error(f"❌ Ошибка создания сессии БД для логирования клика: {e}", exc_info=True)
+            logger.debug(f"Ошибка создания сессии БД для логирования клика: {e}")
 

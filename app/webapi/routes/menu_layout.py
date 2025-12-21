@@ -836,43 +836,6 @@ async def log_button_click(
     return {"success": True}
 
 
-@router.get("/stats/debug")
-async def debug_stats(
-    limit: int = 10,
-    _: Any = Security(require_api_token),
-    db: AsyncSession = Depends(get_db_session),
-) -> dict:
-    """DEBUG: Показать сырые данные из таблицы button_click_logs."""
-    from sqlalchemy import text
-
-    # Общее количество
-    total = await db.execute(text("SELECT COUNT(*) FROM button_click_logs"))
-    total_count = total.scalar()
-
-    # Последние записи
-    result = await db.execute(text(f"""
-        SELECT id, button_id, user_id, button_type, clicked_at
-        FROM button_click_logs
-        ORDER BY clicked_at DESC
-        LIMIT {limit}
-    """))
-    rows = result.fetchall()
-
-    return {
-        "total_count": total_count,
-        "last_records": [
-            {
-                "id": row[0],
-                "button_id": row[1],
-                "user_id": row[2],
-                "button_type": row[3],
-                "clicked_at": str(row[4]) if row[4] else None,
-            }
-            for row in rows
-        ]
-    }
-
-
 @router.get("/stats/by-type", response_model=ButtonTypeStatsResponse)
 async def get_stats_by_button_type(
     days: int = 30,
@@ -881,16 +844,8 @@ async def get_stats_by_button_type(
 ) -> ButtonTypeStatsResponse:
     """Получить статистику кликов по типам кнопок (builtin, callback, url, mini_app)."""
     try:
-        # Отладка: проверяем сколько записей в таблице
-        from sqlalchemy import text
-        count_result = await db.execute(text("SELECT COUNT(*) FROM button_click_logs"))
-        total_in_table = count_result.scalar()
-        logger.info(f"📊 DEBUG: Всего записей в button_click_logs: {total_in_table}")
-
         stats = await MenuLayoutService.get_stats_by_button_type(db, days)
         total_clicks = sum(s["clicks_total"] for s in stats)
-
-        logger.info(f"📊 Stats by type: {len(stats)} types, total_clicks={total_clicks}")
         
         return ButtonTypeStatsResponse(
             items=[
@@ -960,28 +915,17 @@ async def get_top_users(
 ) -> TopUsersResponse:
     """Получить топ пользователей по количеству кликов."""
     try:
-        # Отладка: проверяем user_id в таблице
-        from sqlalchemy import text
-        null_count = await db.execute(text("SELECT COUNT(*) FROM button_click_logs WHERE user_id IS NULL"))
-        not_null_count = await db.execute(text("SELECT COUNT(*) FROM button_click_logs WHERE user_id IS NOT NULL"))
-        logger.info(f"📊 DEBUG top-users: user_id IS NULL: {null_count.scalar()}, IS NOT NULL: {not_null_count.scalar()}")
-
         stats = await MenuLayoutService.get_top_users(db, button_id, limit, days)
 
-        logger.info(f"📊 Top users: {len(stats)} users, data={stats}, button_id={button_id}, limit={limit}, days={days}")
-
-        items = [
-            TopUserStats(
-                user_id=s["user_id"],
-                clicks_count=s["clicks_count"],
-                last_click_at=s["last_click_at"],
-            )
-            for s in stats
-        ]
-        logger.info(f"📊 Top users response items: {len(items)}")
-
         return TopUsersResponse(
-            items=items,
+            items=[
+                TopUserStats(
+                    user_id=s["user_id"],
+                    clicks_count=s["clicks_count"],
+                    last_click_at=s["last_click_at"],
+                )
+                for s in stats
+            ],
             button_id=button_id,
             limit=limit,
         )
