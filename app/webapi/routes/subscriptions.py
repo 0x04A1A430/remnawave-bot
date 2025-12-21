@@ -8,6 +8,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.services.subscription_service import SubscriptionService
+
 from app.config import settings
 from app.database.crud.server_squad import get_random_trial_squad_uuid
 from app.database.crud.subscription import (
@@ -143,70 +145,92 @@ async def create_subscription(
     if not settings.is_devices_selection_enabled():
         forced_devices = settings.get_disabled_mode_device_limit()
 
-    if payload.is_trial:
-        trial_device_limit = payload.device_limit
-        if trial_device_limit is None:
-            trial_device_limit = forced_devices
-        duration_days = payload.duration_days or settings.TRIAL_DURATION_DAYS
-        traffic_limit_gb = payload.traffic_limit_gb or settings.TRIAL_TRAFFIC_LIMIT_GB
+    subscription = None
+    try:
+        if payload.is_trial:
+            trial_device_limit = payload.device_limit
+            if trial_device_limit is None:
+                trial_device_limit = forced_devices
+            duration_days = payload.duration_days or settings.TRIAL_DURATION_DAYS
+            traffic_limit_gb = payload.traffic_limit_gb or settings.TRIAL_TRAFFIC_LIMIT_GB
 
-        if existing:
-            connected_squads = await _choose_trial_squads(
-                db, payload.squad_uuid, list(existing.connected_squads or [])
-            )
-            subscription = await replace_subscription(
-                db,
-                existing,
-                duration_days=duration_days,
-                traffic_limit_gb=traffic_limit_gb,
-                device_limit=(
-                    trial_device_limit
-                    if trial_device_limit is not None
-                    else settings.TRIAL_DEVICE_LIMIT
-                ),
-                connected_squads=connected_squads,
-                is_trial=True,
-                update_server_counters=True,
-            )
-        else:
-            subscription = await create_trial_subscription(
-                db,
-                user_id=payload.user_id,
-                duration_days=duration_days,
-                traffic_limit_gb=traffic_limit_gb,
-                device_limit=trial_device_limit,
-                squad_uuid=payload.squad_uuid,
-            )
-    else:
-        if payload.duration_days is None:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "duration_days is required for paid subscriptions")
-        device_limit = payload.device_limit
-        if device_limit is None:
-            if forced_devices is not None:
-                device_limit = forced_devices
+            if existing:
+                connected_squads = await _choose_trial_squads(
+                    db, payload.squad_uuid, list(existing.connected_squads or [])
+                )
+                subscription = await replace_subscription(
+                    db,
+                    existing,
+                    duration_days=duration_days,
+                    traffic_limit_gb=traffic_limit_gb,
+                    device_limit=(
+                        trial_device_limit
+                        if trial_device_limit is not None
+                        else settings.TRIAL_DEVICE_LIMIT
+                    ),
+                    connected_squads=connected_squads,
+                    is_trial=True,
+                    update_server_counters=True,
+                )
             else:
-                device_limit = settings.DEFAULT_DEVICE_LIMIT
-        if existing:
-            subscription = await replace_subscription(
-                db,
-                existing,
-                duration_days=payload.duration_days,
-                traffic_limit_gb=payload.traffic_limit_gb or settings.DEFAULT_TRAFFIC_LIMIT_GB,
-                device_limit=device_limit,
-                connected_squads=payload.connected_squads or [],
-                is_trial=False,
-                update_server_counters=True,
-            )
+                subscription = await create_trial_subscription(
+                    db,
+                    user_id=payload.user_id,
+                    duration_days=duration_days,
+                    traffic_limit_gb=traffic_limit_gb,
+                    device_limit=trial_device_limit,
+                    squad_uuid=payload.squad_uuid,
+                )
         else:
-            subscription = await create_paid_subscription(
-                db,
-                user_id=payload.user_id,
-                duration_days=payload.duration_days,
-                traffic_limit_gb=payload.traffic_limit_gb or settings.DEFAULT_TRAFFIC_LIMIT_GB,
-                device_limit=device_limit,
-                connected_squads=payload.connected_squads or [],
-                update_server_counters=True,
-            )
+            if payload.duration_days is None:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "duration_days is required for paid subscriptions")
+            device_limit = payload.device_limit
+            if device_limit is None:
+                if forced_devices is not None:
+                    device_limit = forced_devices
+                else:
+                    device_limit = settings.DEFAULT_DEVICE_LIMIT
+            if existing:
+                subscription = await replace_subscription(
+                    db,
+                    existing,
+                    duration_days=payload.duration_days,
+                    traffic_limit_gb=payload.traffic_limit_gb or settings.DEFAULT_TRAFFIC_LIMIT_GB,
+                    device_limit=device_limit,
+                    connected_squads=payload.connected_squads or [],
+                    is_trial=False,
+                    update_server_counters=True,
+                )
+            else:
+                subscription = await create_paid_subscription(
+                    db,
+                    user_id=payload.user_id,
+                    duration_days=payload.duration_days,
+                    traffic_limit_gb=payload.traffic_limit_gb or settings.DEFAULT_TRAFFIC_LIMIT_GB,
+                    device_limit=device_limit,
+                    connected_squads=payload.connected_squads or [],
+                    update_server_counters=True,
+                )
+
+        subscription_service = SubscriptionService()
+        rem_user = await subscription_service.create_remnawave_user(
+            db,
+            subscription,
+            reset_traffic=False
+        )
+        if not rem_user:
+            raise ValueError("Failed to create/update user in Remnawave")
+
+        await db.refresh(subscription)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        try:
+            await db.rollback()
+        except Exception:
+            logger.exception("Rollback failed after error: %s", e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to sync with Remnawave: {str(e)}")
 
     subscription = await _get_subscription(db, subscription.id)
     return _serialize_subscription(subscription)
