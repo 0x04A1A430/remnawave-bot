@@ -618,7 +618,7 @@ async def export_menu_layout(
         version=export_data.get("version", 1),
         rows=rows,
         buttons=buttons,
-        exported_at=datetime.now(),
+        exported_at=datetime.utcnow(),
     )
 
 
@@ -766,7 +766,7 @@ async def get_menu_click_stats(
     stats = await MenuLayoutService.get_all_buttons_stats(db, days)
     total_clicks = await MenuLayoutService.get_total_clicks(db, days)
 
-    now = datetime.now()
+    now = datetime.utcnow()
     period_start = now - timedelta(days=days)
 
     return MenuClickStatsResponse(
