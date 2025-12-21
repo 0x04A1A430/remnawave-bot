@@ -63,12 +63,30 @@ class PartnerStatsService:
         else:
             active_referrals = 0
 
-        # Заработки по периодам
-        earnings_all_time = await cls._get_earnings_for_period(db, user_id, None)
-        earnings_today = await cls._get_earnings_for_period(db, user_id, today_start)
-        earnings_week = await cls._get_earnings_for_period(db, user_id, week_ago)
-        earnings_month = await cls._get_earnings_for_period(db, user_id, month_ago)
-        earnings_year = await cls._get_earnings_for_period(db, user_id, year_ago)
+        # Заработки по периодам - один запрос с CASE WHEN
+        earnings_result = await db.execute(
+            select(
+                func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0).label("all_time"),
+                func.coalesce(func.sum(
+                    case((ReferralEarning.created_at >= today_start, ReferralEarning.amount_kopeks), else_=0)
+                ), 0).label("today"),
+                func.coalesce(func.sum(
+                    case((ReferralEarning.created_at >= week_ago, ReferralEarning.amount_kopeks), else_=0)
+                ), 0).label("week"),
+                func.coalesce(func.sum(
+                    case((ReferralEarning.created_at >= month_ago, ReferralEarning.amount_kopeks), else_=0)
+                ), 0).label("month"),
+                func.coalesce(func.sum(
+                    case((ReferralEarning.created_at >= year_ago, ReferralEarning.amount_kopeks), else_=0)
+                ), 0).label("year"),
+            ).where(ReferralEarning.user_id == user_id)
+        )
+        earnings_row = earnings_result.one()
+        earnings_all_time = int(earnings_row.all_time)
+        earnings_today = int(earnings_row.today)
+        earnings_week = int(earnings_row.week)
+        earnings_month = int(earnings_row.month)
+        earnings_year = int(earnings_row.year)
 
         # Рефералы по периодам
         referrals_today = sum(1 for r in referrals if r.created_at >= today_start)
@@ -174,6 +192,8 @@ class PartnerStatsService:
         limit: int = 10,
     ) -> List[Dict[str, Any]]:
         """Получить топ рефералов по доходу для реферера."""
+        now = datetime.utcnow()
+
         # Получаем рефералов с их доходами
         result = await db.execute(
             select(
@@ -192,24 +212,29 @@ class PartnerStatsService:
             .order_by(desc(func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0)))
             .limit(limit)
         )
+        rows = result.all()
+
+        if not rows:
+            return []
+
+        # Собираем user_id для проверки активных подписок одним запросом
+        user_ids = [row.id for row in rows]
+
+        # Получаем все активные подписки для этих пользователей одним запросом
+        active_subs_result = await db.execute(
+            select(Subscription.user_id)
+            .where(
+                and_(
+                    Subscription.user_id.in_(user_ids),
+                    Subscription.status == SubscriptionStatus.ACTIVE.value,
+                    Subscription.end_date > now,
+                )
+            )
+        )
+        active_user_ids = {row.user_id for row in active_subs_result.all()}
 
         referrals = []
-        now = datetime.utcnow()
-        for row in result.all():
-            # Проверяем активность подписки
-            sub_result = await db.execute(
-                select(Subscription)
-                .where(
-                    and_(
-                        Subscription.user_id == row.id,
-                        Subscription.status == SubscriptionStatus.ACTIVE.value,
-                        Subscription.end_date > now,
-                    )
-                )
-                .limit(1)
-            )
-            is_active = sub_result.scalar_one_or_none() is not None
-
+        for row in rows:
             referrals.append({
                 "id": row.id,
                 "telegram_id": row.telegram_id,
@@ -219,7 +244,7 @@ class PartnerStatsService:
                 "full_name": f"{row.first_name or ''} {row.last_name or ''}".strip() or f"User {row.telegram_id}",
                 "created_at": row.created_at,
                 "has_made_first_topup": row.has_made_first_topup,
-                "is_active": is_active,
+                "is_active": row.id in active_user_ids,
                 "total_earnings_kopeks": int(row.total_earnings),
             })
 
@@ -350,47 +375,49 @@ class PartnerStatsService:
             .where(
                 and_(
                     User.referred_by_id.isnot(None),
-                    User.has_made_first_topup == True,
+                    User.has_made_first_topup.is_(True),
                 )
             )
         )
         paid_referrals_count = paid_referrals.scalar() or 0
 
-        # Всего выплачено
-        total_paid = await cls._get_total_earnings(db, None)
-        today_paid = await cls._get_total_earnings(db, today_start)
-        week_paid = await cls._get_total_earnings(db, week_ago)
-        month_paid = await cls._get_total_earnings(db, month_ago)
-        year_paid = await cls._get_total_earnings(db, year_ago)
+        # Всего выплачено - один запрос с CASE WHEN
+        payouts_result = await db.execute(
+            select(
+                func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0).label("all_time"),
+                func.coalesce(func.sum(
+                    case((ReferralEarning.created_at >= today_start, ReferralEarning.amount_kopeks), else_=0)
+                ), 0).label("today"),
+                func.coalesce(func.sum(
+                    case((ReferralEarning.created_at >= week_ago, ReferralEarning.amount_kopeks), else_=0)
+                ), 0).label("week"),
+                func.coalesce(func.sum(
+                    case((ReferralEarning.created_at >= month_ago, ReferralEarning.amount_kopeks), else_=0)
+                ), 0).label("month"),
+                func.coalesce(func.sum(
+                    case((ReferralEarning.created_at >= year_ago, ReferralEarning.amount_kopeks), else_=0)
+                ), 0).label("year"),
+            )
+        )
+        payouts_row = payouts_result.one()
+        total_paid = int(payouts_row.all_time)
+        today_paid = int(payouts_row.today)
+        week_paid = int(payouts_row.week)
+        month_paid = int(payouts_row.month)
+        year_paid = int(payouts_row.year)
 
-        # Новые рефералы по периодам
-        new_referrals_today = await db.execute(
-            select(func.count(User.id))
-            .where(
-                and_(
-                    User.referred_by_id.isnot(None),
-                    User.created_at >= today_start,
-                )
-            )
+        # Новые рефералы по периодам - один запрос с CASE WHEN
+        new_referrals_result = await db.execute(
+            select(
+                func.sum(case((User.created_at >= today_start, 1), else_=0)).label("today"),
+                func.sum(case((User.created_at >= week_ago, 1), else_=0)).label("week"),
+                func.sum(case((User.created_at >= month_ago, 1), else_=0)).label("month"),
+            ).where(User.referred_by_id.isnot(None))
         )
-        new_referrals_week = await db.execute(
-            select(func.count(User.id))
-            .where(
-                and_(
-                    User.referred_by_id.isnot(None),
-                    User.created_at >= week_ago,
-                )
-            )
-        )
-        new_referrals_month = await db.execute(
-            select(func.count(User.id))
-            .where(
-                and_(
-                    User.referred_by_id.isnot(None),
-                    User.created_at >= month_ago,
-                )
-            )
-        )
+        new_referrals_row = new_referrals_result.one()
+        new_referrals_today_count = int(new_referrals_row.today or 0)
+        new_referrals_week_count = int(new_referrals_row.week or 0)
+        new_referrals_month_count = int(new_referrals_row.month or 0)
 
         # Конверсия
         conversion_rate = (
@@ -422,9 +449,9 @@ class PartnerStatsService:
                 "today_kopeks": today_paid,
             },
             "new_referrals": {
-                "today": new_referrals_today.scalar() or 0,
-                "week": new_referrals_week.scalar() or 0,
-                "month": new_referrals_month.scalar() or 0,
+                "today": new_referrals_today_count,
+                "week": new_referrals_week_count,
+                "month": new_referrals_month_count,
             },
         }
 
@@ -532,14 +559,20 @@ class PartnerStatsService:
         referrers_data.sort(key=lambda x: x["total_earnings"], reverse=True)
         top_referrers = referrers_data[:limit]
 
-        # Получаем данные пользователей
+        if not top_referrers:
+            return []
+
+        # Получаем данные всех пользователей одним запросом
+        top_user_ids = [data["user_id"] for data in top_referrers]
+        users_result = await db.execute(
+            select(User).where(User.id.in_(top_user_ids))
+        )
+        users_dict = {user.id: user for user in users_result.scalars().all()}
+
+        # Формируем результат с сохранением порядка сортировки
         result = []
         for data in top_referrers:
-            user_result = await db.execute(
-                select(User).where(User.id == data["user_id"])
-            )
-            user = user_result.scalar_one_or_none()
-
+            user = users_dict.get(data["user_id"])
             if user:
                 result.append({
                     "id": user.id,
