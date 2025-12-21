@@ -2,6 +2,7 @@ import logging
 from datetime import datetime
 from aiogram import Dispatcher, types, F, Bot
 from aiogram.enums import ChatMemberStatus
+from aiogram.exceptions import TelegramForbiddenError
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
