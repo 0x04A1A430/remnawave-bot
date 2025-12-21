@@ -93,7 +93,7 @@ async def get_main_menu_keyboard_async(
             
             # Дни с регистрации
             if hasattr(user, 'created_at') and user.created_at:
-                registration_days = (datetime.now() - user.created_at).days
+                registration_days = (datetime.utcnow() - user.created_at).days
             
             # ID промо-группы
             if hasattr(user, 'promo_group_id'):
