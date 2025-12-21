@@ -133,7 +133,7 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     if settings.MENU_LAYOUT_ENABLED:
         button_stats_middleware = ButtonStatsMiddleware()
         dp.callback_query.middleware(button_stats_middleware)
-        logger.info("📊 ButtonStatsMiddleware активирован - автоматическое логирование кликов включено")
+        logger.info("📊 ButtonStatsMiddleware активирован")
 
     if settings.CHANNEL_IS_REQUIRED_SUB:
         from app.middlewares.channel_checker import ChannelCheckerMiddleware

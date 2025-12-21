@@ -587,6 +587,91 @@ class MenuClickStatsResponse(BaseModel):
     period_end: datetime
 
 
+class ButtonTypeStats(BaseModel):
+    """Статистика по типу кнопки."""
+
+    button_type: str
+    clicks_total: int
+    unique_users: int
+
+
+class ButtonTypeStatsResponse(BaseModel):
+    """Статистика кликов по типам кнопок."""
+
+    items: List[ButtonTypeStats]
+    total_clicks: int
+
+
+class HourlyStats(BaseModel):
+    """Статистика по часам."""
+
+    hour: int
+    count: int
+
+
+class HourlyStatsResponse(BaseModel):
+    """Статистика кликов по часам дня."""
+
+    items: List[HourlyStats]
+    button_id: Optional[str] = None
+
+
+class WeekdayStats(BaseModel):
+    """Статистика по дням недели."""
+
+    weekday: int
+    weekday_name: str
+    count: int
+
+
+class WeekdayStatsResponse(BaseModel):
+    """Статистика кликов по дням недели."""
+
+    items: List[WeekdayStats]
+    button_id: Optional[str] = None
+
+
+class TopUserStats(BaseModel):
+    """Статистика пользователя."""
+
+    user_id: int
+    clicks_count: int
+    last_click_at: Optional[datetime] = None
+
+
+class TopUsersResponse(BaseModel):
+    """Топ пользователей по кликам."""
+
+    items: List[TopUserStats]
+    button_id: Optional[str] = None
+    limit: int
+
+
+class PeriodComparisonResponse(BaseModel):
+    """Сравнение периодов."""
+
+    current_period: Dict[str, Any]
+    previous_period: Dict[str, Any]
+    change: Dict[str, Any]
+    button_id: Optional[str] = None
+
+
+class UserClickSequence(BaseModel):
+    """Последовательность кликов пользователя."""
+
+    button_id: str
+    button_text: Optional[str] = None
+    clicked_at: datetime
+
+
+class UserClickSequencesResponse(BaseModel):
+    """Последовательности кликов пользователя."""
+
+    user_id: int
+    items: List[UserClickSequence]
+    total: int
+
+
 # --- Схемы для плейсхолдеров ---
 
 

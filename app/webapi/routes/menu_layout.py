@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Response, Security, status
@@ -12,6 +13,8 @@ from app.services.menu_layout_service import (
     MenuContext,
     MenuLayoutService,
 )
+
+logger = logging.getLogger(__name__)
 
 from ..dependencies import get_db_session, require_api_token
 from ..schemas.menu_layout import (
@@ -24,9 +27,13 @@ from ..schemas.menu_layout import (
     ButtonClickStats,
     ButtonClickStatsResponse,
     ButtonConditions,
+    ButtonTypeStats,
+    ButtonTypeStatsResponse,
     ButtonUpdateRequest,
     DynamicPlaceholder,
     DynamicPlaceholdersResponse,
+    HourlyStats,
+    HourlyStatsResponse,
     MenuButtonConfig,
     MenuClickStatsResponse,
     MenuLayoutConfig,
@@ -47,7 +54,14 @@ from ..schemas.menu_layout import (
     MenuRowConfig,
     MoveButtonResponse,
     MoveButtonToRowRequest,
+    PeriodComparisonResponse,
     ReorderButtonsInRowRequest,
+    TopUserStats,
+    TopUsersResponse,
+    UserClickSequence,
+    UserClickSequencesResponse,
+    WeekdayStats,
+    WeekdayStatsResponse,
     ReorderButtonsResponse,
     RowsReorderRequest,
     SwapButtonsRequest,
@@ -128,9 +142,15 @@ async def update_menu_layout(
         config["rows"] = [row.model_dump() for row in payload.rows]
 
     if payload.buttons is not None:
-        config["buttons"] = {
-            btn_id: btn.model_dump() for btn_id, btn in payload.buttons.items()
-        }
+        buttons_config = {}
+        for btn_id, btn in payload.buttons.items():
+            btn_dict = btn.model_dump()
+            # Автоматически определяем наличие плейсхолдеров, если dynamic_text не установлен
+            if not btn_dict.get("dynamic_text", False):
+                from app.services.menu_layout.service import MenuLayoutService
+                btn_dict["dynamic_text"] = MenuLayoutService._text_has_placeholders(btn_dict.get("text", {}))
+            buttons_config[btn_id] = btn_dict
+        config["buttons"] = buttons_config
 
     await MenuLayoutService.save_config(db, config)
     updated_at = await MenuLayoutService.get_config_updated_at(db)
@@ -296,6 +316,12 @@ async def add_custom_button(
 ) -> MenuButtonConfig:
     """Добавить кастомную кнопку (URL, MiniApp или callback)."""
     try:
+        # Автоматически определяем наличие плейсхолдеров, если dynamic_text не установлен
+        dynamic_text = payload.dynamic_text
+        if not dynamic_text:
+            from app.services.menu_layout.service import MenuLayoutService
+            dynamic_text = MenuLayoutService._text_has_placeholders(payload.text)
+        
         button_config = {
             "type": payload.type.value,
             "text": payload.text,
@@ -305,7 +331,7 @@ async def add_custom_button(
             "conditions": payload.conditions.model_dump(exclude_none=True)
             if payload.conditions
             else None,
-            "dynamic_text": payload.dynamic_text,
+            "dynamic_text": dynamic_text,
             "description": payload.description,
         }
         button = await MenuLayoutService.add_custom_button(
@@ -748,6 +774,9 @@ async def get_menu_click_stats(
             ButtonClickStats(
                 button_id=s["button_id"],
                 clicks_total=s["clicks_total"],
+                clicks_today=s.get("clicks_today", 0),
+                clicks_week=s.get("clicks_week", 0),
+                clicks_month=s.get("clicks_month", 0),
                 unique_users=s["unique_users"],
                 last_click_at=s["last_click_at"],
             )
@@ -805,3 +834,158 @@ async def log_button_click(
         button_text=button_text,
     )
     return {"success": True}
+
+
+@router.get("/stats/by-type", response_model=ButtonTypeStatsResponse)
+async def get_stats_by_button_type(
+    days: int = 30,
+    _: Any = Security(require_api_token),
+    db: AsyncSession = Depends(get_db_session),
+) -> ButtonTypeStatsResponse:
+    """Получить статистику кликов по типам кнопок (builtin, callback, url, mini_app)."""
+    try:
+        stats = await MenuLayoutService.get_stats_by_button_type(db, days)
+        total_clicks = sum(s["clicks_total"] for s in stats)
+        
+        return ButtonTypeStatsResponse(
+            items=[
+                ButtonTypeStats(
+                    button_type=s["button_type"],
+                    clicks_total=s["clicks_total"],
+                    unique_users=s["unique_users"],
+                )
+                for s in stats
+            ],
+            total_clicks=total_clicks,
+        )
+    except Exception as e:
+        logger.error(f"Error getting stats by type: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+@router.get("/stats/by-hour", response_model=HourlyStatsResponse)
+async def get_clicks_by_hour(
+    button_id: Optional[str] = None,
+    days: int = 30,
+    _: Any = Security(require_api_token),
+    db: AsyncSession = Depends(get_db_session),
+) -> HourlyStatsResponse:
+    """Получить статистику кликов по часам дня (0-23)."""
+    stats = await MenuLayoutService.get_clicks_by_hour(db, button_id, days)
+    
+    return HourlyStatsResponse(
+        items=[
+            HourlyStats(hour=s["hour"], count=s["count"])
+            for s in stats
+        ],
+        button_id=button_id,
+    )
+
+
+@router.get("/stats/by-weekday", response_model=WeekdayStatsResponse)
+async def get_clicks_by_weekday(
+    button_id: Optional[str] = None,
+    days: int = 30,
+    _: Any = Security(require_api_token),
+    db: AsyncSession = Depends(get_db_session),
+) -> WeekdayStatsResponse:
+    """Получить статистику кликов по дням недели."""
+    stats = await MenuLayoutService.get_clicks_by_weekday(db, button_id, days)
+    
+    return WeekdayStatsResponse(
+        items=[
+            WeekdayStats(
+                weekday=s["weekday"],
+                weekday_name=s["weekday_name"],
+                count=s["count"]
+            )
+            for s in stats
+        ],
+        button_id=button_id,
+    )
+
+
+@router.get("/stats/top-users", response_model=TopUsersResponse)
+async def get_top_users(
+    button_id: Optional[str] = None,
+    limit: int = 10,
+    days: int = 30,
+    _: Any = Security(require_api_token),
+    db: AsyncSession = Depends(get_db_session),
+) -> TopUsersResponse:
+    """Получить топ пользователей по количеству кликов."""
+    try:
+        stats = await MenuLayoutService.get_top_users(db, button_id, limit, days)
+
+        return TopUsersResponse(
+            items=[
+                TopUserStats(
+                    user_id=s["user_id"],
+                    clicks_count=s["clicks_count"],
+                    last_click_at=s["last_click_at"],
+                )
+                for s in stats
+            ],
+            button_id=button_id,
+            limit=limit,
+        )
+    except Exception as e:
+        logger.error(f"Error getting top users: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+@router.get("/stats/compare", response_model=PeriodComparisonResponse)
+async def get_period_comparison(
+    button_id: Optional[str] = None,
+    current_days: int = 7,
+    previous_days: int = 7,
+    _: Any = Security(require_api_token),
+    db: AsyncSession = Depends(get_db_session),
+) -> PeriodComparisonResponse:
+    """Сравнить статистику текущего и предыдущего периода."""
+    try:
+        comparison = await MenuLayoutService.get_period_comparison(
+            db, button_id, current_days, previous_days
+        )
+        
+        logger.debug(f"Period comparison: button_id={button_id}, current_days={current_days}, previous_days={previous_days}, trend={comparison.get('change', {}).get('trend')}")
+        
+        return PeriodComparisonResponse(
+            current_period=comparison["current_period"],
+            previous_period=comparison["previous_period"],
+            change=comparison["change"],
+            button_id=button_id,
+        )
+    except Exception as e:
+        logger.error(f"Error getting period comparison: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+@router.get("/stats/users/{user_id}/sequences", response_model=UserClickSequencesResponse)
+async def get_user_click_sequences(
+    user_id: int,
+    limit: int = 50,
+    _: Any = Security(require_api_token),
+    db: AsyncSession = Depends(get_db_session),
+) -> UserClickSequencesResponse:
+    """Получить последовательности кликов пользователя."""
+    try:
+        sequences = await MenuLayoutService.get_user_click_sequences(db, user_id, limit)
+        
+        logger.debug(f"User sequences: user_id={user_id}, limit={limit}, found={len(sequences)} sequences")
+        
+        return UserClickSequencesResponse(
+            user_id=user_id,
+            items=[
+                UserClickSequence(
+                    button_id=s["button_id"],
+                    button_text=s["button_text"],
+                    clicked_at=s["clicked_at"],
+                )
+                for s in sequences
+            ],
+            total=len(sequences),
+        )
+    except Exception as e:
+        logger.error(f"Error getting user sequences: user_id={user_id}, error={e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
