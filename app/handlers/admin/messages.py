@@ -1047,6 +1047,106 @@ async def get_target_users(db: AsyncSession, target: str) -> list:
             and (user.subscription.traffic_used_gb or 0) <= 0
         ]
 
+    if target == "expiring_subscribers":
+        expiring_subs = await get_expiring_subscriptions(db, 7)
+        return [sub.user for sub in expiring_subs if sub.user]
+
+    if target == "expired_subscribers":
+        now = datetime.utcnow()
+        expired_statuses = {
+            SubscriptionStatus.EXPIRED.value,
+            SubscriptionStatus.DISABLED.value,
+        }
+        expired_users = []
+        for user in users:
+            subscription = user.subscription
+            if subscription:
+                if subscription.status in expired_statuses:
+                    expired_users.append(user)
+                    continue
+                if subscription.end_date <= now and not subscription.is_active:
+                    expired_users.append(user)
+                    continue
+            elif user.has_had_paid_subscription:
+                expired_users.append(user)
+        return expired_users
+
+    if target == "canceled_subscribers":
+        return [
+            user
+            for user in users
+            if user.subscription
+            and user.subscription.status == SubscriptionStatus.DISABLED.value
+        ]
+
+    if target == "trial_ending":
+        now = datetime.utcnow()
+        in_3_days = now + timedelta(days=3)
+        return [
+            user
+            for user in users
+            if user.subscription
+            and user.subscription.is_trial
+            and user.subscription.is_active
+            and user.subscription.end_date <= in_3_days
+        ]
+
+    if target == "trial_expired":
+        now = datetime.utcnow()
+        return [
+            user
+            for user in users
+            if user.subscription
+            and user.subscription.is_trial
+            and user.subscription.end_date <= now
+        ]
+
+    if target == "autopay_failed":
+        from app.database.models import SubscriptionEvent
+        week_ago = datetime.utcnow() - timedelta(days=7)
+        stmt = select(SubscriptionEvent.user_id).where(
+            and_(
+                SubscriptionEvent.event_type == "autopay_failed",
+                SubscriptionEvent.occurred_at >= week_ago,
+            )
+        ).distinct()
+        result = await db.execute(stmt)
+        failed_user_ids = set(result.scalars().all())
+        return [user for user in users if user.id in failed_user_ids]
+
+    if target == "low_balance":
+        threshold_kopeks = 10000  # 100 рублей
+        return [
+            user
+            for user in users
+            if (user.balance_kopeks or 0) < threshold_kopeks
+            and (user.balance_kopeks or 0) > 0
+        ]
+
+    if target == "inactive_30d":
+        threshold = datetime.utcnow() - timedelta(days=30)
+        return [
+            user
+            for user in users
+            if user.last_activity and user.last_activity < threshold
+        ]
+
+    if target == "inactive_60d":
+        threshold = datetime.utcnow() - timedelta(days=60)
+        return [
+            user
+            for user in users
+            if user.last_activity and user.last_activity < threshold
+        ]
+
+    if target == "inactive_90d":
+        threshold = datetime.utcnow() - timedelta(days=90)
+        return [
+            user
+            for user in users
+            if user.last_activity and user.last_activity < threshold
+        ]
+
     return []
 
 

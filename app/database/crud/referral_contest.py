@@ -4,12 +4,14 @@ from typing import List, Optional, Sequence, Tuple
 
 from sqlalchemy import and_, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, aliased
 
 from app.database.models import (
     ReferralContest,
     ReferralContestEvent,
     User,
+    Transaction,
+    TransactionType,
 )
 
 logger = logging.getLogger(__name__)
@@ -177,6 +179,10 @@ async def get_contest_leaderboard(
     *,
     limit: Optional[int] = None,
 ) -> Sequence[Tuple[User, int, int]]:
+    contest = await get_referral_contest(db, contest_id)
+    if not contest:
+        return []
+
     query = (
         select(
             User,
@@ -191,7 +197,9 @@ async def get_contest_leaderboard(
     if limit:
         query = query.limit(limit)
     result = await db.execute(query)
-    return result.all()
+    leaderboard = result.all()
+
+    return leaderboard
 
 
 async def get_contest_participants(
@@ -246,6 +254,16 @@ async def get_contest_events_count(
         query = query.where(ReferralContestEvent.occurred_at < end)
     result = await db.execute(query)
     return int(result.scalar_one())
+
+
+async def get_contest_events(
+    db: AsyncSession,
+    contest_id: int,
+) -> List[ReferralContestEvent]:
+    result = await db.execute(
+        select(ReferralContestEvent).where(ReferralContestEvent.contest_id == contest_id)
+    )
+    return list(result.scalars().all())
 
 
 async def mark_daily_summary_sent(

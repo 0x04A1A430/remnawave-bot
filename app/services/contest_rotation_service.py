@@ -3,6 +3,7 @@ import logging
 import random
 from datetime import datetime, timedelta, time, timezone
 from typing import Dict, List, Optional
+from zoneinfo import ZoneInfo
 
 from aiogram import Bot
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -191,10 +192,15 @@ class ContestRotationService:
     async def _tick(self) -> None:
         async with AsyncSessionLocal() as db:
             templates = await list_templates(db)
-            now_local = datetime.now().astimezone(timezone.utc)
+            # Get current time in configured timezone
+            tz = self._get_timezone()
+            now_utc = datetime.now(timezone.utc)
+            now_local = now_utc.astimezone(tz)
+
             for tpl in templates:
                 times = self._parse_times(tpl.schedule_times) or []
                 for slot in times[: tpl.times_per_day]:
+                    # Apply schedule time to local date
                     starts_at_local = now_local.replace(
                         hour=slot.hour, minute=slot.minute, second=0, microsecond=0
                     )
@@ -207,17 +213,30 @@ class ContestRotationService:
                     exists = await get_active_round_by_template(db, tpl.id)
                     if exists:
                         continue
+
+                    # Convert to UTC for storage
+                    starts_at_utc = starts_at_local.astimezone(timezone.utc).replace(tzinfo=None)
+                    ends_at_utc = ends_at_local.astimezone(timezone.utc).replace(tzinfo=None)
+
                     # Анонс перед созданием раунда
                     await self._announce_round_start(tpl, starts_at_local, ends_at_local)
                     payload = self._build_payload_for_template(tpl)
                     round_obj = await create_round(
                         db,
                         template=tpl,
-                        starts_at=starts_at_local.replace(tzinfo=None),
-                        ends_at=ends_at_local.replace(tzinfo=None),
+                        starts_at=starts_at_utc,
+                        ends_at=ends_at_utc,
                         payload=payload,
                     )
                     logger.info("Создан раунд %s для шаблона %s", round_obj.id, tpl.slug)
+
+    def _get_timezone(self) -> ZoneInfo:
+        tz_name = settings.TIMEZONE or "UTC"
+        try:
+            return ZoneInfo(tz_name)
+        except Exception:
+            logger.warning("Не удалось загрузить TZ %s, используем UTC", tz_name)
+            return ZoneInfo("UTC")
 
     def _build_payload_for_template(self, tpl: ContestTemplate) -> Dict:
         payload = tpl.payload or {}
@@ -262,9 +281,6 @@ class ContestRotationService:
         if not self.bot:
             return
 
-        tz = settings.TIMEZONE or "UTC"
-        starts_txt = starts_at_local.strftime("%d.%m %H:%M")
-        ends_txt = ends_at_local.strftime("%d.%m %H:%M")
         text = (
             f"🎲 Стартует игра: <b>{tpl.name}</b>\n"
             f"Приз: {tpl.prize_days} дн. подписки • Победителей: {tpl.max_winners}\n"

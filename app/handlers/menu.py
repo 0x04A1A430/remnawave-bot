@@ -17,6 +17,7 @@ from app.database.crud.promo_group import (
 from app.database.crud.transaction import get_user_total_spent_kopeks
 from app.keyboards.inline import (
     get_main_menu_keyboard,
+    get_main_menu_keyboard_async,
     get_language_selection_keyboard,
     get_info_menu_keyboard,
 )
@@ -198,22 +199,26 @@ async def show_main_menu(
             subscription_is_active=subscription_is_active,
         )
 
+    keyboard = await get_main_menu_keyboard_async(
+        db=db,
+        user=db_user,
+        language=db_user.language,
+        is_admin=is_admin,
+        is_moderator=is_moderator,
+        has_had_paid_subscription=db_user.has_had_paid_subscription,
+        has_active_subscription=has_active_subscription,
+        subscription_is_active=subscription_is_active,
+        balance_kopeks=db_user.balance_kopeks,
+        subscription=db_user.subscription,
+        show_resume_checkout=show_resume_checkout,
+        has_saved_cart=has_saved_cart,
+        custom_buttons=custom_buttons,
+    )
+
     await edit_or_answer_photo(
         callback=callback,
         caption=menu_text,
-        keyboard=get_main_menu_keyboard(
-            language=db_user.language,
-            is_admin=is_admin,
-            is_moderator=is_moderator,
-            has_had_paid_subscription=db_user.has_had_paid_subscription,
-            has_active_subscription=has_active_subscription,
-            subscription_is_active=subscription_is_active,
-            balance_kopeks=db_user.balance_kopeks,
-            subscription=db_user.subscription,
-            show_resume_checkout=show_resume_checkout,
-            has_saved_cart=has_saved_cart,  # Добавляем параметр для отображения уведомления о сохраненной корзине
-            custom_buttons=custom_buttons,
-        ),
+        keyboard=keyboard,
         parse_mode="HTML",
         force_text=settings.is_text_main_menu_mode(),
     )
@@ -1061,22 +1066,26 @@ async def handle_back_to_menu(
             subscription_is_active=subscription_is_active,
         )
 
+    keyboard = await get_main_menu_keyboard_async(
+        db=db,
+        user=db_user,
+        language=db_user.language,
+        is_admin=is_admin,
+        is_moderator=is_moderator,
+        has_had_paid_subscription=db_user.has_had_paid_subscription,
+        has_active_subscription=has_active_subscription,
+        subscription_is_active=subscription_is_active,
+        balance_kopeks=db_user.balance_kopeks,
+        subscription=db_user.subscription,
+        show_resume_checkout=show_resume_checkout,
+        has_saved_cart=has_saved_cart,
+        custom_buttons=custom_buttons,
+    )
+
     await edit_or_answer_photo(
         callback=callback,
         caption=menu_text,
-        keyboard=get_main_menu_keyboard(
-            language=db_user.language,
-            is_admin=is_admin,
-            is_moderator=is_moderator,
-            has_had_paid_subscription=db_user.has_had_paid_subscription,
-            has_active_subscription=has_active_subscription,
-            subscription_is_active=subscription_is_active,
-            balance_kopeks=db_user.balance_kopeks,
-            subscription=db_user.subscription,
-            show_resume_checkout=show_resume_checkout,
-            has_saved_cart=has_saved_cart,  # Добавляем параметр для отображения уведомления о сохраненной корзине
-            custom_buttons=custom_buttons,
-        ),
+        keyboard=keyboard,
         parse_mode="HTML",
         force_text=settings.is_text_main_menu_mode(),
     )
@@ -1216,10 +1225,10 @@ async def get_main_menu_text(user, texts, db: AsyncSession):
         random_message = await get_random_active_message(db)
         if random_message:
             return _insert_random_message(base_text, random_message, action_prompt)
-                
+
     except Exception as e:
         logger.error(f"Ошибка получения случайного сообщения: {e}")
-    
+
     return base_text
 
 
@@ -1303,7 +1312,7 @@ async def handle_activate_button(
 
 
 def register_handlers(dp: Dispatcher):
-    
+
     dp.callback_query.register(
         handle_back_to_menu,
         F.data == "back_to_menu"

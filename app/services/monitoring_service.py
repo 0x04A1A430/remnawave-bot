@@ -214,7 +214,8 @@ class MonitoringService:
                 await self._check_trial_inactivity_notifications(db)
                 await self._check_trial_channel_subscriptions(db)
                 await self._check_expired_subscription_followups(db)
-                await self._process_autopayments(db)
+                if settings.ENABLE_AUTOPAY:
+                    await self._process_autopayments(db)
                 await self._cleanup_inactive_users(db)
                 await self._sync_with_remnawave(db)
                 
@@ -937,7 +938,7 @@ class MonitoringService:
             autopay_subscriptions = []
             for sub in all_autopay_subscriptions:
                 days_before_expiry = (sub.end_date - current_time).days
-                if days_before_expiry <= sub.autopay_days_before:
+                if days_before_expiry <= min(sub.autopay_days_before, 3):
                     autopay_subscriptions.append(sub)
             
             processed_count = 0
@@ -1065,12 +1066,16 @@ class MonitoringService:
             texts = get_texts(user.language)
             days_text = format_days_declension(days, user.language)
             
-            if subscription.autopay_enabled:
-                autopay_status = "✅ Включен - подписка продлится автоматически"
-                action_text = f"💰 Убедитесь, что на балансе достаточно средств: {texts.format_price(user.balance_kopeks)}"
+            if settings.ENABLE_AUTOPAY:
+                if subscription.autopay_enabled:
+                    autopay_status = "✅ Включен - подписка продлится автоматически"
+                    action_text = f"💰 Убедитесь, что на балансе достаточно средств: {texts.format_price(user.balance_kopeks)}"
+                else:
+                    autopay_status = "❌ Отключен - не забудьте продлить вручную!"
+                    action_text = "💡 Включите автоплатеж или продлите подписку вручную"
             else:
                 autopay_status = "❌ Отключен - не забудьте продлить вручную!"
-                action_text = "💡 Включите автоплатеж или продлите подписку вручную"
+                action_text = "💡 Продлите подписку вручную"
             
             message = f"""
 ⚠️ <b>Подписка истекает через {days_text}!</b>

@@ -12,6 +12,7 @@ from app.middlewares.throttling import ThrottlingMiddleware
 from app.middlewares.subscription_checker import SubscriptionStatusMiddleware
 from app.middlewares.maintenance import MaintenanceMiddleware
 from app.middlewares.display_name_restriction import DisplayNameRestrictionMiddleware
+from app.middlewares.button_stats import ButtonStatsMiddleware
 from app.services.maintenance_service import maintenance_service
 from app.utils.cache import cache 
 
@@ -127,6 +128,12 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     dp.pre_checkout_query.middleware(display_name_middleware)
     dp.message.middleware(ThrottlingMiddleware())
     dp.callback_query.middleware(ThrottlingMiddleware())
+    
+    # Middleware для автоматического логирования кликов по кнопкам
+    if settings.MENU_LAYOUT_ENABLED:
+        button_stats_middleware = ButtonStatsMiddleware()
+        dp.callback_query.middleware(button_stats_middleware)
+        logger.info("📊 ButtonStatsMiddleware активирован")
 
     if settings.CHANNEL_IS_REQUIRED_SUB:
         from app.middlewares.channel_checker import ChannelCheckerMiddleware

@@ -175,6 +175,9 @@ class Settings(BaseSettings):
     SIMPLE_SUBSCRIPTION_TRAFFIC_GB: int = 0  # 0 означает безлимит
     SIMPLE_SUBSCRIPTION_SQUAD_UUID: Optional[str] = None
 
+    # Настройки конструктора меню (API)
+    MENU_LAYOUT_ENABLED: bool = False  # Включить управление меню через API
+
     # Настройки мониторинга трафика
     TRAFFIC_MONITORING_ENABLED: bool = False
     TRAFFIC_THRESHOLD_GB_PER_DAY: float = 10.0  # Порог трафика в ГБ за сутки
@@ -182,6 +185,8 @@ class Settings(BaseSettings):
     SUSPICIOUS_NOTIFICATIONS_TOPIC_ID: Optional[int] = None
 
     AUTOPAY_WARNING_DAYS: str = "3,1"
+
+    ENABLE_AUTOPAY: bool = False
 
     DEFAULT_AUTOPAY_ENABLED: bool = False
     DEFAULT_AUTOPAY_DAYS_BEFORE: int = 3

@@ -1,7 +1,7 @@
 from typing import List, Optional
 from aiogram import types
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from datetime import datetime
+from datetime import datetime, timezone
 from app.database.models import User
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +21,136 @@ from app.utils.subscription_utils import (
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+async def get_main_menu_keyboard_async(
+    db: AsyncSession,
+    language: str = DEFAULT_LANGUAGE,
+    is_admin: bool = False,
+    has_had_paid_subscription: bool = False,
+    has_active_subscription: bool = False,
+    subscription_is_active: bool = False,
+    balance_kopeks: int = 0,
+    subscription=None,
+    show_resume_checkout: bool = False,
+    has_saved_cart: bool = False,
+    *,
+    is_moderator: bool = False,
+    custom_buttons: Optional[list[InlineKeyboardButton]] = None,
+    user=None,  # Добавляем параметр пользователя для получения данных
+) -> InlineKeyboardMarkup:
+    """
+    Асинхронная версия get_main_menu_keyboard с поддержкой конструктора меню.
+
+    Если MENU_LAYOUT_ENABLED=True, использует конфигурацию из БД.
+    Иначе делегирует в синхронную версию.
+    """
+    if settings.MENU_LAYOUT_ENABLED:
+        from app.services.menu_layout_service import MenuLayoutService, MenuContext
+        from datetime import datetime
+
+        # Получаем данные для плейсхолдеров
+        subscription_days_left = 0
+        traffic_used_gb = 0.0
+        traffic_left_gb = 0.0
+        referral_count = 0
+        referral_earnings_kopeks = 0
+        registration_days = 0
+        promo_group_id = None
+        has_autopay = False
+        username = ""
+
+        # Заполняем данными из подписки
+        if subscription:
+            # Дни до окончания подписки
+            if hasattr(subscription, 'days_left'):
+                # Используем свойство из модели, которое правильно вычисляет дни в UTC
+                subscription_days_left = subscription.days_left
+            elif hasattr(subscription, 'end_date') and subscription.end_date:
+                # Fallback: вычисляем вручную, используя UTC
+                now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+                days_left = (subscription.end_date - now_utc).days
+                subscription_days_left = max(0, days_left)
+            
+            # Трафик
+            if hasattr(subscription, 'traffic_used_gb'):
+                traffic_used_gb = subscription.traffic_used_gb or 0.0
+            
+            if hasattr(subscription, 'traffic_limit_gb') and subscription.traffic_limit_gb:
+                traffic_left_gb = max(0, subscription.traffic_limit_gb - (subscription.traffic_used_gb or 0))
+            
+            # Автоплатеж
+            if hasattr(subscription, 'autopay_enabled'):
+                has_autopay = subscription.autopay_enabled
+
+        # Получаем данные пользователя
+        if user:
+            # Имя пользователя
+            if hasattr(user, 'username') and user.username:
+                username = user.username
+            elif hasattr(user, 'first_name') and user.first_name:
+                username = user.first_name
+            
+            # Дни с регистрации
+            if hasattr(user, 'created_at') and user.created_at:
+                now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+                registration_days = (now_utc - user.created_at).days
+            
+            # ID промо-группы
+            if hasattr(user, 'promo_group_id'):
+                promo_group_id = user.promo_group_id
+
+        # Получаем данные о рефералах из БД (если нужно)
+        try:
+            from app.database.crud.referral import get_user_referral_stats
+            if user and hasattr(user, 'id'):
+                referral_data = await get_user_referral_stats(db, user.id)
+                if referral_data:
+                    referral_count = referral_data.get('invited_count', 0)
+                    referral_earnings_kopeks = referral_data.get('total_earned_kopeks', 0)
+        except Exception as e:
+            logger.error(f"Error getting referral data: {e}")
+
+        context = MenuContext(
+            language=language,
+            is_admin=is_admin,
+            is_moderator=is_moderator,
+            has_active_subscription=has_active_subscription,
+            subscription_is_active=subscription_is_active,
+            has_had_paid_subscription=has_had_paid_subscription,
+            balance_kopeks=balance_kopeks,
+            subscription=subscription,
+            show_resume_checkout=show_resume_checkout,
+            has_saved_cart=has_saved_cart,
+            custom_buttons=custom_buttons or [],
+            # Добавляем данные для плейсхолдеров
+            username=username,
+            subscription_days=subscription_days_left,
+            traffic_used_gb=traffic_used_gb,
+            traffic_left_gb=traffic_left_gb,
+            referral_count=referral_count,
+            referral_earnings_kopeks=referral_earnings_kopeks,
+            registration_days=registration_days,
+            promo_group_id=promo_group_id,
+            has_autopay=has_autopay,
+        )
+
+        return await MenuLayoutService.build_keyboard(db, context)
+
+    # Fallback на синхронную версию
+    return get_main_menu_keyboard(
+        language=language,
+        is_admin=is_admin,
+        has_had_paid_subscription=has_had_paid_subscription,
+        has_active_subscription=has_active_subscription,
+        subscription_is_active=subscription_is_active,
+        balance_kopeks=balance_kopeks,
+        subscription=subscription,
+        show_resume_checkout=show_resume_checkout,
+        has_saved_cart=has_saved_cart,
+        is_moderator=is_moderator,
+        custom_buttons=custom_buttons,
+    )
 
 
 def _get_localized_value(values, language: str, default_language: str = "en") -> str:

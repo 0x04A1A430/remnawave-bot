@@ -1945,8 +1945,8 @@ class RemnaWaveService:
                 }
                 
                 usage_data = await api._make_request(
-                    'GET', 
-                    f'/api/nodes/usage/{node_uuid}/users/range',
+                    'GET',
+                    f'/api/bandwidth-stats/nodes/{node_uuid}/users/legacy',
                     params=params
                 )
                 

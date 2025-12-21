@@ -2,6 +2,7 @@
 "ACCESS_DENIED":"❌拒绝访问",
 "ADDON_INSUFFICIENT_FUNDS_MESSAGE":"⚠️<b>资金不足</b>\n\n服务费用：{required}\n当前余额：{balance}\n缺少：{missing}\n\n请选择充值方式。金额将自动填入。",
 "ADD_COUNTRIES_BUTTON":"🌐添加国家",
+"BUY_TRAFFIC_BUTTON":"📈购买更多流量",
 "ADMIN_BACK_TO_ADMIN":"⬅️返回后台管理",
 "ADMIN_BACK_TO_LIST":"⬅️返回列表",
 "ADMIN_BACK_TO_MAIN":"🏠返回主菜单",

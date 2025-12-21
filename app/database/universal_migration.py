@@ -3715,6 +3715,133 @@ async def create_system_settings_table() -> bool:
         return False
 
 
+async def create_menu_layout_history_table() -> bool:
+    """Создаёт таблицу для хранения истории изменений конфигурации меню."""
+    table_exists = await check_table_exists("menu_layout_history")
+    if table_exists:
+        logger.info("ℹ️ Таблица menu_layout_history уже существует")
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == "sqlite":
+                create_table_sql = """
+                CREATE TABLE menu_layout_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    config_json TEXT NOT NULL,
+                    action VARCHAR(50) NOT NULL,
+                    changes_summary TEXT NULL,
+                    user_info VARCHAR(255) NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            elif db_type == "postgresql":
+                create_table_sql = """
+                CREATE TABLE menu_layout_history (
+                    id SERIAL PRIMARY KEY,
+                    config_json TEXT NOT NULL,
+                    action VARCHAR(50) NOT NULL,
+                    changes_summary TEXT NULL,
+                    user_info VARCHAR(255) NULL,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+                """
+            else:
+                create_table_sql = """
+                CREATE TABLE menu_layout_history (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    config_json TEXT NOT NULL,
+                    action VARCHAR(50) NOT NULL,
+                    changes_summary TEXT NULL,
+                    user_info VARCHAR(255) NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                ) ENGINE=InnoDB
+                """
+
+            await conn.execute(text(create_table_sql))
+            await conn.execute(text(
+                "CREATE INDEX ix_menu_layout_history_created ON menu_layout_history(created_at)"
+            ))
+            logger.info("✅ Таблица menu_layout_history создана")
+            return True
+
+    except Exception as error:
+        logger.error(f"❌ Ошибка создания таблицы menu_layout_history: {error}")
+        return False
+
+
+async def create_button_click_logs_table() -> bool:
+    """Создаёт таблицу для логирования кликов по кнопкам меню."""
+    table_exists = await check_table_exists("button_click_logs")
+    if table_exists:
+        logger.info("ℹ️ Таблица button_click_logs уже существует")
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == "sqlite":
+                create_table_sql = """
+                CREATE TABLE button_click_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    button_id VARCHAR(100) NOT NULL,
+                    user_id BIGINT NULL REFERENCES users(telegram_id) ON DELETE SET NULL,
+                    callback_data VARCHAR(255) NULL,
+                    clicked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    button_type VARCHAR(20) NULL,
+                    button_text VARCHAR(255) NULL
+                )
+                """
+            elif db_type == "postgresql":
+                create_table_sql = """
+                CREATE TABLE button_click_logs (
+                    id SERIAL PRIMARY KEY,
+                    button_id VARCHAR(100) NOT NULL,
+                    user_id BIGINT NULL REFERENCES users(telegram_id) ON DELETE SET NULL,
+                    callback_data VARCHAR(255) NULL,
+                    clicked_at TIMESTAMP DEFAULT NOW(),
+                    button_type VARCHAR(20) NULL,
+                    button_text VARCHAR(255) NULL
+                )
+                """
+            else:
+                create_table_sql = """
+                CREATE TABLE button_click_logs (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    button_id VARCHAR(100) NOT NULL,
+                    user_id BIGINT NULL,
+                    callback_data VARCHAR(255) NULL,
+                    clicked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    button_type VARCHAR(20) NULL,
+                    button_text VARCHAR(255) NULL,
+                    FOREIGN KEY (user_id) REFERENCES users(telegram_id) ON DELETE SET NULL
+                ) ENGINE=InnoDB
+                """
+
+            await conn.execute(text(create_table_sql))
+
+            # Создаём индексы отдельными запросами
+            index_statements = [
+                "CREATE INDEX ix_button_click_logs_button_id ON button_click_logs(button_id)",
+                "CREATE INDEX ix_button_click_logs_user_id ON button_click_logs(user_id)",
+                "CREATE INDEX ix_button_click_logs_clicked_at ON button_click_logs(clicked_at)",
+                "CREATE INDEX ix_button_click_logs_button_date ON button_click_logs(button_id, clicked_at)",
+                "CREATE INDEX ix_button_click_logs_user_date ON button_click_logs(user_id, clicked_at)",
+            ]
+            for stmt in index_statements:
+                await conn.execute(text(stmt))
+
+            logger.info("✅ Таблица button_click_logs создана")
+            return True
+
+    except Exception as error:
+        logger.error(f"❌ Ошибка создания таблицы button_click_logs: {error}")
+        return False
+
+
 async def create_web_api_tokens_table() -> bool:
     table_exists = await check_table_exists("web_api_tokens")
     if table_exists:
@@ -4315,6 +4442,20 @@ async def run_universal_migration():
             logger.info("✅ Таблица web_api_tokens готова")
         else:
             logger.warning("⚠️ Проблемы с таблицей web_api_tokens")
+
+        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ MENU_LAYOUT_HISTORY ===")
+        menu_layout_history_ready = await create_menu_layout_history_table()
+        if menu_layout_history_ready:
+            logger.info("✅ Таблица menu_layout_history готова")
+        else:
+            logger.warning("⚠️ Проблемы с таблицей menu_layout_history")
+
+        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ BUTTON_CLICK_LOGS ===")
+        button_click_logs_ready = await create_button_click_logs_table()
+        if button_click_logs_ready:
+            logger.info("✅ Таблица button_click_logs готова")
+        else:
+            logger.warning("⚠️ Проблемы с таблицей button_click_logs")
 
         logger.info("=== ДОБАВЛЕНИЕ КОЛОНКИ ДЛЯ ТРИАЛЬНЫХ СКВАДОВ ===")
         trial_column_ready = await add_server_trial_flag_column()
