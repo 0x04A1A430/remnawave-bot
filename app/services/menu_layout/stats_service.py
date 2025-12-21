@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import select, func, and_, desc, case, Integer
@@ -10,6 +10,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import ButtonClickLog
+
+
+def _utcnow() -> datetime:
+    """Возвращает текущее UTC время как naive datetime (без timezone).
+
+    Замена deprecated datetime.utcnow().
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class MenuLayoutStatsService:
@@ -79,7 +87,7 @@ class MenuLayoutStatsService:
         days: int = 30,
     ) -> Dict[str, Any]:
         """Получить статистику кликов по конкретной кнопке."""
-        now = datetime.utcnow()
+        now = _utcnow()
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         week_ago = now - timedelta(days=7)
         month_ago = now - timedelta(days=days)
@@ -155,7 +163,7 @@ class MenuLayoutStatsService:
         days: int = 30,
     ) -> List[Dict[str, Any]]:
         """Получить статистику кликов по дням."""
-        start_date = datetime.utcnow() - timedelta(days=days)
+        start_date = _utcnow() - timedelta(days=days)
 
         # Группировка по дате
         result = await db.execute(
@@ -183,7 +191,7 @@ class MenuLayoutStatsService:
         days: int = 30,
     ) -> List[Dict[str, Any]]:
         """Получить статистику по всем кнопкам."""
-        now = datetime.utcnow()
+        now = _utcnow()
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         week_ago = now - timedelta(days=7)
         month_ago = now - timedelta(days=days)
@@ -235,7 +243,7 @@ class MenuLayoutStatsService:
         days: int = 30,
     ) -> int:
         """Получить общее количество кликов за период."""
-        start_date = datetime.utcnow() - timedelta(days=days)
+        start_date = _utcnow() - timedelta(days=days)
 
         result = await db.execute(
             select(func.count(ButtonClickLog.id))
@@ -250,7 +258,7 @@ class MenuLayoutStatsService:
         days: int = 30,
     ) -> List[Dict[str, Any]]:
         """Получить статистику кликов по типам кнопок."""
-        start_date = datetime.utcnow() - timedelta(days=days)
+        start_date = _utcnow() - timedelta(days=days)
 
         result = await db.execute(
             select(
@@ -283,7 +291,7 @@ class MenuLayoutStatsService:
         days: int = 30,
     ) -> List[Dict[str, Any]]:
         """Получить статистику кликов по часам дня."""
-        start_date = datetime.utcnow() - timedelta(days=days)
+        start_date = _utcnow() - timedelta(days=days)
 
         # Используем helper-метод для совместимости с SQLite и PostgreSQL
         hour_expr = cls._get_hour_expr(ButtonClickLog.clicked_at).label("hour")
@@ -326,7 +334,7 @@ class MenuLayoutStatsService:
         Возвращает 0=понедельник, 6=воскресенье.
         Поддерживает как PostgreSQL, так и SQLite.
         """
-        start_date = datetime.utcnow() - timedelta(days=days)
+        start_date = _utcnow() - timedelta(days=days)
 
         # Используем helper-метод для совместимости с SQLite и PostgreSQL
         weekday_expr = cls._get_weekday_expr(ButtonClickLog.clicked_at).label("weekday")
@@ -372,7 +380,7 @@ class MenuLayoutStatsService:
         days: int = 30,
     ) -> List[Dict[str, Any]]:
         """Получить топ пользователей по количеству кликов."""
-        start_date = datetime.utcnow() - timedelta(days=days)
+        start_date = _utcnow() - timedelta(days=days)
 
         query = select(
             ButtonClickLog.user_id,
@@ -411,7 +419,7 @@ class MenuLayoutStatsService:
         previous_days: int = 7,
     ) -> Dict[str, Any]:
         """Сравнить статистику текущего и предыдущего периода."""
-        now = datetime.utcnow()
+        now = _utcnow()
         current_start = now - timedelta(days=current_days)
         previous_start = current_start - timedelta(days=previous_days)
         previous_end = current_start
