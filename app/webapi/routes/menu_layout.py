@@ -968,17 +968,20 @@ async def get_top_users(
 
         stats = await MenuLayoutService.get_top_users(db, button_id, limit, days)
 
-        logger.info(f"📊 Top users: {len(stats)} users, button_id={button_id}, limit={limit}, days={days}")
-        
+        logger.info(f"📊 Top users: {len(stats)} users, data={stats}, button_id={button_id}, limit={limit}, days={days}")
+
+        items = [
+            TopUserStats(
+                user_id=s["user_id"],
+                clicks_count=s["clicks_count"],
+                last_click_at=s["last_click_at"],
+            )
+            for s in stats
+        ]
+        logger.info(f"📊 Top users response items: {len(items)}")
+
         return TopUsersResponse(
-            items=[
-                TopUserStats(
-                    user_id=s["user_id"],
-                    clicks_count=s["clicks_count"],
-                    last_click_at=s["last_click_at"],
-                )
-                for s in stats
-            ],
+            items=items,
             button_id=button_id,
             limit=limit,
         )
