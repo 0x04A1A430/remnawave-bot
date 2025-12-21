@@ -1,7 +1,6 @@
 import logging
 import random
-from datetime import datetime
-from typing import Optional
+from datetime import datetime, timedelta
 
 from aiogram import Dispatcher, F, types
 from aiogram.fsm.context import FSMContext
@@ -11,8 +10,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.crud.contest import (
     get_active_rounds,
-    get_template_by_slug,
-    get_active_round_by_template,
     get_attempt,
     create_attempt,
     increment_winner_count,
@@ -47,10 +44,6 @@ def _user_allowed(subscription) -> bool:
     }
 
 
-async def _with_session() -> AsyncSession:
-    return AsyncSessionLocal()
-
-
 async def _award_prize(db: AsyncSession, user_id: int, prize_days: int, language: str) -> str:
     from app.database.crud.user import get_user_by_id
     user = await get_user_by_id(db, user_id)
@@ -62,12 +55,6 @@ async def _award_prize(db: AsyncSession, user_id: int, prize_days: int, language
     await extend_subscription(db, subscription, prize_days)
     texts = get_texts(language)
     return texts.t("CONTEST_PRIZE_GRANTED", "Бонус {days} дней зачислен!").format(days=prize_days)
-
-
-async def _ensure_round_for_template(template: ContestTemplate) -> Optional[ContestRound]:
-    async with AsyncSessionLocal() as db:
-        round_obj = await get_active_round_by_template(db, template.id)
-        return round_obj
 
 
 async def _reply_not_eligible(callback: types.CallbackQuery, language: str):
@@ -181,7 +168,6 @@ async def _render_quest(callback, db_user, round_obj: ContestRound, tpl: Contest
     texts = get_texts(db_user.language)
     rows = round_obj.payload.get("rows", 3)
     cols = round_obj.payload.get("cols", 3)
-    secret = random.randint(0, rows * cols - 1)
     keyboard = []
     for r in range(rows):
         row_buttons = []
@@ -190,7 +176,7 @@ async def _render_quest(callback, db_user, round_obj: ContestRound, tpl: Contest
             row_buttons.append(
                 types.InlineKeyboardButton(
                     text="🎛",
-                    callback_data=f"contest_pick_{round_obj.id}_{idx}_{secret}"
+                    callback_data=f"contest_pick_{round_obj.id}_quest_{idx}"
                 )
             )
         keyboard.append(row_buttons)
@@ -205,11 +191,10 @@ async def _render_quest(callback, db_user, round_obj: ContestRound, tpl: Contest
 async def _render_locks(callback, db_user, round_obj: ContestRound, tpl: ContestTemplate):
     texts = get_texts(db_user.language)
     total = round_obj.payload.get("total", 20)
-    secret = random.randint(0, total - 1)
     keyboard = []
     row = []
     for i in range(total):
-        row.append(types.InlineKeyboardButton(text="🔒", callback_data=f"contest_pick_{round_obj.id}_{i}_{secret}"))
+        row.append(types.InlineKeyboardButton(text="🔒", callback_data=f"contest_pick_{round_obj.id}_locks_{i}"))
         if len(row) == 5:
             keyboard.append(row)
             row = []
@@ -337,18 +322,30 @@ async def handle_pick(callback: types.CallbackQuery, db_user, db: AsyncSession):
         is_winner = False
         if tpl.slug == GAME_SERVER:
             is_winner = pick == correct_flag
-        elif tpl.slug in {GAME_QUEST, GAME_LOCKS}:
+        elif tpl.slug == GAME_QUEST:
+            # Format: quest_{idx}
             try:
-                idx_str, secret_str = pick.split("_", 1)
-                idx = int(idx_str)
-                secret = int(secret_str)
-                is_winner = idx == secret
-            except ValueError:
+                if pick.startswith("quest_"):
+                    idx = int(pick.split("_")[1])
+                    is_winner = secret_idx is not None and idx == secret_idx
+            except (ValueError, IndexError):
+                is_winner = False
+        elif tpl.slug == GAME_LOCKS:
+            # Format: locks_{idx}
+            try:
+                if pick.startswith("locks_"):
+                    idx = int(pick.split("_")[1])
+                    is_winner = secret_idx is not None and idx == secret_idx
+            except (ValueError, IndexError):
                 is_winner = False
         elif tpl.slug == GAME_BLITZ:
             is_winner = pick == "blitz"
         else:
             is_winner = False
+
+        # Check if max winners already reached
+        if is_winner and round_obj.winners_count >= round_obj.max_winners:
+            is_winner = False  # Too late, max winners already reached
 
         await create_attempt(db2, round_id=round_obj.id, user_id=db_user.id, answer=str(pick), is_winner=is_winner)
 
@@ -393,6 +390,11 @@ async def handle_text_answer(message: types.Message, state: FSMContext, db_user,
         correct = (round_obj.payload.get("answer") or "").upper()
 
         is_winner = correct and answer == correct
+
+        # Check if max winners already reached
+        if is_winner and round_obj.winners_count >= round_obj.max_winners:
+            is_winner = False  # Too late, max winners already reached
+
         await create_attempt(db2, round_id=round_obj.id, user_id=db_user.id, answer=answer, is_winner=is_winner)
 
         if is_winner:
@@ -402,24 +404,6 @@ async def handle_text_answer(message: types.Message, state: FSMContext, db_user,
         else:
             await message.answer(texts.t("CONTEST_LOSE", "Не верно, попробуй снова в следующем раунде."), reply_markup=get_back_keyboard(db_user.language))
     await state.clear()
-
-
-async def _award_prize(db: AsyncSession, user_id: int, prize_days: int, language: str) -> str:
-    from app.database.crud.subscription import get_subscription_by_user_id
-
-    logger = logging.getLogger(__name__)
-
-    subscription = await get_subscription_by_user_id(db, user_id)
-    if not subscription:
-        return "ошибка: подписка не найдена"
-
-    current_time = datetime.utcnow()
-    subscription.end_date = subscription.end_date + timedelta(days=prize_days)
-    subscription.updated_at = current_time
-    await db.commit()
-    await db.refresh(subscription)
-    logger.info(f"🎁 Продлена подписка пользователя {user_id} на {prize_days} дней за конкурс")
-    return f"подписка продлена на {prize_days} дней"
 
 
 def register_handlers(dp: Dispatcher):
