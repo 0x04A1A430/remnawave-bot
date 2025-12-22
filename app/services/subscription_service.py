@@ -94,7 +94,8 @@ class SubscriptionService:
         secret_key = (auth_params.get("secret_key") or "").strip() or None
         username = (auth_params.get("username") or "").strip() or None
         password = (auth_params.get("password") or "").strip() or None
-        auth_type = (auth_params.get("auth_type") or "").strip() or None
+        caddy_token = (auth_params.get("caddy_token") or "").strip() or None
+        auth_type = (auth_params.get("auth_type") or "api_key").strip()
 
         config_signature = (
             base_url,
@@ -102,7 +103,8 @@ class SubscriptionService:
             secret_key or "",
             username or "",
             password or "",
-            auth_type or "",
+            caddy_token or "",
+            auth_type,
         )
 
         if config_signature == self._last_config_signature:
@@ -122,6 +124,8 @@ class SubscriptionService:
                 secret_key=secret_key,
                 username=username,
                 password=password,
+                caddy_token=caddy_token,
+                auth_type=auth_type,
             )
 
         if self._config_error:

@@ -79,7 +79,8 @@ class Settings(BaseSettings):
 
     REMNAWAVE_USERNAME: Optional[str] = None
     REMNAWAVE_PASSWORD: Optional[str] = None
-    REMNAWAVE_AUTH_TYPE: str = "api_key"
+    REMNAWAVE_CADDY_TOKEN: Optional[str] = None
+    REMNAWAVE_AUTH_TYPE: str = "api_key"  # api_key, basic, bearer, cookies, caddy
     REMNAWAVE_USER_DESCRIPTION_TEMPLATE: str = "Bot user: {full_name} {username}"
     REMNAWAVE_USER_USERNAME_TEMPLATE: str = "user_{telegram_id}"
     REMNAWAVE_USER_DELETE_MODE: str = "delete"  # "delete" или "disable"
@@ -575,6 +576,7 @@ class Settings(BaseSettings):
             "secret_key": self.REMNAWAVE_SECRET_KEY,
             "username": self.REMNAWAVE_USERNAME,
             "password": self.REMNAWAVE_PASSWORD,
+            "caddy_token": self.REMNAWAVE_CADDY_TOKEN,
             "auth_type": self.REMNAWAVE_AUTH_TYPE
         }
 

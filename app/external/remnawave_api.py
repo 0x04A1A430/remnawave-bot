@@ -225,14 +225,24 @@ class RemnaWaveAPIError(Exception):
 
 
 class RemnaWaveAPI:
-    
-    def __init__(self, base_url: str, api_key: str, secret_key: Optional[str] = None, 
-                 username: Optional[str] = None, password: Optional[str] = None):
+
+    def __init__(
+        self,
+        base_url: str,
+        api_key: str,
+        secret_key: Optional[str] = None,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+        caddy_token: Optional[str] = None,
+        auth_type: str = "api_key",
+    ):
         self.base_url = base_url.rstrip('/')
         self.api_key = api_key
         self.secret_key = secret_key
         self.username = username
         self.password = password
+        self.caddy_token = caddy_token
+        self.auth_type = auth_type.lower() if auth_type else "api_key"
         self.session: Optional[aiohttp.ClientSession] = None
         self.authenticated = False
         
@@ -264,19 +274,32 @@ class RemnaWaveAPI:
             'X-Forwarded-For': '127.0.0.1',
             'X-Real-IP': '127.0.0.1'
         }
-        
-        if self.username and self.password:
-            import base64
+
+        # Caddy авторизация — добавляется поверх основной
+        if self.caddy_token:
+            # Caddy Security: готовый base64 токен используется как есть
+            headers['Authorization'] = f'Basic {self.caddy_token}'
+            logger.debug("Используем Caddy Basic Auth")
+
+        # Основная авторизация RemnaWave API
+        if self.auth_type == "basic" and self.username and self.password:
             credentials = f"{self.username}:{self.password}"
             encoded_credentials = base64.b64encode(credentials.encode()).decode()
             headers['X-Api-Key'] = f"Basic {encoded_credentials}"
             logger.debug("Используем Basic Auth в X-Api-Key заголовке")
+        elif self.auth_type == "caddy":
+            # Для caddy auth_type основная авторизация уже в Authorization header
+            # Но API ключ всё равно нужен для RemnaWave
+            if self.api_key:
+                headers['X-Api-Key'] = self.api_key
+                logger.debug("Используем API ключ для RemnaWave + Caddy авторизацию")
         else:
+            # api_key или bearer — стандартный режим
             headers['X-Api-Key'] = self.api_key
+            if not self.caddy_token:
+                headers['Authorization'] = f'Bearer {self.api_key}'
             logger.debug("Используем API ключ в X-Api-Key заголовке")
-        
-        headers['Authorization'] = f'Bearer {self.api_key}'
-        
+
         return headers
         
     async def __aenter__(self):
