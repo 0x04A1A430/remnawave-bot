@@ -61,12 +61,12 @@
 
 ### 📚 Поддерживаемые методы авторизации
 
-| Метод | Заголовок | Описание |
-|-------|-----------|----------|
-| API Key | X-Api-Key: your_api_key | Стандартный API ключ |
-| Bearer Token | Authorization: Bearer token | Классический Bearer token |
-| Basic Auth | X-Api-Key: Basic base64(user:pass) | Basic Authentication |
-| eGames Cookies | Cookies в формате key:value | Для панелей eGames |
+  | Конфигурация     | Authorization       | X-Api-Key           |
+  |------------------|---------------------|---------------------|
+  | Только API Key   | Bearer <api_key>    | <api_key>           |
+  | Basic Auth       | Bearer <api_key>    | Basic <user:pass>   |
+  | Caddy + API Key  | Basic <caddy_token> | <api_key>           |
+  | Cookies (eGames) | Bearer <api_key>    | <api_key> + cookies |
 
 ---
 
