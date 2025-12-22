@@ -3,11 +3,14 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Optional
 
+from aiogram import Bot
+from aiogram.client.default import DefaultBotProperties
+from aiogram.enums import ParseMode
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.bot import bot
+from app.config import settings
 from app.database.models import PinnedMessage
 from app.services.pinned_message_service import (
     broadcast_pinned_message,
@@ -43,6 +46,14 @@ def _serialize_pinned_message(msg: PinnedMessage) -> PinnedMessageResponse:
         created_by=msg.created_by,
         created_at=msg.created_at,
         updated_at=msg.updated_at,
+    )
+
+
+def _get_bot() -> Bot:
+    """Создать экземпляр бота для API операций."""
+    return Bot(
+        token=settings.BOT_TOKEN,
+        default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
 
 
@@ -143,7 +154,7 @@ async def create_pinned_message(
     failed_count = 0
 
     if broadcast:
-        sent_count, failed_count = await broadcast_pinned_message(bot, db, msg)
+        sent_count, failed_count = await broadcast_pinned_message(_get_bot(), db, msg)
 
     return PinnedMessageBroadcastResponse(
         message=_serialize_pinned_message(msg),
@@ -273,7 +284,7 @@ async def activate_pinned_message(
     failed_count = 0
 
     if broadcast:
-        sent_count, failed_count = await broadcast_pinned_message(bot, db, msg)
+        sent_count, failed_count = await broadcast_pinned_message(_get_bot(), db, msg)
 
     return PinnedMessageBroadcastResponse(
         message=_serialize_pinned_message(msg),
@@ -300,7 +311,7 @@ async def broadcast_message(
     if not msg:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Pinned message not found")
 
-    sent_count, failed_count = await broadcast_pinned_message(bot, db, msg)
+    sent_count, failed_count = await broadcast_pinned_message(_get_bot(), db, msg)
 
     return PinnedMessageBroadcastResponse(
         message=_serialize_pinned_message(msg),
@@ -335,7 +346,7 @@ async def unpin_active_message(
 
     Удаляет закреплённое сообщение из чатов всех активных пользователей.
     """
-    unpinned_count, failed_count, was_active = await unpin_active_pinned_message(bot, db)
+    unpinned_count, failed_count, was_active = await unpin_active_pinned_message(_get_bot(), db)
     return PinnedMessageUnpinResponse(
         unpinned_count=unpinned_count,
         failed_count=failed_count,
