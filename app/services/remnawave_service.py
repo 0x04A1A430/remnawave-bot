@@ -165,7 +165,9 @@ class RemnaWaveService:
                 api_key=api_key,
                 secret_key=auth_params.get("secret_key"),
                 username=auth_params.get("username"),
-                password=auth_params.get("password")
+                password=auth_params.get("password"),
+                caddy_token=auth_params.get("caddy_token"),
+                auth_type=auth_params.get("auth_type") or "api_key",
             )
 
     @property
