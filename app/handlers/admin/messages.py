@@ -344,6 +344,7 @@ async def process_pinned_message_update(
     state: FSMContext,
     db: AsyncSession,
 ):
+    texts = get_texts(db_user.language)
     media_type: Optional[str] = None
     media_file_id: Optional[str] = None
 
@@ -357,7 +358,9 @@ async def process_pinned_message_update(
     pinned_text = message.html_text or message.caption_html or message.text or message.caption or ""
 
     if not pinned_text and not media_file_id:
-        await message.answer("❌ Не удалось прочитать текст или медиа в сообщении, попробуйте снова.")
+        await message.answer(
+            texts.t("ADMIN_PINNED_NO_CONTENT", "❌ Не удалось прочитать текст или медиа в сообщении, попробуйте снова.")
+        )
         return
 
     try:
@@ -373,7 +376,7 @@ async def process_pinned_message_update(
         return
 
     await message.answer(
-        "📌 Сообщение сохранено. Начинаю отправку и закрепление у пользователей...",
+        texts.t("ADMIN_PINNED_SAVING", "📌 Сообщение сохранено. Начинаю отправку и закрепление у пользователей..."),
         parse_mode="HTML",
     )
 
@@ -385,10 +388,13 @@ async def process_pinned_message_update(
 
     total = sent_count + failed_count
     await message.answer(
-        "✅ <b>Закрепленное сообщение обновлено</b>\n\n"
-        f"👥 Получателей: {total}\n"
-        f"✅ Отправлено: {sent_count}\n"
-        f"⚠️ Ошибок: {failed_count}",
+        texts.t(
+            "ADMIN_PINNED_UPDATED",
+            "✅ <b>Закрепленное сообщение обновлено</b>\n\n"
+            "👥 Получателей: {total}\n"
+            "✅ Отправлено: {sent}\n"
+            "⚠️ Ошибок: {failed}",
+        ).format(total=total, sent=sent_count, failed=failed_count),
         reply_markup=get_admin_messages_keyboard(db_user.language),
         parse_mode="HTML",
     )
