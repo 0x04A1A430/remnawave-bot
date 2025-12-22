@@ -354,7 +354,7 @@ async def unpin_active_message(
     )
 
 
-@router.delete("/{message_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{message_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def delete_pinned_message(
     message_id: int,
     token: Any = Depends(require_api_token),
