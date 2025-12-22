@@ -303,6 +303,7 @@ async def _send_and_pin_message(bot: Bot, chat_id: int, pinned_message: PinnedMe
                 text=pinned_message.content,
                 parse_mode="HTML",
                 disable_web_page_preview=True,
+                disable_notification=True,
             )
         await bot.pin_chat_message(
             chat_id=chat_id,
