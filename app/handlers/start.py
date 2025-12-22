@@ -36,6 +36,7 @@ from app.services.subscription_service import SubscriptionService
 from app.services.support_settings_service import SupportSettingsService
 from app.services.main_menu_button_service import MainMenuButtonService
 from app.services.privacy_policy_service import PrivacyPolicyService
+from app.services.pinned_message_service import deliver_pinned_message_to_user
 from app.utils.user_utils import generate_unique_referral_code
 from app.utils.promo_offer import (
     build_promo_offer_hint,
@@ -59,6 +60,17 @@ def _calculate_subscription_flags(subscription):
     subscription_is_active = bool(getattr(subscription, "is_active", False))
 
     return has_active_subscription, subscription_is_active
+
+
+async def _send_pinned_message(bot: Bot, db: AsyncSession, user, position_filter: str | None = None) -> None:
+    try:
+        await deliver_pinned_message_to_user(bot, db, user, position_filter=position_filter)
+    except Exception as error:  # noqa: BLE001
+        logger.error(
+            "Не удалось отправить закрепленное сообщение пользователю %s: %s",
+            getattr(user, "telegram_id", "unknown"),
+            error,
+        )
 
 
 async def _apply_campaign_bonus_if_needed(
@@ -433,11 +445,13 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             is_moderator=is_moderator,
             custom_buttons=custom_buttons,
         )
+        await _send_pinned_message(message.bot, db, user, position_filter="before_menu")
         await message.answer(
             menu_text,
             reply_markup=keyboard,
             parse_mode="HTML"
         )
+        await _send_pinned_message(message.bot, db, user, position_filter="after_menu")
         await state.clear()
         return
 
@@ -1089,11 +1103,13 @@ async def complete_registration_from_callback(
                 is_moderator=is_moderator,
                 custom_buttons=custom_buttons,
             )
+            await _send_pinned_message(callback.bot, db, existing_user, position_filter="before_menu")
             await callback.message.answer(
                 menu_text,
                 reply_markup=keyboard,
                 parse_mode="HTML"
             )
+            await _send_pinned_message(callback.bot, db, existing_user, position_filter="after_menu")
         except Exception as e:
             logger.error(f"Ошибка при показе главного меню существующему пользователю: {e}")
             await callback.message.answer(
@@ -1232,6 +1248,8 @@ async def complete_registration_from_callback(
                 reply_markup=get_post_registration_keyboard(user.language),
             )
             logger.info(f"✅ Приветственное сообщение отправлено пользователю {user.telegram_id}")
+            await _send_pinned_message(callback.bot, db, user, position_filter="before_menu")
+            await _send_pinned_message(callback.bot, db, user, position_filter="after_menu")
         except Exception as e:
             logger.error(f"Ошибка при отправке приветственного сообщения: {e}")
     else:
@@ -1272,11 +1290,13 @@ async def complete_registration_from_callback(
                 is_moderator=is_moderator,
                 custom_buttons=custom_buttons,
             )
+            await _send_pinned_message(callback.bot, db, user, position_filter="before_menu")
             await callback.message.answer(
                 menu_text,
                 reply_markup=keyboard,
                 parse_mode="HTML"
             )
+            await _send_pinned_message(callback.bot, db, user, position_filter="after_menu")
             logger.info(f"✅ Главное меню показано пользователю {user.telegram_id}")
         except Exception as e:
             logger.error(f"Ошибка при показе главного меню: {e}")
@@ -1369,11 +1389,13 @@ async def complete_registration(
                 is_moderator=is_moderator,
                 custom_buttons=custom_buttons,
             )
+            await _send_pinned_message(message.bot, db, existing_user, position_filter="before_menu")
             await message.answer(
                 menu_text,
                 reply_markup=keyboard,
                 parse_mode="HTML"
             )
+            await _send_pinned_message(message.bot, db, existing_user, position_filter="after_menu")
         except Exception as e:
             logger.error(f"Ошибка при показе главного меню существующему пользователю: {e}")
             await message.answer(
@@ -1535,6 +1557,8 @@ async def complete_registration(
                 reply_markup=get_post_registration_keyboard(user.language),
             )
             logger.info(f"✅ Приветственное сообщение отправлено пользователю {user.telegram_id}")
+            await _send_pinned_message(message.bot, db, user, position_filter="before_menu")
+            await _send_pinned_message(message.bot, db, user, position_filter="after_menu")
         except Exception as e:
             logger.error(f"Ошибка при отправке приветственного сообщения: {e}")
     else:
@@ -1575,12 +1599,14 @@ async def complete_registration(
                 is_moderator=is_moderator,
                 custom_buttons=custom_buttons,
             )
+            await _send_pinned_message(message.bot, db, user, position_filter="before_menu")
             await message.answer(
                 menu_text,
                 reply_markup=keyboard,
                 parse_mode="HTML"
             )
             logger.info(f"✅ Главное меню показано пользователю {user.telegram_id}")
+            await _send_pinned_message(message.bot, db, user, position_filter="after_menu")
         except Exception as e:
             logger.error(f"Ошибка при показе главного меню: {e}")
             await message.answer(
@@ -1925,6 +1951,8 @@ async def required_sub_channel_check(
                     reply_markup=keyboard,
                     parse_mode="HTML",
                 )
+            await _send_pinned_message(bot, db, user, position_filter="before_menu")
+            await _send_pinned_message(bot, db, user, position_filter="after_menu")
         else:
             from app.keyboards.inline import get_rules_keyboard
 

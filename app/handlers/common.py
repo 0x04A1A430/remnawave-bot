@@ -67,7 +67,7 @@ async def handle_cancel(
 
 async def handle_unknown_message(
     message: types.Message,
-    db_user: User
+    db_user: User | None = None
 ):
     
     texts = get_texts(db_user.language if db_user else "ru")
