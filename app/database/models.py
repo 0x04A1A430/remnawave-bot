@@ -611,6 +611,7 @@ class User(Base):
     promo_group = relationship("PromoGroup", back_populates="users")
     user_promo_groups = relationship("UserPromoGroup", back_populates="user", cascade="all, delete-orphan")
     poll_responses = relationship("PollResponse", back_populates="user")
+    last_pinned_message_id = Column(Integer, nullable=True)
 
     @property
     def balance_rubles(self) -> float:
@@ -1551,6 +1552,23 @@ class WelcomeText(Base):
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
     creator = relationship("User", backref="created_welcome_texts")
+
+
+class PinnedMessage(Base):
+    __tablename__ = "pinned_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    content = Column(Text, nullable=False, default="")
+    media_type = Column(String(32), nullable=True)
+    media_file_id = Column(String(255), nullable=True)
+    send_before_menu = Column(Boolean, nullable=False, server_default="1", default=True)
+    send_on_every_start = Column(Boolean, nullable=False, server_default="1", default=True)
+    is_active = Column(Boolean, default=True)
+    created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    creator = relationship("User", backref="pinned_messages")
 
 
 class AdvertisingCampaign(Base):
