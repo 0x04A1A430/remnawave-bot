@@ -1142,12 +1142,14 @@ class RemnaWaveService:
             async with self.get_api_client() as api:
                 panel_users = []
                 start = 0
-                size = 100 
+                size = 500  # Увеличен размер батча для ускорения загрузки 
                 
                 while True:
                     logger.info(f"📥 Загружаем пользователей: start={start}, size={size}")
-                    
-                    response = await api.get_all_users(start=start, size=size, enrich_happ_links=True)
+
+                    # enrich_happ_links=False - happ_crypto_link уже возвращается API в поле happ.cryptoLink
+                    # Не делаем дополнительные HTTP-запросы для каждого пользователя
+                    response = await api.get_all_users(start=start, size=size, enrich_happ_links=False)
                     users_batch = response['users']
                     total_users = response['total']
                     
@@ -1370,20 +1372,40 @@ class RemnaWaveService:
                 processed_count = 0
                 cleanup_uuid_mutations: List[_UUIDMapMutation] = []
 
-                for telegram_id, db_user in bot_users_by_telegram_id.items():
-                    if telegram_id not in panel_telegram_ids and hasattr(db_user, 'subscription') and db_user.subscription:
+                # Собираем список пользователей для деактивации
+                users_to_deactivate = [
+                    (telegram_id, db_user)
+                    for telegram_id, db_user in bot_users_by_telegram_id.items()
+                    if telegram_id not in panel_telegram_ids
+                    and hasattr(db_user, 'subscription')
+                    and db_user.subscription
+                ]
+
+                if users_to_deactivate:
+                    logger.info(f"📊 Найдено {len(users_to_deactivate)} пользователей для деактивации")
+
+                # Используем один API клиент для всех операций сброса HWID
+                hwid_api_client = None
+                try:
+                    hwid_api_client = self.get_api_client()
+                    await hwid_api_client.__aenter__()
+                except Exception as api_init_error:
+                    logger.warning(f"⚠️ Не удалось создать API клиент для сброса HWID: {api_init_error}")
+                    hwid_api_client = None
+
+                try:
+                    for telegram_id, db_user in users_to_deactivate:
                         cleanup_mutation: Optional[_UUIDMapMutation] = None
                         try:
                             logger.info(f"🗑️ Деактивация подписки пользователя {telegram_id} (нет в панели)")
 
                             subscription = db_user.subscription
-                            
-                            if db_user.remnawave_uuid:
+
+                            if db_user.remnawave_uuid and hwid_api_client:
                                 try:
-                                    async with self.get_api_client() as api:
-                                        devices_reset = await api.reset_user_devices(db_user.remnawave_uuid)
-                                        if devices_reset:
-                                            logger.info(f"🔧 Сброшены HWID устройства для пользователя {telegram_id}")
+                                    devices_reset = await hwid_api_client.reset_user_devices(db_user.remnawave_uuid)
+                                    if devices_reset:
+                                        logger.info(f"🔧 Сброшены HWID устройства для пользователя {telegram_id}")
                                 except Exception as hwid_error:
                                     logger.error(f"❌ Ошибка сброса HWID устройств для {telegram_id}: {hwid_error}")
                             
@@ -1459,21 +1481,26 @@ class RemnaWaveService:
                                     cleanup_uuid_mutations.clear()
                                     stats["errors"] += batch_size
                                     break  # Прерываем цикл при ошибке коммита
-                    else:
-                        # Увеличиваем счетчик для отслеживания прогресса
-                        processed_count += 1
 
-                # Коммитим оставшиеся изменения
-                try:
-                    await db.commit()
-                    cleanup_uuid_mutations.clear()
-                except Exception as final_commit_error:
-                    logger.error(f"❌ Ошибка финального коммита при деактивации: {final_commit_error}")
-                    await db.rollback()
-                    for mutation in reversed(cleanup_uuid_mutations):
-                        mutation.rollback()
-                    cleanup_uuid_mutations.clear()
-            
+                    # Коммитим оставшиеся изменения
+                    try:
+                        await db.commit()
+                        cleanup_uuid_mutations.clear()
+                    except Exception as final_commit_error:
+                        logger.error(f"❌ Ошибка финального коммита при деактивации: {final_commit_error}")
+                        await db.rollback()
+                        for mutation in reversed(cleanup_uuid_mutations):
+                            mutation.rollback()
+                        cleanup_uuid_mutations.clear()
+
+                finally:
+                    # Закрываем API клиент
+                    if hwid_api_client:
+                        try:
+                            await hwid_api_client.__aexit__(None, None, None)
+                        except Exception:
+                            pass
+
             logger.info(f"🎯 Синхронизация завершена: создано {stats['created']}, обновлено {stats['updated']}, деактивировано {stats['deleted']}, ошибок {stats['errors']}")
             return stats
         
