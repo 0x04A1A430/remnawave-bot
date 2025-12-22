@@ -838,40 +838,8 @@ def get_admin_messages_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
             )
         ],
         [
-            InlineKeyboardButton(
-                text=_t(texts, "ADMIN_PINNED_MESSAGE", "📌 Закрепленное сообщение"),
-                callback_data="admin_pinned_message",
-            )
-        ],
-        [
             InlineKeyboardButton(text=texts.BACK, callback_data="admin_submenu_communications")
         ]
-    ])
-
-
-def get_pinned_message_keyboard(language: str = "ru", position: str | None = None) -> InlineKeyboardMarkup:
-    texts = get_texts(language)
-
-    position_label = ""
-    if position:
-        before_label = texts.t("PINNED_POSITION_BEFORE_MENU", "До меню")
-        after_label = texts.t("PINNED_POSITION_AFTER_MENU", "После меню")
-        position_label = " (" + (before_label if position == "before_menu" else after_label) + ")"
-
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(
-                text=_t(texts, "ADMIN_PINNED_MESSAGE_UPDATE", "✏️ Обновить"),
-                callback_data="admin_pinned_message_edit",
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=_t(texts, "ADMIN_PINNED_MESSAGE_POSITION", f"🔄 Позиция{position_label}"),
-                callback_data="admin_pinned_message_position",
-            )
-        ],
-        [InlineKeyboardButton(text=texts.BACK, callback_data="admin_messages")],
     ])
 
 
