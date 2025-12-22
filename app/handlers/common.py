@@ -67,7 +67,7 @@ async def handle_cancel(
 
 async def handle_unknown_message(
     message: types.Message,
-    db_user: User | None = None,
+    db_user: User
 ):
     
     texts = get_texts(db_user.language if db_user else "ru")
@@ -126,8 +126,6 @@ def register_handlers(dp: Dispatcher):
     dp.message.register(
         handle_unknown_message,
         StateFilter(None),
-        F.successful_payment.is_(None),
-        F.text.is_not(None),
-        ~F.text.startswith("/"),
+        F.successful_payment.is_(None)
     )
     
