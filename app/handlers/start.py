@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime
+from typing import Optional
 from aiogram import Dispatcher, types, F, Bot
 from aiogram.enums import ChatMemberStatus
 from aiogram.exceptions import TelegramForbiddenError
@@ -18,7 +19,7 @@ from app.database.crud.campaign import (
     get_campaign_by_start_parameter,
     get_campaign_by_id,
 )
-from app.database.models import UserStatus, SubscriptionStatus
+from app.database.models import PinnedMessage, SubscriptionStatus, UserStatus
 from app.keyboards.inline import (
     get_rules_keyboard,
     get_privacy_policy_keyboard,
@@ -36,6 +37,10 @@ from app.services.subscription_service import SubscriptionService
 from app.services.support_settings_service import SupportSettingsService
 from app.services.main_menu_button_service import MainMenuButtonService
 from app.services.privacy_policy_service import PrivacyPolicyService
+from app.services.pinned_message_service import (
+    deliver_pinned_message_to_user,
+    get_active_pinned_message,
+)
 from app.utils.user_utils import generate_unique_referral_code
 from app.utils.promo_offer import (
     build_promo_offer_hint,
@@ -59,6 +64,22 @@ def _calculate_subscription_flags(subscription):
     subscription_is_active = bool(getattr(subscription, "is_active", False))
 
     return has_active_subscription, subscription_is_active
+
+
+async def _send_pinned_message(
+    bot: Bot,
+    db: AsyncSession,
+    user,
+    pinned_message: Optional[PinnedMessage] = None,
+) -> None:
+    try:
+        await deliver_pinned_message_to_user(bot, db, user, pinned_message)
+    except Exception as error:  # noqa: BLE001
+        logger.error(
+            "Не удалось отправить закрепленное сообщение пользователю %s: %s",
+            getattr(user, "telegram_id", "unknown"),
+            error,
+        )
 
 
 async def _apply_campaign_bonus_if_needed(
@@ -404,6 +425,14 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             user.subscription
         )
 
+        pinned_message = await get_active_pinned_message(db)
+        should_send_pinned = bool(pinned_message)
+        if pinned_message and not pinned_message.send_on_every_start:
+            should_send_pinned = user.last_pinned_message_id != pinned_message.id
+
+        if pinned_message and pinned_message.send_before_menu and should_send_pinned:
+            await _send_pinned_message(message.bot, db, user, pinned_message)
+
         menu_text = await get_main_menu_text(user, texts, db)
 
         is_admin = settings.is_admin(user.telegram_id)
@@ -438,6 +467,9 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             reply_markup=keyboard,
             parse_mode="HTML"
         )
+
+        if pinned_message and not pinned_message.send_before_menu and should_send_pinned:
+            await _send_pinned_message(message.bot, db, user, pinned_message)
         await state.clear()
         return
 
@@ -1094,6 +1126,7 @@ async def complete_registration_from_callback(
                 reply_markup=keyboard,
                 parse_mode="HTML"
             )
+            await _send_pinned_message(callback.bot, db, existing_user)
         except Exception as e:
             logger.error(f"Ошибка при показе главного меню существующему пользователю: {e}")
             await callback.message.answer(
@@ -1232,6 +1265,7 @@ async def complete_registration_from_callback(
                 reply_markup=get_post_registration_keyboard(user.language),
             )
             logger.info(f"✅ Приветственное сообщение отправлено пользователю {user.telegram_id}")
+            await _send_pinned_message(callback.bot, db, user)
         except Exception as e:
             logger.error(f"Ошибка при отправке приветственного сообщения: {e}")
     else:
@@ -1277,6 +1311,7 @@ async def complete_registration_from_callback(
                 reply_markup=keyboard,
                 parse_mode="HTML"
             )
+            await _send_pinned_message(callback.bot, db, user)
             logger.info(f"✅ Главное меню показано пользователю {user.telegram_id}")
         except Exception as e:
             logger.error(f"Ошибка при показе главного меню: {e}")
@@ -1374,6 +1409,7 @@ async def complete_registration(
                 reply_markup=keyboard,
                 parse_mode="HTML"
             )
+            await _send_pinned_message(message.bot, db, existing_user)
         except Exception as e:
             logger.error(f"Ошибка при показе главного меню существующему пользователю: {e}")
             await message.answer(
@@ -1535,6 +1571,7 @@ async def complete_registration(
                 reply_markup=get_post_registration_keyboard(user.language),
             )
             logger.info(f"✅ Приветственное сообщение отправлено пользователю {user.telegram_id}")
+            await _send_pinned_message(message.bot, db, user)
         except Exception as e:
             logger.error(f"Ошибка при отправке приветственного сообщения: {e}")
     else:
@@ -1581,6 +1618,7 @@ async def complete_registration(
                 parse_mode="HTML"
             )
             logger.info(f"✅ Главное меню показано пользователю {user.telegram_id}")
+            await _send_pinned_message(message.bot, db, user)
         except Exception as e:
             logger.error(f"Ошибка при показе главного меню: {e}")
             await message.answer(
@@ -1925,6 +1963,7 @@ async def required_sub_channel_check(
                     reply_markup=keyboard,
                     parse_mode="HTML",
                 )
+            await _send_pinned_message(bot, db, user)
         else:
             from app.keyboards.inline import get_rules_keyboard
 
