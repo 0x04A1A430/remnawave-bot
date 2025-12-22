@@ -1,5 +1,8 @@
+import asyncio
+import logging
+
 from aiogram import types
-from aiogram.exceptions import TelegramBadRequest
+from aiogram.exceptions import TelegramBadRequest, TelegramNetworkError
 from aiogram.types import FSInputFile, InputMediaPhoto
 
 from app.config import settings
@@ -10,6 +13,11 @@ from .message_patch import (
     is_qr_message,
     prepare_privacy_safe_kwargs,
 )
+
+logger = logging.getLogger(__name__)
+
+MAX_RETRIES = 3
+RETRY_DELAY = 0.5
 
 
 def _resolve_media(message: types.Message):
@@ -104,34 +112,56 @@ async def edit_or_answer_photo(
         return
 
     media = _resolve_media(callback.message)
-    try:
-        await callback.message.edit_media(
-            InputMediaPhoto(media=media, caption=caption, parse_mode=(parse_mode or "HTML")),
-            reply_markup=keyboard,
-        )
-    except TelegramBadRequest as error:
-        if is_privacy_restricted_error(error):
+
+    # Retry logic для сетевых ошибок
+    for attempt in range(MAX_RETRIES):
+        try:
+            await callback.message.edit_media(
+                InputMediaPhoto(media=media, caption=caption, parse_mode=(parse_mode or "HTML")),
+                reply_markup=keyboard,
+            )
+            return  # Успешно — выходим
+        except TelegramNetworkError as net_error:
+            if attempt < MAX_RETRIES - 1:
+                logger.warning(
+                    "Сетевая ошибка edit_media (попытка %d/%d): %s",
+                    attempt + 1, MAX_RETRIES, net_error
+                )
+                await asyncio.sleep(RETRY_DELAY * (attempt + 1))
+                continue
+            else:
+                logger.error("Сетевая ошибка edit_media после %d попыток: %s", MAX_RETRIES, net_error)
+                # После всех попыток — фоллбек на текст
+                try:
+                    await callback.message.delete()
+                except Exception:
+                    pass
+                await _answer_text(callback, caption, keyboard, resolved_parse_mode)
+                return
+        except TelegramBadRequest as error:
+            if is_privacy_restricted_error(error):
+                try:
+                    await callback.message.delete()
+                except Exception:
+                    pass
+                await _answer_text(callback, caption, keyboard, resolved_parse_mode, error)
+                return
+            # Фоллбек: если не удалось обновить фото — отправим текст
             try:
                 await callback.message.delete()
             except Exception:
                 pass
-            await _answer_text(callback, caption, keyboard, resolved_parse_mode, error)
+            try:
+                # Отправим как фото с логотипом
+                await callback.message.answer_photo(
+                    photo=media if isinstance(media, FSInputFile) else FSInputFile(LOGO_PATH),
+                    caption=caption,
+                    reply_markup=keyboard,
+                    parse_mode=resolved_parse_mode,
+                )
+            except TelegramBadRequest as photo_error:
+                await _answer_text(callback, caption, keyboard, resolved_parse_mode, photo_error)
+            except Exception:
+                # Последний фоллбек — обычный текст
+                await _answer_text(callback, caption, keyboard, resolved_parse_mode)
             return
-        # Фоллбек: если не удалось обновить фото — отправим текст, чтобы не упасть на лимите caption
-        try:
-            await callback.message.delete()
-        except Exception:
-            pass
-        try:
-            # Отправим как фото с логотипом
-            await callback.message.answer_photo(
-                photo=media if isinstance(media, FSInputFile) else FSInputFile(LOGO_PATH),
-                caption=caption,
-                reply_markup=keyboard,
-                parse_mode=resolved_parse_mode,
-            )
-        except TelegramBadRequest as photo_error:
-            await _answer_text(callback, caption, keyboard, resolved_parse_mode, photo_error)
-        except Exception:
-            # Последний фоллбек — обычный текст
-            await _answer_text(callback, caption, keyboard, resolved_parse_mode)
