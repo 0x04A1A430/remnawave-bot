@@ -838,64 +838,8 @@ def get_admin_messages_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
             )
         ],
         [
-            InlineKeyboardButton(
-                text=_t(texts, "ADMIN_PINNED_MESSAGE", "📌 Закрепленное сообщение"),
-                callback_data="admin_pinned_message",
-            )
-        ],
-        [
             InlineKeyboardButton(text=texts.BACK, callback_data="admin_submenu_communications")
         ]
-    ])
-
-
-def get_pinned_message_keyboard(
-    language: str = "ru",
-    send_before_menu: bool = True,
-    send_on_every_start: bool = True,
-) -> InlineKeyboardMarkup:
-    texts = get_texts(language)
-
-    position_label = (
-        _t(texts, "ADMIN_PINNED_POSITION_BEFORE", "⬆️ Показать перед меню")
-        if send_before_menu
-        else _t(texts, "ADMIN_PINNED_POSITION_AFTER", "⬇️ Показать после меню")
-    )
-    toggle_callback = "admin_pinned_message_position"
-
-    frequency_label = (
-        _t(texts, "ADMIN_PINNED_FREQUENCY_ALWAYS", "🔁 Отправлять при каждом /start")
-        if send_on_every_start
-        else _t(texts, "ADMIN_PINNED_FREQUENCY_ONCE", "⏱️ Отправлять только при обновлении")
-    )
-    frequency_callback = "admin_pinned_message_frequency"
-
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(
-                text=_t(texts, "ADMIN_PINNED_MESSAGE_UPDATE", "✏️ Обновить"),
-                callback_data="admin_pinned_message_edit",
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=position_label,
-                callback_data=toggle_callback,
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=frequency_label,
-                callback_data=frequency_callback,
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=_t(texts, "ADMIN_PINNED_MESSAGE_DELETE", "🗑️ Удалить и отключить"),
-                callback_data="admin_pinned_message_delete",
-            )
-        ],
-        [InlineKeyboardButton(text=texts.BACK, callback_data="admin_messages")],
     ])
 
 

@@ -606,7 +606,6 @@ class User(Base):
     trojan_password = Column(String(255), nullable=True)
     vless_uuid = Column(String(255), nullable=True)
     ss_password = Column(String(255), nullable=True)
-    last_pinned_message_id = Column(Integer, ForeignKey("pinned_messages.id"), nullable=True)
     has_made_first_topup: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     promo_group_id = Column(Integer, ForeignKey("promo_groups.id", ondelete="RESTRICT"), nullable=True, index=True)
     promo_group = relationship("PromoGroup", back_populates="users")
@@ -1552,23 +1551,6 @@ class WelcomeText(Base):
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
     creator = relationship("User", backref="created_welcome_texts")
-
-
-class PinnedMessage(Base):
-    __tablename__ = "pinned_messages"
-
-    id = Column(Integer, primary_key=True, index=True)
-    content = Column(Text, nullable=False, default="")
-    media_type = Column(String(32), nullable=True)
-    media_file_id = Column(String(255), nullable=True)
-    send_before_menu = Column(Boolean, nullable=False, server_default="1", default=True)
-    send_on_every_start = Column(Boolean, nullable=False, server_default="1", default=True)
-    is_active = Column(Boolean, default=True)
-    created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    created_at = Column(DateTime, default=func.now())
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
-
-    creator = relationship("User", backref="pinned_messages")
 
 
 class AdvertisingCampaign(Base):
