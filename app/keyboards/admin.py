@@ -899,6 +899,29 @@ def get_pinned_message_keyboard(
     ])
 
 
+def get_pinned_broadcast_confirm_keyboard(
+    language: str = "ru",
+    pinned_message_id: int = 0,
+) -> InlineKeyboardMarkup:
+    """Клавиатура для выбора: разослать сейчас или только при /start."""
+    texts = get_texts(language)
+
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text=_t(texts, "ADMIN_PINNED_BROADCAST_NOW", "📨 Разослать сейчас всем"),
+                callback_data=f"admin_pinned_broadcast_now:{pinned_message_id}",
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=_t(texts, "ADMIN_PINNED_BROADCAST_ON_START", "⏳ Только при /start"),
+                callback_data=f"admin_pinned_broadcast_skip:{pinned_message_id}",
+            )
+        ],
+    ])
+
+
 def get_admin_monitoring_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     texts = get_texts(language)
 
