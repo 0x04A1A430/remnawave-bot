@@ -694,13 +694,16 @@ class RemnaWaveService:
                     'MB': 1024 ** 2,
                     'GB': 1024 ** 3,
                     'TB': 1024 ** 4,
-                    'KIB': 1024,          
+                    'PB': 1024 ** 5,
+                    'KIB': 1024,
                     'MIB': 1024 ** 2,
                     'GIB': 1024 ** 3,
                     'TIB': 1024 ** 4,
-                    'KBPS': 1024,      
+                    'PIB': 1024 ** 5,
+                    'KBPS': 1024,
                     'MBPS': 1024 ** 2,
-                    'GBPS': 1024 ** 3
+                    'GBPS': 1024 ** 3,
+                    'TBPS': 1024 ** 4,
                 }
             
                 match = re.match(r'([0-9.,]+)([A-Z]+)', bandwidth_str)
