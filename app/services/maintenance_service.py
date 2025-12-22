@@ -293,6 +293,8 @@ class MaintenanceService:
             secret_key = (auth_params.get("secret_key") or "").strip() or None
             username = (auth_params.get("username") or "").strip() or None
             password = (auth_params.get("password") or "").strip() or None
+            caddy_token = (auth_params.get("caddy_token") or "").strip() or None
+            auth_type = (auth_params.get("auth_type") or "api_key").strip()
 
             if not base_url:
                 logger.error("REMNAWAVE_API_URL не настроен, пропускаем проверку API")
@@ -311,7 +313,9 @@ class MaintenanceService:
                 api_key=api_key,
                 secret_key=secret_key,
                 username=username,
-                password=password
+                password=password,
+                caddy_token=caddy_token,
+                auth_type=auth_type,
             )
 
             attempts = settings.get_maintenance_retry_attempts()
