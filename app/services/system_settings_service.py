@@ -84,7 +84,7 @@ class BotConfigurationService:
         "CRYPTOBOT": "🪙 CryptoBot",
         "HELEKET": "🪙 Heleket",
         "YOOKASSA": "🟣 YooKassa",
-        "PLATEGA": "💳 Platega",
+        "PLATEGA": "💳 {platega_name}",
         "TRIBUTE": "🎁 Tribute",
         "MULENPAY": "💰 {mulenpay_name}",
         "PAL24": "🏦 PAL24 / PayPalych",
@@ -138,7 +138,7 @@ class BotConfigurationService:
         "YOOKASSA": "Интеграция с YooKassa: идентификаторы магазина и вебхуки.",
         "CRYPTOBOT": "CryptoBot и криптоплатежи через Telegram.",
         "HELEKET": "Heleket: криптоплатежи, ключи мерчанта и вебхуки.",
-        "PLATEGA": "Platega: merchant ID, секрет, ссылки возврата и методы оплаты.",
+        "PLATEGA": "{platega_name}: merchant ID, секрет, ссылки возврата и методы оплаты.",
         "MULENPAY": "Платежи {mulenpay_name} и параметры магазина.",
         "PAL24": "PAL24 / PayPalych подключения и лимиты.",
         "TRIBUTE": "Tribute и донат-сервисы.",
@@ -188,6 +188,8 @@ class BotConfigurationService:
             return value
         if category_key == "MULENPAY":
             return value.format(mulenpay_name=settings.get_mulenpay_display_name())
+        if category_key == "PLATEGA":
+            return value.format(platega_name=settings.get_platega_display_name())
         return value
 
     CATEGORY_KEY_OVERRIDES: Dict[str, str] = {

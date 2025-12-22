@@ -38,7 +38,7 @@ def _method_display(method: PaymentMethod) -> str:
     if method == PaymentMethod.YOOKASSA:
         return "YooKassa"
     if method == PaymentMethod.PLATEGA:
-        return "Platega"
+        return settings.get_platega_display_name()
     if method == PaymentMethod.CRYPTOBOT:
         return "CryptoBot"
     if method == PaymentMethod.TELEGRAM_STARS:
