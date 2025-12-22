@@ -375,19 +375,65 @@ async def process_pinned_message_update(
         await message.answer(f"❌ {validation_error}")
         return
 
+    # Сообщение сохранено, спрашиваем о рассылке
+    from app.keyboards.admin import get_pinned_broadcast_confirm_keyboard
+    from app.states import AdminStates
+
     await message.answer(
+        texts.t(
+            "ADMIN_PINNED_SAVED_ASK_BROADCAST",
+            "📌 <b>Сообщение сохранено!</b>\n\n"
+            "Выберите, как доставить сообщение пользователям:\n\n"
+            "• <b>Разослать сейчас</b> — отправит и закрепит у всех активных пользователей\n"
+            "• <b>Только при /start</b> — пользователи увидят при следующем запуске бота",
+        ),
+        reply_markup=get_pinned_broadcast_confirm_keyboard(db_user.language, pinned_message.id),
+        parse_mode="HTML",
+    )
+    await state.set_state(AdminStates.confirming_pinned_broadcast)
+
+
+@admin_required
+@error_handler
+async def handle_pinned_broadcast_now(
+    callback: types.CallbackQuery,
+    db_user: User,
+    state: FSMContext,
+    db: AsyncSession,
+):
+    """Разослать закреплённое сообщение сейчас всем пользователям."""
+    texts = get_texts(db_user.language)
+
+    # Получаем ID сообщения из callback_data
+    pinned_message_id = int(callback.data.split(":")[1])
+
+    # Получаем сообщение из БД
+    from sqlalchemy import select
+    from app.database.models import PinnedMessage
+
+    result = await db.execute(
+        select(PinnedMessage).where(PinnedMessage.id == pinned_message_id)
+    )
+    pinned_message = result.scalar_one_or_none()
+
+    if not pinned_message:
+        await callback.answer("❌ Сообщение не найдено", show_alert=True)
+        await state.clear()
+        return
+
+    await callback.message.edit_text(
         texts.t("ADMIN_PINNED_SAVING", "📌 Сообщение сохранено. Начинаю отправку и закрепление у пользователей..."),
         parse_mode="HTML",
     )
 
     sent_count, failed_count = await broadcast_pinned_message(
-        message.bot,
+        callback.bot,
         db,
         pinned_message,
     )
 
     total = sent_count + failed_count
-    await message.answer(
+    await callback.message.edit_text(
         texts.t(
             "ADMIN_PINNED_UPDATED",
             "✅ <b>Закрепленное сообщение обновлено</b>\n\n"
@@ -395,6 +441,29 @@ async def process_pinned_message_update(
             "✅ Отправлено: {sent}\n"
             "⚠️ Ошибок: {failed}",
         ).format(total=total, sent=sent_count, failed=failed_count),
+        reply_markup=get_admin_messages_keyboard(db_user.language),
+        parse_mode="HTML",
+    )
+    await state.clear()
+
+
+@admin_required
+@error_handler
+async def handle_pinned_broadcast_skip(
+    callback: types.CallbackQuery,
+    db_user: User,
+    state: FSMContext,
+    db: AsyncSession,
+):
+    """Пропустить рассылку — пользователи увидят при /start."""
+    texts = get_texts(db_user.language)
+
+    await callback.message.edit_text(
+        texts.t(
+            "ADMIN_PINNED_SAVED_NO_BROADCAST",
+            "✅ <b>Закрепленное сообщение сохранено</b>\n\n"
+            "Рассылка не выполнена. Пользователи увидят сообщение при следующем вводе /start.",
+        ),
         reply_markup=get_admin_messages_keyboard(db_user.language),
         parse_mode="HTML",
     )
@@ -1534,6 +1603,8 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(toggle_pinned_message_start_mode, F.data == "admin_pinned_message_start_mode")
     dp.callback_query.register(delete_pinned_message, F.data == "admin_pinned_message_delete")
     dp.callback_query.register(prompt_pinned_message_update, F.data == "admin_pinned_message_edit")
+    dp.callback_query.register(handle_pinned_broadcast_now, F.data.startswith("admin_pinned_broadcast_now:"))
+    dp.callback_query.register(handle_pinned_broadcast_skip, F.data.startswith("admin_pinned_broadcast_skip:"))
     dp.callback_query.register(show_broadcast_targets, F.data.in_(["admin_msg_all", "admin_msg_by_sub"]))
     dp.callback_query.register(select_broadcast_target, F.data.startswith("broadcast_"))
     dp.callback_query.register(confirm_broadcast, F.data == "admin_confirm_broadcast")
