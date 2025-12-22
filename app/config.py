@@ -146,8 +146,9 @@ class Settings(BaseSettings):
     BASE_PROMO_GROUP_PERIOD_DISCOUNTS_ENABLED: bool = False
     BASE_PROMO_GROUP_PERIOD_DISCOUNTS: str = ""
 
-    TRAFFIC_SELECTION_MODE: str = "selectable" 
-    FIXED_TRAFFIC_LIMIT_GB: int = 100 
+    TRAFFIC_SELECTION_MODE: str = "selectable"
+    FIXED_TRAFFIC_LIMIT_GB: int = 100
+    BUY_TRAFFIC_BUTTON_VISIBLE: bool = True 
     
     REFERRAL_MINIMUM_TOPUP_KOPEKS: int = 10000 
     REFERRAL_FIRST_TOPUP_BONUS_KOPEKS: int = 10000 
@@ -319,6 +320,7 @@ class Settings(BaseSettings):
     PLATEGA_ENABLED: bool = False
     PLATEGA_MERCHANT_ID: Optional[str] = None
     PLATEGA_SECRET: Optional[str] = None
+    PLATEGA_DISPLAY_NAME: str = "Platega"
     PLATEGA_BASE_URL: str = "https://app.platega.io"
     PLATEGA_RETURN_URL: Optional[str] = None
     PLATEGA_FAILED_URL: Optional[str] = None
@@ -1084,6 +1086,15 @@ class Settings(BaseSettings):
             and self.PLATEGA_MERCHANT_ID is not None
             and self.PLATEGA_SECRET is not None
         )
+
+    def get_platega_display_name(self) -> str:
+        name = (self.PLATEGA_DISPLAY_NAME or "").strip()
+        if not name:
+            return "Platega"
+        return name
+
+    def get_platega_display_name_html(self) -> str:
+        return html.escape(self.get_platega_display_name())
 
     def get_platega_return_url(self) -> Optional[str]:
         if self.PLATEGA_RETURN_URL:
