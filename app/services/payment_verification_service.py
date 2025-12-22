@@ -90,7 +90,7 @@ def method_display_name(method: PaymentMethod) -> str:
     if method == PaymentMethod.WATA:
         return "WATA"
     if method == PaymentMethod.PLATEGA:
-        return "Platega"
+        return settings.get_platega_display_name()
     if method == PaymentMethod.CRYPTOBOT:
         return "CryptoBot"
     if method == PaymentMethod.HELEKET:
