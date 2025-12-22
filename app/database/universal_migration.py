@@ -3014,6 +3014,157 @@ async def create_welcome_texts_table():
         logger.error(f"Ошибка создания таблицы welcome_texts: {e}")
         return False
 
+
+async def create_pinned_messages_table():
+    table_exists = await check_table_exists("pinned_messages")
+    if table_exists:
+        logger.info("Таблица pinned_messages уже существует")
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == "sqlite":
+                create_sql = """
+                CREATE TABLE pinned_messages (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    content TEXT NOT NULL DEFAULT '',
+                    media_type VARCHAR(32) NULL,
+                    media_file_id VARCHAR(255) NULL,
+                    send_before_menu BOOLEAN NOT NULL DEFAULT 1,
+                    send_on_every_start BOOLEAN NOT NULL DEFAULT 1,
+                    is_active BOOLEAN DEFAULT 1,
+                    created_by INTEGER NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS ix_pinned_messages_active ON pinned_messages(is_active);
+                """
+
+            elif db_type == "postgresql":
+                create_sql = """
+                CREATE TABLE pinned_messages (
+                    id SERIAL PRIMARY KEY,
+                    content TEXT NOT NULL DEFAULT '',
+                    media_type VARCHAR(32) NULL,
+                    media_file_id VARCHAR(255) NULL,
+                    send_before_menu BOOLEAN NOT NULL DEFAULT TRUE,
+                    send_on_every_start BOOLEAN NOT NULL DEFAULT TRUE,
+                    is_active BOOLEAN DEFAULT TRUE,
+                    created_by INTEGER NULL REFERENCES users(id) ON DELETE SET NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE INDEX IF NOT EXISTS ix_pinned_messages_active ON pinned_messages(is_active);
+                """
+
+            elif db_type == "mysql":
+                create_sql = """
+                CREATE TABLE pinned_messages (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    content TEXT NOT NULL DEFAULT '',
+                    media_type VARCHAR(32) NULL,
+                    media_file_id VARCHAR(255) NULL,
+                    send_before_menu BOOLEAN NOT NULL DEFAULT TRUE,
+                    send_on_every_start BOOLEAN NOT NULL DEFAULT TRUE,
+                    is_active BOOLEAN DEFAULT TRUE,
+                    created_by INT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+                );
+
+                CREATE INDEX ix_pinned_messages_active ON pinned_messages(is_active);
+                """
+
+            else:
+                logger.error(f"Неподдерживаемый тип БД для создания таблицы pinned_messages: {db_type}")
+                return False
+
+            await conn.execute(text(create_sql))
+
+        logger.info("✅ Таблица pinned_messages успешно создана")
+        return True
+
+    except Exception as e:
+        logger.error(f"Ошибка создания таблицы pinned_messages: {e}")
+        return False
+
+
+async def ensure_pinned_message_media_columns():
+    table_exists = await check_table_exists("pinned_messages")
+    if not table_exists:
+        logger.warning("⚠️ Таблица pinned_messages отсутствует — пропускаем обновление медиа полей")
+        return False
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if not await check_column_exists("pinned_messages", "media_type"):
+                await conn.execute(
+                    text("ALTER TABLE pinned_messages ADD COLUMN media_type VARCHAR(32)")
+                )
+
+            if not await check_column_exists("pinned_messages", "media_file_id"):
+                await conn.execute(
+                    text("ALTER TABLE pinned_messages ADD COLUMN media_file_id VARCHAR(255)")
+                )
+
+            if not await check_column_exists("pinned_messages", "send_before_menu"):
+                default_value = "TRUE" if db_type != "sqlite" else "1"
+                await conn.execute(
+                    text(
+                        f"ALTER TABLE pinned_messages ADD COLUMN send_before_menu BOOLEAN NOT NULL DEFAULT {default_value}"
+                    )
+                )
+
+            if not await check_column_exists("pinned_messages", "send_on_every_start"):
+                default_value = "TRUE" if db_type != "sqlite" else "1"
+                await conn.execute(
+                    text(
+                        f"ALTER TABLE pinned_messages ADD COLUMN send_on_every_start BOOLEAN NOT NULL DEFAULT {default_value}"
+                    )
+                )
+
+            await conn.execute(text("UPDATE pinned_messages SET content = '' WHERE content IS NULL"))
+
+            if db_type == "postgresql":
+                await conn.execute(
+                    text("ALTER TABLE pinned_messages ALTER COLUMN content SET DEFAULT ''")
+                )
+            elif db_type == "mysql":
+                await conn.execute(
+                    text("ALTER TABLE pinned_messages MODIFY content TEXT NOT NULL DEFAULT ''")
+                )
+            else:
+                logger.info("ℹ️ Пропускаем установку DEFAULT для content в SQLite")
+
+        logger.info("✅ Медиа поля pinned_messages приведены в актуальное состояние")
+        return True
+
+    except Exception as e:
+        logger.error(f"Ошибка обновления медиа полей pinned_messages: {e}")
+        return False
+
+
+async def ensure_user_last_pinned_column():
+    try:
+        async with engine.begin() as conn:
+            if not await check_column_exists("users", "last_pinned_message_id"):
+                await conn.execute(
+                    text("ALTER TABLE users ADD COLUMN last_pinned_message_id INTEGER")
+                )
+        logger.info("✅ Поле last_pinned_message_id у пользователей готово")
+        return True
+    except Exception as e:
+        logger.error(f"Ошибка добавления поля last_pinned_message_id: {e}")
+        return False
+
 async def add_media_fields_to_broadcast_history():
     logger.info("=== ДОБАВЛЕНИЕ ПОЛЕЙ МЕДИА В BROADCAST_HISTORY ===")
     
@@ -4690,12 +4841,33 @@ async def run_universal_migration():
         else:
             logger.warning("⚠️ Проблемы с таблицей user_messages")
 
+        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ PINNED_MESSAGES ===")
+        pinned_messages_created = await create_pinned_messages_table()
+        if pinned_messages_created:
+            logger.info("✅ Таблица pinned_messages готова")
+        else:
+            logger.warning("⚠️ Проблемы с таблицей pinned_messages")
+
         logger.info("=== СОЗДАНИЕ/ОБНОВЛЕНИЕ ТАБЛИЦЫ WELCOME_TEXTS ===")
         welcome_texts_created = await create_welcome_texts_table()
         if welcome_texts_created:
             logger.info("✅ Таблица welcome_texts готова с полем is_enabled")
         else:
             logger.warning("⚠️ Проблемы с таблицей welcome_texts")
+
+        logger.info("=== ОБНОВЛЕНИЕ СХЕМЫ PINNED_MESSAGES ===")
+        pinned_media_ready = await ensure_pinned_message_media_columns()
+        if pinned_media_ready:
+            logger.info("✅ Медиа поля для pinned_messages готовы")
+        else:
+            logger.warning("⚠️ Проблемы с медиа полями pinned_messages")
+
+        logger.info("=== ДОБАВЛЕНИЕ СЛЕДА ОТПРАВКИ ЗАКРЕПА ДЛЯ ПОЛЬЗОВАТЕЛЕЙ ===")
+        last_pinned_ready = await ensure_user_last_pinned_column()
+        if last_pinned_ready:
+            logger.info("✅ Колонка last_pinned_message_id добавлена")
+        else:
+            logger.warning("⚠️ Не удалось обновить колонку last_pinned_message_id")
         
         logger.info("=== ДОБАВЛЕНИЕ МЕДИА ПОЛЕЙ В BROADCAST_HISTORY ===")
         media_fields_added = await add_media_fields_to_broadcast_history()
@@ -4880,8 +5052,13 @@ async def check_migration_status():
             "cryptobot_table": False,
             "heleket_table": False,
             "user_messages_table": False,
+            "pinned_messages_table": False,
             "welcome_texts_table": False,
             "welcome_texts_is_enabled_column": False,
+            "pinned_messages_media_columns": False,
+            "pinned_messages_position_column": False,
+            "pinned_messages_start_mode_column": False,
+            "users_last_pinned_column": False,
             "broadcast_history_media_fields": False,
             "subscription_duplicates": False,
             "subscription_conversions_table": False,
@@ -4924,6 +5101,7 @@ async def check_migration_status():
         status["cryptobot_table"] = await check_table_exists('cryptobot_payments')
         status["heleket_table"] = await check_table_exists('heleket_payments')
         status["user_messages_table"] = await check_table_exists('user_messages')
+        status["pinned_messages_table"] = await check_table_exists('pinned_messages')
         status["welcome_texts_table"] = await check_table_exists('welcome_texts')
         status["privacy_policies_table"] = await check_table_exists('privacy_policies')
         status["public_offers_table"] = await check_table_exists('public_offers')
@@ -4969,6 +5147,25 @@ async def check_migration_status():
             await check_column_exists('broadcast_history', 'media_caption')
         )
         status["broadcast_history_media_fields"] = media_fields_exist
+
+        pinned_media_columns_exist = (
+            status["pinned_messages_table"]
+            and await check_column_exists('pinned_messages', 'media_type')
+            and await check_column_exists('pinned_messages', 'media_file_id')
+        )
+        status["pinned_messages_media_columns"] = pinned_media_columns_exist
+
+        status["pinned_messages_position_column"] = (
+            status["pinned_messages_table"]
+            and await check_column_exists('pinned_messages', 'send_before_menu')
+        )
+
+        status["pinned_messages_start_mode_column"] = (
+            status["pinned_messages_table"]
+            and await check_column_exists('pinned_messages', 'send_on_every_start')
+        )
+
+        status["users_last_pinned_column"] = await check_column_exists('users', 'last_pinned_message_id')
         
         async with engine.begin() as conn:
             duplicates_check = await conn.execute(text("""
@@ -4987,10 +5184,15 @@ async def check_migration_status():
             "cryptobot_table": "Таблица CryptoBot payments",
             "heleket_table": "Таблица Heleket payments",
             "user_messages_table": "Таблица пользовательских сообщений",
+            "pinned_messages_table": "Таблица закреплённых сообщений",
             "welcome_texts_table": "Таблица приветственных текстов",
             "privacy_policies_table": "Таблица политик конфиденциальности",
             "public_offers_table": "Таблица публичных оферт",
             "welcome_texts_is_enabled_column": "Поле is_enabled в welcome_texts",
+            "pinned_messages_media_columns": "Медиа поля в pinned_messages",
+            "pinned_messages_position_column": "Позиция закрепа (до/после меню)",
+            "pinned_messages_start_mode_column": "Режим отправки закрепа при /start",
+            "users_last_pinned_column": "Колонка last_pinned_message_id у пользователей",
             "broadcast_history_media_fields": "Медиа поля в broadcast_history",
             "subscription_conversions_table": "Таблица конверсий подписок",
             "subscription_events_table": "Таблица событий подписок",

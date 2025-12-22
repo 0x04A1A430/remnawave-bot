@@ -18,6 +18,7 @@ from .routes import (
     menu_layout,
     miniapp,
     partners,
+    pinned_messages,
     polls,
     promocodes,
     promo_groups,
@@ -145,6 +146,13 @@ OPENAPI_TAGS = [
         "name": "contests",
         "description": "Управление конкурсами: реферальными и ежедневными играми/раундами.",
     },
+    {
+        "name": "pinned-messages",
+        "description": (
+            "Управление закреплёнными сообщениями: создание, обновление, рассылка и "
+            "настройка показа при /start."
+        ),
+    },
 ]
 
 
@@ -224,6 +232,11 @@ def create_web_api_app() -> FastAPI:
     app.include_router(partners.router, prefix="/partners", tags=["partners"])
     app.include_router(polls.router, prefix="/polls", tags=["polls"])
     app.include_router(logs.router, prefix="/logs", tags=["logs"])
+    app.include_router(
+        pinned_messages.router,
+        prefix="/pinned-messages",
+        tags=["pinned-messages"],
+    )
     app.include_router(
         subscription_events.router,
         prefix="/notifications/subscriptions",

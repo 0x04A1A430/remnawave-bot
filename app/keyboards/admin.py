@@ -838,8 +838,87 @@ def get_admin_messages_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
             )
         ],
         [
+            InlineKeyboardButton(
+                text=_t(texts, "ADMIN_PINNED_MESSAGE", "📌 Закрепленное сообщение"),
+                callback_data="admin_pinned_message",
+            )
+        ],
+        [
             InlineKeyboardButton(text=texts.BACK, callback_data="admin_submenu_communications")
         ]
+    ])
+
+
+def get_pinned_message_keyboard(
+    language: str = "ru",
+    send_before_menu: bool = True,
+    send_on_every_start: bool = True,
+) -> InlineKeyboardMarkup:
+    texts = get_texts(language)
+
+    position_label = (
+        _t(texts, "ADMIN_PINNED_POSITION_BEFORE", "⬆️ Показать перед меню")
+        if send_before_menu
+        else _t(texts, "ADMIN_PINNED_POSITION_AFTER", "⬇️ Показать после меню")
+    )
+    toggle_callback = "admin_pinned_message_position"
+
+    start_mode_label = (
+        _t(texts, "ADMIN_PINNED_START_EVERY_TIME", "🔁 Показать при каждом /start")
+        if send_on_every_start
+        else _t(texts, "ADMIN_PINNED_START_ONCE", "🚫 Показывать только один раз")
+    )
+    start_mode_callback = "admin_pinned_message_start_mode"
+
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text=_t(texts, "ADMIN_PINNED_MESSAGE_UPDATE", "✏️ Обновить"),
+                callback_data="admin_pinned_message_edit",
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=position_label,
+                callback_data=toggle_callback,
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=start_mode_label,
+                callback_data=start_mode_callback,
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=_t(texts, "ADMIN_PINNED_MESSAGE_DELETE", "🗑️ Удалить и отключить"),
+                callback_data="admin_pinned_message_delete",
+            )
+        ],
+        [InlineKeyboardButton(text=texts.BACK, callback_data="admin_messages")],
+    ])
+
+
+def get_pinned_broadcast_confirm_keyboard(
+    language: str = "ru",
+    pinned_message_id: int = 0,
+) -> InlineKeyboardMarkup:
+    """Клавиатура для выбора: разослать сейчас или только при /start."""
+    texts = get_texts(language)
+
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text=_t(texts, "ADMIN_PINNED_BROADCAST_NOW", "📨 Разослать сейчас всем"),
+                callback_data=f"admin_pinned_broadcast_now:{pinned_message_id}",
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=_t(texts, "ADMIN_PINNED_BROADCAST_ON_START", "⏳ Только при /start"),
+                callback_data=f"admin_pinned_broadcast_skip:{pinned_message_id}",
+            )
+        ],
     ])
 
 
