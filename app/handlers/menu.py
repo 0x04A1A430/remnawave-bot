@@ -41,7 +41,7 @@ from app.services.public_offer_service import PublicOfferService
 from app.services.faq_service import FaqService
 from app.utils.timezone import format_local_datetime
 from app.utils.pricing_utils import format_period_description
-from app.handlers.subscription.traffic import handle_add_traffic
+from app.handlers.subscription.traffic import handle_add_traffic, add_traffic
 
 logger = logging.getLogger(__name__)
 
@@ -1383,6 +1383,11 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         handle_add_traffic,
         F.data == "buy_traffic"
+    )
+
+    dp.callback_query.register(
+        add_traffic,
+        F.data.startswith("add_traffic_")
     )
 
     dp.callback_query.register(
