@@ -40,6 +40,7 @@ from app.services.privacy_policy_service import PrivacyPolicyService
 from app.services.public_offer_service import PublicOfferService
 from app.services.faq_service import FaqService
 from app.utils.timezone import format_local_datetime
+from app.utils.pricing_utils import format_period_description
 from app.handlers.subscription.traffic import handle_add_traffic
 
 logger = logging.getLogger(__name__)
