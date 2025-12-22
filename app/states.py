@@ -135,6 +135,7 @@ class AdminStates(StatesGroup):
 
     editing_welcome_text = State()
     editing_pinned_message = State()
+    confirming_pinned_broadcast = State()
     waiting_for_message_buttons = "waiting_for_message_buttons"
 
     editing_promo_offer_message = State()
