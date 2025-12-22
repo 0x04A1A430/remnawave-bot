@@ -16,9 +16,32 @@ branch_labels = None
 depends_on = None
 
 
+TABLE_NAME = "pinned_messages"
+
+
+def _table_exists(inspector: sa.Inspector) -> bool:
+    return TABLE_NAME in inspector.get_table_names()
+
+
+def _column_exists(inspector: sa.Inspector, column_name: str) -> bool:
+    if not _table_exists(inspector):
+        return False
+    columns = {col["name"] for col in inspector.get_columns(TABLE_NAME)}
+    return column_name in columns
+
+
 def upgrade() -> None:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+
+    if not _table_exists(inspector):
+        return
+
+    if _column_exists(inspector, "send_before_menu"):
+        return
+
     op.add_column(
-        "pinned_messages",
+        TABLE_NAME,
         sa.Column(
             "send_before_menu",
             sa.Boolean(),
@@ -29,4 +52,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_column("pinned_messages", "send_before_menu")
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+
+    if _column_exists(inspector, "send_before_menu"):
+        op.drop_column(TABLE_NAME, "send_before_menu")
