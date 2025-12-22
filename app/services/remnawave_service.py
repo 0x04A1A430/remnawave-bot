@@ -1704,91 +1704,120 @@ class RemnaWaveService:
         try:
             stats = {"created": 0, "updated": 0, "errors": 0}
 
-            batch_size = 100
+            batch_size = 500  # Увеличен для ускорения
             offset = 0
+            concurrent_limit = 10  # Параллельные запросы к API
 
             async with self.get_api_client() as api:
+                semaphore = asyncio.Semaphore(concurrent_limit)
+
                 while True:
                     users = await get_users_list(db, offset=offset, limit=batch_size)
 
                     if not users:
                         break
 
-                    for user in users:
-                        if not user.subscription:
-                            continue
+                    # Фильтруем пользователей с подписками и готовим данные
+                    users_with_subscriptions = [u for u in users if u.subscription]
 
-                        try:
-                            subscription = user.subscription
-                            hwid_limit = resolve_hwid_device_limit_for_payload(subscription)
+                    if not users_with_subscriptions:
+                        if len(users) < batch_size:
+                            break
+                        offset += batch_size
+                        continue
 
-                            expire_at = self._safe_expire_at_for_panel(subscription.end_date)
-                            status = UserStatus.ACTIVE if subscription.is_active else UserStatus.DISABLED
+                    # Подготавливаем задачи для параллельного выполнения
+                    async def process_user(user):
+                        async with semaphore:
+                            try:
+                                subscription = user.subscription
+                                hwid_limit = resolve_hwid_device_limit_for_payload(subscription)
+                                expire_at = self._safe_expire_at_for_panel(subscription.end_date)
 
-                            username = settings.format_remnawave_username(
-                                full_name=user.full_name,
-                                username=user.username,
-                                telegram_id=user.telegram_id,
-                            )
+                                # Определяем статус для панели
+                                is_subscription_active = (
+                                    subscription.status in (
+                                        SubscriptionStatus.ACTIVE.value,
+                                        SubscriptionStatus.TRIAL.value,
+                                    )
+                                    and subscription.end_date > datetime.utcnow()
+                                )
+                                status = UserStatus.ACTIVE if is_subscription_active else UserStatus.DISABLED
 
-                            create_kwargs = dict(
-                                username=username,
-                                expire_at=expire_at,
-                                status=status,
-                                traffic_limit_bytes=subscription.traffic_limit_gb * (1024**3) if subscription.traffic_limit_gb > 0 else 0,
-                                traffic_limit_strategy=TrafficLimitStrategy.MONTH,
-                                telegram_id=user.telegram_id,
-                                description=settings.format_remnawave_user_description(
+                                username = settings.format_remnawave_username(
                                     full_name=user.full_name,
                                     username=user.username,
-                                    telegram_id=user.telegram_id
-                                ),
-                                active_internal_squads=subscription.connected_squads,
-                            )
+                                    telegram_id=user.telegram_id,
+                                )
 
-                            if hwid_limit is not None:
-                                create_kwargs['hwid_device_limit'] = hwid_limit
-
-                            if user.remnawave_uuid:
-                                update_kwargs = dict(
-                                    uuid=user.remnawave_uuid,
-                                    status=status,
+                                create_kwargs = dict(
+                                    username=username,
                                     expire_at=expire_at,
-                                    traffic_limit_bytes=create_kwargs['traffic_limit_bytes'],
+                                    status=status,
+                                    traffic_limit_bytes=subscription.traffic_limit_gb * (1024**3) if subscription.traffic_limit_gb > 0 else 0,
                                     traffic_limit_strategy=TrafficLimitStrategy.MONTH,
-                                    description=create_kwargs['description'],
+                                    telegram_id=user.telegram_id,
+                                    description=settings.format_remnawave_user_description(
+                                        full_name=user.full_name,
+                                        username=user.username,
+                                        telegram_id=user.telegram_id
+                                    ),
                                     active_internal_squads=subscription.connected_squads,
                                 )
 
                                 if hwid_limit is not None:
-                                    update_kwargs['hwid_device_limit'] = hwid_limit
+                                    create_kwargs['hwid_device_limit'] = hwid_limit
 
-                                try:
-                                    await api.update_user(**update_kwargs)
-                                    stats["updated"] += 1
-                                except RemnaWaveAPIError as api_error:
-                                    if api_error.status_code == 404:
-                                        logger.warning(
-                                            "⚠️ Не найден пользователь %s в панели, создаем заново",
-                                            user.remnawave_uuid,
-                                        )
+                                if user.remnawave_uuid:
+                                    update_kwargs = dict(
+                                        uuid=user.remnawave_uuid,
+                                        status=status,
+                                        expire_at=expire_at,
+                                        traffic_limit_bytes=create_kwargs['traffic_limit_bytes'],
+                                        traffic_limit_strategy=TrafficLimitStrategy.MONTH,
+                                        description=create_kwargs['description'],
+                                        active_internal_squads=subscription.connected_squads,
+                                    )
 
-                                        new_user = await api.create_user(**create_kwargs)
-                                        user.remnawave_uuid = new_user.uuid
-                                        subscription.remnawave_short_uuid = new_user.short_uuid
-                                        stats["created"] += 1
-                                    else:
-                                        raise
-                            else:
-                                new_user = await api.create_user(**create_kwargs)
+                                    if hwid_limit is not None:
+                                        update_kwargs['hwid_device_limit'] = hwid_limit
 
+                                    try:
+                                        await api.update_user(**update_kwargs)
+                                        return ("updated", user, None)
+                                    except RemnaWaveAPIError as api_error:
+                                        if api_error.status_code == 404:
+                                            new_user = await api.create_user(**create_kwargs)
+                                            return ("created", user, new_user)
+                                        else:
+                                            raise
+                                else:
+                                    new_user = await api.create_user(**create_kwargs)
+                                    return ("created", user, new_user)
+
+                            except Exception as e:
+                                logger.error(f"Ошибка синхронизации пользователя {user.telegram_id} в панель: {e}")
+                                return ("error", user, None)
+
+                    # Выполняем параллельно
+                    tasks = [process_user(user) for user in users_with_subscriptions]
+                    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+                    # Обрабатываем результаты
+                    for result in results:
+                        if isinstance(result, Exception):
+                            stats["errors"] += 1
+                            continue
+
+                        action, user, new_user = result
+                        if action == "created":
+                            if new_user:
                                 user.remnawave_uuid = new_user.uuid
-                                subscription.remnawave_short_uuid = new_user.short_uuid
-
-                                stats["created"] += 1
-
-                        except Exception as e:
-                            logger.error(f"Ошибка синхронизации пользователя {user.telegram_id} в панель: {e}")
+                                user.subscription.remnawave_short_uuid = new_user.short_uuid
+                            stats["created"] += 1
+                        elif action == "updated":
+                            stats["updated"] += 1
+                        else:
                             stats["errors"] += 1
 
                     try:
@@ -1799,7 +1828,12 @@ class RemnaWaveService:
                             commit_error,
                         )
                         await db.rollback()
-                        stats["errors"] += len(users)
+                        stats["errors"] += len(users_with_subscriptions)
+
+                    logger.info(
+                        f"📦 Обработано {offset + len(users)} пользователей: "
+                        f"создано {stats['created']}, обновлено {stats['updated']}, ошибок {stats['errors']}"
+                    )
 
                     if len(users) < batch_size:
                         break
@@ -1810,7 +1844,7 @@ class RemnaWaveService:
                 f"✅ Синхронизация в панель завершена: создано {stats['created']}, обновлено {stats['updated']}, ошибок {stats['errors']}"
             )
             return stats
-            
+
         except Exception as e:
             logger.error(f"Ошибка синхронизации пользователей в панель: {e}")
             return {"created": 0, "updated": 0, "errors": 1}
