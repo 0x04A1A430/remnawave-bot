@@ -92,11 +92,12 @@ def get_available_payment_methods() -> List[Dict[str, str]]:
         })
 
     if settings.is_platega_enabled() and settings.get_platega_active_methods():
+        platega_name = settings.get_platega_display_name()
         methods.append({
             "id": "platega",
             "name": "Банковская карта",
             "icon": "💳",
-            "description": "через Platega (карты + СБП)",
+            "description": f"через {platega_name} (карты + СБП)",
             "callback": "topup_platega",
         })
 
@@ -164,6 +165,11 @@ def get_payment_methods_text(language: str) -> str:
             mulenpay_name_html = settings.get_mulenpay_display_name_html()
             name = name.format(mulenpay_name=mulenpay_name_html)
             description = description.format(mulenpay_name=mulenpay_name)
+        elif method_id == "PLATEGA":
+            platega_name = settings.get_platega_display_name()
+            platega_name_html = settings.get_platega_display_name_html()
+            name = name.format(platega_name=platega_name_html)
+            description = description.format(platega_name=platega_name)
 
         text += f"{name} - {description}\n"
 
