@@ -4,14 +4,17 @@ from datetime import datetime
 import html
 
 ALLOWED_HTML_TAGS = {
-    'b', 'strong',           
-    'i', 'em',              
-    'u', 'ins',             
-    's', 'strike', 'del',  
-    'code',                 
-    'pre',                
-    'a',                  
-    'blockquote'
+    'b', 'strong',           # жирный
+    'i', 'em',               # курсив
+    'u', 'ins',              # подчёркнутый
+    's', 'strike', 'del',    # зачёркнутый
+    'code',                  # моноширинный
+    'pre',                   # блок кода
+    'a',                     # ссылка
+    'blockquote',            # цитата
+    'tg-spoiler',            # спойлер
+    'tg-emoji',              # кастомный эмодзи
+    'span',                  # для class="tg-spoiler"
 }
 
 SELF_CLOSING_TAGS = {
@@ -276,14 +279,16 @@ def fix_html_tags(text: str) -> str:
 def get_html_help_text() -> str:
     return """<b>Поддерживаемые HTML теги:</b>
 
-• <code>&lt;b&gt;жирный&lt;/b&gt;</code> или <code>&lt;strong&gt;жирный&lt;/strong&gt;</code>
-• <code>&lt;i&gt;курсив&lt;/i&gt;</code> или <code>&lt;em&gt;курсив&lt;/em&gt;</code>  
-• <code>&lt;u&gt;подчеркнутый&lt;/u&gt;</code>
-• <code>&lt;s&gt;зачеркнутый&lt;/s&gt;</code>
+• <code>&lt;b&gt;жирный&lt;/b&gt;</code> или <code>&lt;strong&gt;&lt;/strong&gt;</code>
+• <code>&lt;i&gt;курсив&lt;/i&gt;</code> или <code>&lt;em&gt;&lt;/em&gt;</code>
+• <code>&lt;u&gt;подчёркнутый&lt;/u&gt;</code>
+• <code>&lt;s&gt;зачёркнутый&lt;/s&gt;</code>
 • <code>&lt;code&gt;моноширинный&lt;/code&gt;</code>
 • <code>&lt;pre&gt;блок кода&lt;/pre&gt;</code>
 • <code>&lt;a href="url"&gt;ссылка&lt;/a&gt;</code>
 • <code>&lt;blockquote&gt;цитата&lt;/blockquote&gt;</code>
+• <code>&lt;tg-spoiler&gt;спойлер&lt;/tg-spoiler&gt;</code>
+• <code>&lt;tg-emoji emoji-id="123"&gt;😀&lt;/tg-emoji&gt;</code>
 
 <b>⚠️ Важные правила:</b>
 • Каждый открывающий тег должен быть закрыт
@@ -292,11 +297,9 @@ def get_html_help_text() -> str:
 
 <b>❌ Неправильно:</b>
 <code>&lt;b&gt;жирный &lt;i&gt;курсив&lt;/b&gt;&lt;/i&gt;</code>
-<code>&lt;a href=google.com&gt;ссылка&lt;/a&gt;</code>
 
 <b>✅ Правильно:</b>
-<code>&lt;b&gt;жирный &lt;i&gt;курсив&lt;/i&gt;&lt;/b&gt;</code>
-<code>&lt;a href="https://google.com"&gt;ссылка&lt;/a&gt;</code>"""
+<code>&lt;b&gt;жирный &lt;i&gt;курсив&lt;/i&gt;&lt;/b&gt;</code>"""
 
 
 def validate_rules_content(text: str) -> Tuple[bool, str, Optional[str]]:
