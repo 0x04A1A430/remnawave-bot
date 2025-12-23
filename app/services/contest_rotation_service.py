@@ -36,7 +36,8 @@ DEFAULT_TEMPLATES = [
         "slug": GAME_QUEST,
         "name": "Квест-кнопки",
         "description": "Найди секретную кнопку 3×3",
-        "prize_days": 1,
+        "prize_type": "days",
+        "prize_value": "1",
         "max_winners": 3,
         "attempts_per_user": 1,
         "times_per_day": 2,
@@ -48,7 +49,8 @@ DEFAULT_TEMPLATES = [
         "slug": GAME_LOCKS,
         "name": "Кнопочный взлом",
         "description": "Найди взломанную кнопку среди 20 замков",
-        "prize_days": 5,
+        "prize_type": "days",
+        "prize_value": "5",
         "max_winners": 1,
         "attempts_per_user": 1,
         "times_per_day": 2,
@@ -60,7 +62,8 @@ DEFAULT_TEMPLATES = [
         "slug": GAME_CIPHER,
         "name": "Шифр букв",
         "description": "Расшифруй слово по номерам",
-        "prize_days": 1,
+        "prize_type": "days",
+        "prize_value": "1",
         "max_winners": 1,
         "attempts_per_user": 1,
         "times_per_day": 2,
@@ -72,7 +75,8 @@ DEFAULT_TEMPLATES = [
         "slug": GAME_SERVER,
         "name": "Сервер-лотерея",
         "description": "Угадай доступный сервер",
-        "prize_days": 7,
+        "prize_type": "days",
+        "prize_value": "7",
         "max_winners": 1,
         "attempts_per_user": 1,
         "times_per_day": 1,
@@ -84,7 +88,8 @@ DEFAULT_TEMPLATES = [
         "slug": GAME_BLITZ,
         "name": "Блиц-реакция",
         "description": "Нажми кнопку за 10 секунд",
-        "prize_days": 1,
+        "prize_type": "days",
+        "prize_value": "1",
         "max_winners": 1,
         "attempts_per_user": 1,
         "times_per_day": 2,
@@ -96,7 +101,8 @@ DEFAULT_TEMPLATES = [
         "slug": GAME_EMOJI,
         "name": "Угадай сервис по эмодзи",
         "description": "Определи сервис по эмодзи",
-        "prize_days": 1,
+        "prize_type": "days",
+        "prize_value": "1",
         "max_winners": 1,
         "attempts_per_user": 1,
         "times_per_day": 1,
@@ -108,7 +114,8 @@ DEFAULT_TEMPLATES = [
         "slug": GAME_ANAGRAM,
         "name": "Анаграмма дня",
         "description": "Собери слово из букв",
-        "prize_days": 1,
+        "prize_type": "days",
+        "prize_value": "1",
         "max_winners": 1,
         "attempts_per_user": 1,
         "times_per_day": 1,
@@ -281,11 +288,30 @@ class ContestRotationService:
         if not self.bot:
             return
 
+        from app.localization.texts import get_texts
+        texts = get_texts("ru")  # Default to ru for announcements, or detect
+        
+        # Format prize display based on prize_type
+        prize_display = ""
+        if hasattr(tpl, 'prize_type') and tpl.prize_type:
+            if tpl.prize_type == "days":
+                prize_display = f"{tpl.prize_value} {texts.t('DAYS', 'дн. подписки')}"
+            elif tpl.prize_type == "balance":
+                prize_display = f"{tpl.prize_value} коп."
+            elif tpl.prize_type == "custom":
+                prize_display = tpl.prize_value
+            else:
+                prize_display = tpl.prize_value
+        else:
+            # Fallback for old templates
+            prize_display = f"{getattr(tpl, 'prize_days', 1)} {texts.t('DAYS', 'дн. подписки')}"
+        
         text = (
-            f"🎲 Стартует игра: <b>{tpl.name}</b>\n"
-            f"Приз: {tpl.prize_days} дн. подписки • Победителей: {tpl.max_winners}\n"
-            f"Попыток/польз: {tpl.attempts_per_user}\n\n"
-            "Участвовать могут только с активной или триальной подпиской."
+            f"🎲 {texts.t('CONTEST_START_ANNOUNCEMENT', 'Стартует игра')}: <b>{tpl.name}</b>\n"
+            f"{texts.t('CONTEST_PRIZE', 'Приз')}: {prize_display} • {texts.t('CONTEST_WINNERS', 'Победителей')}: {tpl.max_winners}\n"
+            f"{texts.t('CONTEST_ATTEMPTS', 'Попыток/польз')}: {tpl.attempts_per_user}\n\n"
+            f"{texts.t('CONTEST_ELIGIBILITY', 'Участвовать могут только с активной или триальной подпиской')}.\n"
+            f"💡 <b>{texts.t('REMINDER', 'Напоминание')}:</b> {texts.t('CONTEST_REMINDER_TEXT', 'Не забудьте участвовать в конкурсах для получения бонусов')}!"
         )
 
         await asyncio.gather(

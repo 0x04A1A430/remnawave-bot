@@ -82,17 +82,33 @@ def _user_allowed(subscription) -> bool:
     }
 
 
-async def _award_prize(db: AsyncSession, user_id: int, prize_days: int, language: str) -> str:
+async def _award_prize(db: AsyncSession, user_id: int, prize_type: str, prize_value: str, language: str) -> str:
     from app.database.crud.user import get_user_by_id
     user = await get_user_by_id(db, user_id)
     if not user:
         return ""
-    subscription = await get_subscription_by_user_id(db, user_id)
-    if not subscription:
-        return ""
-    await extend_subscription(db, subscription, prize_days)
+    
     texts = get_texts(language)
-    return texts.t("CONTEST_PRIZE_GRANTED", "Бонус {days} дней зачислен!").format(days=prize_days)
+    
+    if prize_type == "days":
+        subscription = await get_subscription_by_user_id(db, user_id)
+        if not subscription:
+            return ""
+        days = int(prize_value) if prize_value.isdigit() else 1
+        await extend_subscription(db, subscription, days)
+        return texts.t("CONTEST_PRIZE_GRANTED", "Бонус {days} дней зачислен!").format(days=days)
+    
+    elif prize_type == "balance":
+        kopeks = int(prize_value) if prize_value.isdigit() else 0
+        if kopeks > 0:
+            user.balance_kopeks += kopeks
+            return texts.t("CONTEST_BALANCE_GRANTED", "Бонус {amount} зачислен!").format(amount=settings.format_price(kopeks))
+    
+    elif prize_type == "custom":
+        # For custom prizes, just send a message
+        return f"🎁 {prize_value}"
+    
+    return ""
 
 
 async def _reply_not_eligible(callback: types.CallbackQuery, language: str):
@@ -423,7 +439,7 @@ async def handle_pick(callback: types.CallbackQuery, db_user, db: AsyncSession):
         if is_winner:
             round_obj_locked.winners_count += 1
             await db2.commit()
-            prize_text = await _award_prize(db2, db_user.id, tpl.prize_days, db_user.language)
+            prize_text = await _award_prize(db2, db_user.id, tpl.prize_type, tpl.prize_value, db_user.language)
             await callback.answer(texts.t("CONTEST_WIN", "🎉 Победа! ") + (prize_text or ""), show_alert=True)
         else:
             responses = {
@@ -463,15 +479,21 @@ async def handle_text_answer(message: types.Message, state: FSMContext, db_user,
 
         is_winner = correct and answer == correct
 
-        # Check if max winners already reached
-        if is_winner and round_obj.winners_count >= round_obj.max_winners:
-            is_winner = False  # Too late, max winners already reached
+        # Atomic winner check and increment
+        from sqlalchemy import select
+        stmt = select(ContestRound).where(ContestRound.id == round_id).with_for_update()
+        result = await db2.execute(stmt)
+        round_obj_locked = result.scalar_one()
+
+        if is_winner and round_obj_locked.winners_count >= round_obj_locked.max_winners:
+            is_winner = False
 
         await create_attempt(db2, round_id=round_obj.id, user_id=db_user.id, answer=answer, is_winner=is_winner)
 
         if is_winner:
-            await increment_winner_count(db2, round_obj)
-            prize_text = await _award_prize(db2, db_user.id, tpl.prize_days, db_user.language)
+            round_obj_locked.winners_count += 1
+            await db2.commit()
+            prize_text = await _award_prize(db2, db_user.id, tpl.prize_type, tpl.prize_value, db_user.language)
             await message.answer(texts.t("CONTEST_WIN", "🎉 Победа! ") + (prize_text or ""), reply_markup=get_back_keyboard(db_user.language))
         else:
             await message.answer(texts.t("CONTEST_LOSE", "Не верно, попробуй снова в следующем раунде."), reply_markup=get_back_keyboard(db_user.language))

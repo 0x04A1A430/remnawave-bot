@@ -1619,5 +1619,13 @@
   "POLL_COMPLETED": "🙏 Thanks for completing the poll!",
   "POLL_REWARD_GRANTED": "Reward {amount} has been credited to your balance.",
   "ADMIN_USERS_BULK_BAN": "🛑 Bulk Ban",
-  "ADMIN_USERS_BLACKLIST": "🔐 Blacklist"
+  "ADMIN_USERS_BLACKLIST": "🔐 Blacklist",
+  "CONTEST_START_ANNOUNCEMENT": "Game starts",
+  "CONTEST_PRIZE": "Prize",
+  "DAYS": "days subscription",
+  "CONTEST_WINNERS": "Winners",
+  "CONTEST_ATTEMPTS": "Attempts/user",
+  "CONTEST_ELIGIBILITY": "Only users with active or trial subscription can participate",
+  "REMINDER": "Reminder",
+  "CONTEST_REMINDER_TEXT": "Don't forget to participate in contests to get bonuses"
 }
