@@ -438,13 +438,14 @@ def get_main_menu_keyboard(
     if settings.DEBUG:
         print(f"DEBUG KEYBOARD: language={language}, is_admin={is_admin}, has_had_paid={has_had_paid_subscription}, has_active={has_active_subscription}, sub_active={subscription_is_active}, balance={balance_kopeks}")
     
-    if hasattr(texts, 'BALANCE_BUTTON') and balance_kopeks > 0:
-        balance_button_text = texts.BALANCE_BUTTON.format(balance=texts.format_price(balance_kopeks))
+    safe_balance = balance_kopeks or 0
+    if hasattr(texts, 'BALANCE_BUTTON') and safe_balance > 0:
+        balance_button_text = texts.BALANCE_BUTTON.format(balance=texts.format_price(safe_balance))
     else:
         balance_button_text = texts.t(
             "BALANCE_BUTTON_DEFAULT",
             "💰 Баланс: {balance}",
-        ).format(balance=texts.format_price(balance_kopeks))
+        ).format(balance=texts.format_price(safe_balance))
     
     keyboard: list[list[InlineKeyboardButton]] = []
     paired_buttons: list[InlineKeyboardButton] = []
@@ -511,7 +512,7 @@ def get_main_menu_keyboard(
             settings.BUY_TRAFFIC_BUTTON_VISIBLE
             and subscription
             and not subscription.is_trial
-            and subscription.traffic_limit_gb > 0
+            and (subscription.traffic_limit_gb or 0) > 0
         ):
             paired_buttons.append(
                 InlineKeyboardButton(text=texts.t("BUY_TRAFFIC_BUTTON", "📈 Докупить трафик"), callback_data="buy_traffic")

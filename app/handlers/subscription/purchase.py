@@ -1881,34 +1881,17 @@ async def confirm_purchase(
         return
     months_in_period = data.get('months_in_period', calculate_months_from_days(period_days))
 
-    base_price = data.get('base_price')
-    base_price_original = data.get('base_price_original')
-    base_discount_percent = data.get('base_discount_percent')
-    base_discount_total = data.get('base_discount_total')
-
-    if base_price is None:
-        base_price_original = PERIOD_PRICES[period_days]
-        base_discount_percent = db_user.get_promo_discount(
-            "period",
-            period_days,
-        )
-        base_price, base_discount_total = apply_percentage_discount(
-            base_price_original,
-            base_discount_percent,
-        )
-    else:
-        if base_price_original is None:
-            base_price_original = PERIOD_PRICES[period_days]
-        if base_discount_percent is None:
-            base_discount_percent = db_user.get_promo_discount(
-                "period",
-                period_days,
-            )
-        if base_discount_total is None:
-            _, base_discount_total = apply_percentage_discount(
-                base_price_original,
-                base_discount_percent,
-            )
+    # Всегда пересчитываем base_price из PERIOD_PRICES для безопасности
+    # (не доверяем кэшированным значениям из FSM данных)
+    base_price_original = PERIOD_PRICES[period_days]
+    base_discount_percent = db_user.get_promo_discount(
+        "period",
+        period_days,
+    )
+    base_price, base_discount_total = apply_percentage_discount(
+        base_price_original,
+        base_discount_percent,
+    )
     server_prices = data.get('server_prices_for_period', [])
 
     if not server_prices:
@@ -2038,6 +2021,17 @@ async def confirm_purchase(
     cached_total_price = data.get('total_price', 0)
     cached_promo_discount_value = data.get('promo_offer_discount_value', 0)
 
+    # Всегда пересчитываем monthly_additions из компонентов для безопасности
+    discounted_monthly_additions = (
+        discounted_traffic_price_per_month
+        + discounted_servers_price_per_month
+        + discounted_devices_price_per_month
+    )
+
+    # Вычисляем ожидаемую цену до промо-скидки из компонентов
+    calculated_total_before_promo = base_price + (discounted_monthly_additions * months_in_period)
+
+    # Получаем сохраненную цену до промо-скидки или используем вычисленную
     validation_total_price = data.get('total_price_before_promo_offer')
     if validation_total_price is None and cached_promo_discount_value > 0:
         validation_total_price = cached_total_price + cached_promo_discount_value
@@ -2047,33 +2041,28 @@ async def confirm_purchase(
     current_promo_offer_percent = _get_promo_offer_discount_percent(db_user)
     if current_promo_offer_percent > 0:
         final_price, promo_offer_discount_value = apply_percentage_discount(
-            validation_total_price,
+            calculated_total_before_promo,
             current_promo_offer_percent,
         )
         promo_offer_discount_percent = current_promo_offer_percent
     else:
-        final_price = validation_total_price
+        final_price = calculated_total_before_promo
         promo_offer_discount_value = 0
         promo_offer_discount_percent = 0
 
-    discounted_monthly_additions = data.get(
-        'discounted_monthly_additions',
-        discounted_traffic_price_per_month
-        + discounted_servers_price_per_month
-        + discounted_devices_price_per_month,
-    )
+    # Валидация: проверяем что cached_total_price соответствует ожидаемой финальной цене
+    # Допускаем небольшое расхождение из-за округления
+    is_valid = True
+    if abs(final_price - cached_total_price) > 100:  # допуск 1₽
+        # Если есть расхождение, логируем предупреждение но продолжаем с пересчитанной ценой
+        logger.warning(
+            f"Расхождение цены для пользователя {db_user.telegram_id}: "
+            f"кэш={cached_total_price/100}₽, пересчет={final_price/100}₽. "
+            f"Используем пересчитанную цену."
+        )
 
-    is_valid = validate_pricing_calculation(
-        base_price,
-        discounted_monthly_additions,
-        months_in_period,
-        validation_total_price,
-    )
-
-    if not is_valid:
-        logger.error(f"Ошибка в расчете цены подписки для пользователя {db_user.telegram_id}")
-        await callback.answer("Ошибка расчета цены. Обратитесь в поддержку.", show_alert=True)
-        return
+    # Используем пересчитанную цену вместо закэшированной для надежности
+    validation_total_price = calculated_total_before_promo
 
     logger.info(f"Расчет покупки подписки на {data['period_days']} дней ({months_in_period} мес):")
     base_log = f"   Период: {base_price_original / 100}₽"
