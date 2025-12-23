@@ -648,15 +648,13 @@ class Settings(BaseSettings):
         })
 
         raw_username = template.format_map(values).strip()
-        # RemnaWave API требует паттерн ^[a-zA-Z0-9_-]+$ (без точек)
-        sanitized_username = re.sub(r"[^0-9A-Za-z_-]+", "_", raw_username)
-        sanitized_username = re.sub(r"_+", "_", sanitized_username).strip("_-")
+        sanitized_username = re.sub(r"[^0-9A-Za-z._-]+", "_", raw_username)
+        sanitized_username = re.sub(r"_+", "_", sanitized_username).strip("._-")
 
-        if not sanitized_username or len(sanitized_username) < 3:
+        if not sanitized_username:
             sanitized_username = f"user_{telegram_id}"
 
-        # RemnaWave API требует длину 3-36 символов
-        return sanitized_username[:36]
+        return sanitized_username[:64]
 
     @staticmethod
     def parse_daily_time_list(raw_value: Optional[str]) -> List[time]:

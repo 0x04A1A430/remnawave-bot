@@ -1711,7 +1711,7 @@ class RemnaWaveService:
 
             batch_size = 500  # Увеличен для ускорения
             offset = 0
-            concurrent_limit = 10  # Параллельные запросы к API
+            concurrent_limit = 5  # Параллельные запросы к API (уменьшено для стабильности)
 
             async with self.get_api_client() as api:
                 semaphore = asyncio.Semaphore(concurrent_limit)
@@ -1773,9 +1773,19 @@ class RemnaWaveService:
                                 if hwid_limit is not None:
                                     create_kwargs['hwid_device_limit'] = hwid_limit
 
-                                if user.remnawave_uuid:
+                                # Определяем UUID для обновления
+                                panel_uuid = user.remnawave_uuid
+
+                                # Если нет UUID в базе, ищем пользователя по telegram_id в панели
+                                if not panel_uuid:
+                                    existing_users = await api.get_user_by_telegram_id(user.telegram_id)
+                                    if existing_users:
+                                        panel_uuid = existing_users[0].uuid
+                                        logger.debug(f"Найден пользователь {user.telegram_id} в панели: {panel_uuid}")
+
+                                if panel_uuid:
                                     update_kwargs = dict(
-                                        uuid=user.remnawave_uuid,
+                                        uuid=panel_uuid,
                                         status=status,
                                         expire_at=expire_at,
                                         traffic_limit_bytes=create_kwargs['traffic_limit_bytes'],
@@ -1789,6 +1799,9 @@ class RemnaWaveService:
 
                                     try:
                                         await api.update_user(**update_kwargs)
+                                        # Сохраняем UUID если его не было
+                                        if not user.remnawave_uuid:
+                                            user.remnawave_uuid = panel_uuid
                                         return ("updated", user, None)
                                     except RemnaWaveAPIError as api_error:
                                         if api_error.status_code == 404:
