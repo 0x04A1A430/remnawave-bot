@@ -13,13 +13,6 @@ from urllib.parse import urlparse, urljoin
 logger = logging.getLogger(__name__)
 
 
-def _format_datetime_for_api(dt: datetime) -> str:
-    """Форматирует datetime для RemnaWave API в формат ISO 8601 с Z суффиксом."""
-    dt_no_tz = dt.replace(tzinfo=None) if dt.tzinfo else dt
-    iso_str = dt_no_tz.strftime('%Y-%m-%dT%H:%M:%S.') + f'{dt_no_tz.microsecond // 1000:03d}Z'
-    return iso_str
-
-
 class UserStatus(Enum):
     ACTIVE = "ACTIVE"
     DISABLED = "DISABLED"
@@ -429,7 +422,7 @@ class RemnaWaveAPI:
         data = {
             'username': username,
             'status': status.value,
-            'expireAt': _format_datetime_for_api(expire_at),
+            'expireAt': expire_at.isoformat(),
             'trafficLimitBytes': traffic_limit_bytes,
             'trafficLimitStrategy': traffic_limit_strategy.value
         }
@@ -508,7 +501,7 @@ class RemnaWaveAPI:
         if traffic_limit_strategy:
             data['trafficLimitStrategy'] = traffic_limit_strategy.value
         if expire_at:
-            data['expireAt'] = _format_datetime_for_api(expire_at)
+            data['expireAt'] = expire_at.isoformat()
         if telegram_id is not None:
             data['telegramId'] = telegram_id
         if email is not None:
