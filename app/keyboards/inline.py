@@ -512,7 +512,7 @@ def get_main_menu_keyboard(
             settings.BUY_TRAFFIC_BUTTON_VISIBLE
             and subscription
             and not subscription.is_trial
-            and subscription.traffic_limit_gb > 0
+            and (subscription.traffic_limit_gb or 0) > 0
         ):
             paired_buttons.append(
                 InlineKeyboardButton(text=texts.t("BUY_TRAFFIC_BUTTON", "📈 Докупить трафик"), callback_data="buy_traffic")
