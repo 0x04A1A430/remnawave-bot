@@ -1881,34 +1881,17 @@ async def confirm_purchase(
         return
     months_in_period = data.get('months_in_period', calculate_months_from_days(period_days))
 
-    base_price = data.get('base_price')
-    base_price_original = data.get('base_price_original')
-    base_discount_percent = data.get('base_discount_percent')
-    base_discount_total = data.get('base_discount_total')
-
-    if base_price is None:
-        base_price_original = PERIOD_PRICES[period_days]
-        base_discount_percent = db_user.get_promo_discount(
-            "period",
-            period_days,
-        )
-        base_price, base_discount_total = apply_percentage_discount(
-            base_price_original,
-            base_discount_percent,
-        )
-    else:
-        if base_price_original is None:
-            base_price_original = PERIOD_PRICES[period_days]
-        if base_discount_percent is None:
-            base_discount_percent = db_user.get_promo_discount(
-                "period",
-                period_days,
-            )
-        if base_discount_total is None:
-            _, base_discount_total = apply_percentage_discount(
-                base_price_original,
-                base_discount_percent,
-            )
+    # Всегда пересчитываем base_price из PERIOD_PRICES для безопасности
+    # (не доверяем кэшированным значениям из FSM данных)
+    base_price_original = PERIOD_PRICES[period_days]
+    base_discount_percent = db_user.get_promo_discount(
+        "period",
+        period_days,
+    )
+    base_price, base_discount_total = apply_percentage_discount(
+        base_price_original,
+        base_discount_percent,
+    )
     server_prices = data.get('server_prices_for_period', [])
 
     if not server_prices:
@@ -2038,11 +2021,11 @@ async def confirm_purchase(
     cached_total_price = data.get('total_price', 0)
     cached_promo_discount_value = data.get('promo_offer_discount_value', 0)
 
-    discounted_monthly_additions = data.get(
-        'discounted_monthly_additions',
+    # Всегда пересчитываем monthly_additions из компонентов для безопасности
+    discounted_monthly_additions = (
         discounted_traffic_price_per_month
         + discounted_servers_price_per_month
-        + discounted_devices_price_per_month,
+        + discounted_devices_price_per_month
     )
 
     # Вычисляем ожидаемую цену до промо-скидки из компонентов
