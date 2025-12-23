@@ -1,7 +1,7 @@
 import logging
 import random
 from datetime import datetime, timedelta
-
+from typing import Optional
 from aiogram import Dispatcher, F, types
 from aiogram.fsm.context import FSMContext
 from aiogram.filters import Command
@@ -33,6 +33,44 @@ from app.keyboards.inline import get_back_keyboard
 from app.states import ContestStates
 
 logger = logging.getLogger(__name__)
+
+# Rate limiting for contests
+_contest_rate_limits = {}
+
+
+def _check_rate_limit(user_id: int, action: str, limit: int = 1, window_seconds: int = 5) -> bool:
+    """Check if user exceeds rate limit for contest actions."""
+    key = f"{user_id}_{action}"
+    now = datetime.utcnow().timestamp()
+    
+    if key not in _contest_rate_limits:
+        _contest_rate_limits[key] = []
+    
+    # Clean old entries
+    _contest_rate_limits[key] = [t for t in _contest_rate_limits[key] if now - t < window_seconds]
+    
+    if len(_contest_rate_limits[key]) >= limit:
+        return False
+    
+    _contest_rate_limits[key].append(now)
+    return True
+
+
+def _validate_callback_data(data: str) -> Optional[list]:
+    """Validate and parse callback data safely."""
+    if not data or not isinstance(data, str):
+        return None
+    
+    parts = data.split("_")
+    if len(parts) < 2 or parts[0] != "contest":
+        return None
+    
+    # Basic validation for parts
+    for part in parts:
+        if not part or len(part) > 50:  # reasonable limit
+            return None
+    
+    return parts
 
 
 def _user_allowed(subscription) -> bool:
@@ -116,8 +154,14 @@ async def play_contest(callback: types.CallbackQuery, state: FSMContext, db_user
         await _reply_not_eligible(callback, db_user.language)
         return
 
-    parts = callback.data.split("_")
-    if len(parts) < 4 or parts[0] != "contest" or parts[1] != "play":
+    # Rate limit check
+    if not _check_rate_limit(db_user.id, "contest_play", limit=2, window_seconds=10):
+        await callback.answer(texts.t("CONTEST_TOO_FAST", "Слишком быстро! Подождите."), show_alert=True)
+        return
+
+    # Validate callback data
+    parts = _validate_callback_data(callback.data)
+    if not parts or len(parts) < 4 or parts[1] != "play":
         await callback.answer("Некорректные данные", show_alert=True)
         return
 
@@ -273,7 +317,8 @@ async def _render_blitz(callback, db_user, round_obj: ContestRound, tpl: Contest
     texts = get_texts(db_user.language)
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
-            [types.InlineKeyboardButton(text=texts.t("CONTEST_BLITZ_BUTTON", "Я здесь!"), callback_data=f"contest_pick_{round_obj.id}_blitz")]
+            [types.InlineKeyboardButton(text=texts.t("CONTEST_BLITZ_BUTTON", "Я здесь!"), callback_data=f"contest_pick_{round_obj.id}_blitz")],
+            [types.InlineKeyboardButton(text=texts.BACK, callback_data="contests_menu")]
         ]
     )
     await callback.message.edit_text(
@@ -287,17 +332,35 @@ async def _render_blitz(callback, db_user, round_obj: ContestRound, tpl: Contest
 @error_handler
 async def handle_pick(callback: types.CallbackQuery, db_user, db: AsyncSession):
     texts = get_texts(db_user.language)
-    parts = callback.data.split("_")
-    if len(parts) < 4 or parts[0] != "contest" or parts[1] != "pick":
+    
+    # Rate limit check
+    if not _check_rate_limit(db_user.id, "contest_pick", limit=1, window_seconds=3):
+        await callback.answer(texts.t("CONTEST_TOO_FAST", "Слишком быстро! Подождите."), show_alert=True)
+        return
+    
+    # Validate callback data
+    parts = _validate_callback_data(callback.data)
+    if not parts:
         await callback.answer("Некорректные данные", show_alert=True)
         return
-
+    
+    if len(parts) < 4 or parts[1] != "pick":
+        await callback.answer("Некорректные данные", show_alert=True)
+        return
+    
     round_id_str = parts[2]
     pick = "_".join(parts[3:])
+    
     try:
         round_id = int(round_id_str)
     except ValueError:
         await callback.answer("Некорректные данные", show_alert=True)
+        return
+    
+    # Re-check authorization
+    subscription = await get_subscription_by_user_id(db, db_user.id)
+    if not _user_allowed(subscription):
+        await callback.answer(texts.t("CONTEST_NOT_ELIGIBLE", "Игра недоступна без активной подписки."), show_alert=True)
         return
 
     async with AsyncSessionLocal() as db2:
@@ -343,14 +406,23 @@ async def handle_pick(callback: types.CallbackQuery, db_user, db: AsyncSession):
         else:
             is_winner = False
 
-        # Check if max winners already reached
-        if is_winner and round_obj.winners_count >= round_obj.max_winners:
-            is_winner = False  # Too late, max winners already reached
+        # Log attempt
+        logger.info(f"Contest attempt: user {db_user.id}, round {round_id}, pick '{pick}', winner {is_winner}")
+        
+        # Atomic winner check and increment
+        from sqlalchemy import select
+        stmt = select(ContestRound).where(ContestRound.id == round_id).with_for_update()
+        result = await db2.execute(stmt)
+        round_obj_locked = result.scalar_one()
+        
+        if is_winner and round_obj_locked.winners_count >= round_obj_locked.max_winners:
+            is_winner = False
 
         await create_attempt(db2, round_id=round_obj.id, user_id=db_user.id, answer=str(pick), is_winner=is_winner)
 
         if is_winner:
-            await increment_winner_count(db2, round_obj)
+            round_obj_locked.winners_count += 1
+            await db2.commit()
             prize_text = await _award_prize(db2, db_user.id, tpl.prize_days, db_user.language)
             await callback.answer(texts.t("CONTEST_WIN", "🎉 Победа! ") + (prize_text or ""), show_alert=True)
         else:
