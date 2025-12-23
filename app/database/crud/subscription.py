@@ -797,17 +797,17 @@ async def update_subscription_usage(
     return subscription
 
 async def get_all_subscriptions(
-    db: AsyncSession, 
-    page: int = 1, 
+    db: AsyncSession,
+    page: int = 1,
     limit: int = 10
 ) -> Tuple[List[Subscription], int]:
     count_result = await db.execute(
         select(func.count(Subscription.id))
     )
     total_count = count_result.scalar()
-    
+
     offset = (page - 1) * limit
-    
+
     result = await db.execute(
         select(Subscription)
         .options(selectinload(Subscription.user))
@@ -815,10 +815,26 @@ async def get_all_subscriptions(
         .offset(offset)
         .limit(limit)
     )
-    
+
     subscriptions = result.scalars().all()
-    
+
     return subscriptions, total_count
+
+
+async def get_subscriptions_batch(
+    db: AsyncSession,
+    offset: int = 0,
+    limit: int = 500,
+) -> List[Subscription]:
+    """Получает подписки пачками для синхронизации. Загружает связанных пользователей."""
+    result = await db.execute(
+        select(Subscription)
+        .options(selectinload(Subscription.user))
+        .order_by(Subscription.id)
+        .offset(offset)
+        .limit(limit)
+    )
+    return list(result.scalars().all())
 
 async def add_subscription_servers(
     db: AsyncSession,
