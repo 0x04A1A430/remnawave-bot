@@ -13,6 +13,13 @@ from urllib.parse import urlparse, urljoin
 logger = logging.getLogger(__name__)
 
 
+def _format_datetime_for_api(dt: datetime) -> str:
+    """Форматирует datetime для RemnaWave API в формат ISO 8601 с Z суффиксом."""
+    dt_no_tz = dt.replace(tzinfo=None) if dt.tzinfo else dt
+    iso_str = dt_no_tz.strftime('%Y-%m-%dT%H:%M:%S.') + f'{dt_no_tz.microsecond // 1000:03d}Z'
+    return iso_str
+
+
 class UserStatus(Enum):
     ACTIVE = "ACTIVE"
     DISABLED = "DISABLED"
@@ -422,7 +429,7 @@ class RemnaWaveAPI:
         data = {
             'username': username,
             'status': status.value,
-            'expireAt': expire_at.isoformat(),
+            'expireAt': _format_datetime_for_api(expire_at),
             'trafficLimitBytes': traffic_limit_bytes,
             'trafficLimitStrategy': traffic_limit_strategy.value
         }
@@ -439,7 +446,8 @@ class RemnaWaveAPI:
             data['tag'] = tag
         if active_internal_squads:
             data['activeInternalSquads'] = active_internal_squads
-            
+
+        logger.debug("Создание пользователя в панели: %s", data)
         response = await self._make_request('POST', '/api/users', data)
         user = self._parse_user(response['response'])
         return await self.enrich_user_with_happ_link(user)
@@ -500,7 +508,7 @@ class RemnaWaveAPI:
         if traffic_limit_strategy:
             data['trafficLimitStrategy'] = traffic_limit_strategy.value
         if expire_at:
-            data['expireAt'] = expire_at.isoformat()
+            data['expireAt'] = _format_datetime_for_api(expire_at)
         if telegram_id is not None:
             data['telegramId'] = telegram_id
         if email is not None:
