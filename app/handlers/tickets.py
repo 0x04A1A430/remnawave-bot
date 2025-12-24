@@ -464,17 +464,61 @@ async def show_my_tickets_closed(
     await callback.answer()
 
 
+def _split_long_block(block: str, max_len: int) -> list[str]:
+    """Разбивает слишком длинный блок на части."""
+    if len(block) <= max_len:
+        return [block]
+
+    parts = []
+    remaining = block
+    while remaining:
+        if len(remaining) <= max_len:
+            parts.append(remaining)
+            break
+        # Ищем место для разрыва (перенос строки или пробел)
+        cut_at = max_len
+        newline_pos = remaining.rfind('\n', 0, max_len)
+        space_pos = remaining.rfind(' ', 0, max_len)
+
+        if newline_pos > max_len // 2:
+            cut_at = newline_pos + 1
+        elif space_pos > max_len // 2:
+            cut_at = space_pos + 1
+
+        parts.append(remaining[:cut_at])
+        remaining = remaining[cut_at:]
+
+    return parts
+
+
 def _split_text_into_pages(header: str, message_blocks: list[str], max_len: int = 3500) -> list[str]:
+    """Разбивает текст на страницы с учётом лимита Telegram."""
     pages: list[str] = []
     current = header
+    header_len = len(header)
+    block_max_len = max_len - header_len - 50  # запас для безопасности
+
     for block in message_blocks:
-        if len(current) + len(block) > max_len:
-            pages.append(current)
+        # Если блок сам по себе слишком длинный — разбиваем его
+        if len(block) > block_max_len:
+            block_parts = _split_long_block(block, block_max_len)
+            for part in block_parts:
+                if len(current) + len(part) > max_len:
+                    if current.strip() and current != header:
+                        pages.append(current)
+                    current = header + part
+                else:
+                    current += part
+        elif len(current) + len(block) > max_len:
+            if current.strip() and current != header:
+                pages.append(current)
             current = header + block
         else:
             current += block
+
     if current.strip():
         pages.append(current)
+
     return pages if pages else [header]
 
 
