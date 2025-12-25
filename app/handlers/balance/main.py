@@ -594,6 +594,11 @@ async def process_topup_amount(
             from .heleket import process_heleket_payment_amount
             async with AsyncSessionLocal() as db:
                 await process_heleket_payment_amount(message, db_user, db, amount_kopeks, state)
+        elif payment_method == "cloudpayments":
+            from app.database.database import AsyncSessionLocal
+            from .cloudpayments import process_cloudpayments_amount
+            async with AsyncSessionLocal() as db:
+                await process_cloudpayments_amount(message, db_user, db, state)
         else:
             await message.answer("Неизвестный способ оплаты")
         
@@ -723,6 +728,14 @@ async def handle_quick_amount_selection(
                 await process_heleket_payment_amount(
                     callback.message, db_user, db, amount_kopeks, state
                 )
+        elif payment_method == "cloudpayments":
+            from app.database.database import AsyncSessionLocal
+            from .cloudpayments import process_cloudpayments_payment_amount
+
+            async with AsyncSessionLocal() as db:
+                await process_cloudpayments_payment_amount(
+                    callback.message, db_user, db, amount_kopeks, state
+                )
         elif payment_method == "stars":
             from .stars import process_stars_payment_amount
 
@@ -820,6 +833,13 @@ async def handle_topup_amount_callback(
             from .wata import process_wata_payment_amount
             async with AsyncSessionLocal() as db:
                 await process_wata_payment_amount(
+                    callback.message, db_user, db, amount_kopeks, state
+                )
+        elif method == "cloudpayments":
+            from app.database.database import AsyncSessionLocal
+            from .cloudpayments import process_cloudpayments_payment_amount
+            async with AsyncSessionLocal() as db:
+                await process_cloudpayments_payment_amount(
                     callback.message, db_user, db, amount_kopeks, state
                 )
         elif method == "stars":
@@ -963,6 +983,16 @@ def register_balance_handlers(dp: Dispatcher):
     dp.callback_query.register(
         check_heleket_payment_status,
         F.data.startswith("check_heleket_")
+    )
+
+    from .cloudpayments import start_cloudpayments_payment, handle_cloudpayments_quick_amount
+    dp.callback_query.register(
+        start_cloudpayments_payment,
+        F.data == "topup_cloudpayments"
+    )
+    dp.callback_query.register(
+        handle_cloudpayments_quick_amount,
+        F.data.startswith("topup_amount|cloudpayments|")
     )
 
     from .mulenpay import check_mulenpay_payment_status

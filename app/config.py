@@ -375,6 +375,24 @@ class Settings(BaseSettings):
     WATA_PUBLIC_KEY_URL: Optional[str] = None
     WATA_PUBLIC_KEY_CACHE_SECONDS: int = 3600
 
+    # CloudPayments
+    CLOUDPAYMENTS_ENABLED: bool = False
+    CLOUDPAYMENTS_PUBLIC_ID: Optional[str] = None
+    CLOUDPAYMENTS_API_SECRET: Optional[str] = None
+    CLOUDPAYMENTS_API_URL: str = "https://api.cloudpayments.ru"
+    CLOUDPAYMENTS_WIDGET_URL: str = "https://widget.cloudpayments.ru/show"
+    CLOUDPAYMENTS_DESCRIPTION: str = "Пополнение баланса"
+    CLOUDPAYMENTS_CURRENCY: str = "RUB"
+    CLOUDPAYMENTS_MIN_AMOUNT_KOPEKS: int = 5000
+    CLOUDPAYMENTS_MAX_AMOUNT_KOPEKS: int = 10000000
+    CLOUDPAYMENTS_WEBHOOK_PATH: str = "/cloudpayments-webhook"
+    CLOUDPAYMENTS_WEBHOOK_HOST: str = "0.0.0.0"
+    CLOUDPAYMENTS_WEBHOOK_PORT: int = 8087
+    CLOUDPAYMENTS_RETURN_URL: Optional[str] = None
+    CLOUDPAYMENTS_SKIN: str = "mini"  # mini, classic, modern
+    CLOUDPAYMENTS_REQUIRE_EMAIL: bool = False
+    CLOUDPAYMENTS_TEST_MODE: bool = False
+
     MAIN_MENU_MODE: str = "default"
     CONNECT_BUTTON_MODE: str = "guide"
     MINIAPP_CUSTOM_URL: str = ""
@@ -1297,6 +1315,13 @@ class Settings(BaseSettings):
             self.WATA_ENABLED
             and self.WATA_ACCESS_TOKEN is not None
             and self.WATA_TERMINAL_PUBLIC_ID is not None
+        )
+
+    def is_cloudpayments_enabled(self) -> bool:
+        return (
+            self.CLOUDPAYMENTS_ENABLED
+            and self.CLOUDPAYMENTS_PUBLIC_ID is not None
+            and self.CLOUDPAYMENTS_API_SECRET is not None
         )
 
     def is_payment_verification_auto_check_enabled(self) -> bool:
