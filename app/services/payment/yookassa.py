@@ -1029,13 +1029,13 @@ class YooKassaPaymentMixin:
             receipt_uuid = await self.nalogo_service.create_receipt(
                 name=receipt_name,
                 amount=amount_rubles,
-                quantity=1
+                quantity=1,
+                payment_id=payment.yookassa_payment_id,
             )
 
             if receipt_uuid:
                 logger.info(f"Чек NaloGO создан для платежа {payment.yookassa_payment_id}: {receipt_uuid}")
-            else:
-                logger.warning(f"Не удалось создать чек NaloGO для платежа {payment.yookassa_payment_id}")
+            # При временной недоступности чек добавляется в очередь автоматически
 
         except Exception as error:
             logger.error(

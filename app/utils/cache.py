@@ -159,7 +159,7 @@ class CacheService:
     async def get_hash(self, name: str, key: str = None) -> Optional[Union[dict, str]]:
         if not self._connected:
             return None
-        
+
         try:
             if key:
                 value = await self.redis_client.hget(name, key)
@@ -170,6 +170,56 @@ class CacheService:
         except Exception as e:
             logger.error(f"Ошибка получения хеша {name}: {e}")
             return None
+
+    async def lpush(self, key: str, value: Any) -> bool:
+        """Добавить элемент в начало списка (очереди)."""
+        if not self._connected:
+            return False
+
+        try:
+            serialized = json.dumps(value, default=str)
+            await self.redis_client.lpush(key, serialized)
+            return True
+        except Exception as e:
+            logger.error(f"Ошибка добавления в очередь {key}: {e}")
+            return False
+
+    async def rpop(self, key: str) -> Optional[Any]:
+        """Извлечь элемент из конца списка (FIFO очередь)."""
+        if not self._connected:
+            return None
+
+        try:
+            value = await self.redis_client.rpop(key)
+            if value:
+                return json.loads(value)
+            return None
+        except Exception as e:
+            logger.error(f"Ошибка извлечения из очереди {key}: {e}")
+            return None
+
+    async def llen(self, key: str) -> int:
+        """Получить длину списка (очереди)."""
+        if not self._connected:
+            return 0
+
+        try:
+            return await self.redis_client.llen(key)
+        except Exception as e:
+            logger.error(f"Ошибка получения длины очереди {key}: {e}")
+            return 0
+
+    async def lrange(self, key: str, start: int = 0, end: int = -1) -> list:
+        """Получить элементы списка без удаления."""
+        if not self._connected:
+            return []
+
+        try:
+            items = await self.redis_client.lrange(key, start, end)
+            return [json.loads(item) for item in items]
+        except Exception as e:
+            logger.error(f"Ошибка чтения очереди {key}: {e}")
+            return []
 
 
 cache = CacheService()

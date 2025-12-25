@@ -10,6 +10,7 @@ from aiogram.exceptions import TelegramBadRequest
 from app.config import settings
 from app.database.database import get_db
 from app.services.monitoring_service import monitoring_service
+from app.services.nalogo_queue_service import nalogo_queue_service
 from app.utils.decorators import admin_required
 from app.utils.pagination import paginate_list
 from app.keyboards.admin import get_monitoring_keyboard, get_admin_main_keyboard
@@ -911,11 +912,36 @@ async def monitoring_statistics_callback(callback: CallbackQuery):
 • Уведомления: {'🟢 Вкл' if getattr(settings, 'ENABLE_NOTIFICATIONS', True) else '🔴 Выкл'}
 • Автооплата: {', '.join(map(str, settings.get_autopay_warning_days()))} дней
 """
-            
+
+            # Добавляем информацию о чеках NaloGO
+            if settings.is_nalogo_enabled():
+                nalogo_status = await nalogo_queue_service.get_status()
+                queue_len = nalogo_status.get("queue_length", 0)
+                total_amount = nalogo_status.get("total_amount", 0)
+                running = nalogo_status.get("running", False)
+
+                nalogo_section = f"""
+🧾 <b>Чеки NaloGO:</b>
+• Сервис: {'🟢 Работает' if running else '🔴 Остановлен'}
+• В очереди: {queue_len} чек(ов)"""
+                if queue_len > 0:
+                    nalogo_section += f"\n• На сумму: {total_amount:,.2f} ₽"
+                text += nalogo_section
+
             from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-            keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_monitoring")]
-            ])
+
+            buttons = []
+            # Кнопка обработки очереди чеков если есть что обрабатывать
+            if settings.is_nalogo_enabled():
+                nalogo_status = await nalogo_queue_service.get_status()
+                if nalogo_status.get("queue_length", 0) > 0:
+                    buttons.append([InlineKeyboardButton(
+                        text=f"🧾 Отправить чеки ({nalogo_status['queue_length']} шт.)",
+                        callback_data="admin_mon_nalogo_force_process"
+                    )])
+
+            buttons.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_monitoring")])
+            keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
             
             await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
             break
@@ -923,6 +949,110 @@ async def monitoring_statistics_callback(callback: CallbackQuery):
     except Exception as e:
         logger.error(f"Ошибка получения статистики: {e}")
         await callback.answer(f"❌ Ошибка получения статистики: {str(e)}", show_alert=True)
+
+
+@router.callback_query(F.data == "admin_mon_nalogo_force_process")
+@admin_required
+async def nalogo_force_process_callback(callback: CallbackQuery):
+    """Принудительная отправка чеков из очереди."""
+    try:
+        await callback.answer("🔄 Запускаю обработку очереди чеков...", show_alert=False)
+
+        result = await nalogo_queue_service.force_process()
+
+        if "error" in result:
+            await callback.answer(f"❌ {result['error']}", show_alert=True)
+            return
+
+        message = result.get("message", "Готово")
+        processed = result.get("processed", 0)
+        remaining = result.get("remaining", 0)
+
+        if processed > 0:
+            text = f"✅ Обработано: {processed} чек(ов)"
+            if remaining > 0:
+                text += f"\n⏳ Осталось в очереди: {remaining}"
+        else:
+            if remaining > 0:
+                text = f"⚠️ Сервис nalog.ru недоступен\n⏳ В очереди: {remaining} чек(ов)"
+            else:
+                text = "📭 Очередь пуста"
+
+        await callback.answer(text, show_alert=True)
+
+        # Обновляем страницу статистики
+        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+
+        # Перезагружаем статистику
+        async for db in get_db():
+            from app.database.crud.subscription import get_subscriptions_statistics
+            sub_stats = await get_subscriptions_statistics(db)
+            mon_status = await monitoring_service.get_monitoring_status(db)
+
+            week_ago = datetime.now() - timedelta(days=7)
+            week_logs = await monitoring_service.get_monitoring_logs(db, limit=1000)
+            week_logs = [log for log in week_logs if log['created_at'] >= week_ago]
+            week_success = sum(1 for log in week_logs if log['is_success'])
+            week_errors = len(week_logs) - week_success
+
+            stats_text = f"""
+📊 <b>Статистика мониторинга</b>
+
+📱 <b>Подписки:</b>
+• Всего: {sub_stats['total_subscriptions']}
+• Активных: {sub_stats['active_subscriptions']}
+• Тестовых: {sub_stats['trial_subscriptions']}
+• Платных: {sub_stats['paid_subscriptions']}
+
+📈 <b>За сегодня:</b>
+• Успешных операций: {mon_status['stats_24h']['successful']}
+• Ошибок: {mon_status['stats_24h']['failed']}
+• Успешность: {mon_status['stats_24h']['success_rate']}%
+
+📊 <b>За неделю:</b>
+• Всего событий: {len(week_logs)}
+• Успешных: {week_success}
+• Ошибок: {week_errors}
+• Успешность: {round(week_success/len(week_logs)*100, 1) if week_logs else 0}%
+
+🔧 <b>Система:</b>
+• Интервал: {settings.MONITORING_INTERVAL} мин
+• Уведомления: {'🟢 Вкл' if getattr(settings, 'ENABLE_NOTIFICATIONS', True) else '🔴 Выкл'}
+• Автооплата: {', '.join(map(str, settings.get_autopay_warning_days()))} дней
+"""
+
+            if settings.is_nalogo_enabled():
+                nalogo_status = await nalogo_queue_service.get_status()
+                queue_len = nalogo_status.get("queue_length", 0)
+                total_amount = nalogo_status.get("total_amount", 0)
+                running = nalogo_status.get("running", False)
+
+                nalogo_section = f"""
+🧾 <b>Чеки NaloGO:</b>
+• Сервис: {'🟢 Работает' if running else '🔴 Остановлен'}
+• В очереди: {queue_len} чек(ов)"""
+                if queue_len > 0:
+                    nalogo_section += f"\n• На сумму: {total_amount:,.2f} ₽"
+                stats_text += nalogo_section
+
+            buttons = []
+            if settings.is_nalogo_enabled():
+                nalogo_status = await nalogo_queue_service.get_status()
+                if nalogo_status.get("queue_length", 0) > 0:
+                    buttons.append([InlineKeyboardButton(
+                        text=f"🧾 Отправить чеки ({nalogo_status['queue_length']} шт.)",
+                        callback_data="admin_mon_nalogo_force_process"
+                    )])
+
+            buttons.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_monitoring")])
+            keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+
+            await callback.message.edit_text(stats_text, parse_mode="HTML", reply_markup=keyboard)
+            break
+
+    except Exception as e:
+        logger.error(f"Ошибка принудительной обработки чеков: {e}")
+        await callback.answer(f"❌ Ошибка: {str(e)}", show_alert=True)
 
 
 def get_monitoring_logs_keyboard(current_page: int, total_pages: int):

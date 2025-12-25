@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 from typing import Optional, Dict, Any
 from decimal import Decimal
 
@@ -6,8 +7,11 @@ from nalogo import Client
 from nalogo.dto.income import IncomeClient, IncomeType
 
 from app.config import settings
+from app.utils.cache import cache
 
 logger = logging.getLogger(__name__)
+
+NALOGO_QUEUE_KEY = "nalogo:receipt_queue"
 
 
 class NaloGoService:
@@ -49,6 +53,45 @@ class NaloGoService:
                 )
                 self.configured = False
 
+    @staticmethod
+    def _is_service_unavailable(error: Exception) -> bool:
+        """Проверяет, является ли ошибка временной недоступностью сервиса (503)."""
+        error_str = str(error).lower()
+        return (
+            "503" in error_str
+            or "service temporarily unavailable" in error_str
+            or "service unavailable" in error_str
+            or "ведутся работы" in error_str
+            or ("health" in error_str and "false" in error_str)
+        )
+
+    async def _queue_receipt(
+        self,
+        name: str,
+        amount: float,
+        quantity: int,
+        client_info: Optional[Dict[str, Any]],
+        payment_id: Optional[str] = None,
+    ) -> bool:
+        """Добавить чек в очередь для отложенной отправки."""
+        receipt_data = {
+            "name": name,
+            "amount": amount,
+            "quantity": quantity,
+            "client_info": client_info,
+            "payment_id": payment_id,
+            "created_at": datetime.now().isoformat(),
+            "attempts": 0,
+        }
+        success = await cache.lpush(NALOGO_QUEUE_KEY, receipt_data)
+        if success:
+            queue_len = await cache.llen(NALOGO_QUEUE_KEY)
+            logger.info(
+                f"Чек добавлен в очередь (payment_id={payment_id}, "
+                f"сумма={amount}₽, в очереди: {queue_len})"
+            )
+        return success
+
     async def authenticate(self) -> bool:
         """Аутентификация в сервисе NaloGO."""
         if not self.configured:
@@ -60,10 +103,24 @@ class NaloGoService:
             logger.info("Успешная аутентификация в NaloGO")
             return True
         except Exception as error:
-            logger.error("Ошибка аутентификации в NaloGO: %s", error, exc_info=True)
+            if self._is_service_unavailable(error):
+                logger.warning(
+                    "NaloGO временно недоступен (техработы): %s",
+                    str(error)[:200]
+                )
+            else:
+                logger.error("Ошибка аутентификации в NaloGO: %s", error, exc_info=True)
             return False
 
-    async def create_receipt(self, name: str, amount: float, quantity: int = 1, client_info: Optional[Dict[str, Any]] = None) -> Optional[str]:
+    async def create_receipt(
+        self,
+        name: str,
+        amount: float,
+        quantity: int = 1,
+        client_info: Optional[Dict[str, Any]] = None,
+        payment_id: Optional[str] = None,
+        queue_on_failure: bool = True,
+    ) -> Optional[str]:
         """Создание чека о доходе.
 
         Args:
@@ -71,6 +128,8 @@ class NaloGoService:
             amount: Сумма в рублях
             quantity: Количество
             client_info: Информация о клиенте (опционально)
+            payment_id: ID платежа для логирования
+            queue_on_failure: Добавить в очередь при временной недоступности
 
         Returns:
             UUID чека или None при ошибке
@@ -84,6 +143,9 @@ class NaloGoService:
             if not hasattr(self.client, '_access_token') or not self.client._access_token:
                 auth_success = await self.authenticate()
                 if not auth_success:
+                    # Если сервис недоступен — добавляем в очередь
+                    if queue_on_failure:
+                        await self._queue_receipt(name, amount, quantity, client_info, payment_id)
                     return None
 
             income_api = self.client.income()
@@ -114,5 +176,30 @@ class NaloGoService:
                 return None
 
         except Exception as error:
-            logger.error("Ошибка создания чека в NaloGO: %s", error, exc_info=True)
+            if self._is_service_unavailable(error):
+                logger.warning(
+                    "NaloGO временно недоступен, чек будет отправлен позже "
+                    f"(payment_id={payment_id}, сумма={amount}₽)"
+                )
+                if queue_on_failure:
+                    await self._queue_receipt(name, amount, quantity, client_info, payment_id)
+            else:
+                logger.error("Ошибка создания чека в NaloGO: %s", error, exc_info=True)
             return None
+
+    async def get_queue_length(self) -> int:
+        """Получить количество чеков в очереди."""
+        return await cache.llen(NALOGO_QUEUE_KEY)
+
+    async def get_queued_receipts(self) -> list:
+        """Получить список чеков в очереди (без удаления)."""
+        return await cache.lrange(NALOGO_QUEUE_KEY)
+
+    async def pop_receipt_from_queue(self) -> Optional[Dict[str, Any]]:
+        """Извлечь следующий чек из очереди."""
+        return await cache.rpop(NALOGO_QUEUE_KEY)
+
+    async def requeue_receipt(self, receipt_data: Dict[str, Any]) -> bool:
+        """Вернуть чек обратно в очередь (при неудачной отправке)."""
+        receipt_data["attempts"] = receipt_data.get("attempts", 0) + 1
+        return await cache.lpush(NALOGO_QUEUE_KEY, receipt_data)

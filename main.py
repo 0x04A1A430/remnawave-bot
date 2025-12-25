@@ -34,6 +34,7 @@ from app.services.external_admin_service import ensure_external_admin_token
 from app.services.broadcast_service import broadcast_service
 from app.services.referral_contest_service import referral_contest_service
 from app.services.contest_rotation_service import contest_rotation_service
+from app.services.nalogo_queue_service import nalogo_queue_service
 from app.utils.startup_timeline import StartupTimeline
 from app.utils.timezone import TimezoneAwareFormatter
 
@@ -271,6 +272,11 @@ async def main():
         payment_service = PaymentService(bot)
         auto_payment_verification_service.set_payment_service(payment_service)
 
+        # Настройка сервиса очереди чеков NaloGO
+        if payment_service.nalogo_service:
+            nalogo_queue_service.set_nalogo_service(payment_service.nalogo_service)
+            nalogo_queue_service.set_bot(bot)
+
         verification_providers: list[str] = []
         auto_verification_active = False
         async with timeline.stage(
@@ -330,6 +336,27 @@ async def main():
             auto_verification_active = auto_payment_verification_service.is_running()
             if auto_verification_active:
                 stage.log("Фоновая автопроверка запущена")
+
+        async with timeline.stage(
+            "Очередь чеков NaloGO",
+            "🧾",
+            success_message="Сервис очереди чеков запущен",
+        ) as stage:
+            if settings.is_nalogo_enabled():
+                try:
+                    await nalogo_queue_service.start()
+                    if nalogo_queue_service.is_running():
+                        queue_len = await payment_service.nalogo_service.get_queue_length()
+                        if queue_len > 0:
+                            stage.log(f"В очереди ожидает {queue_len} чек(ов)")
+                        stage.success("Фоновая обработка чеков активна")
+                    else:
+                        stage.skip("Сервис не запущен")
+                except Exception as e:
+                    stage.warning(f"Ошибка запуска очереди чеков: {e}")
+                    logger.error(f"❌ Ошибка запуска очереди чеков NaloGO: {e}")
+            else:
+                stage.skip("NaloGO отключен настройками")
 
         async with timeline.stage(
             "Внешняя админка",
@@ -645,6 +672,12 @@ async def main():
             await contest_rotation_service.stop()
         except Exception as e:
             logger.error(f"Ошибка остановки ротации игр: {e}")
+
+        logger.info("ℹ️ Остановка очереди чеков NaloGO...")
+        try:
+            await nalogo_queue_service.stop()
+        except Exception as e:
+            logger.error(f"Ошибка остановки очереди чеков NaloGO: {e}")
 
         logger.info("ℹ️ Остановка сервиса бекапов...")
         try:

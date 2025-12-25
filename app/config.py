@@ -45,6 +45,12 @@ class Settings(BaseSettings):
     ADMIN_NOTIFICATIONS_CHAT_ID: Optional[str] = None
     ADMIN_NOTIFICATIONS_TOPIC_ID: Optional[int] = None
     ADMIN_NOTIFICATIONS_TICKET_TOPIC_ID: Optional[int] = None
+    ADMIN_NOTIFICATIONS_NALOG_TOPIC_ID: Optional[int] = None
+
+    # Настройки очереди чеков NaloGO
+    NALOGO_QUEUE_CHECK_INTERVAL: int = 300  # Интервал проверки очереди (секунды)
+    NALOGO_QUEUE_RECEIPT_DELAY: int = 3  # Задержка между отправкой чеков (секунды)
+    NALOGO_QUEUE_MAX_ATTEMPTS: int = 10  # Максимум попыток отправки чека
 
     ADMIN_REPORTS_ENABLED: bool = False
     ADMIN_REPORTS_CHAT_ID: Optional[str] = None
