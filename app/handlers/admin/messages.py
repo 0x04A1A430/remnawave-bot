@@ -711,29 +711,56 @@ async def handle_media_selection(
         await state.update_data(has_media=False)
         await show_button_selector_callback(callback, db_user, state)
         return
-    
+
     media_type = callback.data.replace('add_media_', '')
-    
+
     media_instructions = {
         "photo": "📷 Отправьте фотографию для рассылки:",
         "video": "🎥 Отправьте видео для рассылки:",
         "document": "📄 Отправьте документ для рассылки:"
     }
-    
+
     await state.update_data(
         media_type=media_type,
         waiting_for_media=True
     )
-    
-    await callback.message.edit_text(
+
+    instruction_text = (
         f"{media_instructions.get(media_type, 'Отправьте медиафайл:')}\n\n"
-        f"<i>Размер файла не должен превышать 50 МБ</i>",
-        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
-            [types.InlineKeyboardButton(text="❌ Отмена", callback_data="admin_messages")]
-        ]),
-        parse_mode="HTML"
+        f"<i>Размер файла не должен превышать 50 МБ</i>"
     )
-    
+    instruction_keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+        [types.InlineKeyboardButton(text="❌ Отмена", callback_data="admin_messages")]
+    ])
+
+    # Проверяем, является ли текущее сообщение медиа-сообщением
+    is_media_message = (
+        callback.message.photo
+        or callback.message.video
+        or callback.message.document
+        or callback.message.animation
+        or callback.message.audio
+        or callback.message.voice
+    )
+
+    if is_media_message:
+        # Удаляем медиа-сообщение и отправляем новое текстовое
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
+        await callback.message.answer(
+            instruction_text,
+            reply_markup=instruction_keyboard,
+            parse_mode="HTML"
+        )
+    else:
+        await callback.message.edit_text(
+            instruction_text,
+            reply_markup=instruction_keyboard,
+            parse_mode="HTML"
+        )
+
     await state.set_state(AdminStates.waiting_for_broadcast_media)
     await callback.answer()
 
@@ -860,12 +887,12 @@ async def show_button_selector_callback(
     if selected_buttons is None:
         selected_buttons = list(DEFAULT_SELECTED_BUTTONS)
         await state.update_data(selected_buttons=selected_buttons)
-    
+
     media_info = ""
     if has_media:
         media_type = data.get('media_type', 'файл')
         media_info = f"\n🖼️ <b>Медиафайл:</b> {media_type} добавлен"
-    
+
     text = f"""
 📘 <b>Выбор дополнительных кнопок</b>
 
@@ -882,16 +909,39 @@ async def show_button_selector_callback(
 
 Выберите нужные кнопки и нажмите "Продолжить":
 """
-    
+
     keyboard = get_updated_message_buttons_selector_keyboard_with_media(
         selected_buttons, has_media, db_user.language
     )
-    
-    await callback.message.edit_text(
-        text,
-        reply_markup=keyboard,
-        parse_mode="HTML"
+
+    # Проверяем, является ли текущее сообщение медиа-сообщением
+    # (фото, видео, документ и т.д.) - для них нельзя использовать edit_text
+    is_media_message = (
+        callback.message.photo
+        or callback.message.video
+        or callback.message.document
+        or callback.message.animation
+        or callback.message.audio
+        or callback.message.voice
     )
+
+    if is_media_message:
+        # Удаляем медиа-сообщение и отправляем новое текстовое
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass  # Игнорируем ошибки удаления
+        await callback.message.answer(
+            text,
+            reply_markup=keyboard,
+            parse_mode="HTML"
+        )
+    else:
+        await callback.message.edit_text(
+            text,
+            reply_markup=keyboard,
+            parse_mode="HTML"
+        )
     await callback.answer()
 
 

@@ -373,13 +373,16 @@ class MiniAppSubscriptionPurchaseService:
         period_map: Dict[str, PurchasePeriodConfig] = {}
 
         default_devices = settings.DEFAULT_DEVICE_LIMIT
-        if subscription and getattr(subscription, "device_limit", None):
+        # Для триала НЕ используем его ограничения как дефолтные,
+        # чтобы при продлении клиент получил стандартные значения платной подписки
+        is_trial_subscription = subscription and getattr(subscription, "is_trial", False)
+        if subscription and getattr(subscription, "device_limit", None) and not is_trial_subscription:
             default_devices = max(default_devices, int(subscription.device_limit))
 
         fixed_traffic_value = None
         if settings.is_traffic_fixed():
             fixed_traffic_value = settings.get_fixed_traffic_limit()
-        elif subscription and subscription.traffic_limit_gb is not None:
+        elif subscription and subscription.traffic_limit_gb is not None and not is_trial_subscription:
             fixed_traffic_value = subscription.traffic_limit_gb
 
         default_period_days = available_periods[0] if available_periods else 30

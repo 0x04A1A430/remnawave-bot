@@ -26,8 +26,67 @@ from app.utils.cache import RateLimitCache
 
 logger = logging.getLogger(__name__)
 
+# Максимальная длина сообщения Telegram (с запасом)
+MAX_MESSAGE_LEN = 3500
 
- 
+
+def _split_long_block(block: str, max_len: int) -> list[str]:
+    """Разбивает слишком длинный блок на части."""
+    if len(block) <= max_len:
+        return [block]
+
+    parts = []
+    remaining = block
+    while remaining:
+        if len(remaining) <= max_len:
+            parts.append(remaining)
+            break
+        cut_at = max_len
+        newline_pos = remaining.rfind('\n', 0, max_len)
+        space_pos = remaining.rfind(' ', 0, max_len)
+
+        if newline_pos > max_len // 2:
+            cut_at = newline_pos + 1
+        elif space_pos > max_len // 2:
+            cut_at = space_pos + 1
+
+        parts.append(remaining[:cut_at])
+        remaining = remaining[cut_at:]
+
+    return parts
+
+
+def _split_text_into_pages(header: str, message_blocks: list[str], max_len: int = MAX_MESSAGE_LEN) -> list[str]:
+    """Разбивает текст на страницы с учётом лимита Telegram."""
+    pages: list[str] = []
+    current = header
+    header_len = len(header)
+    block_max_len = max_len - header_len - 50
+
+    for block in message_blocks:
+        if len(block) > block_max_len:
+            block_parts = _split_long_block(block, block_max_len)
+            for part in block_parts:
+                if len(current) + len(part) > max_len:
+                    if current.strip() and current != header:
+                        pages.append(current)
+                    current = header + part
+                else:
+                    current += part
+        elif len(current) + len(block) > max_len:
+            if current.strip() and current != header:
+                pages.append(current)
+            current = header + block
+        else:
+            current += block
+
+    if current.strip():
+        pages.append(current)
+
+    return pages if pages else [header]
+
+
+
 
 
 async def show_admin_tickets(
@@ -133,15 +192,27 @@ async def view_admin_ticket(
     state: Optional[FSMContext] = None,
     ticket_id: Optional[int] = None
 ):
-    """Показать детали тикета для админа"""
+    """Показать детали тикета для админа с пагинацией"""
     if not (settings.is_admin(callback.from_user.id) or SupportSettingsService.is_moderator(callback.from_user.id)):
         texts = get_texts(db_user.language)
         await callback.answer(texts.ACCESS_DENIED, show_alert=True)
         return
-    
-    if ticket_id is None:
+
+    # Парсим ticket_id и page из callback_data
+    page = 1
+    data_str = callback.data or ""
+
+    if data_str.startswith("admin_ticket_page_"):
+        # format: admin_ticket_page_{ticket_id}_{page}
         try:
-            ticket_id = int((callback.data or "").split("_")[-1])
+            parts = data_str.split("_")
+            ticket_id = int(parts[3])
+            page = max(1, int(parts[4]))
+        except (ValueError, IndexError):
+            pass
+    elif ticket_id is None:
+        try:
+            ticket_id = int(data_str.split("_")[-1])
         except (ValueError, AttributeError):
             texts = get_texts(db_user.language)
             await callback.answer(
@@ -152,9 +223,9 @@ async def view_admin_ticket(
 
     if state is None:
         state = FSMContext(callback.bot, callback.from_user.id)
-    
+
     ticket = await TicketCRUD.get_ticket_by_id(db, ticket_id, load_messages=True, load_user=True)
-    
+
     if not ticket:
         texts = get_texts(db_user.language)
         await callback.answer(
@@ -162,59 +233,60 @@ async def view_admin_ticket(
             show_alert=True
         )
         return
-    
+
     texts = get_texts(db_user.language)
-    
-    # Формируем текст тикета
+
+    # Формируем заголовок тикета
     status_text = {
         TicketStatus.OPEN.value: texts.t("TICKET_STATUS_OPEN", "Открыт"),
         TicketStatus.ANSWERED.value: texts.t("TICKET_STATUS_ANSWERED", "Отвечен"),
         TicketStatus.CLOSED.value: texts.t("TICKET_STATUS_CLOSED", "Закрыт"),
         TicketStatus.PENDING.value: texts.t("TICKET_STATUS_PENDING", "В ожидании")
     }.get(ticket.status, ticket.status)
-    
+
     user_name = ticket.user.full_name if ticket.user else "Unknown"
     telegram_id_display = ticket.user.telegram_id if ticket.user else "—"
     username_value = ticket.user.username if ticket.user else None
 
-    ticket_text = f"🎫 Тикет #{ticket.id}\n\n"
-    ticket_text += f"👤 Пользователь: {user_name}\n"
-    ticket_text += f"🆔 Telegram ID: <code>{telegram_id_display}</code>\n"
+    header = f"🎫 Тикет #{ticket.id}\n\n"
+    header += f"👤 Пользователь: {user_name}\n"
+    header += f"🆔 Telegram ID: <code>{telegram_id_display}</code>\n"
     if username_value:
         safe_username = html.escape(username_value)
-        ticket_text += f"📱 Username: @{safe_username}\n"
-        ticket_text += (
-            f"🔗 ЛС: <a href=\"tg://resolve?domain={safe_username}\">"
-            f"tg://resolve?domain={safe_username}</a>\n"
-        )
+        header += f"📱 Username: @{safe_username}\n"
     else:
-        ticket_text += "📱 Username: отсутствует\n"
-        if ticket.user and ticket.user.telegram_id:
-            chat_link = f"tg://user?id={int(ticket.user.telegram_id)}"
-            ticket_text += f"🔗 Чат по ID: <a href=\"{chat_link}\">{chat_link}</a>\n"
-    ticket_text += "\n"
-    ticket_text += f"📝 Заголовок: {ticket.title}\n"
-    ticket_text += f"📊 Статус: {ticket.status_emoji} {status_text}\n"
-    ticket_text += f"📅 Создан: {ticket.created_at.strftime('%d.%m.%Y %H:%M')}\n"
-    ticket_text += f"🔄 Обновлен: {ticket.updated_at.strftime('%d.%m.%Y %H:%M')}\n\n"
-    
+        header += "📱 Username: отсутствует\n"
+    header += f"📝 Заголовок: {ticket.title}\n"
+    header += f"📊 Статус: {ticket.status_emoji} {status_text}\n"
+    header += f"📅 Создан: {ticket.created_at.strftime('%d.%m.%Y %H:%M')}\n\n"
+
     if ticket.is_user_reply_blocked:
         if ticket.user_reply_block_permanent:
-            ticket_text += "🚫 Пользователь заблокирован навсегда для ответов в этом тикете\n"
+            header += "🚫 Пользователь заблокирован навсегда\n\n"
         elif ticket.user_reply_block_until:
-            ticket_text += f"⏳ Блок до: {ticket.user_reply_block_until.strftime('%d.%m.%Y %H:%M')}\n"
-    
+            header += f"⏳ Блок до: {ticket.user_reply_block_until.strftime('%d.%m.%Y %H:%M')}\n\n"
+
+    # Формируем блоки сообщений
+    message_blocks: list[str] = []
     if ticket.messages:
-        ticket_text += f"💬 Сообщения ({len(ticket.messages)}):\n\n"
-        
+        message_blocks.append(f"💬 Сообщения ({len(ticket.messages)}):\n\n")
         for msg in ticket.messages:
             sender = "👤 Пользователь" if msg.is_user_message else "🛠️ Поддержка"
-            ticket_text += f"{sender} ({msg.created_at.strftime('%d.%m %H:%M')}):\n"
-            ticket_text += f"{msg.message_text}\n\n"
+            block = (
+                f"{sender} ({msg.created_at.strftime('%d.%m %H:%M')}):\n"
+                f"{msg.message_text}\n\n"
+            )
             if getattr(msg, "has_media", False) and getattr(msg, "media_type", None) == "photo":
-                ticket_text += "📎 Вложение: фото\n\n"
-    
-    # Добавим кнопку "Вложения", если есть фото
+                block += "📎 Вложение: фото\n\n"
+            message_blocks.append(block)
+
+    # Разбиваем на страницы
+    pages = _split_text_into_pages(header, message_blocks, max_len=MAX_MESSAGE_LEN)
+    total_pages = len(pages)
+    if page > total_pages:
+        page = total_pages
+
+    # Формируем клавиатуру
     has_photos = any(getattr(m, "has_media", False) and getattr(m, "media_type", None) == "photo" for m in ticket.messages or [])
     keyboard = get_admin_ticket_view_keyboard(
         ticket_id,
@@ -222,7 +294,8 @@ async def view_admin_ticket(
         db_user.language,
         is_user_blocked=ticket.is_user_reply_blocked
     )
-    # Кнопка открытия профиля пользователя в админке
+
+    # Кнопка профиля пользователя
     try:
         if ticket.user:
             admin_profile_btn = types.InlineKeyboardButton(
@@ -232,34 +305,76 @@ async def view_admin_ticket(
             keyboard.inline_keyboard.insert(0, [admin_profile_btn])
     except Exception:
         pass
+
     # Кнопки ЛС и профиль
     try:
         if ticket.user and ticket.user.telegram_id and ticket.user.username:
             safe_username = html.escape(ticket.user.username)
             buttons_row = []
             pm_url = f"tg://resolve?domain={safe_username}"
-            buttons_row.append(types.InlineKeyboardButton(text="✉ Написать в ЛС", url=pm_url))
+            buttons_row.append(types.InlineKeyboardButton(text="✉ ЛС", url=pm_url))
             profile_url = f"tg://user?id={ticket.user.telegram_id}"
             buttons_row.append(types.InlineKeyboardButton(text="👤 Профиль", url=profile_url))
             if buttons_row:
                 keyboard.inline_keyboard.insert(0, buttons_row)
     except Exception:
         pass
+
+    # Кнопка вложений
     if has_photos:
         try:
-            keyboard.inline_keyboard.insert(0, [types.InlineKeyboardButton(text=texts.t("TICKET_ATTACHMENTS", "📎 Вложения"), callback_data=f"admin_ticket_attachments_{ticket_id}")])
+            keyboard.inline_keyboard.insert(0, [
+                types.InlineKeyboardButton(
+                    text=texts.t("TICKET_ATTACHMENTS", "📎 Вложения"),
+                    callback_data=f"admin_ticket_attachments_{ticket_id}"
+                )
+            ])
         except Exception:
             pass
 
-    # Рендер через фото-утилиту (с логотипом), внутри есть фоллбеки на текст
-    from app.utils.photo_message import edit_or_answer_photo
-    await edit_or_answer_photo(
-        callback=callback,
-        caption=ticket_text,
-        keyboard=keyboard,
-        parse_mode="HTML",
-    )
-    # сохраняем id для дальнейших действий (ответ/статусы)
+    # Пагинация
+    if total_pages > 1:
+        nav_row = []
+        if page > 1:
+            nav_row.append(types.InlineKeyboardButton(
+                text="⬅️",
+                callback_data=f"admin_ticket_page_{ticket_id}_{page - 1}"
+            ))
+        nav_row.append(types.InlineKeyboardButton(
+            text=f"{page}/{total_pages}",
+            callback_data="noop"
+        ))
+        if page < total_pages:
+            nav_row.append(types.InlineKeyboardButton(
+                text="➡️",
+                callback_data=f"admin_ticket_page_{ticket_id}_{page + 1}"
+            ))
+        try:
+            keyboard.inline_keyboard.insert(0, nav_row)
+        except Exception:
+            pass
+
+    page_text = pages[page - 1]
+
+    # Отправка сообщения
+    try:
+        await callback.message.edit_text(
+            page_text,
+            reply_markup=keyboard,
+            parse_mode="HTML"
+        )
+    except TelegramBadRequest:
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
+        await callback.message.answer(
+            page_text,
+            reply_markup=keyboard,
+            parse_mode="HTML"
+        )
+
+    # Сохраняем id для дальнейших действий
     if state is not None:
         try:
             await state.update_data(ticket_id=ticket_id)
@@ -1034,7 +1149,8 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(close_all_open_admin_tickets, F.data == "admin_tickets_close_all_open")
 
     dp.callback_query.register(view_admin_ticket, F.data.startswith("admin_view_ticket_"))
-    
+    dp.callback_query.register(view_admin_ticket, F.data.startswith("admin_ticket_page_"))
+
     # Ответы на тикеты
     dp.callback_query.register(
         reply_to_admin_ticket,

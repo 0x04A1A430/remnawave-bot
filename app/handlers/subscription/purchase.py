@@ -68,6 +68,8 @@ from app.services.trial_activation_service import (
     rollback_trial_subscription_activation,
 )
 
+logger = logging.getLogger(__name__)
+
 
 def _serialize_markup(markup: Optional[InlineKeyboardMarkup]) -> Optional[Any]:
     if markup is None:
@@ -211,7 +213,13 @@ async def show_subscription_info(
     subscription_service = SubscriptionService()
     await subscription_service.sync_subscription_usage(db, subscription)
 
+    # Проверяем и синхронизируем подписку с RemnaWave если необходимо
+    sync_success, sync_error = await subscription_service.ensure_subscription_synced(db, subscription)
+    if not sync_success:
+        logger.warning(f"Не удалось синхронизировать подписку {subscription.id} с RemnaWave: {sync_error}")
+
     await db.refresh(subscription)
+    await db.refresh(db_user)
 
     current_time = datetime.utcnow()
 
@@ -2051,17 +2059,32 @@ async def confirm_purchase(
         promo_offer_discount_percent = 0
 
     # Валидация: проверяем что cached_total_price соответствует ожидаемой финальной цене
-    # Допускаем небольшое расхождение из-за округления
-    is_valid = True
-    if abs(final_price - cached_total_price) > 100:  # допуск 1₽
-        # Если есть расхождение, логируем предупреждение но продолжаем с пересчитанной ценой
+    # Допускаем небольшое расхождение из-за округления (до 5%)
+    price_difference = abs(final_price - cached_total_price)
+    max_allowed_difference = max(500, int(final_price * 0.05))  # 5% или минимум 5₽
+
+    if price_difference > max_allowed_difference:
+        # Слишком большое расхождение - блокируем покупку
+        logger.error(
+            f"Критическое расхождение цены для пользователя {db_user.telegram_id}: "
+            f"кэш={cached_total_price/100}₽, пересчет={final_price/100}₽, "
+            f"разница={price_difference/100}₽ (>{max_allowed_difference/100}₽). "
+            f"Покупка заблокирована."
+        )
+        await callback.answer(
+            "Цена изменилась. Пожалуйста, начните оформление заново.",
+            show_alert=True
+        )
+        return
+    elif price_difference > 100:  # допуск 1₽
+        # Небольшое расхождение - логируем предупреждение но продолжаем
         logger.warning(
             f"Расхождение цены для пользователя {db_user.telegram_id}: "
             f"кэш={cached_total_price/100}₽, пересчет={final_price/100}₽. "
             f"Используем пересчитанную цену."
         )
 
-    # Используем пересчитанную цену вместо закэшированной для надежности
+    # Используем пересчитанную цену
     validation_total_price = calculated_total_before_promo
 
     logger.info(f"Расчет покупки подписки на {data['period_days']} дней ({months_in_period} мес):")
