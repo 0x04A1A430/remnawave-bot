@@ -191,6 +191,22 @@ async def create_attempt(
     return attempt
 
 
+async def update_attempt(
+    db: AsyncSession,
+    attempt: ContestAttempt,
+    *,
+    answer: Optional[str] = None,
+    is_winner: bool = False,
+) -> ContestAttempt:
+    """Update existing attempt with answer and winner status."""
+    if answer is not None:
+        attempt.answer = answer
+    attempt.is_winner = is_winner
+    await db.commit()
+    await db.refresh(attempt)
+    return attempt
+
+
 async def clear_attempts(db: AsyncSession, round_id: int) -> int:
     result = await db.execute(delete(ContestAttempt).where(ContestAttempt.round_id == round_id))
     deleted_count = result.rowcount

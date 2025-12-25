@@ -12,6 +12,7 @@ from app.database.crud.contest import (
     get_active_rounds,
     get_attempt,
     create_attempt,
+    update_attempt,
     increment_winner_count,
 )
 from app.database.database import AsyncSessionLocal
@@ -213,11 +214,11 @@ async def play_contest(callback: types.CallbackQuery, state: FSMContext, db_user
         elif tpl.slug == GAME_SERVER:
             await _render_server_lottery(callback, db_user, round_obj, tpl)
         elif tpl.slug == GAME_CIPHER:
-            await _render_cipher(callback, db_user, round_obj, tpl, state)
+            await _render_cipher(callback, db_user, round_obj, tpl, state, db2)
         elif tpl.slug == GAME_EMOJI:
-            await _render_emoji(callback, db_user, round_obj, tpl, state)
+            await _render_emoji(callback, db_user, round_obj, tpl, state, db2)
         elif tpl.slug == GAME_ANAGRAM:
-            await _render_anagram(callback, db_user, round_obj, tpl, state)
+            await _render_anagram(callback, db_user, round_obj, tpl, state, db2)
         elif tpl.slug == GAME_BLITZ:
             await _render_blitz(callback, db_user, round_obj, tpl)
         else:
@@ -290,9 +291,11 @@ async def _render_server_lottery(callback, db_user, round_obj: ContestRound, tpl
     await callback.answer()
 
 
-async def _render_cipher(callback, db_user, round_obj: ContestRound, tpl: ContestTemplate, state: FSMContext):
+async def _render_cipher(callback, db_user, round_obj: ContestRound, tpl: ContestTemplate, state: FSMContext, db: AsyncSession):
     texts = get_texts(db_user.language)
     question = round_obj.payload.get("question", "")
+    # Create attempt immediately to block re-entry
+    await create_attempt(db, round_id=round_obj.id, user_id=db_user.id, answer=None, is_winner=False)
     await state.set_state(ContestStates.waiting_for_answer)
     await state.update_data(contest_round_id=round_obj.id)
     await callback.message.edit_text(
@@ -302,12 +305,14 @@ async def _render_cipher(callback, db_user, round_obj: ContestRound, tpl: Contes
     await callback.answer()
 
 
-async def _render_emoji(callback, db_user, round_obj: ContestRound, tpl: ContestTemplate, state: FSMContext):
+async def _render_emoji(callback, db_user, round_obj: ContestRound, tpl: ContestTemplate, state: FSMContext, db: AsyncSession):
     texts = get_texts(db_user.language)
     question = round_obj.payload.get("question", "🤔")
     emoji_list = question.split()
     random.shuffle(emoji_list)
     shuffled_question = " ".join(emoji_list)
+    # Create attempt immediately to block re-entry
+    await create_attempt(db, round_id=round_obj.id, user_id=db_user.id, answer=None, is_winner=False)
     await state.set_state(ContestStates.waiting_for_answer)
     await state.update_data(contest_round_id=round_obj.id)
     await callback.message.edit_text(
@@ -317,9 +322,11 @@ async def _render_emoji(callback, db_user, round_obj: ContestRound, tpl: Contest
     await callback.answer()
 
 
-async def _render_anagram(callback, db_user, round_obj: ContestRound, tpl: ContestTemplate, state: FSMContext):
+async def _render_anagram(callback, db_user, round_obj: ContestRound, tpl: ContestTemplate, state: FSMContext, db: AsyncSession):
     texts = get_texts(db_user.language)
     letters = round_obj.payload.get("letters", "")
+    # Create attempt immediately to block re-entry
+    await create_attempt(db, round_id=round_obj.id, user_id=db_user.id, answer=None, is_winner=False)
     await state.set_state(ContestStates.waiting_for_answer)
     await state.update_data(contest_round_id=round_obj.id)
     await callback.message.edit_text(
@@ -468,7 +475,14 @@ async def handle_text_answer(message: types.Message, state: FSMContext, db_user,
             return
 
         attempt = await get_attempt(db2, round_obj.id, db_user.id)
-        if attempt:
+        if not attempt:
+            # No attempt found - user didn't start the game properly
+            await message.answer(texts.t("CONTEST_NOT_STARTED", "Сначала начните игру."), reply_markup=get_back_keyboard(db_user.language))
+            await state.clear()
+            return
+        
+        if attempt.answer is not None:
+            # Already answered - block re-entry
             await message.answer(texts.t("CONTEST_ALREADY_PLAYED", "У вас уже была попытка."), reply_markup=get_back_keyboard(db_user.language))
             await state.clear()
             return
@@ -488,7 +502,7 @@ async def handle_text_answer(message: types.Message, state: FSMContext, db_user,
         if is_winner and round_obj_locked.winners_count >= round_obj_locked.max_winners:
             is_winner = False
 
-        await create_attempt(db2, round_id=round_obj.id, user_id=db_user.id, answer=answer, is_winner=is_winner)
+        await update_attempt(db2, attempt, answer=answer, is_winner=is_winner)
 
         if is_winner:
             round_obj_locked.winners_count += 1
