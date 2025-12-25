@@ -1238,8 +1238,8 @@ class SubscriptionService:
         logger.info(f"Итого доплата за {months_to_pay} мес: {total_price/100}₽")
         return total_price
     
-    def _gb_to_bytes(self, gb: int) -> int:
-        if gb == 0: 
+    def _gb_to_bytes(self, gb: Optional[int]) -> int:
+        if not gb:  # None or 0
             return 0
         return gb * 1024 * 1024 * 1024
     
