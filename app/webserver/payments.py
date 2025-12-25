@@ -649,6 +649,155 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
         routes_registered = True
 
+    if settings.is_cloudpayments_enabled():
+        from app.services.cloudpayments_service import CloudPaymentsService
+
+        cloudpayments_service = CloudPaymentsService()
+
+        @router.options(settings.CLOUDPAYMENTS_WEBHOOK_PATH)
+        async def cloudpayments_options() -> Response:
+            return Response(
+                status_code=status.HTTP_200_OK,
+                headers={
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+                    "Access-Control-Allow-Headers": "Content-Type, X-Content-HMAC",
+                },
+            )
+
+        @router.get(settings.CLOUDPAYMENTS_WEBHOOK_PATH)
+        async def cloudpayments_health() -> JSONResponse:
+            return JSONResponse(
+                {
+                    "status": "ok",
+                    "service": "cloudpayments_webhook",
+                    "enabled": settings.is_cloudpayments_enabled(),
+                }
+            )
+
+        # CloudPayments Check webhook (перед списанием)
+        @router.post(settings.CLOUDPAYMENTS_WEBHOOK_PATH + "/check")
+        async def cloudpayments_check_webhook(request: Request) -> JSONResponse:
+            """Check webhook - вызывается перед списанием, можно отклонить платёж."""
+            raw_body = await request.body()
+
+            # Проверяем подпись
+            signature = request.headers.get("X-Content-HMAC") or request.headers.get("Content-HMAC") or ""
+            if settings.CLOUDPAYMENTS_API_SECRET and not cloudpayments_service.verify_webhook_signature(
+                raw_body, signature, settings.CLOUDPAYMENTS_API_SECRET
+            ):
+                logger.warning("CloudPayments check webhook: invalid signature")
+                return JSONResponse({"code": 13})  # Отклонить
+
+            # Разрешаем платёж
+            return JSONResponse({"code": 0})
+
+        # CloudPayments Pay webhook (успешная оплата)
+        @router.post(settings.CLOUDPAYMENTS_WEBHOOK_PATH + "/pay")
+        async def cloudpayments_pay_webhook(request: Request) -> JSONResponse:
+            """Pay webhook - вызывается после успешной оплаты."""
+            raw_body = await request.body()
+
+            # Проверяем подпись
+            signature = request.headers.get("X-Content-HMAC") or request.headers.get("Content-HMAC") or ""
+            if settings.CLOUDPAYMENTS_API_SECRET and not cloudpayments_service.verify_webhook_signature(
+                raw_body, signature, settings.CLOUDPAYMENTS_API_SECRET
+            ):
+                logger.warning("CloudPayments pay webhook: invalid signature")
+                return JSONResponse({"code": 13})
+
+            # Парсим данные формы
+            try:
+                form_data = await request.form()
+                webhook_data = cloudpayments_service.parse_webhook_data(dict(form_data))
+            except Exception as error:
+                logger.error("CloudPayments pay webhook parse error: %s", error)
+                return JSONResponse({"code": 0})  # Возвращаем 0, чтобы не было повторов
+
+            # Обрабатываем платёж
+            success = await _process_payment_service_callback(
+                payment_service,
+                webhook_data,
+                "process_cloudpayments_pay_webhook",
+            )
+
+            return JSONResponse({"code": 0})
+
+        # CloudPayments Fail webhook (неуспешная оплата)
+        @router.post(settings.CLOUDPAYMENTS_WEBHOOK_PATH + "/fail")
+        async def cloudpayments_fail_webhook(request: Request) -> JSONResponse:
+            """Fail webhook - вызывается при неуспешной оплате."""
+            raw_body = await request.body()
+
+            # Проверяем подпись
+            signature = request.headers.get("X-Content-HMAC") or request.headers.get("Content-HMAC") or ""
+            if settings.CLOUDPAYMENTS_API_SECRET and not cloudpayments_service.verify_webhook_signature(
+                raw_body, signature, settings.CLOUDPAYMENTS_API_SECRET
+            ):
+                logger.warning("CloudPayments fail webhook: invalid signature")
+                return JSONResponse({"code": 13})
+
+            # Парсим данные формы
+            try:
+                form_data = await request.form()
+                webhook_data = cloudpayments_service.parse_webhook_data(dict(form_data))
+            except Exception as error:
+                logger.error("CloudPayments fail webhook parse error: %s", error)
+                return JSONResponse({"code": 0})
+
+            # Обрабатываем неуспешный платёж
+            await _process_payment_service_callback(
+                payment_service,
+                webhook_data,
+                "process_cloudpayments_fail_webhook",
+            )
+
+            return JSONResponse({"code": 0})
+
+        # Универсальный endpoint для всех webhooks
+        @router.post(settings.CLOUDPAYMENTS_WEBHOOK_PATH)
+        async def cloudpayments_webhook(request: Request) -> JSONResponse:
+            """Универсальный webhook endpoint."""
+            raw_body = await request.body()
+
+            # Проверяем подпись
+            signature = request.headers.get("X-Content-HMAC") or request.headers.get("Content-HMAC") or ""
+            if settings.CLOUDPAYMENTS_API_SECRET and not cloudpayments_service.verify_webhook_signature(
+                raw_body, signature, settings.CLOUDPAYMENTS_API_SECRET
+            ):
+                logger.warning("CloudPayments webhook: invalid signature")
+                return JSONResponse({"code": 13})
+
+            # Парсим данные формы
+            try:
+                form_data = await request.form()
+                webhook_data = cloudpayments_service.parse_webhook_data(dict(form_data))
+            except Exception as error:
+                logger.error("CloudPayments webhook parse error: %s", error)
+                return JSONResponse({"code": 0})
+
+            # Определяем тип webhook по статусу
+            status_value = webhook_data.get("status", "")
+
+            if status_value in ("Completed", "Authorized"):
+                # Успешная оплата
+                await _process_payment_service_callback(
+                    payment_service,
+                    webhook_data,
+                    "process_cloudpayments_pay_webhook",
+                )
+            elif status_value in ("Declined", "Cancelled"):
+                # Неуспешная оплата
+                await _process_payment_service_callback(
+                    payment_service,
+                    webhook_data,
+                    "process_cloudpayments_fail_webhook",
+                )
+
+            return JSONResponse({"code": 0})
+
+        routes_registered = True
+
     if routes_registered:
         @router.get("/health/payment-webhooks")
         async def payment_webhooks_health() -> JSONResponse:
@@ -663,6 +812,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                     "heleket_enabled": settings.is_heleket_enabled(),
                     "pal24_enabled": settings.is_pal24_enabled(),
                     "platega_enabled": settings.is_platega_enabled(),
+                    "cloudpayments_enabled": settings.is_cloudpayments_enabled(),
                 }
             )
 

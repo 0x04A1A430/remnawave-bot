@@ -28,8 +28,10 @@ from app.services.payment import (
     YooKassaPaymentMixin,
     WataPaymentMixin,
 )
+from app.services.payment.cloudpayments import CloudPaymentsPaymentMixin
 from app.services.yookassa_service import YooKassaService
 from app.services.wata_service import WataService
+from app.services.cloudpayments_service import CloudPaymentsService
 from app.services.nalogo_service import NaloGoService
 
 logger = logging.getLogger(__name__)
@@ -263,6 +265,26 @@ async def link_heleket_payment_to_transaction(*args, **kwargs):
     return await heleket_crud.link_heleket_payment_to_transaction(*args, **kwargs)
 
 
+async def create_cloudpayments_payment(*args, **kwargs):
+    cloudpayments_crud = import_module("app.database.crud.cloudpayments")
+    return await cloudpayments_crud.create_cloudpayments_payment(*args, **kwargs)
+
+
+async def get_cloudpayments_payment_by_invoice_id(*args, **kwargs):
+    cloudpayments_crud = import_module("app.database.crud.cloudpayments")
+    return await cloudpayments_crud.get_cloudpayments_payment_by_invoice_id(*args, **kwargs)
+
+
+async def get_cloudpayments_payment_by_id(*args, **kwargs):
+    cloudpayments_crud = import_module("app.database.crud.cloudpayments")
+    return await cloudpayments_crud.get_cloudpayments_payment_by_id(*args, **kwargs)
+
+
+async def update_cloudpayments_payment(*args, **kwargs):
+    cloudpayments_crud = import_module("app.database.crud.cloudpayments")
+    return await cloudpayments_crud.update_cloudpayments_payment(*args, **kwargs)
+
+
 class PaymentService(
     PaymentCommonMixin,
     TelegramStarsMixin,
@@ -274,6 +296,7 @@ class PaymentService(
     Pal24PaymentMixin,
     PlategaPaymentMixin,
     WataPaymentMixin,
+    CloudPaymentsPaymentMixin,
 ):
     """Основной интерфейс платежей, делегирующий работу специализированным mixin-ам."""
 
@@ -301,11 +324,14 @@ class PaymentService(
             PlategaService() if settings.is_platega_enabled() else None
         )
         self.wata_service = WataService() if settings.is_wata_enabled() else None
+        self.cloudpayments_service = (
+            CloudPaymentsService() if settings.is_cloudpayments_enabled() else None
+        )
         self.nalogo_service = NaloGoService() if settings.is_nalogo_enabled() else None
 
         mulenpay_name = settings.get_mulenpay_display_name()
         logger.debug(
-            "PaymentService инициализирован (YooKassa=%s, Stars=%s, CryptoBot=%s, Heleket=%s, %s=%s, Pal24=%s, Platega=%s, Wata=%s)",
+            "PaymentService инициализирован (YooKassa=%s, Stars=%s, CryptoBot=%s, Heleket=%s, %s=%s, Pal24=%s, Platega=%s, Wata=%s, CloudPayments=%s)",
             bool(self.yookassa_service),
             bool(self.stars_service),
             bool(self.cryptobot_service),
@@ -315,4 +341,5 @@ class PaymentService(
             bool(self.pal24_service),
             bool(self.platega_service),
             bool(self.wata_service),
+            bool(self.cloudpayments_service),
         )
