@@ -219,6 +219,7 @@ async def show_subscription_info(
         logger.warning(f"Не удалось синхронизировать подписку {subscription.id} с RemnaWave: {sync_error}")
 
     await db.refresh(subscription)
+    await db.refresh(db_user)
 
     current_time = datetime.utcnow()
 
