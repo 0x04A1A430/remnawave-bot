@@ -128,7 +128,7 @@ DEFAULT_MENU_CONFIG: Dict[str, Any] = {
             "action": "buy_traffic",
             "enabled": True,
             "visibility": "subscribers",
-            "conditions": {"has_traffic_limit": True},
+            "conditions": {"has_traffic_limit": True, "traffic_topup_enabled": True},
             "dynamic_text": False,
         },
         "balance": {

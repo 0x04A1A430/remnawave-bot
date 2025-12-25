@@ -91,6 +91,17 @@ async def handle_add_traffic(
 
     texts = get_texts(db_user.language)
 
+    # Проверяем, включена ли функция докупки трафика
+    if not settings.is_traffic_topup_enabled():
+        await callback.answer(
+            texts.t(
+                "TRAFFIC_TOPUP_DISABLED",
+                "⚠️ Функция докупки трафика отключена",
+            ),
+            show_alert=True,
+        )
+        return
+
     if settings.is_traffic_fixed():
         await callback.answer(
             texts.t(
@@ -146,6 +157,43 @@ async def handle_add_traffic(
 
     await callback.answer()
 
+def _calculate_traffic_reset_price(subscription) -> int:
+    """Рассчитывает цену сброса трафика в зависимости от настроек."""
+    mode = settings.get_traffic_reset_price_mode()
+    base_price = settings.get_traffic_reset_base_price()
+    
+    # Если базовая цена не задана, используем цену периода 30 дней
+    if base_price == 0:
+        base_price = PERIOD_PRICES.get(30, 0)
+    
+    if mode == "period":
+        # Старое поведение: фиксированная цена = стоимость периода
+        return base_price
+    
+    elif mode == "traffic":
+        # Цена = стоимость текущего пакета трафика
+        traffic_price = settings.get_traffic_price(subscription.traffic_limit_gb)
+        return max(traffic_price, base_price)
+    
+    elif mode == "traffic_with_purchased":
+        # Цена = стоимость базового трафика + докупленного
+        # Базовый трафик = текущий лимит - докупленный
+        purchased_gb = getattr(subscription, 'purchased_traffic_gb', 0) or 0
+        base_traffic_gb = subscription.traffic_limit_gb - purchased_gb
+        
+        # Получаем цену базового трафика
+        base_traffic_price = settings.get_traffic_price(base_traffic_gb) if base_traffic_gb > 0 else 0
+        
+        # Получаем цену докупленного трафика
+        purchased_traffic_price = settings.get_traffic_price(purchased_gb) if purchased_gb > 0 else 0
+        
+        total_price = base_traffic_price + purchased_traffic_price
+        return max(total_price, base_price)
+    
+    # Fallback на базовую цену
+    return base_price
+
+
 async def handle_reset_traffic(
         callback: types.CallbackQuery,
         db_user: User,
@@ -168,19 +216,40 @@ async def handle_reset_traffic(
         await callback.answer("⌛ У вас безлимитный трафик", show_alert=True)
         return
 
-    reset_price = PERIOD_PRICES[30]
+    reset_price = _calculate_traffic_reset_price(subscription)
 
-    if db_user.balance_kopeks < reset_price:
-        await callback.answer("⌛ Недостаточно средств на балансе", show_alert=True)
-        return
+    # Формируем информацию о расчете цены
+    purchased_gb = getattr(subscription, 'purchased_traffic_gb', 0) or 0
+    price_info = ""
+    if purchased_gb > 0 and settings.get_traffic_reset_price_mode() == "traffic_with_purchased":
+        base_traffic_gb = subscription.traffic_limit_gb - purchased_gb
+        price_info = (
+            f"\n\n💡 <i>Расчет цены:</i>\n"
+            f"• Базовый трафик: {texts.format_traffic(base_traffic_gb)}\n"
+            f"• Докупленный: {texts.format_traffic(purchased_gb)}"
+        )
+
+    # Проверяем достаточно ли средств
+    has_enough_balance = db_user.balance_kopeks >= reset_price
+    missing_kopeks = max(0, reset_price - db_user.balance_kopeks)
+    
+    # Формируем текст о балансе
+    balance_info = f"\n\n💰 На балансе: {texts.format_price(db_user.balance_kopeks)}"
+    if not has_enough_balance:
+        balance_info += f"\n⚠️ Не хватает: {texts.format_price(missing_kopeks)}"
 
     await callback.message.edit_text(
         f"🔄 <b>Сброс трафика</b>\n\n"
         f"Использовано: {texts.format_traffic(subscription.traffic_used_gb)}\n"
         f"Лимит: {texts.format_traffic(subscription.traffic_limit_gb)}\n\n"
-        f"Стоимость сброса: {texts.format_price(reset_price)}\n\n"
+        f"Стоимость сброса: {texts.format_price(reset_price)}{price_info}{balance_info}\n\n"
         "После сброса счетчик использованного трафика станет равным 0.",
-        reply_markup=get_reset_traffic_confirm_keyboard(reset_price, db_user.language)
+        reply_markup=get_reset_traffic_confirm_keyboard(
+            reset_price, 
+            db_user.language,
+            has_enough_balance=has_enough_balance,
+            missing_kopeks=missing_kopeks,
+        )
     )
 
     await callback.answer()
@@ -199,7 +268,7 @@ async def confirm_reset_traffic(
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
 
-    reset_price = PERIOD_PRICES[30]
+    reset_price = _calculate_traffic_reset_price(subscription)
 
     if db_user.balance_kopeks < reset_price:
         missing_kopeks = reset_price - db_user.balance_kopeks
@@ -388,7 +457,7 @@ async def add_traffic(
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
 
-    base_price = settings.get_traffic_price(traffic_gb)
+    base_price = settings.get_traffic_topup_price(traffic_gb)
 
     if base_price == 0 and traffic_gb != 0:
         await callback.answer("⚠️ Цена для этого пакета не настроена", show_alert=True)
@@ -458,8 +527,13 @@ async def add_traffic(
 
         if traffic_gb == 0:
             subscription.traffic_limit_gb = 0
+            # При переходе на безлимит сбрасываем докупленный трафик
+            subscription.purchased_traffic_gb = 0
         else:
             await add_subscription_traffic(db, subscription, traffic_gb)
+            # Записываем докупленный трафик для корректного расчета цены сброса
+            current_purchased = getattr(subscription, 'purchased_traffic_gb', 0) or 0
+            subscription.purchased_traffic_gb = current_purchased + traffic_gb
 
         subscription_service = SubscriptionService()
         await subscription_service.update_remnawave_user(db, subscription)

@@ -510,6 +510,7 @@ def get_main_menu_keyboard(
         # Добавляем кнопку докупки трафика для лимитированных подписок
         if (
             settings.BUY_TRAFFIC_BUTTON_VISIBLE
+            and settings.is_traffic_topup_enabled()
             and subscription
             and not subscription.is_trial
             and (subscription.traffic_limit_gb or 0) > 0
@@ -1690,7 +1691,7 @@ def get_add_traffic_keyboard(
         if months_multiplier > 1:
             period_text = f" (за {months_multiplier} мес)"
     
-    packages = settings.get_traffic_packages()
+    packages = settings.get_traffic_topup_packages()
     enabled_packages = [pkg for pkg in packages if pkg['enabled']]
     
     if not enabled_packages:
@@ -1846,27 +1847,45 @@ def get_confirm_change_devices_keyboard(new_devices_count: int, price: int, lang
     ])
 
 
-def get_reset_traffic_confirm_keyboard(price_kopeks: int, language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
+def get_reset_traffic_confirm_keyboard(
+    price_kopeks: int, 
+    language: str = DEFAULT_LANGUAGE,
+    has_enough_balance: bool = True,
+    missing_kopeks: int = 0,
+) -> InlineKeyboardMarkup:
     from app.config import settings
     
     if settings.is_traffic_fixed():
         return get_back_keyboard(language)
     
     texts = get_texts(language)
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [
+    buttons = []
+    
+    if has_enough_balance:
+        # Достаточно средств - показываем кнопку сброса
+        buttons.append([
             InlineKeyboardButton(
                 text=f"✅ Сбросить за {settings.format_price(price_kopeks)}", 
                 callback_data="confirm_reset_traffic"
             )
-        ],
-        [
+        ])
+    else:
+        # Не хватает средств - показываем кнопку пополнения
+        buttons.append([
             InlineKeyboardButton(
-                text=texts.t("PENDING_CANCEL_BUTTON", "⌛ Отмена"),
-                callback_data="menu_subscription",
+                text=texts.t("TOPUP_BALANCE_BUTTON", "💳 Пополнить баланс"),
+                callback_data=f"topup_amount_{missing_kopeks}"
             )
-        ]
+        ])
+    
+    buttons.append([
+        InlineKeyboardButton(
+            text=texts.BACK,
+            callback_data="subscription_settings",
+        )
     ])
+    
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 def get_manage_countries_keyboard(
     countries: List[dict],

@@ -222,6 +222,7 @@ async def replace_subscription(
     subscription.end_date = current_time + timedelta(days=duration_days)
     subscription.traffic_limit_gb = traffic_limit_gb
     subscription.traffic_used_gb = 0.0
+    subscription.purchased_traffic_gb = 0  # Сбрасываем докупленный трафик при замене подписки
     subscription.device_limit = device_limit
     subscription.connected_squads = list(new_squads)
     subscription.subscription_url = None
@@ -339,7 +340,8 @@ async def extend_subscription(
 
     if settings.RESET_TRAFFIC_ON_PAYMENT:
         subscription.traffic_used_gb = 0.0
-        logger.info("🔄 Сбрасываем использованный трафик согласно настройке RESET_TRAFFIC_ON_PAYMENT")
+        subscription.purchased_traffic_gb = 0  # Сбрасываем докупленный трафик вместе с использованным
+        logger.info("🔄 Сбрасываем использованный и докупленный трафик согласно настройке RESET_TRAFFIC_ON_PAYMENT")
 
     subscription.updated_at = current_time
 

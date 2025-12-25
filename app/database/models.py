@@ -678,6 +678,7 @@ class Subscription(Base):
     
     traffic_limit_gb = Column(Integer, default=0)
     traffic_used_gb = Column(Float, default=0.0)
+    purchased_traffic_gb = Column(Integer, default=0)  # Докупленный трафик (для расчета цены сброса)
 
     subscription_url = Column(String, nullable=True)
     subscription_crypto_link = Column(String, nullable=True)

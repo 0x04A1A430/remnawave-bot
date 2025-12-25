@@ -153,7 +153,21 @@ class Settings(BaseSettings):
 
     TRAFFIC_SELECTION_MODE: str = "selectable"
     FIXED_TRAFFIC_LIMIT_GB: int = 100
-    BUY_TRAFFIC_BUTTON_VISIBLE: bool = True 
+    BUY_TRAFFIC_BUTTON_VISIBLE: bool = True
+    
+    # Настройки докупки трафика
+    TRAFFIC_TOPUP_ENABLED: bool = True  # Включить/выключить функцию докупки трафика
+    # Пакеты для докупки трафика (формат: "гб:цена:enabled", пустая строка = использовать TRAFFIC_PACKAGES_CONFIG)
+    TRAFFIC_TOPUP_PACKAGES_CONFIG: str = ""
+    
+    # Настройки сброса трафика
+    # Режимы расчета цены сброса:
+    # "period" - фиксированная цена = стоимость периода 30 дней (старое поведение)
+    # "traffic" - цена зависит от текущего лимита трафика (цена пакета трафика)
+    # "traffic_with_purchased" - цена = базовый трафик + докупленный трафик (рекомендуется)
+    TRAFFIC_RESET_PRICE_MODE: str = "traffic_with_purchased"
+    # Базовая цена сброса в копейках (используется если режим "period" или как минимальная цена)
+    TRAFFIC_RESET_BASE_PRICE: int = 0  # 0 = использовать PERIOD_PRICES[30]
     
     REFERRAL_MINIMUM_TOPUP_KOPEKS: int = 10000 
     REFERRAL_FIRST_TOPUP_BONUS_KOPEKS: int = 10000 
@@ -971,6 +985,57 @@ class Settings(BaseSettings):
 
     def get_fixed_traffic_limit(self) -> int:
         return self.FIXED_TRAFFIC_LIMIT_GB
+
+    def is_traffic_topup_enabled(self) -> bool:
+        return self.TRAFFIC_TOPUP_ENABLED
+    
+    def get_traffic_topup_packages(self) -> List[Dict]:
+        """Возвращает пакеты для докупки трафика. Если не настроены - использует TRAFFIC_PACKAGES_CONFIG."""
+        config_str = self.TRAFFIC_TOPUP_PACKAGES_CONFIG.strip()
+        
+        if not config_str:
+            # Если не настроены отдельные пакеты для докупки - используем основные
+            return self.get_traffic_packages()
+        
+        packages = []
+        for package_config in config_str.split(','):
+            package_config = package_config.strip()
+            if not package_config:
+                continue
+            
+            parts = package_config.split(':')
+            if len(parts) >= 2:
+                try:
+                    gb = int(parts[0])
+                    price = int(parts[1])
+                    enabled = parts[2].lower() == 'true' if len(parts) > 2 else True
+                    packages.append({"gb": gb, "price": price, "enabled": enabled})
+                except (ValueError, IndexError):
+                    continue
+        
+        return packages if packages else self.get_traffic_packages()
+    
+    def get_traffic_topup_price(self, gb: Optional[int]) -> int:
+        """Возвращает цену докупки для указанного количества ГБ."""
+        packages = self.get_traffic_topup_packages()
+        enabled_packages = [pkg for pkg in packages if pkg["enabled"]]
+        
+        if not enabled_packages:
+            return 0
+        
+        # Ищем точное совпадение
+        for pkg in enabled_packages:
+            if pkg["gb"] == gb:
+                return pkg["price"]
+        
+        # Если не нашли - возвращаем 0
+        return 0
+    
+    def get_traffic_reset_price_mode(self) -> str:
+        return self.TRAFFIC_RESET_PRICE_MODE.lower()
+    
+    def get_traffic_reset_base_price(self) -> int:
+        return self.TRAFFIC_RESET_BASE_PRICE
 
     def is_devices_selection_enabled(self) -> bool:
         return self.DEVICES_SELECTION_ENABLED
