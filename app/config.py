@@ -1147,6 +1147,10 @@ class Settings(BaseSettings):
         return applicable_discount
 
     def is_trial_paid_activation_enabled(self) -> bool:
+        # Если цена > 0, триал автоматически платный
+        # (TRIAL_PAYMENT_ENABLED теперь опционален - для обратной совместимости)
+        if self.TRIAL_ACTIVATION_PRICE > 0:
+            return True
         return bool(self.TRIAL_PAYMENT_ENABLED)
 
     def get_trial_activation_price(self) -> int:

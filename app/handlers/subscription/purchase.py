@@ -17,6 +17,7 @@ from app.database.crud.discount_offer import (
 from app.database.crud.promo_offer_template import get_promo_offer_template_by_id
 from app.database.crud.subscription import (
     create_trial_subscription,
+    create_pending_trial_subscription,
     create_paid_subscription, add_subscription_traffic, add_subscription_devices,
     update_subscription_autopay
 )
@@ -49,6 +50,7 @@ from app.keyboards.inline import (
 )
 from app.services.user_cart_service import user_cart_service
 from app.localization.texts import get_texts
+from app.utils.decorators import error_handler
 from app.services.admin_notification_service import AdminNotificationService
 from app.services.remnawave_service import RemnaWaveConfigurationError, RemnaWaveService
 from app.services.blacklist_service import blacklist_service
@@ -498,12 +500,86 @@ async def show_trial_offer(
     )
     await callback.answer()
 
+def _get_trial_payment_keyboard(language: str, can_pay_from_balance: bool = False) -> types.InlineKeyboardMarkup:
+    """Создает клавиатуру с методами оплаты для платного триала."""
+    texts = get_texts(language)
+    keyboard = []
+
+    # Кнопка оплаты с баланса (если хватает средств)
+    if can_pay_from_balance:
+        keyboard.append([types.InlineKeyboardButton(
+            text="✅ Оплатить с баланса",
+            callback_data="trial_pay_with_balance"
+        )])
+
+    # Добавляем доступные методы оплаты
+    if settings.TELEGRAM_STARS_ENABLED:
+        keyboard.append([types.InlineKeyboardButton(
+            text="⭐ Telegram Stars",
+            callback_data="trial_payment_stars"
+        )])
+
+    if settings.is_yookassa_enabled():
+        yookassa_methods = []
+        if settings.YOOKASSA_SBP_ENABLED:
+            yookassa_methods.append(types.InlineKeyboardButton(
+                text="🏦 YooKassa (СБП)",
+                callback_data="trial_payment_yookassa_sbp"
+            ))
+        yookassa_methods.append(types.InlineKeyboardButton(
+            text="💳 YooKassa (Карта)",
+            callback_data="trial_payment_yookassa"
+        ))
+        if yookassa_methods:
+            keyboard.append(yookassa_methods)
+
+    if settings.is_cryptobot_enabled():
+        keyboard.append([types.InlineKeyboardButton(
+            text="🪙 CryptoBot",
+            callback_data="trial_payment_cryptobot"
+        )])
+
+    if settings.is_heleket_enabled():
+        keyboard.append([types.InlineKeyboardButton(
+            text="🪙 Heleket",
+            callback_data="trial_payment_heleket"
+        )])
+
+    if settings.is_mulenpay_enabled():
+        mulenpay_name = settings.get_mulenpay_display_name()
+        keyboard.append([types.InlineKeyboardButton(
+            text=f"💳 {mulenpay_name}",
+            callback_data="trial_payment_mulenpay"
+        )])
+
+    if settings.is_pal24_enabled():
+        keyboard.append([types.InlineKeyboardButton(
+            text="💳 PayPalych",
+            callback_data="trial_payment_pal24"
+        )])
+
+    if settings.is_wata_enabled():
+        keyboard.append([types.InlineKeyboardButton(
+            text="💳 WATA",
+            callback_data="trial_payment_wata"
+        )])
+
+    # Кнопка назад
+    keyboard.append([types.InlineKeyboardButton(
+        text=texts.BACK,
+        callback_data="menu_trial"
+    )])
+
+    return types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
 async def activate_trial(
         callback: types.CallbackQuery,
         db_user: User,
         db: AsyncSession
 ):
     from app.services.admin_notification_service import AdminNotificationService
+    from app.services.trial_activation_service import get_trial_activation_charge_amount
 
     texts = get_texts(db_user.language)
 
@@ -515,29 +591,51 @@ async def activate_trial(
         await callback.answer()
         return
 
-    try:
-        preview_trial_activation_charge(db_user)
-    except TrialPaymentInsufficientFunds as error:
-        required_label = settings.format_price(error.required_amount)
-        balance_label = settings.format_price(error.balance_amount)
-        missing_label = settings.format_price(error.missing_amount)
-        message = texts.t(
-            "TRIAL_PAYMENT_INSUFFICIENT_FUNDS",
-            "⚠️ Недостаточно средств для активации триала.\n"
-            "Необходимо: {required}\nНа балансе: {balance}\n"
-            "Не хватает: {missing}\n\nПополните баланс и попробуйте снова.",
-        ).format(required=required_label, balance=balance_label, missing=missing_label)
+    # Проверяем, платный ли триал
+    trial_price_kopeks = get_trial_activation_charge_amount()
+
+    if trial_price_kopeks > 0:
+        # Платный триал - показываем экран с выбором метода оплаты
+        user_balance_kopeks = getattr(db_user, "balance_kopeks", 0) or 0
+        can_pay_from_balance = user_balance_kopeks >= trial_price_kopeks
+
+        traffic_label = "Безлимит" if settings.TRIAL_TRAFFIC_LIMIT_GB == 0 else f"{settings.TRIAL_TRAFFIC_LIMIT_GB} ГБ"
+
+        message_lines = [
+            texts.t("PAID_TRIAL_HEADER", "⚡ <b>Пробная подписка</b>"),
+            "",
+            f"📅 {texts.t('PERIOD', 'Период')}: {settings.TRIAL_DURATION_DAYS} {texts.t('DAYS', 'дней')}",
+            f"📊 {texts.t('TRAFFIC', 'Трафик')}: {traffic_label}",
+            f"📱 {texts.t('DEVICES', 'Устройства')}: {settings.TRIAL_DEVICE_LIMIT}",
+            "",
+            f"💰 {texts.t('PRICE', 'Стоимость')}: {settings.format_price(trial_price_kopeks)}",
+            f"💳 {texts.t('YOUR_BALANCE', 'Ваш баланс')}: {settings.format_price(user_balance_kopeks)}",
+            "",
+        ]
+
+        if can_pay_from_balance:
+            message_lines.append(texts.t(
+                "PAID_TRIAL_CAN_PAY_BALANCE",
+                "Вы можете оплатить пробную подписку с баланса или выбрать другой способ оплаты."
+            ))
+        else:
+            message_lines.append(texts.t(
+                "PAID_TRIAL_SELECT_PAYMENT",
+                "Выберите подходящий способ оплаты:"
+            ))
+
+        message_text = "\n".join(message_lines)
+        keyboard = _get_trial_payment_keyboard(db_user.language, can_pay_from_balance)
 
         await callback.message.edit_text(
-            message,
-            reply_markup=get_insufficient_balance_keyboard(
-                db_user.language,
-                amount_kopeks=error.required_amount,
-            ),
+            message_text,
+            reply_markup=keyboard,
+            parse_mode="HTML"
         )
         await callback.answer()
         return
 
+    # Бесплатный триал - текущее поведение
     charged_amount = 0
     subscription: Optional[Subscription] = None
     remnawave_user = None
@@ -2732,6 +2830,696 @@ async def clear_saved_cart(
 
     await callback.answer("🗑️ Корзина очищена")
 
+
+# ============== ХЕНДЛЕРЫ ПЛАТНОГО ТРИАЛА ==============
+
+@error_handler
+async def handle_trial_pay_with_balance(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    """Обрабатывает оплату триала с баланса."""
+    from app.services.trial_activation_service import get_trial_activation_charge_amount
+    from app.services.admin_notification_service import AdminNotificationService
+
+    texts = get_texts(db_user.language)
+
+    # Проверяем права на триал
+    if db_user.subscription or db_user.has_had_paid_subscription:
+        await callback.message.edit_text(
+            texts.TRIAL_ALREADY_USED,
+            reply_markup=get_back_keyboard(db_user.language)
+        )
+        await callback.answer()
+        return
+
+    trial_price_kopeks = get_trial_activation_charge_amount()
+    if trial_price_kopeks <= 0:
+        await callback.answer("❌ Ошибка: триал бесплатный", show_alert=True)
+        return
+
+    user_balance_kopeks = getattr(db_user, "balance_kopeks", 0) or 0
+    if user_balance_kopeks < trial_price_kopeks:
+        await callback.answer(
+            texts.t("INSUFFICIENT_BALANCE", "❌ Недостаточно средств на балансе"),
+            show_alert=True
+        )
+        return
+
+    # Списываем с баланса
+    success = await subtract_user_balance(
+        db,
+        db_user,
+        trial_price_kopeks,
+        texts.t("TRIAL_PAYMENT_DESCRIPTION", "Оплата пробной подписки"),
+    )
+
+    if not success:
+        await callback.answer(
+            texts.t("PAYMENT_FAILED", "❌ Не удалось списать средства"),
+            show_alert=True
+        )
+        return
+
+    await db.refresh(db_user)
+
+    # Создаем триальную подписку
+    subscription: Optional[Subscription] = None
+    remnawave_user = None
+
+    try:
+        forced_devices = None
+        if not settings.is_devices_selection_enabled():
+            forced_devices = settings.get_disabled_mode_device_limit()
+
+        subscription = await create_trial_subscription(
+            db,
+            db_user.id,
+            device_limit=forced_devices,
+        )
+
+        await db.refresh(db_user)
+
+        subscription_service = SubscriptionService()
+        try:
+            remnawave_user = await subscription_service.create_remnawave_user(
+                db,
+                subscription,
+            )
+        except RemnaWaveConfigurationError as error:
+            logger.error("RemnaWave update skipped due to configuration error: %s", error)
+            # Откатываем подписку и возвращаем деньги
+            await rollback_trial_subscription_activation(db, subscription)
+            from app.database.crud.user import add_user_balance
+            await add_user_balance(
+                db,
+                db_user,
+                trial_price_kopeks,
+                texts.t("TRIAL_REFUND_DESCRIPTION", "Возврат за неудачную активацию триала"),
+                transaction_type=TransactionType.REFUND,
+            )
+            await db.refresh(db_user)
+
+            await callback.message.edit_text(
+                texts.t(
+                    "TRIAL_PROVISIONING_FAILED",
+                    "Не удалось завершить активацию триала. Средства возвращены на баланс.",
+                ),
+                reply_markup=get_back_keyboard(db_user.language),
+            )
+            await callback.answer()
+            return
+        except Exception as error:
+            logger.error(
+                "Failed to create RemnaWave user for trial subscription %s: %s",
+                getattr(subscription, "id", "<unknown>"),
+                error,
+            )
+            # Откатываем подписку и возвращаем деньги
+            await rollback_trial_subscription_activation(db, subscription)
+            from app.database.crud.user import add_user_balance
+            await add_user_balance(
+                db,
+                db_user,
+                trial_price_kopeks,
+                texts.t("TRIAL_REFUND_DESCRIPTION", "Возврат за неудачную активацию триала"),
+                transaction_type=TransactionType.REFUND,
+            )
+            await db.refresh(db_user)
+
+            await callback.message.edit_text(
+                texts.t(
+                    "TRIAL_PROVISIONING_FAILED",
+                    "Не удалось завершить активацию триала. Средства возвращены на баланс.",
+                ),
+                reply_markup=get_back_keyboard(db_user.language),
+            )
+            await callback.answer()
+            return
+
+        # Отправляем уведомление админам
+        try:
+            notification_service = AdminNotificationService(callback.bot)
+            await notification_service.send_trial_activation_notification(
+                db,
+                db_user,
+                subscription,
+                charged_amount_kopeks=trial_price_kopeks,
+            )
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления о триале: {e}")
+
+        # Показываем успешное сообщение с ссылкой
+        subscription_link = get_display_subscription_link(subscription)
+        hide_subscription_link = settings.should_hide_subscription_link()
+
+        payment_note = "\n\n" + texts.t(
+            "TRIAL_PAYMENT_CHARGED_NOTE",
+            "💳 С вашего баланса списано {amount}.",
+        ).format(amount=settings.format_price(trial_price_kopeks))
+
+        if remnawave_user and subscription_link:
+            if settings.is_happ_cryptolink_mode():
+                trial_success_text = (
+                    f"{texts.TRIAL_ACTIVATED}\n\n"
+                    + texts.t(
+                        "SUBSCRIPTION_HAPP_LINK_PROMPT",
+                        "🔒 Ссылка на подписку создана. Нажмите кнопку \"Подключиться\" ниже, чтобы открыть её в Happ.",
+                    )
+                    + "\n\n"
+                    + texts.t(
+                        "SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT",
+                        "📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве",
+                    )
+                )
+            elif hide_subscription_link:
+                trial_success_text = (
+                    f"{texts.TRIAL_ACTIVATED}\n\n"
+                    + texts.t(
+                        "SUBSCRIPTION_LINK_HIDDEN_NOTICE",
+                        "ℹ️ Ссылка подписки доступна по кнопкам ниже или в разделе \"Моя подписка\".",
+                    )
+                    + "\n\n"
+                    + texts.t(
+                        "SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT",
+                        "📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве",
+                    )
+                )
+            else:
+                subscription_import_link = texts.t(
+                    "SUBSCRIPTION_IMPORT_LINK_SECTION",
+                    "🔗 <b>Ваша ссылка для импорта в VPN приложение:</b>\n<code>{subscription_url}</code>",
+                ).format(subscription_url=subscription_link)
+
+                trial_success_text = (
+                    f"{texts.TRIAL_ACTIVATED}\n\n"
+                    f"{subscription_import_link}\n\n"
+                    f"{texts.t('SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT', '📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве')}"
+                )
+
+            trial_success_text += payment_note
+
+            connect_mode = settings.CONNECT_BUTTON_MODE
+            connect_keyboard = _build_trial_success_keyboard(texts, subscription_link, connect_mode)
+
+            await callback.message.edit_text(
+                trial_success_text,
+                reply_markup=connect_keyboard,
+                parse_mode="HTML",
+            )
+        else:
+            trial_success_text = (
+                f"{texts.TRIAL_ACTIVATED}\n\n⚠️ Ссылка генерируется, попробуйте перейти в раздел 'Моя подписка' через несколько секунд."
+            )
+            trial_success_text += payment_note
+
+            await callback.message.edit_text(
+                trial_success_text,
+                reply_markup=get_back_keyboard(db_user.language),
+                parse_mode="HTML",
+            )
+
+        await callback.answer()
+
+    except Exception as error:
+        logger.error(
+            "Unexpected error during paid trial activation for user %s: %s",
+            db_user.id,
+            error,
+        )
+        # Пытаемся откатить и вернуть деньги
+        if subscription:
+            await rollback_trial_subscription_activation(db, subscription)
+        from app.database.crud.user import add_user_balance
+        await add_user_balance(
+            db,
+            db_user,
+            trial_price_kopeks,
+            texts.t("TRIAL_REFUND_DESCRIPTION", "Возврат за неудачную активацию триала"),
+            transaction_type=TransactionType.REFUND,
+        )
+        await db.refresh(db_user)
+
+        await callback.message.edit_text(
+            texts.t(
+                "TRIAL_ACTIVATION_ERROR",
+                "❌ Произошла ошибка при активации триала. Средства возвращены на баланс.",
+            ),
+            reply_markup=get_back_keyboard(db_user.language),
+        )
+        await callback.answer()
+
+
+def _build_trial_success_keyboard(texts, subscription_link: str, connect_mode: str) -> InlineKeyboardMarkup:
+    """Создает клавиатуру успешной активации триала."""
+
+    if connect_mode == "miniapp_subscription":
+        return InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
+                    web_app=types.WebAppInfo(url=subscription_link),
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"),
+                    callback_data="back_to_menu",
+                )
+            ],
+        ])
+    elif connect_mode == "miniapp_custom":
+        if not settings.MINIAPP_CUSTOM_URL:
+            return get_back_keyboard(texts.language if hasattr(texts, 'language') else 'ru')
+
+        return InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
+                    web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL),
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"),
+                    callback_data="back_to_menu",
+                )
+            ],
+        ])
+    elif connect_mode == "link":
+        rows = [
+            [
+                InlineKeyboardButton(
+                    text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
+                    url=subscription_link,
+                )
+            ]
+        ]
+        happ_row = get_happ_download_button_row(texts)
+        if happ_row:
+            rows.append(happ_row)
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"),
+                    callback_data="back_to_menu",
+                )
+            ]
+        )
+        return InlineKeyboardMarkup(inline_keyboard=rows)
+    elif connect_mode == "happ_cryptolink":
+        rows = [
+            [
+                InlineKeyboardButton(
+                    text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
+                    callback_data="open_subscription_link",
+                )
+            ]
+        ]
+        happ_row = get_happ_download_button_row(texts)
+        if happ_row:
+            rows.append(happ_row)
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"),
+                    callback_data="back_to_menu",
+                )
+            ]
+        )
+        return InlineKeyboardMarkup(inline_keyboard=rows)
+    else:
+        return InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
+                        callback_data="subscription_connect",
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"),
+                        callback_data="back_to_menu",
+                    )
+                ],
+            ]
+        )
+
+
+@error_handler
+async def handle_trial_payment_method(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    """Обрабатывает выбор метода оплаты для платного триала."""
+    from app.services.trial_activation_service import get_trial_activation_charge_amount
+    from app.services.payment_service import PaymentService
+
+    texts = get_texts(db_user.language)
+
+    # Проверяем права на триал
+    if db_user.subscription or db_user.has_had_paid_subscription:
+        await callback.message.edit_text(
+            texts.TRIAL_ALREADY_USED,
+            reply_markup=get_back_keyboard(db_user.language)
+        )
+        await callback.answer()
+        return
+
+    trial_price_kopeks = get_trial_activation_charge_amount()
+    if trial_price_kopeks <= 0:
+        await callback.answer("❌ Ошибка: триал бесплатный", show_alert=True)
+        return
+
+    # Определяем метод оплаты
+    payment_method = callback.data.replace("trial_payment_", "")
+
+    try:
+        payment_service = PaymentService(callback.bot)
+
+        # Получаем случайный сквад для триала
+        from app.database.crud.server_squad import get_random_trial_squad_uuid
+        trial_squad_uuid = await get_random_trial_squad_uuid(db)
+
+        # Создаем pending триальную подписку
+        pending_subscription = await create_pending_trial_subscription(
+            db=db,
+            user_id=db_user.id,
+            duration_days=settings.TRIAL_DURATION_DAYS,
+            traffic_limit_gb=settings.TRIAL_TRAFFIC_LIMIT_GB,
+            device_limit=settings.TRIAL_DEVICE_LIMIT,
+            connected_squads=[trial_squad_uuid] if trial_squad_uuid else [],
+            payment_method=f"trial_{payment_method}",
+            total_price_kopeks=trial_price_kopeks,
+        )
+
+        if not pending_subscription:
+            await callback.answer("❌ Не удалось подготовить заказ. Попробуйте позже.", show_alert=True)
+            return
+
+        traffic_label = "Безлимит" if settings.TRIAL_TRAFFIC_LIMIT_GB == 0 else f"{settings.TRIAL_TRAFFIC_LIMIT_GB} ГБ"
+
+        if payment_method == "stars":
+            # Оплата через Telegram Stars
+            stars_count = settings.rubles_to_stars(settings.kopeks_to_rubles(trial_price_kopeks))
+
+            await callback.bot.send_invoice(
+                chat_id=callback.from_user.id,
+                title=texts.t("PAID_TRIAL_INVOICE_TITLE", "Пробная подписка на {days} дней").format(
+                    days=settings.TRIAL_DURATION_DAYS
+                ),
+                description=(
+                    f"{texts.t('PERIOD', 'Период')}: {settings.TRIAL_DURATION_DAYS} {texts.t('DAYS', 'дней')}\n"
+                    f"{texts.t('DEVICES', 'Устройства')}: {settings.TRIAL_DEVICE_LIMIT}\n"
+                    f"{texts.t('TRAFFIC', 'Трафик')}: {traffic_label}"
+                ),
+                payload=f"trial_{pending_subscription.id}",
+                provider_token="",
+                currency="XTR",
+                prices=[types.LabeledPrice(
+                    label=texts.t("PAID_TRIAL_STARS_LABEL", "Пробная подписка"),
+                    amount=stars_count
+                )],
+            )
+
+            await callback.message.edit_text(
+                texts.t(
+                    "PAID_TRIAL_STARS_WAITING",
+                    "⭐ Для оплаты пробной подписки нажмите кнопку оплаты в сообщении выше.\n\n"
+                    "После успешной оплаты подписка будет активирована автоматически."
+                ),
+                reply_markup=get_back_keyboard(db_user.language),
+                parse_mode="HTML",
+            )
+
+        elif payment_method == "yookassa_sbp":
+            # Оплата через YooKassa СБП
+            payment_result = await payment_service.create_yookassa_sbp_payment(
+                amount_kopeks=trial_price_kopeks,
+                description=texts.t("PAID_TRIAL_PAYMENT_DESC", "Пробная подписка на {days} дней").format(
+                    days=settings.TRIAL_DURATION_DAYS
+                ),
+                user_id=db_user.id,
+                metadata={
+                    "type": "trial",
+                    "subscription_id": pending_subscription.id,
+                    "user_id": db_user.id,
+                },
+            )
+
+            if not payment_result or not payment_result.get("confirmation_url"):
+                await callback.answer("❌ Не удалось создать платеж. Попробуйте позже.", show_alert=True)
+                return
+
+            qr_url = payment_result.get("qr_code_url") or payment_result.get("confirmation_url")
+
+            await callback.message.edit_text(
+                texts.t(
+                    "PAID_TRIAL_YOOKASSA_SBP",
+                    "🏦 <b>Оплата через СБП</b>\n\n"
+                    "Отсканируйте QR-код или перейдите по ссылке для оплаты.\n\n"
+                    "💰 Сумма: {amount}"
+                ).format(amount=settings.format_price(trial_price_kopeks)),
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="💳 Оплатить", url=qr_url)],
+                    [InlineKeyboardButton(text=texts.BACK, callback_data="trial_activate")],
+                ]),
+                parse_mode="HTML",
+            )
+
+        elif payment_method == "yookassa":
+            # Оплата через YooKassa карта
+            payment_result = await payment_service.create_yookassa_payment(
+                amount_kopeks=trial_price_kopeks,
+                description=texts.t("PAID_TRIAL_PAYMENT_DESC", "Пробная подписка на {days} дней").format(
+                    days=settings.TRIAL_DURATION_DAYS
+                ),
+                user_id=db_user.id,
+                metadata={
+                    "type": "trial",
+                    "subscription_id": pending_subscription.id,
+                    "user_id": db_user.id,
+                },
+            )
+
+            if not payment_result or not payment_result.get("confirmation_url"):
+                await callback.answer("❌ Не удалось создать платеж. Попробуйте позже.", show_alert=True)
+                return
+
+            await callback.message.edit_text(
+                texts.t(
+                    "PAID_TRIAL_YOOKASSA_CARD",
+                    "💳 <b>Оплата картой</b>\n\n"
+                    "Нажмите кнопку ниже для перехода к оплате.\n\n"
+                    "💰 Сумма: {amount}"
+                ).format(amount=settings.format_price(trial_price_kopeks)),
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="💳 Оплатить", url=payment_result["confirmation_url"])],
+                    [InlineKeyboardButton(text=texts.BACK, callback_data="trial_activate")],
+                ]),
+                parse_mode="HTML",
+            )
+
+        elif payment_method == "cryptobot":
+            # Оплата через CryptoBot
+            payment_result = await payment_service.create_cryptobot_payment(
+                amount_kopeks=trial_price_kopeks,
+                description=texts.t("PAID_TRIAL_PAYMENT_DESC", "Пробная подписка на {days} дней").format(
+                    days=settings.TRIAL_DURATION_DAYS
+                ),
+                user_id=db_user.id,
+                metadata={
+                    "type": "trial",
+                    "subscription_id": pending_subscription.id,
+                    "user_id": db_user.id,
+                },
+            )
+
+            if not payment_result or not payment_result.get("pay_url"):
+                await callback.answer("❌ Не удалось создать платеж. Попробуйте позже.", show_alert=True)
+                return
+
+            await callback.message.edit_text(
+                texts.t(
+                    "PAID_TRIAL_CRYPTOBOT",
+                    "🪙 <b>Оплата криптовалютой</b>\n\n"
+                    "Нажмите кнопку ниже для перехода к оплате.\n\n"
+                    "💰 Сумма: {amount}"
+                ).format(amount=settings.format_price(trial_price_kopeks)),
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="🪙 Оплатить", url=payment_result["pay_url"])],
+                    [InlineKeyboardButton(
+                        text=texts.t("CHECK_PAYMENT", "🔄 Проверить оплату"),
+                        callback_data=f"check_trial_cryptobot_{pending_subscription.id}"
+                    )],
+                    [InlineKeyboardButton(text=texts.BACK, callback_data="trial_activate")],
+                ]),
+                parse_mode="HTML",
+            )
+
+        elif payment_method == "heleket":
+            # Оплата через Heleket
+            payment_result = await payment_service.create_heleket_payment(
+                amount_kopeks=trial_price_kopeks,
+                description=texts.t("PAID_TRIAL_PAYMENT_DESC", "Пробная подписка на {days} дней").format(
+                    days=settings.TRIAL_DURATION_DAYS
+                ),
+                user_id=db_user.id,
+                metadata={
+                    "type": "trial",
+                    "subscription_id": pending_subscription.id,
+                    "user_id": db_user.id,
+                },
+            )
+
+            if not payment_result or not payment_result.get("pay_url"):
+                await callback.answer("❌ Не удалось создать платеж. Попробуйте позже.", show_alert=True)
+                return
+
+            await callback.message.edit_text(
+                texts.t(
+                    "PAID_TRIAL_HELEKET",
+                    "🪙 <b>Оплата криптовалютой (Heleket)</b>\n\n"
+                    "Нажмите кнопку ниже для перехода к оплате.\n\n"
+                    "💰 Сумма: {amount}"
+                ).format(amount=settings.format_price(trial_price_kopeks)),
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="🪙 Оплатить", url=payment_result["pay_url"])],
+                    [InlineKeyboardButton(
+                        text=texts.t("CHECK_PAYMENT", "🔄 Проверить оплату"),
+                        callback_data=f"check_trial_heleket_{pending_subscription.id}"
+                    )],
+                    [InlineKeyboardButton(text=texts.BACK, callback_data="trial_activate")],
+                ]),
+                parse_mode="HTML",
+            )
+
+        elif payment_method == "mulenpay":
+            # Оплата через MulenPay
+            payment_result = await payment_service.create_mulenpay_payment(
+                amount_kopeks=trial_price_kopeks,
+                description=texts.t("PAID_TRIAL_PAYMENT_DESC", "Пробная подписка на {days} дней").format(
+                    days=settings.TRIAL_DURATION_DAYS
+                ),
+                user_id=db_user.id,
+                metadata={
+                    "type": "trial",
+                    "subscription_id": pending_subscription.id,
+                    "user_id": db_user.id,
+                },
+            )
+
+            if not payment_result or not payment_result.get("pay_url"):
+                await callback.answer("❌ Не удалось создать платеж. Попробуйте позже.", show_alert=True)
+                return
+
+            mulenpay_name = settings.get_mulenpay_display_name()
+            await callback.message.edit_text(
+                texts.t(
+                    "PAID_TRIAL_MULENPAY",
+                    "💳 <b>Оплата через {name}</b>\n\n"
+                    "Нажмите кнопку ниже для перехода к оплате.\n\n"
+                    "💰 Сумма: {amount}"
+                ).format(name=mulenpay_name, amount=settings.format_price(trial_price_kopeks)),
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="💳 Оплатить", url=payment_result["pay_url"])],
+                    [InlineKeyboardButton(
+                        text=texts.t("CHECK_PAYMENT", "🔄 Проверить оплату"),
+                        callback_data=f"check_trial_mulenpay_{pending_subscription.id}"
+                    )],
+                    [InlineKeyboardButton(text=texts.BACK, callback_data="trial_activate")],
+                ]),
+                parse_mode="HTML",
+            )
+
+        elif payment_method == "pal24":
+            # Оплата через PAL24
+            payment_result = await payment_service.create_pal24_payment(
+                amount_kopeks=trial_price_kopeks,
+                description=texts.t("PAID_TRIAL_PAYMENT_DESC", "Пробная подписка на {days} дней").format(
+                    days=settings.TRIAL_DURATION_DAYS
+                ),
+                user_id=db_user.id,
+                metadata={
+                    "type": "trial",
+                    "subscription_id": pending_subscription.id,
+                    "user_id": db_user.id,
+                },
+            )
+
+            if not payment_result or not payment_result.get("pay_url"):
+                await callback.answer("❌ Не удалось создать платеж. Попробуйте позже.", show_alert=True)
+                return
+
+            await callback.message.edit_text(
+                texts.t(
+                    "PAID_TRIAL_PAL24",
+                    "💳 <b>Оплата через PayPalych</b>\n\n"
+                    "Нажмите кнопку ниже для перехода к оплате.\n\n"
+                    "💰 Сумма: {amount}"
+                ).format(amount=settings.format_price(trial_price_kopeks)),
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="💳 Оплатить", url=payment_result["pay_url"])],
+                    [InlineKeyboardButton(
+                        text=texts.t("CHECK_PAYMENT", "🔄 Проверить оплату"),
+                        callback_data=f"check_trial_pal24_{pending_subscription.id}"
+                    )],
+                    [InlineKeyboardButton(text=texts.BACK, callback_data="trial_activate")],
+                ]),
+                parse_mode="HTML",
+            )
+
+        elif payment_method == "wata":
+            # Оплата через WATA
+            payment_result = await payment_service.create_wata_payment(
+                amount_kopeks=trial_price_kopeks,
+                description=texts.t("PAID_TRIAL_PAYMENT_DESC", "Пробная подписка на {days} дней").format(
+                    days=settings.TRIAL_DURATION_DAYS
+                ),
+                user_id=db_user.id,
+                metadata={
+                    "type": "trial",
+                    "subscription_id": pending_subscription.id,
+                    "user_id": db_user.id,
+                },
+            )
+
+            if not payment_result or not payment_result.get("pay_url"):
+                await callback.answer("❌ Не удалось создать платеж. Попробуйте позже.", show_alert=True)
+                return
+
+            await callback.message.edit_text(
+                texts.t(
+                    "PAID_TRIAL_WATA",
+                    "💳 <b>Оплата через WATA</b>\n\n"
+                    "Нажмите кнопку ниже для перехода к оплате.\n\n"
+                    "💰 Сумма: {amount}"
+                ).format(amount=settings.format_price(trial_price_kopeks)),
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="💳 Оплатить", url=payment_result["pay_url"])],
+                    [InlineKeyboardButton(
+                        text=texts.t("CHECK_PAYMENT", "🔄 Проверить оплату"),
+                        callback_data=f"check_trial_wata_{pending_subscription.id}"
+                    )],
+                    [InlineKeyboardButton(text=texts.BACK, callback_data="trial_activate")],
+                ]),
+                parse_mode="HTML",
+            )
+
+        else:
+            await callback.answer(f"❌ Неизвестный метод оплаты: {payment_method}", show_alert=True)
+            return
+
+        await callback.answer()
+
+    except Exception as error:
+        logger.error(f"Error processing trial payment method {payment_method}: {error}")
+        await callback.answer("❌ Произошла ошибка при создании платежа. Попробуйте позже.", show_alert=True)
+
+
 def register_handlers(dp: Dispatcher):
     update_traffic_prices()
 
@@ -2748,6 +3536,17 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         activate_trial,
         F.data == "trial_activate"
+    )
+
+    # Хендлеры платного триала
+    dp.callback_query.register(
+        handle_trial_pay_with_balance,
+        F.data == "trial_pay_with_balance"
+    )
+
+    dp.callback_query.register(
+        handle_trial_payment_method,
+        F.data.startswith("trial_payment_")
     )
 
     dp.callback_query.register(

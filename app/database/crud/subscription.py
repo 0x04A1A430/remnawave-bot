@@ -1547,7 +1547,84 @@ async def create_pending_subscription(
         subscription.id,
         payment_method,
     )
-    
+
+    return subscription
+
+
+async def create_pending_trial_subscription(
+    db: AsyncSession,
+    user_id: int,
+    duration_days: int,
+    traffic_limit_gb: int = 0,
+    device_limit: int = 1,
+    connected_squads: List[str] = None,
+    payment_method: str = "pending",
+    total_price_kopeks: int = 0
+) -> Subscription:
+    """Creates a pending trial subscription that will be activated after payment."""
+
+    current_time = datetime.utcnow()
+    end_date = current_time + timedelta(days=duration_days)
+
+    existing_subscription = await get_subscription_by_user_id(db, user_id)
+
+    if existing_subscription:
+        if (
+            existing_subscription.status == SubscriptionStatus.ACTIVE.value
+            and existing_subscription.end_date > current_time
+        ):
+            logger.warning(
+                "⚠️ Попытка создать pending триал для активного пользователя %s. Возвращаем существующую запись.",
+                user_id,
+            )
+            return existing_subscription
+
+        # Обновляем существующую подписку
+        existing_subscription.status = SubscriptionStatus.PENDING.value
+        existing_subscription.is_trial = True  # Помечаем как триальную
+        existing_subscription.start_date = current_time
+        existing_subscription.end_date = end_date
+        existing_subscription.traffic_limit_gb = traffic_limit_gb
+        existing_subscription.device_limit = device_limit
+        existing_subscription.connected_squads = connected_squads or []
+        existing_subscription.traffic_used_gb = 0.0
+        existing_subscription.updated_at = current_time
+
+        await db.commit()
+        await db.refresh(existing_subscription)
+
+        logger.info(
+            "♻️ Обновлена ожидающая триальная подписка пользователя %s, ID: %s, метод оплаты: %s",
+            user_id,
+            existing_subscription.id,
+            payment_method,
+        )
+        return existing_subscription
+
+    subscription = Subscription(
+        user_id=user_id,
+        status=SubscriptionStatus.PENDING.value,
+        is_trial=True,  # Помечаем как триальную
+        start_date=current_time,
+        end_date=end_date,
+        traffic_limit_gb=traffic_limit_gb,
+        device_limit=device_limit,
+        connected_squads=connected_squads or [],
+        autopay_enabled=settings.is_autopay_enabled_by_default(),
+        autopay_days_before=settings.DEFAULT_AUTOPAY_DAYS_BEFORE,
+    )
+
+    db.add(subscription)
+    await db.commit()
+    await db.refresh(subscription)
+
+    logger.info(
+        "💳 Создана ожидающая триальная подписка для пользователя %s, ID: %s, метод оплаты: %s",
+        user_id,
+        subscription.id,
+        payment_method,
+    )
+
     return subscription
 
 
