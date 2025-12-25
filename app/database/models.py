@@ -86,6 +86,7 @@ class PaymentMethod(Enum):
     PAL24 = "pal24"
     WATA = "wata"
     PLATEGA = "platega"
+    CLOUDPAYMENTS = "cloudpayments"
     MANUAL = "manual"
 
 
@@ -464,6 +465,82 @@ class PlategaPayment(Base):
                 self.amount_rubles,
                 self.status,
                 self.payment_method_code,
+            )
+        )
+
+
+class CloudPaymentsPayment(Base):
+    __tablename__ = "cloudpayments_payments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    # CloudPayments идентификаторы
+    transaction_id_cp = Column(Integer, unique=True, nullable=True, index=True)  # TransactionId от CloudPayments
+    invoice_id = Column(String(255), unique=True, nullable=False, index=True)  # Наш InvoiceId
+
+    amount_kopeks = Column(Integer, nullable=False)
+    currency = Column(String(10), nullable=False, default="RUB")
+    description = Column(Text, nullable=True)
+
+    status = Column(String(50), nullable=False, default="pending")  # pending, completed, failed, authorized
+    is_paid = Column(Boolean, default=False)
+    paid_at = Column(DateTime, nullable=True)
+
+    # Данные карты (маскированные)
+    card_first_six = Column(String(6), nullable=True)
+    card_last_four = Column(String(4), nullable=True)
+    card_type = Column(String(50), nullable=True)  # Visa, MasterCard, etc.
+    card_exp_date = Column(String(10), nullable=True)  # MM/YY
+
+    # Токен для рекуррентных платежей
+    token = Column(String(255), nullable=True)
+
+    # URL для оплаты (виджет)
+    payment_url = Column(Text, nullable=True)
+
+    # Email плательщика
+    email = Column(String(255), nullable=True)
+
+    # Тестовый режим
+    test_mode = Column(Boolean, default=False)
+
+    # Дополнительные данные
+    metadata_json = Column(JSON, nullable=True)
+    callback_payload = Column(JSON, nullable=True)
+
+    # Связь с транзакцией в нашей системе
+    transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=True)
+
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    user = relationship("User", backref="cloudpayments_payments")
+    transaction = relationship("Transaction", backref="cloudpayments_payment")
+
+    @property
+    def amount_rubles(self) -> float:
+        return self.amount_kopeks / 100
+
+    @property
+    def is_pending(self) -> bool:
+        return self.status == "pending"
+
+    @property
+    def is_completed(self) -> bool:
+        return self.status == "completed" and self.is_paid
+
+    @property
+    def is_failed(self) -> bool:
+        return self.status == "failed"
+
+    def __repr__(self) -> str:  # pragma: no cover - debug helper
+        return (
+            "<CloudPaymentsPayment(id={0}, invoice={1}, amount={2}₽, status={3})>".format(
+                self.id,
+                self.invoice_id,
+                self.amount_rubles,
+                self.status,
             )
         )
 
