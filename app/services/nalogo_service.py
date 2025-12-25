@@ -55,14 +55,22 @@ class NaloGoService:
 
     @staticmethod
     def _is_service_unavailable(error: Exception) -> bool:
-        """Проверяет, является ли ошибка временной недоступностью сервиса (503)."""
+        """Проверяет, является ли ошибка временной недоступностью сервиса."""
         error_str = str(error).lower()
+        error_type = type(error).__name__.lower()
         return (
             "503" in error_str
             or "service temporarily unavailable" in error_str
             or "service unavailable" in error_str
             or "ведутся работы" in error_str
             or ("health" in error_str and "false" in error_str)
+            # Таймауты и сетевые ошибки — временные проблемы
+            or "timeout" in error_type
+            or "timeout" in error_str
+            or "readtimeout" in error_type
+            or "connecttimeout" in error_type
+            or "connectionerror" in error_type
+            or "connecterror" in error_type
         )
 
     async def _queue_receipt(
