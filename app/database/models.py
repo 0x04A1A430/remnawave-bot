@@ -683,6 +683,7 @@ class Subscription(Base):
     subscription_crypto_link = Column(String, nullable=True)
 
     device_limit = Column(Integer, default=1)
+    modem_enabled = Column(Boolean, default=False)
     
     connected_squads = Column(JSON, default=list)
     

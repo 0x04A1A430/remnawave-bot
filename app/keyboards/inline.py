@@ -2377,6 +2377,14 @@ def get_updated_subscription_settings_keyboard(language: str = DEFAULT_LANGUAGE,
             )
         ])
 
+    if settings.is_modem_enabled():
+        keyboard.append([
+            InlineKeyboardButton(
+                text=texts.t("MODEM_BUTTON", "📡 Модем"),
+                callback_data="subscription_modem"
+            )
+        ])
+
     keyboard.append([
         InlineKeyboardButton(
             text=texts.t("MANAGE_DEVICES_BUTTON", "🔧 Управление устройствами"),

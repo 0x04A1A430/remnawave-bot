@@ -338,6 +338,15 @@ async def show_subscription_info(
             "",
         )
 
+    # Формируем отображение лимита устройств с учётом модема
+    modem_enabled = getattr(subscription, 'modem_enabled', False) or False
+    if modem_enabled and settings.is_modem_enabled():
+        # Показываем лимит без модема + модем
+        visible_device_limit = (subscription.device_limit or 1) - 1
+        device_limit_display = f"{visible_device_limit} + модем"
+    else:
+        device_limit_display = str(subscription.device_limit)
+
     message = message_template.format(
         full_name=db_user.full_name,
         balance=settings.format_price(db_user.balance_kopeks),
@@ -350,7 +359,7 @@ async def show_subscription_info(
         traffic=traffic_used_display,
         servers=servers_display,
         devices_used=devices_used_str,
-        device_limit=subscription.device_limit,
+        device_limit=device_limit_display,
     )
 
     if show_devices and devices_list:
@@ -2660,12 +2669,20 @@ async def handle_subscription_settings(
             "",
         )
 
+    # Формируем отображение лимита устройств с учётом модема
+    modem_enabled = getattr(subscription, 'modem_enabled', False) or False
+    if modem_enabled and settings.is_modem_enabled():
+        visible_device_limit = (subscription.device_limit or 1) - 1
+        devices_limit_display = f"{visible_device_limit} + модем"
+    else:
+        devices_limit_display = str(subscription.device_limit)
+
     settings_text = settings_template.format(
         countries_count=len(subscription.connected_squads),
         traffic_used=texts.format_traffic(subscription.traffic_used_gb),
         traffic_limit=texts.format_traffic(subscription.traffic_limit_gb),
         devices_used=devices_used,
-        devices_limit=subscription.device_limit,
+        devices_limit=devices_limit_display,
     )
 
     show_countries = await _should_show_countries_management(db_user)
@@ -2977,6 +2994,10 @@ def register_handlers(dp: Dispatcher):
         show_device_connection_help,
         F.data == "device_connection_help"
     )
+
+    # Регистрируем обработчики модема
+    from .modem import register_modem_handlers
+    register_modem_handlers(dp)
 
     # Регистрируем обработчик для простой покупки
     dp.callback_query.register(
