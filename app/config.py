@@ -270,6 +270,7 @@ class Settings(BaseSettings):
     NALOGO_STORAGE_PATH: str = "./nalogo_tokens.json"
 
     AUTO_PURCHASE_AFTER_TOPUP_ENABLED: bool = False
+    AUTO_ACTIVATE_AFTER_TOPUP_ENABLED: bool = False
 
     # Отключение превью ссылок в сообщениях бота
     DISABLE_WEB_PAGE_PREVIEW: bool = False
@@ -419,7 +420,10 @@ class Settings(BaseSettings):
     DEFAULT_LANGUAGE: str = "ru"
     AVAILABLE_LANGUAGES: str = "ru,en"
     LANGUAGE_SELECTION_ENABLED: bool = True
-    
+
+    # Округление цен при отображении (≤50 коп вниз, >50 коп вверх)
+    PRICE_ROUNDING_ENABLED: bool = True
+
     LOG_LEVEL: str = "INFO"
     LOG_FILE: str = "logs/bot.log"
     
@@ -787,7 +791,17 @@ class Settings(BaseSettings):
             return normalized in {"1", "true", "yes", "on"}
 
         return bool(value)
-    
+
+    def is_auto_activate_after_topup_enabled(self) -> bool:
+        """Умная автоактивация после пополнения баланса (без корзины)."""
+        value = getattr(self, "AUTO_ACTIVATE_AFTER_TOPUP_ENABLED", False)
+
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            return normalized in {"1", "true", "yes", "on"}
+
+        return bool(value)
+
     def get_available_languages(self) -> List[str]:
         defaults = ["ru", "en", "ua", "zh"]
 
@@ -827,10 +841,32 @@ class Settings(BaseSettings):
     def is_language_selection_enabled(self) -> bool:
         return bool(getattr(self, "LANGUAGE_SELECTION_ENABLED", True))
 
-    def format_price(self, price_kopeks: int) -> str:
-        sign = "-" if price_kopeks < 0 else ""
-        rubles, kopeks = divmod(abs(price_kopeks), 100)
+    def format_price(self, price_kopeks: int, round_kopeks: Optional[bool] = None) -> str:
+        """
+        Форматирует цену в копейках для отображения пользователю.
 
+        Args:
+            price_kopeks: Сумма в копейках
+            round_kopeks: Если True, округляет копейки (≤50 вниз, >50 вверх).
+                         Если None, использует настройку PRICE_ROUNDING_ENABLED.
+
+        Returns:
+            Отформатированная строка цены (например, "150 ₽")
+        """
+        # Используем настройку если не передано явно
+        should_round = round_kopeks if round_kopeks is not None else self.PRICE_ROUNDING_ENABLED
+
+        sign = "-" if price_kopeks < 0 else ""
+        abs_kopeks = abs(price_kopeks)
+        rubles, kopeks = divmod(abs_kopeks, 100)
+
+        if should_round:
+            # Округление: ≤50 коп вниз, >50 коп вверх
+            if kopeks > 50:
+                rubles += 1
+            return f"{sign}{rubles} ₽"
+
+        # Без округления - показываем точное значение
         if kopeks:
             value = f"{sign}{rubles}.{kopeks:02d}".rstrip("0").rstrip(".")
             return f"{value} ₽"

@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.models import PaymentMethod, TransactionType
 from app.services.subscription_auto_purchase_service import (
+    auto_activate_subscription_after_topup,
     auto_purchase_saved_cart_after_topup,
 )
 from app.utils.user_utils import format_referrer_info
@@ -740,6 +741,22 @@ class YooKassaPaymentMixin:
 
                             if auto_purchase_success:
                                 has_saved_cart = False
+
+                        # Умная автоактивация если автопокупка не сработала
+                        if not auto_purchase_success:
+                            try:
+                                await auto_activate_subscription_after_topup(
+                                    db,
+                                    user,
+                                    bot=getattr(self, "bot", None),
+                                )
+                            except Exception as auto_activate_error:
+                                logger.error(
+                                    "Ошибка умной автоактивации для пользователя %s: %s",
+                                    user.id,
+                                    auto_activate_error,
+                                    exc_info=True,
+                                )
 
                         if has_saved_cart and getattr(self, "bot", None):
                             # Если у пользователя есть сохраненная корзина,
