@@ -854,8 +854,9 @@ async def handle_ticket_reply(
         await state.clear()
 
         # Уведомить админов об ответе пользователя
+        logger.info(f"Attempting to notify admins about ticket reply #{ticket_id}")
         await notify_admins_about_ticket_reply(ticket, reply_text, db)
-        
+
     except Exception as e:
         logger.error(f"Error adding ticket reply: {e}")
         texts = get_texts(db_user.language)
@@ -1020,6 +1021,7 @@ async def notify_admins_about_new_ticket(ticket: Ticket, db: AsyncSession):
 
 async def notify_admins_about_ticket_reply(ticket: Ticket, reply_text: str, db: AsyncSession):
     """Уведомить админов об ответе пользователя на тикет"""
+    logger.info(f"notify_admins_about_ticket_reply called for ticket #{ticket.id}")
     try:
         from app.config import settings
         if not settings.is_admin_notifications_enabled():
@@ -1059,7 +1061,8 @@ async def notify_admins_about_ticket_reply(ticket: Ticket, reply_text: str, db: 
             return
 
         service = AdminNotificationService(bot)
-        await service.send_ticket_event_notification(notification_text, None)
+        result = await service.send_ticket_event_notification(notification_text, None)
+        logger.info(f"Ticket #{ticket.id} reply notification sent: {result}")
     except Exception as e:
         logger.error(f"Error notifying admins about ticket reply: {e}")
 

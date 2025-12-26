@@ -609,6 +609,10 @@ async def handle_switch_traffic(
         return
 
     current_traffic = subscription.traffic_limit_gb
+    # Вычисляем базовый трафик (без докупленного) для корректного расчёта цен
+    purchased_traffic = getattr(subscription, 'purchased_traffic_gb', 0) or 0
+    base_traffic = current_traffic - purchased_traffic
+
     period_hint_days = _get_period_hint_from_subscription(subscription)
     traffic_discount_percent = _get_addon_discount_percent_for_user(
         db_user,
@@ -616,18 +620,25 @@ async def handle_switch_traffic(
         period_hint_days,
     )
 
+    # Показываем информацию о докупленном трафике, если он есть
+    purchased_info = ""
+    if purchased_traffic > 0:
+        purchased_info = f"\n📦 Базовый пакет: {texts.format_traffic(base_traffic)}\n➕ Докуплено: {texts.format_traffic(purchased_traffic)}"
+
     await callback.message.edit_text(
         f"🔄 <b>Переключение лимита трафика</b>\n\n"
-        f"Текущий лимит: {texts.format_traffic(current_traffic)}\n"
+        f"Текущий лимит: {texts.format_traffic(current_traffic)}{purchased_info}\n"
         f"Выберите новый лимит трафика:\n\n"
         f"💡 <b>Важно:</b>\n"
         f"• При увеличении - доплата за разницу\n"
-        f"• При уменьшении - возврат средств не производится",
+        f"• При уменьшении - возврат средств не производится\n"
+        f"• Докупленный трафик будет сброшен",
         reply_markup=get_traffic_switch_keyboard(
             current_traffic,
             db_user.language,
             subscription.end_date,
             traffic_discount_percent,
+            base_traffic_gb=base_traffic,
         ),
         parse_mode="HTML"
     )
@@ -645,11 +656,16 @@ async def confirm_switch_traffic(
 
     current_traffic = subscription.traffic_limit_gb
 
+    # Вычисляем базовый трафик (без докупленного) для корректного расчёта цены
+    purchased_traffic = getattr(subscription, 'purchased_traffic_gb', 0) or 0
+    base_traffic = current_traffic - purchased_traffic
+
     if new_traffic_gb == current_traffic:
         await callback.answer("ℹ️ Лимит трафика не изменился", show_alert=True)
         return
 
-    old_price_per_month = settings.get_traffic_price(current_traffic)
+    # Используем базовый трафик для определения текущей цены пакета
+    old_price_per_month = settings.get_traffic_price(base_traffic)
     new_price_per_month = settings.get_traffic_price(new_traffic_gb)
 
     months_remaining = get_remaining_months(subscription.end_date)
@@ -766,6 +782,8 @@ async def execute_switch_traffic(
             )
 
         subscription.traffic_limit_gb = new_traffic_gb
+        # Сбрасываем докупленный трафик при переключении пакета
+        subscription.purchased_traffic_gb = 0
         subscription.updated_at = datetime.utcnow()
 
         await db.commit()
