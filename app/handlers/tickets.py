@@ -836,7 +836,7 @@ async def handle_ticket_reply(
         )
         
         texts = get_texts(db_user.language)
-        
+
         await message.answer(
             texts.t("TICKET_REPLY_SENT", "✅ Ваш ответ отправлен!"),
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
@@ -850,8 +850,11 @@ async def handle_ticket_reply(
                 )]
             ])
         )
-        
+
         await state.clear()
+
+        # Уведомить админов об ответе пользователя
+        await notify_admins_about_ticket_reply(ticket, reply_text, db)
         
     except Exception as e:
         logger.error(f"Error adding ticket reply: {e}")
@@ -1013,6 +1016,52 @@ async def notify_admins_about_new_ticket(ticket: Ticket, db: AsyncSession):
         await service.send_ticket_event_notification(notification_text, None)
     except Exception as e:
         logger.error(f"Error notifying admins about new ticket: {e}")
+
+
+async def notify_admins_about_ticket_reply(ticket: Ticket, reply_text: str, db: AsyncSession):
+    """Уведомить админов об ответе пользователя на тикет"""
+    try:
+        from app.config import settings
+        if not settings.is_admin_notifications_enabled():
+            logger.info(f"Admin notifications disabled. Reply to ticket #{ticket.id}")
+            return
+
+        title = (ticket.title or '').strip()
+        if len(title) > 60:
+            title = title[:57] + "..."
+
+        # Загрузим пользователя
+        try:
+            user = await get_user_by_id(db, ticket.user_id)
+        except Exception:
+            user = None
+        full_name = user.full_name if user else "Unknown"
+        telegram_id_display = user.telegram_id if user else "—"
+        username_display = (user.username or "отсутствует") if user else "отсутствует"
+
+        # Обрезаем текст ответа для уведомления
+        reply_preview = reply_text[:150] + "..." if len(reply_text) > 150 else reply_text
+
+        notification_text = (
+            f"💬 <b>ОТВЕТ НА ТИКЕТ</b>\n\n"
+            f"🆔 <b>ID тикета:</b> <code>{ticket.id}</code>\n"
+            f"📝 <b>Заголовок:</b> {title or '—'}\n"
+            f"👤 <b>Пользователь:</b> {full_name}\n"
+            f"🆔 <b>Telegram ID:</b> <code>{telegram_id_display}</code>\n"
+            f"📱 <b>Username:</b> @{username_display}\n\n"
+            f"📩 <b>Сообщение:</b>\n{reply_preview}\n"
+        )
+
+        from app.services.maintenance_service import maintenance_service
+        bot = maintenance_service._bot or None
+        if bot is None:
+            logger.warning("Bot instance is not available for admin notifications")
+            return
+
+        service = AdminNotificationService(bot)
+        await service.send_ticket_event_notification(notification_text, None)
+    except Exception as e:
+        logger.error(f"Error notifying admins about ticket reply: {e}")
 
 
 def register_handlers(dp: Dispatcher):
