@@ -61,7 +61,8 @@ class Settings(BaseSettings):
     CHANNEL_LINK: Optional[str] = None
     CHANNEL_IS_REQUIRED_SUB: bool = False
     CHANNEL_DISABLE_TRIAL_ON_UNSUBSCRIBE: bool = True
-    
+    CHANNEL_REQUIRED_FOR_ALL: bool = False
+
     DATABASE_URL: Optional[str] = None
     
     POSTGRES_HOST: str = "postgres"

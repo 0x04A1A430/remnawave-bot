@@ -108,8 +108,8 @@ class ChannelCheckerMiddleware(BaseMiddleware):
             elif member.status in self.BAD_MEMBER_STATUS:
                 logger.info(f"❌ Пользователь {telegram_id} не подписан на канал (статус: {member.status})")
 
-                if telegram_id and settings.CHANNEL_DISABLE_TRIAL_ON_UNSUBSCRIBE:
-                    await self._deactivate_trial_subscription(telegram_id)
+                if telegram_id and (settings.CHANNEL_DISABLE_TRIAL_ON_UNSUBSCRIBE or settings.CHANNEL_REQUIRED_FOR_ALL):
+                    await self._deactivate_subscription_on_unsubscribe(telegram_id)
 
                 await self._capture_start_payload(state, event, bot)
 
@@ -253,8 +253,8 @@ class ChannelCheckerMiddleware(BaseMiddleware):
             finally:
                 break
 
-    async def _deactivate_trial_subscription(self, telegram_id: int) -> None:
-        if not settings.CHANNEL_DISABLE_TRIAL_ON_UNSUBSCRIBE:
+    async def _deactivate_subscription_on_unsubscribe(self, telegram_id: int) -> None:
+        if not settings.CHANNEL_DISABLE_TRIAL_ON_UNSUBSCRIBE and not settings.CHANNEL_REQUIRED_FOR_ALL:
             logger.debug(
                 "ℹ️ Пропускаем деактивацию подписки пользователя %s: отключение при отписке выключено",
                 telegram_id,
@@ -272,19 +272,29 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                     break
 
                 subscription = user.subscription
-                if (not subscription.is_trial or
-                        subscription.status != SubscriptionStatus.ACTIVE.value):
+
+                if subscription.status != SubscriptionStatus.ACTIVE.value:
                     logger.debug(
-                        "ℹ️ Подписка пользователя %s не требует деактивации (trial=%s, status=%s)",
+                        "ℹ️ Подписка пользователя %s не активна (status=%s) — пропускаем деактивацию",
                         telegram_id,
-                        subscription.is_trial,
                         subscription.status,
                     )
                     break
 
+                if settings.CHANNEL_REQUIRED_FOR_ALL:
+                    pass
+                elif not subscription.is_trial:
+                    logger.debug(
+                        "ℹ️ Подписка пользователя %s платная, CHANNEL_REQUIRED_FOR_ALL=False — пропускаем деактивацию",
+                        telegram_id,
+                    )
+                    break
+
                 await deactivate_subscription(db, subscription)
+                sub_type = "Триальная" if subscription.is_trial else "Платная"
                 logger.info(
-                    "🚫 Триальная подписка пользователя %s отключена после отписки от канала",
+                    "🚫 %s подписка пользователя %s отключена после отписки от канала",
+                    sub_type,
                     telegram_id,
                 )
 

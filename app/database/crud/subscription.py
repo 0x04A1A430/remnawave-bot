@@ -128,17 +128,18 @@ async def create_paid_subscription(
     device_limit: Optional[int] = None,
     connected_squads: List[str] = None,
     update_server_counters: bool = False,
+    is_trial: bool = False,
 ) -> Subscription:
 
     end_date = datetime.utcnow() + timedelta(days=duration_days)
-    
+
     if device_limit is None:
         device_limit = settings.DEFAULT_DEVICE_LIMIT
 
     subscription = Subscription(
         user_id=user_id,
         status=SubscriptionStatus.ACTIVE.value,
-        is_trial=False,
+        is_trial=is_trial,
         start_date=datetime.utcnow(),
         end_date=end_date,
         traffic_limit_gb=traffic_limit_gb,

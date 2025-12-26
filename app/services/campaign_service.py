@@ -147,6 +147,7 @@ class AdvertisingCampaignService:
             device_limit=device_limit,
             connected_squads=squads,
             update_server_counters=True,
+            is_trial=True,
         )
 
         try:
