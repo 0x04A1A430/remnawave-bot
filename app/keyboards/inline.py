@@ -1252,11 +1252,9 @@ def get_devices_keyboard(current: int, language: str = DEFAULT_LANGUAGE) -> Inli
             )
         )
     
-    for i in range(0, len(buttons), 2):
-        if i + 1 < len(buttons):
-            keyboard.append([buttons[i], buttons[i + 1]])
-        else:
-            keyboard.append([buttons[i]])
+    # Кнопки в один столбец для лучшей читаемости
+    for button in buttons:
+        keyboard.append([button])
     
     keyboard.extend([
         [InlineKeyboardButton(text=texts.t("CONTINUE_BUTTON", "✅ Продолжить"), callback_data="devices_continue")],

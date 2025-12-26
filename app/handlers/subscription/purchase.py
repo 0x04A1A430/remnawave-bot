@@ -140,7 +140,9 @@ from .autopay import (
     toggle_autopay,
 )
 from .countries import (
+    _build_countries_selection_text,
     _get_available_countries,
+    _get_preselected_free_countries,
     _should_show_countries_management,
     apply_countries_changes,
     countries_continue,
@@ -1845,9 +1847,16 @@ async def select_period(
 
     if await _should_show_countries_management(db_user):
         countries = await _get_available_countries(db_user.promo_group_id)
+        # Автоматически предвыбираем бесплатные серверы
+        preselected = _get_preselected_free_countries(countries)
+        data['countries'] = preselected
+        await state.set_data(data)
+        # Формируем текст с описаниями сквадов
+        selection_text = _build_countries_selection_text(countries, texts.SELECT_COUNTRIES)
         await callback.message.edit_text(
-            texts.SELECT_COUNTRIES,
-            reply_markup=get_countries_keyboard(countries, [], db_user.language)
+            selection_text,
+            reply_markup=get_countries_keyboard(countries, preselected, db_user.language),
+            parse_mode="HTML"
         )
         await state.set_state(SubscriptionStates.selecting_countries)
         await callback.answer()

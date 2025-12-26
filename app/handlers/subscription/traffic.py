@@ -79,7 +79,12 @@ from app.utils.promo_offer import (
 )
 
 from .common import _apply_addon_discount, _get_addon_discount_percent_for_user, _get_period_hint_from_subscription, get_confirm_switch_traffic_keyboard, get_traffic_switch_keyboard, logger
-from .countries import _get_available_countries, _should_show_countries_management
+from .countries import (
+    _build_countries_selection_text,
+    _get_available_countries,
+    _get_preselected_free_countries,
+    _should_show_countries_management,
+)
 from .summary import present_subscription_summary
 
 async def handle_add_traffic(
@@ -417,9 +422,16 @@ async def select_traffic(
 
     if await _should_show_countries_management(db_user):
         countries = await _get_available_countries(db_user.promo_group_id)
+        # Автоматически предвыбираем бесплатные серверы
+        preselected = _get_preselected_free_countries(countries)
+        data['countries'] = preselected
+        await state.set_data(data)
+        # Формируем текст с описаниями сквадов
+        selection_text = _build_countries_selection_text(countries, texts.SELECT_COUNTRIES)
         await callback.message.edit_text(
-            texts.SELECT_COUNTRIES,
-            reply_markup=get_countries_keyboard(countries, [], db_user.language)
+            selection_text,
+            reply_markup=get_countries_keyboard(countries, preselected, db_user.language),
+            parse_mode="HTML"
         )
         await state.set_state(SubscriptionStates.selecting_countries)
         await callback.answer()
