@@ -331,13 +331,14 @@ async def add_user_balance(
     description: str = "Пополнение баланса",
     create_transaction: bool = True,
     transaction_type: TransactionType = TransactionType.DEPOSIT,
-    bot = None
+    bot = None,
+    payment_method: Optional[PaymentMethod] = None
 ) -> bool:
     try:
         old_balance = user.balance_kopeks
         user.balance_kopeks += amount_kopeks
         user.updated_at = datetime.utcnow()
-        
+
         if create_transaction:
             from app.database.crud.transaction import create_transaction as create_trans
 
@@ -346,7 +347,8 @@ async def add_user_balance(
                 user_id=user.id,
                 type=transaction_type,
                 amount_kopeks=amount_kopeks,
-                description=description
+                description=description,
+                payment_method=payment_method
             )
         
         await db.commit()
@@ -368,19 +370,21 @@ async def add_user_balance_by_id(
     amount_kopeks: int,
     description: str = "Пополнение баланса",
     transaction_type: TransactionType = TransactionType.DEPOSIT,
+    payment_method: Optional[PaymentMethod] = None,
 ) -> bool:
     try:
         user = await get_user_by_telegram_id(db, telegram_id)
         if not user:
             logger.error(f"Пользователь с telegram_id {telegram_id} не найден")
             return False
-        
+
         return await add_user_balance(
             db,
             user,
             amount_kopeks,
             description,
             transaction_type=transaction_type,
+            payment_method=payment_method,
         )
         
     except Exception as e:
