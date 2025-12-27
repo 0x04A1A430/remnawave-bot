@@ -243,14 +243,23 @@ async def upload_and_restore_backup(
     if not file.filename:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Filename is required")
 
+    safe_filename = Path(file.filename).name
+    if not safe_filename or safe_filename in ('.', '..'):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid filename")
+
     allowed_extensions = ('.tar.gz', '.json', '.json.gz', '.tar')
-    if not any(file.filename.endswith(ext) for ext in allowed_extensions):
+    if not any(safe_filename.endswith(ext) for ext in allowed_extensions):
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
             f"Invalid file type. Allowed: {', '.join(allowed_extensions)}"
         )
 
-    temp_path = backup_service.backup_dir / f"uploaded_{file.filename}"
+    temp_path = backup_service.backup_dir / f"uploaded_{safe_filename}"
+
+    resolved_path = temp_path.resolve()
+    backup_dir_resolved = backup_service.backup_dir.resolve()
+    if not str(resolved_path).startswith(str(backup_dir_resolved)):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Invalid file path")
 
     try:
         content = await file.read()
