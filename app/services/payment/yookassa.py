@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import logging
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from importlib import import_module
@@ -21,8 +20,7 @@ from app.services.subscription_auto_purchase_service import (
     auto_purchase_saved_cart_after_topup,
 )
 from app.utils.user_utils import format_referrer_info
-
-logger = logging.getLogger(__name__)
+from app.utils.payment_logger import payment_logger as logger
 
 if TYPE_CHECKING:
     from app.database.models import YooKassaPayment

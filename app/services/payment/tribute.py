@@ -4,12 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-import logging
 from typing import Dict
 
 from app.config import settings
-
-logger = logging.getLogger(__name__)
+from app.utils.payment_logger import payment_logger as logger
 
 
 class TributePaymentMixin:

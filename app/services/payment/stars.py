@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal, ROUND_FLOOR, ROUND_HALF_UP
@@ -25,8 +24,7 @@ from app.services.subscription_auto_purchase_service import (
     auto_purchase_saved_cart_after_topup,
 )
 from app.utils.user_utils import format_referrer_info
-
-logger = logging.getLogger(__name__)
+from app.utils.payment_logger import payment_logger as logger
 
 
 @dataclass(slots=True)

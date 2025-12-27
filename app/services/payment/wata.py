@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import uuid
 from datetime import datetime
 from importlib import import_module
@@ -18,8 +17,7 @@ from app.services.subscription_auto_purchase_service import (
 )
 from app.services.wata_service import WataAPIError, WataService
 from app.utils.user_utils import format_referrer_info
-
-logger = logging.getLogger(__name__)
+from app.utils.payment_logger import payment_logger as logger
 
 
 def _extract_transaction_id(payment: Any, remote_link: Optional[Dict[str, Any]] = None) -> Optional[str]:
