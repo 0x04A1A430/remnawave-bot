@@ -1545,7 +1545,7 @@ class BackupService:
                     file_to_send = temp_zip_path
 
             caption = f"📦 <b>Резервная копия</b>\n\n"
-            if password:
+            if temp_zip_path:
                 caption += f"🔐 <b>Архив защищён паролем</b>\n\n"
             caption += f"⏰ <i>{datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</i>"
 
