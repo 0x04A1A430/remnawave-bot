@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import aiofiles
+import pyzipper
 from aiogram.types import FSInputFile
 from sqlalchemy import inspect, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -1534,13 +1535,24 @@ class BackupService:
             if not chat_id:
                 return
 
+            password = settings.get_backup_archive_password()
+            file_to_send = file_path
+            temp_zip_path = None
+
+            if password:
+                temp_zip_path = await self._create_password_protected_archive(file_path, password)
+                if temp_zip_path:
+                    file_to_send = temp_zip_path
+
+            caption = f"📦 <b>Резервная копия</b>\n\n"
+            if temp_zip_path:
+                caption += f"🔐 <b>Архив защищён паролем</b>\n\n"
+            caption += f"⏰ <i>{datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</i>"
+
             send_kwargs = {
                 'chat_id': chat_id,
-                'document': FSInputFile(file_path),
-                'caption': (
-                    f"📦 <b>Резервная копия</b>\n\n"
-                    f"⏰ <i>{datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</i>"
-                ),
+                'document': FSInputFile(file_to_send),
+                'caption': caption,
                 'parse_mode': 'HTML'
             }
 
@@ -1549,8 +1561,43 @@ class BackupService:
 
             await self.bot.send_document(**send_kwargs)
             logger.info(f"Бекап отправлен в чат {chat_id}")
+
+            if temp_zip_path and Path(temp_zip_path).exists():
+                try:
+                    Path(temp_zip_path).unlink()
+                except Exception as cleanup_error:
+                    logger.warning(f"Не удалось удалить временный архив: {cleanup_error}")
+
         except Exception as e:
             logger.error(f"Ошибка отправки бекапа в чат: {e}")
+
+    async def _create_password_protected_archive(self, file_path: str, password: str) -> Optional[str]:
+        try:
+            source_path = Path(file_path)
+            if not source_path.exists():
+                logger.error(f"Исходный файл бекапа не найден: {file_path}")
+                return None
+
+            zip_filename = source_path.stem + ".zip"
+            zip_path = source_path.parent / zip_filename
+
+            def create_zip():
+                with pyzipper.AESZipFile(
+                    zip_path,
+                    'w',
+                    compression=pyzipper.ZIP_DEFLATED,
+                    encryption=pyzipper.WZ_AES
+                ) as zf:
+                    zf.setpassword(password.encode('utf-8'))
+                    zf.write(source_path, arcname=source_path.name)
+
+            await asyncio.to_thread(create_zip)
+            logger.info(f"Создан защищённый паролем архив: {zip_path}")
+            return str(zip_path)
+
+        except Exception as e:
+            logger.error(f"Ошибка создания защищённого архива: {e}")
+            return None
 
 
 backup_service = BackupService()
