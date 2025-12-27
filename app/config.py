@@ -469,6 +469,7 @@ class Settings(BaseSettings):
     BACKUP_SEND_ENABLED: bool = False
     BACKUP_SEND_CHAT_ID: Optional[str] = None
     BACKUP_SEND_TOPIC_ID: Optional[int] = None
+    BACKUP_ARCHIVE_PASSWORD: Optional[str] = None
 
     EXTERNAL_ADMIN_TOKEN: Optional[str] = None
     EXTERNAL_ADMIN_TOKEN_BOT_ID: Optional[int] = None
@@ -1624,6 +1625,10 @@ class Settings(BaseSettings):
     def is_backup_send_enabled(self) -> bool:
         return (self.BACKUP_SEND_ENABLED and
                 self.get_backup_send_chat_id() is not None)
+
+    def get_backup_archive_password(self) -> Optional[str]:
+        password = (self.BACKUP_ARCHIVE_PASSWORD or "").strip()
+        return password if password else None
 
     def get_referral_settings(self) -> Dict:
         return {

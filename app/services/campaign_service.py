@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.crud.campaign import record_campaign_registration
 from app.database.crud.subscription import (
-    create_paid_subscription,
+    create_trial_subscription,
     get_subscription_by_user_id,
 )
 from app.database.crud.user import add_user_balance
@@ -139,7 +139,9 @@ class AdvertisingCampaignService:
                     error,
                 )
 
-        new_subscription = await create_paid_subscription(
+        squad_uuid = squads[0] if squads else None
+
+        new_subscription = await create_trial_subscription(
             db=db,
             user_id=user.id,
             duration_days=duration_days,
@@ -148,6 +150,7 @@ class AdvertisingCampaignService:
             connected_squads=squads,
             update_server_counters=True,
             is_trial=True,
+            squad_uuid=squad_uuid,
         )
 
         try:
