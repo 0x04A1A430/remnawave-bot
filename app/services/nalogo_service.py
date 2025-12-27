@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from typing import Optional, Dict, Any
 from decimal import Decimal
 
@@ -168,11 +169,16 @@ class NaloGoService:
                     inn=client_info.get("inn")
                 )
 
+            # Используем время из настроек (TZ env)
+            local_tz = ZoneInfo(settings.TIMEZONE)
+            local_time = datetime.now(local_tz)
+
             result = await income_api.create(
                 name=name,
                 amount=Decimal(str(amount)),
                 quantity=quantity,
-                client=income_client
+                client=income_client,
+                operation_time=local_time
             )
 
             receipt_uuid = result.get("approvedReceiptUuid")

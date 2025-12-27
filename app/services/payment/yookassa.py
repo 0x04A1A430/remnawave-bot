@@ -967,16 +967,9 @@ class YooKassaPaymentMixin:
                     payment.amount_kopeks / 100,
                 )
 
-            # Создаем чек через NaloGO для всех платежей
+            # Создаем чек через NaloGO (если NALOGO_ENABLED=true)
             if hasattr(self, "nalogo_service") and self.nalogo_service:
-                try:
-                    from app.services.support_settings_service import SupportSettingsService
-                    if SupportSettingsService.is_nalogo_receipts_enabled():
-                        await self._create_nalogo_receipt(payment)
-                except Exception as error:
-                    logger.error("Ошибка проверки настройки NALOGO_RECEIPTS_ENABLED: %s", error)
-                    if settings.NALOGO_RECEIPTS_ENABLED:
-                        await self._create_nalogo_receipt(payment)
+                await self._create_nalogo_receipt(payment)
 
             return True
 

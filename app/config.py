@@ -263,7 +263,6 @@ class Settings(BaseSettings):
     PAYMENT_VERIFICATION_AUTO_CHECK_INTERVAL_MINUTES: int = 10
 
     NALOGO_ENABLED: bool = False
-    NALOGO_RECEIPTS_ENABLED: bool = False
     NALOGO_INN: Optional[str] = None
     NALOGO_PASSWORD: Optional[str] = None
     NALOGO_DEVICE_ID: Optional[str] = None
