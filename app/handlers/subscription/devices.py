@@ -355,6 +355,28 @@ async def confirm_change_devices(
         ).format(count=new_devices_count)
         cost_text = texts.t("DEVICE_CHANGE_NO_REFUND", "Возврат средств не производится")
 
+    # Проверяем количество подключённых устройств для предупреждения
+    devices_warning = ""
+    if new_devices_count < current_devices and db_user.remnawave_uuid:
+        try:
+            service = RemnaWaveService()
+            async with service.get_api_client() as api:
+                response = await api._make_request('GET', f'/api/hwid/devices/{db_user.remnawave_uuid}')
+                if response and 'response' in response:
+                    connected_count = response['response'].get('total', 0)
+                    if connected_count > new_devices_count:
+                        devices_warning = texts.t(
+                            "DEVICE_CHANGE_RESET_WARNING",
+                            (
+                                "\n⚠️ <b>Внимание!</b>\n"
+                                "У вас подключено {connected} устройств.\n"
+                                "При уменьшении лимита до {new} все устройства будут сброшены.\n"
+                                "Вам нужно будет заново подключить нужные устройства.\n"
+                            ),
+                        ).format(connected=connected_count, new=new_devices_count)
+        except Exception as e:
+            logger.error(f"Ошибка проверки устройств: {e}")
+
     confirm_text = texts.t(
         "DEVICE_CHANGE_CONFIRMATION",
         (
@@ -371,6 +393,9 @@ async def confirm_change_devices(
         action=action_text,
         cost=cost_text,
     )
+
+    if devices_warning:
+        confirm_text += devices_warning
 
     await callback.message.edit_text(
         confirm_text,
@@ -431,6 +456,28 @@ async def execute_change_devices(
         subscription_service = SubscriptionService()
         await subscription_service.update_remnawave_user(db, subscription)
 
+        # При уменьшении лимита - сбросить лишние устройства
+        devices_reset_count = 0
+        if new_devices_count < current_devices and db_user.remnawave_uuid:
+            try:
+                service = RemnaWaveService()
+                async with service.get_api_client() as api:
+                    response = await api._make_request('GET', f'/api/hwid/devices/{db_user.remnawave_uuid}')
+                    if response and 'response' in response:
+                        devices_list = response['response'].get('devices', [])
+                        connected_count = len(devices_list)
+
+                        # Если подключённых устройств больше чем новый лимит - сбросить все
+                        if connected_count > new_devices_count:
+                            logger.info(
+                                f"🔧 Сброс устройств при уменьшении лимита: "
+                                f"подключено {connected_count}, новый лимит {new_devices_count}"
+                            )
+                            await api.reset_user_devices(db_user.remnawave_uuid)
+                            devices_reset_count = connected_count
+            except Exception as reset_error:
+                logger.error(f"Ошибка сброса устройств при уменьшении лимита: {reset_error}")
+
         await db.refresh(db_user)
         await db.refresh(subscription)
 
@@ -466,6 +513,12 @@ async def execute_change_devices(
                 "DEVICE_CHANGE_RESULT_LINE",
                 "📱 Было: {old} → Стало: {new}\n",
             ).format(old=current_devices, new=new_devices_count)
+            if devices_reset_count > 0:
+                success_text += texts.t(
+                    "DEVICE_CHANGE_DEVICES_RESET",
+                    "\n🔄 Сброшено устройств: {count}\n"
+                    "💡 Подключите заново нужные устройства (до {limit} шт.)\n\n",
+                ).format(count=devices_reset_count, limit=new_devices_count)
             success_text += texts.t(
                 "DEVICE_CHANGE_NO_REFUND_INFO",
                 "ℹ️ Возврат средств не производится",

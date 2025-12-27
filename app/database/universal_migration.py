@@ -4555,6 +4555,130 @@ async def add_promocode_promo_group_column() -> bool:
         return False
 
 
+async def migrate_contest_templates_prize_columns() -> bool:
+    """Миграция contest_templates: prize_days -> prize_type + prize_value."""
+    try:
+        prize_type_exists = await check_column_exists("contest_templates", "prize_type")
+        prize_value_exists = await check_column_exists("contest_templates", "prize_value")
+
+        if prize_type_exists and prize_value_exists:
+            logger.info("Колонки prize_type и prize_value уже существуют в contest_templates")
+            return True
+
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            # Добавляем prize_type
+            if not prize_type_exists:
+                if db_type == "sqlite":
+                    await conn.execute(text(
+                        "ALTER TABLE contest_templates ADD COLUMN prize_type VARCHAR(20) NOT NULL DEFAULT 'days'"
+                    ))
+                elif db_type == "postgresql":
+                    await conn.execute(text(
+                        "ALTER TABLE contest_templates ADD COLUMN prize_type VARCHAR(20) NOT NULL DEFAULT 'days'"
+                    ))
+                else:
+                    await conn.execute(text(
+                        "ALTER TABLE contest_templates ADD COLUMN prize_type VARCHAR(20) NOT NULL DEFAULT 'days'"
+                    ))
+                logger.info("✅ Добавлена колонка prize_type в contest_templates")
+
+            # Добавляем prize_value
+            if not prize_value_exists:
+                if db_type == "sqlite":
+                    await conn.execute(text(
+                        "ALTER TABLE contest_templates ADD COLUMN prize_value VARCHAR(50) NOT NULL DEFAULT '1'"
+                    ))
+                elif db_type == "postgresql":
+                    await conn.execute(text(
+                        "ALTER TABLE contest_templates ADD COLUMN prize_value VARCHAR(50) NOT NULL DEFAULT '1'"
+                    ))
+                else:
+                    await conn.execute(text(
+                        "ALTER TABLE contest_templates ADD COLUMN prize_value VARCHAR(50) NOT NULL DEFAULT '1'"
+                    ))
+                logger.info("✅ Добавлена колонка prize_value в contest_templates")
+
+            # Мигрируем данные из prize_days в prize_value (если prize_days существует)
+            prize_days_exists = await check_column_exists("contest_templates", "prize_days")
+            if prize_days_exists:
+                await conn.execute(text(
+                    "UPDATE contest_templates SET prize_value = CAST(prize_days AS VARCHAR) WHERE prize_type = 'days'"
+                ))
+                logger.info("✅ Данные из prize_days перенесены в prize_value")
+
+        return True
+
+    except Exception as error:
+        logger.error(f"❌ Ошибка миграции prize_type/prize_value в contest_templates: {error}")
+        return False
+
+
+async def add_subscription_modem_enabled_column() -> bool:
+    """Добавить колонку modem_enabled в subscriptions."""
+    try:
+        column_exists = await check_column_exists("subscriptions", "modem_enabled")
+        if column_exists:
+            logger.info("Колонка modem_enabled уже существует в subscriptions")
+            return True
+
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == "sqlite":
+                await conn.execute(text(
+                    "ALTER TABLE subscriptions ADD COLUMN modem_enabled BOOLEAN DEFAULT 0"
+                ))
+            elif db_type == "postgresql":
+                await conn.execute(text(
+                    "ALTER TABLE subscriptions ADD COLUMN modem_enabled BOOLEAN DEFAULT FALSE"
+                ))
+            else:
+                await conn.execute(text(
+                    "ALTER TABLE subscriptions ADD COLUMN modem_enabled TINYINT(1) DEFAULT 0"
+                ))
+
+        logger.info("✅ Добавлена колонка modem_enabled в subscriptions")
+        return True
+
+    except Exception as error:
+        logger.error(f"❌ Ошибка добавления modem_enabled в subscriptions: {error}")
+        return False
+
+
+async def add_subscription_purchased_traffic_column() -> bool:
+    """Добавить колонку purchased_traffic_gb в subscriptions."""
+    try:
+        column_exists = await check_column_exists("subscriptions", "purchased_traffic_gb")
+        if column_exists:
+            logger.info("Колонка purchased_traffic_gb уже существует в subscriptions")
+            return True
+
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == "sqlite":
+                await conn.execute(text(
+                    "ALTER TABLE subscriptions ADD COLUMN purchased_traffic_gb INTEGER DEFAULT 0"
+                ))
+            elif db_type == "postgresql":
+                await conn.execute(text(
+                    "ALTER TABLE subscriptions ADD COLUMN purchased_traffic_gb INTEGER DEFAULT 0"
+                ))
+            else:
+                await conn.execute(text(
+                    "ALTER TABLE subscriptions ADD COLUMN purchased_traffic_gb INT DEFAULT 0"
+                ))
+
+        logger.info("✅ Добавлена колонка purchased_traffic_gb в subscriptions")
+        return True
+
+    except Exception as error:
+        logger.error(f"❌ Ошибка добавления purchased_traffic_gb в subscriptions: {error}")
+        return False
+
+
 async def run_universal_migration():
     logger.info("=== НАЧАЛО УНИВЕРСАЛЬНОЙ МИГРАЦИИ ===")
     
@@ -4742,6 +4866,13 @@ async def run_universal_migration():
         else:
             logger.warning("⚠️ Проблемы с таблицей contest_templates")
 
+        logger.info("=== МИГРАЦИЯ КОЛОНОК ПРИЗА В CONTEST_TEMPLATES ===")
+        prize_columns_ready = await migrate_contest_templates_prize_columns()
+        if prize_columns_ready:
+            logger.info("✅ Колонки prize_type и prize_value готовы")
+        else:
+            logger.warning("⚠️ Проблемы с миграцией prize_type/prize_value")
+
         contest_rounds_ready = await create_contest_rounds_table()
         if contest_rounds_ready:
             logger.info("✅ Таблица contest_rounds готова")
@@ -4896,6 +5027,20 @@ async def run_universal_migration():
             logger.info("✅ Колонка subscription_crypto_link готова")
         else:
             logger.warning("⚠️ Проблемы с добавлением колонки subscription_crypto_link")
+
+        logger.info("=== ДОБАВЛЕНИЕ КОЛОНКИ MODEM_ENABLED ДЛЯ ПОДПИСОК ===")
+        modem_enabled_added = await add_subscription_modem_enabled_column()
+        if modem_enabled_added:
+            logger.info("✅ Колонка modem_enabled готова")
+        else:
+            logger.warning("⚠️ Проблемы с добавлением колонки modem_enabled")
+
+        logger.info("=== ДОБАВЛЕНИЕ КОЛОНКИ PURCHASED_TRAFFIC_GB ДЛЯ ПОДПИСОК ===")
+        purchased_traffic_added = await add_subscription_purchased_traffic_column()
+        if purchased_traffic_added:
+            logger.info("✅ Колонка purchased_traffic_gb готова")
+        else:
+            logger.warning("⚠️ Проблемы с добавлением колонки purchased_traffic_gb")
 
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ АУДИТА ПОДДЕРЖКИ ===")
         try:
@@ -5079,6 +5224,10 @@ async def check_migration_status():
             "users_promo_offer_discount_expires_column": False,
             "users_referral_commission_percent_column": False,
             "subscription_crypto_link_column": False,
+            "subscription_modem_enabled_column": False,
+            "subscription_purchased_traffic_column": False,
+            "contest_templates_prize_type_column": False,
+            "contest_templates_prize_value_column": False,
             "discount_offers_table": False,
             "discount_offers_effect_column": False,
             "discount_offers_extra_column": False,
@@ -5139,7 +5288,11 @@ async def check_migration_status():
         status["users_promo_offer_discount_expires_column"] = await check_column_exists('users', 'promo_offer_discount_expires_at')
         status["users_referral_commission_percent_column"] = await check_column_exists('users', 'referral_commission_percent')
         status["subscription_crypto_link_column"] = await check_column_exists('subscriptions', 'subscription_crypto_link')
-        
+        status["subscription_modem_enabled_column"] = await check_column_exists('subscriptions', 'modem_enabled')
+        status["subscription_purchased_traffic_column"] = await check_column_exists('subscriptions', 'purchased_traffic_gb')
+        status["contest_templates_prize_type_column"] = await check_column_exists('contest_templates', 'prize_type')
+        status["contest_templates_prize_value_column"] = await check_column_exists('contest_templates', 'prize_value')
+
         media_fields_exist = (
             await check_column_exists('broadcast_history', 'has_media') and
             await check_column_exists('broadcast_history', 'media_type') and
@@ -5211,6 +5364,10 @@ async def check_migration_status():
             "users_promo_offer_discount_expires_column": "Колонка срока действия промо-скидки у пользователей",
             "users_referral_commission_percent_column": "Колонка процента реферальной комиссии у пользователей",
             "subscription_crypto_link_column": "Колонка subscription_crypto_link в subscriptions",
+            "subscription_modem_enabled_column": "Колонка modem_enabled в subscriptions",
+            "subscription_purchased_traffic_column": "Колонка purchased_traffic_gb в subscriptions",
+            "contest_templates_prize_type_column": "Колонка prize_type в contest_templates",
+            "contest_templates_prize_value_column": "Колонка prize_value в contest_templates",
             "discount_offers_table": "Таблица discount_offers",
             "discount_offers_effect_column": "Колонка effect_type в discount_offers",
             "discount_offers_extra_column": "Колонка extra_data в discount_offers",

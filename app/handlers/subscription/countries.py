@@ -646,7 +646,8 @@ async def _get_available_countries(promo_group_id: Optional[int] = None):
                 "name": server.display_name,
                 "price_kopeks": server.price_kopeks,
                 "country_code": server.country_code,
-                "is_available": server.is_available and not server.is_full
+                "is_available": server.is_available and not server.is_full,
+                "description": server.description or ""
             })
 
         if not countries:
@@ -675,7 +676,8 @@ async def _get_available_countries(promo_group_id: Optional[int] = None):
                     "uuid": squad["uuid"],
                     "name": squad_name,
                     "price_kopeks": 0,
-                    "is_available": True
+                    "is_available": True,
+                    "description": ""
                 })
 
         await cache.set(cache_key_value, countries, 300)
@@ -684,7 +686,7 @@ async def _get_available_countries(promo_group_id: Optional[int] = None):
     except Exception as e:
         logger.error(f"Ошибка получения списка стран: {e}")
         fallback_countries = [
-            {"uuid": "default-free", "name": "🆓 Бесплатный сервер", "price_kopeks": 0, "is_available": True},
+            {"uuid": "default-free", "name": "🆓 Бесплатный сервер", "price_kopeks": 0, "is_available": True, "description": ""},
         ]
 
         await cache.set(cache_key_value, fallback_countries, 60)
@@ -693,6 +695,36 @@ async def _get_available_countries(promo_group_id: Optional[int] = None):
 async def _get_countries_info(squad_uuids):
     countries = await _get_available_countries()
     return [c for c in countries if c['uuid'] in squad_uuids]
+
+
+def _get_preselected_free_countries(countries: List[dict]) -> List[str]:
+    """Получить UUID бесплатных серверов для автоматического предвыбора."""
+    return [
+        c['uuid'] for c in countries
+        if c.get('is_available', True) and c.get('price_kopeks', 0) == 0
+    ]
+
+
+def _build_countries_selection_text(countries: List[dict], base_text: str) -> str:
+    """
+    Формирует текст выбора серверов с описаниями.
+
+    Если у серверов есть description — добавляет их под базовым текстом.
+    """
+    descriptions = []
+    for country in countries:
+        if not country.get('is_available', True):
+            continue
+        desc = country.get('description', '').strip()
+        if desc:
+            name = country.get('name', '')
+            descriptions.append(f"<b>{name}</b>\n{desc}")
+
+    if not descriptions:
+        return base_text
+
+    return f"{base_text}\n\n" + "\n\n".join(descriptions)
+
 
 async def handle_add_country_to_subscription(
         callback: types.CallbackQuery,

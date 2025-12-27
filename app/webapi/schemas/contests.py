@@ -11,7 +11,8 @@ class ContestTemplateResponse(BaseModel):
     name: str
     slug: str
     description: Optional[str] = None
-    prize_days: int
+    prize_type: str
+    prize_value: str
     max_winners: int
     attempts_per_user: int
     times_per_day: int
@@ -30,7 +31,8 @@ class ContestTemplateListResponse(BaseModel):
 class ContestTemplateUpdateRequest(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
-    prize_days: Optional[int] = Field(None, ge=1)
+    prize_type: Optional[str] = None
+    prize_value: Optional[str] = None
     max_winners: Optional[int] = Field(None, ge=1)
     attempts_per_user: Optional[int] = Field(None, ge=1)
     times_per_day: Optional[int] = Field(None, ge=1)

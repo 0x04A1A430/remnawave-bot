@@ -755,11 +755,13 @@ class Subscription(Base):
     
     traffic_limit_gb = Column(Integer, default=0)
     traffic_used_gb = Column(Float, default=0.0)
+    purchased_traffic_gb = Column(Integer, default=0)  # Докупленный трафик (для расчета цены сброса)
 
     subscription_url = Column(String, nullable=True)
     subscription_crypto_link = Column(String, nullable=True)
 
     device_limit = Column(Integer, default=1)
+    modem_enabled = Column(Boolean, default=False)
     
     connected_squads = Column(JSON, default=list)
     
@@ -1107,7 +1109,8 @@ class ContestTemplate(Base):
     name = Column(String(100), nullable=False)
     slug = Column(String(50), nullable=False, unique=True, index=True)
     description = Column(Text, nullable=True)
-    prize_days = Column(Integer, nullable=False, default=1)
+    prize_type = Column(String(20), nullable=False, default="days")
+    prize_value = Column(String(50), nullable=False, default="1")
     max_winners = Column(Integer, nullable=False, default=1)
     attempts_per_user = Column(Integer, nullable=False, default=1)
     times_per_day = Column(Integer, nullable=False, default=1)

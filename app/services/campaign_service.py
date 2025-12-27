@@ -147,6 +147,9 @@ class AdvertisingCampaignService:
             duration_days=duration_days,
             traffic_limit_gb=traffic_limit or 0,
             device_limit=device_limit,
+            connected_squads=squads,
+            update_server_counters=True,
+            is_trial=True,
             squad_uuid=squad_uuid,
         )
 

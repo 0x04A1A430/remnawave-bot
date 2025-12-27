@@ -17,6 +17,7 @@ class SubscriptionResponse(BaseModel):
     traffic_limit_gb: int
     traffic_used_gb: float
     device_limit: int
+    modem_enabled: bool = False
     autopay_enabled: bool
     autopay_days_before: Optional[int] = None
     subscription_url: Optional[str] = None
@@ -51,3 +52,7 @@ class SubscriptionDevicesRequest(BaseModel):
 
 class SubscriptionSquadRequest(BaseModel):
     squad_uuid: str
+
+
+class SubscriptionModemRequest(BaseModel):
+    enabled: bool

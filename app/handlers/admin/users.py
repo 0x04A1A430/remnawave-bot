@@ -1241,6 +1241,15 @@ async def _render_user_subscription_overview(
             ]
         ]
 
+        if settings.is_modem_enabled():
+            modem_status = "✅" if getattr(subscription, 'modem_enabled', False) else "❌"
+            keyboard.append([
+                types.InlineKeyboardButton(
+                    text=f"📡 Модем ({modem_status})",
+                    callback_data=f"admin_user_modem_{user_id}"
+                )
+            ])
+
         if subscription.is_active:
             keyboard.append([
                 types.InlineKeyboardButton(
@@ -3805,6 +3814,68 @@ async def set_user_devices_button(
 
 @admin_required
 @error_handler
+async def toggle_user_modem(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    """Переключение модема для пользователя в админке."""
+    user_id = int(callback.data.split('_')[-1])
+    
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        await callback.answer("❌ Пользователь не найден", show_alert=True)
+        return
+    
+    subscription = user.subscription
+    if not subscription:
+        await callback.answer("❌ У пользователя нет подписки", show_alert=True)
+        return
+    
+    modem_enabled = getattr(subscription, 'modem_enabled', False) or False
+    
+    if modem_enabled:
+        # Отключаем модем
+        subscription.modem_enabled = False
+        if subscription.device_limit and subscription.device_limit > 1:
+            subscription.device_limit = subscription.device_limit - 1
+        action_text = "отключен"
+    else:
+        # Включаем модем
+        subscription.modem_enabled = True
+        subscription.device_limit = (subscription.device_limit or 1) + 1
+        action_text = "подключен"
+    
+    subscription.updated_at = datetime.utcnow()
+    await db.commit()
+    
+    # Обновляем в RemnaWave
+    try:
+        subscription_service = SubscriptionService()
+        await subscription_service.update_remnawave_user(db, subscription)
+    except Exception as e:
+        logger.error(f"Ошибка обновления RemnaWave при переключении модема: {e}")
+    
+    await db.refresh(subscription)
+    
+    modem_status = "✅ Подключен" if subscription.modem_enabled else "❌ Отключен"
+    
+    await callback.message.edit_text(
+        f"📡 <b>Модем {action_text}</b>\n\n"
+        f"Статус модема: {modem_status}\n"
+        f"Лимит устройств: {subscription.device_limit}",
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+            [types.InlineKeyboardButton(text="📱 Подписка и настройки", callback_data=f"admin_user_subscription_{user_id}")]
+        ]),
+        parse_mode="HTML"
+    )
+    
+    logger.info(f"Админ {db_user.telegram_id} {action_text} модем для пользователя {user_id}")
+    await callback.answer()
+
+
+@admin_required
+@error_handler
 async def process_devices_edit_text(
     message: types.Message,
     db_user: User,
@@ -5196,6 +5267,11 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         set_user_devices_button,
         F.data.startswith("admin_user_devices_set_")
+    )
+    
+    dp.callback_query.register(
+        toggle_user_modem,
+        F.data.startswith("admin_user_modem_")
     )
     
     dp.message.register(

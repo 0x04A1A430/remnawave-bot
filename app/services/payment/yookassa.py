@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.models import PaymentMethod, TransactionType
 from app.services.subscription_auto_purchase_service import (
+    auto_activate_subscription_after_topup,
     auto_purchase_saved_cart_after_topup,
 )
 from app.utils.user_utils import format_referrer_info
@@ -741,6 +742,22 @@ class YooKassaPaymentMixin:
                             if auto_purchase_success:
                                 has_saved_cart = False
 
+                        # Умная автоактивация если автопокупка не сработала
+                        if not auto_purchase_success:
+                            try:
+                                await auto_activate_subscription_after_topup(
+                                    db,
+                                    user,
+                                    bot=getattr(self, "bot", None),
+                                )
+                            except Exception as auto_activate_error:
+                                logger.error(
+                                    "Ошибка умной автоактивации для пользователя %s: %s",
+                                    user.id,
+                                    auto_activate_error,
+                                    exc_info=True,
+                                )
+
                         if has_saved_cart and getattr(self, "bot", None):
                             # Если у пользователя есть сохраненная корзина,
                             # отправляем ему уведомление с кнопкой вернуться к оформлению
@@ -1029,13 +1046,13 @@ class YooKassaPaymentMixin:
             receipt_uuid = await self.nalogo_service.create_receipt(
                 name=receipt_name,
                 amount=amount_rubles,
-                quantity=1
+                quantity=1,
+                payment_id=payment.yookassa_payment_id,
             )
 
             if receipt_uuid:
                 logger.info(f"Чек NaloGO создан для платежа {payment.yookassa_payment_id}: {receipt_uuid}")
-            else:
-                logger.warning(f"Не удалось создать чек NaloGO для платежа {payment.yookassa_payment_id}")
+            # При временной недоступности чек добавляется в очередь автоматически
 
         except Exception as error:
             logger.error(
