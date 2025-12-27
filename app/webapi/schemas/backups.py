@@ -53,3 +53,22 @@ class BackupTaskInfo(BackupStatusResponse):
 class BackupTaskListResponse(BaseModel):
     items: list[BackupTaskInfo]
     total: int
+
+
+class BackupRestoreRequest(BaseModel):
+    clear_existing: bool = Field(
+        default=False,
+        description="Очистить существующие данные перед восстановлением"
+    )
+
+
+class BackupRestoreResponse(BaseModel):
+    success: bool
+    message: str
+    tables_restored: Optional[int] = None
+    records_restored: Optional[int] = None
+
+
+class BackupDeleteResponse(BaseModel):
+    success: bool
+    message: str
