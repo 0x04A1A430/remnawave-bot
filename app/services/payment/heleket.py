@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import secrets
 import time
 from datetime import datetime, timezone, timedelta
@@ -14,8 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.models import PaymentMethod, TransactionType
 from app.utils.user_utils import format_referrer_info
-
-logger = logging.getLogger(__name__)
+from app.utils.payment_logger import payment_logger as logger
 
 
 class HeleketPaymentMixin:

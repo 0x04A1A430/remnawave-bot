@@ -1,7 +1,7 @@
 """Mixin с логикой обработки платежей CryptoBot."""
 
 from __future__ import annotations
-import logging
+
 import math
 from dataclasses import dataclass
 from datetime import datetime
@@ -28,8 +28,7 @@ from app.services.subscription_renewal_service import (
 )
 from app.utils.currency_converter import currency_converter
 from app.utils.user_utils import format_referrer_info
-
-logger = logging.getLogger(__name__)
+from app.utils.payment_logger import payment_logger as logger
 
 
 renewal_service = SubscriptionRenewalService()

@@ -263,7 +263,6 @@ class Settings(BaseSettings):
     PAYMENT_VERIFICATION_AUTO_CHECK_INTERVAL_MINUTES: int = 10
 
     NALOGO_ENABLED: bool = False
-    NALOGO_RECEIPTS_ENABLED: bool = False
     NALOGO_INN: Optional[str] = None
     NALOGO_PASSWORD: Optional[str] = None
     NALOGO_DEVICE_ID: Optional[str] = None
@@ -426,7 +425,23 @@ class Settings(BaseSettings):
 
     LOG_LEVEL: str = "INFO"
     LOG_FILE: str = "logs/bot.log"
-    
+
+    # === Log Rotation Settings ===
+    LOG_ROTATION_ENABLED: bool = False  # По умолчанию старое поведение
+    LOG_ROTATION_TIME: str = "00:00"  # Время ротации (HH:MM)
+    LOG_ROTATION_KEEP_DAYS: int = 7  # Хранить архивы N дней
+    LOG_ROTATION_COMPRESS: bool = True  # Сжимать архивы gzip
+    LOG_ROTATION_SEND_TO_TELEGRAM: bool = False  # Отправлять в канал
+    LOG_ROTATION_CHAT_ID: Optional[str] = None  # Канал для логов (или BACKUP_SEND_CHAT_ID)
+    LOG_ROTATION_TOPIC_ID: Optional[int] = None  # Топик в канале
+
+    # Пути к лог-файлам (при LOG_ROTATION_ENABLED=true)
+    LOG_DIR: str = "logs"
+    LOG_INFO_FILE: str = "info.log"
+    LOG_WARNING_FILE: str = "warning.log"
+    LOG_ERROR_FILE: str = "error.log"
+    LOG_PAYMENTS_FILE: str = "payments.log"
+
     DEBUG: bool = False
     WEBHOOK_URL: Optional[str] = None
     WEBHOOK_PATH: str = "/webhook"
@@ -1629,6 +1644,36 @@ class Settings(BaseSettings):
     def get_backup_archive_password(self) -> Optional[str]:
         password = (self.BACKUP_ARCHIVE_PASSWORD or "").strip()
         return password if password else None
+
+    # === Log Rotation Methods ===
+
+    def is_log_rotation_enabled(self) -> bool:
+        """Проверить, включена ли новая система ротации логов."""
+        return self.LOG_ROTATION_ENABLED
+
+    def get_log_rotation_chat_id(self) -> Optional[int]:
+        """Получить ID канала для отправки логов.
+
+        Если LOG_ROTATION_CHAT_ID не задан, использует BACKUP_SEND_CHAT_ID.
+        """
+        chat_id = self.LOG_ROTATION_CHAT_ID or self.BACKUP_SEND_CHAT_ID
+        if not chat_id:
+            return None
+
+        try:
+            return int(chat_id)
+        except (ValueError, TypeError):
+            return None
+
+    def get_log_rotation_topic_id(self) -> Optional[int]:
+        """Получить ID топика для отправки логов.
+
+        Если LOG_ROTATION_TOPIC_ID не задан, использует BACKUP_SEND_TOPIC_ID.
+        """
+        topic_id = self.LOG_ROTATION_TOPIC_ID
+        if topic_id is not None:
+            return topic_id
+        return self.BACKUP_SEND_TOPIC_ID
 
     def get_referral_settings(self) -> Dict:
         return {

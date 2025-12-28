@@ -1083,6 +1083,14 @@ def get_user_management_keyboard(user_id: int, user_status: str, language: str =
         )
     ])
 
+    # Кнопка управления ограничениями
+    keyboard.append([
+        InlineKeyboardButton(
+            text=_t(texts, "ADMIN_USER_RESTRICTIONS", "⚠️ Ограничить"),
+            callback_data=f"admin_user_restrictions_{user_id}"
+        )
+    ])
+
     if user_status == "active":
         keyboard.append([
             InlineKeyboardButton(
@@ -1115,6 +1123,65 @@ def get_user_management_keyboard(user_id: int, user_status: str, language: str =
 
     keyboard.append([
         InlineKeyboardButton(text=texts.BACK, callback_data=back_callback)
+    ])
+
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def get_user_restrictions_keyboard(
+    user_id: int,
+    restriction_topup: bool,
+    restriction_subscription: bool,
+    language: str = "ru"
+) -> InlineKeyboardMarkup:
+    """Клавиатура управления ограничениями пользователя."""
+    texts = get_texts(language)
+
+    keyboard = []
+
+    # Toggle для ограничения пополнения
+    topup_emoji = "🚫" if restriction_topup else "✅"
+    topup_text = f"{topup_emoji} Пополнение"
+    keyboard.append([
+        InlineKeyboardButton(
+            text=topup_text,
+            callback_data=f"admin_user_restriction_toggle_topup_{user_id}"
+        )
+    ])
+
+    # Toggle для ограничения подписки
+    sub_emoji = "🚫" if restriction_subscription else "✅"
+    sub_text = f"{sub_emoji} Продление/покупка"
+    keyboard.append([
+        InlineKeyboardButton(
+            text=sub_text,
+            callback_data=f"admin_user_restriction_toggle_sub_{user_id}"
+        )
+    ])
+
+    # Кнопка изменения причины
+    keyboard.append([
+        InlineKeyboardButton(
+            text="📝 Изменить причину",
+            callback_data=f"admin_user_restriction_reason_{user_id}"
+        )
+    ])
+
+    # Кнопка снятия всех ограничений (если есть хотя бы одно)
+    if restriction_topup or restriction_subscription:
+        keyboard.append([
+            InlineKeyboardButton(
+                text="🔓 Снять все ограничения",
+                callback_data=f"admin_user_restriction_clear_{user_id}"
+            )
+        ])
+
+    # Кнопка назад
+    keyboard.append([
+        InlineKeyboardButton(
+            text=texts.BACK,
+            callback_data=f"admin_user_manage_{user_id}"
+        )
     ])
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)

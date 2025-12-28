@@ -3276,6 +3276,81 @@ async def add_ticket_sla_columns():
         return False
 
 
+async def add_user_restriction_columns() -> bool:
+    """Добавить колонки ограничений пользователей в таблицу users."""
+    try:
+        col_topup = await check_column_exists('users', 'restriction_topup')
+        col_sub = await check_column_exists('users', 'restriction_subscription')
+        col_reason = await check_column_exists('users', 'restriction_reason')
+
+        if col_topup and col_sub and col_reason:
+            logger.info("ℹ️ Колонки ограничений пользователей уже существуют")
+            return True
+
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if not col_topup:
+                if db_type == 'sqlite':
+                    await conn.execute(text(
+                        "ALTER TABLE users ADD COLUMN restriction_topup BOOLEAN DEFAULT 0 NOT NULL"
+                    ))
+                elif db_type == 'postgresql':
+                    await conn.execute(text(
+                        "ALTER TABLE users ADD COLUMN restriction_topup BOOLEAN DEFAULT FALSE NOT NULL"
+                    ))
+                elif db_type == 'mysql':
+                    await conn.execute(text(
+                        "ALTER TABLE users ADD COLUMN restriction_topup BOOLEAN DEFAULT FALSE NOT NULL"
+                    ))
+                else:
+                    logger.error(f"Неподдерживаемый тип БД: {db_type}")
+                    return False
+                logger.info("✅ Добавлена колонка users.restriction_topup")
+
+            if not col_sub:
+                if db_type == 'sqlite':
+                    await conn.execute(text(
+                        "ALTER TABLE users ADD COLUMN restriction_subscription BOOLEAN DEFAULT 0 NOT NULL"
+                    ))
+                elif db_type == 'postgresql':
+                    await conn.execute(text(
+                        "ALTER TABLE users ADD COLUMN restriction_subscription BOOLEAN DEFAULT FALSE NOT NULL"
+                    ))
+                elif db_type == 'mysql':
+                    await conn.execute(text(
+                        "ALTER TABLE users ADD COLUMN restriction_subscription BOOLEAN DEFAULT FALSE NOT NULL"
+                    ))
+                else:
+                    logger.error(f"Неподдерживаемый тип БД: {db_type}")
+                    return False
+                logger.info("✅ Добавлена колонка users.restriction_subscription")
+
+            if not col_reason:
+                if db_type == 'sqlite':
+                    await conn.execute(text(
+                        "ALTER TABLE users ADD COLUMN restriction_reason VARCHAR(500) NULL"
+                    ))
+                elif db_type == 'postgresql':
+                    await conn.execute(text(
+                        "ALTER TABLE users ADD COLUMN restriction_reason VARCHAR(500) NULL"
+                    ))
+                elif db_type == 'mysql':
+                    await conn.execute(text(
+                        "ALTER TABLE users ADD COLUMN restriction_reason VARCHAR(500) NULL"
+                    ))
+                else:
+                    logger.error(f"Неподдерживаемый тип БД: {db_type}")
+                    return False
+                logger.info("✅ Добавлена колонка users.restriction_reason")
+
+            return True
+
+    except Exception as e:
+        logger.error(f"Ошибка добавления колонок ограничений пользователей: {e}")
+        return False
+
+
 async def add_subscription_crypto_link_column() -> bool:
     column_exists = await check_column_exists('subscriptions', 'subscription_crypto_link')
     if column_exists:
@@ -5042,6 +5117,13 @@ async def run_universal_migration():
         else:
             logger.warning("⚠️ Проблемы с добавлением колонки purchased_traffic_gb")
 
+        logger.info("=== ДОБАВЛЕНИЕ КОЛОНОК ОГРАНИЧЕНИЙ ПОЛЬЗОВАТЕЛЕЙ ===")
+        restrictions_added = await add_user_restriction_columns()
+        if restrictions_added:
+            logger.info("✅ Колонки ограничений пользователей готовы")
+        else:
+            logger.warning("⚠️ Проблемы с добавлением колонок ограничений пользователей")
+
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ АУДИТА ПОДДЕРЖКИ ===")
         try:
             async with engine.begin() as conn:
@@ -5226,6 +5308,9 @@ async def check_migration_status():
             "subscription_crypto_link_column": False,
             "subscription_modem_enabled_column": False,
             "subscription_purchased_traffic_column": False,
+            "users_restriction_topup_column": False,
+            "users_restriction_subscription_column": False,
+            "users_restriction_reason_column": False,
             "contest_templates_prize_type_column": False,
             "contest_templates_prize_value_column": False,
             "discount_offers_table": False,
@@ -5290,6 +5375,9 @@ async def check_migration_status():
         status["subscription_crypto_link_column"] = await check_column_exists('subscriptions', 'subscription_crypto_link')
         status["subscription_modem_enabled_column"] = await check_column_exists('subscriptions', 'modem_enabled')
         status["subscription_purchased_traffic_column"] = await check_column_exists('subscriptions', 'purchased_traffic_gb')
+        status["users_restriction_topup_column"] = await check_column_exists('users', 'restriction_topup')
+        status["users_restriction_subscription_column"] = await check_column_exists('users', 'restriction_subscription')
+        status["users_restriction_reason_column"] = await check_column_exists('users', 'restriction_reason')
         status["contest_templates_prize_type_column"] = await check_column_exists('contest_templates', 'prize_type')
         status["contest_templates_prize_value_column"] = await check_column_exists('contest_templates', 'prize_value')
 

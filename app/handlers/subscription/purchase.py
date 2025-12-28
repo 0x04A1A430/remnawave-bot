@@ -585,6 +585,23 @@ async def activate_trial(
 
     texts = get_texts(db_user.language)
 
+    # Проверка ограничения на покупку/продление подписки
+    if getattr(db_user, 'restriction_subscription', False):
+        reason = getattr(db_user, 'restriction_reason', None) or "Действие ограничено администратором"
+        support_url = settings.get_support_contact_url()
+        keyboard = []
+        if support_url:
+            keyboard.append([types.InlineKeyboardButton(text="🆘 Обжаловать", url=support_url)])
+        keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data="subscription")])
+
+        await callback.message.edit_text(
+            f"🚫 <b>Активация подписки ограничена</b>\n\n{reason}\n\n"
+            "Если вы считаете это ошибкой, вы можете обжаловать решение.",
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+        )
+        await callback.answer()
+        return
+
     if db_user.subscription or db_user.has_had_paid_subscription:
         await callback.message.edit_text(
             texts.TRIAL_ALREADY_USED,
@@ -1981,6 +1998,24 @@ async def confirm_purchase(
             )
         except Exception as e:
             logger.error(f"Ошибка при отправке сообщения о блокировке: {e}")
+        return
+
+    # Проверка ограничения на покупку/продление подписки
+    if getattr(db_user, 'restriction_subscription', False):
+        reason = getattr(db_user, 'restriction_reason', None) or "Действие ограничено администратором"
+        texts = get_texts(db_user.language)
+        support_url = settings.get_support_contact_url()
+        keyboard = []
+        if support_url:
+            keyboard.append([types.InlineKeyboardButton(text="🆘 Обжаловать", url=support_url)])
+        keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data="subscription")])
+
+        await callback.message.edit_text(
+            f"🚫 <b>Покупка/продление подписки ограничено</b>\n\n{reason}\n\n"
+            "Если вы считаете это ошибкой, вы можете обжаловать решение.",
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+        )
+        await callback.answer()
         return
 
     data = await state.get_data()

@@ -7,7 +7,6 @@
 
 from __future__ import annotations
 
-import logging
 from types import SimpleNamespace
 from typing import Any
 
@@ -25,8 +24,7 @@ from app.services.subscription_checkout_service import (
 )
 from app.services.user_cart_service import user_cart_service
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button
-
-logger = logging.getLogger(__name__)
+from app.utils.payment_logger import payment_logger as logger
 
 
 class PaymentCommonMixin:

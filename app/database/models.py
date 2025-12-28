@@ -690,6 +690,16 @@ class User(Base):
     poll_responses = relationship("PollResponse", back_populates="user")
     last_pinned_message_id = Column(Integer, nullable=True)
 
+    # Ограничения пользователя
+    restriction_topup = Column(Boolean, default=False, nullable=False)  # Запрет пополнения
+    restriction_subscription = Column(Boolean, default=False, nullable=False)  # Запрет продления/покупки
+    restriction_reason = Column(String(500), nullable=True)  # Причина ограничения
+
+    @property
+    def has_restrictions(self) -> bool:
+        """Проверить, есть ли у пользователя активные ограничения."""
+        return self.restriction_topup or self.restriction_subscription
+
     @property
     def balance_rubles(self) -> float:
         return self.balance_kopeks / 100
