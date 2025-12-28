@@ -139,6 +139,24 @@ async def process_cloudpayments_payment_amount(
     """
     texts = get_texts(db_user.language)
 
+    # Проверка ограничения на пополнение
+    if getattr(db_user, 'restriction_topup', False):
+        reason = getattr(db_user, 'restriction_reason', None) or "Действие ограничено администратором"
+        support_url = settings.get_support_contact_url()
+        keyboard = []
+        if support_url:
+            keyboard.append([InlineKeyboardButton(text="🆘 Обжаловать", url=support_url)])
+        keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data="menu_balance")])
+
+        await message.answer(
+            f"🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\n"
+            "Если вы считаете это ошибкой, вы можете обжаловать решение.",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
+            parse_mode="HTML"
+        )
+        await state.clear()
+        return
+
     if not settings.is_cloudpayments_enabled():
         await message.answer(
             texts.t("CLOUDPAYMENTS_NOT_AVAILABLE", "CloudPayments временно недоступен"),
@@ -186,6 +204,23 @@ async def start_cloudpayments_payment(
     Shows amount input prompt or quick amount buttons.
     """
     texts = get_texts(db_user.language)
+
+    # Проверка ограничения на пополнение
+    if getattr(db_user, 'restriction_topup', False):
+        reason = getattr(db_user, 'restriction_reason', None) or "Действие ограничено администратором"
+        support_url = settings.get_support_contact_url()
+        keyboard = []
+        if support_url:
+            keyboard.append([InlineKeyboardButton(text="🆘 Обжаловать", url=support_url)])
+        keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data="menu_balance")])
+
+        await callback.message.edit_text(
+            f"🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\n"
+            "Если вы считаете это ошибкой, вы можете обжаловать решение.",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
+        )
+        await callback.answer()
+        return
 
     if not settings.is_cloudpayments_enabled():
         await callback.answer(

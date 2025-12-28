@@ -1651,5 +1651,10 @@
   "MODEM_PERIOD_NOTE": "\nℹ️ Days until subscription ends: <b>{days}</b>\nAfter renewal, modem will need to be paid again.",
   "MODEM_PRICE_WITH_DISCOUNT": "Cost: <s>{base_price}</s> <b>{final_price}</b> (for {months} months)\n🎁 Discount {discount}%: -{discount_amount}",
   "MODEM_PRICE_NO_DISCOUNT": "Cost: {price} (for {months} months)",
-  "MODEM_CONFIRM_ENABLE_BASE": "📡 <b>Confirm modem connection</b>\n\n{price_text}\n\nWhen connecting a modem:\n• An additional device will be added to your subscription\n• Monthly fee will increase by {monthly_price}\n\nConfirm connection?"
+  "MODEM_CONFIRM_ENABLE_BASE": "📡 <b>Confirm modem connection</b>\n\n{price_text}\n\nWhen connecting a modem:\n• An additional device will be added to your subscription\n• Monthly fee will increase by {monthly_price}\n\nConfirm connection?",
+
+  "ADMIN_USER_RESTRICTIONS": "⚠️ Restrict",
+  "USER_RESTRICTION_TOPUP_BLOCKED": "🚫 <b>Top-up restricted</b>\n\n{reason}\n\nIf you believe this is an error, you can appeal the decision.",
+  "USER_RESTRICTION_SUBSCRIPTION_BLOCKED": "🚫 <b>Subscription purchase/renewal restricted</b>\n\n{reason}\n\nIf you believe this is an error, you can appeal the decision.",
+  "USER_RESTRICTION_APPEAL_BUTTON": "🆘 Appeal"
 }
