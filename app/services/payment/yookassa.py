@@ -969,7 +969,10 @@ class YooKassaPaymentMixin:
 
             # Создаем чек через NaloGO (если NALOGO_ENABLED=true)
             if hasattr(self, "nalogo_service") and self.nalogo_service:
-                await self._create_nalogo_receipt(payment)
+                await self._create_nalogo_receipt(
+                    payment,
+                    telegram_user_id=user.telegram_id if user else None,
+                )
 
             return True
 
@@ -1024,6 +1027,7 @@ class YooKassaPaymentMixin:
     async def _create_nalogo_receipt(
         self,
         payment: "YooKassaPayment",
+        telegram_user_id: Optional[int] = None,
     ) -> None:
         """Создание чека через NaloGO для успешного платежа."""
         if not hasattr(self, "nalogo_service") or not self.nalogo_service:
@@ -1032,13 +1036,18 @@ class YooKassaPaymentMixin:
 
         try:
             amount_rubles = payment.amount_kopeks / 100
-            receipt_name = "Интернет-сервис - Пополнение баланса"
+            # Формируем описание из настроек (включает сумму и ID пользователя)
+            receipt_name = settings.get_balance_payment_description(
+                payment.amount_kopeks, telegram_user_id
+            )
 
             receipt_uuid = await self.nalogo_service.create_receipt(
                 name=receipt_name,
                 amount=amount_rubles,
                 quantity=1,
                 payment_id=payment.yookassa_payment_id,
+                telegram_user_id=telegram_user_id,
+                amount_kopeks=payment.amount_kopeks,
             )
 
             if receipt_uuid:

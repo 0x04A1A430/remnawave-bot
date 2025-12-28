@@ -164,13 +164,31 @@ class NalogoQueueService:
 
             # Пытаемся отправить чек
             try:
+                # Восстанавливаем описание из сохранённых данных
+                telegram_user_id = receipt_data.get("telegram_user_id")
+                amount_kopeks = receipt_data.get("amount_kopeks")
+
+                # Формируем описание заново из настроек (если есть данные)
+                if amount_kopeks is not None:
+                    receipt_name = settings.get_balance_payment_description(
+                        amount_kopeks, telegram_user_id
+                    )
+                else:
+                    # Fallback на сохранённое имя
+                    receipt_name = receipt_data.get(
+                        "name",
+                        settings.get_balance_payment_description(int(amount * 100), telegram_user_id)
+                    )
+
                 receipt_uuid = await self._nalogo_service.create_receipt(
-                    name=receipt_data.get("name", "Интернет-сервис - Пополнение баланса"),
+                    name=receipt_name,
                     amount=amount,
                     quantity=receipt_data.get("quantity", 1),
                     client_info=receipt_data.get("client_info"),
                     payment_id=payment_id,
                     queue_on_failure=False,  # Не добавлять в очередь повторно автоматически
+                    telegram_user_id=telegram_user_id,
+                    amount_kopeks=amount_kopeks,
                 )
 
                 if receipt_uuid:

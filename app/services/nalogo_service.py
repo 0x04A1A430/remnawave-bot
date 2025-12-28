@@ -1,11 +1,11 @@
 import logging
-from datetime import datetime
-from zoneinfo import ZoneInfo
+from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any
 from decimal import Decimal
 
-from nalogo import Client
-from nalogo.dto.income import IncomeClient, IncomeType
+# Используем локальную исправленную версию библиотеки
+from app.lib.nalogo import Client
+from app.lib.nalogo.dto.income import IncomeClient, IncomeType, MOSCOW_TZ
 
 from app.config import settings
 from app.utils.cache import cache
@@ -81,6 +81,8 @@ class NaloGoService:
         quantity: int,
         client_info: Optional[Dict[str, Any]],
         payment_id: Optional[str] = None,
+        telegram_user_id: Optional[int] = None,
+        amount_kopeks: Optional[int] = None,
     ) -> bool:
         """Добавить чек в очередь для отложенной отправки."""
         receipt_data = {
@@ -89,6 +91,8 @@ class NaloGoService:
             "quantity": quantity,
             "client_info": client_info,
             "payment_id": payment_id,
+            "telegram_user_id": telegram_user_id,
+            "amount_kopeks": amount_kopeks,
             "created_at": datetime.now().isoformat(),
             "attempts": 0,
         }
@@ -129,6 +133,8 @@ class NaloGoService:
         client_info: Optional[Dict[str, Any]] = None,
         payment_id: Optional[str] = None,
         queue_on_failure: bool = True,
+        telegram_user_id: Optional[int] = None,
+        amount_kopeks: Optional[int] = None,
     ) -> Optional[str]:
         """Создание чека о доходе.
 
@@ -139,6 +145,8 @@ class NaloGoService:
             client_info: Информация о клиенте (опционально)
             payment_id: ID платежа для логирования
             queue_on_failure: Добавить в очередь при временной недоступности
+            telegram_user_id: Telegram ID пользователя для формирования описания
+            amount_kopeks: Сумма в копейках для формирования описания
 
         Returns:
             UUID чека или None при ошибке
@@ -154,7 +162,10 @@ class NaloGoService:
                 if not auth_success:
                     # Если сервис недоступен — добавляем в очередь
                     if queue_on_failure:
-                        await self._queue_receipt(name, amount, quantity, client_info, payment_id)
+                        await self._queue_receipt(
+                            name, amount, quantity, client_info, payment_id,
+                            telegram_user_id, amount_kopeks
+                        )
                     return None
 
             income_api = self.client.income()
@@ -169,16 +180,12 @@ class NaloGoService:
                     inn=client_info.get("inn")
                 )
 
-            # Используем время из настроек (TZ env)
-            local_tz = ZoneInfo(settings.TIMEZONE)
-            local_time = datetime.now(local_tz)
-
+            # Библиотека использует UTC время автоматически
             result = await income_api.create(
                 name=name,
                 amount=Decimal(str(amount)),
                 quantity=quantity,
                 client=income_client,
-                operation_time=local_time
             )
 
             receipt_uuid = result.get("approvedReceiptUuid")
@@ -196,7 +203,10 @@ class NaloGoService:
                     f"(payment_id={payment_id}, сумма={amount}₽)"
                 )
                 if queue_on_failure:
-                    await self._queue_receipt(name, amount, quantity, client_info, payment_id)
+                    await self._queue_receipt(
+                        name, amount, quantity, client_info, payment_id,
+                        telegram_user_id, amount_kopeks
+                    )
             else:
                 logger.error("Ошибка создания чека в NaloGO: %s", error, exc_info=True)
             return None

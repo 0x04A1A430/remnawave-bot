@@ -20,7 +20,8 @@ python-multipart==0.0.9
 yookassa==3.9.0
 
 # NaloGO для чеков в налоговую
-nalogo
+# nalogo - используем локальную исправленную версию в app/lib/nalogo/
+httpx  # зависимость для nalogo
 
 # Логирование и мониторинг
 structlog==23.2.0
