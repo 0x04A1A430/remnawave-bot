@@ -18,6 +18,7 @@ from app.config import settings
 from app.database.crud.subscription import get_subscriptions_statistics
 from app.database.database import AsyncSessionLocal
 from app.database.models import (
+    PaymentMethod,
     Subscription,
     SubscriptionConversion,
     SubscriptionStatus,
@@ -499,6 +500,11 @@ class ReportingService:
             Transaction.created_at >= start_utc,
             Transaction.created_at < end_utc,
             self._exclude_referral_deposits_condition(),
+            # Исключаем ручные (админские) пополнения из статистики
+            or_(
+                Transaction.payment_method.is_(None),
+                Transaction.payment_method != PaymentMethod.MANUAL.value,
+            ),
         )
 
     async def _get_top_referrers(

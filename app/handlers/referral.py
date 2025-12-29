@@ -481,9 +481,11 @@ def register_handlers(dp: Dispatcher):
         F.data == "referral_analytics"
     )
     
+    async def handle_referral_list_page(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+        page = int(callback.data.split('_')[-1])
+        await show_detailed_referral_list(callback, db_user, db, page)
+
     dp.callback_query.register(
-        lambda callback, db_user, db: show_detailed_referral_list(
-            callback, db_user, db, int(callback.data.split('_')[-1])
-        ),
+        handle_referral_list_page,
         F.data.startswith("referral_list_page_")
     )

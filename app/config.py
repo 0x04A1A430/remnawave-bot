@@ -45,6 +45,12 @@ class Settings(BaseSettings):
     ADMIN_NOTIFICATIONS_CHAT_ID: Optional[str] = None
     ADMIN_NOTIFICATIONS_TOPIC_ID: Optional[int] = None
     ADMIN_NOTIFICATIONS_TICKET_TOPIC_ID: Optional[int] = None
+    ADMIN_NOTIFICATIONS_NALOG_TOPIC_ID: Optional[int] = None
+
+    # Настройки очереди чеков NaloGO
+    NALOGO_QUEUE_CHECK_INTERVAL: int = 300  # Интервал проверки очереди (секунды)
+    NALOGO_QUEUE_RECEIPT_DELAY: int = 3  # Задержка между отправкой чеков (секунды)
+    NALOGO_QUEUE_MAX_ATTEMPTS: int = 10  # Максимум попыток отправки чека
 
     ADMIN_REPORTS_ENABLED: bool = False
     ADMIN_REPORTS_CHAT_ID: Optional[str] = None
@@ -55,7 +61,8 @@ class Settings(BaseSettings):
     CHANNEL_LINK: Optional[str] = None
     CHANNEL_IS_REQUIRED_SUB: bool = False
     CHANNEL_DISABLE_TRIAL_ON_UNSUBSCRIBE: bool = True
-    
+    CHANNEL_REQUIRED_FOR_ALL: bool = False
+
     DATABASE_URL: Optional[str] = None
     
     POSTGRES_HOST: str = "postgres"
@@ -143,12 +150,31 @@ class Settings(BaseSettings):
     DEVICES_SELECTION_ENABLED: bool = True
     DEVICES_SELECTION_DISABLED_AMOUNT: Optional[int] = None
 
+    # Настройки модема
+    MODEM_ENABLED: bool = False
+    MODEM_PRICE_PER_MONTH: int = 10000  # Цена модема в копейках за месяц
+    MODEM_PERIOD_DISCOUNTS: str = ""  # Скидки на модем: "месяцев:процент,месяцев:процент" (напр. "3:10,6:15,12:20")
+
     BASE_PROMO_GROUP_PERIOD_DISCOUNTS_ENABLED: bool = False
     BASE_PROMO_GROUP_PERIOD_DISCOUNTS: str = ""
 
     TRAFFIC_SELECTION_MODE: str = "selectable"
     FIXED_TRAFFIC_LIMIT_GB: int = 100
-    BUY_TRAFFIC_BUTTON_VISIBLE: bool = True 
+    BUY_TRAFFIC_BUTTON_VISIBLE: bool = True
+    
+    # Настройки докупки трафика
+    TRAFFIC_TOPUP_ENABLED: bool = True  # Включить/выключить функцию докупки трафика
+    # Пакеты для докупки трафика (формат: "гб:цена:enabled", пустая строка = использовать TRAFFIC_PACKAGES_CONFIG)
+    TRAFFIC_TOPUP_PACKAGES_CONFIG: str = ""
+    
+    # Настройки сброса трафика
+    # Режимы расчета цены сброса:
+    # "period" - фиксированная цена = стоимость периода 30 дней (старое поведение)
+    # "traffic" - цена зависит от текущего лимита трафика (цена пакета трафика)
+    # "traffic_with_purchased" - цена = базовый трафик + докупленный трафик (рекомендуется)
+    TRAFFIC_RESET_PRICE_MODE: str = "traffic_with_purchased"
+    # Базовая цена сброса в копейках (используется если режим "period" или как минимальная цена)
+    TRAFFIC_RESET_BASE_PRICE: int = 0  # 0 = использовать PERIOD_PRICES[30]
     
     REFERRAL_MINIMUM_TOPUP_KOPEKS: int = 10000 
     REFERRAL_FIRST_TOPUP_BONUS_KOPEKS: int = 10000 
@@ -237,13 +263,13 @@ class Settings(BaseSettings):
     PAYMENT_VERIFICATION_AUTO_CHECK_INTERVAL_MINUTES: int = 10
 
     NALOGO_ENABLED: bool = False
-    NALOGO_RECEIPTS_ENABLED: bool = False
     NALOGO_INN: Optional[str] = None
     NALOGO_PASSWORD: Optional[str] = None
     NALOGO_DEVICE_ID: Optional[str] = None
     NALOGO_STORAGE_PATH: str = "./nalogo_tokens.json"
 
     AUTO_PURCHASE_AFTER_TOPUP_ENABLED: bool = False
+    AUTO_ACTIVATE_AFTER_TOPUP_ENABLED: bool = False
 
     # Отключение превью ссылок в сообщениях бота
     DISABLE_WEB_PAGE_PREVIEW: bool = False
@@ -393,10 +419,29 @@ class Settings(BaseSettings):
     DEFAULT_LANGUAGE: str = "ru"
     AVAILABLE_LANGUAGES: str = "ru,en"
     LANGUAGE_SELECTION_ENABLED: bool = True
-    
+
+    # Округление цен при отображении (≤50 коп вниз, >50 коп вверх)
+    PRICE_ROUNDING_ENABLED: bool = True
+
     LOG_LEVEL: str = "INFO"
     LOG_FILE: str = "logs/bot.log"
-    
+
+    # === Log Rotation Settings ===
+    LOG_ROTATION_ENABLED: bool = False  # По умолчанию старое поведение
+    LOG_ROTATION_TIME: str = "00:00"  # Время ротации (HH:MM)
+    LOG_ROTATION_KEEP_DAYS: int = 7  # Хранить архивы N дней
+    LOG_ROTATION_COMPRESS: bool = True  # Сжимать архивы gzip
+    LOG_ROTATION_SEND_TO_TELEGRAM: bool = False  # Отправлять в канал
+    LOG_ROTATION_CHAT_ID: Optional[str] = None  # Канал для логов (или BACKUP_SEND_CHAT_ID)
+    LOG_ROTATION_TOPIC_ID: Optional[int] = None  # Топик в канале
+
+    # Пути к лог-файлам (при LOG_ROTATION_ENABLED=true)
+    LOG_DIR: str = "logs"
+    LOG_INFO_FILE: str = "info.log"
+    LOG_WARNING_FILE: str = "warning.log"
+    LOG_ERROR_FILE: str = "error.log"
+    LOG_PAYMENTS_FILE: str = "payments.log"
+
     DEBUG: bool = False
     WEBHOOK_URL: Optional[str] = None
     WEBHOOK_PATH: str = "/webhook"
@@ -762,7 +807,17 @@ class Settings(BaseSettings):
             return normalized in {"1", "true", "yes", "on"}
 
         return bool(value)
-    
+
+    def is_auto_activate_after_topup_enabled(self) -> bool:
+        """Умная автоактивация после пополнения баланса (без корзины)."""
+        value = getattr(self, "AUTO_ACTIVATE_AFTER_TOPUP_ENABLED", False)
+
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            return normalized in {"1", "true", "yes", "on"}
+
+        return bool(value)
+
     def get_available_languages(self) -> List[str]:
         defaults = ["ru", "en", "ua", "zh"]
 
@@ -802,10 +857,32 @@ class Settings(BaseSettings):
     def is_language_selection_enabled(self) -> bool:
         return bool(getattr(self, "LANGUAGE_SELECTION_ENABLED", True))
 
-    def format_price(self, price_kopeks: int) -> str:
-        sign = "-" if price_kopeks < 0 else ""
-        rubles, kopeks = divmod(abs(price_kopeks), 100)
+    def format_price(self, price_kopeks: int, round_kopeks: Optional[bool] = None) -> str:
+        """
+        Форматирует цену в копейках для отображения пользователю.
 
+        Args:
+            price_kopeks: Сумма в копейках
+            round_kopeks: Если True, округляет копейки (≤50 вниз, >50 вверх).
+                         Если None, использует настройку PRICE_ROUNDING_ENABLED.
+
+        Returns:
+            Отформатированная строка цены (например, "150 ₽")
+        """
+        # Используем настройку если не передано явно
+        should_round = round_kopeks if round_kopeks is not None else self.PRICE_ROUNDING_ENABLED
+
+        sign = "-" if price_kopeks < 0 else ""
+        abs_kopeks = abs(price_kopeks)
+        rubles, kopeks = divmod(abs_kopeks, 100)
+
+        if should_round:
+            # Округление: ≤50 коп вниз, >50 коп вверх
+            if kopeks > 50:
+                rubles += 1
+            return f"{sign}{rubles} ₽"
+
+        # Без округления - показываем точное значение
         if kopeks:
             value = f"{sign}{rubles}.{kopeks:02d}".rstrip("0").rstrip(".")
             return f"{value} ₽"
@@ -986,6 +1063,57 @@ class Settings(BaseSettings):
     def get_fixed_traffic_limit(self) -> int:
         return self.FIXED_TRAFFIC_LIMIT_GB
 
+    def is_traffic_topup_enabled(self) -> bool:
+        return self.TRAFFIC_TOPUP_ENABLED
+    
+    def get_traffic_topup_packages(self) -> List[Dict]:
+        """Возвращает пакеты для докупки трафика. Если не настроены - использует TRAFFIC_PACKAGES_CONFIG."""
+        config_str = self.TRAFFIC_TOPUP_PACKAGES_CONFIG.strip()
+        
+        if not config_str:
+            # Если не настроены отдельные пакеты для докупки - используем основные
+            return self.get_traffic_packages()
+        
+        packages = []
+        for package_config in config_str.split(','):
+            package_config = package_config.strip()
+            if not package_config:
+                continue
+            
+            parts = package_config.split(':')
+            if len(parts) >= 2:
+                try:
+                    gb = int(parts[0])
+                    price = int(parts[1])
+                    enabled = parts[2].lower() == 'true' if len(parts) > 2 else True
+                    packages.append({"gb": gb, "price": price, "enabled": enabled})
+                except (ValueError, IndexError):
+                    continue
+        
+        return packages if packages else self.get_traffic_packages()
+    
+    def get_traffic_topup_price(self, gb: Optional[int]) -> int:
+        """Возвращает цену докупки для указанного количества ГБ."""
+        packages = self.get_traffic_topup_packages()
+        enabled_packages = [pkg for pkg in packages if pkg["enabled"]]
+        
+        if not enabled_packages:
+            return 0
+        
+        # Ищем точное совпадение
+        for pkg in enabled_packages:
+            if pkg["gb"] == gb:
+                return pkg["price"]
+        
+        # Если не нашли - возвращаем 0
+        return 0
+    
+    def get_traffic_reset_price_mode(self) -> str:
+        return self.TRAFFIC_RESET_PRICE_MODE.lower()
+    
+    def get_traffic_reset_base_price(self) -> int:
+        return self.TRAFFIC_RESET_BASE_PRICE
+
     def is_devices_selection_enabled(self) -> bool:
         return self.DEVICES_SELECTION_ENABLED
 
@@ -1012,7 +1140,70 @@ class Settings(BaseSettings):
     def get_disabled_mode_device_limit(self) -> Optional[int]:
         return self.get_devices_selection_disabled_amount()
 
+    def is_modem_enabled(self) -> bool:
+        return bool(self.MODEM_ENABLED)
+
+    def get_modem_price_per_month(self) -> int:
+        try:
+            value = int(self.MODEM_PRICE_PER_MONTH)
+        except (TypeError, ValueError):
+            logger.warning(
+                "Некорректное значение MODEM_PRICE_PER_MONTH: %s",
+                self.MODEM_PRICE_PER_MONTH,
+            )
+            return 10000
+        return max(0, value)
+
+    def get_modem_period_discounts(self) -> Dict[int, int]:
+        """Возвращает скидки на модем по количеству месяцев: {месяцев: процент_скидки}"""
+        try:
+            config_str = (self.MODEM_PERIOD_DISCOUNTS or "").strip()
+            if not config_str:
+                return {}
+
+            discounts: Dict[int, int] = {}
+            for part in config_str.split(','):
+                part = part.strip()
+                if not part:
+                    continue
+
+                months_and_discount = part.split(':')
+                if len(months_and_discount) != 2:
+                    continue
+
+                months_str, discount_str = months_and_discount
+                try:
+                    months = int(months_str.strip())
+                    discount_percent = int(discount_str.strip())
+                except ValueError:
+                    continue
+
+                discounts[months] = max(0, min(100, discount_percent))
+
+            return discounts
+        except Exception:
+            return {}
+
+    def get_modem_period_discount(self, months: int) -> int:
+        """Возвращает процент скидки для указанного количества месяцев"""
+        if months <= 0:
+            return 0
+
+        discounts = self.get_modem_period_discounts()
+        
+        # Ищем точное совпадение или ближайшее меньшее
+        applicable_discount = 0
+        for discount_months, discount_percent in sorted(discounts.items()):
+            if months >= discount_months:
+                applicable_discount = discount_percent
+        
+        return applicable_discount
+
     def is_trial_paid_activation_enabled(self) -> bool:
+        # Если цена > 0, триал автоматически платный
+        # (TRIAL_PAYMENT_ENABLED теперь опционален - для обратной совместимости)
+        if self.TRIAL_ACTIVATION_PRICE > 0:
+            return True
         return bool(self.TRIAL_PAYMENT_ENABLED)
 
     def get_trial_activation_price(self) -> int:
@@ -1453,6 +1644,36 @@ class Settings(BaseSettings):
     def get_backup_archive_password(self) -> Optional[str]:
         password = (self.BACKUP_ARCHIVE_PASSWORD or "").strip()
         return password if password else None
+
+    # === Log Rotation Methods ===
+
+    def is_log_rotation_enabled(self) -> bool:
+        """Проверить, включена ли новая система ротации логов."""
+        return self.LOG_ROTATION_ENABLED
+
+    def get_log_rotation_chat_id(self) -> Optional[int]:
+        """Получить ID канала для отправки логов.
+
+        Если LOG_ROTATION_CHAT_ID не задан, использует BACKUP_SEND_CHAT_ID.
+        """
+        chat_id = self.LOG_ROTATION_CHAT_ID or self.BACKUP_SEND_CHAT_ID
+        if not chat_id:
+            return None
+
+        try:
+            return int(chat_id)
+        except (ValueError, TypeError):
+            return None
+
+    def get_log_rotation_topic_id(self) -> Optional[int]:
+        """Получить ID топика для отправки логов.
+
+        Если LOG_ROTATION_TOPIC_ID не задан, использует BACKUP_SEND_TOPIC_ID.
+        """
+        topic_id = self.LOG_ROTATION_TOPIC_ID
+        if topic_id is not None:
+            return topic_id
+        return self.BACKUP_SEND_TOPIC_ID
 
     def get_referral_settings(self) -> Dict:
         return {

@@ -34,8 +34,12 @@ from app.services.external_admin_service import ensure_external_admin_token
 from app.services.broadcast_service import broadcast_service
 from app.services.referral_contest_service import referral_contest_service
 from app.services.contest_rotation_service import contest_rotation_service
+from app.services.nalogo_queue_service import nalogo_queue_service
 from app.utils.startup_timeline import StartupTimeline
 from app.utils.timezone import TimezoneAwareFormatter
+from app.utils.log_handlers import LevelFilterHandler, ExcludePaymentFilter
+from app.utils.payment_logger import payment_logger, configure_payment_logger
+from app.services.log_rotation_service import log_rotation_service
 
 
 class GracefulExit:
@@ -54,17 +58,85 @@ async def main():
         timezone_name=settings.TIMEZONE,
     )
 
-    file_handler = logging.FileHandler(settings.LOG_FILE, encoding='utf-8')
-    file_handler.setFormatter(formatter)
+    log_handlers = []
 
-    stream_handler = logging.StreamHandler(sys.stdout)
-    stream_handler.setFormatter(formatter)
+    # === Инициализация системы логирования ===
+    if settings.is_log_rotation_enabled():
+        # Новая система: разделение по уровням + отдельный лог платежей
+        await log_rotation_service.initialize()
 
-    logging.basicConfig(
-        level=getattr(logging, settings.LOG_LEVEL),
-        handlers=[file_handler, stream_handler],
-    )
-    
+        log_dir = log_rotation_service.current_dir
+        log_dir.mkdir(parents=True, exist_ok=True)
+
+        # 1. Общий лог (bot.log) - все уровни, без платежей
+        bot_handler = logging.FileHandler(log_dir / "bot.log", encoding='utf-8')
+        bot_handler.setFormatter(formatter)
+        bot_handler.addFilter(ExcludePaymentFilter())
+        log_handlers.append(bot_handler)
+
+        # 2. INFO лог - только INFO уровень
+        info_handler = LevelFilterHandler(
+            str(log_dir / settings.LOG_INFO_FILE),
+            min_level=logging.INFO,
+            max_level=logging.INFO,
+        )
+        info_handler.setFormatter(formatter)
+        info_handler.addFilter(ExcludePaymentFilter())
+        log_handlers.append(info_handler)
+
+        # 3. WARNING лог - WARNING и выше
+        warning_handler = LevelFilterHandler(
+            str(log_dir / settings.LOG_WARNING_FILE),
+            min_level=logging.WARNING,
+        )
+        warning_handler.setFormatter(formatter)
+        warning_handler.addFilter(ExcludePaymentFilter())
+        log_handlers.append(warning_handler)
+
+        # 4. ERROR лог - только ERROR и CRITICAL
+        error_handler = LevelFilterHandler(
+            str(log_dir / settings.LOG_ERROR_FILE),
+            min_level=logging.ERROR,
+        )
+        error_handler.setFormatter(formatter)
+        error_handler.addFilter(ExcludePaymentFilter())
+        log_handlers.append(error_handler)
+
+        # 5. Payment лог - отдельный файл для платежей
+        payment_handler = logging.FileHandler(
+            log_dir / settings.LOG_PAYMENTS_FILE,
+            encoding='utf-8',
+        )
+        configure_payment_logger(payment_handler, formatter)
+
+        # 6. Консольный вывод
+        stream_handler = logging.StreamHandler(sys.stdout)
+        stream_handler.setFormatter(formatter)
+        log_handlers.append(stream_handler)
+
+        logging.basicConfig(
+            level=getattr(logging, settings.LOG_LEVEL),
+            handlers=log_handlers,
+        )
+
+        # Регистрируем хэндлеры для управления при ротации
+        log_rotation_service.register_handlers(log_handlers)
+
+    else:
+        # Старое поведение: один файл лога
+        file_handler = logging.FileHandler(settings.LOG_FILE, encoding='utf-8')
+        file_handler.setFormatter(formatter)
+        log_handlers.append(file_handler)
+
+        stream_handler = logging.StreamHandler(sys.stdout)
+        stream_handler.setFormatter(formatter)
+        log_handlers.append(stream_handler)
+
+        logging.basicConfig(
+            level=getattr(logging, settings.LOG_LEVEL),
+            handlers=log_handlers,
+        )
+
     # Установим более высокий уровень логирования для "мусорных" логов
     logging.getLogger("aiohttp.access").setLevel(logging.ERROR)
     logging.getLogger("aiohttp.client").setLevel(logging.WARNING)
@@ -73,7 +145,7 @@ async def main():
     logging.getLogger("aiogram").setLevel(logging.WARNING)
     logging.getLogger("uvicorn.access").setLevel(logging.ERROR)
     logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
-    
+
     logger = logging.getLogger(__name__)
     timeline = StartupTimeline(logger, "Bedolaga Remnawave Bot")
     timeline.log_banner(
@@ -245,6 +317,28 @@ async def main():
                 stage.warning(f"Ошибка запуска ротации игр: {e}")
                 logger.error(f"❌ Ошибка запуска ротации игр: {e}")
 
+        if settings.is_log_rotation_enabled():
+            async with timeline.stage(
+                "Ротация логов",
+                "📋",
+                success_message="Сервис ротации логов готов",
+            ) as stage:
+                try:
+                    log_rotation_service.set_bot(bot)
+                    await log_rotation_service.start()
+                    status = log_rotation_service.get_status()
+                    stage.log(f"Время ротации: {status.rotation_time}")
+                    stage.log(f"Хранение архивов: {status.keep_days} дней")
+                    if status.send_to_telegram:
+                        stage.log("Отправка в Telegram: включена")
+                    if status.next_rotation:
+                        from datetime import datetime
+                        next_dt = datetime.fromisoformat(status.next_rotation)
+                        stage.log(f"Следующая ротация: {next_dt.strftime('%d.%m.%Y %H:%M')}")
+                except Exception as e:
+                    stage.warning(f"Ошибка запуска сервиса ротации логов: {e}")
+                    logger.error(f"❌ Ошибка запуска сервиса ротации логов: {e}")
+
         async with timeline.stage(
             "Автосинхронизация RemnaWave",
             "🔄",
@@ -270,6 +364,11 @@ async def main():
 
         payment_service = PaymentService(bot)
         auto_payment_verification_service.set_payment_service(payment_service)
+
+        # Настройка сервиса очереди чеков NaloGO
+        if payment_service.nalogo_service:
+            nalogo_queue_service.set_nalogo_service(payment_service.nalogo_service)
+            nalogo_queue_service.set_bot(bot)
 
         verification_providers: list[str] = []
         auto_verification_active = False
@@ -330,6 +429,27 @@ async def main():
             auto_verification_active = auto_payment_verification_service.is_running()
             if auto_verification_active:
                 stage.log("Фоновая автопроверка запущена")
+
+        async with timeline.stage(
+            "Очередь чеков NaloGO",
+            "🧾",
+            success_message="Сервис очереди чеков запущен",
+        ) as stage:
+            if settings.is_nalogo_enabled():
+                try:
+                    await nalogo_queue_service.start()
+                    if nalogo_queue_service.is_running():
+                        queue_len = await payment_service.nalogo_service.get_queue_length()
+                        if queue_len > 0:
+                            stage.log(f"В очереди ожидает {queue_len} чек(ов)")
+                        stage.success("Фоновая обработка чеков активна")
+                    else:
+                        stage.skip("Сервис не запущен")
+                except Exception as e:
+                    stage.warning(f"Ошибка запуска очереди чеков: {e}")
+                    logger.error(f"❌ Ошибка запуска очереди чеков NaloGO: {e}")
+            else:
+                stage.skip("NaloGO отключен настройками")
 
         async with timeline.stage(
             "Внешняя админка",
@@ -645,6 +765,19 @@ async def main():
             await contest_rotation_service.stop()
         except Exception as e:
             logger.error(f"Ошибка остановки ротации игр: {e}")
+
+        if settings.is_log_rotation_enabled():
+            logger.info("ℹ️ Остановка сервиса ротации логов...")
+            try:
+                await log_rotation_service.stop()
+            except Exception as e:
+                logger.error(f"Ошибка остановки сервиса ротации логов: {e}")
+
+        logger.info("ℹ️ Остановка очереди чеков NaloGO...")
+        try:
+            await nalogo_queue_service.stop()
+        except Exception as e:
+            logger.error(f"Ошибка остановки очереди чеков NaloGO: {e}")
 
         logger.info("ℹ️ Остановка сервиса бекапов...")
         try:

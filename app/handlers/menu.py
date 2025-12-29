@@ -1238,39 +1238,68 @@ async def handle_activate_button(
     db_user: User,
     db: AsyncSession
 ):
+    """
+    Умная кнопка активации — система сама решает что делать:
+    - Если подписка активна — ничего не делать
+    - Если подписка истекла — продлить с теми же параметрами
+    - Если подписки нет — создать новую с дефолтными параметрами
+    Выбирает максимальный период, который можно оплатить из баланса.
+    """
     texts = get_texts(db_user.language)
-    
-    # Получить подписку пользователя
-    from app.database.crud.subscription import get_subscription_by_user_id
+
+    from app.database.crud.subscription import get_subscription_by_user_id, create_paid_subscription
+    from app.database.crud.server_squad import get_server_ids_by_uuids, get_available_server_squads
+    from app.database.crud.transaction import create_transaction
+    from app.database.crud.user import subtract_user_balance
+    from app.database.models import TransactionType, PaymentMethod
+    from app.services.subscription_service import SubscriptionService
+    from app.services.subscription_renewal_service import SubscriptionRenewalService
+
     subscription = await get_subscription_by_user_id(db, db_user.id)
-    
+
+    # Если подписка активна — ничего не делаем
     if subscription and subscription.status == "ACTIVE" and subscription.end_date > datetime.utcnow():
         await callback.answer(
             texts.t("SUBSCRIPTION_ALREADY_ACTIVE", "✅ Подписка уже активна!"),
             show_alert=True,
         )
         return
-    
-    # Параметры из подписки или дефолтные
-    device_limit = subscription.device_limit if subscription else settings.DEFAULT_DEVICE_LIMIT
-    traffic_limit_gb = subscription.traffic_limit_gb if subscription else 0
-    connected_squads = subscription.connected_squads if subscription else []
-    
-    # Получить IDs серверов из UUIDs
-    from app.database.crud.server_squad import get_server_ids_by_uuids
+
+    # Определяем параметры подписки
+    if subscription:
+        # Есть подписка (возможно истекшая) — берём её параметры
+        device_limit = subscription.device_limit or settings.DEFAULT_DEVICE_LIMIT
+        traffic_limit_gb = subscription.traffic_limit_gb or 0
+        connected_squads = subscription.connected_squads or []
+    else:
+        # Нет подписки — дефолтные параметры
+        device_limit = settings.DEFAULT_DEVICE_LIMIT
+        traffic_limit_gb = 0
+        connected_squads = []
+
+    # Если серверы не выбраны — берём бесплатные по умолчанию
+    if not connected_squads:
+        available_servers = await get_available_server_squads(db, promo_group_id=db_user.promo_group_id)
+        connected_squads = [
+            s.squad_uuid for s in available_servers
+            if s.is_available and s.price_kopeks == 0
+        ]
+        # Если бесплатных нет — берём первый доступный
+        if not connected_squads and available_servers:
+            connected_squads = [available_servers[0].squad_uuid]
+
     server_ids = await get_server_ids_by_uuids(db, connected_squads) if connected_squads else []
-    
+
     balance = db_user.balance_kopeks
-    available_periods = [int(p) for p in settings.AVAILABLE_SUBSCRIPTION_PERIODS]
-    
+    available_periods = sorted([int(p) for p in settings.AVAILABLE_SUBSCRIPTION_PERIODS], reverse=True)
+
+    subscription_service = SubscriptionService()
+
+    # Найти максимальный период <= баланса
     best_period = None
     best_price = 0
-    
-    from app.services.subscription_service import SubscriptionService
-    subscription_service = SubscriptionService()
-    
-    # Найти максимальный период, цена которого <= баланса
-    for period in sorted(available_periods, reverse=True):
+
+    for period in available_periods:
         price, _ = await subscription_service.calculate_subscription_price_with_months(
             period,
             traffic_limit_gb,
@@ -1283,31 +1312,88 @@ async def handle_activate_button(
             best_period = period
             best_price = price
             break
-    
-    if best_period:
-        # Создать новую подписку
-        from app.database.crud.subscription import create_paid_subscription
-        new_subscription = await create_paid_subscription(
-            db,
-            db_user.id,
-            best_period,
-            traffic_limit_gb=traffic_limit_gb,
-            device_limit=device_limit,
-            connected_squads=connected_squads,
-            update_server_counters=True
+
+    if not best_period:
+        # Показать сколько не хватает для минимального периода
+        min_period = min(available_periods) if available_periods else 30
+        min_price, _ = await subscription_service.calculate_subscription_price_with_months(
+            min_period, traffic_limit_gb, server_ids, device_limit, db, user=db_user
         )
-        
-        # Списать деньги
-        db_user.balance_kopeks -= best_price
-        await db.commit()
-        
+        missing = min_price - balance
         await callback.answer(
-            texts.t("ACTIVATION_SUCCESS", f"✅ Подписка активирована на {best_period} дней за {best_price//100} руб!"),
+            texts.t(
+                "INSUFFICIENT_FUNDS_DETAILED",
+                f"❌ Недостаточно средств. Не хватает {missing // 100} ₽"
+            ),
             show_alert=True,
         )
-    else:
+        return
+
+    try:
+        if subscription:
+            # Продление существующей подписки
+            renewal_service = SubscriptionRenewalService()
+            pricing = await renewal_service.calculate_pricing(
+                db, db_user, subscription, best_period
+            )
+
+            result = await renewal_service.finalize(
+                db, db_user, subscription,
+                pricing,
+                description=f"Автоматическое продление на {best_period} дней",
+                payment_method=PaymentMethod.BALANCE,
+            )
+
+            await callback.answer(
+                texts.t(
+                    "ACTIVATION_SUCCESS",
+                    f"✅ Подписка продлена на {best_period} дней за {best_price // 100} ₽!"
+                ),
+                show_alert=True,
+            )
+        else:
+            # Создание новой подписки
+            new_subscription = await create_paid_subscription(
+                db,
+                db_user.id,
+                best_period,
+                traffic_limit_gb=traffic_limit_gb,
+                device_limit=device_limit,
+                connected_squads=connected_squads,
+                update_server_counters=True
+            )
+
+            # Списать баланс правильно
+            await subtract_user_balance(
+                db, db_user, best_price,
+                f"Активация подписки на {best_period} дней"
+            )
+
+            # Создать пользователя в RemnaWave
+            await subscription_service.create_remnawave_user(db, new_subscription)
+
+            # Создать транзакцию
+            await create_transaction(
+                db=db,
+                user_id=db_user.id,
+                type=TransactionType.SUBSCRIPTION_PAYMENT,
+                amount_kopeks=best_price,
+                description=f"Активация подписки на {best_period} дней",
+                payment_method=PaymentMethod.BALANCE,
+            )
+
+            await callback.answer(
+                texts.t(
+                    "ACTIVATION_SUCCESS",
+                    f"✅ Подписка активирована на {best_period} дней за {best_price // 100} ₽!"
+                ),
+                show_alert=True,
+            )
+
+    except Exception as e:
+        logger.error(f"Ошибка автоматической активации для {db_user.telegram_id}: {e}")
         await callback.answer(
-            texts.t("INSUFFICIENT_FUNDS", "❌ Недостаточно средств для активации подписки"),
+            texts.t("ACTIVATION_ERROR", "❌ Ошибка активации. Попробуйте позже."),
             show_alert=True,
         )
 

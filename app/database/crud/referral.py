@@ -269,6 +269,176 @@ async def get_referral_statistics(db: AsyncSession) -> dict:
     }
 
 
+async def get_top_referrers_by_period(
+    db: AsyncSession,
+    period: str = "week",  # "week" или "month"
+    sort_by: str = "earnings",  # "earnings" или "invited"
+    limit: int = 20
+) -> list:
+    """
+    Получает топ рефереров за период.
+
+    Args:
+        period: "week" (7 дней) или "month" (30 дней)
+        sort_by: "earnings" (по заработку) или "invited" (по приглашённым)
+        limit: количество записей
+
+    Returns:
+        Список словарей с данными рефереров
+    """
+    from app.database.models import Transaction, TransactionType
+
+    now = datetime.utcnow()
+    if period == "week":
+        start_date = now - timedelta(days=7)
+    else:  # month
+        start_date = now - timedelta(days=30)
+
+    if sort_by == "invited":
+        # Топ по количеству приглашённых за период
+        referrals_result = await db.execute(
+            select(
+                User.referred_by_id.label('referrer_id'),
+                func.count(User.id).label('invited_count')
+            )
+            .where(
+                and_(
+                    User.referred_by_id.isnot(None),
+                    User.created_at >= start_date
+                )
+            )
+            .group_by(User.referred_by_id)
+            .order_by(func.count(User.id).desc())
+            .limit(limit)
+        )
+
+        top_data = []
+        for row in referrals_result:
+            # Получаем заработок за период для этого реферера
+            earnings_result = await db.execute(
+                select(func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0))
+                .where(
+                    and_(
+                        ReferralEarning.user_id == row.referrer_id,
+                        ReferralEarning.created_at >= start_date
+                    )
+                )
+            )
+            earnings = earnings_result.scalar() or 0
+
+            # Добавляем транзакции REFERRAL_REWARD
+            trans_earnings_result = await db.execute(
+                select(func.coalesce(func.sum(Transaction.amount_kopeks), 0))
+                .where(
+                    and_(
+                        Transaction.user_id == row.referrer_id,
+                        Transaction.type == TransactionType.REFERRAL_REWARD.value,
+                        Transaction.created_at >= start_date
+                    )
+                )
+            )
+            earnings += trans_earnings_result.scalar() or 0
+
+            top_data.append({
+                'referrer_id': row.referrer_id,
+                'invited_count': row.invited_count,
+                'earnings_kopeks': earnings
+            })
+    else:
+        # Топ по заработку за период
+        # Собираем заработки из ReferralEarning
+        referral_earnings_result = await db.execute(
+            select(
+                ReferralEarning.user_id.label('referrer_id'),
+                func.sum(ReferralEarning.amount_kopeks).label('ref_earnings')
+            )
+            .where(ReferralEarning.created_at >= start_date)
+            .group_by(ReferralEarning.user_id)
+        )
+        referral_earnings = {row.referrer_id: row.ref_earnings for row in referral_earnings_result}
+
+        # Добавляем транзакции REFERRAL_REWARD
+        transaction_earnings_result = await db.execute(
+            select(
+                Transaction.user_id.label('referrer_id'),
+                func.sum(Transaction.amount_kopeks).label('trans_earnings')
+            )
+            .where(
+                and_(
+                    Transaction.type == TransactionType.REFERRAL_REWARD.value,
+                    Transaction.created_at >= start_date
+                )
+            )
+            .group_by(Transaction.user_id)
+        )
+
+        # Объединяем заработки
+        combined_earnings = dict(referral_earnings)
+        for row in transaction_earnings_result:
+            if row.referrer_id in combined_earnings:
+                combined_earnings[row.referrer_id] += row.trans_earnings or 0
+            else:
+                combined_earnings[row.referrer_id] = row.trans_earnings or 0
+
+        # Сортируем и берём топ
+        sorted_referrers = sorted(
+            combined_earnings.items(),
+            key=lambda x: x[1],
+            reverse=True
+        )[:limit]
+
+        top_data = []
+        for referrer_id, earnings in sorted_referrers:
+            # Получаем количество приглашённых за период
+            invited_result = await db.execute(
+                select(func.count(User.id))
+                .where(
+                    and_(
+                        User.referred_by_id == referrer_id,
+                        User.created_at >= start_date
+                    )
+                )
+            )
+            invited_count = invited_result.scalar() or 0
+
+            top_data.append({
+                'referrer_id': referrer_id,
+                'invited_count': invited_count,
+                'earnings_kopeks': earnings
+            })
+
+    # Добавляем информацию о пользователях
+    result = []
+    for data in top_data:
+        user_result = await db.execute(
+            select(User.id, User.username, User.first_name, User.last_name, User.telegram_id)
+            .where(User.id == data['referrer_id'])
+        )
+        user = user_result.first()
+
+        if user:
+            display_name = ""
+            if user.first_name:
+                display_name = user.first_name
+                if user.last_name:
+                    display_name += f" {user.last_name}"
+            elif user.username:
+                display_name = f"@{user.username}"
+            else:
+                display_name = f"ID{user.telegram_id}"
+
+            result.append({
+                'user_id': user.id,
+                'telegram_id': user.telegram_id,
+                'username': user.username,
+                'display_name': display_name,
+                'invited_count': data['invited_count'],
+                'earnings_kopeks': data['earnings_kopeks']
+            })
+
+    return result
+
+
 async def get_user_referral_stats(db: AsyncSession, user_id: int) -> dict:
     
     invited_count_result = await db.execute(

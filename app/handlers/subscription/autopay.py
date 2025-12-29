@@ -79,7 +79,12 @@ from app.utils.promo_offer import (
     get_user_active_promo_discount_percent,
 )
 
-from .countries import _get_available_countries, _should_show_countries_management
+from .countries import (
+    _build_countries_selection_text,
+    _get_available_countries,
+    _get_preselected_free_countries,
+    _should_show_countries_management,
+)
 from .pricing import _build_subscription_period_prompt
 
 async def handle_autopay_menu(
@@ -260,9 +265,18 @@ async def _show_previous_configuration_step(
         data = await state.get_data()
         selected_countries = data.get('countries', [])
 
+        # Если страны не выбраны — автоматически предвыбираем бесплатные
+        if not selected_countries:
+            selected_countries = _get_preselected_free_countries(countries)
+            data['countries'] = selected_countries
+            await state.set_data(data)
+
+        # Формируем текст с описаниями сквадов
+        selection_text = _build_countries_selection_text(countries, texts.SELECT_COUNTRIES)
         await callback.message.edit_text(
-            texts.SELECT_COUNTRIES,
-            reply_markup=get_countries_keyboard(countries, selected_countries, db_user.language)
+            selection_text,
+            reply_markup=get_countries_keyboard(countries, selected_countries, db_user.language),
+            parse_mode="HTML"
         )
         await state.set_state(SubscriptionStates.selecting_countries)
         return

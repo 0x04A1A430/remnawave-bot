@@ -24,7 +24,8 @@ from app.database.crud.campaign import (
 from app.keyboards.admin import (
     get_admin_users_keyboard, get_user_management_keyboard,
     get_admin_pagination_keyboard, get_confirmation_keyboard,
-    get_admin_users_filters_keyboard, get_user_promo_group_keyboard
+    get_admin_users_filters_keyboard, get_user_promo_group_keyboard,
+    get_user_restrictions_keyboard
 )
 from app.localization.texts import get_texts
 from app.services.user_service import UserService
@@ -1241,6 +1242,15 @@ async def _render_user_subscription_overview(
             ]
         ]
 
+        if settings.is_modem_enabled():
+            modem_status = "✅" if getattr(subscription, 'modem_enabled', False) else "❌"
+            keyboard.append([
+                types.InlineKeyboardButton(
+                    text=f"📡 Модем ({modem_status})",
+                    callback_data=f"admin_user_modem_{user_id}"
+                )
+            ])
+
         if subscription.is_active:
             keyboard.append([
                 types.InlineKeyboardButton(
@@ -1632,6 +1642,20 @@ async def show_user_management(
                     )
     else:
         sections.append(texts.ADMIN_USER_MANAGEMENT_PROMO_GROUP_NONE)
+
+    # Показать ограничения пользователя если есть
+    restriction_topup = getattr(user, 'restriction_topup', False)
+    restriction_subscription = getattr(user, 'restriction_subscription', False)
+    if restriction_topup or restriction_subscription:
+        restriction_lines = ["⚠️ <b>Ограничения:</b>"]
+        if restriction_topup:
+            restriction_lines.append("  • 🚫 Пополнение запрещено")
+        if restriction_subscription:
+            restriction_lines.append("  • 🚫 Продление/покупка запрещена")
+        restriction_reason = getattr(user, 'restriction_reason', None)
+        if restriction_reason:
+            restriction_lines.append(f"  📝 Причина: {restriction_reason}")
+        sections.append("\n".join(restriction_lines))
 
     text = "\n\n".join(sections)
 
@@ -2746,6 +2770,236 @@ async def block_user(
     await callback.answer()
 
 
+# ============ УПРАВЛЕНИЕ ОГРАНИЧЕНИЯМИ ПОЛЬЗОВАТЕЛЯ ============
+
+@admin_required
+@error_handler
+async def show_user_restrictions(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    """Показать меню управления ограничениями пользователя."""
+    user_id = int(callback.data.split('_')[-1])
+    user = await get_user_by_id(db, user_id)
+
+    if not user:
+        await callback.answer("Пользователь не найден", show_alert=True)
+        return
+
+    texts = get_texts(db_user.language)
+
+    # Формируем текст с информацией об ограничениях
+    restriction_topup = getattr(user, 'restriction_topup', False)
+    restriction_subscription = getattr(user, 'restriction_subscription', False)
+    restriction_reason = getattr(user, 'restriction_reason', None)
+
+    text_lines = [
+        f"⚠️ <b>Ограничения пользователя</b>",
+        f"👤 {user.full_name}",
+        "",
+        f"✅ — разрешено, 🚫 — запрещено",
+        "",
+        f"{'🚫' if restriction_topup else '✅'} Пополнение баланса",
+        f"{'🚫' if restriction_subscription else '✅'} Продление/покупка подписки",
+    ]
+
+    if restriction_reason:
+        text_lines.append("")
+        text_lines.append(f"📝 <b>Причина:</b> {restriction_reason}")
+
+    keyboard = get_user_restrictions_keyboard(
+        user_id=user_id,
+        restriction_topup=restriction_topup,
+        restriction_subscription=restriction_subscription,
+        language=db_user.language
+    )
+
+    await callback.message.edit_text(
+        "\n".join(text_lines),
+        reply_markup=keyboard
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def toggle_user_restriction_topup(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    """Переключить ограничение на пополнение баланса."""
+    user_id = int(callback.data.split('_')[-1])
+    user = await get_user_by_id(db, user_id)
+
+    if not user:
+        await callback.answer("Пользователь не найден", show_alert=True)
+        return
+
+    # Переключаем ограничение
+    current_value = getattr(user, 'restriction_topup', False)
+    user.restriction_topup = not current_value
+    await db.commit()
+
+    action = "установлено" if user.restriction_topup else "снято"
+    await callback.answer(f"Ограничение на пополнение {action}", show_alert=False)
+
+    # Обновляем меню
+    await show_user_restrictions(callback, db_user, db)
+
+
+@admin_required
+@error_handler
+async def toggle_user_restriction_subscription(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    """Переключить ограничение на продление/покупку подписки."""
+    user_id = int(callback.data.split('_')[-1])
+    user = await get_user_by_id(db, user_id)
+
+    if not user:
+        await callback.answer("Пользователь не найден", show_alert=True)
+        return
+
+    # Переключаем ограничение
+    current_value = getattr(user, 'restriction_subscription', False)
+    user.restriction_subscription = not current_value
+    await db.commit()
+
+    action = "установлено" if user.restriction_subscription else "снято"
+    await callback.answer(f"Ограничение на подписку {action}", show_alert=False)
+
+    # Обновляем меню
+    await show_user_restrictions(callback, db_user, db)
+
+
+@admin_required
+@error_handler
+async def ask_restriction_reason(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext
+):
+    """Запросить ввод причины ограничения."""
+    user_id = int(callback.data.split('_')[-1])
+    user = await get_user_by_id(db, user_id)
+
+    if not user:
+        await callback.answer("Пользователь не найден", show_alert=True)
+        return
+
+    current_reason = getattr(user, 'restriction_reason', None) or ""
+
+    await state.set_state(AdminStates.editing_user_restriction_reason)
+    await state.update_data(restriction_user_id=user_id)
+
+    text = (
+        "📝 <b>Введите причину ограничения</b>\n\n"
+        "Эта причина будет показана пользователю при попытке "
+        "выполнить запрещённое действие.\n\n"
+    )
+    if current_reason:
+        text += f"Текущая причина: <i>{current_reason}</i>\n\n"
+    text += "Отправьте новую причину или /cancel для отмены:"
+
+    await callback.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="❌ Отмена", callback_data=f"admin_user_restrictions_{user_id}")]
+        ])
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def save_restriction_reason(
+    message: types.Message,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext
+):
+    """Сохранить причину ограничения."""
+    data = await state.get_data()
+    user_id = data.get("restriction_user_id")
+
+    if not user_id:
+        await message.answer("Ошибка: пользователь не найден")
+        await state.clear()
+        return
+
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        await message.answer("Ошибка: пользователь не найден")
+        await state.clear()
+        return
+
+    reason = message.text.strip()[:500]  # Ограничение 500 символов
+    user.restriction_reason = reason
+    await db.commit()
+
+    await state.clear()
+
+    # Формируем текст с обновлённой информацией
+    restriction_topup = getattr(user, 'restriction_topup', False)
+    restriction_subscription = getattr(user, 'restriction_subscription', False)
+
+    text_lines = [
+        f"✅ <b>Причина ограничения сохранена</b>",
+        "",
+        f"⚠️ <b>Ограничения пользователя</b>",
+        f"👤 {user.full_name}",
+        "",
+        f"{'🚫' if restriction_topup else '✅'} Пополнение баланса",
+        f"{'🚫' if restriction_subscription else '✅'} Продление/покупка подписки",
+        "",
+        f"📝 <b>Причина:</b> {reason}",
+    ]
+
+    keyboard = get_user_restrictions_keyboard(
+        user_id=user_id,
+        restriction_topup=restriction_topup,
+        restriction_subscription=restriction_subscription,
+        language=db_user.language
+    )
+
+    await message.answer(
+        "\n".join(text_lines),
+        reply_markup=keyboard
+    )
+
+
+@admin_required
+@error_handler
+async def clear_user_restrictions(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    """Снять все ограничения с пользователя."""
+    user_id = int(callback.data.split('_')[-1])
+    user = await get_user_by_id(db, user_id)
+
+    if not user:
+        await callback.answer("Пользователь не найден", show_alert=True)
+        return
+
+    # Снимаем все ограничения
+    user.restriction_topup = False
+    user.restriction_subscription = False
+    user.restriction_reason = None
+    await db.commit()
+
+    await callback.answer("Все ограничения сняты", show_alert=True)
+
+    # Обновляем меню
+    await show_user_restrictions(callback, db_user, db)
+
+
 @admin_required
 @error_handler
 async def show_inactive_users(
@@ -3800,6 +4054,68 @@ async def set_user_devices_button(
             ])
         )
     
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def toggle_user_modem(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    """Переключение модема для пользователя в админке."""
+    user_id = int(callback.data.split('_')[-1])
+    
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        await callback.answer("❌ Пользователь не найден", show_alert=True)
+        return
+    
+    subscription = user.subscription
+    if not subscription:
+        await callback.answer("❌ У пользователя нет подписки", show_alert=True)
+        return
+    
+    modem_enabled = getattr(subscription, 'modem_enabled', False) or False
+    
+    if modem_enabled:
+        # Отключаем модем
+        subscription.modem_enabled = False
+        if subscription.device_limit and subscription.device_limit > 1:
+            subscription.device_limit = subscription.device_limit - 1
+        action_text = "отключен"
+    else:
+        # Включаем модем
+        subscription.modem_enabled = True
+        subscription.device_limit = (subscription.device_limit or 1) + 1
+        action_text = "подключен"
+    
+    subscription.updated_at = datetime.utcnow()
+    await db.commit()
+    
+    # Обновляем в RemnaWave
+    try:
+        subscription_service = SubscriptionService()
+        await subscription_service.update_remnawave_user(db, subscription)
+    except Exception as e:
+        logger.error(f"Ошибка обновления RemnaWave при переключении модема: {e}")
+    
+    await db.refresh(subscription)
+    
+    modem_status = "✅ Подключен" if subscription.modem_enabled else "❌ Отключен"
+    
+    await callback.message.edit_text(
+        f"📡 <b>Модем {action_text}</b>\n\n"
+        f"Статус модема: {modem_status}\n"
+        f"Лимит устройств: {subscription.device_limit}",
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+            [types.InlineKeyboardButton(text="📱 Подписка и настройки", callback_data=f"admin_user_subscription_{user_id}")]
+        ]),
+        parse_mode="HTML"
+    )
+    
+    logger.info(f"Админ {db_user.telegram_id} {action_text} модем для пользователя {user_id}")
     await callback.answer()
 
 
@@ -4978,7 +5294,38 @@ def register_handlers(dp: Dispatcher):
         confirm_user_delete,
         F.data.startswith("admin_user_delete_") & ~F.data.contains("confirm")
     )
-    
+
+    # Регистрация хендлеров ограничений пользователя
+    dp.callback_query.register(
+        show_user_restrictions,
+        F.data.startswith("admin_user_restrictions_")
+    )
+
+    dp.callback_query.register(
+        toggle_user_restriction_topup,
+        F.data.startswith("admin_user_restriction_toggle_topup_")
+    )
+
+    dp.callback_query.register(
+        toggle_user_restriction_subscription,
+        F.data.startswith("admin_user_restriction_toggle_sub_")
+    )
+
+    dp.callback_query.register(
+        ask_restriction_reason,
+        F.data.startswith("admin_user_restriction_reason_")
+    )
+
+    dp.callback_query.register(
+        clear_user_restrictions,
+        F.data.startswith("admin_user_restriction_clear_")
+    )
+
+    dp.message.register(
+        save_restriction_reason,
+        AdminStates.editing_user_restriction_reason
+    )
+
     dp.callback_query.register(
         handle_users_list_pagination_fixed,
         F.data.startswith("admin_users_list_page_")
@@ -5196,6 +5543,11 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         set_user_devices_button,
         F.data.startswith("admin_user_devices_set_")
+    )
+    
+    dp.callback_query.register(
+        toggle_user_modem,
+        F.data.startswith("admin_user_modem_")
     )
     
     dp.message.register(

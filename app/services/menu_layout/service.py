@@ -715,6 +715,11 @@ class MenuLayoutService:
             if is_trial or traffic_limit <= 0:
                 return False
 
+        # traffic_topup_enabled - функция докупки трафика включена
+        if conditions.get("traffic_topup_enabled") is True:
+            if not settings.is_traffic_topup_enabled():
+                return False
+
         # is_admin
         if conditions.get("is_admin") is True:
             if not context.is_admin:

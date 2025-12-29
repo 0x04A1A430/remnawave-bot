@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import random
 from datetime import datetime, timedelta, time, timezone
 from typing import Dict, List, Optional
 from zoneinfo import ZoneInfo
@@ -18,17 +17,19 @@ from app.database.crud.contest import (
 )
 from app.database.database import AsyncSessionLocal
 from app.database.models import ContestTemplate, SubscriptionStatus, User
+from app.services.contests.enums import GameType, PrizeType, RoundStatus
+from app.services.contests.games import get_game_strategy
 
 logger = logging.getLogger(__name__)
 
-# Slugs for games
-GAME_QUEST = "quest_buttons"
-GAME_LOCKS = "lock_hack"
-GAME_CIPHER = "letter_cipher"
-GAME_SERVER = "server_lottery"
-GAME_BLITZ = "blitz_reaction"
-GAME_EMOJI = "emoji_guess"
-GAME_ANAGRAM = "anagram"
+# Legacy aliases for backward compatibility
+GAME_QUEST = GameType.QUEST_BUTTONS.value
+GAME_LOCKS = GameType.LOCK_HACK.value
+GAME_CIPHER = GameType.LETTER_CIPHER.value
+GAME_SERVER = GameType.SERVER_LOTTERY.value
+GAME_BLITZ = GameType.BLITZ_REACTION.value
+GAME_EMOJI = GameType.EMOJI_GUESS.value
+GAME_ANAGRAM = GameType.ANAGRAM.value
 
 
 DEFAULT_TEMPLATES = [
@@ -36,7 +37,8 @@ DEFAULT_TEMPLATES = [
         "slug": GAME_QUEST,
         "name": "Квест-кнопки",
         "description": "Найди секретную кнопку 3×3",
-        "prize_days": 1,
+        "prize_type": "days",
+        "prize_value": "1",
         "max_winners": 3,
         "attempts_per_user": 1,
         "times_per_day": 2,
@@ -48,7 +50,8 @@ DEFAULT_TEMPLATES = [
         "slug": GAME_LOCKS,
         "name": "Кнопочный взлом",
         "description": "Найди взломанную кнопку среди 20 замков",
-        "prize_days": 5,
+        "prize_type": "days",
+        "prize_value": "5",
         "max_winners": 1,
         "attempts_per_user": 1,
         "times_per_day": 2,
@@ -60,7 +63,8 @@ DEFAULT_TEMPLATES = [
         "slug": GAME_CIPHER,
         "name": "Шифр букв",
         "description": "Расшифруй слово по номерам",
-        "prize_days": 1,
+        "prize_type": "days",
+        "prize_value": "1",
         "max_winners": 1,
         "attempts_per_user": 1,
         "times_per_day": 2,
@@ -72,7 +76,8 @@ DEFAULT_TEMPLATES = [
         "slug": GAME_SERVER,
         "name": "Сервер-лотерея",
         "description": "Угадай доступный сервер",
-        "prize_days": 7,
+        "prize_type": "days",
+        "prize_value": "7",
         "max_winners": 1,
         "attempts_per_user": 1,
         "times_per_day": 1,
@@ -84,7 +89,8 @@ DEFAULT_TEMPLATES = [
         "slug": GAME_BLITZ,
         "name": "Блиц-реакция",
         "description": "Нажми кнопку за 10 секунд",
-        "prize_days": 1,
+        "prize_type": "days",
+        "prize_value": "1",
         "max_winners": 1,
         "attempts_per_user": 1,
         "times_per_day": 2,
@@ -96,7 +102,8 @@ DEFAULT_TEMPLATES = [
         "slug": GAME_EMOJI,
         "name": "Угадай сервис по эмодзи",
         "description": "Определи сервис по эмодзи",
-        "prize_days": 1,
+        "prize_type": "days",
+        "prize_value": "1",
         "max_winners": 1,
         "attempts_per_user": 1,
         "times_per_day": 1,
@@ -108,7 +115,8 @@ DEFAULT_TEMPLATES = [
         "slug": GAME_ANAGRAM,
         "name": "Анаграмма дня",
         "description": "Собери слово из букв",
-        "prize_days": 1,
+        "prize_type": "days",
+        "prize_value": "1",
         "max_winners": 1,
         "attempts_per_user": 1,
         "times_per_day": 1,
@@ -239,38 +247,12 @@ class ContestRotationService:
             return ZoneInfo("UTC")
 
     def _build_payload_for_template(self, tpl: ContestTemplate) -> Dict:
-        payload = tpl.payload or {}
-        if tpl.slug == GAME_QUEST:
-            rows = payload.get("rows", 3)
-            cols = payload.get("cols", 3)
-            total = rows * cols
-            secret_idx = random.randint(0, total - 1)
-            return {"rows": rows, "cols": cols, "secret_idx": secret_idx}
-        if tpl.slug == GAME_LOCKS:
-            total = payload.get("buttons", 20)
-            secret_idx = random.randint(0, max(0, total - 1))
-            return {"total": total, "secret_idx": secret_idx}
-        if tpl.slug == GAME_CIPHER:
-            words = payload.get("words") or ["VPN"]
-            word = random.choice(words)
-            codes = [str(ord(ch.upper()) - 64) for ch in word if ch.isalpha()]
-            return {"question": "-".join(codes), "answer": word.upper()}
-        if tpl.slug == GAME_SERVER:
-            flags = payload.get("flags") or ["🇸🇪","🇸🇬","🇺🇸","🇷🇺","🇩🇪","🇯🇵","🇧🇷","🇦🇺","🇨🇦","🇫🇷"]
-            secret_idx = random.randint(0, len(flags) - 1)
-            return {"flags": flags, "secret_idx": secret_idx}
-        if tpl.slug == GAME_BLITZ:
-            return {"timeout_seconds": payload.get("timeout_seconds", 10)}
-        if tpl.slug == GAME_EMOJI:
-            pairs = payload.get("pairs") or [{"question": "🔐📡🌐", "answer": "VPN"}]
-            pair = random.choice(pairs)
-            return pair
-        if tpl.slug == GAME_ANAGRAM:
-            words = payload.get("words") or ["SERVER"]
-            word = random.choice(words).upper()
-            shuffled = "".join(random.sample(word, len(word)))
-            return {"letters": shuffled, "answer": word}
-        return payload
+        """Build round-specific payload using game strategy."""
+        strategy = get_game_strategy(tpl.slug)
+        if strategy:
+            return strategy.build_payload(tpl.payload or {})
+        # Fallback for unknown game types
+        return tpl.payload or {}
 
     async def _announce_round_start(
         self,
@@ -281,11 +263,28 @@ class ContestRotationService:
         if not self.bot:
             return
 
+        from app.localization.texts import get_texts
+        texts = get_texts("ru")  # Default to ru for announcements
+
+        # Format prize display based on prize_type
+        prize_type = tpl.prize_type or PrizeType.DAYS.value
+        prize_value = tpl.prize_value or "1"
+
+        if prize_type == PrizeType.DAYS.value:
+            prize_display = f"{prize_value} {texts.t('DAYS', 'дн. подписки')}"
+        elif prize_type == PrizeType.BALANCE.value:
+            prize_display = f"{prize_value} коп."
+        elif prize_type == PrizeType.CUSTOM.value:
+            prize_display = prize_value
+        else:
+            prize_display = prize_value
+        
         text = (
-            f"🎲 Стартует игра: <b>{tpl.name}</b>\n"
-            f"Приз: {tpl.prize_days} дн. подписки • Победителей: {tpl.max_winners}\n"
-            f"Попыток/польз: {tpl.attempts_per_user}\n\n"
-            "Участвовать могут только с активной или триальной подпиской."
+            f"🎲 {texts.t('CONTEST_START_ANNOUNCEMENT', 'Стартует игра')}: <b>{tpl.name}</b>\n"
+            f"{texts.t('CONTEST_PRIZE', 'Приз')}: {prize_display} • {texts.t('CONTEST_WINNERS', 'Победителей')}: {tpl.max_winners}\n"
+            f"{texts.t('CONTEST_ATTEMPTS', 'Попыток/польз')}: {tpl.attempts_per_user}\n\n"
+            f"{texts.t('CONTEST_ELIGIBILITY', 'Участвовать могут только с активной или триальной подпиской')}.\n"
+            f"💡 <b>{texts.t('REMINDER', 'Напоминание')}:</b> {texts.t('CONTEST_REMINDER_TEXT', 'Не забудьте участвовать в конкурсах для получения бонусов')}!"
         )
 
         await asyncio.gather(

@@ -390,8 +390,14 @@ def get_traffic_switch_keyboard(
         language: str = "ru",
         subscription_end_date: datetime = None,
         discount_percent: int = 0,
+        base_traffic_gb: int = None,
 ) -> InlineKeyboardMarkup:
     from app.config import settings
+
+    # Если базовый трафик не передан, используем текущий
+    # (для обратной совместимости и случаев без докупленного трафика)
+    if base_traffic_gb is None:
+        base_traffic_gb = current_traffic_gb
 
     months_multiplier = 1
     period_text = ""
@@ -403,7 +409,8 @@ def get_traffic_switch_keyboard(
     packages = settings.get_traffic_packages()
     enabled_packages = [pkg for pkg in packages if pkg['enabled']]
 
-    current_price_per_month = settings.get_traffic_price(current_traffic_gb)
+    # Используем базовый трафик для определения цены текущего пакета
+    current_price_per_month = settings.get_traffic_price(base_traffic_gb)
     discounted_current_per_month, _ = apply_percentage_discount(
         current_price_per_month,
         discount_percent,
@@ -422,7 +429,8 @@ def get_traffic_switch_keyboard(
         price_diff_per_month = discounted_price_per_month - discounted_current_per_month
         total_price_diff = price_diff_per_month * months_multiplier
 
-        if gb == current_traffic_gb:
+        # Сравниваем с базовым трафиком (без докупленного)
+        if gb == base_traffic_gb:
             emoji = "✅"
             action_text = " (текущий)"
             price_text = ""

@@ -40,7 +40,8 @@ async def upsert_template(
     slug: str,
     name: str,
     description: str = "",
-    prize_days: int = 1,
+    prize_type: str = "days",
+    prize_value: str = "1",
     max_winners: int = 1,
     attempts_per_user: int = 1,
     times_per_day: int = 1,
@@ -56,7 +57,8 @@ async def upsert_template(
 
     template.name = name
     template.description = description
-    template.prize_days = prize_days
+    template.prize_type = prize_type
+    template.prize_value = prize_value
     template.max_winners = max_winners
     template.attempts_per_user = attempts_per_user
     template.times_per_day = times_per_day
@@ -184,6 +186,22 @@ async def create_attempt(
         is_winner=is_winner,
     )
     db.add(attempt)
+    await db.commit()
+    await db.refresh(attempt)
+    return attempt
+
+
+async def update_attempt(
+    db: AsyncSession,
+    attempt: ContestAttempt,
+    *,
+    answer: Optional[str] = None,
+    is_winner: bool = False,
+) -> ContestAttempt:
+    """Update existing attempt with answer and winner status."""
+    if answer is not None:
+        attempt.answer = answer
+    attempt.is_winner = is_winner
     await db.commit()
     await db.refresh(attempt)
     return attempt

@@ -1510,6 +1510,7 @@ class AdminNotificationService:
         except Exception:
             runtime_enabled = True
         if not (self._is_enabled() and runtime_enabled):
+            logger.info(f"Ticket notification skipped: _is_enabled={self._is_enabled()}, runtime_enabled={runtime_enabled}")
             return False
         return await self._send_message(text, reply_markup=keyboard, ticket_event=True)
 

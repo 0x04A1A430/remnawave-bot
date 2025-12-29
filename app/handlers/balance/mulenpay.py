@@ -21,6 +21,24 @@ async def start_mulenpay_payment(
     state: FSMContext,
 ):
     texts = get_texts(db_user.language)
+
+    # Проверка ограничения на пополнение
+    if getattr(db_user, 'restriction_topup', False):
+        reason = getattr(db_user, 'restriction_reason', None) or "Действие ограничено администратором"
+        support_url = settings.get_support_contact_url()
+        keyboard = []
+        if support_url:
+            keyboard.append([types.InlineKeyboardButton(text="🆘 Обжаловать", url=support_url)])
+        keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data="menu_balance")])
+
+        await callback.message.edit_text(
+            f"🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\n"
+            "Если вы считаете это ошибкой, вы можете обжаловать решение.",
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+        )
+        await callback.answer()
+        return
+
     mulenpay_name = settings.get_mulenpay_display_name()
     mulenpay_name_html = settings.get_mulenpay_display_name_html()
 
@@ -76,6 +94,25 @@ async def process_mulenpay_payment_amount(
     state: FSMContext,
 ):
     texts = get_texts(db_user.language)
+
+    # Проверка ограничения на пополнение
+    if getattr(db_user, 'restriction_topup', False):
+        reason = getattr(db_user, 'restriction_reason', None) or "Действие ограничено администратором"
+        support_url = settings.get_support_contact_url()
+        keyboard = []
+        if support_url:
+            keyboard.append([types.InlineKeyboardButton(text="🆘 Обжаловать", url=support_url)])
+        keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data="menu_balance")])
+
+        await message.answer(
+            f"🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\n"
+            "Если вы считаете это ошибкой, вы можете обжаловать решение.",
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+            parse_mode="HTML"
+        )
+        await state.clear()
+        return
+
     mulenpay_name = settings.get_mulenpay_display_name()
     mulenpay_name_html = settings.get_mulenpay_display_name_html()
 

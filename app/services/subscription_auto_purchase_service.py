@@ -624,4 +624,282 @@ async def auto_purchase_saved_cart_after_topup(
     return True
 
 
-__all__ = ["auto_purchase_saved_cart_after_topup"]
+async def auto_activate_subscription_after_topup(
+    db: AsyncSession,
+    user: User,
+    *,
+    bot: Optional[Bot] = None,
+) -> bool:
+    """
+    Умная автоактивация после пополнения баланса.
+
+    Работает БЕЗ сохранённой корзины:
+    - Если подписка активна — ничего не делает
+    - Если подписка истекла — продлевает с теми же параметрами
+    - Если подписки нет — создаёт новую с дефолтными параметрами
+
+    Выбирает максимальный период, который можно оплатить из баланса.
+    """
+    from datetime import datetime
+    from app.database.crud.subscription import get_subscription_by_user_id, create_paid_subscription
+    from app.database.crud.server_squad import get_server_ids_by_uuids, get_available_server_squads
+    from app.database.crud.transaction import create_transaction
+    from app.database.crud.user import subtract_user_balance
+    from app.database.models import TransactionType, PaymentMethod
+    from app.services.subscription_service import SubscriptionService
+    from app.services.subscription_renewal_service import SubscriptionRenewalService
+    from app.services.admin_notification_service import AdminNotificationService
+
+    if not settings.is_auto_activate_after_topup_enabled():
+        return False
+
+    if not user or not getattr(user, "id", None):
+        return False
+
+    subscription = await get_subscription_by_user_id(db, user.id)
+
+    # Если подписка активна — ничего не делаем
+    if subscription and subscription.status == "ACTIVE" and subscription.end_date > datetime.utcnow():
+        logger.info(
+            "🔁 Автоактивация: у пользователя %s уже активная подписка, пропускаем",
+            user.telegram_id,
+        )
+        return False
+
+    # Определяем параметры подписки
+    if subscription:
+        device_limit = subscription.device_limit or settings.DEFAULT_DEVICE_LIMIT
+        traffic_limit_gb = subscription.traffic_limit_gb or 0
+        connected_squads = subscription.connected_squads or []
+    else:
+        device_limit = settings.DEFAULT_DEVICE_LIMIT
+        traffic_limit_gb = 0
+        connected_squads = []
+
+    # Если серверы не выбраны — берём бесплатные по умолчанию
+    if not connected_squads:
+        available_servers = await get_available_server_squads(db, promo_group_id=user.promo_group_id)
+        connected_squads = [
+            s.squad_uuid for s in available_servers
+            if s.is_available and s.price_kopeks == 0
+        ]
+        if not connected_squads and available_servers:
+            connected_squads = [available_servers[0].squad_uuid]
+
+    server_ids = await get_server_ids_by_uuids(db, connected_squads) if connected_squads else []
+
+    balance = user.balance_kopeks
+    available_periods = sorted([int(p) for p in settings.AVAILABLE_SUBSCRIPTION_PERIODS], reverse=True)
+
+    if not available_periods:
+        logger.warning("🔁 Автоактивация: нет доступных периодов подписки")
+        return False
+
+    subscription_service = SubscriptionService()
+
+    # Найти максимальный период <= баланса
+    best_period = None
+    best_price = 0
+
+    for period in available_periods:
+        try:
+            price, _ = await subscription_service.calculate_subscription_price_with_months(
+                period,
+                traffic_limit_gb,
+                server_ids,
+                device_limit,
+                db,
+                user=user
+            )
+            if price <= balance:
+                best_period = period
+                best_price = price
+                break
+        except Exception as calc_error:
+            logger.warning(
+                "🔁 Автоактивация: ошибка расчёта цены для периода %s: %s",
+                period,
+                calc_error,
+            )
+            continue
+
+    if not best_period:
+        logger.info(
+            "🔁 Автоактивация: у пользователя %s недостаточно средств (%s) для любого периода",
+            user.telegram_id,
+            balance,
+        )
+        return False
+
+    texts = get_texts(getattr(user, "language", "ru"))
+
+    try:
+        if subscription:
+            # Продление существующей подписки
+            renewal_service = SubscriptionRenewalService()
+            pricing = await renewal_service.calculate_pricing(
+                db, user, subscription, best_period
+            )
+
+            old_end_date = subscription.end_date
+            result = await renewal_service.finalize(
+                db, user, subscription,
+                pricing,
+                description=f"Автоматическое продление на {best_period} дней",
+                payment_method=PaymentMethod.BALANCE,
+            )
+
+            logger.info(
+                "✅ Автоактивация: подписка пользователя %s продлена на %s дней за %s коп.",
+                user.telegram_id,
+                best_period,
+                best_price,
+            )
+
+            # Уведомление пользователю
+            if bot:
+                try:
+                    period_label = format_period_description(best_period, getattr(user, "language", "ru"))
+                    new_end_date = result.subscription.end_date
+                    end_date_str = new_end_date.strftime("%d.%m.%Y") if new_end_date else "—"
+
+                    message = texts.t(
+                        "AUTO_PURCHASE_SUBSCRIPTION_EXTENDED",
+                        "✅ Подписка автоматически продлена на {period}.",
+                    ).format(period=period_label)
+
+                    details = texts.t(
+                        "AUTO_PURCHASE_SUBSCRIPTION_EXTENDED_DETAILS",
+                        "⏰ Новая дата окончания: {date}.",
+                    ).format(date=end_date_str)
+
+                    hint = texts.t(
+                        "AUTO_PURCHASE_SUBSCRIPTION_HINT",
+                        "Перейдите в раздел «Моя подписка», чтобы получить ссылку.",
+                    )
+
+                    keyboard = InlineKeyboardMarkup(
+                        inline_keyboard=[
+                            [InlineKeyboardButton(
+                                text=texts.t("MY_SUBSCRIPTION_BUTTON", "📱 Моя подписка"),
+                                callback_data="menu_subscription",
+                            )],
+                        ]
+                    )
+
+                    await bot.send_message(
+                        chat_id=user.telegram_id,
+                        text=f"{message}\n{details}\n\n{hint}",
+                        reply_markup=keyboard,
+                        parse_mode="HTML",
+                    )
+                except Exception as notify_error:
+                    logger.warning(
+                        "⚠️ Автоактивация: не удалось уведомить пользователя %s: %s",
+                        user.telegram_id,
+                        notify_error,
+                    )
+
+        else:
+            # Создание новой подписки
+            new_subscription = await create_paid_subscription(
+                db,
+                user.id,
+                best_period,
+                traffic_limit_gb=traffic_limit_gb,
+                device_limit=device_limit,
+                connected_squads=connected_squads,
+                update_server_counters=True
+            )
+
+            await subtract_user_balance(
+                db, user, best_price,
+                f"Активация подписки на {best_period} дней"
+            )
+
+            await subscription_service.create_remnawave_user(db, new_subscription)
+
+            await create_transaction(
+                db=db,
+                user_id=user.id,
+                type=TransactionType.SUBSCRIPTION_PAYMENT,
+                amount_kopeks=best_price,
+                description=f"Активация подписки на {best_period} дней",
+                payment_method=PaymentMethod.BALANCE,
+            )
+
+            logger.info(
+                "✅ Автоактивация: новая подписка на %s дней создана для пользователя %s за %s коп.",
+                best_period,
+                user.telegram_id,
+                best_price,
+            )
+
+            # Уведомление пользователю
+            if bot:
+                try:
+                    period_label = format_period_description(best_period, getattr(user, "language", "ru"))
+
+                    message = texts.t(
+                        "AUTO_PURCHASE_SUBSCRIPTION_SUCCESS",
+                        "✅ Подписка на {period} автоматически оформлена после пополнения баланса.",
+                    ).format(period=period_label)
+
+                    hint = texts.t(
+                        "AUTO_PURCHASE_SUBSCRIPTION_HINT",
+                        "Перейдите в раздел «Моя подписка», чтобы получить ссылку.",
+                    )
+
+                    keyboard = InlineKeyboardMarkup(
+                        inline_keyboard=[
+                            [InlineKeyboardButton(
+                                text=texts.t("MY_SUBSCRIPTION_BUTTON", "📱 Моя подписка"),
+                                callback_data="menu_subscription",
+                            )],
+                        ]
+                    )
+
+                    await bot.send_message(
+                        chat_id=user.telegram_id,
+                        text=f"{message}\n\n{hint}",
+                        reply_markup=keyboard,
+                        parse_mode="HTML",
+                    )
+
+                    # Уведомление админам
+                    try:
+                        notification_service = AdminNotificationService(bot)
+                        await notification_service.send_subscription_purchase_notification(
+                            db,
+                            user,
+                            new_subscription,
+                            None,  # transaction
+                            best_period,
+                            False,  # was_trial_conversion
+                        )
+                    except Exception as admin_error:
+                        logger.warning(
+                            "⚠️ Автоактивация: не удалось уведомить админов: %s",
+                            admin_error,
+                        )
+
+                except Exception as notify_error:
+                    logger.warning(
+                        "⚠️ Автоактивация: не удалось уведомить пользователя %s: %s",
+                        user.telegram_id,
+                        notify_error,
+                    )
+
+        return True
+
+    except Exception as e:
+        logger.error(
+            "❌ Автоактивация: ошибка для пользователя %s: %s",
+            user.telegram_id,
+            e,
+            exc_info=True,
+        )
+        return False
+
+
+__all__ = ["auto_purchase_saved_cart_after_topup", "auto_activate_subscription_after_topup"]

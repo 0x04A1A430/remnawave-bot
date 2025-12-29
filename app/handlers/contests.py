@@ -1,41 +1,73 @@
+"""Contest handlers for daily games."""
+
 import logging
-import random
-from datetime import datetime, timedelta
+from datetime import datetime
+from typing import Optional
 
 from aiogram import Dispatcher, F, types
-from aiogram.fsm.context import FSMContext
 from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
-from app.database.crud.contest import (
-    get_active_rounds,
-    get_attempt,
-    create_attempt,
-    increment_winner_count,
-)
-from app.database.database import AsyncSessionLocal
-from app.database.models import ContestRound, ContestTemplate, SubscriptionStatus
-from app.localization.texts import get_texts
-from app.services.contest_rotation_service import (
-    GAME_QUEST,
-    GAME_LOCKS,
-    GAME_CIPHER,
-    GAME_SERVER,
-    GAME_BLITZ,
-    GAME_EMOJI,
-    GAME_ANAGRAM,
-)
+from app.database.crud.contest import get_active_rounds, get_attempt
 from app.database.crud.subscription import get_subscription_by_user_id
-from app.database.crud.subscription import extend_subscription
-from app.utils.decorators import auth_required, error_handler
+from app.database.database import AsyncSessionLocal
+from app.database.models import ContestRound, SubscriptionStatus
 from app.keyboards.inline import get_back_keyboard
+from app.localization.texts import get_texts
+from app.services.contests import (
+    ContestAttemptService,
+    GameType,
+    get_game_strategy,
+)
 from app.states import ContestStates
+from app.utils.decorators import auth_required, error_handler
 
 logger = logging.getLogger(__name__)
 
+# Rate limiting storage
+_rate_limits: dict = {}
+
+# Service instance
+_attempt_service = ContestAttemptService()
+
+
+def _check_rate_limit(user_id: int, action: str, limit: int = 1, window_seconds: int = 5) -> bool:
+    """Check if user exceeds rate limit for contest actions."""
+    key = f"{user_id}_{action}"
+    now = datetime.utcnow().timestamp()
+
+    if key not in _rate_limits:
+        _rate_limits[key] = []
+
+    # Clean old entries
+    _rate_limits[key] = [t for t in _rate_limits[key] if now - t < window_seconds]
+
+    if len(_rate_limits[key]) >= limit:
+        return False
+
+    _rate_limits[key].append(now)
+    return True
+
+
+def _validate_callback_data(data: str) -> Optional[list]:
+    """Validate and parse callback data safely."""
+    if not data or not isinstance(data, str):
+        return None
+
+    parts = data.split("_")
+    if len(parts) < 2 or parts[0] != "contest":
+        return None
+
+    for part in parts:
+        if not part or len(part) > 50:
+            return None
+
+    return parts
+
 
 def _user_allowed(subscription) -> bool:
+    """Check if user has active or trial subscription."""
     if not subscription:
         return False
     return subscription.status in {
@@ -44,22 +76,13 @@ def _user_allowed(subscription) -> bool:
     }
 
 
-async def _award_prize(db: AsyncSession, user_id: int, prize_days: int, language: str) -> str:
-    from app.database.crud.user import get_user_by_id
-    user = await get_user_by_id(db, user_id)
-    if not user:
-        return ""
-    subscription = await get_subscription_by_user_id(db, user_id)
-    if not subscription:
-        return ""
-    await extend_subscription(db, subscription, prize_days)
-    texts = get_texts(language)
-    return texts.t("CONTEST_PRIZE_GRANTED", "Бонус {days} дней зачислен!").format(days=prize_days)
-
-
 async def _reply_not_eligible(callback: types.CallbackQuery, language: str):
+    """Reply that user is not eligible to play."""
     texts = get_texts(language)
-    await callback.answer(texts.t("CONTEST_NOT_ELIGIBLE", "Игры доступны только с активной или триальной подпиской."), show_alert=True)
+    await callback.answer(
+        texts.t("CONTEST_NOT_ELIGIBLE", "Игры доступны только с активной или триальной подпиской."),
+        show_alert=True,
+    )
 
 
 # ---------- Handlers ----------
@@ -68,13 +91,17 @@ async def _reply_not_eligible(callback: types.CallbackQuery, language: str):
 @auth_required
 @error_handler
 async def show_contests_menu(callback: types.CallbackQuery, db_user, db: AsyncSession):
+    """Show menu with available contest games."""
     texts = get_texts(db_user.language)
+
     subscription = await get_subscription_by_user_id(db, db_user.id)
     if not _user_allowed(subscription):
         await _reply_not_eligible(callback, db_user.language)
         return
 
     active_rounds = await get_active_rounds(db)
+
+    # Group by template, take one round per template
     unique_templates = {}
     for rnd in active_rounds:
         if not rnd.template or not rnd.template.is_enabled:
@@ -86,19 +113,24 @@ async def show_contests_menu(callback: types.CallbackQuery, db_user, db: AsyncSe
     buttons = []
     for tpl_slug, rnd in unique_templates.items():
         title = rnd.template.name if rnd.template else tpl_slug
-        buttons.append(
-            [
-                types.InlineKeyboardButton(
-                    text=f"▶️ {title}",
-                    callback_data=f"contest_play_{tpl_slug}_{rnd.id}",
-                )
-            ]
-        )
+        buttons.append([
+            types.InlineKeyboardButton(
+                text=f"▶️ {title}",
+                callback_data=f"contest_play_{tpl_slug}_{rnd.id}",
+            )
+        ])
+
     if not buttons:
-        buttons.append(
-            [types.InlineKeyboardButton(text=texts.t("CONTEST_EMPTY", "Сейчас игр нет"), callback_data="noop")]
-        )
-    buttons.append([types.InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")])
+        buttons.append([
+            types.InlineKeyboardButton(
+                text=texts.t("CONTEST_EMPTY", "Сейчас игр нет"),
+                callback_data="noop",
+            )
+        ])
+
+    buttons.append([
+        types.InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")
+    ])
 
     await callback.message.edit_text(
         texts.t("CONTEST_MENU_TITLE", "🎲 <b>Игры/Конкурсы</b>\nВыберите игру:"),
@@ -110,14 +142,25 @@ async def show_contests_menu(callback: types.CallbackQuery, db_user, db: AsyncSe
 @auth_required
 @error_handler
 async def play_contest(callback: types.CallbackQuery, state: FSMContext, db_user, db: AsyncSession):
+    """Start playing a specific contest."""
     texts = get_texts(db_user.language)
+
     subscription = await get_subscription_by_user_id(db, db_user.id)
     if not _user_allowed(subscription):
         await _reply_not_eligible(callback, db_user.language)
         return
 
-    parts = callback.data.split("_")
-    if len(parts) < 4 or parts[0] != "contest" or parts[1] != "play":
+    # Rate limit check
+    if not _check_rate_limit(db_user.id, "contest_play", limit=2, window_seconds=10):
+        await callback.answer(
+            texts.t("CONTEST_TOO_FAST", "Слишком быстро! Подождите."),
+            show_alert=True,
+        )
+        return
+
+    # Validate callback data
+    parts = _validate_callback_data(callback.data)
+    if not parts or len(parts) < 4 or parts[1] != "play":
         await callback.answer("Некорректные данные", show_alert=True)
         return
 
@@ -128,285 +171,169 @@ async def play_contest(callback: types.CallbackQuery, state: FSMContext, db_user
         await callback.answer("Некорректные данные", show_alert=True)
         return
 
-    slug = "_".join(parts[2:-1])
-
-    # reload round with template
+    # Get round with template
     async with AsyncSessionLocal() as db2:
         active_rounds = await get_active_rounds(db2)
         round_obj = next((r for r in active_rounds if r.id == round_id), None)
+
         if not round_obj:
-            await callback.answer(texts.t("CONTEST_ROUND_FINISHED", "Раунд завершён или недоступен."), show_alert=True)
+            await callback.answer(
+                texts.t("CONTEST_ROUND_FINISHED", "Раунд завершён или недоступен."),
+                show_alert=True,
+            )
             return
+
         if not round_obj.template or not round_obj.template.is_enabled:
-            await callback.answer(texts.t("CONTEST_DISABLED", "Игра отключена."), show_alert=True)
+            await callback.answer(
+                texts.t("CONTEST_DISABLED", "Игра отключена."),
+                show_alert=True,
+            )
             return
+
+        # Check if user already played
         attempt = await get_attempt(db2, round_id, db_user.id)
         if attempt:
-            await callback.answer(texts.t("CONTEST_ALREADY_PLAYED", "У вас уже была попытка в этом раунде."), show_alert=True)
+            await callback.answer(
+                texts.t("CONTEST_ALREADY_PLAYED", "У вас уже была попытка в этом раунде."),
+                show_alert=True,
+            )
             return
 
+        # Get game strategy and render
         tpl = round_obj.template
-        if tpl.slug == GAME_QUEST:
-            await _render_quest(callback, db_user, round_obj, tpl)
-        elif tpl.slug == GAME_LOCKS:
-            await _render_locks(callback, db_user, round_obj, tpl)
-        elif tpl.slug == GAME_SERVER:
-            await _render_server_lottery(callback, db_user, round_obj, tpl)
-        elif tpl.slug == GAME_CIPHER:
-            await _render_cipher(callback, db_user, round_obj, tpl, state)
-        elif tpl.slug == GAME_EMOJI:
-            await _render_emoji(callback, db_user, round_obj, tpl, state)
-        elif tpl.slug == GAME_ANAGRAM:
-            await _render_anagram(callback, db_user, round_obj, tpl, state)
-        elif tpl.slug == GAME_BLITZ:
-            await _render_blitz(callback, db_user, round_obj, tpl)
-        else:
-            await callback.answer(texts.t("CONTEST_UNKNOWN", "Тип конкурса не поддерживается."), show_alert=True)
+        strategy = get_game_strategy(tpl.slug)
 
-
-async def _render_quest(callback, db_user, round_obj: ContestRound, tpl: ContestTemplate):
-    texts = get_texts(db_user.language)
-    rows = round_obj.payload.get("rows", 3)
-    cols = round_obj.payload.get("cols", 3)
-    keyboard = []
-    for r in range(rows):
-        row_buttons = []
-        for c in range(cols):
-            idx = r * cols + c
-            row_buttons.append(
-                types.InlineKeyboardButton(
-                    text="🎛",
-                    callback_data=f"contest_pick_{round_obj.id}_quest_{idx}"
-                )
+        if not strategy:
+            await callback.answer(
+                texts.t("CONTEST_UNKNOWN", "Тип конкурса не поддерживается."),
+                show_alert=True,
             )
-        keyboard.append(row_buttons)
-    keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data="contests_menu")])
-    await callback.message.edit_text(
-        texts.t("CONTEST_QUEST_PROMPT", "Выбери один из узлов 3×3:"),
-        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
-    )
-    await callback.answer()
+            return
 
+        render_result = strategy.render(
+            round_id=round_obj.id,
+            payload=round_obj.payload or {},
+            language=db_user.language,
+        )
 
-async def _render_locks(callback, db_user, round_obj: ContestRound, tpl: ContestTemplate):
-    texts = get_texts(db_user.language)
-    total = round_obj.payload.get("total", 20)
-    keyboard = []
-    row = []
-    for i in range(total):
-        row.append(types.InlineKeyboardButton(text="🔒", callback_data=f"contest_pick_{round_obj.id}_locks_{i}"))
-        if len(row) == 5:
-            keyboard.append(row)
-            row = []
-    if row:
-        keyboard.append(row)
-    keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data="contests_menu")])
-    await callback.message.edit_text(
-        texts.t("CONTEST_LOCKS_PROMPT", "Найди взломанную кнопку среди замков:"),
-        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
-    )
-    await callback.answer()
+        # For text input games, create pending attempt and set FSM state
+        if render_result.requires_text_input:
+            await _attempt_service.create_pending_attempt(db2, round_obj.id, db_user.id)
+            await state.set_state(ContestStates.waiting_for_answer)
+            await state.update_data(contest_round_id=round_obj.id)
 
-
-async def _render_server_lottery(callback, db_user, round_obj: ContestRound, tpl: ContestTemplate):
-    texts = get_texts(db_user.language)
-    flags = round_obj.payload.get("flags") or []
-    shuffled_flags = flags.copy()
-    random.shuffle(shuffled_flags)
-    keyboard = []
-    row = []
-    for flag in shuffled_flags:
-        row.append(types.InlineKeyboardButton(text=flag, callback_data=f"contest_pick_{round_obj.id}_{flag}"))
-        if len(row) == 5:
-            keyboard.append(row)
-            row = []
-    if row:
-        keyboard.append(row)
-    keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data="contests_menu")])
-    await callback.message.edit_text(
-        texts.t("CONTEST_SERVER_PROMPT", "Выбери сервер:"),
-        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
-    )
-    await callback.answer()
-
-
-async def _render_cipher(callback, db_user, round_obj: ContestRound, tpl: ContestTemplate, state: FSMContext):
-    texts = get_texts(db_user.language)
-    question = round_obj.payload.get("question", "")
-    await state.set_state(ContestStates.waiting_for_answer)
-    await state.update_data(contest_round_id=round_obj.id)
-    await callback.message.edit_text(
-        texts.t("CONTEST_CIPHER_PROMPT", "Расшифруй: {q}").format(q=question),
-        reply_markup=get_back_keyboard(db_user.language),
-    )
-    await callback.answer()
-
-
-async def _render_emoji(callback, db_user, round_obj: ContestRound, tpl: ContestTemplate, state: FSMContext):
-    texts = get_texts(db_user.language)
-    question = round_obj.payload.get("question", "🤔")
-    emoji_list = question.split()
-    random.shuffle(emoji_list)
-    shuffled_question = " ".join(emoji_list)
-    await state.set_state(ContestStates.waiting_for_answer)
-    await state.update_data(contest_round_id=round_obj.id)
-    await callback.message.edit_text(
-        texts.t("CONTEST_EMOJI_PROMPT", "Угадай сервис по эмодзи: {q}").format(q=shuffled_question),
-        reply_markup=get_back_keyboard(db_user.language),
-    )
-    await callback.answer()
-
-
-async def _render_anagram(callback, db_user, round_obj: ContestRound, tpl: ContestTemplate, state: FSMContext):
-    texts = get_texts(db_user.language)
-    letters = round_obj.payload.get("letters", "")
-    await state.set_state(ContestStates.waiting_for_answer)
-    await state.update_data(contest_round_id=round_obj.id)
-    await callback.message.edit_text(
-        texts.t("CONTEST_ANAGRAM_PROMPT", "Составь слово: {letters}").format(letters=letters),
-        reply_markup=get_back_keyboard(db_user.language),
-    )
-    await callback.answer()
-
-
-async def _render_blitz(callback, db_user, round_obj: ContestRound, tpl: ContestTemplate):
-    texts = get_texts(db_user.language)
-    keyboard = types.InlineKeyboardMarkup(
-        inline_keyboard=[
-            [types.InlineKeyboardButton(text=texts.t("CONTEST_BLITZ_BUTTON", "Я здесь!"), callback_data=f"contest_pick_{round_obj.id}_blitz")]
-        ]
-    )
-    await callback.message.edit_text(
-        texts.t("CONTEST_BLITZ_PROMPT", "⚡️ Блиц! Нажми «Я здесь!»"),
-        reply_markup=keyboard,
-    )
-    await callback.answer()
+        await callback.message.edit_text(
+            render_result.text,
+            reply_markup=render_result.keyboard,
+        )
+        await callback.answer()
 
 
 @auth_required
 @error_handler
 async def handle_pick(callback: types.CallbackQuery, db_user, db: AsyncSession):
+    """Handle button pick in contest games."""
     texts = get_texts(db_user.language)
-    parts = callback.data.split("_")
-    if len(parts) < 4 or parts[0] != "contest" or parts[1] != "pick":
+
+    # Rate limit check
+    if not _check_rate_limit(db_user.id, "contest_pick", limit=1, window_seconds=3):
+        await callback.answer(
+            texts.t("CONTEST_TOO_FAST", "Слишком быстро! Подождите."),
+            show_alert=True,
+        )
+        return
+
+    # Validate callback data
+    parts = _validate_callback_data(callback.data)
+    if not parts or len(parts) < 4 or parts[1] != "pick":
         await callback.answer("Некорректные данные", show_alert=True)
         return
 
     round_id_str = parts[2]
     pick = "_".join(parts[3:])
+
     try:
         round_id = int(round_id_str)
     except ValueError:
         await callback.answer("Некорректные данные", show_alert=True)
         return
 
-    async with AsyncSessionLocal() as db2:
-        active_rounds = await get_active_rounds(db2)
-        round_obj = next((r for r in active_rounds if r.id == round_id), None)
-        if not round_obj:
-            await callback.answer(texts.t("CONTEST_ROUND_FINISHED", "Раунд завершён."), show_alert=True)
-            return
-
-        tpl = round_obj.template
-        attempt = await get_attempt(db2, round_id, db_user.id)
-        if attempt:
-            await callback.answer(texts.t("CONTEST_ALREADY_PLAYED", "У вас уже была попытка."), show_alert=True)
-            return
-
-        secret_idx = round_obj.payload.get("secret_idx")
-        correct_flag = ""
-        if tpl.slug == GAME_SERVER:
-            flags = round_obj.payload.get("flags") or []
-            correct_flag = flags[secret_idx] if secret_idx is not None and secret_idx < len(flags) else ""
-
-        is_winner = False
-        if tpl.slug == GAME_SERVER:
-            is_winner = pick == correct_flag
-        elif tpl.slug == GAME_QUEST:
-            # Format: quest_{idx}
-            try:
-                if pick.startswith("quest_"):
-                    idx = int(pick.split("_")[1])
-                    is_winner = secret_idx is not None and idx == secret_idx
-            except (ValueError, IndexError):
-                is_winner = False
-        elif tpl.slug == GAME_LOCKS:
-            # Format: locks_{idx}
-            try:
-                if pick.startswith("locks_"):
-                    idx = int(pick.split("_")[1])
-                    is_winner = secret_idx is not None and idx == secret_idx
-            except (ValueError, IndexError):
-                is_winner = False
-        elif tpl.slug == GAME_BLITZ:
-            is_winner = pick == "blitz"
-        else:
-            is_winner = False
-
-        # Check if max winners already reached
-        if is_winner and round_obj.winners_count >= round_obj.max_winners:
-            is_winner = False  # Too late, max winners already reached
-
-        await create_attempt(db2, round_id=round_obj.id, user_id=db_user.id, answer=str(pick), is_winner=is_winner)
-
-        if is_winner:
-            await increment_winner_count(db2, round_obj)
-            prize_text = await _award_prize(db2, db_user.id, tpl.prize_days, db_user.language)
-            await callback.answer(texts.t("CONTEST_WIN", "🎉 Победа! ") + (prize_text or ""), show_alert=True)
-        else:
-            responses = {
-                GAME_QUEST: ["Пусто", "Ложный сервер", "Найди другой узел"],
-                GAME_LOCKS: ["Заблокировано", "Попробуй ещё", "Нет доступа"],
-                GAME_SERVER: ["Сервер перегружен", "Нет ответа", "Попробуй завтра"],
-            }.get(tpl.slug, ["Неудача"])
-            await callback.answer(random.choice(responses), show_alert=True)
-
-
-@auth_required
-@error_handler
-async def handle_text_answer(message: types.Message, state: FSMContext, db_user, db: AsyncSession):
-    texts = get_texts(db_user.language)
-    data = await state.get_data()
-    round_id = data.get("contest_round_id")
-    if not round_id:
+    # Re-check subscription
+    subscription = await get_subscription_by_user_id(db, db_user.id)
+    if not _user_allowed(subscription):
+        await callback.answer(
+            texts.t("CONTEST_NOT_ELIGIBLE", "Игра недоступна без активной подписки."),
+            show_alert=True,
+        )
         return
 
     async with AsyncSessionLocal() as db2:
         active_rounds = await get_active_rounds(db2)
         round_obj = next((r for r in active_rounds if r.id == round_id), None)
+
         if not round_obj:
-            await message.answer(texts.t("CONTEST_ROUND_FINISHED", "Раунд завершён."), reply_markup=get_back_keyboard(db_user.language))
+            await callback.answer(
+                texts.t("CONTEST_ROUND_FINISHED", "Раунд завершён."),
+                show_alert=True,
+            )
+            return
+
+        # Process attempt using service
+        result = await _attempt_service.process_button_attempt(
+            db=db2,
+            round_obj=round_obj,
+            user_id=db_user.id,
+            pick=pick,
+            language=db_user.language,
+        )
+
+        await callback.answer(result.message, show_alert=True)
+
+
+@auth_required
+@error_handler
+async def handle_text_answer(message: types.Message, state: FSMContext, db_user, db: AsyncSession):
+    """Handle text answer in contest games."""
+    texts = get_texts(db_user.language)
+
+    data = await state.get_data()
+    round_id = data.get("contest_round_id")
+    if not round_id:
+        await state.clear()
+        return
+
+    async with AsyncSessionLocal() as db2:
+        active_rounds = await get_active_rounds(db2)
+        round_obj = next((r for r in active_rounds if r.id == round_id), None)
+
+        if not round_obj:
+            await message.answer(
+                texts.t("CONTEST_ROUND_FINISHED", "Раунд завершён."),
+                reply_markup=get_back_keyboard(db_user.language),
+            )
             await state.clear()
             return
 
-        attempt = await get_attempt(db2, round_obj.id, db_user.id)
-        if attempt:
-            await message.answer(texts.t("CONTEST_ALREADY_PLAYED", "У вас уже была попытка."), reply_markup=get_back_keyboard(db_user.language))
-            await state.clear()
-            return
+        # Process attempt using service
+        text_answer = (message.text or "").strip()
+        result = await _attempt_service.process_text_attempt(
+            db=db2,
+            round_obj=round_obj,
+            user_id=db_user.id,
+            text_answer=text_answer,
+            language=db_user.language,
+        )
 
-        answer = (message.text or "").strip().upper()
-        tpl = round_obj.template
-        correct = (round_obj.payload.get("answer") or "").upper()
+        await message.answer(
+            result.message,
+            reply_markup=get_back_keyboard(db_user.language),
+        )
 
-        is_winner = correct and answer == correct
-
-        # Check if max winners already reached
-        if is_winner and round_obj.winners_count >= round_obj.max_winners:
-            is_winner = False  # Too late, max winners already reached
-
-        await create_attempt(db2, round_id=round_obj.id, user_id=db_user.id, answer=answer, is_winner=is_winner)
-
-        if is_winner:
-            await increment_winner_count(db2, round_obj)
-            prize_text = await _award_prize(db2, db_user.id, tpl.prize_days, db_user.language)
-            await message.answer(texts.t("CONTEST_WIN", "🎉 Победа! ") + (prize_text or ""), reply_markup=get_back_keyboard(db_user.language))
-        else:
-            await message.answer(texts.t("CONTEST_LOSE", "Не верно, попробуй снова в следующем раунде."), reply_markup=get_back_keyboard(db_user.language))
     await state.clear()
 
 
 def register_handlers(dp: Dispatcher):
+    """Register contest handlers."""
     dp.callback_query.register(show_contests_menu, F.data == "contests_menu")
     dp.callback_query.register(play_contest, F.data.startswith("contest_play_"))
     dp.callback_query.register(handle_pick, F.data.startswith("contest_pick_"))

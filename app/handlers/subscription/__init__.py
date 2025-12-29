@@ -120,6 +120,14 @@ from .traffic import (
     select_traffic,
 )
 
+from .modem import (
+    handle_modem_menu,
+    handle_modem_enable,
+    handle_modem_confirm,
+    handle_modem_disable,
+    register_modem_handlers,
+)
+
 __all__ = [
     'activate_trial',
     'add_traffic',
@@ -185,6 +193,11 @@ __all__ = [
     'handle_subscription_config_back',
     'handle_subscription_settings',
     'handle_switch_traffic',
+    'handle_modem_menu',
+    'handle_modem_enable',
+    'handle_modem_confirm',
+    'handle_modem_disable',
+    'register_modem_handlers',
     'load_app_config',
     'refresh_traffic_config',
     'register_handlers',

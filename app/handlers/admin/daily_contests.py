@@ -9,10 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.crud.contest import (
+    clear_attempts,
+    create_round,
     get_template_by_id,
     list_templates,
     update_template_fields,
-    create_round,
 )
 from app.database.models import ContestTemplate
 from app.keyboards.admin import (
@@ -28,7 +29,8 @@ from app.utils.decorators import admin_required, error_handler
 logger = logging.getLogger(__name__)
 
 EDITABLE_FIELDS: Dict[str, Dict] = {
-    "prize_days": {"type": int, "min": 1, "label": "приз (дни)"},
+    "prize_type": {"type": str, "label": "тип приза (days/balance/custom)"},
+    "prize_value": {"type": str, "label": "значение приза"},
     "max_winners": {"type": int, "min": 1, "label": "макс. победителей"},
     "attempts_per_user": {"type": int, "min": 1, "label": "попыток на пользователя"},
     "times_per_day": {"type": int, "min": 1, "label": "раундов в день"},
@@ -57,7 +59,8 @@ async def show_daily_contests(
     else:
         for tpl in templates:
             status = "🟢" if tpl.is_enabled else "⚪️"
-            lines.append(f"{status} <b>{tpl.name}</b> (slug: {tpl.slug}) — приз {tpl.prize_days}д, макс {tpl.max_winners}")
+            prize_info = f"{tpl.prize_value} ({tpl.prize_type})" if tpl.prize_type else tpl.prize_value
+            lines.append(f"{status} <b>{tpl.name}</b> (slug: {tpl.slug}) — приз {prize_info}, макс {tpl.max_winners}")
 
     keyboard_rows = []
     if templates:
@@ -101,10 +104,12 @@ async def show_daily_contest(
         await callback.answer(texts.t("ADMIN_CONTEST_NOT_FOUND", "Конкурс не найден."), show_alert=True)
         return
 
+    prize_display = f"{tpl.prize_value} ({tpl.prize_type})" if tpl.prize_type else tpl.prize_value
     lines = [
         f"🏷 <b>{tpl.name}</b> (slug: {tpl.slug})",
         f"{texts.t('ADMIN_CONTEST_STATUS_ACTIVE','🟢 Активен') if tpl.is_enabled else texts.t('ADMIN_CONTEST_STATUS_INACTIVE','⚪️ Выключен')}",
-        f"Приз: {tpl.prize_days} дн. | Макс победителей: {tpl.max_winners}",
+        f"Тип приза: {tpl.prize_type or 'days'} | Значение: {tpl.prize_value or '1'}",
+        f"Макс победителей: {tpl.max_winners}",
         f"Попыток/польз: {tpl.attempts_per_user}",
         f"Раундов в день: {tpl.times_per_day}",
         f"Расписание: {tpl.schedule_times or '-'}",

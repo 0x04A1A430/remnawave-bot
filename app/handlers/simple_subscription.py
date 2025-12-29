@@ -39,6 +39,23 @@ async def start_simple_subscription_purchase(
         await callback.answer("❌ Простая покупка подписки временно недоступна", show_alert=True)
         return
 
+    # Проверка ограничения на покупку/продление подписки
+    if getattr(db_user, 'restriction_subscription', False):
+        reason = getattr(db_user, 'restriction_reason', None) or "Действие ограничено администратором"
+        support_url = settings.get_support_contact_url()
+        keyboard = []
+        if support_url:
+            keyboard.append([types.InlineKeyboardButton(text="🆘 Обжаловать", url=support_url)])
+        keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data="subscription")])
+
+        await callback.message.edit_text(
+            f"🚫 <b>Покупка подписки ограничена</b>\n\n{reason}\n\n"
+            "Если вы считаете это ошибкой, вы можете обжаловать решение.",
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+        )
+        await callback.answer()
+        return
+
     # Проверяем, есть ли у пользователя подписка
     from app.database.crud.subscription import get_subscription_by_user_id
     current_subscription = await get_subscription_by_user_id(db, db_user.id)

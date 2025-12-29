@@ -690,6 +690,16 @@ class User(Base):
     poll_responses = relationship("PollResponse", back_populates="user")
     last_pinned_message_id = Column(Integer, nullable=True)
 
+    # Ограничения пользователя
+    restriction_topup = Column(Boolean, default=False, nullable=False)  # Запрет пополнения
+    restriction_subscription = Column(Boolean, default=False, nullable=False)  # Запрет продления/покупки
+    restriction_reason = Column(String(500), nullable=True)  # Причина ограничения
+
+    @property
+    def has_restrictions(self) -> bool:
+        """Проверить, есть ли у пользователя активные ограничения."""
+        return self.restriction_topup or self.restriction_subscription
+
     @property
     def balance_rubles(self) -> float:
         return self.balance_kopeks / 100
@@ -755,11 +765,13 @@ class Subscription(Base):
     
     traffic_limit_gb = Column(Integer, default=0)
     traffic_used_gb = Column(Float, default=0.0)
+    purchased_traffic_gb = Column(Integer, default=0)  # Докупленный трафик (для расчета цены сброса)
 
     subscription_url = Column(String, nullable=True)
     subscription_crypto_link = Column(String, nullable=True)
 
     device_limit = Column(Integer, default=1)
+    modem_enabled = Column(Boolean, default=False)
     
     connected_squads = Column(JSON, default=list)
     
@@ -1107,7 +1119,8 @@ class ContestTemplate(Base):
     name = Column(String(100), nullable=False)
     slug = Column(String(50), nullable=False, unique=True, index=True)
     description = Column(Text, nullable=True)
-    prize_days = Column(Integer, nullable=False, default=1)
+    prize_type = Column(String(20), nullable=False, default="days")
+    prize_value = Column(String(50), nullable=False, default="1")
     max_winners = Column(Integer, nullable=False, default=1)
     attempts_per_user = Column(Integer, nullable=False, default=1)
     times_per_day = Column(Integer, nullable=False, default=1)
