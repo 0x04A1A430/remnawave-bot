@@ -9,6 +9,8 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
+from dateutil.parser import isoparse
+
 from aiogram import Bot
 
 from app.config import settings
@@ -168,6 +170,17 @@ class NalogoQueueService:
                 telegram_user_id = receipt_data.get("telegram_user_id")
                 amount_kopeks = receipt_data.get("amount_kopeks")
 
+                # Извлекаем время оплаты из очереди (чтобы чек был с правильным временем)
+                operation_time = None
+                created_at_str = receipt_data.get("created_at")
+                if created_at_str:
+                    try:
+                        operation_time = isoparse(created_at_str)
+                    except (ValueError, TypeError) as parse_error:
+                        logger.warning(
+                            f"Не удалось распарсить created_at '{created_at_str}': {parse_error}"
+                        )
+
                 # Формируем описание заново из настроек (если есть данные)
                 if amount_kopeks is not None:
                     receipt_name = settings.get_balance_payment_description(
@@ -189,6 +202,7 @@ class NalogoQueueService:
                     queue_on_failure=False,  # Не добавлять в очередь повторно автоматически
                     telegram_user_id=telegram_user_id,
                     amount_kopeks=amount_kopeks,
+                    operation_time=operation_time,  # Время оплаты, а не отправки
                 )
 
                 if receipt_uuid:

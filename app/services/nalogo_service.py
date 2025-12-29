@@ -135,6 +135,7 @@ class NaloGoService:
         queue_on_failure: bool = True,
         telegram_user_id: Optional[int] = None,
         amount_kopeks: Optional[int] = None,
+        operation_time: Optional[datetime] = None,
     ) -> Optional[str]:
         """Создание чека о доходе.
 
@@ -147,6 +148,7 @@ class NaloGoService:
             queue_on_failure: Добавить в очередь при временной недоступности
             telegram_user_id: Telegram ID пользователя для формирования описания
             amount_kopeks: Сумма в копейках для формирования описания
+            operation_time: Время операции (по умолчанию текущее)
 
         Returns:
             UUID чека или None при ошибке
@@ -180,11 +182,12 @@ class NaloGoService:
                     inn=client_info.get("inn")
                 )
 
-            # Библиотека использует UTC время автоматически
+            # Используем переданное время операции или текущее
             result = await income_api.create(
                 name=name,
                 amount=Decimal(str(amount)),
                 quantity=quantity,
+                operation_time=operation_time,
                 client=income_client,
             )
 
