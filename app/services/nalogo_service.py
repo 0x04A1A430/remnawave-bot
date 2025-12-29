@@ -88,6 +88,26 @@ class NaloGoService:
         amount_kopeks: Optional[int] = None,
     ) -> bool:
         """Добавить чек в очередь для отложенной отправки."""
+        if payment_id:
+            # Защита от дубликатов: проверяем не был ли чек уже создан
+            created_key = f"nalogo:created:{payment_id}"
+            already_created = await cache.get(created_key)
+            if already_created:
+                logger.info(
+                    f"Чек для payment_id={payment_id} уже создан ({already_created}), "
+                    "не добавляем в очередь"
+                )
+                return False
+
+            # Проверяем не в очереди ли уже
+            queued_key = f"nalogo:queued:{payment_id}"
+            already_queued = await cache.get(queued_key)
+            if already_queued:
+                logger.info(
+                    f"Чек для payment_id={payment_id} уже в очереди, пропускаем дубликат"
+                )
+                return False
+
         receipt_data = {
             "name": name,
             "amount": amount,
@@ -101,6 +121,11 @@ class NaloGoService:
         }
         success = await cache.lpush(NALOGO_QUEUE_KEY, receipt_data)
         if success:
+            # Помечаем что чек в очереди (TTL 7 дней)
+            if payment_id:
+                queued_key = f"nalogo:queued:{payment_id}"
+                await cache.set(queued_key, "queued", expire=7 * 24 * 3600)
+
             queue_len = await cache.llen(NALOGO_QUEUE_KEY)
             logger.info(
                 f"Чек добавлен в очередь (payment_id={payment_id}, "

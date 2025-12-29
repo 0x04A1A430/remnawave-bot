@@ -628,6 +628,16 @@ def get_referral_contest_manage_keyboard(
                 callback_data=f"admin_contest_edit_times_{contest_id}",
             ),
         ],
+        [
+            InlineKeyboardButton(
+                text="🔄 Синхронизация",
+                callback_data=f"admin_contest_sync_{contest_id}",
+            ),
+            InlineKeyboardButton(
+                text="🔍 Отладка",
+                callback_data=f"admin_contest_debug_{contest_id}",
+            ),
+        ],
     ]
 
     if can_delete:

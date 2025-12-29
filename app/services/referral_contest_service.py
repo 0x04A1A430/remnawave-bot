@@ -391,7 +391,12 @@ class ReferralContestService:
         return "\n".join(lines)
 
     async def get_detailed_contest_stats(self, db: AsyncSession, contest_id: int) -> dict:
-        from app.database.crud.referral_contest import get_contest_leaderboard, get_referral_contest
+        from app.database.crud.referral_contest import (
+            get_contest_leaderboard,
+            get_referral_contest,
+            get_contest_payment_stats,
+            get_contest_transaction_breakdown,
+        )
 
         contest = await get_referral_contest(db, contest_id)
         if not contest:
@@ -400,24 +405,39 @@ class ReferralContestService:
                 'total_invited': 0,
                 'total_paid_amount': 0,
                 'total_unpaid': 0,
+                'paid_count': 0,
+                'unpaid_count': 0,
+                'subscription_total': 0,
+                'deposit_total': 0,
                 'participants': [],
             }
 
         # Get leaderboard - already includes User objects
         leaderboard = await get_contest_leaderboard(db, contest_id)
+
+        # Получаем статистику оплат
+        payment_stats = await get_contest_payment_stats(db, contest_id)
+
+        # Получаем разбивку по типам транзакций
+        breakdown = await get_contest_transaction_breakdown(db, contest_id)
+
         if not leaderboard:
             return {
                 'total_participants': 0,
                 'total_invited': 0,
-                'total_paid_amount': 0,
-                'total_unpaid': 0,
+                'total_paid_amount': payment_stats['total_amount'],
+                'total_unpaid': payment_stats['unpaid_count'],
+                'paid_count': payment_stats['paid_count'],
+                'unpaid_count': payment_stats['unpaid_count'],
+                'subscription_total': breakdown['subscription_total'],
+                'deposit_total': breakdown['deposit_total'],
                 'participants': [],
             }
 
         total_participants = len(leaderboard)
         total_invited = sum(score for _, score, _ in leaderboard)
-        total_paid_amount = sum(amount for _, _, amount in leaderboard)
-        total_unpaid = 0
+        total_paid_amount = payment_stats['total_amount']
+        total_unpaid = payment_stats['unpaid_count']
 
         # Build participants stats directly from leaderboard (already has User objects)
         participants_stats = []
@@ -426,8 +446,8 @@ class ReferralContestService:
                 'referrer_id': user.id,
                 'full_name': user.full_name,
                 'total_referrals': score,
-                'paid_referrals': score,
-                'unpaid_referrals': 0,
+                'paid_referrals': score if amount > 0 else 0,
+                'unpaid_referrals': 0 if amount > 0 else score,
                 'total_paid_amount': amount,
             })
 
@@ -436,6 +456,10 @@ class ReferralContestService:
             'total_invited': total_invited,
             'total_paid_amount': total_paid_amount,
             'total_unpaid': total_unpaid,
+            'paid_count': payment_stats['paid_count'],
+            'unpaid_count': payment_stats['unpaid_count'],
+            'subscription_total': breakdown['subscription_total'],
+            'deposit_total': breakdown['deposit_total'],
             'participants': participants_stats,
         }
 
@@ -557,5 +581,33 @@ class ReferralContestService:
                     )
             except Exception as exc:  # noqa: BLE001
                 logger.error("Не удалось записать зачёт регистрации для конкурса %s: %s", contest.id, exc)
+
+    async def sync_contest(
+        self,
+        db: AsyncSession,
+        contest_id: int,
+    ) -> dict:
+        """Синхронизировать события конкурса с реальными данными.
+
+        Проверяет всех рефералов и их платежи за период конкурса.
+        Учитывает ВСЕ платёжные системы (Stars, YooKassa, Platega, CryptoBot и др.).
+        """
+        from app.database.crud.referral_contest import sync_contest_events
+
+        try:
+            stats = await sync_contest_events(db, contest_id)
+            if "error" not in stats:
+                logger.info(
+                    "Синхронизация конкурса %s: создано %s, обновлено %s, пропущено %s",
+                    contest_id,
+                    stats.get("created", 0),
+                    stats.get("updated", 0),
+                    stats.get("skipped", 0),
+                )
+            return stats
+        except Exception as exc:
+            logger.error("Ошибка синхронизации конкурса %s: %s", contest_id, exc)
+            return {"error": str(exc)}
+
 
 referral_contest_service = ReferralContestService()

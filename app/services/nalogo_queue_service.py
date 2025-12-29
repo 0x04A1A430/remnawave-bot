@@ -15,6 +15,7 @@ from aiogram import Bot
 
 from app.config import settings
 from app.services.nalogo_service import NaloGoService
+from app.utils.cache import cache
 
 logger = logging.getLogger(__name__)
 
@@ -205,6 +206,12 @@ class NalogoQueueService:
                 if receipt_uuid:
                     processed += 1
                     total_processed_amount += amount
+
+                    # Удаляем метку "в очереди" (чек создан успешно)
+                    if payment_id:
+                        queued_key = f"nalogo:queued:{payment_id}"
+                        await cache.delete(queued_key)
+
                     logger.info(
                         f"Чек из очереди успешно создан: {receipt_uuid} "
                         f"(payment_id={payment_id}, попытка {attempts + 1})"
