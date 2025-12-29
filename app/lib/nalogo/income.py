@@ -3,9 +3,9 @@ Income API implementation.
 Based on PHP library's Api\\Income class.
 """
 
-from datetime import datetime
+from datetime import datetime, date
 from decimal import Decimal
-from typing import Any
+from typing import Any, Optional
 
 from ._http import AsyncHTTPClient
 from .dto.income import (
@@ -192,4 +192,48 @@ class IncomeAPI:
 
         # Make API request
         response = await self.http.post("/cancel", json_data=request.model_dump())
+        return response.json()  # type: ignore[no-any-return]
+
+    async def get_list(
+        self,
+        from_date: Optional[date] = None,
+        to_date: Optional[date] = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> dict[str, Any]:
+        """
+        Get list of income records for a period.
+
+        Args:
+            from_date: Start date (default: 30 days ago)
+            to_date: End date (default: today)
+            limit: Maximum number of records (default: 100)
+            offset: Offset for pagination (default: 0)
+
+        Returns:
+            Dictionary with income records list
+
+        Raises:
+            DomainException: For API errors
+        """
+        from datetime import timedelta
+
+        if from_date is None:
+            from_date = date.today() - timedelta(days=30)
+        if to_date is None:
+            to_date = date.today()
+
+        # API использует GET с query параметрами
+        params = {
+            "from": from_date.isoformat(),
+            "to": to_date.isoformat(),
+            "limit": str(limit),
+            "offset": str(offset),
+            "sortBy": "OPERATION_TIME",
+            "sortOrder": "DESC",
+        }
+
+        # Формируем query string
+        query = "&".join(f"{k}={v}" for k, v in params.items())
+        response = await self.http.get(f"/incomes?{query}")
         return response.json()  # type: ignore[no-any-return]

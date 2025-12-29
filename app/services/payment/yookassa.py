@@ -23,7 +23,7 @@ from app.utils.user_utils import format_referrer_info
 from app.utils.payment_logger import payment_logger as logger
 
 if TYPE_CHECKING:
-    from app.database.models import YooKassaPayment
+    from app.database.models import YooKassaPayment, Transaction
 
 
 class YooKassaPaymentMixin:
@@ -970,7 +970,9 @@ class YooKassaPaymentMixin:
             # Создаем чек через NaloGO (если NALOGO_ENABLED=true)
             if hasattr(self, "nalogo_service") and self.nalogo_service:
                 await self._create_nalogo_receipt(
-                    payment,
+                    db=db,
+                    payment=payment,
+                    transaction=transaction,
                     telegram_user_id=user.telegram_id if user else None,
                 )
 
@@ -1026,12 +1028,22 @@ class YooKassaPaymentMixin:
 
     async def _create_nalogo_receipt(
         self,
+        db: AsyncSession,
         payment: "YooKassaPayment",
+        transaction: Optional["Transaction"] = None,
         telegram_user_id: Optional[int] = None,
     ) -> None:
         """Создание чека через NaloGO для успешного платежа."""
         if not hasattr(self, "nalogo_service") or not self.nalogo_service:
             logger.debug("NaloGO сервис не инициализирован, чек не создан")
+            return
+
+        # Защита от дублей: если у транзакции уже есть чек — не создаём новый
+        if transaction and getattr(transaction, "receipt_uuid", None):
+            logger.info(
+                f"Чек для платежа {payment.yookassa_payment_id} уже создан: {transaction.receipt_uuid}, "
+                "пропускаем повторное создание"
+            )
             return
 
         try:
@@ -1052,6 +1064,20 @@ class YooKassaPaymentMixin:
 
             if receipt_uuid:
                 logger.info(f"Чек NaloGO создан для платежа {payment.yookassa_payment_id}: {receipt_uuid}")
+
+                # Сохраняем receipt_uuid в транзакцию
+                if transaction:
+                    try:
+                        transaction.receipt_uuid = receipt_uuid
+                        transaction.receipt_created_at = datetime.utcnow()
+                        await db.commit()
+                        logger.debug(
+                            f"Чек {receipt_uuid} привязан к транзакции {transaction.id}"
+                        )
+                    except Exception as save_error:
+                        logger.warning(
+                            f"Не удалось сохранить receipt_uuid в транзакцию: {save_error}"
+                        )
             # При временной недоступности чек добавляется в очередь автоматически
 
         except Exception as error:

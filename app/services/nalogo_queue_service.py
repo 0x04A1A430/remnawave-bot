@@ -155,14 +155,11 @@ class NalogoQueueService:
             payment_id = receipt_data.get("payment_id", "unknown")
             amount = receipt_data.get("amount", 0)
 
-            # Проверяем количество попыток
-            if attempts >= self._max_attempts:
-                logger.error(
-                    f"Чек {payment_id} превысил лимит попыток ({self._max_attempts}), "
-                    f"удален из очереди"
+            # Логируем количество попыток (чек никогда не удаляется из очереди)
+            if attempts >= 10:
+                logger.warning(
+                    f"Чек {payment_id} уже {attempts} попыток, продолжаем пытаться..."
                 )
-                skipped += 1
-                continue
 
             # Пытаемся отправить чек
             try:

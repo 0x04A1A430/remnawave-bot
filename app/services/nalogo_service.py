@@ -1,6 +1,6 @@
 import logging
-from datetime import datetime, timezone, timedelta
-from typing import Optional, Dict, Any
+from datetime import datetime, timezone, timedelta, date
+from typing import Optional, Dict, Any, List
 from decimal import Decimal
 
 # Используем локальную исправленную версию библиотеки
@@ -61,6 +61,9 @@ class NaloGoService:
         error_type = type(error).__name__.lower()
         return (
             "503" in error_str
+            or "500" in error_str
+            or "internal server error" in error_str
+            or "внутренняя ошибка" in error_str
             or "service temporarily unavailable" in error_str
             or "service unavailable" in error_str
             or "ведутся работы" in error_str
@@ -157,6 +160,17 @@ class NaloGoService:
             logger.warning("NaloGO не настроен, чек не создан")
             return None
 
+        # Защита от дублей: проверяем не был ли уже создан чек для этого payment_id
+        if payment_id:
+            created_key = f"nalogo:created:{payment_id}"
+            already_created = await cache.get(created_key)
+            if already_created:
+                logger.info(
+                    f"Чек для payment_id={payment_id} уже был создан ({already_created}), "
+                    "пропускаем повторное создание"
+                )
+                return already_created  # Возвращаем ранее созданный uuid
+
         try:
             # Аутентифицируемся, если нужно
             if not hasattr(self.client, '_access_token') or not self.client._access_token:
@@ -194,6 +208,12 @@ class NaloGoService:
             receipt_uuid = result.get("approvedReceiptUuid")
             if receipt_uuid:
                 logger.info(f"Чек создан успешно: {receipt_uuid} на сумму {amount}₽")
+
+                # Сохраняем в Redis чтобы предотвратить дубли (TTL 30 дней)
+                if payment_id:
+                    created_key = f"nalogo:created:{payment_id}"
+                    await cache.set(created_key, receipt_uuid, expire=30 * 24 * 3600)
+
                 return receipt_uuid
             else:
                 logger.error(f"Ошибка создания чека: {result}")
@@ -230,3 +250,49 @@ class NaloGoService:
         """Вернуть чек обратно в очередь (при неудачной отправке)."""
         receipt_data["attempts"] = receipt_data.get("attempts", 0) + 1
         return await cache.lpush(NALOGO_QUEUE_KEY, receipt_data)
+
+    async def get_incomes(
+        self,
+        from_date: Optional[date] = None,
+        to_date: Optional[date] = None,
+        limit: int = 100,
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Получить список доходов (чеков) за период.
+
+        Args:
+            from_date: Начало периода (по умолчанию 30 дней назад)
+            to_date: Конец периода (по умолчанию сегодня)
+            limit: Максимальное количество записей
+
+        Returns:
+            Список чеков с информацией, или None при ошибке
+        """
+        if not self.configured:
+            logger.warning("NaloGO не настроен, невозможно получить список доходов")
+            return None
+
+        try:
+            # Аутентифицируемся если нужно
+            if not hasattr(self.client, '_access_token') or not self.client._access_token:
+                auth_success = await self.authenticate()
+                if not auth_success:
+                    return []
+
+            income_api = self.client.income()
+            result = await income_api.get_list(
+                from_date=from_date,
+                to_date=to_date,
+                limit=limit,
+            )
+
+            # API возвращает структуру с полем content или items
+            incomes = result.get("content", result.get("items", []))
+            logger.info(f"Получено {len(incomes)} доходов из NaloGO")
+            return incomes
+
+        except Exception as error:
+            if self._is_service_unavailable(error):
+                logger.warning(f"NaloGO временно недоступен: {error}")
+            else:
+                logger.error(f"Ошибка получения списка доходов: {error}", exc_info=True)
+            return None  # None = ошибка, [] = нет чеков

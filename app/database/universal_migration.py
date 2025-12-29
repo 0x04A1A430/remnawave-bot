@@ -4754,6 +4754,78 @@ async def add_subscription_purchased_traffic_column() -> bool:
         return False
 
 
+async def add_transaction_receipt_columns() -> bool:
+    """Добавить колонки receipt_uuid и receipt_created_at в transactions."""
+    try:
+        receipt_uuid_exists = await check_column_exists("transactions", "receipt_uuid")
+        receipt_created_at_exists = await check_column_exists("transactions", "receipt_created_at")
+
+        if receipt_uuid_exists and receipt_created_at_exists:
+            logger.info("Колонки receipt_uuid и receipt_created_at уже существуют в transactions")
+            return True
+
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if not receipt_uuid_exists:
+                if db_type == "sqlite":
+                    await conn.execute(text(
+                        "ALTER TABLE transactions ADD COLUMN receipt_uuid VARCHAR(255)"
+                    ))
+                elif db_type == "postgresql":
+                    await conn.execute(text(
+                        "ALTER TABLE transactions ADD COLUMN receipt_uuid VARCHAR(255)"
+                    ))
+                else:
+                    await conn.execute(text(
+                        "ALTER TABLE transactions ADD COLUMN receipt_uuid VARCHAR(255)"
+                    ))
+                logger.info("✅ Добавлена колонка receipt_uuid в transactions")
+
+            if not receipt_created_at_exists:
+                if db_type == "sqlite":
+                    await conn.execute(text(
+                        "ALTER TABLE transactions ADD COLUMN receipt_created_at DATETIME"
+                    ))
+                elif db_type == "postgresql":
+                    await conn.execute(text(
+                        "ALTER TABLE transactions ADD COLUMN receipt_created_at TIMESTAMP"
+                    ))
+                else:
+                    await conn.execute(text(
+                        "ALTER TABLE transactions ADD COLUMN receipt_created_at DATETIME"
+                    ))
+                logger.info("✅ Добавлена колонка receipt_created_at в transactions")
+
+        # Создаём индекс на receipt_uuid
+        try:
+            async with engine.begin() as conn:
+                db_type = await get_database_type()
+                if db_type == "postgresql":
+                    await conn.execute(text(
+                        "CREATE INDEX IF NOT EXISTS ix_transactions_receipt_uuid "
+                        "ON transactions (receipt_uuid)"
+                    ))
+                elif db_type == "sqlite":
+                    await conn.execute(text(
+                        "CREATE INDEX IF NOT EXISTS ix_transactions_receipt_uuid "
+                        "ON transactions (receipt_uuid)"
+                    ))
+                else:
+                    await conn.execute(text(
+                        "CREATE INDEX ix_transactions_receipt_uuid "
+                        "ON transactions (receipt_uuid)"
+                    ))
+        except Exception as idx_error:
+            logger.warning(f"Индекс на receipt_uuid возможно уже существует: {idx_error}")
+
+        return True
+
+    except Exception as error:
+        logger.error(f"❌ Ошибка добавления колонок чеков в transactions: {error}")
+        return False
+
+
 async def run_universal_migration():
     logger.info("=== НАЧАЛО УНИВЕРСАЛЬНОЙ МИГРАЦИИ ===")
     
@@ -5224,6 +5296,13 @@ async def run_universal_migration():
         else:
             logger.warning("⚠️ Проблемы с таблицей subscription_events")
 
+        logger.info("=== ДОБАВЛЕНИЕ КОЛОНОК ЧЕКОВ В TRANSACTIONS ===")
+        receipt_columns_ready = await add_transaction_receipt_columns()
+        if receipt_columns_ready:
+            logger.info("✅ Колонки receipt_uuid и receipt_created_at готовы")
+        else:
+            logger.warning("⚠️ Проблемы с колонками чеков в transactions")
+
         async with engine.begin() as conn:
             total_subs = await conn.execute(text("SELECT COUNT(*) FROM subscriptions"))
             unique_users = await conn.execute(text("SELECT COUNT(DISTINCT user_id) FROM subscriptions"))
@@ -5407,7 +5486,11 @@ async def check_migration_status():
         )
 
         status["users_last_pinned_column"] = await check_column_exists('users', 'last_pinned_message_id')
-        
+
+        # Колонки чеков в transactions
+        status["transactions_receipt_uuid_column"] = await check_column_exists('transactions', 'receipt_uuid')
+        status["transactions_receipt_created_at_column"] = await check_column_exists('transactions', 'receipt_created_at')
+
         async with engine.begin() as conn:
             duplicates_check = await conn.execute(text("""
                 SELECT COUNT(*) FROM (
@@ -5471,6 +5554,8 @@ async def check_migration_status():
             "promo_offer_templates_active_discount_column": "Колонка active_discount_hours в promo_offer_templates",
             "promo_offer_logs_table": "Таблица promo_offer_logs",
             "subscription_temporary_access_table": "Таблица subscription_temporary_access",
+            "transactions_receipt_uuid_column": "Колонка receipt_uuid в transactions",
+            "transactions_receipt_created_at_column": "Колонка receipt_created_at в transactions",
         }
         
         for check_key, check_status in status.items():
