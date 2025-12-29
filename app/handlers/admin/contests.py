@@ -893,7 +893,6 @@ async def debug_contest_transactions(
 
     deposit_total = debug_data.get('deposit_total_kopeks', 0) // 100
     subscription_total = debug_data.get('subscription_total_kopeks', 0) // 100
-    grand_total = deposit_total + subscription_total
 
     lines = [
         "🔍 <b>Отладка транзакций конкурса</b>",
@@ -906,12 +905,9 @@ async def debug_contest_transactions(
         f"⚠️ <b>Отфильтровано (вне периода):</b> {debug_data.get('filtered_out', 0)}",
         f"📊 <b>Всего событий в БД:</b> {debug_data.get('total_all_events', 0)}",
         "",
-        "<b>💰 РАЗБИВКА ПО ТИПАМ ТРАНЗАКЦИЙ:</b>",
-        f"   📥 Пополнения баланса (DEPOSIT): <b>{deposit_total}</b> руб.",
-        f"   🛒 Прямые покупки (SUBSCRIPTION): <b>{subscription_total}</b> руб.",
-        f"   📊 ИТОГО: <b>{grand_total}</b> руб.",
-        "",
-        f"💸 <b>Сумма вне периода:</b> {debug_data.get('total_outside_period_kopeks', 0) // 100} руб.",
+        "<b>💰 СУММЫ:</b>",
+        f"   📥 Пополнения баланса: <b>{deposit_total}</b> руб.",
+        f"   🛒 Покупки подписок: <b>{subscription_total}</b> руб.",
         "",
     ]
 
