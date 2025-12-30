@@ -198,6 +198,7 @@ CORE_PRICING_ENTRIES: Tuple[SettingEntry, ...] = (
         choices=(
             ChoiceOption("selectable", "Выбор пакетов", "Selectable"),
             ChoiceOption("fixed", "Фиксированный лимит", "Fixed limit"),
+            ChoiceOption("fixed_with_topup", "Фикс. лимит + докупка", "Fixed + topup"),
         ),
         description_ru="Определяет, выбирают ли пользователи пакеты или получают фиксированный лимит.",
         description_en="Defines whether users pick packages or use a fixed limit.",
@@ -351,8 +352,11 @@ def _format_core_summary(lang_code: str) -> str:
     base_price = settings.format_price(settings.BASE_SUBSCRIPTION_PRICE)
     device_limit = settings.DEFAULT_DEVICE_LIMIT
     traffic_limit = settings.DEFAULT_TRAFFIC_LIMIT_GB
-    if settings.TRAFFIC_SELECTION_MODE == "fixed":
+    mode = settings.TRAFFIC_SELECTION_MODE.lower()
+    if mode == "fixed":
         traffic_mode = "⚙️ fixed"
+    elif mode == "fixed_with_topup":
+        traffic_mode = "⚙️ fixed+topup"
     else:
         traffic_mode = "⚙️ selectable"
     traffic_label = _format_traffic_label(traffic_limit, lang_code, short=True)

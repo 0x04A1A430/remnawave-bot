@@ -319,9 +319,13 @@ class SubscriptionRenewalService:
         if connected_uuids:
             server_ids = await get_server_ids_by_uuids(db, connected_uuids)
 
-        traffic_limit = subscription.traffic_limit_gb
-        if traffic_limit is None:
-            traffic_limit = settings.DEFAULT_TRAFFIC_LIMIT_GB
+        # В режиме fixed_with_topup при продлении используем фиксированный лимит
+        if settings.is_traffic_fixed():
+            traffic_limit = settings.get_fixed_traffic_limit()
+        else:
+            traffic_limit = subscription.traffic_limit_gb
+            if traffic_limit is None:
+                traffic_limit = settings.DEFAULT_TRAFFIC_LIMIT_GB
 
         devices_limit = subscription.device_limit
         if devices_limit is None:
