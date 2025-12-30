@@ -71,15 +71,8 @@ class PaymentCommonMixin:
             ),
         )
 
-        # Кнопка активации подписки (всегда отображается)
-        activate_subscription_button = build_miniapp_or_callback_button(
-            text="🚀 Активировать подписку",
-            callback_data="menu_buy"  # Используем ту же callback_data что и "Купить подписку"
-        )
-
         keyboard_rows: list[list[InlineKeyboardButton]] = [
             [first_button],
-            [activate_subscription_button]
         ]
 
         # Если для пользователя есть незавершённый checkout, предлагаем вернуться к нему.
