@@ -823,6 +823,10 @@ class Settings(BaseSettings):
 
         return bool(value)
 
+    def is_quick_amount_buttons_enabled(self) -> bool:
+        """Показывать ли кнопки быстрого выбора суммы пополнения."""
+        return self.YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED and not self.DISABLE_TOPUP_BUTTONS
+
     def get_available_languages(self) -> List[str]:
         defaults = ["ru", "en", "ua", "zh"]
 

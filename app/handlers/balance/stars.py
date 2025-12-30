@@ -45,7 +45,7 @@ async def start_stars_payment(
         return
 
     # Формируем текст сообщения в зависимости от настройки
-    if settings.YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED and not settings.DISABLE_TOPUP_BUTTONS:
+    if settings.is_quick_amount_buttons_enabled():
         message_text = (
             f"⭐ <b>Пополнение через Telegram Stars</b>\n\n"
             f"Выберите сумму пополнения или введите вручную:"
@@ -57,7 +57,7 @@ async def start_stars_payment(
     keyboard = get_back_keyboard(db_user.language)
 
     # Если включен быстрый выбор суммы и не отключены кнопки, добавляем кнопки
-    if settings.YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED and not settings.DISABLE_TOPUP_BUTTONS:
+    if settings.is_quick_amount_buttons_enabled():
         from .main import get_quick_amount_buttons
         quick_amount_buttons = get_quick_amount_buttons(db_user.language, db_user)
         if quick_amount_buttons:

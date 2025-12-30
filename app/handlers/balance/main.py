@@ -125,7 +125,7 @@ def get_quick_amount_buttons(language: str, user: User) -> list:
     Returns:
         List of button rows for inline keyboard
     """
-    if not settings.YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED or settings.DISABLE_TOPUP_BUTTONS:
+    if not settings.is_quick_amount_buttons_enabled():
         return []
 
     from app.localization.texts import get_texts
