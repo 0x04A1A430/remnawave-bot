@@ -7,9 +7,7 @@ import hashlib
 import hmac
 import logging
 import time
-from datetime import datetime
 from typing import Any, Dict, Optional
-from urllib.parse import urlencode
 
 import httpx
 
@@ -35,12 +33,10 @@ class CloudPaymentsService:
         public_id: Optional[str] = None,
         api_secret: Optional[str] = None,
         api_url: Optional[str] = None,
-        widget_url: Optional[str] = None,
     ) -> None:
         self.public_id = public_id or settings.CLOUDPAYMENTS_PUBLIC_ID
         self.api_secret = api_secret or settings.CLOUDPAYMENTS_API_SECRET
         self.api_url = (api_url or settings.CLOUDPAYMENTS_API_URL).rstrip("/")
-        self.widget_url = (widget_url or settings.CLOUDPAYMENTS_WIDGET_URL).rstrip("/")
 
     @property
     def is_configured(self) -> bool:
@@ -114,16 +110,18 @@ class CloudPaymentsService:
         """Convert rubles to kopeks."""
         return int(amount * 100)
 
-    def generate_payment_link(
+    async def generate_payment_link(
         self,
         telegram_id: int,
         amount_kopeks: int,
         invoice_id: str,
         description: Optional[str] = None,
         email: Optional[str] = None,
+        success_redirect_url: Optional[str] = None,
+        fail_redirect_url: Optional[str] = None,
     ) -> str:
         """
-        Generate a payment widget URL for CloudPayments.
+        Create a payment order via CloudPayments API and return payment URL.
 
         Args:
             telegram_id: User's Telegram ID (will be used as AccountId)
@@ -131,35 +129,65 @@ class CloudPaymentsService:
             invoice_id: Unique invoice ID for this payment
             description: Payment description
             email: User's email (optional)
+            success_redirect_url: Redirect URL after successful payment
+            fail_redirect_url: Redirect URL after failed payment
 
         Returns:
-            URL to CloudPayments payment widget
+            URL to CloudPayments payment page
         """
-        if not self.public_id:
-            raise CloudPaymentsAPIError("CloudPayments public_id not configured")
+        if not self.is_configured:
+            raise CloudPaymentsAPIError("CloudPayments is not configured")
 
         amount = self._amount_from_kopeks(amount_kopeks)
 
-        params = {
-            "publicId": self.public_id,
-            "description": description or settings.CLOUDPAYMENTS_DESCRIPTION,
-            "amount": amount,
-            "currency": settings.CLOUDPAYMENTS_CURRENCY,
-            "accountId": str(telegram_id),
-            "invoiceId": invoice_id,
-            "skin": settings.CLOUDPAYMENTS_SKIN,
+        # Формируем данные для создания заказа через API /orders/create
+        payload: Dict[str, Any] = {
+            "Amount": amount,
+            "Currency": settings.CLOUDPAYMENTS_CURRENCY,
+            "Description": description or settings.CLOUDPAYMENTS_DESCRIPTION,
+            "AccountId": str(telegram_id),
+            "InvoiceId": invoice_id,
+            "JsonData": {
+                "telegram_id": telegram_id,
+                "invoice_id": invoice_id,
+            },
         }
 
-        if settings.CLOUDPAYMENTS_REQUIRE_EMAIL:
-            params["requireEmail"] = "true"
-
         if email:
-            params["email"] = email
+            payload["Email"] = email
 
-        # Добавляем JSON данные для webhook
-        params["data"] = f'{{"telegram_id": {telegram_id}, "invoice_id": "{invoice_id}"}}'
+        if settings.CLOUDPAYMENTS_REQUIRE_EMAIL:
+            payload["RequireConfirmation"] = False
 
-        return f"{self.widget_url}?{urlencode(params)}"
+        # URL для редиректа после оплаты
+        if success_redirect_url or settings.CLOUDPAYMENTS_RETURN_URL:
+            payload["SuccessRedirectUrl"] = success_redirect_url or settings.CLOUDPAYMENTS_RETURN_URL
+
+        if fail_redirect_url:
+            payload["FailRedirectUrl"] = fail_redirect_url
+
+        # Создаём заказ через API
+        response = await self._request("POST", "/orders/create", json=payload)
+
+        if not response.get("Success"):
+            error_message = response.get("Message", "Unknown error")
+            logger.error("CloudPayments orders/create failed: %s", error_message)
+            raise CloudPaymentsAPIError(f"Failed to create order: {error_message}")
+
+        model = response.get("Model", {})
+        payment_url = model.get("Url")
+
+        if not payment_url:
+            logger.error("CloudPayments orders/create returned no URL: %s", response)
+            raise CloudPaymentsAPIError("CloudPayments API returned no payment URL")
+
+        logger.info(
+            "CloudPayments order created: id=%s, url=%s",
+            model.get("Id"),
+            payment_url,
+        )
+
+        return payment_url
 
     def generate_invoice_id(self, telegram_id: int) -> str:
         """Generate unique invoice ID for a payment."""

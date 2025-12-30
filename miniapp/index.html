@@ -16166,7 +16166,8 @@
         }
 
         function ensurePurchaseTrafficSelection(config) {
-            const selectable = config && config.selectable !== false && String(config.mode || '').toLowerCase() !== 'fixed';
+            const mode = String(config?.mode || '').toLowerCase();
+            const selectable = config && config.selectable !== false && !['fixed', 'fixed_with_topup'].includes(mode);
             const options = ensureArray(config?.options || config?.available || []);
             if (!selectable || !options.length) {
                 if (config && (config.current !== undefined || config.default !== undefined)) {
@@ -16937,7 +16938,8 @@
             }
 
             const config = getSubscriptionPurchaseTrafficConfig(period);
-            const selectable = config && config.selectable !== false && String(config.mode || '').toLowerCase() !== 'fixed';
+            const mode = String(config?.mode || '').toLowerCase();
+            const selectable = config && config.selectable !== false && !['fixed', 'fixed_with_topup'].includes(mode);
             const options = ensureArray(config?.options || config?.available || []);
 
             optionsContainer.innerHTML = '';

@@ -511,9 +511,11 @@ class MiniAppSubscriptionPurchaseService:
     ) -> PurchaseTrafficConfig:
         if settings.is_traffic_fixed():
             value = fixed_traffic_value if fixed_traffic_value is not None else settings.get_fixed_traffic_limit()
+            # Передаём актуальный режим (fixed или fixed_with_topup)
+            actual_mode = settings.TRAFFIC_SELECTION_MODE.lower()
             return PurchaseTrafficConfig(
                 selectable=False,
-                mode="fixed",
+                mode=actual_mode,
                 options=[],
                 default_value=value,
                 current_value=value,

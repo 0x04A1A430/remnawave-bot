@@ -158,6 +158,10 @@ class Settings(BaseSettings):
     BASE_PROMO_GROUP_PERIOD_DISCOUNTS_ENABLED: bool = False
     BASE_PROMO_GROUP_PERIOD_DISCOUNTS: str = ""
 
+    # Режим выбора трафика:
+    # - selectable: пользователь выбирает трафик при покупке и может докупать
+    # - fixed: фиксированный лимит, без выбора и без докупки
+    # - fixed_with_topup: фиксированный лимит при покупке, но докупка разрешена (при продлении сброс до лимита)
     TRAFFIC_SELECTION_MODE: str = "selectable"
     FIXED_TRAFFIC_LIMIT_GB: int = 100
     BUY_TRAFFIC_BUTTON_VISIBLE: bool = True
@@ -1058,6 +1062,11 @@ class Settings(BaseSettings):
         return self.TRAFFIC_SELECTION_MODE.lower() == "selectable"
     
     def is_traffic_fixed(self) -> bool:
+        """Возвращает True если выбор трафика отключён (fixed или fixed_with_topup)"""
+        return self.TRAFFIC_SELECTION_MODE.lower() in ("fixed", "fixed_with_topup")
+
+    def is_traffic_topup_blocked(self) -> bool:
+        """Возвращает True если докупка трафика полностью заблокирована (только fixed)"""
         return self.TRAFFIC_SELECTION_MODE.lower() == "fixed"
 
     def get_fixed_traffic_limit(self) -> int:

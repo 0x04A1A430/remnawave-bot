@@ -1362,7 +1362,12 @@ async def handle_extend_subscription(
             devices_price_info = calculate_user_price(db_user, devices_total_base, days, "devices")
 
             # 4. Calculate traffic price with promo group discount
-            traffic_price_per_month = settings.get_traffic_price(subscription.traffic_limit_gb)
+            # В режиме fixed_with_topup при продлении трафик сбрасывается до фиксированного лимита
+            if settings.is_traffic_fixed():
+                renewal_traffic_gb = settings.get_fixed_traffic_limit()
+            else:
+                renewal_traffic_gb = subscription.traffic_limit_gb
+            traffic_price_per_month = settings.get_traffic_price(renewal_traffic_gb)
             traffic_total_base = traffic_price_per_month * months_in_period
             traffic_price_info = calculate_user_price(db_user, traffic_total_base, days, "traffic")
 
@@ -1579,7 +1584,12 @@ async def confirm_extend_subscription(
         discounted_devices_price_per_month = devices_price_per_month - devices_discount_per_month
         total_devices_price = discounted_devices_price_per_month * months_in_period
 
-        traffic_price_per_month = settings.get_traffic_price(subscription.traffic_limit_gb)
+        # В режиме fixed_with_topup при продлении трафик сбрасывается до фиксированного лимита
+        if settings.is_traffic_fixed():
+            renewal_traffic_gb = settings.get_fixed_traffic_limit()
+        else:
+            renewal_traffic_gb = subscription.traffic_limit_gb
+        traffic_price_per_month = settings.get_traffic_price(renewal_traffic_gb)
         traffic_discount_percent = db_user.get_promo_discount(
             "traffic",
             days,
@@ -1731,6 +1741,17 @@ async def confirm_extend_subscription(
         subscription.status = SubscriptionStatus.ACTIVE.value
         subscription.updated_at = current_time
 
+        # В режиме fixed_with_topup при продлении сбрасываем трафик до фиксированного лимита
+        traffic_was_reset = False
+        old_traffic_limit = subscription.traffic_limit_gb
+        if settings.is_traffic_fixed():
+            fixed_limit = settings.get_fixed_traffic_limit()
+            if subscription.traffic_limit_gb != fixed_limit or (subscription.purchased_traffic_gb or 0) > 0:
+                traffic_was_reset = True
+                subscription.traffic_limit_gb = fixed_limit
+                subscription.purchased_traffic_gb = 0
+                logger.info(f"🔄 Сброс трафика при продлении: {old_traffic_limit} ГБ → {fixed_limit} ГБ")
+
         await db.commit()
         await db.refresh(subscription)
         await db.refresh(db_user)
@@ -1802,6 +1823,11 @@ async def confirm_extend_subscription(
             f"Действует до: {format_local_datetime(refreshed_end_date, '%d.%m.%Y %H:%M')}\n\n"
             f"💰 Списано: {texts.format_price(price)}"
         )
+
+        # Добавляем уведомление о сбросе трафика
+        if traffic_was_reset:
+            fixed_limit = settings.get_fixed_traffic_limit()
+            success_message += f"\n\n📊 Трафик сброшен до {fixed_limit} ГБ"
 
         if promo_component["discount"] > 0:
             success_message += (
