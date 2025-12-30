@@ -79,7 +79,8 @@ class Settings(BaseSettings):
     DATABASE_MODE: str = "auto"
     
     REDIS_URL: str = "redis://localhost:6379/0"
-    
+    CART_TTL_SECONDS: int = 3600  # Время жизни корзины пользователя в Redis (1 час)
+
     REMNAWAVE_API_URL: Optional[str] = None
     REMNAWAVE_API_KEY: Optional[str] = None
     REMNAWAVE_SECRET_KEY: Optional[str] = None

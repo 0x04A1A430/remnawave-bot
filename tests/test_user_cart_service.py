@@ -31,7 +31,8 @@ def mock_redis():
 @pytest.fixture
 def user_cart_service(mock_redis):
     service = UserCartService()
-    service.redis_client = mock_redis
+    service._redis_client = mock_redis
+    service._initialized = True
     return service
 
 async def test_save_user_cart(user_cart_service, mock_redis):
