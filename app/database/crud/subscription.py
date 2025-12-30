@@ -1429,8 +1429,11 @@ async def create_subscription_no_commit(
     )
     
     db.add(subscription)
+
+    # Выполняем flush, чтобы получить присвоенный первичный ключ
+    await db.flush()
+
     # Не коммитим сразу, оставляем для пакетной обработки
-    
     logger.info(f"✅ Подготовлена подписка для пользователя {user_id} (ожидает коммита)")
     return subscription
 
