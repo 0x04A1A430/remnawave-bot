@@ -27,8 +27,17 @@ async def show_referral_info(
     db_user: User,
     db: AsyncSession
 ):
+    # Проверяем, включена ли реферальная программа
+    if not settings.is_referral_program_enabled():
+        texts = get_texts(db_user.language)
+        await callback.answer(
+            texts.t("REFERRAL_PROGRAM_DISABLED", "Реферальная программа отключена"),
+            show_alert=True
+        )
+        return
+
     texts = get_texts(db_user.language)
-    
+
     summary = await get_user_referral_summary(db, db_user.id)
     
     bot_username = (await callback.bot.get_me()).username
