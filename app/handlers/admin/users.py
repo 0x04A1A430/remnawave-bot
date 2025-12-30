@@ -2432,7 +2432,7 @@ async def process_send_user_message(
     )
 
     try:
-        await message.bot.send_message(target_user.telegram_id, text)
+        await message.bot.send_message(target_user.telegram_id, text, parse_mode="HTML")
         await message.answer(
             texts.t("ADMIN_USER_SEND_MESSAGE_SUCCESS", "✅ Сообщение отправлено пользователю"),
             reply_markup=confirmation_keyboard,
@@ -2448,6 +2448,7 @@ async def process_send_user_message(
             texts.t("ADMIN_USER_SEND_MESSAGE_BAD_REQUEST", "❌ Telegram отклонил сообщение. Проверьте текст и попробуйте ещё раз."),
             reply_markup=confirmation_keyboard,
         )
+        await state.clear()
         return
     except Exception as err:
         logger.error("Неожиданная ошибка отправки сообщения пользователю %s: %s", target_user.telegram_id, err)
