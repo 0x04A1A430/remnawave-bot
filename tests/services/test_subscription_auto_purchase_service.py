@@ -172,6 +172,11 @@ async def test_auto_purchase_saved_cart_after_topup_success(monkeypatch):
         "app.services.subscription_auto_purchase_service.AdminNotificationService",
         lambda bot: admin_service_mock,
     )
+    # Мокаем get_user_by_id чтобы вернуть того же user
+    monkeypatch.setattr(
+        "app.services.subscription_auto_purchase_service.get_user_by_id",
+        AsyncMock(return_value=user),
+    )
 
     bot = AsyncMock()
     db_session = AsyncMock(spec=AsyncSession)

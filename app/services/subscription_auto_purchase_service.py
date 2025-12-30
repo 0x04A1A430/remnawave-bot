@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.crud.subscription import extend_subscription
 from app.database.crud.transaction import create_transaction
-from app.database.crud.user import subtract_user_balance
+from app.database.crud.user import get_user_by_id, subtract_user_balance
 from app.database.models import Subscription, TransactionType, User
 from app.localization.texts import get_texts
 from app.services.admin_notification_service import AdminNotificationService
@@ -72,6 +72,17 @@ async def _prepare_auto_purchase(
             user.telegram_id,
         )
         return None
+
+    # Перезагружаем user с нужными связями (user_promo_groups),
+    # т.к. после db.refresh() в payment-сервисах связи сбрасываются
+    fresh_user = await get_user_by_id(db, user.id)
+    if not fresh_user:
+        logger.warning(
+            "🔁 Автопокупка: не удалось перезагрузить пользователя %s",
+            user.telegram_id,
+        )
+        return None
+    user = fresh_user
 
     miniapp_service = MiniAppSubscriptionPurchaseService()
     context = await miniapp_service.build_options(db, user)
