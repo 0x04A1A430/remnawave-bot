@@ -75,8 +75,8 @@ class CloudPaymentsPaymentMixin:
         invoice_id = self.cloudpayments_service.generate_invoice_id(telegram_id)
 
         try:
-            # Generate payment widget URL
-            payment_url = self.cloudpayments_service.generate_payment_link(
+            # Create payment order via CloudPayments API
+            payment_url = await self.cloudpayments_service.generate_payment_link(
                 telegram_id=telegram_id,
                 amount_kopeks=amount_kopeks,
                 invoice_id=invoice_id,
