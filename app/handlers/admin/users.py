@@ -5035,11 +5035,12 @@ async def admin_buy_subscription_execute(
             subscription.updated_at = current_time
 
             if subscription.is_trial or not subscription.is_active:
+                was_trial = subscription.is_trial
                 subscription.is_trial = False
-                if subscription.traffic_limit_gb != 0: 
+                if subscription.traffic_limit_gb != 0:
                     subscription.traffic_limit_gb = 0
                 subscription.device_limit = settings.DEFAULT_DEVICE_LIMIT
-                if subscription.is_trial:
+                if was_trial:
                     subscription.traffic_used_gb = 0.0
             
             await db.commit()
