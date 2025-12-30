@@ -993,7 +993,20 @@ def get_subscription_keyboard(
                     callback_data="subscription_settings",
                 )
             ])
-    
+            # Кнопка докупки трафика для платных подписок
+            if (
+                settings.is_traffic_topup_enabled()
+                and not settings.is_traffic_topup_blocked()
+                and subscription
+                and (subscription.traffic_limit_gb or 0) > 0
+            ):
+                keyboard.append([
+                    InlineKeyboardButton(
+                        text=texts.t("BUY_TRAFFIC_BUTTON", "📈 Докупить трафик"),
+                        callback_data="buy_traffic"
+                    )
+                ])
+
     keyboard.append([
         InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")
     ])
