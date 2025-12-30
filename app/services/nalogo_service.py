@@ -99,10 +99,11 @@ class NaloGoService:
                 )
                 return False
 
-            # Проверяем не в очереди ли уже
+            # Атомарная проверка и установка флага "в очереди" (защита от race condition)
             queued_key = f"nalogo:queued:{payment_id}"
-            already_queued = await cache.get(queued_key)
-            if already_queued:
+            lock_acquired = await cache.setnx(queued_key, "queued", expire=7 * 24 * 3600)
+            if not lock_acquired:
+                # Ключ уже существует — чек уже в очереди
                 logger.info(
                     f"Чек для payment_id={payment_id} уже в очереди, пропускаем дубликат"
                 )
@@ -121,16 +122,16 @@ class NaloGoService:
         }
         success = await cache.lpush(NALOGO_QUEUE_KEY, receipt_data)
         if success:
-            # Помечаем что чек в очереди (TTL 7 дней)
-            if payment_id:
-                queued_key = f"nalogo:queued:{payment_id}"
-                await cache.set(queued_key, "queued", expire=7 * 24 * 3600)
-
             queue_len = await cache.llen(NALOGO_QUEUE_KEY)
             logger.info(
                 f"Чек добавлен в очередь (payment_id={payment_id}, "
                 f"сумма={amount}₽, в очереди: {queue_len})"
             )
+        else:
+            # Если не удалось добавить в очередь — удаляем флаг
+            if payment_id:
+                queued_key = f"nalogo:queued:{payment_id}"
+                await cache.delete(queued_key)
         return success
 
     async def authenticate(self) -> bool:
