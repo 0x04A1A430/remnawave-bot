@@ -930,10 +930,14 @@ class Transaction(Base):
     description = Column(Text, nullable=True)
     
     payment_method = Column(String(50), nullable=True)
-    external_id = Column(String(255), nullable=True)  
-    
+    external_id = Column(String(255), nullable=True)
+
     is_completed = Column(Boolean, default=True)
-    
+
+    # NaloGO чек
+    receipt_uuid = Column(String(255), nullable=True, index=True)
+    receipt_created_at = Column(DateTime, nullable=True)
+
     created_at = Column(DateTime, default=func.now())
     completed_at = Column(DateTime, nullable=True)
     

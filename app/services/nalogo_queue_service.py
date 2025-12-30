@@ -9,10 +9,13 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
+from dateutil.parser import isoparse
+
 from aiogram import Bot
 
 from app.config import settings
 from app.services.nalogo_service import NaloGoService
+from app.utils.cache import cache
 
 logger = logging.getLogger(__name__)
 
@@ -153,20 +156,28 @@ class NalogoQueueService:
             payment_id = receipt_data.get("payment_id", "unknown")
             amount = receipt_data.get("amount", 0)
 
-            # Проверяем количество попыток
-            if attempts >= self._max_attempts:
-                logger.error(
-                    f"Чек {payment_id} превысил лимит попыток ({self._max_attempts}), "
-                    f"удален из очереди"
+            # Логируем количество попыток (чек никогда не удаляется из очереди)
+            if attempts >= 10:
+                logger.warning(
+                    f"Чек {payment_id} уже {attempts} попыток, продолжаем пытаться..."
                 )
-                skipped += 1
-                continue
 
             # Пытаемся отправить чек
             try:
                 # Восстанавливаем описание из сохранённых данных
                 telegram_user_id = receipt_data.get("telegram_user_id")
                 amount_kopeks = receipt_data.get("amount_kopeks")
+
+                # Извлекаем время оплаты из очереди (чтобы чек был с правильным временем)
+                operation_time = None
+                created_at_str = receipt_data.get("created_at")
+                if created_at_str:
+                    try:
+                        operation_time = isoparse(created_at_str)
+                    except (ValueError, TypeError) as parse_error:
+                        logger.warning(
+                            f"Не удалось распарсить created_at '{created_at_str}': {parse_error}"
+                        )
 
                 # Формируем описание заново из настроек (если есть данные)
                 if amount_kopeks is not None:
@@ -189,11 +200,18 @@ class NalogoQueueService:
                     queue_on_failure=False,  # Не добавлять в очередь повторно автоматически
                     telegram_user_id=telegram_user_id,
                     amount_kopeks=amount_kopeks,
+                    operation_time=operation_time,  # Время оплаты, а не отправки
                 )
 
                 if receipt_uuid:
                     processed += 1
                     total_processed_amount += amount
+
+                    # Удаляем метку "в очереди" (чек создан успешно)
+                    if payment_id:
+                        queued_key = f"nalogo:queued:{payment_id}"
+                        await cache.delete(queued_key)
+
                     logger.info(
                         f"Чек из очереди успешно создан: {receipt_uuid} "
                         f"(payment_id={payment_id}, попытка {attempts + 1})"

@@ -688,10 +688,15 @@ async def show_detailed_stats(
         "📈 <b>Статистика конкурса</b>",
         f"🏆 {contest.title}",
         "",
-        f"👥 Участников: <b>{stats['total_participants']}</b>",
+        f"👥 Участников (рефереров): <b>{stats['total_participants']}</b>",
         f"📨 Приглашено рефералов: <b>{stats['total_invited']}</b>",
-        f"💰 Оплатили подписок: <b>{stats['total_paid_amount'] // 100} руб.</b>",
-        f"❌ Не оплатили: <b>{stats['total_unpaid']}</b>",
+        "",
+        f"💳 Рефералов оплатили: <b>{stats.get('paid_count', 0)}</b>",
+        f"❌ Рефералов не оплатили: <b>{stats.get('unpaid_count', 0)}</b>",
+        "",
+        "<b>💰 СУММЫ:</b>",
+        f"   🛒 Покупки подписок: <b>{stats.get('subscription_total', 0) // 100} руб.</b>",
+        f"   📥 Пополнения баланса: <b>{stats.get('deposit_total', 0) // 100} руб.</b>",
     ]
 
     await callback.message.edit_text(
@@ -760,6 +765,198 @@ async def show_detailed_stats_page(
     await callback.answer()
 
 
+@admin_required
+@error_handler
+async def sync_contest(
+    callback: types.CallbackQuery,
+    db_user,
+    db: AsyncSession,
+):
+    """Синхронизировать события конкурса с реальными платежами."""
+    if not settings.is_contests_enabled():
+        await callback.answer(
+            get_texts(db_user.language).t("ADMIN_CONTESTS_DISABLED", "Конкурсы отключены."),
+            show_alert=True,
+        )
+        return
+
+    contest_id = int(callback.data.split("_")[-1])
+    contest = await get_referral_contest(db, contest_id)
+
+    if not contest:
+        await callback.answer("Конкурс не найден.", show_alert=True)
+        return
+
+    await callback.answer("🔄 Синхронизация запущена...", show_alert=False)
+
+    from app.services.referral_contest_service import referral_contest_service
+    stats = await referral_contest_service.sync_contest(db, contest_id)
+
+    if "error" in stats:
+        await callback.message.answer(
+            f"❌ Ошибка синхронизации:\n{stats['error']}",
+        )
+        return
+
+    # Формируем сообщение о результатах
+    # Показываем точные даты которые использовались для фильтрации
+    start_str = stats.get('contest_start', contest.start_at.isoformat())
+    end_str = stats.get('contest_end', contest.end_at.isoformat())
+
+    lines = [
+        "✅ <b>Синхронизация завершена!</b>",
+        "",
+        f"📊 <b>Конкурс:</b> {contest.title}",
+        f"📅 <b>Период:</b> {contest.start_at.strftime('%d.%m.%Y')} - {contest.end_at.strftime('%d.%m.%Y')}",
+        f"🔍 <b>Фильтр транзакций:</b>",
+        f"   <code>{start_str}</code>",
+        f"   <code>{end_str}</code>",
+        "",
+        f"📝 Рефералов в периоде: <b>{stats.get('total_events', 0)}</b>",
+        f"⚠️ Отфильтровано (вне периода): <b>{stats.get('filtered_out_events', 0)}</b>",
+        f"📊 Всего событий в БД: <b>{stats.get('total_all_events', 0)}</b>",
+        "",
+        f"🔄 Обновлено сумм: <b>{stats.get('updated', 0)}</b>",
+        f"⏭ Без изменений: <b>{stats.get('skipped', 0)}</b>",
+        "",
+        f"💳 Рефералов оплатили: <b>{stats.get('paid_count', 0)}</b>",
+        f"❌ Рефералов не оплатили: <b>{stats.get('unpaid_count', 0)}</b>",
+        "",
+        "<b>💰 СУММЫ:</b>",
+        f"   🛒 Покупки подписок: <b>{stats.get('subscription_total', 0) // 100} руб.</b>",
+        f"   📥 Пополнения баланса: <b>{stats.get('deposit_total', 0) // 100} руб.</b>",
+    ]
+
+    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+    back_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⬅️ Назад к конкурсу", callback_data=f"admin_contest_view_{contest_id}")]
+    ])
+
+    await callback.message.answer(
+        "\n".join(lines),
+        parse_mode="HTML",
+        reply_markup=back_keyboard,
+    )
+
+    # Обновляем основное сообщение с новой статистикой
+    detailed_stats = await referral_contest_service.get_detailed_contest_stats(db, contest_id)
+    general_lines = [
+        f"🏆 <b>{contest.title}</b>",
+        f"📅 Период: {contest.start_at.strftime('%d.%m.%Y')} - {contest.end_at.strftime('%d.%m.%Y')}",
+        "",
+        f"👥 Участников (рефереров): <b>{detailed_stats['total_participants']}</b>",
+        f"📨 Приглашено рефералов: <b>{detailed_stats['total_invited']}</b>",
+        "",
+        f"💳 Рефералов оплатили: <b>{detailed_stats.get('paid_count', 0)}</b>",
+        f"❌ Рефералов не оплатили: <b>{detailed_stats.get('unpaid_count', 0)}</b>",
+        f"🛒 Покупки подписок: <b>{detailed_stats['total_paid_amount'] // 100} руб.</b>",
+    ]
+
+    await callback.message.edit_text(
+        "\n".join(general_lines),
+        reply_markup=get_referral_contest_manage_keyboard(
+            contest_id, is_active=contest.is_active, language=db_user.language
+        ),
+    )
+
+
+@admin_required
+@error_handler
+async def debug_contest_transactions(
+    callback: types.CallbackQuery,
+    db_user,
+    db: AsyncSession,
+):
+    """Показать транзакции рефералов конкурса для отладки."""
+    if not settings.is_contests_enabled():
+        await callback.answer(
+            get_texts(db_user.language).t("ADMIN_CONTESTS_DISABLED", "Конкурсы отключены."),
+            show_alert=True,
+        )
+        return
+
+    contest_id = int(callback.data.split("_")[-1])
+    contest = await get_referral_contest(db, contest_id)
+
+    if not contest:
+        await callback.answer("Конкурс не найден.", show_alert=True)
+        return
+
+    await callback.answer("🔍 Загружаю данные...", show_alert=False)
+
+    from app.database.crud.referral_contest import debug_contest_transactions as debug_txs
+    debug_data = await debug_txs(db, contest_id, limit=10)
+
+    if "error" in debug_data:
+        await callback.message.answer(f"❌ Ошибка: {debug_data['error']}")
+        return
+
+    deposit_total = debug_data.get('deposit_total_kopeks', 0) // 100
+    subscription_total = debug_data.get('subscription_total_kopeks', 0) // 100
+
+    lines = [
+        "🔍 <b>Отладка транзакций конкурса</b>",
+        "",
+        f"📊 <b>Конкурс:</b> {contest.title}",
+        f"📅 <b>Период фильтрации:</b>",
+        f"   Начало: <code>{debug_data.get('contest_start')}</code>",
+        f"   Конец: <code>{debug_data.get('contest_end')}</code>",
+        f"👥 <b>Рефералов в периоде:</b> {debug_data.get('referral_count', 0)}",
+        f"⚠️ <b>Отфильтровано (вне периода):</b> {debug_data.get('filtered_out', 0)}",
+        f"📊 <b>Всего событий в БД:</b> {debug_data.get('total_all_events', 0)}",
+        "",
+        "<b>💰 СУММЫ:</b>",
+        f"   📥 Пополнения баланса: <b>{deposit_total}</b> руб.",
+        f"   🛒 Покупки подписок: <b>{subscription_total}</b> руб.",
+        "",
+    ]
+
+    # Показываем транзакции В периоде
+    txs_in = debug_data.get('transactions_in_period', [])
+    if txs_in:
+        lines.append(f"✅ <b>Транзакции в периоде</b> (первые {len(txs_in)}):")
+        for tx in txs_in[:5]:  # Показываем максимум 5
+            lines.append(
+                f"  • {tx['created_at'][:10]} | "
+                f"{tx['type']} | "
+                f"{tx['amount_kopeks'] // 100}₽ | "
+                f"user={tx['user_id']}"
+            )
+        if len(txs_in) > 5:
+            lines.append(f"  ... и ещё {len(txs_in) - 5}")
+    else:
+        lines.append("✅ <b>Транзакций в периоде:</b> 0")
+
+    lines.append("")
+
+    # Показываем транзакции ВНЕ периода
+    txs_out = debug_data.get('transactions_outside_period', [])
+    if txs_out:
+        lines.append(f"❌ <b>Транзакции вне периода</b> (первые {len(txs_out)}):")
+        for tx in txs_out[:5]:
+            lines.append(
+                f"  • {tx['created_at'][:10]} | "
+                f"{tx['type']} | "
+                f"{tx['amount_kopeks'] // 100}₽ | "
+                f"user={tx['user_id']}"
+            )
+        if len(txs_out) > 5:
+            lines.append(f"  ... и ещё {len(txs_out) - 5}")
+    else:
+        lines.append("❌ <b>Транзакций вне периода:</b> 0")
+
+    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+    back_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⬅️ Назад к конкурсу", callback_data=f"admin_contest_view_{contest_id}")]
+    ])
+
+    await callback.message.answer(
+        "\n".join(lines),
+        parse_mode="HTML",
+        reply_markup=back_keyboard,
+    )
+
+
 def register_handlers(dp: Dispatcher):
     dp.callback_query.register(show_contests_menu, F.data == "admin_contests")
     dp.callback_query.register(show_referral_contests_menu, F.data == "admin_contests_referral")
@@ -772,6 +969,8 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(show_leaderboard, F.data.startswith("admin_contest_leaderboard_"))
     dp.callback_query.register(show_detailed_stats, F.data.startswith("admin_contest_detailed_stats_"))
     dp.callback_query.register(show_detailed_stats_page, F.data.startswith("admin_contest_detailed_stats_page_"))
+    dp.callback_query.register(sync_contest, F.data.startswith("admin_contest_sync_"))
+    dp.callback_query.register(debug_contest_transactions, F.data.startswith("admin_contest_debug_"))
     dp.callback_query.register(start_contest_creation, F.data == "admin_contests_create")
     dp.callback_query.register(select_contest_mode, F.data.in_(["admin_contest_mode_paid", "admin_contest_mode_registered"]))
 
