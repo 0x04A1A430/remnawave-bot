@@ -224,7 +224,7 @@ class UserService:
         db: AsyncSession,
         min_balance_kopeks: int,
         page: int = 1,
-        limit: int = 20,
+        limit: int = 10,
     ) -> Dict[str, Any]:
         """Возвращает пользователей с истекшей подпиской и достаточным балансом."""
         try:
@@ -247,7 +247,7 @@ class UserService:
                 .limit(limit)
             )
             result = await db.execute(query)
-            users = result.scalars().all()
+            users = result.scalars().unique().all()
 
             count_query = (
                 select(func.count(User.id))
