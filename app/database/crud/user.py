@@ -28,6 +28,48 @@ from app.utils.validators import sanitize_telegram_name
 logger = logging.getLogger(__name__)
 
 
+def _build_spending_stats_select():
+    """
+    Возвращает базовый SELECT для статистики трат пользователей.
+
+    Используется в:
+    - get_users_list() для сортировки по тратам/покупкам
+    - get_users_spending_stats() для получения статистики
+
+    Returns:
+        Tuple колонок (user_id, total_spent, purchase_count)
+    """
+    from app.database.models import Transaction
+
+    return (
+        Transaction.user_id.label("user_id"),
+        func.coalesce(
+            func.sum(
+                case(
+                    (
+                        Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
+                        Transaction.amount_kopeks,
+                    ),
+                    else_=0,
+                )
+            ),
+            0,
+        ).label("total_spent"),
+        func.coalesce(
+            func.sum(
+                case(
+                    (
+                        Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
+                        1,
+                    ),
+                    else_=0,
+                )
+            ),
+            0,
+        ).label("purchase_count"),
+    )
+
+
 def generate_referral_code() -> str:
     alphabet = string.ascii_letters + string.digits
     code_suffix = ''.join(secrets.choice(alphabet) for _ in range(8))
@@ -661,33 +703,7 @@ async def get_users_list(
         from app.database.models import Transaction
 
         transactions_stats = (
-            select(
-                Transaction.user_id.label("user_id"),
-                func.coalesce(
-                    func.sum(
-                        case(
-                            (
-                                Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
-                                Transaction.amount_kopeks,
-                            ),
-                            else_=0,
-                        )
-                    ),
-                    0,
-                ).label("total_spent"),
-                func.coalesce(
-                    func.sum(
-                        case(
-                            (
-                                Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
-                                1,
-                            ),
-                            else_=0,
-                        )
-                    ),
-                    0,
-                ).label("purchase_count"),
-            )
+            select(*_build_spending_stats_select())
             .where(Transaction.is_completed.is_(True))
             .group_by(Transaction.user_id)
             .subquery()
@@ -764,39 +780,23 @@ async def get_users_spending_stats(
     db: AsyncSession,
     user_ids: List[int]
 ) -> Dict[int, Dict[str, int]]:
+    """
+    Получает статистику трат для списка пользователей.
+
+    Args:
+        db: Сессия базы данных
+        user_ids: Список ID пользователей
+
+    Returns:
+        Словарь {user_id: {"total_spent": int, "purchase_count": int}}
+    """
     if not user_ids:
         return {}
 
     from app.database.models import Transaction
 
     stats_query = (
-        select(
-            Transaction.user_id,
-            func.coalesce(
-                func.sum(
-                    case(
-                        (
-                            Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
-                            Transaction.amount_kopeks,
-                        ),
-                        else_=0,
-                    )
-                ),
-                0,
-            ).label("total_spent"),
-            func.coalesce(
-                func.sum(
-                    case(
-                        (
-                            Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
-                            1,
-                        ),
-                        else_=0,
-                    )
-                ),
-                0,
-            ).label("purchase_count"),
-        )
+        select(*_build_spending_stats_select())
         .where(
             Transaction.user_id.in_(user_ids),
             Transaction.is_completed.is_(True),
