@@ -730,7 +730,12 @@ class SubscriptionService:
             devices_discount = devices_price * devices_discount_percent // 100
             discounted_devices_price = devices_price - devices_discount
 
-            traffic_price = settings.get_traffic_price(subscription.traffic_limit_gb)
+            # В режиме fixed_with_topup при продлении используем фиксированный лимит
+            if settings.is_traffic_fixed():
+                renewal_traffic_gb = settings.get_fixed_traffic_limit()
+            else:
+                renewal_traffic_gb = subscription.traffic_limit_gb
+            traffic_price = settings.get_traffic_price(renewal_traffic_gb)
             traffic_discount_percent = _resolve_discount_percent(
                 user,
                 promo_group,
@@ -1072,7 +1077,12 @@ class SubscriptionService:
             discounted_devices_per_month = devices_price_per_month - devices_discount_per_month
             total_devices_price = discounted_devices_per_month * months_in_period
 
-            traffic_price_per_month = settings.get_traffic_price(subscription.traffic_limit_gb)
+            # В режиме fixed_with_topup при продлении используем фиксированный лимит
+            if settings.is_traffic_fixed():
+                renewal_traffic_gb = settings.get_fixed_traffic_limit()
+            else:
+                renewal_traffic_gb = subscription.traffic_limit_gb
+            traffic_price_per_month = settings.get_traffic_price(renewal_traffic_gb)
             traffic_discount_percent = _resolve_discount_percent(
                 user,
                 promo_group,

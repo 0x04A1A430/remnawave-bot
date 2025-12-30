@@ -4690,7 +4690,8 @@ async def _build_subscription_settings(
     )
 
     traffic_options: List[MiniAppSubscriptionTrafficOption] = []
-    if settings.is_traffic_selectable():
+    # В режиме fixed_with_topup показываем опции трафика (для докупки)
+    if not settings.is_traffic_topup_blocked():
         for package in settings.get_traffic_packages():
             is_enabled = bool(package.get("enabled", True))
             if package.get("is_active") is False:
@@ -4764,7 +4765,7 @@ async def _build_subscription_settings(
         ),
         traffic=MiniAppSubscriptionTrafficSettings(
             options=traffic_options,
-            can_update=settings.is_traffic_selectable(),
+            can_update=not settings.is_traffic_topup_blocked(),
             current_value=subscription.traffic_limit_gb,
         ),
         devices=MiniAppSubscriptionDevicesSettings(
@@ -5512,7 +5513,9 @@ async def update_subscription_traffic_endpoint(
     if new_traffic == subscription.traffic_limit_gb:
         return MiniAppSubscriptionUpdateResponse(success=True, message="No changes")
 
-    if not settings.is_traffic_selectable():
+    # В режиме fixed полностью блокируем изменение трафика
+    # В режиме fixed_with_topup разрешаем докупку (is_traffic_topup_blocked = False)
+    if settings.is_traffic_topup_blocked():
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
             detail={

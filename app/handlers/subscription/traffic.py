@@ -107,7 +107,7 @@ async def handle_add_traffic(
         )
         return
 
-    if settings.is_traffic_fixed():
+    if settings.is_traffic_topup_blocked():
         await callback.answer(
             texts.t(
                 "TRAFFIC_FIXED_MODE",
@@ -206,7 +206,7 @@ async def handle_reset_traffic(
 ):
     from app.config import settings
 
-    if settings.is_traffic_fixed():
+    if settings.is_traffic_topup_blocked():
         await callback.answer("⚠️ В текущем режиме трафик фиксированный и не может быть сброшен", show_alert=True)
         return
 
@@ -266,7 +266,7 @@ async def confirm_reset_traffic(
 ):
     from app.config import settings
 
-    if settings.is_traffic_fixed():
+    if settings.is_traffic_topup_blocked():
         await callback.answer("⚠️ В текущем режиме трафик фиксированный", show_alert=True)
         return
 
@@ -461,7 +461,7 @@ async def add_traffic(
         db_user: User,
         db: AsyncSession
 ):
-    if settings.is_traffic_fixed():
+    if settings.is_traffic_topup_blocked():
         await callback.answer("⚠️ В текущем режиме трафик фиксированный", show_alert=True)
         return
 
@@ -609,7 +609,7 @@ async def handle_switch_traffic(
 ):
     from app.config import settings
 
-    if settings.is_traffic_fixed():
+    if settings.is_traffic_topup_blocked():
         await callback.answer("⚠️ В текущем режиме трафик фиксированный", show_alert=True)
         return
 

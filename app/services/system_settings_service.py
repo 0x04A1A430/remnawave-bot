@@ -355,6 +355,7 @@ class BotConfigurationService:
         "TRAFFIC_SELECTION_MODE": [
             ChoiceOption("selectable", "📦 Выбор пакетов"),
             ChoiceOption("fixed", "📏 Фиксированный лимит"),
+            ChoiceOption("fixed_with_topup", "📏 Фикс. лимит + докупка"),
         ],
         "DEFAULT_TRAFFIC_RESET_STRATEGY": [
             ChoiceOption("NO_RESET", "♾️ Без сброса"),

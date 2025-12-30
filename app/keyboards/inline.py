@@ -511,6 +511,7 @@ def get_main_menu_keyboard(
         if (
             settings.BUY_TRAFFIC_BUTTON_VISIBLE
             and settings.is_traffic_topup_enabled()
+            and not settings.is_traffic_topup_blocked()
             and subscription
             and not subscription.is_trial
             and (subscription.traffic_limit_gb or 0) > 0
@@ -992,7 +993,20 @@ def get_subscription_keyboard(
                     callback_data="subscription_settings",
                 )
             ])
-    
+            # Кнопка докупки трафика для платных подписок
+            if (
+                settings.is_traffic_topup_enabled()
+                and not settings.is_traffic_topup_blocked()
+                and subscription
+                and (subscription.traffic_limit_gb or 0) > 0
+            ):
+                keyboard.append([
+                    InlineKeyboardButton(
+                        text=texts.t("BUY_TRAFFIC_BUTTON", "📈 Докупить трафик"),
+                        callback_data="buy_traffic"
+                    )
+                ])
+
     keyboard.append([
         InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")
     ])
@@ -1134,10 +1148,10 @@ def get_subscription_period_keyboard(
 def get_traffic_packages_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     import logging
     logger = logging.getLogger(__name__)
-    
+
     from app.config import settings
-    
-    if settings.is_traffic_fixed():
+
+    if settings.is_traffic_topup_blocked():
         return get_back_keyboard(language)
     
     logger.info(f"🔍 RAW CONFIG: '{settings.TRAFFIC_PACKAGES_CONFIG}'")
@@ -1863,8 +1877,8 @@ def get_reset_traffic_confirm_keyboard(
     missing_kopeks: int = 0,
 ) -> InlineKeyboardMarkup:
     from app.config import settings
-    
-    if settings.is_traffic_fixed():
+
+    if settings.is_traffic_topup_blocked():
         return get_back_keyboard(language)
     
     texts = get_texts(language)

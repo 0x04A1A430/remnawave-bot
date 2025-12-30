@@ -680,11 +680,19 @@ async def auto_activate_subscription_after_topup(
     # Определяем параметры подписки
     if subscription:
         device_limit = subscription.device_limit or settings.DEFAULT_DEVICE_LIMIT
-        traffic_limit_gb = subscription.traffic_limit_gb or 0
+        # В режиме fixed_with_topup при автоактивации используем фиксированный лимит
+        if settings.is_traffic_fixed():
+            traffic_limit_gb = settings.get_fixed_traffic_limit()
+        else:
+            traffic_limit_gb = subscription.traffic_limit_gb or 0
         connected_squads = subscription.connected_squads or []
     else:
         device_limit = settings.DEFAULT_DEVICE_LIMIT
-        traffic_limit_gb = 0
+        # В режиме fixed_with_topup при автоактивации используем фиксированный лимит
+        if settings.is_traffic_fixed():
+            traffic_limit_gb = settings.get_fixed_traffic_limit()
+        else:
+            traffic_limit_gb = 0
         connected_squads = []
 
     # Если серверы не выбраны — берём бесплатные по умолчанию

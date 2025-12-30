@@ -344,6 +344,15 @@ async def extend_subscription(
         subscription.purchased_traffic_gb = 0  # Сбрасываем докупленный трафик вместе с использованным
         logger.info("🔄 Сбрасываем использованный и докупленный трафик согласно настройке RESET_TRAFFIC_ON_PAYMENT")
 
+    # В режиме fixed_with_topup при продлении сбрасываем трафик до фиксированного лимита
+    if settings.is_traffic_fixed() and days > 0:
+        fixed_limit = settings.get_fixed_traffic_limit()
+        old_limit = subscription.traffic_limit_gb
+        if subscription.traffic_limit_gb != fixed_limit or (subscription.purchased_traffic_gb or 0) > 0:
+            subscription.traffic_limit_gb = fixed_limit
+            subscription.purchased_traffic_gb = 0
+            logger.info(f"🔄 Сброс трафика при продлении (fixed_with_topup): {old_limit} ГБ → {fixed_limit} ГБ")
+
     subscription.updated_at = current_time
 
     await db.commit()
@@ -1158,7 +1167,12 @@ async def get_subscription_renewal_cost(
         total_servers_cost = discounted_servers_per_month * months_in_period
         total_servers_discount = servers_discount_per_month * months_in_period
 
-        traffic_price_per_month = settings.get_traffic_price(subscription.traffic_limit_gb)
+        # В режиме fixed_with_topup при продлении используем фиксированный лимит
+        if settings.is_traffic_fixed():
+            renewal_traffic_gb = settings.get_fixed_traffic_limit()
+        else:
+            renewal_traffic_gb = subscription.traffic_limit_gb
+        traffic_price_per_month = settings.get_traffic_price(renewal_traffic_gb)
         traffic_discount_percent = _get_discount_percent(
             user,
             promo_group,
