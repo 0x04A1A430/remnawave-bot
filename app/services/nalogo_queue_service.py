@@ -299,12 +299,21 @@ class NalogoQueueService:
         queue_length = 0
         total_amount = 0.0
         queued_receipts = []
+        pending_verification_count = 0
+        pending_verification_amount = 0.0
+        pending_verification_receipts = []
 
         if self._nalogo_service:
             queue_length = await self._nalogo_service.get_queue_length()
             if queue_length > 0:
                 queued_receipts = await self._nalogo_service.get_queued_receipts()
                 total_amount = sum(r.get("amount", 0) for r in queued_receipts)
+
+            # Чеки ожидающие ручной проверки
+            pending_verification_count = await self._nalogo_service.get_pending_verification_count()
+            if pending_verification_count > 0:
+                pending_verification_receipts = await self._nalogo_service.get_pending_verification_receipts()
+                pending_verification_amount = sum(r.get("amount", 0) for r in pending_verification_receipts)
 
         return {
             "running": self.is_running(),
@@ -313,7 +322,11 @@ class NalogoQueueService:
             "queue_length": queue_length,
             "total_amount": total_amount,
             "max_attempts": self._max_attempts,
-            "queued_receipts": queued_receipts[:10],  # Показываем только первые 10
+            "queued_receipts": queued_receipts[:10],
+            # Чеки требующие ручной проверки (таймаут после успешной авторизации)
+            "pending_verification_count": pending_verification_count,
+            "pending_verification_amount": pending_verification_amount,
+            "pending_verification_receipts": pending_verification_receipts[:10],
         }
 
 

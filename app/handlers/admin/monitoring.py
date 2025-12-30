@@ -919,6 +919,8 @@ async def monitoring_statistics_callback(callback: CallbackQuery):
                 queue_len = nalogo_status.get("queue_length", 0)
                 total_amount = nalogo_status.get("total_amount", 0)
                 running = nalogo_status.get("running", False)
+                pending_count = nalogo_status.get("pending_verification_count", 0)
+                pending_amount = nalogo_status.get("pending_verification_amount", 0)
 
                 nalogo_section = f"""
 🧾 <b>Чеки NaloGO:</b>
@@ -926,6 +928,8 @@ async def monitoring_statistics_callback(callback: CallbackQuery):
 • В очереди: {queue_len} чек(ов)"""
                 if queue_len > 0:
                     nalogo_section += f"\n• На сумму: {total_amount:,.2f} ₽"
+                if pending_count > 0:
+                    nalogo_section += f"\n⚠️ <b>Требуют проверки: {pending_count} ({pending_amount:,.2f} ₽)</b>"
                 text += nalogo_section
 
             from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -940,6 +944,12 @@ async def monitoring_statistics_callback(callback: CallbackQuery):
                         text=f"🧾 Отправить ({nalogo_status['queue_length']})",
                         callback_data="admin_mon_nalogo_force_process"
                     ))
+                pending_count = nalogo_status.get("pending_verification_count", 0)
+                if pending_count > 0:
+                    nalogo_buttons.append(InlineKeyboardButton(
+                        text=f"⚠️ Проверить ({pending_count})",
+                        callback_data="admin_mon_nalogo_pending"
+                    ))
                 nalogo_buttons.append(InlineKeyboardButton(
                     text="📊 Сверка чеков",
                     callback_data="admin_mon_receipts_missing"
@@ -948,7 +958,7 @@ async def monitoring_statistics_callback(callback: CallbackQuery):
 
             buttons.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_monitoring")])
             keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
-            
+
             await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
             break
             
@@ -1065,6 +1075,146 @@ async def nalogo_force_process_callback(callback: CallbackQuery):
 
     except Exception as e:
         logger.error(f"Ошибка принудительной обработки чеков: {e}")
+        await callback.answer(f"❌ Ошибка: {str(e)}", show_alert=True)
+
+
+@router.callback_query(F.data == "admin_mon_nalogo_pending")
+@admin_required
+async def nalogo_pending_callback(callback: CallbackQuery):
+    """Просмотр чеков ожидающих ручной проверки."""
+    try:
+        from app.services.nalogo_service import NaloGoService
+        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+
+        nalogo_service = NaloGoService()
+        receipts = await nalogo_service.get_pending_verification_receipts()
+
+        if not receipts:
+            await callback.answer("✅ Нет чеков на проверку", show_alert=True)
+            return
+
+        text = f"⚠️ <b>Чеки требующие проверки: {len(receipts)}</b>\n\n"
+        text += "Проверьте в lknpd.nalog.ru созданы ли эти чеки.\n\n"
+
+        buttons = []
+        for i, receipt in enumerate(receipts[:10], 1):
+            payment_id = receipt.get("payment_id", "unknown")
+            amount = receipt.get("amount", 0)
+            created_at = receipt.get("created_at", "")[:16].replace("T", " ")
+            error = receipt.get("error", "")[:50]
+
+            text += f"<b>{i}. {amount:,.2f} ₽</b>\n"
+            text += f"   📅 {created_at}\n"
+            text += f"   🆔 <code>{payment_id[:20]}...</code>\n"
+            if error:
+                text += f"   ❌ {error}\n"
+            text += "\n"
+
+            # Кнопки для каждого чека
+            buttons.append([
+                InlineKeyboardButton(
+                    text=f"✅ Создан ({i})",
+                    callback_data=f"admin_nalogo_verified:{payment_id[:30]}"
+                ),
+                InlineKeyboardButton(
+                    text=f"🔄 Отправить ({i})",
+                    callback_data=f"admin_nalogo_retry:{payment_id[:30]}"
+                ),
+            ])
+
+        if len(receipts) > 10:
+            text += f"\n... и ещё {len(receipts) - 10} чек(ов)"
+
+        buttons.append([
+            InlineKeyboardButton(
+                text="🗑 Очистить всё (проверено)",
+                callback_data="admin_nalogo_clear_pending"
+            )
+        ])
+        buttons.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_mon_statistics")])
+        keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
+
+    except Exception as e:
+        logger.error(f"Ошибка просмотра очереди проверки: {e}")
+        await callback.answer(f"❌ Ошибка: {str(e)}", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("admin_nalogo_verified:"))
+@admin_required
+async def nalogo_mark_verified_callback(callback: CallbackQuery):
+    """Пометить чек как созданный в налоговой."""
+    try:
+        from app.services.nalogo_service import NaloGoService
+
+        payment_id = callback.data.split(":", 1)[1]
+        nalogo_service = NaloGoService()
+
+        # Помечаем как проверенный (чек был создан)
+        removed = await nalogo_service.mark_pending_as_verified(
+            payment_id, receipt_uuid=None, was_created=True
+        )
+
+        if removed:
+            await callback.answer(f"✅ Чек помечен как созданный", show_alert=True)
+            # Обновляем список
+            await nalogo_pending_callback(callback)
+        else:
+            await callback.answer("❌ Чек не найден", show_alert=True)
+
+    except Exception as e:
+        logger.error(f"Ошибка пометки чека: {e}")
+        await callback.answer(f"❌ Ошибка: {str(e)}", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("admin_nalogo_retry:"))
+@admin_required
+async def nalogo_retry_callback(callback: CallbackQuery):
+    """Повторно отправить чек в налоговую."""
+    try:
+        from app.services.nalogo_service import NaloGoService
+
+        payment_id = callback.data.split(":", 1)[1]
+        nalogo_service = NaloGoService()
+
+        await callback.answer("🔄 Отправляю чек...", show_alert=False)
+
+        receipt_uuid = await nalogo_service.retry_pending_receipt(payment_id)
+
+        if receipt_uuid:
+            await callback.answer(f"✅ Чек создан: {receipt_uuid}", show_alert=True)
+            # Обновляем список
+            await nalogo_pending_callback(callback)
+        else:
+            await callback.answer("❌ Не удалось создать чек", show_alert=True)
+
+    except Exception as e:
+        logger.error(f"Ошибка повторной отправки чека: {e}")
+        await callback.answer(f"❌ Ошибка: {str(e)}", show_alert=True)
+
+
+@router.callback_query(F.data == "admin_nalogo_clear_pending")
+@admin_required
+async def nalogo_clear_pending_callback(callback: CallbackQuery):
+    """Очистить всю очередь проверки."""
+    try:
+        from app.services.nalogo_service import NaloGoService
+
+        nalogo_service = NaloGoService()
+        count = await nalogo_service.clear_pending_verification()
+
+        await callback.answer(f"✅ Очищено: {count} чек(ов)", show_alert=True)
+        # Возвращаемся на статистику
+        await callback.message.edit_text(
+            "✅ Очередь проверки очищена",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_mon_statistics")]
+            ])
+        )
+
+    except Exception as e:
+        logger.error(f"Ошибка очистки очереди: {e}")
         await callback.answer(f"❌ Ошибка: {str(e)}", show_alert=True)
 
 
