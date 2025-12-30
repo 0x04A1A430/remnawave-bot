@@ -993,3 +993,30 @@ async def get_users_statistics(db: AsyncSession) -> dict:
         "new_week": new_week,
         "new_month": new_month
     }
+
+
+async def get_users_with_active_subscriptions(db: AsyncSession) -> List[User]:
+    """
+    Получает список пользователей с активными подписками.
+    Используется для мониторинга трафика.
+
+    Returns:
+        Список пользователей с активными подписками и remnawave_uuid
+    """
+    current_time = datetime.utcnow()
+
+    result = await db.execute(
+        select(User)
+        .join(Subscription, User.id == Subscription.user_id)
+        .where(
+            and_(
+                User.remnawave_uuid.isnot(None),
+                User.status == UserStatus.ACTIVE.value,
+                Subscription.status == SubscriptionStatus.ACTIVE.value,
+                Subscription.end_date > current_time,
+            )
+        )
+        .options(selectinload(User.subscription))
+    )
+
+    return result.scalars().unique().all()
