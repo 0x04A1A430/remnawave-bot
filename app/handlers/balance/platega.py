@@ -80,7 +80,7 @@ async def _prompt_amount(
 
     keyboard = get_back_keyboard(db_user.language)
 
-    if settings.YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED and not settings.DISABLE_TOPUP_BUTTONS:
+    if settings.is_quick_amount_buttons_enabled():
         from .main import get_quick_amount_buttons
 
         quick_amount_buttons = get_quick_amount_buttons(db_user.language, db_user)

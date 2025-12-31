@@ -79,7 +79,8 @@ class Settings(BaseSettings):
     DATABASE_MODE: str = "auto"
     
     REDIS_URL: str = "redis://localhost:6379/0"
-    
+    CART_TTL_SECONDS: int = 3600  # Время жизни корзины пользователя в Redis (1 час)
+
     REMNAWAVE_API_URL: Optional[str] = None
     REMNAWAVE_API_KEY: Optional[str] = None
     REMNAWAVE_SECRET_KEY: Optional[str] = None
@@ -821,6 +822,10 @@ class Settings(BaseSettings):
             return normalized in {"1", "true", "yes", "on"}
 
         return bool(value)
+
+    def is_quick_amount_buttons_enabled(self) -> bool:
+        """Показывать ли кнопки быстрого выбора суммы пополнения."""
+        return self.YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED and not self.DISABLE_TOPUP_BUTTONS
 
     def get_available_languages(self) -> List[str]:
         defaults = ["ru", "en", "ua", "zh"]

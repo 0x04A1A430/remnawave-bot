@@ -807,10 +807,10 @@ def get_happ_download_link_keyboard(language: str, link: str) -> InlineKeyboardM
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-def get_back_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
+def get_back_keyboard(language: str = DEFAULT_LANGUAGE, callback_data: str = "back_to_menu") -> InlineKeyboardMarkup:
     texts = get_texts(language)
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")]
+        [InlineKeyboardButton(text=texts.BACK, callback_data=callback_data)]
     ])
 
 
