@@ -416,6 +416,12 @@ class BotConfigurationService:
             ChoiceOption(4, "4 — НДС 20%"),
             ChoiceOption(5, "5 — НДС 10/110"),
             ChoiceOption(6, "6 — НДС 20/120"),
+            ChoiceOption(7, "7 — НДС 5%"),
+            ChoiceOption(8, "8 — НДС 7%"),
+            ChoiceOption(9, "9 — НДС 5/105"),
+            ChoiceOption(10, "10 — НДС 7/107"),
+            ChoiceOption(11, "11 — НДС 22%"),
+            ChoiceOption(12, "12 — НДС 22/122"),
         ],
         "MULENPAY_LANGUAGE": [
             ChoiceOption("ru", "🇷🇺 Русский"),
