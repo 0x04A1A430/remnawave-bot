@@ -3382,6 +3382,54 @@ async def add_user_restriction_columns() -> bool:
         return False
 
 
+async def add_user_cabinet_columns() -> bool:
+    """Add cabinet (personal account) columns to users table."""
+    cabinet_columns = [
+        ("email", "VARCHAR(255)", "VARCHAR(255)", "VARCHAR(255)"),
+        ("email_verified", "BOOLEAN DEFAULT 0", "BOOLEAN DEFAULT FALSE", "TINYINT(1) DEFAULT 0"),
+        ("email_verified_at", "DATETIME", "TIMESTAMP", "DATETIME"),
+        ("password_hash", "VARCHAR(255)", "VARCHAR(255)", "VARCHAR(255)"),
+        ("email_verification_token", "VARCHAR(255)", "VARCHAR(255)", "VARCHAR(255)"),
+        ("email_verification_expires", "DATETIME", "TIMESTAMP", "DATETIME"),
+        ("password_reset_token", "VARCHAR(255)", "VARCHAR(255)", "VARCHAR(255)"),
+        ("password_reset_expires", "DATETIME", "TIMESTAMP", "DATETIME"),
+        ("cabinet_last_login", "DATETIME", "TIMESTAMP", "DATETIME"),
+    ]
+
+    try:
+        db_type = await get_database_type()
+        added_count = 0
+
+        for col_name, sqlite_type, pg_type, mysql_type in cabinet_columns:
+            if await check_column_exists('users', col_name):
+                continue
+
+            async with engine.begin() as conn:
+                if db_type == 'sqlite':
+                    col_type = sqlite_type
+                elif db_type == 'postgresql':
+                    col_type = pg_type
+                else:
+                    col_type = mysql_type
+
+                await conn.execute(
+                    text(f"ALTER TABLE users ADD COLUMN {col_name} {col_type}")
+                )
+                added_count += 1
+                logger.info(f"✅ Добавлена колонка users.{col_name}")
+
+        if added_count == 0:
+            logger.info("ℹ️ Все колонки cabinet уже существуют в таблице users")
+        else:
+            logger.info(f"✅ Добавлено {added_count} колонок cabinet в таблицу users")
+
+        return True
+
+    except Exception as e:
+        logger.error(f"Ошибка добавления колонок cabinet: {e}")
+        return False
+
+
 async def add_subscription_crypto_link_column() -> bool:
     column_exists = await check_column_exists('subscriptions', 'subscription_crypto_link')
     if column_exists:
@@ -5233,6 +5281,13 @@ async def run_universal_migration():
             logger.info("✅ Колонки ограничений пользователей готовы")
         else:
             logger.warning("⚠️ Проблемы с добавлением колонок ограничений пользователей")
+
+        logger.info("=== ДОБАВЛЕНИЕ КОЛОНОК ЛИЧНОГО КАБИНЕТА ===")
+        cabinet_added = await add_user_cabinet_columns()
+        if cabinet_added:
+            logger.info("✅ Колонки личного кабинета готовы")
+        else:
+            logger.warning("⚠️ Проблемы с добавлением колонок личного кабинета")
 
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ АУДИТА ПОДДЕРЖКИ ===")
         try:
