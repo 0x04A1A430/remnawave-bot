@@ -1947,6 +1947,37 @@ async def ensure_user_promo_offer_discount_columns():
         return False
 
 
+async def ensure_user_notification_settings_column() -> bool:
+    """Ensure notification_settings column exists in users table."""
+    try:
+        column_exists = await check_column_exists('users', 'notification_settings')
+
+        if column_exists:
+            return True
+
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'sqlite':
+                column_def = 'TEXT NULL'
+            elif db_type == 'postgresql':
+                column_def = 'JSONB NULL'
+            elif db_type == 'mysql':
+                column_def = 'JSON NULL'
+            else:
+                column_def = 'TEXT NULL'
+
+            await conn.execute(text(
+                f"ALTER TABLE users ADD COLUMN notification_settings {column_def}"
+            ))
+
+        logger.info("✅ Колонка notification_settings для users добавлена")
+        return True
+    except Exception as e:
+        logger.error(f"Ошибка добавления колонки notification_settings: {e}")
+        return False
+
+
 async def ensure_promo_offer_template_active_duration_column() -> bool:
     try:
         column_exists = await check_column_exists('promo_offer_templates', 'active_discount_hours')
@@ -5038,6 +5069,13 @@ async def run_universal_migration():
         else:
             logger.warning("⚠️ Не удалось обновить пользовательские промо-скидки")
 
+        logger.info("=== ДОБАВЛЕНИЕ КОЛОНКИ NOTIFICATION_SETTINGS ===")
+        notification_settings_ready = await ensure_user_notification_settings_column()
+        if notification_settings_ready:
+            logger.info("✅ Колонка notification_settings готова")
+        else:
+            logger.warning("⚠️ Не удалось добавить колонку notification_settings")
+
         effect_types_updated = await migrate_discount_offer_effect_types()
         if effect_types_updated:
             logger.info("✅ Типы эффектов промо-предложений обновлены")
@@ -5384,6 +5422,7 @@ async def check_migration_status():
             "users_promo_offer_discount_source_column": False,
             "users_promo_offer_discount_expires_column": False,
             "users_referral_commission_percent_column": False,
+            "users_notification_settings_column": False,
             "subscription_crypto_link_column": False,
             "subscription_modem_enabled_column": False,
             "subscription_purchased_traffic_column": False,
@@ -5451,6 +5490,7 @@ async def check_migration_status():
         status["users_promo_offer_discount_source_column"] = await check_column_exists('users', 'promo_offer_discount_source')
         status["users_promo_offer_discount_expires_column"] = await check_column_exists('users', 'promo_offer_discount_expires_at')
         status["users_referral_commission_percent_column"] = await check_column_exists('users', 'referral_commission_percent')
+        status["users_notification_settings_column"] = await check_column_exists('users', 'notification_settings')
         status["subscription_crypto_link_column"] = await check_column_exists('subscriptions', 'subscription_crypto_link')
         status["subscription_modem_enabled_column"] = await check_column_exists('subscriptions', 'modem_enabled')
         status["subscription_purchased_traffic_column"] = await check_column_exists('subscriptions', 'purchased_traffic_gb')
@@ -5534,6 +5574,7 @@ async def check_migration_status():
             "users_promo_offer_discount_source_column": "Колонка источника промо-скидки у пользователей",
             "users_promo_offer_discount_expires_column": "Колонка срока действия промо-скидки у пользователей",
             "users_referral_commission_percent_column": "Колонка процента реферальной комиссии у пользователей",
+            "users_notification_settings_column": "Колонка notification_settings у пользователей",
             "subscription_crypto_link_column": "Колонка subscription_crypto_link в subscriptions",
             "subscription_modem_enabled_column": "Колонка modem_enabled в subscriptions",
             "subscription_purchased_traffic_column": "Колонка purchased_traffic_gb в subscriptions",

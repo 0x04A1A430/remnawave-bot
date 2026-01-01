@@ -494,6 +494,25 @@ class Settings(BaseSettings):
     EXTERNAL_ADMIN_TOKEN: Optional[str] = None
     EXTERNAL_ADMIN_TOKEN_BOT_ID: Optional[int] = None
 
+    # Cabinet (Personal Account) settings
+    CABINET_ENABLED: bool = False
+    CABINET_JWT_SECRET: Optional[str] = None
+    CABINET_ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
+    CABINET_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    CABINET_ALLOWED_ORIGINS: str = ""
+    CABINET_EMAIL_VERIFICATION_ENABLED: bool = True
+    CABINET_EMAIL_VERIFICATION_EXPIRE_HOURS: int = 24
+    CABINET_PASSWORD_RESET_EXPIRE_HOURS: int = 1
+
+    # SMTP settings for cabinet email
+    SMTP_HOST: Optional[str] = None
+    SMTP_PORT: int = 587
+    SMTP_USER: Optional[str] = None
+    SMTP_PASSWORD: Optional[str] = None
+    SMTP_FROM_EMAIL: Optional[str] = None
+    SMTP_FROM_NAME: str = "VPN Service"
+    SMTP_USE_TLS: bool = True
+
     @field_validator('MAIN_MENU_MODE', mode='before')
     @classmethod
     def normalize_main_menu_mode(cls, value: Optional[str]) -> str:
@@ -1627,7 +1646,10 @@ class Settings(BaseSettings):
         return stars * self.get_stars_rate()
     
     def rubles_to_stars(self, rubles: float) -> int:
-        return max(1, math.ceil(rubles / self.get_stars_rate()))
+        rate = self.get_stars_rate()
+        if rate <= 0:
+            raise ValueError("Stars rate must be positive")
+        return max(1, math.ceil(rubles / rate))
 
     def get_admin_notifications_chat_id(self) -> Optional[int]:
         if not self.ADMIN_NOTIFICATIONS_CHAT_ID:
@@ -2009,6 +2031,43 @@ class Settings(BaseSettings):
         if not raw_path:
             raw_path = "miniapp"
         return Path(raw_path)
+
+    # Cabinet methods
+    def is_cabinet_enabled(self) -> bool:
+        return bool(self.CABINET_ENABLED)
+
+    def get_cabinet_jwt_secret(self) -> str:
+        if self.CABINET_JWT_SECRET:
+            return self.CABINET_JWT_SECRET
+        return self.BOT_TOKEN
+
+    def get_cabinet_access_token_expire_minutes(self) -> int:
+        return max(1, self.CABINET_ACCESS_TOKEN_EXPIRE_MINUTES)
+
+    def get_cabinet_refresh_token_expire_days(self) -> int:
+        return max(1, self.CABINET_REFRESH_TOKEN_EXPIRE_DAYS)
+
+    def get_cabinet_allowed_origins(self) -> List[str]:
+        if not self.CABINET_ALLOWED_ORIGINS:
+            return []
+        return [o.strip() for o in self.CABINET_ALLOWED_ORIGINS.split(",") if o.strip()]
+
+    def is_cabinet_email_verification_enabled(self) -> bool:
+        return bool(self.CABINET_EMAIL_VERIFICATION_ENABLED)
+
+    def get_cabinet_email_verification_expire_hours(self) -> int:
+        return max(1, self.CABINET_EMAIL_VERIFICATION_EXPIRE_HOURS)
+
+    def get_cabinet_password_reset_expire_hours(self) -> int:
+        return max(1, self.CABINET_PASSWORD_RESET_EXPIRE_HOURS)
+
+    def is_smtp_configured(self) -> bool:
+        return bool(self.SMTP_HOST and self.SMTP_USER and self.SMTP_PASSWORD)
+
+    def get_smtp_from_email(self) -> Optional[str]:
+        if self.SMTP_FROM_EMAIL:
+            return self.SMTP_FROM_EMAIL
+        return self.SMTP_USER
 
     model_config = {
         "env_file": ".env",

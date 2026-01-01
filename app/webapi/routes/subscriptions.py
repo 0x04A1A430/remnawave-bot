@@ -18,11 +18,13 @@ from app.database.crud.subscription import (
     add_subscription_traffic,
     create_paid_subscription,
     create_trial_subscription,
+    deactivate_subscription,
     extend_subscription,
     get_subscription_by_user_id,
     replace_subscription,
     remove_subscription_squad,
 )
+from app.services.subscription_service import SubscriptionService
 from app.database.models import Subscription, SubscriptionStatus
 
 from ..dependencies import get_db_session, require_api_token
@@ -306,6 +308,30 @@ async def remove_subscription_squad_endpoint(
     return _serialize_subscription(subscription)
 
 
+@router.delete("/{subscription_id}", response_model=SubscriptionResponse)
+async def delete_subscription(
+    subscription_id: int,
+    _: Any = Security(require_api_token),
+    db: AsyncSession = Depends(get_db_session),
+) -> SubscriptionResponse:
+    """
+    Деактивировать подписку.
+    Подписка не удаляется физически, а помечается как DISABLED.
+    Также деактивируется пользователь в RemnaWave, если есть UUID.
+    """
+    subscription = await _get_subscription(db, subscription_id)
+
+    await deactivate_subscription(db, subscription)
+
+    # Деактивируем пользователя в RemnaWave, если есть UUID
+    if subscription.user and subscription.user.remnawave_uuid:
+        subscription_service = SubscriptionService()
+        await subscription_service.disable_remnawave_user(subscription.user.remnawave_uuid)
+
+    subscription = await _get_subscription(db, subscription.id)
+    return _serialize_subscription(subscription)
+
+
 @router.post("/{subscription_id}/modem", response_model=SubscriptionResponse)
 async def set_subscription_modem(
     subscription_id: int,
@@ -315,18 +341,18 @@ async def set_subscription_modem(
 ) -> SubscriptionResponse:
     """Включить или выключить модем для подписки."""
     subscription = await _get_subscription(db, subscription_id)
-    
+
     if subscription.is_trial:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Modem is not available for trial subscriptions")
-    
+
     if not settings.is_modem_enabled():
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Modem feature is disabled")
-    
+
     current_modem = getattr(subscription, 'modem_enabled', False) or False
-    
+
     if payload.enabled == current_modem:
         return _serialize_subscription(subscription)
-    
+
     if payload.enabled:
         subscription.modem_enabled = True
         subscription.device_limit = (subscription.device_limit or 1) + 1
@@ -334,11 +360,11 @@ async def set_subscription_modem(
         subscription.modem_enabled = False
         if subscription.device_limit and subscription.device_limit > 1:
             subscription.device_limit = subscription.device_limit - 1
-    
+
     await db.commit()
-    
+
     subscription_service = SubscriptionService()
     await subscription_service.update_remnawave_user(db, subscription)
-    
+
     subscription = await _get_subscription(db, subscription.id)
     return _serialize_subscription(subscription)
