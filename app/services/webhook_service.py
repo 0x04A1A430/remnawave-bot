@@ -5,7 +5,7 @@ import hashlib
 import hmac
 import json
 import logging
-from datetime import datetime
+from dataclasses import dataclass
 from typing import Any, Optional
 
 import aiohttp
@@ -18,6 +18,19 @@ from app.database.crud.webhook import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class DeliveryResult:
+    """Результат доставки webhook."""
+
+    webhook: Any
+    event_type: str
+    payload: dict[str, Any]
+    status: str
+    response_status: Optional[int] = None
+    response_body: Optional[str] = None
+    error_message: Optional[str] = None
 
 
 class WebhookService:
@@ -59,22 +72,28 @@ class WebhookService:
             logger.debug("No active webhooks for event type: %s", event_type)
             return
 
+        # Выполняем HTTP запросы параллельно (без операций с БД)
         tasks = [
-            self._deliver_webhook(db, webhook, event_type, payload)
+            self._deliver_webhook_http(webhook, event_type, payload)
             for webhook in webhooks
         ]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        # Отправляем все webhooks параллельно
-        await asyncio.gather(*tasks, return_exceptions=True)
+        # Записываем результаты в БД последовательно (избегаем concurrent session access)
+        for result in results:
+            if isinstance(result, Exception):
+                logger.exception("Unexpected error during webhook delivery: %s", result)
+                continue
+            if isinstance(result, DeliveryResult):
+                await self._record_result(db, result)
 
-    async def _deliver_webhook(
+    async def _deliver_webhook_http(
         self,
-        db: AsyncSession,
         webhook: Any,
         event_type: str,
         payload: dict[str, Any],
-    ) -> None:
-        """Доставить webhook одному получателю."""
+    ) -> DeliveryResult:
+        """Выполнить HTTP доставку webhook (без операций с БД)."""
         payload_json = json.dumps(payload, default=str, ensure_ascii=False)
         headers = {
             "Content-Type": "application/json",
@@ -104,9 +123,8 @@ class WebhookService:
                 if status == "failed":
                     error_message = f"HTTP {response.status}: {response_body[:500]}"
 
-                await record_webhook_delivery(
-                    db,
-                    webhook_id=webhook.id,
+                return DeliveryResult(
+                    webhook=webhook,
                     event_type=event_type,
                     payload=payload,
                     status=status,
@@ -115,49 +133,56 @@ class WebhookService:
                     error_message=error_message,
                 )
 
-                await update_webhook_stats(db, webhook, status == "success")
-
-                if status == "success":
-                    logger.info(
-                        "Webhook %s delivered successfully to %s",
-                        webhook.id,
-                        webhook.url,
-                    )
-                else:
-                    logger.warning(
-                        "Webhook %s delivery failed: %s",
-                        webhook.id,
-                        error_message,
-                    )
-
         except asyncio.TimeoutError:
-            error_message = "Request timeout"
-            await record_webhook_delivery(
-                db,
-                webhook_id=webhook.id,
+            return DeliveryResult(
+                webhook=webhook,
                 event_type=event_type,
                 payload=payload,
                 status="failed",
-                error_message=error_message,
+                error_message="Request timeout",
             )
-            await update_webhook_stats(db, webhook, False)
-            logger.warning("Webhook %s delivery timeout: %s", webhook.id, webhook.url)
 
         except Exception as error:
-            error_message = str(error)
-            await record_webhook_delivery(
-                db,
-                webhook_id=webhook.id,
+            return DeliveryResult(
+                webhook=webhook,
                 event_type=event_type,
                 payload=payload,
                 status="failed",
-                error_message=error_message,
+                error_message=str(error),
             )
-            await update_webhook_stats(db, webhook, False)
+
+    async def _record_result(self, db: AsyncSession, result: DeliveryResult) -> None:
+        """Записать результат доставки в БД (последовательно)."""
+        try:
+            await record_webhook_delivery(
+                db,
+                webhook_id=result.webhook.id,
+                event_type=result.event_type,
+                payload=result.payload,
+                status=result.status,
+                response_status=result.response_status,
+                response_body=result.response_body,
+                error_message=result.error_message,
+            )
+
+            await update_webhook_stats(db, result.webhook, result.status == "success")
+
+            if result.status == "success":
+                logger.info(
+                    "Webhook %s delivered successfully to %s",
+                    result.webhook.id,
+                    result.webhook.url,
+                )
+            else:
+                logger.warning(
+                    "Webhook %s delivery failed: %s",
+                    result.webhook.id,
+                    result.error_message,
+                )
+        except Exception as error:
             logger.exception(
-                "Failed to deliver webhook %s to %s: %s",
-                webhook.id,
-                webhook.url,
+                "Failed to record webhook delivery result for %s: %s",
+                result.webhook.id,
                 error,
             )
 

@@ -33,7 +33,8 @@ def validate_telegram_login_widget(data: Dict[str, Any], max_age_seconds: int = 
     auth_date = auth_data.get("auth_date")
     if auth_date:
         try:
-            auth_time = datetime.fromtimestamp(int(auth_date))
+            # Use UTC timestamp to avoid timezone issues
+            auth_time = datetime.utcfromtimestamp(int(auth_date))
             age = (datetime.utcnow() - auth_time).total_seconds()
             if age > max_age_seconds:
                 return False
@@ -83,7 +84,8 @@ def validate_telegram_init_data(init_data: str, max_age_seconds: int = 86400) ->
         auth_date = parsed.get("auth_date")
         if auth_date:
             try:
-                auth_time = datetime.fromtimestamp(int(auth_date))
+                # Use UTC timestamp to avoid timezone issues
+                auth_time = datetime.utcfromtimestamp(int(auth_date))
                 age = (datetime.utcnow() - auth_time).total_seconds()
                 if age > max_age_seconds:
                     return None
