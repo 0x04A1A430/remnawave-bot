@@ -132,6 +132,21 @@ async def show_promocodes_list(
 
 @admin_required
 @error_handler
+async def show_promocodes_list_page(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    """Обработчик пагинации списка промокодов."""
+    try:
+        page = int(callback.data.split('_')[-1])
+    except (ValueError, IndexError):
+        page = 1
+    await show_promocodes_list(callback, db_user, db, page=page)
+
+
+@admin_required
+@error_handler
 async def show_promocode_management(
     callback: types.CallbackQuery,
     db_user: User,
@@ -1103,6 +1118,7 @@ async def show_general_promocode_stats(
 def register_handlers(dp: Dispatcher):
     dp.callback_query.register(show_promocodes_menu, F.data == "admin_promocodes")
     dp.callback_query.register(show_promocodes_list, F.data == "admin_promo_list")
+    dp.callback_query.register(show_promocodes_list_page, F.data.startswith("admin_promo_list_page_"))
     dp.callback_query.register(start_promocode_creation, F.data == "admin_promo_create")
     dp.callback_query.register(select_promocode_type, F.data.startswith("promo_type_"))
     dp.callback_query.register(process_promo_group_selection, F.data.startswith("promo_select_group_"))
