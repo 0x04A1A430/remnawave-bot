@@ -13,6 +13,7 @@ from app.config import settings
 from app.services.yookassa_service import YooKassaService
 from app.external.cryptobot import CryptoBotService
 from app.database.crud.user import get_user_by_id
+from app.services.payment_service import PaymentService
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 from ..schemas.balance import (
@@ -283,6 +284,55 @@ async def create_topup(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Telegram Stars payments are only available through the bot. Please use @{bot_username}",
             )
+
+        elif request.payment_method == "platega":
+            if not settings.is_platega_enabled():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Platega payment method is unavailable",
+                )
+
+            active_methods = settings.get_platega_active_methods()
+            if not active_methods:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="No Platega payment methods configured",
+                )
+
+            # Use payment_option if provided, otherwise use first active method
+            method_option = request.payment_option or str(active_methods[0])
+            try:
+                method_code = int(str(method_option).strip())
+            except (TypeError, ValueError):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid Platega payment option",
+                )
+
+            if method_code not in active_methods:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Selected Platega method is unavailable",
+                )
+
+            payment_service = PaymentService()
+            result = await payment_service.create_platega_payment(
+                db=db,
+                user_id=user.id,
+                amount_kopeks=request.amount_kopeks,
+                description=settings.get_balance_payment_description(request.amount_kopeks),
+                language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+                payment_method_code=method_code,
+            )
+
+            if result and result.get("redirect_url"):
+                payment_url = result.get("redirect_url")
+                payment_id = result.get("transaction_id") or str(result.get("local_payment_id", "pending"))
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to create Platega payment",
+                )
 
         else:
             # For other payment methods, redirect to bot
