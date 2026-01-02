@@ -54,8 +54,7 @@ class PromoCodeService:
 
             # Проверка "только для первой покупки"
             if getattr(promocode, 'first_purchase_only', False):
-                has_purchase = await self._user_has_paid_purchase(db, user_id)
-                if has_purchase:
+                if getattr(user, 'has_had_paid_subscription', False):
                     return {"success": False, "error": "not_first_purchase"}
 
             balance_before_kopeks = user.balance_kopeks
@@ -234,20 +233,3 @@ class PromoCodeService:
                 effects.append("ℹ️ У вас уже есть активная подписка")
         
         return "\n".join(effects) if effects else "✅ Промокод активирован"
-
-    async def _user_has_paid_purchase(self, db: AsyncSession, user_id: int) -> bool:
-        """Проверяет была ли у пользователя хотя бы одна успешная платная покупка."""
-        from sqlalchemy import select, func
-        from app.database.models import Transaction
-
-        result = await db.execute(
-            select(func.count(Transaction.id))
-            .where(
-                Transaction.user_id == user_id,
-                Transaction.status == "success",
-                Transaction.amount_kopeks > 0,  # Платные транзакции
-                Transaction.type.in_(["subscription", "balance_topup", "renewal"])
-            )
-        )
-        count = result.scalar()
-        return count > 0
