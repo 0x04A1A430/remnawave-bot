@@ -331,7 +331,7 @@ class SubscriptionRenewalService:
         if devices_limit is None:
             devices_limit = settings.DEFAULT_DEVICE_LIMIT
 
-        # Модем добавляет +1 к device_limit, но оплачивается отдельно,
+---        # Модем добавляет +1 к device_limit, но оплачивается отдельно,
         # поэтому не должен учитываться как платное устройство при продлении
         if getattr(subscription, 'modem_enabled', False):
             devices_limit = max(1, devices_limit - 1)
