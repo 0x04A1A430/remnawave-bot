@@ -187,27 +187,39 @@ async def show_promocode_management(
 
     if promo.valid_until:
         text += f"⏰ <b>Действует до:</b> {format_datetime(promo.valid_until)}\n"
-    
+
+    first_purchase_only = getattr(promo, 'first_purchase_only', False)
+    first_purchase_emoji = "✅" if first_purchase_only else "❌"
+    text += f"🆕 <b>Только первая покупка:</b> {first_purchase_emoji}\n"
+
     text += f"📅 <b>Создан:</b> {format_datetime(promo.created_at)}\n"
-    
+
+    first_purchase_btn_text = "🆕 Первая покупка: ✅" if first_purchase_only else "🆕 Первая покупка: ❌"
+
     keyboard = [
         [
             types.InlineKeyboardButton(
-                text="✏️ Редактировать", 
+                text="✏️ Редактировать",
                 callback_data=f"promo_edit_{promo.id}"
             ),
             types.InlineKeyboardButton(
-                text="🔄 Переключить статус", 
+                text="🔄 Переключить статус",
                 callback_data=f"promo_toggle_{promo.id}"
             )
         ],
         [
             types.InlineKeyboardButton(
-                text="📊 Статистика", 
+                text=first_purchase_btn_text,
+                callback_data=f"promo_toggle_first_{promo.id}"
+            )
+        ],
+        [
+            types.InlineKeyboardButton(
+                text="📊 Статистика",
                 callback_data=f"promo_stats_{promo.id}"
             ),
             types.InlineKeyboardButton(
-                text="🗑️ Удалить", 
+                text="🗑️ Удалить",
                 callback_data=f"promo_delete_{promo.id}"
             )
         ],
@@ -946,7 +958,31 @@ async def toggle_promocode_status(
     
     status_text = "активирован" if new_status else "деактивирован"
     await callback.answer(f"✅ Промокод {status_text}", show_alert=True)
-    
+
+    await show_promocode_management(callback, db_user, db)
+
+
+@admin_required
+@error_handler
+async def toggle_promocode_first_purchase(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    """Переключает режим 'только для первой покупки'."""
+    promo_id = int(callback.data.split('_')[-1])
+
+    promo = await get_promocode_by_id(db, promo_id)
+    if not promo:
+        await callback.answer("❌ Промокод не найден", show_alert=True)
+        return
+
+    new_status = not getattr(promo, 'first_purchase_only', False)
+    await update_promocode(db, promo, first_purchase_only=new_status)
+
+    status_text = "включён" if new_status else "выключен"
+    await callback.answer(f"✅ Режим 'первая покупка' {status_text}", show_alert=True)
+
     await show_promocode_management(callback, db_user, db)
 
 
@@ -1124,6 +1160,7 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(process_promo_group_selection, F.data.startswith("promo_select_group_"))
     
     dp.callback_query.register(show_promocode_management, F.data.startswith("promo_manage_"))
+    dp.callback_query.register(toggle_promocode_first_purchase, F.data.startswith("promo_toggle_first_"))
     dp.callback_query.register(toggle_promocode_status, F.data.startswith("promo_toggle_"))
     dp.callback_query.register(show_promocode_stats, F.data.startswith("promo_stats_"))
     
