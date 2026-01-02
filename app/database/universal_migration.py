@@ -4630,6 +4630,38 @@ async def add_promocode_promo_group_column() -> bool:
         return False
 
 
+async def add_promocode_first_purchase_only_column() -> bool:
+    """Добавляет колонку first_purchase_only в таблицу promocodes."""
+    column_exists = await check_column_exists('promocodes', 'first_purchase_only')
+    if column_exists:
+        logger.info("Колонка first_purchase_only уже существует в promocodes")
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'sqlite':
+                await conn.execute(
+                    text("ALTER TABLE promocodes ADD COLUMN first_purchase_only BOOLEAN DEFAULT 0")
+                )
+            elif db_type == 'postgresql':
+                await conn.execute(
+                    text("ALTER TABLE promocodes ADD COLUMN first_purchase_only BOOLEAN DEFAULT FALSE")
+                )
+            elif db_type == 'mysql':
+                await conn.execute(
+                    text("ALTER TABLE promocodes ADD COLUMN first_purchase_only BOOLEAN DEFAULT FALSE")
+                )
+
+        logger.info("✅ Добавлена колонка first_purchase_only в promocodes")
+        return True
+
+    except Exception as error:
+        logger.error(f"❌ Ошибка добавления first_purchase_only в promocodes: {error}")
+        return False
+
+
 async def migrate_contest_templates_prize_columns() -> bool:
     """Миграция contest_templates: prize_days -> prize_type + prize_value."""
     try:
@@ -5084,6 +5116,13 @@ async def run_universal_migration():
             logger.info("✅ Колонка promo_group_id в promocodes готова")
         else:
             logger.warning("⚠️ Проблемы с добавлением promo_group_id в promocodes")
+
+        logger.info("=== ДОБАВЛЕНИЕ FIRST_PURCHASE_ONLY В PROMOCODES ===")
+        first_purchase_ready = await add_promocode_first_purchase_only_column()
+        if first_purchase_ready:
+            logger.info("✅ Колонка first_purchase_only в promocodes готова")
+        else:
+            logger.warning("⚠️ Проблемы с добавлением first_purchase_only в promocodes")
 
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ MAIN_MENU_BUTTONS ===")
         main_menu_buttons_created = await create_main_menu_buttons_table()

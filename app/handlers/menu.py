@@ -1291,7 +1291,7 @@ async def handle_activate_button(
     server_ids = await get_server_ids_by_uuids(db, connected_squads) if connected_squads else []
 
     balance = db_user.balance_kopeks
-    available_periods = sorted([int(p) for p in settings.AVAILABLE_SUBSCRIPTION_PERIODS], reverse=True)
+    available_periods = sorted(settings.get_available_subscription_periods(), reverse=True)
 
     subscription_service = SubscriptionService()
 

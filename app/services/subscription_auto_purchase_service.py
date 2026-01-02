@@ -708,7 +708,7 @@ async def auto_activate_subscription_after_topup(
     server_ids = await get_server_ids_by_uuids(db, connected_squads) if connected_squads else []
 
     balance = user.balance_kopeks
-    available_periods = sorted([int(p) for p in settings.AVAILABLE_SUBSCRIPTION_PERIODS], reverse=True)
+    available_periods = sorted(settings.get_available_subscription_periods(), reverse=True)
 
     if not available_periods:
         logger.warning("🔁 Автоактивация: нет доступных периодов подписки")

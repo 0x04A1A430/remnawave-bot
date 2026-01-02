@@ -9,7 +9,7 @@ from aiogram.enums import ChatMemberStatus
 from app.config import settings
 from app.database.database import get_db
 from app.database.crud.campaign import get_campaign_by_start_parameter
-from app.database.crud.subscription import deactivate_subscription
+from app.database.crud.subscription import deactivate_subscription, reactivate_subscription
 from app.database.crud.user import get_user_by_telegram_id
 from app.database.models import SubscriptionStatus
 from app.keyboards.inline import get_channel_sub_keyboard
@@ -104,12 +104,15 @@ class ChannelCheckerMiddleware(BaseMiddleware):
             member = await bot.get_chat_member(chat_id=channel_id, user_id=telegram_id)
 
             if member.status in self.GOOD_MEMBER_STATUS:
+                # Реактивируем подписку если была отключена из-за отписки от канала
+                if telegram_id and (settings.CHANNEL_DISABLE_TRIAL_ON_UNSUBSCRIBE or settings.CHANNEL_REQUIRED_FOR_ALL):
+                    await self._reactivate_subscription_on_subscribe(telegram_id, bot)
                 return await handler(event, data)
             elif member.status in self.BAD_MEMBER_STATUS:
                 logger.info(f"❌ Пользователь {telegram_id} не подписан на канал (статус: {member.status})")
 
                 if telegram_id and (settings.CHANNEL_DISABLE_TRIAL_ON_UNSUBSCRIBE or settings.CHANNEL_REQUIRED_FOR_ALL):
-                    await self._deactivate_subscription_on_unsubscribe(telegram_id)
+                    await self._deactivate_subscription_on_unsubscribe(telegram_id, bot, channel_link)
 
                 await self._capture_start_payload(state, event, bot)
 
@@ -253,7 +256,9 @@ class ChannelCheckerMiddleware(BaseMiddleware):
             finally:
                 break
 
-    async def _deactivate_subscription_on_unsubscribe(self, telegram_id: int) -> None:
+    async def _deactivate_subscription_on_unsubscribe(
+        self, telegram_id: int, bot: Bot, channel_link: Optional[str]
+    ) -> None:
         if not settings.CHANNEL_DISABLE_TRIAL_ON_UNSUBSCRIBE and not settings.CHANNEL_REQUIRED_FOR_ALL:
             logger.debug(
                 "ℹ️ Пропускаем деактивацию подписки пользователя %s: отключение при отписке выключено",
@@ -308,9 +313,98 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                             user.remnawave_uuid,
                             api_error,
                         )
+
+                # Уведомляем пользователя о деактивации
+                try:
+                    texts = get_texts(user.language if user.language else DEFAULT_LANGUAGE)
+                    notification_text = texts.t(
+                        "SUBSCRIPTION_DEACTIVATED_CHANNEL_UNSUBSCRIBE",
+                        "🚫 Ваша подписка приостановлена, так как вы отписались от канала.\n\n"
+                        "Подпишитесь на канал снова, чтобы восстановить доступ к VPN."
+                    )
+                    channel_kb = get_channel_sub_keyboard(channel_link, language=user.language)
+                    await bot.send_message(telegram_id, notification_text, reply_markup=channel_kb)
+                    logger.info(f"📨 Уведомление о деактивации отправлено пользователю {telegram_id}")
+                except Exception as notify_error:
+                    logger.error(
+                        "❌ Не удалось отправить уведомление о деактивации пользователю %s: %s",
+                        telegram_id,
+                        notify_error,
+                    )
             except Exception as db_error:
                 logger.error(
                     "❌ Ошибка деактивации подписки пользователя %s после отписки: %s",
+                    telegram_id,
+                    db_error,
+                )
+            finally:
+                break
+
+    async def _reactivate_subscription_on_subscribe(self, telegram_id: int, bot: Bot) -> None:
+        """Реактивация подписки после повторной подписки на канал.
+
+        Вызывается только если подписка в статусе DISABLED.
+        """
+        if not settings.CHANNEL_DISABLE_TRIAL_ON_UNSUBSCRIBE and not settings.CHANNEL_REQUIRED_FOR_ALL:
+            return
+
+        async for db in get_db():
+            try:
+                user = await get_user_by_telegram_id(db, telegram_id)
+                if not user or not user.subscription:
+                    break
+
+                subscription = user.subscription
+
+                # Реактивируем только DISABLED подписки (деактивированные из-за отписки)
+                # Тихо выходим если подписка не требует реактивации — без логов
+                if subscription.status != SubscriptionStatus.DISABLED.value:
+                    break
+
+                # Проверяем что подписка ещё не истекла
+                from datetime import datetime
+                if subscription.end_date and subscription.end_date <= datetime.utcnow():
+                    break
+
+                # Реактивируем в БД
+                await reactivate_subscription(db, subscription)
+                sub_type = "Триальная" if subscription.is_trial else "Платная"
+                logger.info(
+                    "✅ %s подписка пользователя %s реактивирована после подписки на канал",
+                    sub_type,
+                    telegram_id,
+                )
+
+                # Включаем в RemnaWave
+                if user.remnawave_uuid:
+                    service = SubscriptionService()
+                    try:
+                        await service.enable_remnawave_user(user.remnawave_uuid)
+                    except Exception as api_error:
+                        logger.error(
+                            "❌ Не удалось включить пользователя RemnaWave %s: %s",
+                            user.remnawave_uuid,
+                            api_error,
+                        )
+
+                # Уведомляем пользователя о реактивации
+                try:
+                    texts = get_texts(user.language if user.language else DEFAULT_LANGUAGE)
+                    notification_text = texts.t(
+                        "SUBSCRIPTION_REACTIVATED_CHANNEL_SUBSCRIBE",
+                        "✅ Ваша подписка восстановлена!\n\n"
+                        "Спасибо, что подписались на канал. VPN снова работает."
+                    )
+                    await bot.send_message(telegram_id, notification_text)
+                except Exception as notify_error:
+                    logger.warning(
+                        "Не удалось отправить уведомление о реактивации пользователю %s: %s",
+                        telegram_id,
+                        notify_error,
+                    )
+            except Exception as db_error:
+                logger.error(
+                    "❌ Ошибка реактивации подписки пользователя %s: %s",
                     telegram_id,
                     db_error,
                 )

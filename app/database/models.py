@@ -993,6 +993,7 @@ class PromoCode(Base):
     valid_until = Column(DateTime, nullable=True)
     
     is_active = Column(Boolean, default=True)
+    first_purchase_only = Column(Boolean, default=False)  # Только для первой покупки
 
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     promo_group_id = Column(Integer, ForeignKey("promo_groups.id", ondelete="SET NULL"), nullable=True, index=True)
