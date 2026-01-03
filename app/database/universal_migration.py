@@ -1947,6 +1947,37 @@ async def ensure_user_promo_offer_discount_columns():
         return False
 
 
+async def ensure_user_notification_settings_column() -> bool:
+    """Ensure notification_settings column exists in users table."""
+    try:
+        column_exists = await check_column_exists('users', 'notification_settings')
+
+        if column_exists:
+            return True
+
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'sqlite':
+                column_def = 'TEXT NULL'
+            elif db_type == 'postgresql':
+                column_def = 'JSONB NULL'
+            elif db_type == 'mysql':
+                column_def = 'JSON NULL'
+            else:
+                column_def = 'TEXT NULL'
+
+            await conn.execute(text(
+                f"ALTER TABLE users ADD COLUMN notification_settings {column_def}"
+            ))
+
+        logger.info("✅ Колонка notification_settings для users добавлена")
+        return True
+    except Exception as e:
+        logger.error(f"Ошибка добавления колонки notification_settings: {e}")
+        return False
+
+
 async def ensure_promo_offer_template_active_duration_column() -> bool:
     try:
         column_exists = await check_column_exists('promo_offer_templates', 'active_discount_hours')
@@ -3348,6 +3379,54 @@ async def add_user_restriction_columns() -> bool:
 
     except Exception as e:
         logger.error(f"Ошибка добавления колонок ограничений пользователей: {e}")
+        return False
+
+
+async def add_user_cabinet_columns() -> bool:
+    """Add cabinet (personal account) columns to users table."""
+    cabinet_columns = [
+        ("email", "VARCHAR(255)", "VARCHAR(255)", "VARCHAR(255)"),
+        ("email_verified", "BOOLEAN DEFAULT 0", "BOOLEAN DEFAULT FALSE", "TINYINT(1) DEFAULT 0"),
+        ("email_verified_at", "DATETIME", "TIMESTAMP", "DATETIME"),
+        ("password_hash", "VARCHAR(255)", "VARCHAR(255)", "VARCHAR(255)"),
+        ("email_verification_token", "VARCHAR(255)", "VARCHAR(255)", "VARCHAR(255)"),
+        ("email_verification_expires", "DATETIME", "TIMESTAMP", "DATETIME"),
+        ("password_reset_token", "VARCHAR(255)", "VARCHAR(255)", "VARCHAR(255)"),
+        ("password_reset_expires", "DATETIME", "TIMESTAMP", "DATETIME"),
+        ("cabinet_last_login", "DATETIME", "TIMESTAMP", "DATETIME"),
+    ]
+
+    try:
+        db_type = await get_database_type()
+        added_count = 0
+
+        for col_name, sqlite_type, pg_type, mysql_type in cabinet_columns:
+            if await check_column_exists('users', col_name):
+                continue
+
+            async with engine.begin() as conn:
+                if db_type == 'sqlite':
+                    col_type = sqlite_type
+                elif db_type == 'postgresql':
+                    col_type = pg_type
+                else:
+                    col_type = mysql_type
+
+                await conn.execute(
+                    text(f"ALTER TABLE users ADD COLUMN {col_name} {col_type}")
+                )
+                added_count += 1
+                logger.info(f"✅ Добавлена колонка users.{col_name}")
+
+        if added_count == 0:
+            logger.info("ℹ️ Все колонки cabinet уже существуют в таблице users")
+        else:
+            logger.info(f"✅ Добавлено {added_count} колонок cabinet в таблицу users")
+
+        return True
+
+    except Exception as e:
+        logger.error(f"Ошибка добавления колонок cabinet: {e}")
         return False
 
 
@@ -5070,6 +5149,13 @@ async def run_universal_migration():
         else:
             logger.warning("⚠️ Не удалось обновить пользовательские промо-скидки")
 
+        logger.info("=== ДОБАВЛЕНИЕ КОЛОНКИ NOTIFICATION_SETTINGS ===")
+        notification_settings_ready = await ensure_user_notification_settings_column()
+        if notification_settings_ready:
+            logger.info("✅ Колонка notification_settings готова")
+        else:
+            logger.warning("⚠️ Не удалось добавить колонку notification_settings")
+
         effect_types_updated = await migrate_discount_offer_effect_types()
         if effect_types_updated:
             logger.info("✅ Типы эффектов промо-предложений обновлены")
@@ -5234,6 +5320,13 @@ async def run_universal_migration():
             logger.info("✅ Колонки ограничений пользователей готовы")
         else:
             logger.warning("⚠️ Проблемы с добавлением колонок ограничений пользователей")
+
+        logger.info("=== ДОБАВЛЕНИЕ КОЛОНОК ЛИЧНОГО КАБИНЕТА ===")
+        cabinet_added = await add_user_cabinet_columns()
+        if cabinet_added:
+            logger.info("✅ Колонки личного кабинета готовы")
+        else:
+            logger.warning("⚠️ Проблемы с добавлением колонок личного кабинета")
 
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ АУДИТА ПОДДЕРЖКИ ===")
         try:
@@ -5423,6 +5516,7 @@ async def check_migration_status():
             "users_promo_offer_discount_source_column": False,
             "users_promo_offer_discount_expires_column": False,
             "users_referral_commission_percent_column": False,
+            "users_notification_settings_column": False,
             "subscription_crypto_link_column": False,
             "subscription_modem_enabled_column": False,
             "subscription_purchased_traffic_column": False,
@@ -5490,6 +5584,7 @@ async def check_migration_status():
         status["users_promo_offer_discount_source_column"] = await check_column_exists('users', 'promo_offer_discount_source')
         status["users_promo_offer_discount_expires_column"] = await check_column_exists('users', 'promo_offer_discount_expires_at')
         status["users_referral_commission_percent_column"] = await check_column_exists('users', 'referral_commission_percent')
+        status["users_notification_settings_column"] = await check_column_exists('users', 'notification_settings')
         status["subscription_crypto_link_column"] = await check_column_exists('subscriptions', 'subscription_crypto_link')
         status["subscription_modem_enabled_column"] = await check_column_exists('subscriptions', 'modem_enabled')
         status["subscription_purchased_traffic_column"] = await check_column_exists('subscriptions', 'purchased_traffic_gb')
@@ -5573,6 +5668,7 @@ async def check_migration_status():
             "users_promo_offer_discount_source_column": "Колонка источника промо-скидки у пользователей",
             "users_promo_offer_discount_expires_column": "Колонка срока действия промо-скидки у пользователей",
             "users_referral_commission_percent_column": "Колонка процента реферальной комиссии у пользователей",
+            "users_notification_settings_column": "Колонка notification_settings у пользователей",
             "subscription_crypto_link_column": "Колонка subscription_crypto_link в subscriptions",
             "subscription_modem_enabled_column": "Колонка modem_enabled в subscriptions",
             "subscription_purchased_traffic_column": "Колонка purchased_traffic_gb в subscriptions",
