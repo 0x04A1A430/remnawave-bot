@@ -35,6 +35,11 @@ pytz==2023.4
 cryptography>=41.0.0
 qrcode[pil]==7.4.2
 
+# Личный кабинет (Cabinet)
+bcrypt==4.2.0
+PyJWT==2.8.0
+email-validator==2.1.0
+
 # Для работы с версиями
 packaging==23.2
 

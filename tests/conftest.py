@@ -184,10 +184,20 @@ def _unwrap_test(obj):  # noqa: ANN001 - вспомогательная функ
 def pytest_pyfunc_call(pyfuncitem: pytest.Function) -> bool | None:
     """Позволяет запускать async def тесты без дополнительных плагинов."""
 
+    # Пропускаем если pytest-asyncio уже обработал этот тест
+    if hasattr(pyfuncitem, "_request") and hasattr(pyfuncitem._request, "_pyfuncitem"):
+        markers = list(pyfuncitem.iter_markers())
+        for marker in markers:
+            if marker.name in ("asyncio", "anyio"):
+                # pytest-asyncio обработает этот тест
+                return None
+
     test_func = _unwrap_test(pyfuncitem.obj)
     if not inspect.iscoroutinefunction(test_func):
         return None
 
+    # Проверяем, не обработан ли уже тест плагином pytest-asyncio
+    # Если pyfuncitem.obj не возвращает корутину - пропускаем
     loop = asyncio.new_event_loop()
     try:
         asyncio.set_event_loop(loop)
@@ -197,7 +207,11 @@ def pytest_pyfunc_call(pyfuncitem: pytest.Function) -> bool | None:
             for name, value in pyfuncitem.funcargs.items()
             if name in signature.parameters
         }
-        loop.run_until_complete(pyfuncitem.obj(**call_kwargs))
+        coro = pyfuncitem.obj(**call_kwargs)
+        if coro is None:
+            # Уже обработано другим плагином
+            return None
+        loop.run_until_complete(coro)
     finally:
         asyncio.set_event_loop(None)
         loop.close()
