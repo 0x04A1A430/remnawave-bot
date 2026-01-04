@@ -1364,7 +1364,8 @@ class AdminNotificationService:
             update_types = {
                 "traffic": ("📊 ИЗМЕНЕНИЕ ТРАФИКА", "трафик"),
                 "devices": ("📱 ИЗМЕНЕНИЕ УСТРОЙСТВ", "количество устройств"),
-                "servers": ("🌐 ИЗМЕНЕНИЕ СЕРВЕРОВ", "серверы")
+                "servers": ("🌐 ИЗМЕНЕНИЕ СЕРВЕРОВ", "серверы"),
+                "modem": ("📡 ИЗМЕНЕНИЕ МОДЕМА", "модем")
             }
 
             title, param_name = update_types.get(update_type, ("⚙️ ИЗМЕНЕНИЕ ПОДПИСКИ", "параметры"))
@@ -1449,6 +1450,8 @@ class AdminNotificationService:
             if isinstance(value, list):
                 return f"{len(value)} серверов"
             return str(value)
+        elif update_type == "modem":
+            return "✅ Включён" if value else "❌ Выключен"
         return str(value)
 
     async def send_bulk_ban_notification(

@@ -51,7 +51,12 @@ class PromoCodeService:
             existing_use = await check_user_promocode_usage(db, user_id, promocode.id)
             if existing_use:
                 return {"success": False, "error": "already_used_by_user"}
-            
+
+            # Проверка "только для первой покупки"
+            if getattr(promocode, 'first_purchase_only', False):
+                if getattr(user, 'has_had_paid_subscription', False):
+                    return {"success": False, "error": "not_first_purchase"}
+
             balance_before_kopeks = user.balance_kopeks
 
             result_description = await self._apply_promocode_effects(db, user, promocode)

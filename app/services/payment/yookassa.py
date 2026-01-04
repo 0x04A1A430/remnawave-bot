@@ -667,13 +667,10 @@ class YooKassaPaymentMixin:
                             )
 
                             notification_service = AdminNotificationService(self.bot)
-                            
-                            # Обновляем пользователя, чтобы избежать проблем с ленивой загрузкой
-                            from app.database.crud.user import get_user_by_id
-                            refreshed_user = await get_user_by_id(db, user.id)
-                            
+                            # Перезагрузка user при lazy-loading ошибке
+                            # происходит внутри send_balance_topup_notification
                             await notification_service.send_balance_topup_notification(
-                                refreshed_user or user,
+                                user,
                                 transaction,
                                 old_balance,
                                 topup_status=topup_status,

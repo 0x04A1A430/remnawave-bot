@@ -14,6 +14,7 @@ from .mulenpay import MulenPayPaymentMixin
 from .pal24 import Pal24PaymentMixin
 from .platega import PlategaPaymentMixin
 from .wata import WataPaymentMixin
+from .cloudpayments import CloudPaymentsPaymentMixin
 
 __all__ = [
     "PaymentCommonMixin",
@@ -26,4 +27,5 @@ __all__ = [
     "Pal24PaymentMixin",
     "PlategaPaymentMixin",
     "WataPaymentMixin",
+    "CloudPaymentsPaymentMixin",
 ]

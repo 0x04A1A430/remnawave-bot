@@ -64,6 +64,33 @@ class CacheService:
             logger.error(f"Ошибка записи в кеш {key}: {e}")
             return False
     
+    async def setnx(
+        self,
+        key: str,
+        value: Any,
+        expire: Union[int, timedelta] = None
+    ) -> bool:
+        """Атомарная операция SET IF NOT EXISTS.
+
+        Устанавливает значение только если ключ не существует.
+        Возвращает True если значение было установлено, False если ключ уже существовал.
+        """
+        if not self._connected:
+            return False
+
+        try:
+            serialized_value = json.dumps(value, default=str)
+
+            if isinstance(expire, timedelta):
+                expire = int(expire.total_seconds())
+
+            # SET с NX возвращает True если установлено, None если ключ существует
+            result = await self.redis_client.set(key, serialized_value, ex=expire, nx=True)
+            return result is True
+        except Exception as e:
+            logger.error(f"Ошибка setnx в кеш {key}: {e}")
+            return False
+
     async def delete(self, key: str) -> bool:
         if not self._connected:
             return False

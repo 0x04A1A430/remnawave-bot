@@ -172,6 +172,11 @@ async def test_auto_purchase_saved_cart_after_topup_success(monkeypatch):
         "app.services.subscription_auto_purchase_service.AdminNotificationService",
         lambda bot: admin_service_mock,
     )
+    # Мокаем get_user_by_id чтобы вернуть того же user
+    monkeypatch.setattr(
+        "app.services.subscription_auto_purchase_service.get_user_by_id",
+        AsyncMock(return_value=user),
+    )
 
     bot = AsyncMock()
     db_session = AsyncMock(spec=AsyncSession)
@@ -276,6 +281,12 @@ async def test_auto_purchase_saved_cart_after_topup_extension(monkeypatch):
         lambda bot: admin_service_mock,
     )
 
+    # Мок для get_subscription_by_user_id
+    monkeypatch.setattr(
+        "app.database.crud.subscription.get_subscription_by_user_id",
+        AsyncMock(return_value=subscription),
+    )
+
     bot = AsyncMock()
     db_session = AsyncMock(spec=AsyncSession)
 
@@ -365,6 +376,12 @@ async def test_auto_purchase_trial_preserved_on_insufficient_balance(monkeypatch
     monkeypatch.setattr(
         "app.services.subscription_auto_purchase_service.AdminNotificationService",
         lambda bot: admin_service_mock,
+    )
+
+    # Мок для get_subscription_by_user_id
+    monkeypatch.setattr(
+        "app.database.crud.subscription.get_subscription_by_user_id",
+        AsyncMock(return_value=subscription),
     )
 
     db_session = AsyncMock(spec=AsyncSession)
@@ -474,6 +491,12 @@ async def test_auto_purchase_trial_converted_after_successful_extension(monkeypa
         lambda bot: admin_service_mock,
     )
 
+    # Мок для get_subscription_by_user_id
+    monkeypatch.setattr(
+        "app.database.crud.subscription.get_subscription_by_user_id",
+        AsyncMock(return_value=subscription),
+    )
+
     db_session = AsyncMock(spec=AsyncSession)
     db_session.commit = AsyncMock()  # Важно! Отслеживаем commit
     db_session.refresh = AsyncMock()  # ИСПРАВЛЕНО: Добавлен мок для refresh
@@ -561,6 +584,12 @@ async def test_auto_purchase_trial_preserved_on_extension_failure(monkeypatch):
     monkeypatch.setattr(
         "app.services.subscription_auto_purchase_service.AdminNotificationService",
         lambda bot: admin_service_mock,
+    )
+
+    # Мок для get_subscription_by_user_id
+    monkeypatch.setattr(
+        "app.database.crud.subscription.get_subscription_by_user_id",
+        AsyncMock(return_value=subscription),
     )
 
     db_session = AsyncMock(spec=AsyncSession)
@@ -683,6 +712,12 @@ async def test_auto_purchase_trial_remaining_days_transferred(monkeypatch):
     monkeypatch.setattr(
         "app.services.subscription_auto_purchase_service.AdminNotificationService",
         lambda bot: admin_service_mock,
+    )
+
+    # Мок для get_subscription_by_user_id
+    monkeypatch.setattr(
+        "app.database.crud.subscription.get_subscription_by_user_id",
+        AsyncMock(return_value=subscription),
     )
 
     db_session = AsyncMock(spec=AsyncSession)

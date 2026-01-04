@@ -527,6 +527,33 @@ async def deactivate_subscription(
     return subscription
 
 
+async def reactivate_subscription(
+    db: AsyncSession,
+    subscription: Subscription
+) -> Subscription:
+    """Реактивация подписки (например, после повторной подписки на канал).
+
+    Активирует только если подписка была DISABLED и ещё не истекла.
+    Не логирует если реактивация не требуется.
+    """
+    now = datetime.utcnow()
+
+    # Тихо выходим если реактивация не нужна
+    if subscription.status != SubscriptionStatus.DISABLED.value:
+        return subscription
+
+    if subscription.end_date and subscription.end_date <= now:
+        return subscription
+
+    subscription.status = SubscriptionStatus.ACTIVE.value
+    subscription.updated_at = now
+
+    await db.commit()
+    await db.refresh(subscription)
+
+    return subscription
+
+
 async def get_expiring_subscriptions(
     db: AsyncSession,
     days_before: int = 3
@@ -1429,8 +1456,11 @@ async def create_subscription_no_commit(
     )
     
     db.add(subscription)
+
+    # Выполняем flush, чтобы получить присвоенный первичный ключ
+    await db.flush()
+
     # Не коммитим сразу, оставляем для пакетной обработки
-    
     logger.info(f"✅ Подготовлена подписка для пользователя {user_id} (ожидает коммита)")
     return subscription
 
@@ -1498,10 +1528,15 @@ async def create_pending_subscription(
     device_limit: int = 1,
     connected_squads: List[str] = None,
     payment_method: str = "pending",
-    total_price_kopeks: int = 0
+    total_price_kopeks: int = 0,
+    is_trial: bool = False,
 ) -> Subscription:
-    """Creates a pending subscription that will be activated after payment."""
-    
+    """Creates a pending subscription that will be activated after payment.
+
+    Args:
+        is_trial: If True, marks the subscription as a trial subscription.
+    """
+    trial_label = "триальная " if is_trial else ""
     current_time = datetime.utcnow()
     end_date = current_time + timedelta(days=duration_days)
 
@@ -1513,13 +1548,14 @@ async def create_pending_subscription(
             and existing_subscription.end_date > current_time
         ):
             logger.warning(
-                "⚠️ Попытка создать pending подписку для активного пользователя %s. Возвращаем существующую запись.",
+                "⚠️ Попытка создать pending %sподписку для активного пользователя %s. Возвращаем существующую запись.",
+                trial_label,
                 user_id,
             )
             return existing_subscription
 
         existing_subscription.status = SubscriptionStatus.PENDING.value
-        existing_subscription.is_trial = False
+        existing_subscription.is_trial = is_trial
         existing_subscription.start_date = current_time
         existing_subscription.end_date = end_date
         existing_subscription.traffic_limit_gb = traffic_limit_gb
@@ -1532,7 +1568,8 @@ async def create_pending_subscription(
         await db.refresh(existing_subscription)
 
         logger.info(
-            "♻️ Обновлена ожидающая подписка пользователя %s, ID: %s, метод оплаты: %s",
+            "♻️ Обновлена ожидающая %sподписка пользователя %s, ID: %s, метод оплаты: %s",
+            trial_label,
             user_id,
             existing_subscription.id,
             payment_method,
@@ -1542,7 +1579,7 @@ async def create_pending_subscription(
     subscription = Subscription(
         user_id=user_id,
         status=SubscriptionStatus.PENDING.value,
-        is_trial=False,
+        is_trial=is_trial,
         start_date=current_time,
         end_date=end_date,
         traffic_limit_gb=traffic_limit_gb,
@@ -1551,13 +1588,14 @@ async def create_pending_subscription(
         autopay_enabled=settings.is_autopay_enabled_by_default(),
         autopay_days_before=settings.DEFAULT_AUTOPAY_DAYS_BEFORE,
     )
-    
+
     db.add(subscription)
     await db.commit()
     await db.refresh(subscription)
-    
+
     logger.info(
-        "💳 Создана ожидающая подписка для пользователя %s, ID: %s, метод оплаты: %s",
+        "💳 Создана ожидающая %sподписка для пользователя %s, ID: %s, метод оплаты: %s",
+        trial_label,
         user_id,
         subscription.id,
         payment_method,
@@ -1566,6 +1604,7 @@ async def create_pending_subscription(
     return subscription
 
 
+# Обратная совместимость: алиас для триальной подписки
 async def create_pending_trial_subscription(
     db: AsyncSession,
     user_id: int,
@@ -1574,73 +1613,20 @@ async def create_pending_trial_subscription(
     device_limit: int = 1,
     connected_squads: List[str] = None,
     payment_method: str = "pending",
-    total_price_kopeks: int = 0
+    total_price_kopeks: int = 0,
 ) -> Subscription:
-    """Creates a pending trial subscription that will be activated after payment."""
-
-    current_time = datetime.utcnow()
-    end_date = current_time + timedelta(days=duration_days)
-
-    existing_subscription = await get_subscription_by_user_id(db, user_id)
-
-    if existing_subscription:
-        if (
-            existing_subscription.status == SubscriptionStatus.ACTIVE.value
-            and existing_subscription.end_date > current_time
-        ):
-            logger.warning(
-                "⚠️ Попытка создать pending триал для активного пользователя %s. Возвращаем существующую запись.",
-                user_id,
-            )
-            return existing_subscription
-
-        # Обновляем существующую подписку
-        existing_subscription.status = SubscriptionStatus.PENDING.value
-        existing_subscription.is_trial = True  # Помечаем как триальную
-        existing_subscription.start_date = current_time
-        existing_subscription.end_date = end_date
-        existing_subscription.traffic_limit_gb = traffic_limit_gb
-        existing_subscription.device_limit = device_limit
-        existing_subscription.connected_squads = connected_squads or []
-        existing_subscription.traffic_used_gb = 0.0
-        existing_subscription.updated_at = current_time
-
-        await db.commit()
-        await db.refresh(existing_subscription)
-
-        logger.info(
-            "♻️ Обновлена ожидающая триальная подписка пользователя %s, ID: %s, метод оплаты: %s",
-            user_id,
-            existing_subscription.id,
-            payment_method,
-        )
-        return existing_subscription
-
-    subscription = Subscription(
+    """Creates a pending trial subscription. Wrapper for create_pending_subscription with is_trial=True."""
+    return await create_pending_subscription(
+        db=db,
         user_id=user_id,
-        status=SubscriptionStatus.PENDING.value,
-        is_trial=True,  # Помечаем как триальную
-        start_date=current_time,
-        end_date=end_date,
+        duration_days=duration_days,
         traffic_limit_gb=traffic_limit_gb,
         device_limit=device_limit,
-        connected_squads=connected_squads or [],
-        autopay_enabled=settings.is_autopay_enabled_by_default(),
-        autopay_days_before=settings.DEFAULT_AUTOPAY_DAYS_BEFORE,
+        connected_squads=connected_squads,
+        payment_method=payment_method,
+        total_price_kopeks=total_price_kopeks,
+        is_trial=True,
     )
-
-    db.add(subscription)
-    await db.commit()
-    await db.refresh(subscription)
-
-    logger.info(
-        "💳 Создана ожидающая триальная подписка для пользователя %s, ID: %s, метод оплаты: %s",
-        user_id,
-        subscription.id,
-        payment_method,
-    )
-
-    return subscription
 
 
 async def activate_pending_subscription(
@@ -1649,8 +1635,6 @@ async def activate_pending_subscription(
     period_days: int = None
 ) -> Optional[Subscription]:
     """Активирует pending подписку пользователя, меняя её статус на ACTIVE."""
-    from sqlalchemy import and_
-    
     logger.info(f"Активация pending подписки: пользователь {user_id}, период {period_days} дней")
     
     # Находим pending подписку пользователя

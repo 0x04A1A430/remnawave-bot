@@ -657,7 +657,7 @@ class User(Base):
     status = Column(String(20), default=UserStatus.ACTIVE.value)
     language = Column(String(5), default="ru")
     balance_kopeks = Column(Integer, default=0)
-    used_promocodes = Column(Integer, default=0) 
+    used_promocodes = Column(Integer, default=0)
     has_had_paid_subscription = Column(Boolean, default=False, nullable=False)
     referred_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     referral_code = Column(String(20), unique=True, nullable=True)
@@ -665,6 +665,17 @@ class User(Base):
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
     last_activity = Column(DateTime, default=func.now())
     remnawave_uuid = Column(String(255), nullable=True, unique=True)
+
+    # Cabinet authentication fields
+    email = Column(String(255), unique=True, nullable=True, index=True)
+    email_verified = Column(Boolean, default=False, nullable=False)
+    email_verified_at = Column(DateTime, nullable=True)
+    password_hash = Column(String(255), nullable=True)
+    email_verification_token = Column(String(255), nullable=True)
+    email_verification_expires = Column(DateTime, nullable=True)
+    password_reset_token = Column(String(255), nullable=True)
+    password_reset_expires = Column(DateTime, nullable=True)
+    cabinet_last_login = Column(DateTime, nullable=True)
     broadcasts = relationship("BroadcastHistory", back_populates="admin")
     referrals = relationship("User", backref="referrer", remote_side=[id], foreign_keys="User.referred_by_id")
     subscription = relationship("Subscription", back_populates="user", uselist=False)
@@ -688,6 +699,7 @@ class User(Base):
     promo_group = relationship("PromoGroup", back_populates="users")
     user_promo_groups = relationship("UserPromoGroup", back_populates="user", cascade="all, delete-orphan")
     poll_responses = relationship("PollResponse", back_populates="user")
+    notification_settings = Column(JSON, nullable=True, default=dict)
     last_pinned_message_id = Column(Integer, nullable=True)
 
     # Ограничения пользователя
@@ -993,6 +1005,7 @@ class PromoCode(Base):
     valid_until = Column(DateTime, nullable=True)
     
     is_active = Column(Boolean, default=True)
+    first_purchase_only = Column(Boolean, default=False)  # Только для первой покупки
 
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     promo_group_id = Column(Integer, ForeignKey("promo_groups.id", ondelete="SET NULL"), nullable=True, index=True)
@@ -1939,3 +1952,92 @@ class ButtonClickLog(Base):
 
     def __repr__(self) -> str:
         return f"<ButtonClickLog id={self.id} button='{self.button_id}' user={self.user_id} at={self.clicked_at}>"
+
+
+class Webhook(Base):
+    """Webhook конфигурация для подписки на события."""
+    __tablename__ = "webhooks"
+    __table_args__ = (
+        Index("ix_webhooks_event_type", "event_type"),
+        Index("ix_webhooks_is_active", "is_active"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
+    url = Column(Text, nullable=False)
+    secret = Column(String(128), nullable=True)  # Секрет для подписи payload
+    event_type = Column(String(50), nullable=False)  # user.created, payment.completed, ticket.created, etc.
+    is_active = Column(Boolean, default=True, nullable=False)
+    description = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+    last_triggered_at = Column(DateTime, nullable=True)
+    failure_count = Column(Integer, default=0, nullable=False)
+    success_count = Column(Integer, default=0, nullable=False)
+
+    deliveries = relationship("WebhookDelivery", back_populates="webhook", cascade="all, delete-orphan")
+
+    def __repr__(self) -> str:
+        status = "active" if self.is_active else "inactive"
+        return f"<Webhook id={self.id} name='{self.name}' event='{self.event_type}' status={status}>"
+
+
+class WebhookDelivery(Base):
+    """История доставки webhooks."""
+    __tablename__ = "webhook_deliveries"
+    __table_args__ = (
+        Index("ix_webhook_deliveries_webhook_created", "webhook_id", "created_at"),
+        Index("ix_webhook_deliveries_status", "status"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    webhook_id = Column(Integer, ForeignKey("webhooks.id", ondelete="CASCADE"), nullable=False)
+    event_type = Column(String(50), nullable=False)
+    payload = Column(JSON, nullable=False)  # Отправленный payload
+    response_status = Column(Integer, nullable=True)  # HTTP статус ответа
+    response_body = Column(Text, nullable=True)  # Тело ответа (может быть обрезано)
+    status = Column(String(20), nullable=False)  # pending, success, failed
+    error_message = Column(Text, nullable=True)
+    attempt_number = Column(Integer, default=1, nullable=False)
+    created_at = Column(DateTime, default=func.now())
+    delivered_at = Column(DateTime, nullable=True)
+    next_retry_at = Column(DateTime, nullable=True)
+
+    webhook = relationship("Webhook", back_populates="deliveries")
+
+    def __repr__(self) -> str:
+        return f"<WebhookDelivery id={self.id} webhook_id={self.webhook_id} status='{self.status}' event='{self.event_type}'>"
+
+
+class CabinetRefreshToken(Base):
+    """Refresh tokens for cabinet JWT authentication."""
+    __tablename__ = "cabinet_refresh_tokens"
+    __table_args__ = (
+        Index("ix_cabinet_refresh_tokens_user", "user_id"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    token_hash = Column(String(255), unique=True, nullable=False, index=True)
+    device_info = Column(String(500), nullable=True)
+    expires_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, default=func.now())
+    revoked_at = Column(DateTime, nullable=True)
+
+    user = relationship("User", backref="cabinet_tokens")
+
+    @property
+    def is_expired(self) -> bool:
+        return datetime.utcnow() > self.expires_at
+
+    @property
+    def is_revoked(self) -> bool:
+        return self.revoked_at is not None
+
+    @property
+    def is_valid(self) -> bool:
+        return not self.is_expired and not self.is_revoked
+
+    def __repr__(self) -> str:
+        status = "valid" if self.is_valid else ("revoked" if self.is_revoked else "expired")
+        return f"<CabinetRefreshToken id={self.id} user_id={self.user_id} status={status}>"

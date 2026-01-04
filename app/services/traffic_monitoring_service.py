@@ -6,9 +6,6 @@ import logging
 import asyncio
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
-from decimal import Decimal
-
-import aiohttp
 
 from app.config import settings
 from app.services.admin_notification_service import AdminNotificationService

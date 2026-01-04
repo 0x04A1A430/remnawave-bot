@@ -125,6 +125,10 @@ async def process_promocode(
             "expired": texts.PROMOCODE_EXPIRED,
             "used": texts.PROMOCODE_USED,
             "already_used_by_user": texts.PROMOCODE_USED,
+            "not_first_purchase": texts.t(
+                "PROMOCODE_NOT_FIRST_PURCHASE",
+                "❌ Этот промокод доступен только для первой покупки"
+            ),
             "server_error": texts.ERROR
         }
 

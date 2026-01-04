@@ -37,7 +37,12 @@ from .routes import (
     transactions,
     users,
     logs,
+    webhooks,
+    websocket,
 )
+
+# Cabinet (Personal Account) routes
+from app.cabinet.routes import router as cabinet_router
 
 
 OPENAPI_TAGS = [
@@ -146,6 +151,14 @@ OPENAPI_TAGS = [
         "description": "Управление конкурсами: реферальными и ежедневными играми/раундами.",
     },
     {
+        "name": "webhooks",
+        "description": "Управление webhooks для подписки на события системы (пользователи, платежи, тикеты).",
+    },
+    {
+        "name": "websocket",
+        "description": "WebSocket подключения для real-time обновлений дашборда и уведомлений.",
+    },
+    {
         "name": "pinned-messages",
         "description": (
             "Управление закреплёнными сообщениями: создание, обновление, рассылка и "
@@ -176,9 +189,12 @@ def create_web_api_app() -> FastAPI:
     )
 
     allowed_origins = settings.get_web_api_allowed_origins()
+    cabinet_origins = settings.get_cabinet_allowed_origins()
+    all_origins = list(set(allowed_origins + cabinet_origins))
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"] if allowed_origins == ["*"] else allowed_origins,
+        allow_origins=["*"] if "*" in all_origins else all_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -240,5 +256,11 @@ def create_web_api_app() -> FastAPI:
         prefix="/notifications/subscriptions",
         tags=["notifications"],
     )
+    app.include_router(webhooks.router, prefix="/webhooks", tags=["webhooks"])
+    app.include_router(websocket.router, tags=["websocket"])
+
+    # Cabinet (Personal Account) routes
+    if settings.is_cabinet_enabled():
+        app.include_router(cabinet_router)
 
     return app

@@ -129,6 +129,10 @@ from app.utils.promo_offer import (
     build_promo_offer_hint,
     get_user_active_promo_discount_percent,
 )
+from app.handlers.simple_subscription import (
+    _calculate_simple_subscription_price,
+    _get_simple_subscription_payment_keyboard,
+)
 
 from .common import _apply_promo_offer_discount, _get_promo_offer_discount_percent, logger, update_traffic_prices
 from .autopay import (
@@ -4049,86 +4053,6 @@ async def handle_simple_subscription_purchase(
 
     await state.set_state(SubscriptionStates.waiting_for_simple_subscription_payment_method)
     await callback.answer()
-
-
-
-
-async def _calculate_simple_subscription_price(
-    db: AsyncSession,
-    params: dict,
-    *,
-    user: Optional[User] = None,
-    resolved_squad_uuid: Optional[str] = None,
-) -> Tuple[int, Dict[str, Any]]:
-    """Рассчитывает цену простой подписки."""
-
-    resolved_uuids = [resolved_squad_uuid] if resolved_squad_uuid else None
-    return await compute_simple_subscription_price(
-        db,
-        params,
-        user=user,
-        resolved_squad_uuids=resolved_uuids,
-    )
-
-
-def _get_simple_subscription_payment_keyboard(language: str) -> types.InlineKeyboardMarkup:
-    """Создает клавиатуру с методами оплаты для простой подписки."""
-    texts = get_texts(language)
-    keyboard = []
-
-    # Добавляем доступные методы оплаты
-    if settings.TELEGRAM_STARS_ENABLED:
-        keyboard.append([types.InlineKeyboardButton(
-            text="⭐ Telegram Stars",
-            callback_data="simple_subscription_stars"
-        )])
-
-    if settings.is_yookassa_enabled():
-        yookassa_methods = []
-        if settings.YOOKASSA_SBP_ENABLED:
-            yookassa_methods.append(types.InlineKeyboardButton(
-                text="🏦 YooKassa (СБП)",
-                callback_data="simple_subscription_yookassa_sbp"
-            ))
-        yookassa_methods.append(types.InlineKeyboardButton(
-            text="💳 YooKassa (Карта)",
-            callback_data="simple_subscription_yookassa"
-        ))
-        if yookassa_methods:
-            keyboard.append(yookassa_methods)
-
-    if settings.is_cryptobot_enabled():
-        keyboard.append([types.InlineKeyboardButton(
-            text="🪙 CryptoBot",
-            callback_data="simple_subscription_cryptobot"
-        )])
-
-    if settings.is_mulenpay_enabled():
-        mulenpay_name = settings.get_mulenpay_display_name()
-        keyboard.append([types.InlineKeyboardButton(
-            text=f"💳 {mulenpay_name}",
-            callback_data="simple_subscription_mulenpay"
-        )])
-
-    if settings.is_pal24_enabled():
-        keyboard.append([types.InlineKeyboardButton(
-            text="💳 PayPalych",
-            callback_data="simple_subscription_pal24"
-        )])
-
-    if settings.is_wata_enabled():
-        keyboard.append([types.InlineKeyboardButton(
-            text="💳 WATA",
-            callback_data="simple_subscription_wata"
-        )])
-
-    # Кнопка назад
-    keyboard.append([types.InlineKeyboardButton(
-        text=texts.BACK,
-        callback_data="subscription_purchase"
-    )])
-
-    return types.InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
 async def _extend_existing_subscription(

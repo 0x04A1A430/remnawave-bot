@@ -396,11 +396,23 @@ class SubscriptionService:
                 await api.disable_user(user_uuid)
                 logger.info(f"✅ Отключен RemnaWave пользователь {user_uuid}")
                 return True
-                
+
         except Exception as e:
             logger.error(f"Ошибка отключения RemnaWave пользователя: {e}")
             return False
-    
+
+    async def enable_remnawave_user(self, user_uuid: str) -> bool:
+        """Включить пользователя в RemnaWave (реактивация)."""
+        try:
+            async with self.get_api_client() as api:
+                await api.enable_user(user_uuid)
+                logger.info(f"✅ Включен RemnaWave пользователь {user_uuid}")
+                return True
+
+        except Exception as e:
+            logger.error(f"Ошибка включения RemnaWave пользователя: {e}")
+            return False
+
     async def revoke_subscription(
         self,
         db: AsyncSession,
@@ -719,6 +731,11 @@ class SubscriptionService:
                         device_limit = settings.DEFAULT_DEVICE_LIMIT
                     else:
                         device_limit = forced_limit
+
+            # Модем добавляет +1 к device_limit, но оплачивается отдельно,
+            # поэтому не должен учитываться как платное устройство при продлении
+            if getattr(subscription, 'modem_enabled', False):
+                device_limit = max(1, device_limit - 1)
 
             devices_price = max(0, (device_limit or 0) - settings.DEFAULT_DEVICE_LIMIT) * settings.PRICE_PER_DEVICE
             devices_discount_percent = _resolve_discount_percent(

@@ -62,6 +62,15 @@ async def start_simple_subscription_purchase(
 
     device_limit = resolve_simple_subscription_device_limit()
 
+    # При продлении учитываем количество устройств из текущей подписки
+    if current_subscription and settings.is_devices_selection_enabled():
+        current_device_limit = current_subscription.device_limit or device_limit
+        # Модем добавляет +1 к device_limit, но оплачивается отдельно
+        if getattr(current_subscription, 'modem_enabled', False):
+            current_device_limit = max(1, current_device_limit - 1)
+        # Используем максимум из текущего и дефолтного
+        device_limit = max(device_limit, current_device_limit)
+
     # Подготовим параметры простой подписки
     subscription_params = {
         "period_days": settings.SIMPLE_SUBSCRIPTION_PERIOD_DAYS,
