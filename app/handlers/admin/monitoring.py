@@ -11,6 +11,10 @@ from app.config import settings
 from app.database.database import get_db
 from app.services.monitoring_service import monitoring_service
 from app.services.nalogo_queue_service import nalogo_queue_service
+from app.services.traffic_monitoring_service import (
+    traffic_monitoring_service,
+    traffic_monitoring_scheduler,
+)
 from app.utils.decorators import admin_required
 from app.utils.pagination import paginate_list
 from app.keyboards.admin import get_monitoring_keyboard, get_admin_main_keyboard
@@ -737,10 +741,10 @@ async def stop_monitoring_callback(callback: CallbackQuery):
 async def force_check_callback(callback: CallbackQuery):
     try:
         await callback.answer("⏳ Выполняем проверку подписок...")
-        
+
         async for db in get_db():
             results = await monitoring_service.force_check_subscriptions(db)
-            
+
             text = f"""
 ✅ <b>Принудительная проверка завершена</b>
 
@@ -753,18 +757,110 @@ async def force_check_callback(callback: CallbackQuery):
 
 Нажмите "Назад" для возврата в меню мониторинга.
 """
-            
+
             from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_monitoring")]
             ])
-            
+
             await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
             break
-            
+
     except Exception as e:
         logger.error(f"Ошибка принудительной проверки: {e}")
         await callback.answer(f"❌ Ошибка проверки: {str(e)}", show_alert=True)
+
+
+@router.callback_query(F.data == "admin_mon_traffic_check")
+@admin_required
+async def traffic_check_callback(callback: CallbackQuery):
+    """Ручная проверка трафика всех пользователей."""
+    try:
+        # Проверяем, включен ли мониторинг трафика
+        if not traffic_monitoring_scheduler.is_enabled():
+            await callback.answer(
+                "⚠️ Мониторинг трафика отключен в настройках\n"
+                "Включите TRAFFIC_MONITORING_ENABLED=true в .env",
+                show_alert=True
+            )
+            return
+
+        await callback.answer("⏳ Запускаем проверку трафика...")
+
+        # Устанавливаем бота, если не установлен
+        if not traffic_monitoring_scheduler.bot:
+            traffic_monitoring_scheduler.set_bot(callback.bot)
+
+        checked_count = 0
+        exceeded_count = 0
+        exceeded_users = []
+
+        async for db in get_db():
+            from app.database.crud.user import get_users_with_active_subscriptions
+
+            users = await get_users_with_active_subscriptions(db)
+
+            for user in users:
+                if user.remnawave_uuid:
+                    is_exceeded, traffic_info = await traffic_monitoring_service.check_user_traffic_threshold(
+                        db,
+                        user.remnawave_uuid,
+                        user.telegram_id
+                    )
+                    checked_count += 1
+
+                    if is_exceeded:
+                        exceeded_count += 1
+                        total_gb = traffic_info.get('total_gb', 0)
+                        exceeded_users.append({
+                            'telegram_id': user.telegram_id,
+                            'name': user.full_name or str(user.telegram_id),
+                            'traffic_gb': total_gb
+                        })
+
+                        # Отправляем уведомление админам
+                        if traffic_monitoring_scheduler._should_send_notification(user.remnawave_uuid):
+                            await traffic_monitoring_service.process_suspicious_traffic(
+                                db,
+                                user.remnawave_uuid,
+                                traffic_info,
+                                callback.bot
+                            )
+                            traffic_monitoring_scheduler._record_notification(user.remnawave_uuid)
+
+            break
+
+        threshold_gb = settings.TRAFFIC_THRESHOLD_GB_PER_DAY
+
+        text = f"""
+📊 <b>Проверка трафика завершена</b>
+
+🔍 <b>Результаты:</b>
+• Проверено пользователей: {checked_count}
+• Превышений порога: {exceeded_count}
+• Порог: {threshold_gb} ГБ/сутки
+
+🕐 <b>Время проверки:</b> {datetime.now().strftime('%H:%M:%S')}
+"""
+
+        if exceeded_users:
+            text += "\n⚠️ <b>Пользователи с превышением:</b>\n"
+            for u in exceeded_users[:10]:
+                text += f"• {u['name']}: {u['traffic_gb']:.1f} ГБ\n"
+            if len(exceeded_users) > 10:
+                text += f"... и ещё {len(exceeded_users) - 10}\n"
+
+        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔄 Повторить", callback_data="admin_mon_traffic_check")],
+            [InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_monitoring")]
+        ])
+
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
+
+    except Exception as e:
+        logger.error(f"Ошибка проверки трафика: {e}")
+        await callback.answer(f"❌ Ошибка: {str(e)}", show_alert=True)
 
 
 @router.callback_query(F.data.startswith("admin_mon_logs"))
