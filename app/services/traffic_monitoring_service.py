@@ -5,12 +5,13 @@
 import logging
 import asyncio
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Set
 
 from app.config import settings
 from app.services.admin_notification_service import AdminNotificationService
 from app.services.remnawave_service import RemnaWaveService
 from app.database.crud.user import get_user_by_remnawave_uuid
+from app.database.database import get_db
 from app.database.models import User
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -268,8 +269,23 @@ class TrafficMonitoringScheduler:
         self.traffic_service = traffic_service
         self.check_task = None
         self.is_running = False
+        self.bot = None
+        # Кэш уведомлений: {user_uuid: дата_последнего_уведомления}
+        self._notification_cache: Dict[str, datetime] = {}
 
-    async def start_monitoring(self, db: AsyncSession, bot):
+    def set_bot(self, bot):
+        """Устанавливает экземпляр бота для отправки уведомлений"""
+        self.bot = bot
+
+    def is_enabled(self) -> bool:
+        """Проверяет, включен ли мониторинг трафика"""
+        return self.traffic_service.is_traffic_monitoring_enabled()
+
+    def get_interval_hours(self) -> int:
+        """Получает интервал проверки в часах"""
+        return self.traffic_service.get_monitoring_interval_hours()
+
+    async def start_monitoring(self):
         """
         Запускает периодическую проверку трафика
         """
@@ -277,40 +293,79 @@ class TrafficMonitoringScheduler:
             logger.warning("Мониторинг трафика уже запущен")
             return
 
-        if not self.traffic_service.is_traffic_monitoring_enabled():
+        if not self.is_enabled():
             logger.info("Мониторинг трафика отключен в настройках")
             return
 
+        if not self.bot:
+            logger.error("Бот не установлен для мониторинга трафика")
+            return
+
         self.is_running = True
-        interval_hours = self.traffic_service.get_monitoring_interval_hours()
+        interval_hours = self.get_interval_hours()
         interval_seconds = interval_hours * 3600
 
-        logger.info(f"Запуск мониторинга трафика с интервалом {interval_hours} часов")
+        logger.info(f"🚀 Запуск мониторинга трафика с интервалом {interval_hours} ч")
 
         # Запускаем задачу с интервалом
-        self.check_task = asyncio.create_task(self._periodic_check(db, bot, interval_seconds))
+        self.check_task = asyncio.create_task(self._periodic_check(interval_seconds))
 
-    async def stop_monitoring(self):
+    def stop_monitoring(self):
         """
         Останавливает периодическую проверку трафика
         """
+        self.is_running = False
         if self.check_task:
             self.check_task.cancel()
-            try:
-                await self.check_task
-            except asyncio.CancelledError:
-                pass
-        self.is_running = False
-        logger.info("Мониторинг трафика остановлен")
+        logger.info("ℹ️ Мониторинг трафика остановлен")
 
-    async def _periodic_check(self, db: AsyncSession, bot, interval_seconds: int):
+    def _should_send_notification(self, user_uuid: str) -> bool:
+        """
+        Проверяет, нужно ли отправлять уведомление для пользователя.
+        Защита от спама: одно уведомление в сутки на пользователя.
+        """
+        now = datetime.utcnow()
+        last_notification = self._notification_cache.get(user_uuid)
+
+        if last_notification is None:
+            return True
+
+        # Если прошло больше 24 часов с последнего уведомления
+        return (now - last_notification) > timedelta(hours=24)
+
+    def _record_notification(self, user_uuid: str):
+        """Записывает факт отправки уведомления"""
+        self._notification_cache[user_uuid] = datetime.utcnow()
+
+    def _cleanup_notification_cache(self):
+        """Очищает старые записи из кэша (старше 48 часов)"""
+        now = datetime.utcnow()
+        expired = [
+            uuid for uuid, dt in self._notification_cache.items()
+            if (now - dt) > timedelta(hours=48)
+        ]
+        for uuid in expired:
+            del self._notification_cache[uuid]
+        if expired:
+            logger.debug(f"🧹 Очищено {len(expired)} старых записей из кэша уведомлений о трафике")
+
+    async def _periodic_check(self, interval_seconds: int):
         """
         Выполняет периодическую проверку трафика
         """
         while self.is_running:
             try:
-                logger.info("Запуск периодической проверки трафика")
-                await self.traffic_service.check_all_users_traffic(db, bot)
+                logger.info("📊 Запуск периодической проверки трафика")
+
+                # Очищаем старый кэш
+                self._cleanup_notification_cache()
+
+                # Получаем сессию БД внутри цикла
+                async for db in get_db():
+                    try:
+                        await self._check_all_users_traffic(db)
+                    finally:
+                        break
 
                 # Ждем указанный интервал перед следующей проверкой
                 await asyncio.sleep(interval_seconds)
@@ -319,9 +374,57 @@ class TrafficMonitoringScheduler:
                 logger.info("Задача периодической проверки трафика отменена")
                 break
             except Exception as e:
-                logger.error(f"Ошибка в периодической проверке трафика: {e}")
+                logger.error(f"❌ Ошибка в периодической проверке трафика: {e}")
                 # Даже при ошибке продолжаем цикл, ждем интервал и пробуем снова
                 await asyncio.sleep(interval_seconds)
+
+    async def _check_all_users_traffic(self, db: AsyncSession):
+        """
+        Проверяет трафик всех пользователей с активной подпиской
+        """
+        try:
+            from app.database.crud.user import get_users_with_active_subscriptions
+
+            # Получаем всех пользователей с активной подпиской
+            users = await get_users_with_active_subscriptions(db)
+
+            checked_count = 0
+            exceeded_count = 0
+
+            logger.info(f"📊 Начинаем проверку трафика для {len(users)} пользователей")
+
+            # Проверяем трафик для каждого пользователя
+            for user in users:
+                if user.remnawave_uuid:
+                    is_exceeded, traffic_info = await self.traffic_service.check_user_traffic_threshold(
+                        db,
+                        user.remnawave_uuid,
+                        user.telegram_id
+                    )
+                    checked_count += 1
+
+                    if is_exceeded:
+                        exceeded_count += 1
+                        # Проверяем, не отправляли ли уже уведомление
+                        if self._should_send_notification(user.remnawave_uuid):
+                            await self.traffic_service.process_suspicious_traffic(
+                                db,
+                                user.remnawave_uuid,
+                                traffic_info,
+                                self.bot
+                            )
+                            self._record_notification(user.remnawave_uuid)
+                        else:
+                            logger.debug(
+                                f"⏭️ Пропуск уведомления для {user.telegram_id} — уже отправляли сегодня"
+                            )
+
+            logger.info(
+                f"✅ Проверка трафика завершена: проверено {checked_count}, превышений {exceeded_count}"
+            )
+
+        except Exception as e:
+            logger.error(f"❌ Ошибка при проверке трафика всех пользователей: {e}")
 
 
 # Глобальные экземпляры сервисов

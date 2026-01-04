@@ -35,6 +35,7 @@ from app.services.broadcast_service import broadcast_service
 from app.services.referral_contest_service import referral_contest_service
 from app.services.contest_rotation_service import contest_rotation_service
 from app.services.nalogo_queue_service import nalogo_queue_service
+from app.services.traffic_monitoring_service import traffic_monitoring_scheduler
 from app.utils.startup_timeline import StartupTimeline
 from app.utils.timezone import TimezoneAwareFormatter
 from app.utils.log_handlers import LevelFilterHandler, ExcludePaymentFilter
@@ -172,6 +173,7 @@ async def main():
     monitoring_task = None
     maintenance_task = None
     version_check_task = None
+    traffic_monitoring_task = None
     polling_task = None
     web_api_server = None
     telegram_webhook_enabled = False
@@ -237,6 +239,7 @@ async def main():
         monitoring_service.bot = bot
         maintenance_service.set_bot(bot)
         broadcast_service.set_bot(bot)
+        traffic_monitoring_scheduler.set_bot(bot)
 
         from app.services.admin_notification_service import AdminNotificationService
 
@@ -578,6 +581,23 @@ async def main():
                 stage.skip("Служба техработ уже активна")
 
         async with timeline.stage(
+            "Мониторинг трафика",
+            "📊",
+            success_message="Мониторинг трафика запущен",
+        ) as stage:
+            if traffic_monitoring_scheduler.is_enabled():
+                traffic_monitoring_task = asyncio.create_task(
+                    traffic_monitoring_scheduler.start_monitoring()
+                )
+                interval_hours = traffic_monitoring_scheduler.get_interval_hours()
+                threshold_gb = settings.TRAFFIC_THRESHOLD_GB_PER_DAY
+                stage.log(f"Интервал проверки: {interval_hours} ч")
+                stage.log(f"Порог трафика: {threshold_gb} ГБ/сутки")
+            else:
+                traffic_monitoring_task = None
+                stage.skip("Мониторинг трафика отключен настройками")
+
+        async with timeline.stage(
             "Сервис проверки версий",
             "📄",
             success_message="Проверка версий запущена",
@@ -638,6 +658,7 @@ async def main():
         services_lines = [
             f"Мониторинг: {'Включен' if monitoring_task else 'Отключен'}",
             f"Техработы: {'Включен' if maintenance_task else 'Отключен'}",
+            f"Мониторинг трафика: {'Включен' if traffic_monitoring_task else 'Отключен'}",
             f"Проверка версий: {'Включен' if version_check_task else 'Отключен'}",
             f"Отчеты: {'Включен' if reporting_service.is_running() else 'Отключен'}",
         ]
@@ -681,6 +702,16 @@ async def main():
                         if settings.is_version_check_enabled():
                             logger.info("🔄 Перезапуск сервиса проверки версий...")
                             version_check_task = asyncio.create_task(version_service.start_periodic_check())
+
+                if traffic_monitoring_task and traffic_monitoring_task.done():
+                    exception = traffic_monitoring_task.exception()
+                    if exception:
+                        logger.error(f"Мониторинг трафика завершился с ошибкой: {exception}")
+                        if traffic_monitoring_scheduler.is_enabled():
+                            logger.info("🔄 Перезапуск мониторинга трафика...")
+                            traffic_monitoring_task = asyncio.create_task(
+                                traffic_monitoring_scheduler.start_monitoring()
+                            )
 
                 if auto_verification_active and not auto_payment_verification_service.is_running():
                     logger.warning(
@@ -739,6 +770,15 @@ async def main():
             version_check_task.cancel()
             try:
                 await version_check_task
+            except asyncio.CancelledError:
+                pass
+
+        if traffic_monitoring_task and not traffic_monitoring_task.done():
+            logger.info("ℹ️ Остановка мониторинга трафика...")
+            traffic_monitoring_scheduler.stop_monitoring()
+            traffic_monitoring_task.cancel()
+            try:
+                await traffic_monitoring_task
             except asyncio.CancelledError:
                 pass
 
