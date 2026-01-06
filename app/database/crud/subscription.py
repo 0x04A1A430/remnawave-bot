@@ -44,23 +44,38 @@ async def create_trial_subscription(
     duration_days: int = None,
     traffic_limit_gb: int = None,
     device_limit: Optional[int] = None,
-    squad_uuid: str = None
+    squad_uuid: str = None,
+    connected_squads: List[str] = None,
+    tariff_id: Optional[int] = None,
 ) -> Subscription:
-    
+    """Создает триальную подписку.
+
+    Args:
+        connected_squads: Список UUID сквадов (если указан, squad_uuid игнорируется)
+        tariff_id: ID тарифа (для режима тарифов)
+    """
     duration_days = duration_days or settings.TRIAL_DURATION_DAYS
     traffic_limit_gb = traffic_limit_gb or settings.TRIAL_TRAFFIC_LIMIT_GB
     if device_limit is None:
         device_limit = settings.TRIAL_DEVICE_LIMIT
-    if not squad_uuid:
+
+    # Если переданы connected_squads, используем их
+    # Иначе используем squad_uuid или получаем случайный
+    final_squads = []
+    if connected_squads:
+        final_squads = connected_squads
+    elif squad_uuid:
+        final_squads = [squad_uuid]
+    else:
         try:
             from app.database.crud.server_squad import get_random_trial_squad_uuid
 
-            squad_uuid = await get_random_trial_squad_uuid(db)
-
-            if squad_uuid:
+            random_squad = await get_random_trial_squad_uuid(db)
+            if random_squad:
+                final_squads = [random_squad]
                 logger.debug(
                     "Выбран сквад %s для триальной подписки пользователя %s",
-                    squad_uuid,
+                    random_squad,
                     user_id,
                 )
         except Exception as error:
@@ -80,40 +95,42 @@ async def create_trial_subscription(
         end_date=end_date,
         traffic_limit_gb=traffic_limit_gb,
         device_limit=device_limit,
-        connected_squads=[squad_uuid] if squad_uuid else [],
+        connected_squads=final_squads,
         autopay_enabled=settings.is_autopay_enabled_by_default(),
         autopay_days_before=settings.DEFAULT_AUTOPAY_DAYS_BEFORE,
+        tariff_id=tariff_id,
     )
     
     db.add(subscription)
     await db.commit()
     await db.refresh(subscription)
 
-    logger.info(f"🎁 Создана триальная подписка для пользователя {user_id}")
+    logger.info(f"🎁 Создана триальная подписка для пользователя {user_id}" +
+                 (f" с тарифом {tariff_id}" if tariff_id else ""))
 
-    if squad_uuid:
+    if final_squads:
         try:
             from app.database.crud.server_squad import (
                 get_server_ids_by_uuids,
                 add_user_to_servers,
             )
 
-            server_ids = await get_server_ids_by_uuids(db, [squad_uuid])
+            server_ids = await get_server_ids_by_uuids(db, final_squads)
             if server_ids:
                 await add_user_to_servers(db, server_ids)
                 logger.info(
-                    "📈 Обновлен счетчик пользователей для триального сквада %s",
-                    squad_uuid,
+                    "📈 Обновлен счетчик пользователей для триальных сквадов %s",
+                    final_squads,
                 )
             else:
                 logger.warning(
-                    "⚠️ Не удалось найти серверы для обновления счетчика (сквад %s)",
-                    squad_uuid,
+                    "⚠️ Не удалось найти серверы для обновления счетчика (сквады %s)",
+                    final_squads,
                 )
         except Exception as error:
             logger.error(
-                "⚠️ Ошибка обновления счетчика пользователей для триального сквада %s: %s",
-                squad_uuid,
+                "⚠️ Ошибка обновления счетчика пользователей для триальных сквадов %s: %s",
+                final_squads,
                 error,
             )
 
@@ -129,6 +146,7 @@ async def create_paid_subscription(
     connected_squads: List[str] = None,
     update_server_counters: bool = False,
     is_trial: bool = False,
+    tariff_id: Optional[int] = None,
 ) -> Subscription:
 
     end_date = datetime.utcnow() + timedelta(days=duration_days)
@@ -147,6 +165,7 @@ async def create_paid_subscription(
         connected_squads=connected_squads or [],
         autopay_enabled=settings.is_autopay_enabled_by_default(),
         autopay_days_before=settings.DEFAULT_AUTOPAY_DAYS_BEFORE,
+        tariff_id=tariff_id,
     )
     
     db.add(subscription)
@@ -276,8 +295,24 @@ async def replace_subscription(
 async def extend_subscription(
     db: AsyncSession,
     subscription: Subscription,
-    days: int
+    days: int,
+    *,
+    tariff_id: Optional[int] = None,
+    traffic_limit_gb: Optional[int] = None,
+    device_limit: Optional[int] = None,
+    connected_squads: Optional[List[str]] = None,
 ) -> Subscription:
+    """Продлевает подписку на указанное количество дней.
+
+    Args:
+        db: Сессия базы данных
+        subscription: Подписка для продления
+        days: Количество дней для продления
+        tariff_id: ID тарифа (опционально, для режима тарифов)
+        traffic_limit_gb: Лимит трафика ГБ (опционально, для режима тарифов)
+        device_limit: Лимит устройств (опционально, для режима тарифов)
+        connected_squads: Список UUID сквадов (опционально, для режима тарифов)
+    """
     current_time = datetime.utcnow()
 
     logger.info(f"🔄 Продление подписки {subscription.id} на {days} дней")
@@ -320,7 +355,7 @@ async def extend_subscription(
 
     # Логируем статус подписки перед проверкой
     logger.info(f"🔄 Продление подписки {subscription.id}, текущий статус: {subscription.status}, дни: {days}")
-    
+
     if days > 0 and subscription.status in (
         SubscriptionStatus.EXPIRED.value,
         SubscriptionStatus.DISABLED.value,
@@ -339,13 +374,36 @@ async def extend_subscription(
             days
         )
 
-    if settings.RESET_TRAFFIC_ON_PAYMENT:
+    # Обновляем параметры тарифа, если переданы
+    if tariff_id is not None:
+        old_tariff_id = subscription.tariff_id
+        subscription.tariff_id = tariff_id
+        logger.info(f"📦 Обновлен тариф подписки: {old_tariff_id} → {tariff_id}")
+
+    if traffic_limit_gb is not None:
+        old_traffic = subscription.traffic_limit_gb
+        subscription.traffic_limit_gb = traffic_limit_gb
         subscription.traffic_used_gb = 0.0
-        subscription.purchased_traffic_gb = 0  # Сбрасываем докупленный трафик вместе с использованным
+        subscription.purchased_traffic_gb = 0
+        logger.info(f"📊 Обновлен лимит трафика: {old_traffic} ГБ → {traffic_limit_gb} ГБ")
+    elif settings.RESET_TRAFFIC_ON_PAYMENT:
+        subscription.traffic_used_gb = 0.0
+        subscription.purchased_traffic_gb = 0
         logger.info("🔄 Сбрасываем использованный и докупленный трафик согласно настройке RESET_TRAFFIC_ON_PAYMENT")
 
+    if device_limit is not None:
+        old_devices = subscription.device_limit
+        subscription.device_limit = device_limit
+        logger.info(f"📱 Обновлен лимит устройств: {old_devices} → {device_limit}")
+
+    if connected_squads is not None:
+        old_squads = subscription.connected_squads
+        subscription.connected_squads = connected_squads
+        logger.info(f"🌍 Обновлены сквады: {old_squads} → {connected_squads}")
+
     # В режиме fixed_with_topup при продлении сбрасываем трафик до фиксированного лимита
-    if settings.is_traffic_fixed() and days > 0:
+    # Только если не передан traffic_limit_gb (т.е. не режим тарифов)
+    if traffic_limit_gb is None and settings.is_traffic_fixed() and days > 0:
         fixed_limit = settings.get_fixed_traffic_limit()
         old_limit = subscription.traffic_limit_gb
         if subscription.traffic_limit_gb != fixed_limit or (subscription.purchased_traffic_gb or 0) > 0:
