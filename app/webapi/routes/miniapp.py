@@ -887,6 +887,19 @@ async def get_payment_methods(
             )
         )
 
+    if settings.is_freekassa_enabled():
+        methods.append(
+            MiniAppPaymentMethod(
+                id="freekassa",
+                icon="💳",
+                requires_amount=True,
+                currency="RUB",
+                min_amount_kopeks=settings.FREEKASSA_MIN_AMOUNT_KOPEKS,
+                max_amount_kopeks=settings.FREEKASSA_MAX_AMOUNT_KOPEKS,
+                integration_type=MiniAppPaymentIntegrationType.REDIRECT,
+            )
+        )
+
     if settings.TRIBUTE_ENABLED:
         methods.append(
             MiniAppPaymentMethod(
@@ -903,13 +916,14 @@ async def get_payment_methods(
         "yookassa_sbp": 2,
         "yookassa": 3,
         "cloudpayments": 4,
-        "mulenpay": 5,
-        "pal24": 6,
-        "platega": 7,
-        "wata": 8,
-        "cryptobot": 9,
-        "heleket": 10,
-        "tribute": 11,
+        "freekassa": 5,
+        "mulenpay": 6,
+        "pal24": 7,
+        "platega": 8,
+        "wata": 9,
+        "cryptobot": 10,
+        "heleket": 11,
+        "tribute": 12,
     }
     methods.sort(key=lambda item: order_map.get(item.id, 99))
 
@@ -1383,6 +1397,47 @@ async def create_payment_link(
             },
         )
 
+    if method == "freekassa":
+        if not settings.is_freekassa_enabled():
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Payment method is unavailable")
+        if amount_kopeks is None or amount_kopeks <= 0:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Amount must be positive")
+
+        if amount_kopeks < settings.FREEKASSA_MIN_AMOUNT_KOPEKS:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail=f"Amount is below minimum ({settings.FREEKASSA_MIN_AMOUNT_KOPEKS / 100:.2f} RUB)",
+            )
+        if amount_kopeks > settings.FREEKASSA_MAX_AMOUNT_KOPEKS:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail=f"Amount exceeds maximum ({settings.FREEKASSA_MAX_AMOUNT_KOPEKS / 100:.2f} RUB)",
+            )
+
+        payment_service = PaymentService()
+        result = await payment_service.create_freekassa_payment(
+            db=db,
+            user_id=user.id,
+            amount_kopeks=amount_kopeks,
+            description=settings.get_balance_payment_description(amount_kopeks),
+            email=getattr(user, "email", None),
+            language=user.language or settings.DEFAULT_LANGUAGE,
+        )
+
+        if not result or not result.get("payment_url"):
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail="Failed to create payment")
+
+        return MiniAppPaymentCreateResponse(
+            method=method,
+            payment_url=result["payment_url"],
+            amount_kopeks=amount_kopeks,
+            extra={
+                "local_payment_id": result.get("local_payment_id"),
+                "order_id": result.get("order_id"),
+                "requested_at": _current_request_timestamp(),
+            },
+        )
+
     if method == "tribute":
         if not settings.TRIBUTE_ENABLED:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Payment method is unavailable")
@@ -1481,6 +1536,8 @@ async def _resolve_payment_status_entry(
         return await _resolve_heleket_payment_status(db, user, query)
     if method == "cloudpayments":
         return await _resolve_cloudpayments_payment_status(db, user, query)
+    if method == "freekassa":
+        return await _resolve_freekassa_payment_status(db, user, query)
     if method == "stars":
         return await _resolve_stars_payment_status(db, user, query)
     if method == "tribute":
@@ -2088,6 +2145,64 @@ async def _resolve_cloudpayments_payment_status(
             "transaction_id_cp": payment.transaction_id_cp,
             "card_type": payment.card_type,
             "card_last_four": payment.card_last_four,
+            "payment_url": payment.payment_url,
+            "payload": query.payload,
+            "started_at": query.started_at,
+        },
+    )
+
+
+async def _resolve_freekassa_payment_status(
+    db: AsyncSession,
+    user: User,
+    query: MiniAppPaymentStatusQuery,
+) -> MiniAppPaymentStatusResult:
+    from app.database.crud.freekassa import (
+        get_freekassa_payment_by_id,
+        get_freekassa_payment_by_order_id,
+    )
+
+    payment = None
+    if query.local_payment_id:
+        payment = await get_freekassa_payment_by_id(db, query.local_payment_id)
+    if not payment and query.payment_id:
+        payment = await get_freekassa_payment_by_order_id(db, query.payment_id)
+
+    if not payment or payment.user_id != user.id:
+        return MiniAppPaymentStatusResult(
+            method="freekassa",
+            status="pending",
+            is_paid=False,
+            amount_kopeks=query.amount_kopeks,
+            message="Payment not found",
+            extra={
+                "local_payment_id": query.local_payment_id,
+                "order_id": query.payment_id,
+                "payload": query.payload,
+                "started_at": query.started_at,
+            },
+        )
+
+    status_raw = payment.status
+    is_paid = bool(payment.is_paid)
+    status = _classify_status(status_raw, is_paid)
+    completed_at = payment.paid_at or payment.updated_at or payment.created_at
+
+    return MiniAppPaymentStatusResult(
+        method="freekassa",
+        status=status,
+        is_paid=status == "paid",
+        amount_kopeks=payment.amount_kopeks,
+        currency=payment.currency,
+        completed_at=completed_at,
+        transaction_id=payment.transaction_id,
+        external_id=payment.freekassa_order_id,
+        message=None,
+        extra={
+            "status": payment.status,
+            "local_payment_id": payment.id,
+            "order_id": payment.order_id,
+            "freekassa_order_id": payment.freekassa_order_id,
             "payment_url": payment.payment_url,
             "payload": query.payload,
             "started_at": query.started_at,
