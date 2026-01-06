@@ -159,7 +159,7 @@ def get_tariffs_list_keyboard(
     buttons.append([
         InlineKeyboardButton(
             text=texts.BACK,
-            callback_data="admin_settings"
+            callback_data="admin_submenu_settings"
         )
     ])
 
@@ -278,7 +278,7 @@ async def show_tariffs_list(
             "<code>SALES_MODE=tariffs</code>\n\n"
             "Текущий режим: <code>classic</code>",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text=texts.BACK, callback_data="admin_settings")]
+                [InlineKeyboardButton(text=texts.BACK, callback_data="admin_submenu_settings")]
             ]),
             parse_mode="HTML"
         )
@@ -294,7 +294,7 @@ async def show_tariffs_list(
             "Создайте первый тариф для начала работы.",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="➕ Создать тариф", callback_data="admin_tariff_create")],
-                [InlineKeyboardButton(text=texts.BACK, callback_data="admin_settings")]
+                [InlineKeyboardButton(text=texts.BACK, callback_data="admin_submenu_settings")]
             ]),
             parse_mode="HTML"
         )
@@ -1134,7 +1134,7 @@ async def delete_tariff_confirmed(
             "Тарифы ещё не созданы.",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="➕ Создать тариф", callback_data="admin_tariff_create")],
-                [InlineKeyboardButton(text=texts.BACK, callback_data="admin_settings")]
+                [InlineKeyboardButton(text=texts.BACK, callback_data="admin_submenu_settings")]
             ]),
             parse_mode="HTML"
         )
