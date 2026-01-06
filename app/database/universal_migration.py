@@ -5215,6 +5215,37 @@ async def add_subscription_tariff_id_column() -> bool:
         return False
 
 
+async def add_tariff_device_price_column() -> bool:
+    """Добавляет колонку device_price_kopeks в таблицу tariffs."""
+    try:
+        if await check_column_exists('tariffs', 'device_price_kopeks'):
+            logger.info("ℹ️ Колонка device_price_kopeks уже существует в tariffs")
+            return True
+
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'sqlite':
+                await conn.execute(text(
+                    "ALTER TABLE tariffs ADD COLUMN device_price_kopeks INTEGER DEFAULT NULL"
+                ))
+            elif db_type == 'postgresql':
+                await conn.execute(text(
+                    "ALTER TABLE tariffs ADD COLUMN device_price_kopeks INTEGER DEFAULT NULL"
+                ))
+            else:  # MySQL
+                await conn.execute(text(
+                    "ALTER TABLE tariffs ADD COLUMN device_price_kopeks INT DEFAULT NULL"
+                ))
+
+            logger.info("✅ Колонка device_price_kopeks добавлена в tariffs")
+            return True
+
+    except Exception as error:
+        logger.error(f"❌ Ошибка добавления колонки device_price_kopeks: {error}")
+        return False
+
+
 async def run_universal_migration():
     logger.info("=== НАЧАЛО УНИВЕРСАЛЬНОЙ МИГРАЦИИ ===")
     
@@ -5710,6 +5741,12 @@ async def run_universal_migration():
             logger.info("✅ Колонка tariff_id в subscriptions готова")
         else:
             logger.warning("⚠️ Проблемы с колонкой tariff_id в subscriptions")
+
+        device_price_column_ready = await add_tariff_device_price_column()
+        if device_price_column_ready:
+            logger.info("✅ Колонка device_price_kopeks в tariffs готова")
+        else:
+            logger.warning("⚠️ Проблемы с колонкой device_price_kopeks в tariffs")
 
         logger.info("=== ОБНОВЛЕНИЕ ВНЕШНИХ КЛЮЧЕЙ ===")
         fk_updated = await fix_foreign_keys_for_user_deletion()
