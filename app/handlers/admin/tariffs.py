@@ -19,7 +19,7 @@ from app.database.crud.tariff import (
     get_tariffs_with_subscriptions_count,
 )
 from app.database.crud.promo_group import get_promo_groups_with_counts
-from app.database.crud.server_squads import get_all_server_squads
+from app.database.crud.server_squad import get_all_server_squads
 from app.database.models import Tariff, User
 from app.localization.texts import get_texts
 from app.states import AdminStates
