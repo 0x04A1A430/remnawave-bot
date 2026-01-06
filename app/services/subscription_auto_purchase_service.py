@@ -177,7 +177,7 @@ async def _get_tariff_price_for_period(
     if promo_group:
         discount_percent = getattr(promo_group, 'server_discount_percent', 0)
 
-    personal_discount = await get_user_active_promo_discount_percent(user.id, db)
+    personal_discount = get_user_active_promo_discount_percent(user)
     if personal_discount > discount_percent:
         discount_percent = personal_discount
 
