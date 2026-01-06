@@ -1171,7 +1171,7 @@ async def start_edit_tariff_squads(
         await callback.answer("Тариф не найден", show_alert=True)
         return
 
-    squads = await get_all_server_squads(db)
+    squads, _ = await get_all_server_squads(db)
 
     if not squads:
         await callback.answer("Нет доступных серверов", show_alert=True)
@@ -1238,7 +1238,7 @@ async def toggle_tariff_squad(
     tariff = await update_tariff(db, tariff, allowed_squads=list(current_squads))
 
     # Перерисовываем меню
-    squads = await get_all_server_squads(db)
+    squads, _ = await get_all_server_squads(db)
     texts = get_texts(db_user.language)
 
     buttons = []
@@ -1294,7 +1294,7 @@ async def clear_tariff_squads(
     await callback.answer("Все серверы очищены")
 
     # Перерисовываем меню
-    squads = await get_all_server_squads(db)
+    squads, _ = await get_all_server_squads(db)
     texts = get_texts(db_user.language)
 
     buttons = []
@@ -1342,7 +1342,7 @@ async def select_all_tariff_squads(
         await callback.answer("Тариф не найден", show_alert=True)
         return
 
-    squads = await get_all_server_squads(db)
+    squads, _ = await get_all_server_squads(db)
     all_uuids = [s.squad_uuid for s in squads]
 
     tariff = await update_tariff(db, tariff, allowed_squads=all_uuids)
