@@ -399,7 +399,10 @@ async def confirm_tariff_purchase(
 
     try:
         # Списываем баланс
-        success = await subtract_user_balance(db, db_user.id, final_price)
+        success = await subtract_user_balance(
+            db, db_user, final_price,
+            f"Покупка тарифа {tariff.name} на {period} дней"
+        )
         if not success:
             await callback.answer("Ошибка списания баланса", show_alert=True)
             return
@@ -733,7 +736,10 @@ async def confirm_tariff_extend(
 
     try:
         # Списываем баланс
-        success = await subtract_user_balance(db, db_user.id, final_price)
+        success = await subtract_user_balance(
+            db, db_user, final_price,
+            f"Продление тарифа {tariff.name} на {period} дней"
+        )
         if not success:
             await callback.answer("Ошибка списания баланса", show_alert=True)
             return
@@ -1185,7 +1191,10 @@ async def confirm_tariff_switch(
 
     try:
         # Списываем баланс
-        success = await subtract_user_balance(db, db_user.id, final_price)
+        success = await subtract_user_balance(
+            db, db_user, final_price,
+            f"Смена тарифа на {tariff.name} ({period} дней)"
+        )
         if not success:
             await callback.answer("Ошибка списания баланса", show_alert=True)
             return
