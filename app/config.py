@@ -166,7 +166,17 @@ class Settings(BaseSettings):
     TRAFFIC_SELECTION_MODE: str = "selectable"
     FIXED_TRAFFIC_LIMIT_GB: int = 100
     BUY_TRAFFIC_BUTTON_VISIBLE: bool = True
-    
+
+    # Режим продаж подписок:
+    # - classic: классический режим (выбор серверов, трафика, устройств, периода отдельно)
+    # - tariffs: режим тарифов (готовые пакеты с фиксированными параметрами)
+    SALES_MODE: str = "classic"
+
+    # ID тарифа для триала в режиме тарифов (0 = использовать стандартные настройки триала)
+    # Если указан ID тарифа, параметры триала берутся из тарифа (traffic_limit_gb, device_limit, allowed_squads)
+    # Длительность триала всё равно берётся из TRIAL_DURATION_DAYS
+    TRIAL_TARIFF_ID: int = 0
+
     # Настройки докупки трафика
     TRAFFIC_TOPUP_ENABLED: bool = True  # Включить/выключить функцию докупки трафика
     # Пакеты для докупки трафика (формат: "гб:цена:enabled", пустая строка = использовать TRAFFIC_PACKAGES_CONFIG)
@@ -1190,6 +1200,22 @@ class Settings(BaseSettings):
 
     def is_modem_enabled(self) -> bool:
         return bool(self.MODEM_ENABLED)
+
+    def is_tariffs_mode(self) -> bool:
+        """Проверяет, включен ли режим продаж 'Тарифы'."""
+        return self.SALES_MODE == "tariffs"
+
+    def is_classic_mode(self) -> bool:
+        """Проверяет, включен ли классический режим продаж."""
+        return self.SALES_MODE != "tariffs"
+
+    def get_sales_mode(self) -> str:
+        """Возвращает текущий режим продаж."""
+        return self.SALES_MODE if self.SALES_MODE in ("classic", "tariffs") else "classic"
+
+    def get_trial_tariff_id(self) -> int:
+        """Возвращает ID тарифа для триала (0 = использовать стандартные настройки)."""
+        return self.TRIAL_TARIFF_ID if self.TRIAL_TARIFF_ID > 0 else 0
 
     def get_modem_price_per_month(self) -> int:
         try:
