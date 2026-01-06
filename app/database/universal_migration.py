@@ -5049,6 +5049,172 @@ async def add_transaction_receipt_columns() -> bool:
         return False
 
 
+# =============================================================================
+# МИГРАЦИИ ДЛЯ РЕЖИМА ТАРИФОВ
+# =============================================================================
+
+async def create_tariffs_table() -> bool:
+    """Создаёт таблицу тарифов для режима продаж 'Тарифы'."""
+    try:
+        if await check_table_exists('tariffs'):
+            logger.info("ℹ️ Таблица tariffs уже существует")
+            return True
+
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'sqlite':
+                await conn.execute(text("""
+                CREATE TABLE tariffs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name VARCHAR(255) NOT NULL,
+                    description TEXT,
+                    display_order INTEGER DEFAULT 0 NOT NULL,
+                    is_active BOOLEAN DEFAULT 1 NOT NULL,
+                    traffic_limit_gb INTEGER DEFAULT 100 NOT NULL,
+                    device_limit INTEGER DEFAULT 1 NOT NULL,
+                    allowed_squads JSON DEFAULT '[]',
+                    period_prices JSON DEFAULT '{}' NOT NULL,
+                    tier_level INTEGER DEFAULT 1 NOT NULL,
+                    is_trial_available BOOLEAN DEFAULT 0 NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+                """))
+            elif db_type == 'postgresql':
+                await conn.execute(text("""
+                CREATE TABLE tariffs (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL,
+                    description TEXT,
+                    display_order INTEGER DEFAULT 0 NOT NULL,
+                    is_active BOOLEAN DEFAULT TRUE NOT NULL,
+                    traffic_limit_gb INTEGER DEFAULT 100 NOT NULL,
+                    device_limit INTEGER DEFAULT 1 NOT NULL,
+                    allowed_squads JSON DEFAULT '[]',
+                    period_prices JSON DEFAULT '{}' NOT NULL,
+                    tier_level INTEGER DEFAULT 1 NOT NULL,
+                    is_trial_available BOOLEAN DEFAULT FALSE NOT NULL,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                )
+                """))
+            else:  # MySQL
+                await conn.execute(text("""
+                CREATE TABLE tariffs (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL,
+                    description TEXT,
+                    display_order INT DEFAULT 0 NOT NULL,
+                    is_active BOOLEAN DEFAULT TRUE NOT NULL,
+                    traffic_limit_gb INT DEFAULT 100 NOT NULL,
+                    device_limit INT DEFAULT 1 NOT NULL,
+                    allowed_squads JSON DEFAULT (JSON_ARRAY()),
+                    period_prices JSON NOT NULL,
+                    tier_level INT DEFAULT 1 NOT NULL,
+                    is_trial_available BOOLEAN DEFAULT FALSE NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                )
+                """))
+
+            logger.info("✅ Таблица tariffs создана")
+            return True
+
+    except Exception as error:
+        logger.error(f"❌ Ошибка создания таблицы tariffs: {error}")
+        return False
+
+
+async def create_tariff_promo_groups_table() -> bool:
+    """Создаёт связующую таблицу tariff_promo_groups для M2M связи тарифов и промогрупп."""
+    try:
+        if await check_table_exists('tariff_promo_groups'):
+            logger.info("ℹ️ Таблица tariff_promo_groups уже существует")
+            return True
+
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'sqlite':
+                await conn.execute(text("""
+                CREATE TABLE tariff_promo_groups (
+                    tariff_id INTEGER NOT NULL,
+                    promo_group_id INTEGER NOT NULL,
+                    PRIMARY KEY (tariff_id, promo_group_id),
+                    FOREIGN KEY (tariff_id) REFERENCES tariffs(id) ON DELETE CASCADE,
+                    FOREIGN KEY (promo_group_id) REFERENCES promo_groups(id) ON DELETE CASCADE
+                )
+                """))
+            elif db_type == 'postgresql':
+                await conn.execute(text("""
+                CREATE TABLE tariff_promo_groups (
+                    tariff_id INTEGER NOT NULL REFERENCES tariffs(id) ON DELETE CASCADE,
+                    promo_group_id INTEGER NOT NULL REFERENCES promo_groups(id) ON DELETE CASCADE,
+                    PRIMARY KEY (tariff_id, promo_group_id)
+                )
+                """))
+            else:  # MySQL
+                await conn.execute(text("""
+                CREATE TABLE tariff_promo_groups (
+                    tariff_id INT NOT NULL,
+                    promo_group_id INT NOT NULL,
+                    PRIMARY KEY (tariff_id, promo_group_id),
+                    FOREIGN KEY (tariff_id) REFERENCES tariffs(id) ON DELETE CASCADE,
+                    FOREIGN KEY (promo_group_id) REFERENCES promo_groups(id) ON DELETE CASCADE
+                )
+                """))
+
+            logger.info("✅ Таблица tariff_promo_groups создана")
+            return True
+
+    except Exception as error:
+        logger.error(f"❌ Ошибка создания таблицы tariff_promo_groups: {error}")
+        return False
+
+
+async def add_subscription_tariff_id_column() -> bool:
+    """Добавляет колонку tariff_id в таблицу subscriptions."""
+    try:
+        if await check_column_exists('subscriptions', 'tariff_id'):
+            logger.info("ℹ️ Колонка tariff_id уже существует в subscriptions")
+            return True
+
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'sqlite':
+                await conn.execute(text(
+                    "ALTER TABLE subscriptions ADD COLUMN tariff_id INTEGER REFERENCES tariffs(id)"
+                ))
+            elif db_type == 'postgresql':
+                await conn.execute(text(
+                    "ALTER TABLE subscriptions ADD COLUMN tariff_id INTEGER REFERENCES tariffs(id) ON DELETE SET NULL"
+                ))
+                # Создаём индекс
+                await conn.execute(text(
+                    "CREATE INDEX IF NOT EXISTS ix_subscriptions_tariff_id ON subscriptions(tariff_id)"
+                ))
+            else:  # MySQL
+                await conn.execute(text(
+                    "ALTER TABLE subscriptions ADD COLUMN tariff_id INT NULL"
+                ))
+                await conn.execute(text(
+                    "ALTER TABLE subscriptions ADD CONSTRAINT fk_subscriptions_tariff "
+                    "FOREIGN KEY (tariff_id) REFERENCES tariffs(id) ON DELETE SET NULL"
+                ))
+                await conn.execute(text(
+                    "CREATE INDEX ix_subscriptions_tariff_id ON subscriptions(tariff_id)"
+                ))
+
+            logger.info("✅ Колонка tariff_id добавлена в subscriptions")
+            return True
+
+    except Exception as error:
+        logger.error(f"❌ Ошибка добавления колонки tariff_id: {error}")
+        return False
+
+
 async def run_universal_migration():
     logger.info("=== НАЧАЛО УНИВЕРСАЛЬНОЙ МИГРАЦИИ ===")
     
@@ -5525,6 +5691,25 @@ async def run_universal_migration():
             logger.info("✅ Доступ серверов по промогруппам настроен")
         else:
             logger.warning("⚠️ Проблемы с настройкой доступа серверов к промогруппам")
+
+        logger.info("=== СОЗДАНИЕ ТАБЛИЦ ДЛЯ РЕЖИМА ТАРИФОВ ===")
+        tariffs_table_ready = await create_tariffs_table()
+        if tariffs_table_ready:
+            logger.info("✅ Таблица tariffs готова")
+        else:
+            logger.warning("⚠️ Проблемы с таблицей tariffs")
+
+        tariff_promo_groups_ready = await create_tariff_promo_groups_table()
+        if tariff_promo_groups_ready:
+            logger.info("✅ Таблица tariff_promo_groups готова")
+        else:
+            logger.warning("⚠️ Проблемы с таблицей tariff_promo_groups")
+
+        tariff_id_column_ready = await add_subscription_tariff_id_column()
+        if tariff_id_column_ready:
+            logger.info("✅ Колонка tariff_id в subscriptions готова")
+        else:
+            logger.warning("⚠️ Проблемы с колонкой tariff_id в subscriptions")
 
         logger.info("=== ОБНОВЛЕНИЕ ВНЕШНИХ КЛЮЧЕЙ ===")
         fk_updated = await fix_foreign_keys_for_user_deletion()
