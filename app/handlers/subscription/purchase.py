@@ -333,6 +333,17 @@ async def show_subscription_info(
         else texts.t("SUBSCRIPTION_NO_SERVERS", "Нет серверов")
     )
 
+    # Получаем название тарифа для режима тарифов
+    tariff_line = ""
+    if settings.is_tariffs_mode() and subscription.tariff_id:
+        try:
+            from app.database.crud.tariff import get_tariff_by_id
+            tariff = await get_tariff_by_id(db, subscription.tariff_id)
+            if tariff:
+                tariff_line = f"\n📦 Тариф: {tariff.name}"
+        except Exception as e:
+            logger.warning(f"Ошибка получения тарифа: {e}")
+
     message_template = texts.t(
         "SUBSCRIPTION_OVERVIEW_TEMPLATE",
         """👤 {full_name}
@@ -340,7 +351,7 @@ async def show_subscription_info(
 📱 Подписка: {status_emoji} {status_display}{warning}
 
 📱 Информация о подписке
-🎭 Тип: {subscription_type}
+🎭 Тип: {subscription_type}{tariff_line}
 📅 Действует до: {end_date}
 ⏰ Осталось: {time_left}
 📈 Трафик: {traffic}
@@ -370,6 +381,7 @@ async def show_subscription_info(
         status_display=status_display,
         warning=warning_text,
         subscription_type=subscription_type,
+        tariff_line=tariff_line,
         end_date=format_local_datetime(subscription.end_date, "%d.%m.%Y %H:%M"),
         time_left=time_left_text,
         traffic=traffic_used_display,
@@ -668,10 +680,36 @@ async def activate_trial(
         if not settings.is_devices_selection_enabled():
             forced_devices = settings.get_disabled_mode_device_limit()
 
+        # Проверяем, настроен ли триальный тариф для режима тарифов
+        trial_tariff_id = settings.get_trial_tariff_id()
+        trial_tariff = None
+        trial_traffic_limit = None
+        trial_device_limit = forced_devices
+        trial_squads = None
+        tariff_id_for_trial = None
+
+        if settings.is_tariffs_mode() and trial_tariff_id > 0:
+            try:
+                from app.database.crud.tariff import get_tariff_by_id
+                trial_tariff = await get_tariff_by_id(db, trial_tariff_id)
+                if trial_tariff and trial_tariff.is_active:
+                    trial_traffic_limit = trial_tariff.traffic_limit_gb
+                    trial_device_limit = trial_tariff.device_limit
+                    trial_squads = trial_tariff.allowed_squads or []
+                    tariff_id_for_trial = trial_tariff.id
+                    logger.info(f"Используем триальный тариф {trial_tariff.name} (ID: {trial_tariff_id})")
+                else:
+                    logger.warning(f"Триальный тариф {trial_tariff_id} не найден или неактивен")
+            except Exception as e:
+                logger.error(f"Ошибка получения триального тарифа: {e}")
+
         subscription = await create_trial_subscription(
             db,
             db_user.id,
-            device_limit=forced_devices,
+            device_limit=trial_device_limit,
+            traffic_limit_gb=trial_traffic_limit,
+            connected_squads=trial_squads,
+            tariff_id=tariff_id_for_trial,
         )
 
         await db.refresh(db_user)
@@ -1048,6 +1086,12 @@ async def start_subscription_purchase(
 ):
     texts = get_texts(db_user.language)
 
+    # Проверяем режим продаж - если tariffs, перенаправляем на выбор тарифов
+    if settings.is_tariffs_mode():
+        from .tariff_purchase import show_tariffs_list
+        await show_tariffs_list(callback, db_user, db, state)
+        return
+
     keyboard = get_subscription_period_keyboard(db_user.language, db_user)
     prompt_text = await _build_subscription_period_prompt(db_user, texts, db)
 
@@ -1322,6 +1366,35 @@ async def handle_extend_subscription(
     if not subscription or subscription.is_trial:
         await callback.answer("⚠ Продление доступно только для платных подписок", show_alert=True)
         return
+
+    # В режиме тарифов проверяем наличие tariff_id
+    if settings.is_tariffs_mode():
+        if subscription.tariff_id:
+            # У подписки есть тариф - перенаправляем на продление по тарифу
+            from .tariff_purchase import show_tariff_extend
+            await show_tariff_extend(callback, db_user, db)
+            return
+        else:
+            # У подписки нет тарифа - предлагаем выбрать тариф
+            await callback.message.edit_text(
+                "📦 <b>Выберите тариф для продления</b>\n\n"
+                "Ваша текущая подписка была создана до введения тарифов.\n"
+                "Для продления необходимо выбрать один из доступных тарифов.\n\n"
+                "⚠️ Ваша текущая подписка продолжит действовать до окончания срока.",
+                reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                    [types.InlineKeyboardButton(
+                        text="📦 Выбрать тариф",
+                        callback_data="tariff_switch"
+                    )],
+                    [types.InlineKeyboardButton(
+                        text=texts.BACK,
+                        callback_data="menu_subscription"
+                    )]
+                ]),
+                parse_mode="HTML"
+            )
+            await callback.answer()
+            return
 
     subscription_service = SubscriptionService()
 
@@ -3894,6 +3967,10 @@ def register_handlers(dp: Dispatcher):
     # Регистрируем обработчики модема
     from .modem import register_modem_handlers
     register_modem_handlers(dp)
+
+    # Регистрируем обработчики покупки по тарифам
+    from .tariff_purchase import register_tariff_purchase_handlers
+    register_tariff_purchase_handlers(dp)
 
     # Регистрируем обработчик для простой покупки
     dp.callback_query.register(
