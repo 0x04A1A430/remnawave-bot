@@ -2410,18 +2410,25 @@ def get_devices_management_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-def get_updated_subscription_settings_keyboard(language: str = DEFAULT_LANGUAGE, show_countries_management: bool = True) -> InlineKeyboardMarkup:
+def get_updated_subscription_settings_keyboard(
+    language: str = DEFAULT_LANGUAGE,
+    show_countries_management: bool = True,
+    tariff=None,  # Тариф подписки (если есть - ограничиваем настройки)
+) -> InlineKeyboardMarkup:
     from app.config import settings
-    
+
     texts = get_texts(language)
     keyboard = []
 
-    if show_countries_management:
+    # Если подписка на тарифе - отключаем страны, модем, трафик
+    has_tariff = tariff is not None
+
+    if show_countries_management and not has_tariff:
         keyboard.append([
             InlineKeyboardButton(text=texts.t("ADD_COUNTRIES_BUTTON", "🌐 Добавить страны"), callback_data="subscription_add_countries")
         ])
 
-    if settings.is_traffic_selectable():
+    if settings.is_traffic_selectable() and not has_tariff:
         keyboard.append([
             InlineKeyboardButton(text=texts.t("RESET_TRAFFIC_BUTTON", "🔄 Сбросить трафик"), callback_data="subscription_reset_traffic")
         ])
@@ -2429,7 +2436,16 @@ def get_updated_subscription_settings_keyboard(language: str = DEFAULT_LANGUAGE,
             InlineKeyboardButton(text=texts.t("SWITCH_TRAFFIC_BUTTON", "🔄 Переключить трафик"), callback_data="subscription_switch_traffic")
         ])
 
-    if settings.is_devices_selection_enabled():
+    # Устройства: для тарифов - только если указана цена за устройство
+    if has_tariff:
+        if tariff.device_price_kopeks is not None and tariff.device_price_kopeks > 0:
+            keyboard.append([
+                InlineKeyboardButton(
+                    text=texts.t("CHANGE_DEVICES_BUTTON", "📱 Изменить устройства"),
+                    callback_data="subscription_change_devices"
+                )
+            ])
+    elif settings.is_devices_selection_enabled():
         keyboard.append([
             InlineKeyboardButton(
                 text=texts.t("CHANGE_DEVICES_BUTTON", "📱 Изменить устройства"),
@@ -2437,7 +2453,7 @@ def get_updated_subscription_settings_keyboard(language: str = DEFAULT_LANGUAGE,
             )
         ])
 
-    if settings.is_modem_enabled():
+    if settings.is_modem_enabled() and not has_tariff:
         keyboard.append([
             InlineKeyboardButton(
                 text=texts.t("MODEM_BUTTON", "📡 Модем"),
