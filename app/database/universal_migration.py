@@ -1289,6 +1289,118 @@ async def ensure_wata_payment_schema() -> bool:
         return False
 
 
+async def create_freekassa_payments_table():
+    """Создаёт таблицу freekassa_payments для платежей через Freekassa."""
+    table_exists = await check_table_exists('freekassa_payments')
+    if table_exists:
+        logger.info("Таблица freekassa_payments уже существует")
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'sqlite':
+                create_sql = """
+                CREATE TABLE freekassa_payments (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    order_id VARCHAR(64) NOT NULL UNIQUE,
+                    freekassa_order_id VARCHAR(64) NULL UNIQUE,
+                    amount_kopeks INTEGER NOT NULL,
+                    currency VARCHAR(10) NOT NULL DEFAULT 'RUB',
+                    description TEXT NULL,
+                    status VARCHAR(32) NOT NULL DEFAULT 'pending',
+                    is_paid BOOLEAN NOT NULL DEFAULT 0,
+                    payment_url TEXT NULL,
+                    payment_system_id INTEGER NULL,
+                    metadata_json JSON NULL,
+                    callback_payload JSON NULL,
+                    paid_at DATETIME NULL,
+                    expires_at DATETIME NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    transaction_id INTEGER NULL,
+                    FOREIGN KEY (user_id) REFERENCES users(id),
+                    FOREIGN KEY (transaction_id) REFERENCES transactions(id)
+                );
+
+                CREATE INDEX idx_freekassa_user_id ON freekassa_payments(user_id);
+                CREATE UNIQUE INDEX idx_freekassa_order_id ON freekassa_payments(order_id);
+                CREATE UNIQUE INDEX idx_freekassa_fk_order_id ON freekassa_payments(freekassa_order_id);
+                """
+
+            elif db_type == 'postgresql':
+                create_sql = """
+                CREATE TABLE freekassa_payments (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    order_id VARCHAR(64) NOT NULL UNIQUE,
+                    freekassa_order_id VARCHAR(64) NULL UNIQUE,
+                    amount_kopeks INTEGER NOT NULL,
+                    currency VARCHAR(10) NOT NULL DEFAULT 'RUB',
+                    description TEXT NULL,
+                    status VARCHAR(32) NOT NULL DEFAULT 'pending',
+                    is_paid BOOLEAN NOT NULL DEFAULT FALSE,
+                    payment_url TEXT NULL,
+                    payment_system_id INTEGER NULL,
+                    metadata_json JSON NULL,
+                    callback_payload JSON NULL,
+                    paid_at TIMESTAMP NULL,
+                    expires_at TIMESTAMP NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    transaction_id INTEGER NULL REFERENCES transactions(id)
+                );
+
+                CREATE INDEX idx_freekassa_user_id ON freekassa_payments(user_id);
+                CREATE UNIQUE INDEX idx_freekassa_order_id ON freekassa_payments(order_id);
+                CREATE UNIQUE INDEX idx_freekassa_fk_order_id ON freekassa_payments(freekassa_order_id);
+                """
+
+            elif db_type == 'mysql':
+                create_sql = """
+                CREATE TABLE freekassa_payments (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    user_id INT NOT NULL,
+                    order_id VARCHAR(64) NOT NULL UNIQUE,
+                    freekassa_order_id VARCHAR(64) NULL UNIQUE,
+                    amount_kopeks INT NOT NULL,
+                    currency VARCHAR(10) NOT NULL DEFAULT 'RUB',
+                    description TEXT NULL,
+                    status VARCHAR(32) NOT NULL DEFAULT 'pending',
+                    is_paid BOOLEAN NOT NULL DEFAULT 0,
+                    payment_url TEXT NULL,
+                    payment_system_id INT NULL,
+                    metadata_json JSON NULL,
+                    callback_payload JSON NULL,
+                    paid_at DATETIME NULL,
+                    expires_at DATETIME NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    transaction_id INT NULL,
+                    FOREIGN KEY (user_id) REFERENCES users(id),
+                    FOREIGN KEY (transaction_id) REFERENCES transactions(id)
+                );
+
+                CREATE INDEX idx_freekassa_user_id ON freekassa_payments(user_id);
+                CREATE UNIQUE INDEX idx_freekassa_order_id ON freekassa_payments(order_id);
+                CREATE UNIQUE INDEX idx_freekassa_fk_order_id ON freekassa_payments(freekassa_order_id);
+                """
+
+            else:
+                logger.error(f"Неподдерживаемый тип БД для таблицы freekassa_payments: {db_type}")
+                return False
+
+            await conn.execute(text(create_sql))
+            logger.info("Таблица freekassa_payments успешно создана")
+            return True
+
+    except Exception as e:
+        logger.error(f"Ошибка создания таблицы freekassa_payments: {e}")
+        return False
+
+
 async def create_discount_offers_table():
     table_exists = await check_table_exists('discount_offers')
     if table_exists:
@@ -5079,6 +5191,13 @@ async def run_universal_migration():
             logger.info("✅ Схема Wata payments актуальна")
         else:
             logger.warning("⚠️ Не удалось обновить схему Wata payments")
+
+        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ FREEKASSA ===")
+        freekassa_created = await create_freekassa_payments_table()
+        if freekassa_created:
+            logger.info("✅ Таблица Freekassa payments готова")
+        else:
+            logger.warning("⚠️ Проблемы с таблицей Freekassa payments")
 
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ DISCOUNT_OFFERS ===")
         discount_created = await create_discount_offers_table()
