@@ -87,6 +87,7 @@ class PaymentMethod(Enum):
     WATA = "wata"
     PLATEGA = "platega"
     CLOUDPAYMENTS = "cloudpayments"
+    FREEKASSA = "freekassa"
     MANUAL = "manual"
 
 
@@ -539,6 +540,73 @@ class CloudPaymentsPayment(Base):
             "<CloudPaymentsPayment(id={0}, invoice={1}, amount={2}₽, status={3})>".format(
                 self.id,
                 self.invoice_id,
+                self.amount_rubles,
+                self.status,
+            )
+        )
+
+
+class FreekassaPayment(Base):
+    __tablename__ = "freekassa_payments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    # Идентификаторы
+    order_id = Column(String(64), unique=True, nullable=False, index=True)  # Наш ID заказа
+    freekassa_order_id = Column(String(64), unique=True, nullable=True, index=True)  # intid от Freekassa
+
+    # Суммы
+    amount_kopeks = Column(Integer, nullable=False)
+    currency = Column(String(10), nullable=False, default="RUB")
+    description = Column(Text, nullable=True)
+
+    # Статусы
+    status = Column(String(32), nullable=False, default="pending")  # pending, success, failed, expired
+    is_paid = Column(Boolean, default=False)
+
+    # Данные платежа
+    payment_url = Column(Text, nullable=True)
+    payment_system_id = Column(Integer, nullable=True)  # ID платежной системы FK
+
+    # Метаданные
+    metadata_json = Column(JSON, nullable=True)
+    callback_payload = Column(JSON, nullable=True)
+
+    # Временные метки
+    paid_at = Column(DateTime, nullable=True)
+    expires_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    # Связь с транзакцией
+    transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=True)
+
+    # Relationships
+    user = relationship("User", backref="freekassa_payments")
+    transaction = relationship("Transaction", backref="freekassa_payment")
+
+    @property
+    def amount_rubles(self) -> float:
+        return self.amount_kopeks / 100
+
+    @property
+    def is_pending(self) -> bool:
+        return self.status == "pending"
+
+    @property
+    def is_success(self) -> bool:
+        return self.status == "success" and self.is_paid
+
+    @property
+    def is_failed(self) -> bool:
+        return self.status in ["failed", "expired"]
+
+    def __repr__(self) -> str:  # pragma: no cover - debug helper
+        return (
+            "<FreekassaPayment(id={0}, order_id={1}, amount={2}₽, status={3})>".format(
+                self.id,
+                self.order_id,
                 self.amount_rubles,
                 self.status,
             )
