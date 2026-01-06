@@ -1982,6 +1982,7 @@ async def required_sub_channel_check(
                         language=language,
                         referral_code=referral_code,
                     )
+                    await db.refresh(user, ['subscription'])
 
                     # Показываем главное меню после создания пользователя
                     has_active_subscription, subscription_is_active = _calculate_subscription_flags(
