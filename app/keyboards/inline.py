@@ -993,6 +993,14 @@ def get_subscription_keyboard(
                     callback_data="subscription_settings",
                 )
             ])
+            # Кнопка смены тарифа для режима тарифов
+            if settings.is_tariffs_mode() and subscription:
+                keyboard.append([
+                    InlineKeyboardButton(
+                        text=texts.t("CHANGE_TARIFF_BUTTON", "📦 Сменить тариф"),
+                        callback_data="tariff_switch"
+                    )
+                ])
             # Кнопка докупки трафика для платных подписок
             if (
                 settings.is_traffic_topup_enabled()
