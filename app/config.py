@@ -399,21 +399,6 @@ class Settings(BaseSettings):
     CLOUDPAYMENTS_REQUIRE_EMAIL: bool = False
     CLOUDPAYMENTS_TEST_MODE: bool = False
 
-    # Freekassa
-    FREEKASSA_ENABLED: bool = False
-    FREEKASSA_SHOP_ID: Optional[int] = None
-    FREEKASSA_API_KEY: Optional[str] = None
-    FREEKASSA_SECRET_WORD_1: Optional[str] = None  # Для формы оплаты
-    FREEKASSA_SECRET_WORD_2: Optional[str] = None  # Для webhook
-    FREEKASSA_DISPLAY_NAME: str = "Freekassa"
-    FREEKASSA_CURRENCY: str = "RUB"
-    FREEKASSA_MIN_AMOUNT_KOPEKS: int = 10000  # 100 руб
-    FREEKASSA_MAX_AMOUNT_KOPEKS: int = 100000000  # 1 000 000 руб
-    FREEKASSA_PAYMENT_TIMEOUT_SECONDS: int = 3600
-    FREEKASSA_WEBHOOK_PATH: str = "/freekassa-webhook"
-    FREEKASSA_WEBHOOK_HOST: str = "0.0.0.0"
-    FREEKASSA_WEBHOOK_PORT: int = 8088
-
     MAIN_MENU_MODE: str = "default"
     CONNECT_BUTTON_MODE: str = "guide"
     MINIAPP_CUSTOM_URL: str = ""
@@ -1428,22 +1413,6 @@ class Settings(BaseSettings):
             and self.CLOUDPAYMENTS_PUBLIC_ID is not None
             and self.CLOUDPAYMENTS_API_SECRET is not None
         )
-
-    def is_freekassa_enabled(self) -> bool:
-        return (
-            self.FREEKASSA_ENABLED
-            and self.FREEKASSA_SHOP_ID is not None
-            and self.FREEKASSA_API_KEY is not None
-            and self.FREEKASSA_SECRET_WORD_1 is not None
-            and self.FREEKASSA_SECRET_WORD_2 is not None
-        )
-
-    def get_freekassa_display_name(self) -> str:
-        name = (self.FREEKASSA_DISPLAY_NAME or "").strip()
-        return name if name else "Freekassa"
-
-    def get_freekassa_display_name_html(self) -> str:
-        return html.escape(self.get_freekassa_display_name())
 
     def is_payment_verification_auto_check_enabled(self) -> bool:
         return self.PAYMENT_VERIFICATION_AUTO_CHECK_ENABLED
