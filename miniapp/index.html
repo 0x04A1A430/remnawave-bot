@@ -13708,6 +13708,30 @@
             return typeRaw === 'paid';
         }
 
+        function isTrialSubscription() {
+            if (!userData?.user) {
+                return false;
+            }
+
+            const statusRaw = String(
+                userData.user.subscription_actual_status
+                || userData.user.subscription_status
+                || ''
+            ).toLowerCase();
+
+            if (['trial', 'trialing'].includes(statusRaw)) {
+                return true;
+            }
+
+            const typeRaw = String(
+                userData.subscription_type
+                ?? userData.user.subscription_type
+                ?? ''
+            ).toLowerCase();
+
+            return typeRaw === 'trial';
+        }
+
         function normalizeServerEntry(entry) {
             if (!entry) {
                 return null;
@@ -14896,7 +14920,8 @@
                 return;
             }
 
-            const shouldShow = hasActiveSubscription();
+            // Для триала НЕ показываем карточку продления — юзер должен купить подписку
+            const shouldShow = hasActiveSubscription() && !isTrialSubscription();
             card.classList.toggle('hidden', !shouldShow);
             if (!shouldShow) {
                 return;
@@ -15369,7 +15394,8 @@
                 return;
             }
 
-            const shouldShow = hasActiveSubscription();
+            // Для триала НЕ показываем настройки подписки — юзер должен сначала купить
+            const shouldShow = hasActiveSubscription() && !isTrialSubscription();
             card.classList.toggle('hidden', !shouldShow);
             if (!shouldShow) {
                 return;
@@ -16062,7 +16088,8 @@
             if (subscriptionPurchaseModalOpen) {
                 return true;
             }
-            return Boolean(userData?.user) && !hasPaidSubscription();
+            // Показываем для пользователей без оплаченной подписки ИЛИ с триалом
+            return Boolean(userData?.user) && (!hasPaidSubscription() || isTrialSubscription());
         }
 
         function resolvePurchasePeriodId(period) {
