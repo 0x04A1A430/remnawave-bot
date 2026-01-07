@@ -681,25 +681,33 @@ async def activate_trial(
             forced_devices = settings.get_disabled_mode_device_limit()
 
         # Проверяем, настроен ли триальный тариф для режима тарифов
-        trial_tariff_id = settings.get_trial_tariff_id()
         trial_tariff = None
         trial_traffic_limit = None
         trial_device_limit = forced_devices
         trial_squads = None
         tariff_id_for_trial = None
 
-        if settings.is_tariffs_mode() and trial_tariff_id > 0:
+        if settings.is_tariffs_mode():
             try:
-                from app.database.crud.tariff import get_tariff_by_id
-                trial_tariff = await get_tariff_by_id(db, trial_tariff_id)
-                if trial_tariff and trial_tariff.is_active:
+                from app.database.crud.tariff import get_tariff_by_id, get_trial_tariff
+
+                # Сначала проверяем тариф из БД с флагом is_trial_available
+                trial_tariff = await get_trial_tariff(db)
+
+                # Если не найден в БД, проверяем настройку TRIAL_TARIFF_ID
+                if not trial_tariff:
+                    trial_tariff_id = settings.get_trial_tariff_id()
+                    if trial_tariff_id > 0:
+                        trial_tariff = await get_tariff_by_id(db, trial_tariff_id)
+                        if trial_tariff and not trial_tariff.is_active:
+                            trial_tariff = None
+
+                if trial_tariff:
                     trial_traffic_limit = trial_tariff.traffic_limit_gb
                     trial_device_limit = trial_tariff.device_limit
                     trial_squads = trial_tariff.allowed_squads or []
                     tariff_id_for_trial = trial_tariff.id
-                    logger.info(f"Используем триальный тариф {trial_tariff.name} (ID: {trial_tariff_id})")
-                else:
-                    logger.warning(f"Триальный тариф {trial_tariff_id} не найден или неактивен")
+                    logger.info(f"Используем триальный тариф {trial_tariff.name} (ID: {trial_tariff.id})")
             except Exception as e:
                 logger.error(f"Ошибка получения триального тарифа: {e}")
 
