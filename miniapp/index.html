@@ -650,6 +650,108 @@
             color: inherit;
         }
 
+        /* Tariff Name Styles */
+        .tariff-name-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            border-radius: 10px;
+            font-weight: 700;
+            font-size: 15px;
+            letter-spacing: 0.3px;
+            background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.15), rgba(var(--primary-rgb), 0.05));
+            color: var(--text-primary);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .tariff-name-badge::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, transparent 40%, rgba(255,255,255,0.1) 50%, transparent 60%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .subscription-settings-toggle:hover .tariff-name-badge::before {
+            opacity: 1;
+        }
+
+        .tariff-name-badge.tariff-premium {
+            background: linear-gradient(135deg, #FFD700 0%, #FFA500 50%, #FF8C00 100%);
+            color: #1a1a2e;
+            box-shadow: 0 2px 8px rgba(255, 165, 0, 0.3);
+        }
+
+        .tariff-name-badge.tariff-current {
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.2), rgba(34, 197, 94, 0.08));
+            border: 1px solid rgba(34, 197, 94, 0.3);
+        }
+
+        .tariff-name-badge .tariff-icon {
+            font-size: 16px;
+            line-height: 1;
+        }
+
+        .tariff-name-badge .tariff-text {
+            line-height: 1.2;
+        }
+
+        .tariff-name-badge .tariff-check {
+            color: #22c55e;
+            font-weight: 700;
+        }
+
+        /* Current tariff block name */
+        .tariff-current-name {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 14px;
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 15px;
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.15), rgba(34, 197, 94, 0.05));
+            border: 1px solid rgba(34, 197, 94, 0.25);
+            color: #22c55e;
+        }
+
+        .tariff-current-name .check-icon {
+            font-size: 14px;
+        }
+
+        :root[data-theme="dark"] .tariff-name-badge {
+            background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.25), rgba(var(--primary-rgb), 0.1));
+        }
+
+        :root[data-theme="dark"] .tariff-name-badge.tariff-premium {
+            background: linear-gradient(135deg, #FFD700 0%, #FFA500 50%, #FF8C00 100%);
+            color: #1a1a2e;
+        }
+
+        :root[data-theme="dark"] .tariff-name-badge.tariff-current {
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.25), rgba(34, 197, 94, 0.1));
+        }
+
+        :root[data-theme="dark"] .tariff-current-name {
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.2), rgba(34, 197, 94, 0.08));
+        }
+
+        .subscription-settings-toggle.active .tariff-name-badge {
+            background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.25), rgba(var(--primary-rgb), 0.12));
+            box-shadow: 0 2px 6px rgba(var(--primary-rgb), 0.15);
+        }
+
+        .subscription-settings-toggle.active .tariff-name-badge.tariff-premium {
+            background: linear-gradient(135deg, #FFD700 0%, #FFA500 50%, #FF8C00 100%);
+            box-shadow: 0 3px 12px rgba(255, 165, 0, 0.4);
+        }
+
         .subscription-settings-actions {
             display: flex;
             flex-wrap: wrap;
@@ -4541,6 +4643,7 @@
         @media (max-width: 480px) {
             .container {
                 padding: 12px;
+                padding-bottom: 100px;
             }
 
             .promo-offer-card {
@@ -4945,6 +5048,10 @@
                         <span class="info-label" data-i18n="info.subscription_type">Type</span>
                         <span class="info-value" id="subscriptionType">-</span>
                     </div>
+                    <div class="info-item hidden" id="currentTariffRow">
+                        <span class="info-label" data-i18n="info.current_tariff">Tariff</span>
+                        <span class="info-value" id="currentTariffName">-</span>
+                    </div>
                     <div class="info-item">
                         <span class="info-label" data-i18n="info.device_limit">Device Limit</span>
                         <span class="info-value" id="deviceLimit">-</span>
@@ -5159,13 +5266,29 @@
                             <button class="subscription-settings-retry" id="tariffsRetry" type="button">Повторить</button>
                         </div>
                         <div id="tariffsBody" class="hidden">
-                            <div id="tariffsCurrentTariff" class="subscription-renewal-meta-block hidden" style="margin-bottom: 16px;">
-                                <div class="subscription-renewal-meta-title">Текущий тариф</div>
+                            <div id="tariffsCurrentTariff" class="subscription-renewal-meta-block hidden" style="margin-top: 12px; margin-bottom: 16px;">
+                                <div class="subscription-renewal-meta-title" data-i18n="tariffs.current">Текущий тариф</div>
                                 <div class="subscription-renewal-meta-body" id="tariffsCurrentTariffName"></div>
                             </div>
-                            <div id="tariffsList" style="display: flex; flex-direction: column; gap: 12px;"></div>
+                            <div class="subscription-renewal-section">
+                                <div class="subscription-renewal-section-title">Выберите тариф</div>
+                                <div id="tariffsList" class="subscription-renewal-options"></div>
+                            </div>
+                            <div id="tariffPeriodsSection" class="subscription-renewal-section hidden" style="margin-top: 16px;">
+                                <div class="subscription-renewal-section-title">Выберите период</div>
+                                <div id="tariffPeriodsList" class="subscription-renewal-options"></div>
+                            </div>
+                            <div class="subscription-renewal-summary hidden" id="tariffsSummary" style="margin-top: 16px;">
+                                <div class="subscription-renewal-summary-header">
+                                    <div class="subscription-renewal-summary-prices">
+                                        <div class="subscription-renewal-price-original hidden" id="tariffPriceOriginal"></div>
+                                        <div class="subscription-renewal-price-current" id="tariffPriceCurrent">—</div>
+                                    </div>
+                                </div>
+                                <div class="subscription-renewal-price-discount hidden" id="tariffPriceDiscount"></div>
+                            </div>
                             <div class="subscription-renewal-actions" style="margin-top: 16px;">
-                                <button class="btn btn-primary" id="tariffsSelectBtn" type="button" disabled>Выбрать тариф</button>
+                                <button class="btn btn-primary" id="tariffsSelectBtn" type="button" disabled data-i18n="tariffs.select">Выбрать тариф</button>
                             </div>
                         </div>
                     </div>
@@ -5729,6 +5852,7 @@
                 'info.traffic_used': 'Traffic used',
                 'info.traffic_limit': 'Traffic limit',
                 'info.subscription_type': 'Subscription type',
+                'info.current_tariff': 'Current tariff',
                 'info.promo_group': 'Promo group',
                 'info.device_limit': 'Device limit',
                 'info.autopay': 'Auto-pay',
@@ -5960,6 +6084,10 @@
                 'promo_code.error.generic': 'Unable to activate the promo code.',
                 'promo_code.error.unauthorized': 'Authorization failed. Please reopen the mini app from Telegram.',
                 'promo_code.error.network': 'Network error. Please try again later.',
+                'tariffs.title': 'Tariffs',
+                'tariffs.select': 'Select tariff',
+                'tariffs.current': 'Current tariff',
+                'tariffs.no_tariffs': 'No tariffs available',
                 'card.referral.title': 'Referral Program',
                 'card.history.title': 'Transaction History',
                 'card.servers.title': 'Connected Servers',
@@ -6160,6 +6288,7 @@
                 'info.traffic_used': 'Использовано трафика',
                 'info.traffic_limit': 'Лимит трафика',
                 'info.subscription_type': 'Тип подписки',
+                'info.current_tariff': 'Текущий тариф',
                 'info.promo_group': 'Уровень',
                 'info.device_limit': 'Лимит устройств',
                 'info.autopay': 'Автоплатеж',
@@ -6391,6 +6520,10 @@
                 'promo_code.error.generic': 'Не удалось активировать промокод.',
                 'promo_code.error.unauthorized': 'Ошибка авторизации. Откройте мини-приложение из Telegram.',
                 'promo_code.error.network': 'Ошибка сети. Попробуйте ещё раз.',
+                'tariffs.title': 'Тарифы',
+                'tariffs.select': 'Выбрать тариф',
+                'tariffs.current': 'Текущий тариф',
+                'tariffs.no_tariffs': 'Нет доступных тарифов',
                 'card.referral.title': 'Реферальная программа',
                 'card.history.title': 'История операций',
                 'card.servers.title': 'Подключённые серверы',
@@ -8468,6 +8601,20 @@
                 subscriptionTypeElement.textContent = subscriptionTypeLabel === subscriptionTypeKey
                     ? subscriptionTypeRaw
                     : subscriptionTypeLabel;
+            }
+
+            // Текущий тариф (только в режиме tariffs)
+            const currentTariffRow = document.getElementById('currentTariffRow');
+            const currentTariffNameEl = document.getElementById('currentTariffName');
+            if (currentTariffRow && currentTariffNameEl) {
+                const salesMode = userData?.salesMode ?? userData?.sales_mode ?? 'classic';
+                const currentTariff = userData?.current_tariff ?? userData?.currentTariff;
+                if (salesMode === 'tariffs' && currentTariff && currentTariff.name) {
+                    currentTariffRow.classList.remove('hidden');
+                    currentTariffNameEl.textContent = currentTariff.name;
+                } else {
+                    currentTariffRow.classList.add('hidden');
+                }
             }
 
             const autopayElement = document.getElementById('autopayStatus');
@@ -19081,7 +19228,7 @@
             body?.classList.add('hidden');
 
             try {
-                const initData = getInitData();
+                const initData = tg.initData || '';
                 const response = await fetch('/miniapp/subscription/tariffs', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -19103,6 +19250,8 @@
             }
         }
 
+        let selectedTariffData = null;
+
         function renderTariffs() {
             const loading = document.getElementById('tariffsLoading');
             const body = document.getElementById('tariffsBody');
@@ -19118,13 +19267,47 @@
                 const current = tariffsData.current_tariff || tariffsData.currentTariff;
                 currentBlock?.classList.remove('hidden');
                 if (currentName) {
+                    const trafficLabel = current.traffic_limit_label || current.trafficLimitLabel
+                        || ((current.traffic_limit_gb || current.trafficLimitGb) === 0 ? '∞' : (current.traffic_limit_gb || current.trafficLimitGb) + ' ГБ');
+                    const deviceLimit = current.device_limit || current.deviceLimit || 1;
+                    const servers = current.servers || [];
+                    const serversCount = current.servers_count || current.serversCount || servers.length || 0;
+
+                    let serverTags = '';
+                    if (servers.length > 0) {
+                        const serverNames = servers.slice(0, 3).map(s => s.name || s.display_name).filter(Boolean);
+                        serverTags = serverNames.map(name =>
+                            `<span style="display: inline-block; padding: 2px 8px; background: var(--bg-tertiary, var(--bg-secondary)); border-radius: 12px; font-size: 11px;">${escapeHtml(name)}</span>`
+                        ).join('');
+                        if (serversCount > serverNames.length) {
+                            serverTags += `<span style="display: inline-block; padding: 2px 8px; background: var(--bg-tertiary, var(--bg-secondary)); border-radius: 12px; font-size: 11px;">+${serversCount - serverNames.length}</span>`;
+                        }
+                    } else {
+                        serverTags = `<span style="display: inline-block; padding: 2px 8px; background: var(--bg-tertiary, var(--bg-secondary)); border-radius: 12px; font-size: 11px;">🌍 Все серверы</span>`;
+                    }
+
                     currentName.innerHTML = `
-                        <strong>${escapeHtml(current.name)}</strong><br>
-                        <span style="color: var(--text-secondary); font-size: 13px;">
-                            ${current.device_limit || current.deviceLimit} устр. •
-                            ${current.traffic_limit_label || current.trafficLimitLabel || (current.traffic_limit_gb || current.trafficLimitGb) + ' ГБ'} •
-                            ${current.servers_count || current.serversCount || 0} серв.
-                        </span>
+                        <div class="tariff-current-name">
+                            <span class="check-icon">✓</span>
+                            <span>${escapeHtml(current.name)}</span>
+                        </div>
+                        <div style="display: flex; gap: 12px; margin-top: 10px; font-size: 13px; color: var(--text-secondary);">
+                            <span style="display: inline-flex; align-items: center; gap: 4px;">
+                                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="opacity: 0.6;">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                                </svg>
+                                ${deviceLimit}
+                            </span>
+                            <span style="display: inline-flex; align-items: center; gap: 4px;">
+                                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="opacity: 0.6;">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                                </svg>
+                                ${trafficLabel}
+                            </span>
+                        </div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;">
+                            ${serverTags}
+                        </div>
                     `;
                 }
             } else {
@@ -19137,66 +19320,278 @@
 
             const tariffs = tariffsData?.tariffs || [];
             if (tariffs.length === 0) {
-                list.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 20px;">Нет доступных тарифов</div>';
+                list.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 20px;">' + t('tariffs.no_tariffs') + '</div>';
                 return;
             }
 
             tariffs.forEach(tariff => {
                 const isCurrent = tariff.is_current || tariff.isCurrent;
                 const periods = tariff.periods || [];
-                const firstPeriod = periods[0];
+                const minPrice = periods.length > 0
+                    ? periods.reduce((min, p) => {
+                        const price = p.price_kopeks || p.priceKopeks || 0;
+                        return price < min ? price : min;
+                    }, Infinity)
+                    : null;
+                const minPriceLabel = minPrice !== null && minPrice !== Infinity
+                    ? formatPriceFromKopeks(minPrice, tariffsData?.currency || 'RUB')
+                    : null;
 
                 const div = document.createElement('div');
-                div.className = 'subscription-settings-toggle' + (isCurrent ? ' active' : '');
-                div.style.cssText = 'padding: 16px; border-radius: var(--radius); border: 2px solid var(--border-color); cursor: pointer; transition: all 0.2s;';
-                if (selectedTariffId === tariff.id) {
-                    div.style.borderColor = 'var(--primary)';
-                    div.style.background = 'rgba(var(--primary-rgb), 0.05)';
+                div.className = 'subscription-settings-toggle' + (selectedTariffId === tariff.id ? ' active' : '');
+
+                const trafficLabel = tariff.traffic_limit_label || tariff.trafficLimitLabel
+                    || ((tariff.traffic_limit_gb || tariff.trafficLimitGb) === 0 ? '∞' : (tariff.traffic_limit_gb || tariff.trafficLimitGb) + ' ГБ');
+
+                const deviceLimit = tariff.device_limit || tariff.deviceLimit || 1;
+
+                // Серверы - показываем названия или количество
+                const servers = tariff.servers || [];
+                const serversCount = tariff.servers_count || tariff.serversCount || servers.length || 0;
+                let serversText = '';
+                if (servers.length > 0) {
+                    const serverNames = servers.slice(0, 3).map(s => s.name || s.display_name || s.displayName).filter(Boolean);
+                    if (serverNames.length > 0) {
+                        serversText = serverNames.join(', ');
+                        if (serversCount > serverNames.length) {
+                            serversText += ` +${serversCount - serverNames.length}`;
+                        }
+                    } else {
+                        serversText = serversCount + ' серв.';
+                    }
+                } else if (serversCount > 0) {
+                    serversText = serversCount + ' серв.';
+                } else {
+                    serversText = 'Все серверы';
                 }
 
+                const description = tariff.description || '';
+
+                // Серверные теги
+                let serverTags = '';
+                if (servers.length > 0) {
+                    const serverNames = servers.slice(0, 4).map(s => s.name || s.display_name || s.displayName).filter(Boolean);
+                    serverTags = serverNames.map(name =>
+                        `<span style="display: inline-block; padding: 2px 8px; background: var(--bg-secondary); border-radius: 12px; font-size: 11px; color: var(--text-secondary);">${escapeHtml(name)}</span>`
+                    ).join('');
+                    if (serversCount > serverNames.length) {
+                        serverTags += `<span style="display: inline-block; padding: 2px 8px; background: var(--bg-secondary); border-radius: 12px; font-size: 11px; color: var(--text-secondary);">+${serversCount - serverNames.length}</span>`;
+                    }
+                } else if (serversCount === 0) {
+                    serverTags = `<span style="display: inline-block; padding: 2px 8px; background: var(--bg-secondary); border-radius: 12px; font-size: 11px; color: var(--text-secondary);">🌍 Все серверы</span>`;
+                }
+
+                // Determine tariff type for styling
+                const tariffNameLower = (tariff.name || '').toLowerCase();
+                const isPremium = tariffNameLower.includes('премиум') || tariffNameLower.includes('premium') ||
+                                  tariffNameLower.includes('про') || tariffNameLower.includes('pro') ||
+                                  tariffNameLower.includes('vip') || tariffNameLower.includes('ultimate') ||
+                                  tariffNameLower.includes('макс') || tariffNameLower.includes('max');
+                const tariffIcon = isPremium ? '👑' : (isCurrent ? '✓' : '⚡');
+                const badgeClass = isPremium ? 'tariff-name-badge tariff-premium' : (isCurrent ? 'tariff-name-badge tariff-current' : 'tariff-name-badge');
+
                 div.innerHTML = `
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                        <div>
-                            <div style="font-weight: 600; margin-bottom: 4px;">
-                                ${isCurrent ? '✅ ' : ''}${escapeHtml(tariff.name)}
-                            </div>
-                            <div style="font-size: 13px; color: var(--text-secondary);">
-                                ${tariff.device_limit || tariff.deviceLimit} устр. •
-                                ${tariff.traffic_limit_label || tariff.trafficLimitLabel || (tariff.traffic_limit_gb || tariff.trafficLimitGb) + ' ГБ'} •
-                                ${tariff.servers_count || tariff.serversCount || 0} серв.
-                            </div>
-                            ${tariff.description ? `<div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">${escapeHtml(tariff.description)}</div>` : ''}
-                        </div>
-                        <div style="text-align: right;">
-                            ${firstPeriod ? `
-                                <div style="font-weight: 600; color: var(--primary);">
-                                    от ${firstPeriod.price_label || firstPeriod.priceLabel || '—'}
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
+                            <div style="flex: 1; min-width: 0;">
+                                <div class="${badgeClass}">
+                                    <span class="tariff-icon">${tariffIcon}</span>
+                                    <span class="tariff-text">${escapeHtml(tariff.name)}</span>
                                 </div>
-                                <div style="font-size: 11px; color: var(--text-secondary);">
-                                    ${firstPeriod.label || firstPeriod.days + ' дн.'}
+                                ${description ? `<div style="font-size: 12px; color: var(--text-secondary); margin-top: 8px; line-height: 1.4;">${escapeHtml(description)}</div>` : ''}
+                            </div>
+                            ${minPriceLabel ? `
+                                <div style="text-align: right; flex-shrink: 0;">
+                                    <div style="font-size: 10px; color: var(--text-secondary); text-transform: uppercase;">от</div>
+                                    <div style="font-weight: 600; color: var(--primary); font-size: 15px;">${minPriceLabel}</div>
                                 </div>
                             ` : ''}
                         </div>
+                        <div style="display: flex; gap: 12px; margin-top: 10px; font-size: 13px; color: var(--text-secondary);">
+                            <span style="display: inline-flex; align-items: center; gap: 4px;">
+                                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="opacity: 0.6;">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                                </svg>
+                                ${deviceLimit}
+                            </span>
+                            <span style="display: inline-flex; align-items: center; gap: 4px;">
+                                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="opacity: 0.6;">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                                </svg>
+                                ${trafficLabel}
+                            </span>
+                        </div>
+                        ${serverTags ? `
+                            <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px;">
+                                ${serverTags}
+                            </div>
+                        ` : ''}
                     </div>
                 `;
 
                 div.addEventListener('click', () => selectTariff(tariff));
                 list.appendChild(div);
             });
+
+            // Обновляем периоды если тариф выбран
+            renderTariffPeriods();
         }
 
         function selectTariff(tariff) {
             selectedTariffId = tariff.id;
-            selectedTariffPeriod = (tariff.periods || [])[0];
+            selectedTariffData = tariff;
+            selectedTariffPeriod = null;
 
-            const btn = document.getElementById('tariffsSelectBtn');
-            if (btn) {
-                btn.disabled = false;
-                const price = selectedTariffPeriod?.price_label || selectedTariffPeriod?.priceLabel || '';
-                btn.textContent = `Купить ${tariff.name} ${price ? '(' + price + ')' : ''}`;
+            // Обновляем UI
+            document.querySelectorAll('#tariffsList .subscription-settings-toggle').forEach(el => {
+                el.classList.remove('active');
+            });
+            event?.target?.closest('.subscription-settings-toggle')?.classList.add('active');
+
+            renderTariffPeriods();
+            updateTariffButton();
+        }
+
+        function renderTariffPeriods() {
+            const section = document.getElementById('tariffPeriodsSection');
+            const list = document.getElementById('tariffPeriodsList');
+            const summary = document.getElementById('tariffsSummary');
+
+            if (!selectedTariffData || !section || !list) {
+                section?.classList.add('hidden');
+                summary?.classList.add('hidden');
+                return;
             }
 
-            renderTariffs();
+            const periods = selectedTariffData.periods || [];
+            if (periods.length === 0) {
+                section.classList.add('hidden');
+                summary?.classList.add('hidden');
+                return;
+            }
+
+            section.classList.remove('hidden');
+            list.innerHTML = '';
+
+            periods.forEach((period, index) => {
+                const days = period.days || period.period_days || period.periodDays;
+                const priceKopeks = period.price_kopeks || period.priceKopeks || period.final_price || period.finalPrice || 0;
+                const originalKopeks = period.original_price || period.originalPrice || period.base_price || period.basePrice || priceKopeks;
+                const hasDiscount = originalKopeks > priceKopeks;
+                const discountPercent = hasDiscount ? Math.round((1 - priceKopeks / originalKopeks) * 100) : 0;
+
+                const priceLabel = formatPriceFromKopeks(priceKopeks, tariffsData?.currency || 'RUB');
+                const originalLabel = hasDiscount ? formatPriceFromKopeks(originalKopeks, tariffsData?.currency || 'RUB') : null;
+
+                let periodLabel = period.label || period.name;
+                if (!periodLabel) {
+                    if (days === 30) periodLabel = '1 месяц';
+                    else if (days === 90) periodLabel = '3 месяца';
+                    else if (days === 180) periodLabel = '6 месяцев';
+                    else if (days === 365) periodLabel = '12 месяцев';
+                    else periodLabel = days + ' дней';
+                }
+
+                const isSelected = selectedTariffPeriod &&
+                    (selectedTariffPeriod.id === period.id ||
+                     (selectedTariffPeriod.days || selectedTariffPeriod.period_days) === days);
+
+                const div = document.createElement('div');
+                div.className = 'subscription-settings-toggle' + (isSelected ? ' active' : '');
+
+                div.innerHTML = `
+                    <div class="subscription-settings-toggle-label">
+                        <div class="subscription-settings-toggle-title">${periodLabel}</div>
+                        ${hasDiscount ? `<div class="subscription-renewal-option-discount">-${discountPercent}%</div>` : ''}
+                    </div>
+                    <div class="subscription-renewal-option-price">
+                        ${originalLabel ? `<span class="subscription-renewal-option-price-original">${originalLabel}</span>` : ''}
+                        <span class="subscription-renewal-option-price-current">${priceLabel}</span>
+                    </div>
+                `;
+
+                div.addEventListener('click', () => selectTariffPeriod(period));
+                list.appendChild(div);
+
+                // Автовыбор первого периода
+                if (index === 0 && !selectedTariffPeriod) {
+                    selectedTariffPeriod = period;
+                    div.classList.add('active');
+                }
+            });
+
+            updateTariffSummary();
+        }
+
+        function selectTariffPeriod(period) {
+            selectedTariffPeriod = period;
+
+            document.querySelectorAll('#tariffPeriodsList .subscription-settings-toggle').forEach(el => {
+                el.classList.remove('active');
+            });
+            event?.target?.closest('.subscription-settings-toggle')?.classList.add('active');
+
+            updateTariffSummary();
+            updateTariffButton();
+        }
+
+        function updateTariffSummary() {
+            const summary = document.getElementById('tariffsSummary');
+            const priceEl = document.getElementById('tariffPriceCurrent');
+            const originalEl = document.getElementById('tariffPriceOriginal');
+            const discountEl = document.getElementById('tariffPriceDiscount');
+
+            if (!selectedTariffPeriod || !summary) {
+                summary?.classList.add('hidden');
+                return;
+            }
+
+            summary.classList.remove('hidden');
+
+            const priceKopeks = selectedTariffPeriod.price_kopeks || selectedTariffPeriod.priceKopeks ||
+                selectedTariffPeriod.final_price || selectedTariffPeriod.finalPrice || 0;
+            const originalKopeks = selectedTariffPeriod.original_price || selectedTariffPeriod.originalPrice ||
+                selectedTariffPeriod.base_price || selectedTariffPeriod.basePrice || priceKopeks;
+            const hasDiscount = originalKopeks > priceKopeks;
+
+            if (priceEl) {
+                priceEl.textContent = formatPriceFromKopeks(priceKopeks, tariffsData?.currency || 'RUB');
+            }
+
+            if (originalEl) {
+                if (hasDiscount) {
+                    originalEl.textContent = formatPriceFromKopeks(originalKopeks, tariffsData?.currency || 'RUB');
+                    originalEl.classList.remove('hidden');
+                } else {
+                    originalEl.classList.add('hidden');
+                }
+            }
+
+            if (discountEl) {
+                if (hasDiscount) {
+                    const percent = Math.round((1 - priceKopeks / originalKopeks) * 100);
+                    discountEl.textContent = `Выгода ${percent}%`;
+                    discountEl.classList.remove('hidden');
+                } else {
+                    discountEl.classList.add('hidden');
+                }
+            }
+        }
+
+        function updateTariffButton() {
+            const btn = document.getElementById('tariffsSelectBtn');
+            if (!btn) return;
+
+            if (selectedTariffData && selectedTariffPeriod) {
+                btn.disabled = false;
+                const priceKopeks = selectedTariffPeriod.price_kopeks || selectedTariffPeriod.priceKopeks ||
+                    selectedTariffPeriod.final_price || selectedTariffPeriod.finalPrice || 0;
+                const priceLabel = formatPriceFromKopeks(priceKopeks, tariffsData?.currency || 'RUB');
+                btn.textContent = `Купить за ${priceLabel}`;
+            } else {
+                btn.disabled = true;
+                btn.textContent = t('tariffs.select');
+            }
         }
 
         async function purchaseTariff() {
@@ -19212,7 +19607,7 @@
             }
 
             try {
-                const initData = getInitData();
+                const initData = tg.initData || '';
                 const periodDays = selectedTariffPeriod.days || selectedTariffPeriod.period_days || selectedTariffPeriod.periodDays;
 
                 const response = await fetch('/miniapp/subscription/tariff/purchase', {
@@ -19237,10 +19632,7 @@
                 console.error('Tariff purchase failed:', err);
                 showPopup(err.message || 'Не удалось купить тариф', 'Ошибка');
             } finally {
-                if (btn) {
-                    btn.disabled = !selectedTariffId;
-                    btn.textContent = 'Выбрать тариф';
-                }
+                updateTariffButton();
             }
         }
 
