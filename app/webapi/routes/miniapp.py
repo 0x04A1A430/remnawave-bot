@@ -3723,8 +3723,9 @@ async def activate_subscription_trial_endpoint(
                 trial_device_limit = trial_tariff.device_limit
                 trial_squads = trial_tariff.allowed_squads or []
                 tariff_id_for_trial = trial_tariff.id
-                if trial_tariff.trial_duration_days:
-                    trial_duration = trial_tariff.trial_duration_days
+                tariff_trial_days = getattr(trial_tariff, 'trial_duration_days', None)
+                if tariff_trial_days:
+                    trial_duration = tariff_trial_days
                 logger.info(f"Miniapp: используем триальный тариф {trial_tariff.name}")
         except Exception as e:
             logger.error(f"Ошибка получения триального тарифа: {e}")
