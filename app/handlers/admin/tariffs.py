@@ -251,14 +251,16 @@ def format_tariff_info(tariff: Tariff, language: str, subs_count: int = 0) -> st
     trial_status = "✅ Да" if tariff.is_trial_available else "❌ Нет"
 
     # Форматируем дни триала
-    if tariff.trial_duration_days:
-        trial_days_display = f"{tariff.trial_duration_days} дней"
+    trial_days = getattr(tariff, 'trial_duration_days', None)
+    if trial_days:
+        trial_days_display = f"{trial_days} дней"
     else:
         trial_days_display = f"По умолчанию ({settings.TRIAL_DURATION_DAYS} дней)"
 
     # Форматируем цену за устройство
-    if tariff.device_price_kopeks is not None and tariff.device_price_kopeks > 0:
-        device_price_display = _format_price_kopeks(tariff.device_price_kopeks) + "/мес"
+    device_price = getattr(tariff, 'device_price_kopeks', None)
+    if device_price is not None and device_price > 0:
+        device_price_display = _format_price_kopeks(device_price) + "/мес"
     else:
         device_price_display = "Недоступно"
 
@@ -1152,8 +1154,9 @@ async def start_edit_tariff_device_price(
     await state.set_state(AdminStates.editing_tariff_device_price)
     await state.update_data(tariff_id=tariff_id, language=db_user.language)
 
-    if tariff.device_price_kopeks is not None and tariff.device_price_kopeks > 0:
-        current_price = _format_price_kopeks(tariff.device_price_kopeks) + "/мес"
+    device_price = getattr(tariff, 'device_price_kopeks', None)
+    if device_price is not None and device_price > 0:
+        current_price = _format_price_kopeks(device_price) + "/мес"
     else:
         current_price = "Недоступно (докупка устройств запрещена)"
 
@@ -1240,8 +1243,9 @@ async def start_edit_tariff_trial_days(
     await state.set_state(AdminStates.editing_tariff_trial_days)
     await state.update_data(tariff_id=tariff_id, language=db_user.language)
 
-    if tariff.trial_duration_days:
-        current_days = f"{tariff.trial_duration_days} дней"
+    trial_days = getattr(tariff, 'trial_duration_days', None)
+    if trial_days:
+        current_days = f"{trial_days} дней"
     else:
         current_days = f"По умолчанию ({settings.TRIAL_DURATION_DAYS} дней)"
 
