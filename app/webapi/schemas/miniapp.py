@@ -201,6 +201,9 @@ class MiniAppSubscriptionRenewalOptionsResponse(BaseModel):
     autopay_days_options: List[int] = Field(default_factory=list)
     autopay: Optional[MiniAppSubscriptionAutopay] = None
     autopay_settings: Optional[MiniAppSubscriptionAutopay] = None
+    # Флаги для определения типа действия (покупка vs продление)
+    is_trial: bool = Field(default=False, alias="isTrial")
+    sales_mode: str = Field(default="classic", alias="salesMode")
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 
