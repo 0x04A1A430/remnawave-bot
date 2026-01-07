@@ -4937,6 +4937,92 @@ async def add_transaction_receipt_columns() -> bool:
         return False
 
 
+async def create_withdrawal_requests_table() -> bool:
+    """Создаёт таблицу для заявок на вывод реферального баланса."""
+    try:
+        if await check_table_exists('withdrawal_requests'):
+            logger.debug("Таблица withdrawal_requests уже существует")
+            return True
+
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'sqlite':
+                create_sql = """
+                CREATE TABLE withdrawal_requests (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    amount_kopeks INTEGER NOT NULL,
+                    status VARCHAR(50) NOT NULL DEFAULT 'pending',
+                    payment_details TEXT,
+                    risk_score INTEGER DEFAULT 0,
+                    risk_analysis TEXT,
+                    processed_by INTEGER,
+                    processed_at DATETIME,
+                    admin_comment TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                    FOREIGN KEY (processed_by) REFERENCES users(id) ON DELETE SET NULL
+                )
+                """
+            elif db_type == 'postgresql':
+                create_sql = """
+                CREATE TABLE withdrawal_requests (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    amount_kopeks INTEGER NOT NULL,
+                    status VARCHAR(50) NOT NULL DEFAULT 'pending',
+                    payment_details TEXT,
+                    risk_score INTEGER DEFAULT 0,
+                    risk_analysis TEXT,
+                    processed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                    processed_at TIMESTAMP,
+                    admin_comment TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            else:  # mysql
+                create_sql = """
+                CREATE TABLE withdrawal_requests (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    user_id INT NOT NULL,
+                    amount_kopeks INT NOT NULL,
+                    status VARCHAR(50) NOT NULL DEFAULT 'pending',
+                    payment_details TEXT,
+                    risk_score INT DEFAULT 0,
+                    risk_analysis TEXT,
+                    processed_by INT,
+                    processed_at DATETIME,
+                    admin_comment TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                    FOREIGN KEY (processed_by) REFERENCES users(id) ON DELETE SET NULL
+                )
+                """
+
+            await conn.execute(text(create_sql))
+            logger.info("✅ Таблица withdrawal_requests создана")
+
+            # Создаём индексы
+            try:
+                await conn.execute(text(
+                    "CREATE INDEX idx_withdrawal_requests_user_id ON withdrawal_requests(user_id)"
+                ))
+                await conn.execute(text(
+                    "CREATE INDEX idx_withdrawal_requests_status ON withdrawal_requests(status)"
+                ))
+            except Exception:
+                pass  # Индексы могут уже существовать
+
+        return True
+    except Exception as error:
+        logger.error(f"❌ Ошибка создания таблицы withdrawal_requests: {error}")
+        return False
+
+
 async def run_universal_migration():
     logger.info("=== НАЧАЛО УНИВЕРСАЛЬНОЙ МИГРАЦИИ ===")
     
@@ -5434,6 +5520,13 @@ async def run_universal_migration():
             logger.info("✅ Колонки receipt_uuid и receipt_created_at готовы")
         else:
             logger.warning("⚠️ Проблемы с колонками чеков в transactions")
+
+        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ WITHDRAWAL_REQUESTS ===")
+        withdrawal_requests_ready = await create_withdrawal_requests_table()
+        if withdrawal_requests_ready:
+            logger.info("✅ Таблица withdrawal_requests готова")
+        else:
+            logger.warning("⚠️ Проблемы с таблицей withdrawal_requests")
 
         async with engine.begin() as conn:
             total_subs = await conn.execute(text("SELECT COUNT(*) FROM subscriptions"))

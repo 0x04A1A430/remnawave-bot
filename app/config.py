@@ -181,14 +181,29 @@ class Settings(BaseSettings):
     # Базовая цена сброса в копейках (используется если режим "period" или как минимальная цена)
     TRAFFIC_RESET_BASE_PRICE: int = 0  # 0 = использовать PERIOD_PRICES[30]
     
-    REFERRAL_MINIMUM_TOPUP_KOPEKS: int = 10000 
-    REFERRAL_FIRST_TOPUP_BONUS_KOPEKS: int = 10000 
-    REFERRAL_INVITER_BONUS_KOPEKS: int = 10000 
-    REFERRAL_COMMISSION_PERCENT: int = 25 
+    REFERRAL_MINIMUM_TOPUP_KOPEKS: int = 10000
+    REFERRAL_FIRST_TOPUP_BONUS_KOPEKS: int = 10000
+    REFERRAL_INVITER_BONUS_KOPEKS: int = 10000
+    REFERRAL_COMMISSION_PERCENT: int = 25
 
     REFERRAL_PROGRAM_ENABLED: bool = True
     REFERRAL_NOTIFICATIONS_ENABLED: bool = True
     REFERRAL_NOTIFICATION_RETRY_ATTEMPTS: int = 3
+
+    # Настройки вывода реферального баланса
+    REFERRAL_WITHDRAWAL_ENABLED: bool = False  # Включить возможность вывода
+    REFERRAL_WITHDRAWAL_MIN_AMOUNT_KOPEKS: int = 100000  # Мин. сумма вывода (1000₽)
+    REFERRAL_WITHDRAWAL_COOLDOWN_DAYS: int = 30  # Частота запросов на вывод
+    REFERRAL_WITHDRAWAL_ONLY_REFERRAL_BALANCE: bool = True  # Только реф. баланс (False = реф + свой)
+    REFERRAL_WITHDRAWAL_NOTIFICATIONS_TOPIC_ID: Optional[int] = None  # Топик для уведомлений
+
+    # Настройки анализа на подозрительность
+    REFERRAL_WITHDRAWAL_SUSPICIOUS_MIN_DEPOSIT_KOPEKS: int = 50000  # Мин. сумма от 1 реферала (500₽)
+    REFERRAL_WITHDRAWAL_SUSPICIOUS_MAX_DEPOSITS_PER_MONTH: int = 10  # Макс. пополнений от 1 реферала/мес
+    REFERRAL_WITHDRAWAL_SUSPICIOUS_NO_PURCHASES_RATIO: float = 2.0  # Пополнил в X раз больше чем потратил
+
+    # Тестовый режим для вывода (позволяет админам вручную начислять реф. доход)
+    REFERRAL_WITHDRAWAL_TEST_MODE: bool = False
 
     # Конкурсы (глобальный флаг, будет расширяться под разные типы)
     CONTESTS_ENABLED: bool = False
@@ -1719,7 +1734,14 @@ class Settings(BaseSettings):
             "inviter_bonus_kopeks": self.REFERRAL_INVITER_BONUS_KOPEKS,
             "commission_percent": self.REFERRAL_COMMISSION_PERCENT,
             "notifications_enabled": self.REFERRAL_NOTIFICATIONS_ENABLED,
+            "withdrawal_enabled": self.REFERRAL_WITHDRAWAL_ENABLED,
+            "withdrawal_min_amount_kopeks": self.REFERRAL_WITHDRAWAL_MIN_AMOUNT_KOPEKS,
+            "withdrawal_cooldown_days": self.REFERRAL_WITHDRAWAL_COOLDOWN_DAYS,
         }
+
+    def is_referral_withdrawal_enabled(self) -> bool:
+        """Проверяет, включена ли функция вывода реферального баланса."""
+        return self.is_referral_program_enabled() and self.REFERRAL_WITHDRAWAL_ENABLED
     
     def is_referral_program_enabled(self) -> bool:
         return bool(self.REFERRAL_PROGRAM_ENABLED)
