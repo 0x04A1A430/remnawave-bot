@@ -1791,28 +1791,36 @@ def get_change_devices_keyboard(
     language: str = DEFAULT_LANGUAGE,
     subscription_end_date: datetime = None,
     discount_percent: int = 0,
+    tariff=None,  # Тариф для цены за устройство
 ) -> InlineKeyboardMarkup:
     from app.utils.pricing_utils import get_remaining_months
     from app.config import settings
     texts = get_texts(language)
-    
+
     months_multiplier = 1
     period_text = ""
     if subscription_end_date:
         months_multiplier = get_remaining_months(subscription_end_date)
         if months_multiplier > 1:
             period_text = f" (за {months_multiplier} мес)"
-    
-    device_price_per_month = settings.PRICE_PER_DEVICE
-    
+
+    # Используем цену из тарифа если есть, иначе глобальную настройку
+    if tariff and tariff.device_price_kopeks:
+        device_price_per_month = tariff.device_price_kopeks
+        # Для тарифов все устройства платные (нет бесплатного лимита)
+        default_device_limit = 0
+    else:
+        device_price_per_month = settings.PRICE_PER_DEVICE
+        default_device_limit = settings.DEFAULT_DEVICE_LIMIT
+
     buttons = []
-    
-    min_devices = 1 
+
+    min_devices = 1
     max_devices = settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else 20
-    
+
     start_range = max(1, min(current_devices - 3, max_devices - 6))
     end_range = min(max_devices + 1, max(current_devices + 4, 7))
-    
+
     for devices_count in range(start_range, end_range):
         if devices_count == current_devices:
             emoji = "✅"
@@ -1821,11 +1829,11 @@ def get_change_devices_keyboard(
         elif devices_count > current_devices:
             emoji = "➕"
             additional_devices = devices_count - current_devices
-            
-            current_chargeable = max(0, current_devices - settings.DEFAULT_DEVICE_LIMIT)
-            new_chargeable = max(0, devices_count - settings.DEFAULT_DEVICE_LIMIT)
+
+            current_chargeable = max(0, current_devices - default_device_limit)
+            new_chargeable = max(0, devices_count - default_device_limit)
             chargeable_devices = new_chargeable - current_chargeable
-            
+
             if chargeable_devices > 0:
                 price_per_month = chargeable_devices * device_price_per_month
                 discounted_per_month, discount_per_month = apply_percentage_discount(
@@ -1847,19 +1855,19 @@ def get_change_devices_keyboard(
             emoji = "➖"
             action_text = ""
             price_text = " (без возврата)"
-        
+
         button_text = f"{emoji} {devices_count} устр.{action_text}{price_text}"
-        
+
         buttons.append([
             InlineKeyboardButton(text=button_text, callback_data=f"change_devices_{devices_count}")
         ])
-    
+
     if current_devices < start_range or current_devices >= end_range:
         current_button = f"✅ {current_devices} устр. (текущее)"
         buttons.insert(0, [
             InlineKeyboardButton(text=current_button, callback_data=f"change_devices_{current_devices}")
         ])
-    
+
     buttons.append([
         InlineKeyboardButton(
             text=texts.BACK,
