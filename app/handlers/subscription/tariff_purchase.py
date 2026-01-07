@@ -470,20 +470,12 @@ async def confirm_tariff_purchase(
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления админу: {e}")
 
-        # Сохраняем корзину для автопродления
+        # Очищаем корзину после успешной покупки
         try:
-            cart_data = {
-                "cart_mode": "extend",
-                "subscription_id": subscription.id,
-                "period_days": period,
-                "total_price": final_price,
-                "tariff_id": tariff.id,
-                "description": f"Продление тарифа {tariff.name} на {period} дней",
-            }
-            await user_cart_service.save_user_cart(db_user.id, cart_data)
-            logger.info(f"Корзина тарифа сохранена для автопродления пользователя {db_user.telegram_id}")
+            await user_cart_service.delete_user_cart(db_user.id)
+            logger.info(f"Корзина очищена после покупки тарифа для пользователя {db_user.telegram_id}")
         except Exception as e:
-            logger.error(f"Ошибка сохранения корзины тарифа: {e}")
+            logger.error(f"Ошибка очистки корзины: {e}")
 
         await state.clear()
 
@@ -785,20 +777,12 @@ async def confirm_tariff_extend(
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления админу: {e}")
 
-        # Сохраняем корзину для автопродления
+        # Очищаем корзину после успешной покупки
         try:
-            cart_data = {
-                "cart_mode": "extend",
-                "subscription_id": subscription.id,
-                "period_days": period,
-                "total_price": final_price,
-                "tariff_id": tariff.id,
-                "description": f"Продление тарифа {tariff.name} на {period} дней",
-            }
-            await user_cart_service.save_user_cart(db_user.id, cart_data)
-            logger.info(f"Корзина тарифа обновлена для автопродления пользователя {db_user.telegram_id}")
+            await user_cart_service.delete_user_cart(db_user.id)
+            logger.info(f"Корзина очищена после продления тарифа для пользователя {db_user.telegram_id}")
         except Exception as e:
-            logger.error(f"Ошибка сохранения корзины тарифа: {e}")
+            logger.error(f"Ошибка очистки корзины: {e}")
 
         await state.clear()
 
@@ -1247,20 +1231,12 @@ async def confirm_tariff_switch(
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления админу: {e}")
 
-        # Сохраняем корзину для автопродления (с новым тарифом)
+        # Очищаем корзину после успешной покупки
         try:
-            cart_data = {
-                "cart_mode": "extend",
-                "subscription_id": subscription.id,
-                "period_days": period,
-                "total_price": final_price,
-                "tariff_id": tariff.id,
-                "description": f"Продление тарифа {tariff.name} на {period} дней",
-            }
-            await user_cart_service.save_user_cart(db_user.id, cart_data)
-            logger.info(f"Корзина тарифа обновлена после переключения для пользователя {db_user.telegram_id}")
+            await user_cart_service.delete_user_cart(db_user.id)
+            logger.info(f"Корзина очищена после смены тарифа для пользователя {db_user.telegram_id}")
         except Exception as e:
-            logger.error(f"Ошибка сохранения корзины тарифа: {e}")
+            logger.error(f"Ошибка очистки корзины: {e}")
 
         await state.clear()
 
