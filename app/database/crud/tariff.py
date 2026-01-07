@@ -183,6 +183,7 @@ async def update_tariff(
     is_active: Optional[bool] = None,
     traffic_limit_gb: Optional[int] = None,
     device_limit: Optional[int] = None,
+    device_price_kopeks: Optional[int] = ...,  # ... = не передан, None = сбросить
     allowed_squads: Optional[List[str]] = None,
     period_prices: Optional[Dict[int, int]] = None,
     tier_level: Optional[int] = None,
@@ -202,6 +203,9 @@ async def update_tariff(
         tariff.traffic_limit_gb = max(0, traffic_limit_gb)
     if device_limit is not None:
         tariff.device_limit = max(1, device_limit)
+    if device_price_kopeks is not ...:
+        # Если передан device_price_kopeks (включая None) - обновляем
+        tariff.device_price_kopeks = device_price_kopeks
     if allowed_squads is not None:
         tariff.allowed_squads = allowed_squads
     if period_prices is not None:
