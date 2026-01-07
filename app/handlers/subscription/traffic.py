@@ -107,6 +107,17 @@ async def handle_add_traffic(
         )
         return
 
+    # В режиме тарифов докупка трафика недоступна
+    if settings.is_tariffs_mode():
+        await callback.answer(
+            texts.t(
+                "TARIFF_TRAFFIC_TOPUP_DISABLED",
+                "⚠️ В режиме тарифов докупка трафика недоступна",
+            ),
+            show_alert=True,
+        )
+        return
+
     if settings.is_traffic_topup_blocked():
         await callback.answer(
             texts.t(

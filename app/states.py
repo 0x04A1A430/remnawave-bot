@@ -158,6 +158,27 @@ class AdminStates(StatesGroup):
     viewing_user_from_campaign_list = State()
     viewing_user_from_ready_to_renew_list = State()
 
+    # Состояния для управления тарифами
+    creating_tariff_name = State()
+    creating_tariff_description = State()
+    creating_tariff_traffic = State()
+    creating_tariff_devices = State()
+    creating_tariff_tier = State()
+    creating_tariff_prices = State()
+    creating_tariff_squads = State()
+
+    editing_tariff_name = State()
+    editing_tariff_description = State()
+    editing_tariff_traffic = State()
+    editing_tariff_devices = State()
+    editing_tariff_tier = State()
+    editing_tariff_prices = State()
+    editing_tariff_device_price = State()
+    editing_tariff_trial_days = State()
+    editing_tariff_squads = State()
+    editing_tariff_promo_groups = State()
+
+
 class SupportStates(StatesGroup):
     waiting_for_message = State()
 

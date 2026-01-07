@@ -134,6 +134,57 @@ def _safe_int(value: Optional[object], default: int = 0) -> int:
         return default
 
 
+def _apply_promo_discount_for_tariff(price: int, discount_percent: int) -> int:
+    """Применяет скидку промогруппы к цене тарифа."""
+    if discount_percent <= 0:
+        return price
+    discount = int(price * discount_percent / 100)
+    return max(0, price - discount)
+
+
+async def _get_tariff_price_for_period(
+    db: AsyncSession,
+    user: User,
+    tariff_id: int,
+    period_days: int,
+) -> Optional[int]:
+    """Получает актуальную цену тарифа для заданного периода с учётом скидки пользователя."""
+    from app.database.crud.tariff import get_tariff_by_id
+    from app.utils.promo_offer import get_user_active_promo_discount_percent
+
+    tariff = await get_tariff_by_id(db, tariff_id)
+    if not tariff or not tariff.is_active:
+        logger.warning(
+            "🔁 Автопокупка: тариф %s недоступен для пользователя %s",
+            tariff_id,
+            user.telegram_id,
+        )
+        return None
+
+    prices = tariff.period_prices or {}
+    base_price = prices.get(str(period_days))
+    if base_price is None:
+        logger.warning(
+            "🔁 Автопокупка: период %s дней недоступен для тарифа %s",
+            period_days,
+            tariff_id,
+        )
+        return None
+
+    # Получаем скидку пользователя
+    discount_percent = 0
+    promo_group = getattr(user, 'promo_group', None)
+    if promo_group:
+        discount_percent = getattr(promo_group, 'server_discount_percent', 0)
+
+    personal_discount = get_user_active_promo_discount_percent(user)
+    if personal_discount > discount_percent:
+        discount_percent = personal_discount
+
+    final_price = _apply_promo_discount_for_tariff(base_price, discount_percent)
+    return final_price
+
+
 async def _prepare_auto_extend_context(
     db: AsyncSession,
     user: User,
@@ -162,11 +213,6 @@ async def _prepare_auto_extend_context(
             return None
 
     period_days = _safe_int(cart_data.get("period_days"))
-    price_kopeks = _safe_int(
-        cart_data.get("total_price")
-        or cart_data.get("price")
-        or cart_data.get("final_price"),
-    )
 
     if period_days <= 0:
         logger.warning(
@@ -176,6 +222,30 @@ async def _prepare_auto_extend_context(
         )
         return None
 
+    # Если в корзине есть tariff_id - пересчитываем цену по актуальному тарифу
+    tariff_id = cart_data.get("tariff_id")
+    if tariff_id:
+        tariff_id = _safe_int(tariff_id)
+        price_kopeks = await _get_tariff_price_for_period(db, user, tariff_id, period_days)
+        if price_kopeks is None:
+            # Тариф недоступен или период отсутствует - используем сохранённую цену как fallback
+            price_kopeks = _safe_int(
+                cart_data.get("total_price")
+                or cart_data.get("price")
+                or cart_data.get("final_price"),
+            )
+            logger.warning(
+                "🔁 Автопокупка: не удалось пересчитать цену тарифа %s, используем сохранённую: %s",
+                tariff_id,
+                price_kopeks,
+            )
+    else:
+        price_kopeks = _safe_int(
+            cart_data.get("total_price")
+            or cart_data.get("price")
+            or cart_data.get("final_price"),
+        )
+
     if price_kopeks <= 0:
         logger.warning(
             "🔁 Автопокупка: некорректная цена продления (%s) у пользователя %s",
@@ -184,7 +254,14 @@ async def _prepare_auto_extend_context(
         )
         return None
 
-    description = cart_data.get("description") or f"Продление подписки на {period_days} дней"
+    # Формируем описание с учётом тарифа
+    if tariff_id:
+        from app.database.crud.tariff import get_tariff_by_id
+        tariff = await get_tariff_by_id(db, tariff_id)
+        tariff_name = tariff.name if tariff else "тариф"
+        description = cart_data.get("description") or f"Продление тарифа {tariff_name} на {period_days} дней"
+    else:
+        description = cart_data.get("description") or f"Продление подписки на {period_days} дней"
 
     device_limit = cart_data.get("device_limit")
     if device_limit is not None:

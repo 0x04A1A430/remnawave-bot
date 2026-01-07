@@ -183,19 +183,36 @@ async def handle_change_devices(
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
 
-    if not settings.is_devices_selection_enabled():
-        await callback.answer(
-            texts.t("DEVICES_SELECTION_DISABLED", "⚠️ Изменение количества устройств недоступно"),
-            show_alert=True,
-        )
-        return
-
     if not subscription or subscription.is_trial:
         await callback.answer(
             texts.t("PAID_FEATURE_ONLY", "⚠️ Эта функция доступна только для платных подписок"),
             show_alert=True,
         )
         return
+
+    # Проверяем тариф подписки
+    tariff = None
+    if subscription.tariff_id:
+        from app.database.crud.tariff import get_tariff_by_id
+        tariff = await get_tariff_by_id(db, subscription.tariff_id)
+
+    # Для тарифов - проверяем разрешено ли изменение устройств
+    tariff_device_price = getattr(tariff, 'device_price_kopeks', None) if tariff else None
+    if tariff:
+        if tariff_device_price is None or tariff_device_price <= 0:
+            await callback.answer(
+                texts.t("TARIFF_DEVICES_DISABLED", "⚠️ Изменение устройств недоступно для вашего тарифа"),
+                show_alert=True,
+            )
+            return
+    else:
+        # Для обычных подписок проверяем глобальную настройку
+        if not settings.is_devices_selection_enabled():
+            await callback.answer(
+                texts.t("DEVICES_SELECTION_DISABLED", "⚠️ Изменение количества устройств недоступно"),
+                show_alert=True,
+            )
+            return
 
     current_devices = subscription.device_limit
 
@@ -206,17 +223,34 @@ async def handle_change_devices(
         period_hint_days,
     )
 
-    prompt_text = texts.t(
-        "CHANGE_DEVICES_PROMPT",
-        (
-            "📱 <b>Изменение количества устройств</b>\n\n"
-            "Текущий лимит: {current_devices} устройств\n"
-            "Выберите новое количество устройств:\n\n"
-            "💡 <b>Важно:</b>\n"
-            "• При увеличении - доплата пропорционально оставшемуся времени\n"
-            "• При уменьшении - возврат средств не производится"
-        ),
-    ).format(current_devices=current_devices)
+    # Для тарифов показываем цену из тарифа
+    if tariff:
+        price_per_device = tariff_device_price
+        price_text = texts.format_price(price_per_device)
+        prompt_text = texts.t(
+            "CHANGE_DEVICES_PROMPT_TARIFF",
+            (
+                "📱 <b>Изменение количества устройств</b>\n\n"
+                "Текущий лимит: {current_devices} устройств\n"
+                "Цена за доп. устройство: {price}/мес\n"
+                "Выберите новое количество устройств:\n\n"
+                "💡 <b>Важно:</b>\n"
+                "• При увеличении - доплата пропорционально оставшемуся времени\n"
+                "• При уменьшении - возврат средств не производится"
+            ),
+        ).format(current_devices=current_devices, price=price_text)
+    else:
+        prompt_text = texts.t(
+            "CHANGE_DEVICES_PROMPT",
+            (
+                "📱 <b>Изменение количества устройств</b>\n\n"
+                "Текущий лимит: {current_devices} устройств\n"
+                "Выберите новое количество устройств:\n\n"
+                "💡 <b>Важно:</b>\n"
+                "• При увеличении - доплата пропорционально оставшемуся времени\n"
+                "• При уменьшении - возврат средств не производится"
+            ),
+        ).format(current_devices=current_devices)
 
     await callback.message.edit_text(
         prompt_text,
@@ -225,6 +259,7 @@ async def handle_change_devices(
             db_user.language,
             subscription.end_date,
             devices_discount_percent,
+            tariff=tariff,
         ),
         parse_mode="HTML"
     )
@@ -240,12 +275,30 @@ async def confirm_change_devices(
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
 
-    if not settings.is_devices_selection_enabled():
-        await callback.answer(
-            texts.t("DEVICES_SELECTION_DISABLED", "⚠️ Изменение количества устройств недоступно"),
-            show_alert=True,
-        )
-        return
+    # Проверяем тариф подписки
+    tariff = None
+    if subscription.tariff_id:
+        from app.database.crud.tariff import get_tariff_by_id
+        tariff = await get_tariff_by_id(db, subscription.tariff_id)
+
+    # Для тарифов - проверяем разрешено ли изменение устройств
+    tariff_device_price = getattr(tariff, 'device_price_kopeks', None) if tariff else None
+    if tariff:
+        if tariff_device_price is None or tariff_device_price <= 0:
+            await callback.answer(
+                texts.t("TARIFF_DEVICES_DISABLED", "⚠️ Изменение устройств недоступно для вашего тарифа"),
+                show_alert=True,
+            )
+            return
+        price_per_device = tariff_device_price
+    else:
+        if not settings.is_devices_selection_enabled():
+            await callback.answer(
+                texts.t("DEVICES_SELECTION_DISABLED", "⚠️ Изменение количества устройств недоступно"),
+                show_alert=True,
+            )
+            return
+        price_per_device = settings.PRICE_PER_DEVICE
 
     current_devices = subscription.device_limit
 
@@ -271,13 +324,16 @@ async def confirm_change_devices(
     if devices_difference > 0:
         additional_devices = devices_difference
 
-        if current_devices < settings.DEFAULT_DEVICE_LIMIT:
+        # Для тарифов - все устройства платные (нет бесплатного лимита)
+        if tariff:
+            chargeable_devices = additional_devices
+        elif current_devices < settings.DEFAULT_DEVICE_LIMIT:
             free_devices = settings.DEFAULT_DEVICE_LIMIT - current_devices
             chargeable_devices = max(0, additional_devices - free_devices)
         else:
             chargeable_devices = additional_devices
 
-        devices_price_per_month = chargeable_devices * settings.PRICE_PER_DEVICE
+        devices_price_per_month = chargeable_devices * price_per_device
         months_hint = get_remaining_months(subscription.end_date)
         period_hint_days = months_hint * 30 if months_hint > 0 else None
         devices_discount_percent = _get_addon_discount_percent_for_user(
@@ -937,12 +993,30 @@ async def confirm_add_devices(
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
 
-    if not settings.is_devices_selection_enabled():
-        await callback.answer(
-            texts.t("DEVICES_SELECTION_DISABLED", "⚠️ Изменение количества устройств недоступно"),
-            show_alert=True,
-        )
-        return
+    # Проверяем тариф подписки
+    tariff = None
+    if subscription.tariff_id:
+        from app.database.crud.tariff import get_tariff_by_id
+        tariff = await get_tariff_by_id(db, subscription.tariff_id)
+
+    # Для тарифов - проверяем разрешено ли добавление устройств
+    tariff_device_price = getattr(tariff, 'device_price_kopeks', None) if tariff else None
+    if tariff:
+        if tariff_device_price is None or tariff_device_price <= 0:
+            await callback.answer(
+                texts.t("TARIFF_DEVICES_DISABLED", "⚠️ Добавление устройств недоступно для вашего тарифа"),
+                show_alert=True,
+            )
+            return
+        price_per_device = tariff_device_price
+    else:
+        if not settings.is_devices_selection_enabled():
+            await callback.answer(
+                texts.t("DEVICES_SELECTION_DISABLED", "⚠️ Изменение количества устройств недоступно"),
+                show_alert=True,
+            )
+            return
+        price_per_device = settings.PRICE_PER_DEVICE
 
     resume_callback = None
 
@@ -956,7 +1030,7 @@ async def confirm_add_devices(
         )
         return
 
-    devices_price_per_month = devices_count * settings.PRICE_PER_DEVICE
+    devices_price_per_month = devices_count * price_per_device
     months_hint = get_remaining_months(subscription.end_date)
     period_hint_days = months_hint * 30 if months_hint > 0 else None
     devices_discount_percent = _get_addon_discount_percent_for_user(

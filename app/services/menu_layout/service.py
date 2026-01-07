@@ -719,6 +719,9 @@ class MenuLayoutService:
         if conditions.get("traffic_topup_enabled") is True:
             if not settings.is_traffic_topup_enabled():
                 return False
+            # В режиме тарифов докупка трафика недоступна
+            if settings.is_tariffs_mode():
+                return False
 
         # is_admin
         if conditions.get("is_admin") is True:
