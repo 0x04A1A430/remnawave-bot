@@ -33,9 +33,12 @@ def _format_traffic(gb: int) -> str:
     return f"{gb} ГБ"
 
 
-def _format_price_kopeks(kopeks: int) -> str:
+def _format_price_kopeks(kopeks: int, compact: bool = False) -> str:
     """Форматирует цену из копеек в рубли."""
     rubles = kopeks / 100
+    if compact:
+        # Компактный формат - округляем до рублей
+        return f"{int(round(rubles))}₽"
     if rubles == int(rubles):
         return f"{int(rubles)} ₽"
     return f"{rubles:.2f} ₽"
@@ -86,17 +89,14 @@ def format_tariffs_list_text(
     lines = ["📦 <b>Выберите тариф</b>"]
 
     if has_period_discounts:
-        lines.append("\n🎁 <i>Скидки зависят от выбранного периода</i>")
+        lines.append("🎁 <i>Скидки по периодам</i>")
 
     lines.append("")
 
     for tariff in tariffs:
-        # Название тарифа
-        lines.append(f"<b>{tariff.name}</b>")
-
-        # Трафик
+        # Трафик компактно
         traffic_gb = tariff.traffic_limit_gb
-        traffic = "Безлимит" if traffic_gb == 0 else f"{traffic_gb} ГБ"
+        traffic = "∞" if traffic_gb == 0 else f"{traffic_gb}ГБ"
 
         # Цена
         prices = tariff.period_prices or {}
@@ -110,15 +110,15 @@ def format_tariffs_list_text(
                 discount_percent = _get_user_period_discount(db_user, int(min_period))
             if discount_percent > 0:
                 min_price = _apply_promo_discount(min_price, discount_percent)
-                discount_icon = " 🔥"
-            price_text = f" • от {_format_price_kopeks(min_price)}{discount_icon}"
+                discount_icon = "🔥"
+            price_text = f"от {_format_price_kopeks(min_price, compact=True)}{discount_icon}"
 
-        # Описание в одну строку
-        lines.append(f"   💾 {traffic} • 📱 {tariff.device_limit} уст.{price_text}")
+        # Компактный формат: Название — 250ГБ/10📱 от 179₽🔥
+        lines.append(f"<b>{tariff.name}</b> — {traffic}/{tariff.device_limit}📱 {price_text}")
 
         # Описание тарифа если есть
         if tariff.description:
-            lines.append(f"   📝 <i>{tariff.description}</i>")
+            lines.append(f"<i>{tariff.description}</i>")
 
         lines.append("")
 
@@ -864,28 +864,22 @@ def format_tariff_switch_list_text(
     """Форматирует текст со списком тарифов для переключения."""
     lines = [
         "📦 <b>Смена тарифа</b>",
-        "",
-        f"📌 Ваш текущий тариф: <b>{current_tariff_name}</b>",
+        f"📌 Текущий: <b>{current_tariff_name}</b>",
     ]
 
     if has_period_discounts:
-        lines.append("\n🎁 <i>Скидки зависят от выбранного периода</i>")
+        lines.append("🎁 <i>Скидки по периодам</i>")
 
     lines.append("")
-    lines.append("⚠️ При смене тарифа оплачивается полная стоимость.")
-    lines.append("Остаток времени будет сохранён.")
-    lines.append("")
-    lines.append("<b>Доступные тарифы:</b>")
+    lines.append("⚠️ Оплачивается полная стоимость.")
     lines.append("")
 
     for tariff in tariffs:
         if tariff.id == current_tariff_id:
             continue
 
-        lines.append(f"<b>{tariff.name}</b>")
-
         traffic_gb = tariff.traffic_limit_gb
-        traffic = "Безлимит" if traffic_gb == 0 else f"{traffic_gb} ГБ"
+        traffic = "∞" if traffic_gb == 0 else f"{traffic_gb}ГБ"
 
         prices = tariff.period_prices or {}
         price_text = ""
@@ -898,13 +892,13 @@ def format_tariff_switch_list_text(
                 discount_percent = _get_user_period_discount(db_user, int(min_period))
             if discount_percent > 0:
                 min_price = _apply_promo_discount(min_price, discount_percent)
-                discount_icon = " 🔥"
-            price_text = f" • от {_format_price_kopeks(min_price)}{discount_icon}"
+                discount_icon = "🔥"
+            price_text = f"от {_format_price_kopeks(min_price, compact=True)}{discount_icon}"
 
-        lines.append(f"   💾 {traffic} • 📱 {tariff.device_limit} уст.{price_text}")
+        lines.append(f"<b>{tariff.name}</b> — {traffic}/{tariff.device_limit}📱 {price_text}")
 
         if tariff.description:
-            lines.append(f"   📝 <i>{tariff.description}</i>")
+            lines.append(f"<i>{tariff.description}</i>")
 
         lines.append("")
 
