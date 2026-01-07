@@ -171,7 +171,7 @@ def get_tariff_insufficient_balance_keyboard(
         [
             InlineKeyboardButton(
                 text="💳 Пополнить баланс",
-                callback_data="topup_balance"
+                callback_data="balance_topup"
             )
         ],
         [
@@ -674,7 +674,7 @@ async def select_tariff_extend_period(
             f"💳 Ваш баланс: {_format_price_kopeks(user_balance)}\n"
             f"⚠️ Не хватает: <b>{_format_price_kopeks(missing)}</b>",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="💳 Пополнить баланс", callback_data="topup_balance")],
+                [InlineKeyboardButton(text="💳 Пополнить баланс", callback_data="balance_topup")],
                 [InlineKeyboardButton(text=texts.BACK, callback_data="subscription_extend")]
             ]),
             parse_mode="HTML"
@@ -922,7 +922,7 @@ def get_tariff_switch_insufficient_balance_keyboard(
         [
             InlineKeyboardButton(
                 text="💳 Пополнить баланс",
-                callback_data="topup_balance"
+                callback_data="balance_topup"
             )
         ],
         [
