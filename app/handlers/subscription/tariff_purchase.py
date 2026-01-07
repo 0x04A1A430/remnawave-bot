@@ -63,6 +63,20 @@ def _apply_promo_discount(price: int, discount_percent: int) -> int:
     return max(0, price - discount)
 
 
+def _get_user_period_discount(db_user: User, period_days: int) -> int:
+    """Получает скидку пользователя на период из промогруппы."""
+    promo_group = getattr(db_user, 'promo_group', None)
+    if promo_group:
+        # Используем метод get_discount_percent с категорией "period"
+        discount = promo_group.get_discount_percent("period", period_days)
+        if discount > 0:
+            return discount
+
+    # Проверяем персональную скидку
+    personal_discount = get_user_active_promo_discount_percent(db_user)
+    return personal_discount
+
+
 def get_tariffs_keyboard(
     tariffs: List[Tariff],
     language: str,
@@ -104,9 +118,9 @@ def get_tariffs_keyboard(
 def get_tariff_periods_keyboard(
     tariff: Tariff,
     language: str,
-    discount_percent: int = 0,
+    db_user: Optional[User] = None,
 ) -> InlineKeyboardMarkup:
-    """Создает клавиатуру выбора периода для тарифа."""
+    """Создает клавиатуру выбора периода для тарифа с учетом скидок по периодам."""
     texts = get_texts(language)
     buttons = []
 
@@ -115,10 +129,15 @@ def get_tariff_periods_keyboard(
         period = int(period_str)
         price = prices[period_str]
 
+        # Получаем скидку для конкретного периода
+        discount_percent = 0
+        if db_user:
+            discount_percent = _get_user_period_discount(db_user, period)
+
         if discount_percent > 0:
             original_price = price
             price = _apply_promo_discount(price, discount_percent)
-            price_text = f"{_format_price_kopeks(price)} (было {_format_price_kopeks(original_price)})"
+            price_text = f"{_format_price_kopeks(price)} (было {_format_price_kopeks(original_price)}, -{discount_percent}%)"
         else:
             price_text = _format_price_kopeks(price)
 
@@ -222,18 +241,6 @@ async def show_tariffs_list(
     texts = get_texts(db_user.language)
     await state.clear()
 
-    # Получаем скидку пользователя
-    discount_percent = 0
-    promo_group = getattr(db_user, 'promo_group', None)
-    if promo_group:
-        # Используем скидку на серверы как общую скидку на тарифы
-        discount_percent = getattr(promo_group, 'server_discount_percent', 0)
-
-    # Также проверяем персональную скидку
-    personal_discount = get_user_active_promo_discount_percent(db_user)
-    if personal_discount > discount_percent:
-        discount_percent = personal_discount
-
     # Получаем доступные тарифы
     promo_group_id = getattr(db_user, 'promo_group_id', None)
     tariffs = await get_tariffs_for_user(db, promo_group_id)
@@ -250,18 +257,25 @@ async def show_tariffs_list(
         await callback.answer()
         return
 
-    discount_text = ""
-    if discount_percent > 0:
-        discount_text = f"\n\n🎁 <b>Ваша скидка: {discount_percent}%</b>"
+    # Проверяем есть ли у пользователя скидки по периодам
+    promo_group = getattr(db_user, 'promo_group', None)
+    has_period_discounts = False
+    if promo_group:
+        period_discounts = getattr(promo_group, 'period_discounts', None)
+        if period_discounts and isinstance(period_discounts, dict) and len(period_discounts) > 0:
+            has_period_discounts = True
+
+    discount_hint = ""
+    if has_period_discounts:
+        discount_hint = "\n\n🎁 <i>Скидки зависят от выбранного периода</i>"
 
     await callback.message.edit_text(
-        f"📦 <b>Выберите тариф</b>{discount_text}\n\n"
+        f"📦 <b>Выберите тариф</b>{discount_hint}\n\n"
         "Выберите подходящий тариф из списка:",
-        reply_markup=get_tariffs_keyboard(tariffs, db_user.language, discount_percent),
+        reply_markup=get_tariffs_keyboard(tariffs, db_user.language, discount_percent=0),
         parse_mode="HTML"
     )
 
-    await state.update_data(tariff_discount_percent=discount_percent)
     await callback.answer()
 
 
@@ -280,12 +294,9 @@ async def select_tariff(
         await callback.answer("Тариф недоступен", show_alert=True)
         return
 
-    data = await state.get_data()
-    discount_percent = data.get('tariff_discount_percent', 0)
-
     await callback.message.edit_text(
-        format_tariff_info_for_user(tariff, db_user.language, discount_percent),
-        reply_markup=get_tariff_periods_keyboard(tariff, db_user.language, discount_percent),
+        format_tariff_info_for_user(tariff, db_user.language),
+        reply_markup=get_tariff_periods_keyboard(tariff, db_user.language, db_user=db_user),
         parse_mode="HTML"
     )
 
@@ -310,8 +321,8 @@ async def select_tariff_period(
         await callback.answer("Тариф недоступен", show_alert=True)
         return
 
-    data = await state.get_data()
-    discount_percent = data.get('tariff_discount_percent', 0)
+    # Получаем скидку для выбранного периода
+    discount_percent = _get_user_period_discount(db_user, period)
 
     # Получаем цену
     prices = tariff.period_prices or {}
@@ -360,6 +371,7 @@ async def select_tariff_period(
         selected_tariff_id=tariff_id,
         selected_period=period,
         final_price=final_price,
+        tariff_discount_percent=discount_percent,
     )
     await callback.answer()
 
@@ -381,8 +393,8 @@ async def confirm_tariff_purchase(
         await callback.answer("Тариф недоступен", show_alert=True)
         return
 
-    data = await state.get_data()
-    discount_percent = data.get('tariff_discount_percent', 0)
+    # Получаем скидку для выбранного периода
+    discount_percent = _get_user_period_discount(db_user, period)
 
     # Получаем цену
     prices = tariff.period_prices or {}
@@ -507,9 +519,9 @@ async def confirm_tariff_purchase(
 def get_tariff_extend_keyboard(
     tariff: Tariff,
     language: str,
-    discount_percent: int = 0,
+    db_user: Optional[User] = None,
 ) -> InlineKeyboardMarkup:
-    """Создает клавиатуру выбора периода для продления по тарифу."""
+    """Создает клавиатуру выбора периода для продления по тарифу с учетом скидок по периодам."""
     texts = get_texts(language)
     buttons = []
 
@@ -518,10 +530,15 @@ def get_tariff_extend_keyboard(
         period = int(period_str)
         price = prices[period_str]
 
+        # Получаем скидку для конкретного периода
+        discount_percent = 0
+        if db_user:
+            discount_percent = _get_user_period_discount(db_user, period)
+
         if discount_percent > 0:
             original_price = price
             price = _apply_promo_discount(price, discount_percent)
-            price_text = f"{_format_price_kopeks(price)} (было {_format_price_kopeks(original_price)})"
+            price_text = f"{_format_price_kopeks(price)} (было {_format_price_kopeks(original_price)}, -{discount_percent}%)"
         else:
             price_text = _format_price_kopeks(price)
 
@@ -581,29 +598,27 @@ async def show_tariff_extend(
         await callback.answer("Тариф не найден", show_alert=True)
         return
 
-    # Получаем скидку пользователя
-    discount_percent = 0
-    promo_group = getattr(db_user, 'promo_group', None)
-    if promo_group:
-        discount_percent = getattr(promo_group, 'server_discount_percent', 0)
-
-    personal_discount = get_user_active_promo_discount_percent(db_user)
-    if personal_discount > discount_percent:
-        discount_percent = personal_discount
-
     traffic = _format_traffic(tariff.traffic_limit_gb)
 
-    discount_text = ""
-    if discount_percent > 0:
-        discount_text = f"\n🎁 <b>Ваша скидка: {discount_percent}%</b>"
+    # Проверяем есть ли у пользователя скидки по периодам
+    promo_group = getattr(db_user, 'promo_group', None)
+    has_period_discounts = False
+    if promo_group:
+        period_discounts = getattr(promo_group, 'period_discounts', None)
+        if period_discounts and isinstance(period_discounts, dict) and len(period_discounts) > 0:
+            has_period_discounts = True
+
+    discount_hint = ""
+    if has_period_discounts:
+        discount_hint = "\n🎁 <i>Скидки зависят от выбранного периода</i>"
 
     await callback.message.edit_text(
-        f"🔄 <b>Продление подписки</b>{discount_text}\n\n"
+        f"🔄 <b>Продление подписки</b>{discount_hint}\n\n"
         f"📦 Тариф: <b>{tariff.name}</b>\n"
         f"📊 Трафик: {traffic}\n"
         f"📱 Устройств: {tariff.device_limit}\n\n"
         "Выберите период продления:",
-        reply_markup=get_tariff_extend_keyboard(tariff, db_user.language, discount_percent),
+        reply_markup=get_tariff_extend_keyboard(tariff, db_user.language, db_user=db_user),
         parse_mode="HTML"
     )
     await callback.answer()
@@ -617,6 +632,7 @@ async def select_tariff_extend_period(
     state: FSMContext,
 ):
     """Обрабатывает выбор периода для продления."""
+    texts = get_texts(db_user.language)
     parts = callback.data.split(":")
     tariff_id = int(parts[1])
     period = int(parts[2])
@@ -626,15 +642,8 @@ async def select_tariff_extend_period(
         await callback.answer("Тариф недоступен", show_alert=True)
         return
 
-    # Получаем скидку пользователя
-    discount_percent = 0
-    promo_group = getattr(db_user, 'promo_group', None)
-    if promo_group:
-        discount_percent = getattr(promo_group, 'server_discount_percent', 0)
-
-    personal_discount = get_user_active_promo_discount_percent(db_user)
-    if personal_discount > discount_percent:
-        discount_percent = personal_discount
+    # Получаем скидку для выбранного периода
+    discount_percent = _get_user_period_discount(db_user, period)
 
     # Получаем цену
     prices = tariff.period_prices or {}
@@ -814,7 +823,6 @@ def get_tariff_switch_keyboard(
     tariffs: List[Tariff],
     current_tariff_id: Optional[int],
     language: str,
-    discount_percent: int = 0,
 ) -> InlineKeyboardMarkup:
     """Создает клавиатуру выбора тарифа для переключения."""
     texts = get_texts(language)
@@ -829,8 +837,6 @@ def get_tariff_switch_keyboard(
         if prices:
             min_period = min(prices.keys(), key=int)
             min_price = prices[min_period]
-            if discount_percent > 0:
-                min_price = _apply_promo_discount(min_price, discount_percent)
             price_text = f"от {_format_price_kopeks(min_price)}"
         else:
             price_text = ""
@@ -855,9 +861,9 @@ def get_tariff_switch_keyboard(
 def get_tariff_switch_periods_keyboard(
     tariff: Tariff,
     language: str,
-    discount_percent: int = 0,
+    db_user: Optional[User] = None,
 ) -> InlineKeyboardMarkup:
-    """Создает клавиатуру выбора периода для переключения тарифа."""
+    """Создает клавиатуру выбора периода для переключения тарифа с учетом скидок по периодам."""
     texts = get_texts(language)
     buttons = []
 
@@ -866,10 +872,15 @@ def get_tariff_switch_periods_keyboard(
         period = int(period_str)
         price = prices[period_str]
 
+        # Получаем скидку для конкретного периода
+        discount_percent = 0
+        if db_user:
+            discount_percent = _get_user_period_discount(db_user, period)
+
         if discount_percent > 0:
             original_price = price
             price = _apply_promo_discount(price, discount_percent)
-            price_text = f"{_format_price_kopeks(price)} (было {_format_price_kopeks(original_price)})"
+            price_text = f"{_format_price_kopeks(price)} (было {_format_price_kopeks(original_price)}, -{discount_percent}%)"
         else:
             price_text = _format_price_kopeks(price)
 
@@ -953,16 +964,6 @@ async def show_tariff_switch_list(
 
     current_tariff_id = subscription.tariff_id
 
-    # Получаем скидку пользователя
-    discount_percent = 0
-    promo_group = getattr(db_user, 'promo_group', None)
-    if promo_group:
-        discount_percent = getattr(promo_group, 'server_discount_percent', 0)
-
-    personal_discount = get_user_active_promo_discount_percent(db_user)
-    if personal_discount > discount_percent:
-        discount_percent = personal_discount
-
     # Получаем доступные тарифы
     promo_group_id = getattr(db_user, 'promo_group_id', None)
     tariffs = await get_tariffs_for_user(db, promo_group_id)
@@ -989,22 +990,29 @@ async def show_tariff_switch_list(
         if current_tariff:
             current_tariff_name = current_tariff.name
 
-    discount_text = ""
-    if discount_percent > 0:
-        discount_text = f"\n\n🎁 <b>Ваша скидка: {discount_percent}%</b>"
+    # Проверяем есть ли у пользователя скидки по периодам
+    promo_group = getattr(db_user, 'promo_group', None)
+    has_period_discounts = False
+    if promo_group:
+        period_discounts = getattr(promo_group, 'period_discounts', None)
+        if period_discounts and isinstance(period_discounts, dict) and len(period_discounts) > 0:
+            has_period_discounts = True
+
+    discount_hint = ""
+    if has_period_discounts:
+        discount_hint = "\n🎁 <i>Скидки зависят от выбранного периода</i>"
 
     await callback.message.edit_text(
-        f"📦 <b>Смена тарифа</b>{discount_text}\n\n"
+        f"📦 <b>Смена тарифа</b>{discount_hint}\n\n"
         f"📌 Ваш текущий тариф: <b>{current_tariff_name}</b>\n\n"
         "⚠️ При смене тарифа оплачивается полная стоимость нового тарифа.\n"
         "Остаток времени текущей подписки будет сохранён.\n\n"
         "Выберите новый тариф:",
-        reply_markup=get_tariff_switch_keyboard(tariffs, current_tariff_id, db_user.language, discount_percent),
+        reply_markup=get_tariff_switch_keyboard(tariffs, current_tariff_id, db_user.language),
         parse_mode="HTML"
     )
 
     await state.update_data(
-        tariff_switch_discount_percent=discount_percent,
         current_tariff_id=current_tariff_id,
     )
     await callback.answer()
@@ -1025,9 +1033,6 @@ async def select_tariff_switch(
         await callback.answer("Тариф недоступен", show_alert=True)
         return
 
-    data = await state.get_data()
-    discount_percent = data.get('tariff_switch_discount_percent', 0)
-
     traffic = _format_traffic(tariff.traffic_limit_gb)
 
     info_text = f"""📦 <b>{tariff.name}</b>
@@ -1040,14 +1045,11 @@ async def select_tariff_switch(
     if tariff.description:
         info_text += f"\n📝 {tariff.description}\n"
 
-    if discount_percent > 0:
-        info_text += f"\n🎁 <b>Ваша скидка: {discount_percent}%</b>\n"
-
     info_text += "\n⚠️ Оплачивается полная стоимость тарифа.\nВыберите период:"
 
     await callback.message.edit_text(
         info_text,
-        reply_markup=get_tariff_switch_periods_keyboard(tariff, db_user.language, discount_percent),
+        reply_markup=get_tariff_switch_periods_keyboard(tariff, db_user.language, db_user=db_user),
         parse_mode="HTML"
     )
 
@@ -1073,8 +1075,10 @@ async def select_tariff_switch_period(
         return
 
     data = await state.get_data()
-    discount_percent = data.get('tariff_switch_discount_percent', 0)
     current_tariff_id = data.get('current_tariff_id')
+
+    # Получаем скидку для выбранного периода
+    discount_percent = _get_user_period_discount(db_user, period)
 
     # Получаем цену
     prices = tariff.period_prices or {}
@@ -1151,8 +1155,8 @@ async def confirm_tariff_switch(
         await callback.answer("Тариф недоступен", show_alert=True)
         return
 
-    data = await state.get_data()
-    discount_percent = data.get('tariff_switch_discount_percent', 0)
+    # Получаем скидку для выбранного периода
+    discount_percent = _get_user_period_discount(db_user, period)
 
     # Получаем цену
     prices = tariff.period_prices or {}
