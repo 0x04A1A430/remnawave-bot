@@ -5960,6 +5960,10 @@
                 'promo_code.error.generic': 'Unable to activate the promo code.',
                 'promo_code.error.unauthorized': 'Authorization failed. Please reopen the mini app from Telegram.',
                 'promo_code.error.network': 'Network error. Please try again later.',
+                'tariffs.title': 'Tariffs',
+                'tariffs.select': 'Select tariff',
+                'tariffs.current': 'Current tariff',
+                'tariffs.no_tariffs': 'No tariffs available',
                 'card.referral.title': 'Referral Program',
                 'card.history.title': 'Transaction History',
                 'card.servers.title': 'Connected Servers',
@@ -6391,6 +6395,10 @@
                 'promo_code.error.generic': 'Не удалось активировать промокод.',
                 'promo_code.error.unauthorized': 'Ошибка авторизации. Откройте мини-приложение из Telegram.',
                 'promo_code.error.network': 'Ошибка сети. Попробуйте ещё раз.',
+                'tariffs.title': 'Тарифы',
+                'tariffs.select': 'Выбрать тариф',
+                'tariffs.current': 'Текущий тариф',
+                'tariffs.no_tariffs': 'Нет доступных тарифов',
                 'card.referral.title': 'Реферальная программа',
                 'card.history.title': 'История операций',
                 'card.servers.title': 'Подключённые серверы',
@@ -19081,7 +19089,7 @@
             body?.classList.add('hidden');
 
             try {
-                const initData = getInitData();
+                const initData = tg.initData || '';
                 const response = await fetch('/miniapp/subscription/tariffs', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -19212,7 +19220,7 @@
             }
 
             try {
-                const initData = getInitData();
+                const initData = tg.initData || '';
                 const periodDays = selectedTariffPeriod.days || selectedTariffPeriod.period_days || selectedTariffPeriod.periodDays;
 
                 const response = await fetch('/miniapp/subscription/tariff/purchase', {
