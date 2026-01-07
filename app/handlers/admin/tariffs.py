@@ -189,6 +189,7 @@ def get_tariff_view_keyboard(
     ])
     buttons.append([
         InlineKeyboardButton(text="📱💰 Цена за устройство", callback_data=f"admin_tariff_edit_device_price:{tariff.id}"),
+        InlineKeyboardButton(text="⏰ Дни триала", callback_data=f"admin_tariff_edit_trial_days:{tariff.id}"),
     ])
     buttons.append([
         InlineKeyboardButton(text="🌐 Серверы", callback_data=f"admin_tariff_edit_squads:{tariff.id}"),
@@ -249,6 +250,12 @@ def format_tariff_info(tariff: Tariff, language: str, subs_count: int = 0) -> st
 
     trial_status = "✅ Да" if tariff.is_trial_available else "❌ Нет"
 
+    # Форматируем дни триала
+    if tariff.trial_duration_days:
+        trial_days_display = f"{tariff.trial_duration_days} дней"
+    else:
+        trial_days_display = f"По умолчанию ({settings.TRIAL_DURATION_DAYS} дней)"
+
     # Форматируем цену за устройство
     if tariff.device_price_kopeks is not None and tariff.device_price_kopeks > 0:
         device_price_display = _format_price_kopeks(tariff.device_price_kopeks) + "/мес"
@@ -266,6 +273,7 @@ def format_tariff_info(tariff: Tariff, language: str, subs_count: int = 0) -> st
 • Устройств: {tariff.device_limit}
 • Цена за доп. устройство: {device_price_display}
 • Триал: {trial_status}
+• Дней триала: {trial_days_display}
 
 <b>Цены:</b>
 {prices_display}
@@ -1210,6 +1218,94 @@ async def process_edit_tariff_device_price(
     )
 
 
+# ============ РЕДАКТИРОВАНИЕ ДНЕЙ ТРИАЛА ============
+
+@admin_required
+@error_handler
+async def start_edit_tariff_trial_days(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    """Начинает редактирование дней триала."""
+    texts = get_texts(db_user.language)
+    tariff_id = int(callback.data.split(":")[1])
+    tariff = await get_tariff_by_id(db, tariff_id)
+
+    if not tariff:
+        await callback.answer("Тариф не найден", show_alert=True)
+        return
+
+    await state.set_state(AdminStates.editing_tariff_trial_days)
+    await state.update_data(tariff_id=tariff_id, language=db_user.language)
+
+    if tariff.trial_duration_days:
+        current_days = f"{tariff.trial_duration_days} дней"
+    else:
+        current_days = f"По умолчанию ({settings.TRIAL_DURATION_DAYS} дней)"
+
+    await callback.message.edit_text(
+        f"⏰ <b>Редактирование дней триала</b>\n\n"
+        f"Текущее значение: <b>{current_days}</b>\n\n"
+        "Введите количество дней триала.\n\n"
+        f"• <code>0</code> или <code>-</code> — использовать настройку по умолчанию ({settings.TRIAL_DURATION_DAYS} дней)\n"
+        "• Например: <code>7</code> = 7 дней триала",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=texts.CANCEL, callback_data=f"admin_tariff_view:{tariff_id}")]
+        ]),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def process_edit_tariff_trial_days(
+    message: types.Message,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    """Обрабатывает новое количество дней триала."""
+    data = await state.get_data()
+    tariff_id = data.get("tariff_id")
+
+    tariff = await get_tariff_by_id(db, tariff_id)
+    if not tariff:
+        await message.answer("Тариф не найден")
+        await state.clear()
+        return
+
+    text = message.text.strip()
+
+    if text == "-" or text == "0":
+        trial_days = None
+    else:
+        try:
+            trial_days = int(text)
+            if trial_days < 1:
+                raise ValueError
+        except ValueError:
+            await message.answer(
+                "Введите корректное число дней (1 или больше).\n"
+                "Для использования настройки по умолчанию введите <code>0</code> или <code>-</code>",
+                parse_mode="HTML"
+            )
+            return
+
+    tariff = await update_tariff(db, tariff, trial_duration_days=trial_days)
+    await state.clear()
+
+    subs_count = await get_tariff_subscriptions_count(db, tariff_id)
+
+    await message.answer(
+        f"✅ Дни триала изменены!\n\n" + format_tariff_info(tariff, db_user.language, subs_count),
+        reply_markup=get_tariff_view_keyboard(tariff, db_user.language),
+        parse_mode="HTML"
+    )
+
+
 # ============ УДАЛЕНИЕ ТАРИФА ============
 
 @admin_required
@@ -1750,6 +1846,10 @@ def register_handlers(dp: Dispatcher):
     # Редактирование цены за устройство
     dp.callback_query.register(start_edit_tariff_device_price, F.data.startswith("admin_tariff_edit_device_price:"))
     dp.message.register(process_edit_tariff_device_price, AdminStates.editing_tariff_device_price)
+
+    # Редактирование дней триала
+    dp.callback_query.register(start_edit_tariff_trial_days, F.data.startswith("admin_tariff_edit_trial_days:"))
+    dp.message.register(process_edit_tariff_trial_days, AdminStates.editing_tariff_trial_days)
 
     # Удаление
     dp.callback_query.register(confirm_delete_tariff, F.data.startswith("admin_tariff_delete:"))
