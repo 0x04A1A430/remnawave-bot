@@ -5903,7 +5903,11 @@
                 'subscription_settings.confirm.months.one': '{count} month',
                 'subscription_settings.confirm.months.other': '{count} months',
                 'subscription_renewal.title': 'Renew subscription',
+                'subscription_renewal.title.trial_classic': 'Buy subscription',
+                'subscription_renewal.title.trial_tariffs': 'Buy tariff',
                 'subscription_renewal.subtitle': 'Choose how long you want to extend access.',
+                'subscription_renewal.subtitle.trial_classic': 'Choose a period to get started.',
+                'subscription_renewal.subtitle.trial_tariffs': 'Choose a period to get started.',
                 'subscription_renewal.status.loading': 'Loading renewal options…',
                 'subscription_renewal.status.empty': 'No renewal options are currently available.',
                 'subscription_renewal.error.generic': 'Unable to load renewal options. Please try again later.',
@@ -5915,9 +5919,12 @@
                 'subscription_renewal.summary.discount': 'You save {percent}%',
                 'subscription_renewal.summary.insufficient': 'Not enough balance — missing {missing}.',
                 'subscription_renewal.submit': 'Renew',
+                'subscription_renewal.submit.trial': 'Buy',
                 'subscription_renewal.submit.loading': 'Processing…',
                 'subscription_renewal.confirm.title': 'Confirm renewal',
+                'subscription_renewal.confirm.title.trial': 'Confirm purchase',
                 'subscription_renewal.confirm.message': 'Renew the subscription for {period} and pay {amount}?',
+                'subscription_renewal.confirm.message.trial': 'Buy subscription for {period} and pay {amount}?',
                 'subscription_renewal.confirm.balance': 'Current balance: {balance}',
                 'subscription_renewal.confirm.accept': 'Pay',
                 'subscription_renewal.confirm.cancel': 'Cancel',
@@ -6327,7 +6334,11 @@
                 'subscription_settings.confirm.months.one': '{count} месяц',
                 'subscription_settings.confirm.months.other': '{count} месяцев',
                 'subscription_renewal.title': 'Продление подписки',
+                'subscription_renewal.title.trial_classic': 'Покупка подписки',
+                'subscription_renewal.title.trial_tariffs': 'Покупка тарифа',
                 'subscription_renewal.subtitle': 'Выберите период продления.',
+                'subscription_renewal.subtitle.trial_classic': 'Выберите период для начала.',
+                'subscription_renewal.subtitle.trial_tariffs': 'Выберите период для начала.',
                 'subscription_renewal.status.loading': 'Загружаем доступные периоды…',
                 'subscription_renewal.status.empty': 'Доступных периодов продления нет.',
                 'subscription_renewal.error.generic': 'Не удалось загрузить параметры продления. Попробуйте позже.',
@@ -6339,9 +6350,12 @@
                 'subscription_renewal.summary.discount': 'Выгода {percent}%',
                 'subscription_renewal.summary.insufficient': 'Недостаточно средств — не хватает {missing}.',
                 'subscription_renewal.submit': 'Продлить',
+                'subscription_renewal.submit.trial': 'Купить',
                 'subscription_renewal.submit.loading': 'Продление…',
                 'subscription_renewal.confirm.title': 'Подтвердите продление',
+                'subscription_renewal.confirm.title.trial': 'Подтвердите покупку',
                 'subscription_renewal.confirm.message': 'Продлить подписку на {period} и списать {amount}?',
+                'subscription_renewal.confirm.message.trial': 'Купить подписку на {period} и списать {amount}?',
                 'subscription_renewal.confirm.balance': 'Текущий баланс: {balance}',
                 'subscription_renewal.confirm.accept': 'Оплатить',
                 'subscription_renewal.confirm.cancel': 'Отмена',
@@ -14919,6 +14933,44 @@
                 statusText.classList.add('hidden');
             }
 
+            // Обновляем заголовок, подзаголовок и кнопку в зависимости от типа подписки
+            const isTrial = subscriptionRenewalData.isTrial || subscriptionRenewalData.is_trial || false;
+            const salesMode = subscriptionRenewalData.salesMode || subscriptionRenewalData.sales_mode || 'classic';
+
+            // Обновляем заголовок карточки
+            const titleEl = card.querySelector('[data-i18n="subscription_renewal.title"]');
+            if (titleEl) {
+                let titleKey = 'subscription_renewal.title';
+                if (isTrial) {
+                    titleKey = salesMode === 'tariffs'
+                        ? 'subscription_renewal.title.trial_tariffs'
+                        : 'subscription_renewal.title.trial_classic';
+                }
+                const titleText = t(titleKey);
+                titleEl.textContent = titleText !== titleKey ? titleText : (isTrial ? (salesMode === 'tariffs' ? 'Buy tariff' : 'Buy subscription') : 'Renew subscription');
+            }
+
+            // Обновляем подзаголовок
+            const subtitleEl = card.querySelector('[data-i18n="subscription_renewal.subtitle"]');
+            if (subtitleEl) {
+                let subtitleKey = 'subscription_renewal.subtitle';
+                if (isTrial) {
+                    subtitleKey = salesMode === 'tariffs'
+                        ? 'subscription_renewal.subtitle.trial_tariffs'
+                        : 'subscription_renewal.subtitle.trial_classic';
+                }
+                const subtitleText = t(subtitleKey);
+                subtitleEl.textContent = subtitleText !== subtitleKey ? subtitleText : (isTrial ? 'Choose a period to get started.' : 'Choose how long you want to extend access.');
+            }
+
+            // Обновляем текст кнопки
+            const submitBtn = document.getElementById('subscriptionRenewalSubmit');
+            if (submitBtn && !subscriptionRenewalSubmitting) {
+                const btnKey = isTrial ? 'subscription_renewal.submit.trial' : 'subscription_renewal.submit';
+                const btnText = t(btnKey);
+                submitBtn.textContent = btnText !== btnKey ? btnText : (isTrial ? 'Buy' : 'Renew');
+            }
+
             renderSubscriptionRenewalMeta(subscriptionRenewalData);
             renderSubscriptionRenewalOptions(subscriptionRenewalData);
             renderSubscriptionRenewalSummary(subscriptionRenewalData);
@@ -14930,10 +14982,17 @@
                 || (option.priceKopeks !== null ? formatPriceFromKopeks(option.priceKopeks, data.currency) : '');
             const periodLabel = buildRenewalPeriodLabel(option);
 
-            const messageTemplate = t('subscription_renewal.confirm.message');
-            const message = messageTemplate && messageTemplate !== 'subscription_renewal.confirm.message'
-                ? messageTemplate.replace('{period}', periodLabel).replace('{amount}', amountLabel)
+            // Определяем, триал ли это
+            const isTrial = data?.isTrial || data?.is_trial || false;
+
+            const messageKey = isTrial ? 'subscription_renewal.confirm.message.trial' : 'subscription_renewal.confirm.message';
+            const messageTemplate = t(messageKey);
+            const defaultMessage = isTrial
+                ? `Buy subscription for ${periodLabel} and pay ${amountLabel}?`
                 : `Renew the subscription for ${periodLabel} and pay ${amountLabel}?`;
+            const message = messageTemplate && messageTemplate !== messageKey
+                ? messageTemplate.replace('{period}', periodLabel).replace('{amount}', amountLabel)
+                : defaultMessage;
 
             const balanceLabel = data?.balanceLabel
                 || (data.balanceKopeks !== null ? formatPriceFromKopeks(data.balanceKopeks, data.currency) : null);
@@ -14947,7 +15006,7 @@
                 finalMessage = `${message}\n${balanceText}`;
             }
 
-            const titleKey = 'subscription_renewal.confirm.title';
+            const titleKey = isTrial ? 'subscription_renewal.confirm.title.trial' : 'subscription_renewal.confirm.title';
             const confirmKey = 'subscription_renewal.confirm.accept';
             const cancelKey = 'subscription_renewal.confirm.cancel';
 
@@ -14956,7 +15015,7 @@
             const cancelText = t(cancelKey);
 
             return showConfirmationPopup({
-                title: title === titleKey ? 'Confirm renewal' : title,
+                title: title === titleKey ? (isTrial ? 'Confirm purchase' : 'Confirm renewal') : title,
                 message: finalMessage,
                 confirmText: confirmText === confirmKey ? 'Pay' : confirmText,
                 cancelText: cancelText === cancelKey ? 'Cancel' : cancelText,
