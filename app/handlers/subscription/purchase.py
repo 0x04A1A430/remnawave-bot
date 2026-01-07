@@ -481,8 +481,9 @@ async def show_trial_offer(
             if trial_tariff:
                 trial_traffic = trial_tariff.traffic_limit_gb
                 trial_device_limit = trial_tariff.device_limit
-                if trial_tariff.trial_duration_days:
-                    trial_days = trial_tariff.trial_duration_days
+                tariff_trial_days = getattr(trial_tariff, 'trial_duration_days', None)
+                if tariff_trial_days:
+                    trial_days = tariff_trial_days
                 logger.info(f"Показываем триал с тарифом {trial_tariff.name}")
         except Exception as e:
             logger.error(f"Ошибка получения триального тарифа: {e}")
@@ -747,8 +748,9 @@ async def activate_trial(
                     trial_device_limit = trial_tariff.device_limit
                     trial_squads = trial_tariff.allowed_squads or []
                     tariff_id_for_trial = trial_tariff.id
-                    if trial_tariff.trial_duration_days:
-                        trial_duration = trial_tariff.trial_duration_days
+                    tariff_trial_days = getattr(trial_tariff, 'trial_duration_days', None)
+                    if tariff_trial_days:
+                        trial_duration = tariff_trial_days
                     logger.info(f"Используем триальный тариф {trial_tariff.name} (ID: {trial_tariff.id})")
             except Exception as e:
                 logger.error(f"Ошибка получения триального тарифа: {e}")

@@ -197,8 +197,9 @@ async def handle_change_devices(
         tariff = await get_tariff_by_id(db, subscription.tariff_id)
 
     # Для тарифов - проверяем разрешено ли изменение устройств
+    tariff_device_price = getattr(tariff, 'device_price_kopeks', None) if tariff else None
     if tariff:
-        if tariff.device_price_kopeks is None or tariff.device_price_kopeks <= 0:
+        if tariff_device_price is None or tariff_device_price <= 0:
             await callback.answer(
                 texts.t("TARIFF_DEVICES_DISABLED", "⚠️ Изменение устройств недоступно для вашего тарифа"),
                 show_alert=True,
@@ -224,7 +225,7 @@ async def handle_change_devices(
 
     # Для тарифов показываем цену из тарифа
     if tariff:
-        price_per_device = tariff.device_price_kopeks
+        price_per_device = tariff_device_price
         price_text = texts.format_price(price_per_device)
         prompt_text = texts.t(
             "CHANGE_DEVICES_PROMPT_TARIFF",
@@ -281,14 +282,15 @@ async def confirm_change_devices(
         tariff = await get_tariff_by_id(db, subscription.tariff_id)
 
     # Для тарифов - проверяем разрешено ли изменение устройств
+    tariff_device_price = getattr(tariff, 'device_price_kopeks', None) if tariff else None
     if tariff:
-        if tariff.device_price_kopeks is None or tariff.device_price_kopeks <= 0:
+        if tariff_device_price is None or tariff_device_price <= 0:
             await callback.answer(
                 texts.t("TARIFF_DEVICES_DISABLED", "⚠️ Изменение устройств недоступно для вашего тарифа"),
                 show_alert=True,
             )
             return
-        price_per_device = tariff.device_price_kopeks
+        price_per_device = tariff_device_price
     else:
         if not settings.is_devices_selection_enabled():
             await callback.answer(
@@ -998,14 +1000,15 @@ async def confirm_add_devices(
         tariff = await get_tariff_by_id(db, subscription.tariff_id)
 
     # Для тарифов - проверяем разрешено ли добавление устройств
+    tariff_device_price = getattr(tariff, 'device_price_kopeks', None) if tariff else None
     if tariff:
-        if tariff.device_price_kopeks is None or tariff.device_price_kopeks <= 0:
+        if tariff_device_price is None or tariff_device_price <= 0:
             await callback.answer(
                 texts.t("TARIFF_DEVICES_DISABLED", "⚠️ Добавление устройств недоступно для вашего тарифа"),
                 show_alert=True,
             )
             return
-        price_per_device = tariff.device_price_kopeks
+        price_per_device = tariff_device_price
     else:
         if not settings.is_devices_selection_enabled():
             await callback.answer(
