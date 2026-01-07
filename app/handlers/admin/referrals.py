@@ -713,8 +713,7 @@ async def process_test_referral_earning(
         user_id=target_user.id,
         referral_id=target_user.id,  # Сам на себя (тестовое)
         amount_kopeks=amount_kopeks,
-        reason="test_earning",
-        description=f"Тестовое начисление от админа {db_user.telegram_id}"
+        reason="test_earning"
     )
     db.add(earning)
 
@@ -733,7 +732,7 @@ async def process_test_referral_earning(
         f"Начисление добавлено как реферальный доход.",
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
             [types.InlineKeyboardButton(text="📋 К заявкам", callback_data="admin_withdrawal_requests")],
-            [types.InlineKeyboardButton(text="👤 Профиль", callback_data=f"admin_user_{target_telegram_id}")]
+            [types.InlineKeyboardButton(text="👤 Профиль", callback_data=f"admin_user_manage_{target_telegram_id}")]
         ])
     )
 

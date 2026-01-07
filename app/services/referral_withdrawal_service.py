@@ -52,6 +52,16 @@ class ReferralWithdrawalService:
         )
         return result.scalar() or 0
 
+    async def get_first_referral_earning_date(self, db: AsyncSession, user_id: int) -> Optional[datetime]:
+        """
+        Получает дату первого реферального начисления.
+        """
+        result = await db.execute(
+            select(func.min(ReferralEarning.created_at))
+            .where(ReferralEarning.user_id == user_id)
+        )
+        return result.scalar()
+
     async def get_user_spending(self, db: AsyncSession, user_id: int) -> int:
         """
         Получает сумму трат пользователя (покупки подписок, сброс трафика и т.д.).
@@ -62,6 +72,26 @@ class ReferralWithdrawalService:
                 Transaction.user_id == user_id,
                 Transaction.type.in_(["subscription_payment", "withdrawal"]),
                 Transaction.is_completed == True
+            )
+        )
+        return abs(result.scalar() or 0)
+
+    async def get_user_spending_after_first_earning(self, db: AsyncSession, user_id: int) -> int:
+        """
+        Получает сумму трат ПОСЛЕ первого реферального начисления.
+        Только эти траты могут быть засчитаны как "потрачено из реф. баланса".
+        """
+        first_earning_date = await self.get_first_referral_earning_date(db, user_id)
+        if not first_earning_date:
+            return 0
+
+        result = await db.execute(
+            select(func.coalesce(func.sum(Transaction.amount_kopeks), 0))
+            .where(
+                Transaction.user_id == user_id,
+                Transaction.type.in_(["subscription_payment", "withdrawal"]),
+                Transaction.is_completed == True,
+                Transaction.created_at >= first_earning_date
             )
         )
         return abs(result.scalar() or 0)
@@ -102,12 +132,13 @@ class ReferralWithdrawalService:
         total_earned = await self.get_total_referral_earnings(db, user_id)
         own_deposits = await self.get_user_own_deposits(db, user_id)
         spending = await self.get_user_spending(db, user_id)
+        spending_after_earning = await self.get_user_spending_after_first_earning(db, user_id)
         withdrawn = await self.get_withdrawn_amount(db, user_id)
         pending = await self.get_pending_withdrawal_amount(db, user_id)
 
-        # Сколько реф. баланса потрачено = мин(траты, реф_заработок)
-        # Логика: сначала тратим реф. баланс, потом свой
-        referral_spent = min(spending, total_earned)
+        # Сколько реф. баланса потрачено = мин(траты ПОСЛЕ первого начисления, реф_заработок)
+        # Логика: только траты после получения реф. дохода могут быть из реф. баланса
+        referral_spent = min(spending_after_earning, total_earned)
 
         # Доступный реферальный баланс
         available_referral = max(0, total_earned - referral_spent - withdrawn - pending)
@@ -170,15 +201,17 @@ class ReferralWithdrawalService:
         if available < min_amount:
             return False, f"Минимальная сумма вывода: {min_amount / 100:.0f}₽. Доступно: {available / 100:.0f}₽"
 
-        # Проверяем cooldown
+        # Проверяем cooldown (пропускаем в тестовом режиме)
         last_request = await self.get_last_withdrawal_request(db, user_id)
         if last_request:
-            cooldown_days = settings.REFERRAL_WITHDRAWAL_COOLDOWN_DAYS
-            cooldown_end = last_request.created_at + timedelta(days=cooldown_days)
+            # В тестовом режиме пропускаем проверку cooldown
+            if not settings.REFERRAL_WITHDRAWAL_TEST_MODE:
+                cooldown_days = settings.REFERRAL_WITHDRAWAL_COOLDOWN_DAYS
+                cooldown_end = last_request.created_at + timedelta(days=cooldown_days)
 
-            if datetime.utcnow() < cooldown_end:
-                days_left = (cooldown_end - datetime.utcnow()).days + 1
-                return False, f"Следующий запрос на вывод будет доступен через {days_left} дн."
+                if datetime.utcnow() < cooldown_end:
+                    days_left = (cooldown_end - datetime.utcnow()).days + 1
+                    return False, f"Следующий запрос на вывод будет доступен через {days_left} дн."
 
             # Проверяем, нет ли активной заявки
             if last_request.status == WithdrawalRequestStatus.PENDING.value:

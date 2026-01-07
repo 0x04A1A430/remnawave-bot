@@ -623,9 +623,7 @@ async def process_withdrawal_amount(
             "REFERRAL_WITHDRAWAL_ENTER_DETAILS",
             "💳 Введите реквизиты для перевода:\n\n"
             "Например:\n"
-            "• Номер карты: 1234 5678 9012 3456\n"
-            "• СБП: +7 999 123-45-67 (Сбербанк)\n"
-            "• Кошелёк: ЮMoney 4100..."
+            "• СБП: +7 999 123-45-67 (Сбербанк)"
         )
 
         keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
@@ -661,9 +659,7 @@ async def process_withdrawal_amount_callback(
         "REFERRAL_WITHDRAWAL_ENTER_DETAILS",
         "💳 Введите реквизиты для перевода:\n\n"
         "Например:\n"
-        "• Номер карты: 1234 5678 9012 3456\n"
-        "• СБП: +7 999 123-45-67 (Сбербанк)\n"
-        "• Кошелёк: ЮMoney 4100..."
+        "• СБП: +7 999 123-45-67 (Сбербанк)"
     )
 
     keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
