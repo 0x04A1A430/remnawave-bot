@@ -19144,13 +19144,44 @@
                 const current = tariffsData.current_tariff || tariffsData.currentTariff;
                 currentBlock?.classList.remove('hidden');
                 if (currentName) {
+                    const trafficLabel = current.traffic_limit_label || current.trafficLimitLabel
+                        || ((current.traffic_limit_gb || current.trafficLimitGb) === 0 ? '∞' : (current.traffic_limit_gb || current.trafficLimitGb) + ' ГБ');
+                    const deviceLimit = current.device_limit || current.deviceLimit || 1;
+                    const servers = current.servers || [];
+                    const serversCount = current.servers_count || current.serversCount || servers.length || 0;
+
+                    let serverTags = '';
+                    if (servers.length > 0) {
+                        const serverNames = servers.slice(0, 3).map(s => s.name || s.display_name).filter(Boolean);
+                        serverTags = serverNames.map(name =>
+                            `<span style="display: inline-block; padding: 2px 8px; background: var(--bg-tertiary, var(--bg-secondary)); border-radius: 12px; font-size: 11px;">${escapeHtml(name)}</span>`
+                        ).join('');
+                        if (serversCount > serverNames.length) {
+                            serverTags += `<span style="display: inline-block; padding: 2px 8px; background: var(--bg-tertiary, var(--bg-secondary)); border-radius: 12px; font-size: 11px;">+${serversCount - serverNames.length}</span>`;
+                        }
+                    } else {
+                        serverTags = `<span style="display: inline-block; padding: 2px 8px; background: var(--bg-tertiary, var(--bg-secondary)); border-radius: 12px; font-size: 11px;">🌍 Все серверы</span>`;
+                    }
+
                     currentName.innerHTML = `
-                        <strong>${escapeHtml(current.name)}</strong>
-                        <span style="color: var(--text-secondary); font-size: 13px; display: block; margin-top: 4px;">
-                            ${current.device_limit || current.deviceLimit} устр. •
-                            ${current.traffic_limit_label || current.trafficLimitLabel || (current.traffic_limit_gb || current.trafficLimitGb) + ' ГБ'} •
-                            ${current.servers_count || current.serversCount || 0} серв.
-                        </span>
+                        <div style="font-weight: 600; font-size: 14px; color: var(--success);">✓ ${escapeHtml(current.name)}</div>
+                        <div style="display: flex; gap: 12px; margin-top: 8px; font-size: 13px; color: var(--text-secondary);">
+                            <span style="display: inline-flex; align-items: center; gap: 4px;">
+                                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="opacity: 0.6;">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                                </svg>
+                                ${deviceLimit}
+                            </span>
+                            <span style="display: inline-flex; align-items: center; gap: 4px;">
+                                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="opacity: 0.6;">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                                </svg>
+                                ${trafficLabel}
+                            </span>
+                        </div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;">
+                            ${serverTags}
+                        </div>
                     `;
                 }
             } else {
@@ -19186,20 +19217,81 @@
                 const trafficLabel = tariff.traffic_limit_label || tariff.trafficLimitLabel
                     || ((tariff.traffic_limit_gb || tariff.trafficLimitGb) === 0 ? '∞' : (tariff.traffic_limit_gb || tariff.trafficLimitGb) + ' ГБ');
 
+                const deviceLimit = tariff.device_limit || tariff.deviceLimit || 1;
+
+                // Серверы - показываем названия или количество
+                const servers = tariff.servers || [];
+                const serversCount = tariff.servers_count || tariff.serversCount || servers.length || 0;
+                let serversText = '';
+                if (servers.length > 0) {
+                    const serverNames = servers.slice(0, 3).map(s => s.name || s.display_name || s.displayName).filter(Boolean);
+                    if (serverNames.length > 0) {
+                        serversText = serverNames.join(', ');
+                        if (serversCount > serverNames.length) {
+                            serversText += ` +${serversCount - serverNames.length}`;
+                        }
+                    } else {
+                        serversText = serversCount + ' серв.';
+                    }
+                } else if (serversCount > 0) {
+                    serversText = serversCount + ' серв.';
+                } else {
+                    serversText = 'Все серверы';
+                }
+
+                const description = tariff.description || '';
+
+                // Серверные теги
+                let serverTags = '';
+                if (servers.length > 0) {
+                    const serverNames = servers.slice(0, 4).map(s => s.name || s.display_name || s.displayName).filter(Boolean);
+                    serverTags = serverNames.map(name =>
+                        `<span style="display: inline-block; padding: 2px 8px; background: var(--bg-secondary); border-radius: 12px; font-size: 11px; color: var(--text-secondary);">${escapeHtml(name)}</span>`
+                    ).join('');
+                    if (serversCount > serverNames.length) {
+                        serverTags += `<span style="display: inline-block; padding: 2px 8px; background: var(--bg-secondary); border-radius: 12px; font-size: 11px; color: var(--text-secondary);">+${serversCount - serverNames.length}</span>`;
+                    }
+                } else if (serversCount === 0) {
+                    serverTags = `<span style="display: inline-block; padding: 2px 8px; background: var(--bg-secondary); border-radius: 12px; font-size: 11px; color: var(--text-secondary);">🌍 Все серверы</span>`;
+                }
+
                 div.innerHTML = `
-                    <div class="subscription-settings-toggle-label">
-                        <div class="subscription-settings-toggle-title">
-                            ${isCurrent ? '✅ ' : ''}${escapeHtml(tariff.name)}
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
+                            <div style="flex: 1; min-width: 0;">
+                                <div style="font-weight: 600; font-size: 15px; display: flex; align-items: center; gap: 6px;">
+                                    ${isCurrent ? '<span style="color: var(--success);">✓</span>' : ''}
+                                    <span>${escapeHtml(tariff.name)}</span>
+                                </div>
+                                ${description ? `<div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px; line-height: 1.4;">${escapeHtml(description)}</div>` : ''}
+                            </div>
+                            ${minPriceLabel ? `
+                                <div style="text-align: right; flex-shrink: 0;">
+                                    <div style="font-size: 10px; color: var(--text-secondary); text-transform: uppercase;">от</div>
+                                    <div style="font-weight: 600; color: var(--primary); font-size: 15px;">${minPriceLabel}</div>
+                                </div>
+                            ` : ''}
                         </div>
-                        <div class="subscription-settings-toggle-description">
-                            ${tariff.device_limit || tariff.deviceLimit} устр. • ${trafficLabel} • ${tariff.servers_count || tariff.serversCount || 0} серв.
+                        <div style="display: flex; gap: 12px; margin-top: 10px; font-size: 13px; color: var(--text-secondary);">
+                            <span style="display: inline-flex; align-items: center; gap: 4px;">
+                                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="opacity: 0.6;">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                                </svg>
+                                ${deviceLimit}
+                            </span>
+                            <span style="display: inline-flex; align-items: center; gap: 4px;">
+                                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="opacity: 0.6;">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                                </svg>
+                                ${trafficLabel}
+                            </span>
                         </div>
+                        ${serverTags ? `
+                            <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px;">
+                                ${serverTags}
+                            </div>
+                        ` : ''}
                     </div>
-                    ${minPriceLabel ? `
-                        <div class="subscription-renewal-option-price">
-                            <span class="subscription-renewal-option-price-current">от ${minPriceLabel}</span>
-                        </div>
-                    ` : ''}
                 `;
 
                 div.addEventListener('click', () => selectTariff(tariff));
