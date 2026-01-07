@@ -77,33 +77,66 @@ def _get_user_period_discount(db_user: User, period_days: int) -> int:
     return personal_discount
 
 
+def format_tariffs_list_text(
+    tariffs: List[Tariff],
+    db_user: Optional[User] = None,
+    has_period_discounts: bool = False,
+) -> str:
+    """Форматирует текст со списком тарифов для отображения."""
+    lines = ["📦 <b>Выберите тариф</b>"]
+
+    if has_period_discounts:
+        lines.append("\n🎁 <i>Скидки зависят от выбранного периода</i>")
+
+    lines.append("")
+
+    for tariff in tariffs:
+        # Название тарифа
+        lines.append(f"<b>{tariff.name}</b>")
+
+        # Трафик
+        traffic_gb = tariff.traffic_limit_gb
+        traffic = "Безлимит" if traffic_gb == 0 else f"{traffic_gb} ГБ"
+
+        # Цена
+        prices = tariff.period_prices or {}
+        price_text = ""
+        discount_icon = ""
+        if prices:
+            min_period = min(prices.keys(), key=int)
+            min_price = prices[min_period]
+            discount_percent = 0
+            if db_user:
+                discount_percent = _get_user_period_discount(db_user, int(min_period))
+            if discount_percent > 0:
+                min_price = _apply_promo_discount(min_price, discount_percent)
+                discount_icon = " 🔥"
+            price_text = f" • от {_format_price_kopeks(min_price)}{discount_icon}"
+
+        # Описание в одну строку
+        lines.append(f"   💾 {traffic} • 📱 {tariff.device_limit} уст.{price_text}")
+
+        # Описание тарифа если есть
+        if tariff.description:
+            lines.append(f"   📝 <i>{tariff.description}</i>")
+
+        lines.append("")
+
+    return "\n".join(lines)
+
+
 def get_tariffs_keyboard(
     tariffs: List[Tariff],
     language: str,
-    discount_percent: int = 0,
 ) -> InlineKeyboardMarkup:
-    """Создает клавиатуру выбора тарифов."""
+    """Создает компактную клавиатуру выбора тарифов (только названия)."""
     texts = get_texts(language)
     buttons = []
 
     for tariff in tariffs:
-        # Берем минимальную цену для отображения
-        prices = tariff.period_prices or {}
-        if prices:
-            min_period = min(prices.keys(), key=int)
-            min_price = prices[min_period]
-            if discount_percent > 0:
-                min_price = _apply_promo_discount(min_price, discount_percent)
-            price_text = f"от {_format_price_kopeks(min_price)}"
-        else:
-            price_text = ""
-
-        traffic = _format_traffic(tariff.traffic_limit_gb)
-
-        button_text = f"📦 {tariff.name} • {traffic} • {tariff.device_limit} уст. {price_text}"
         buttons.append([
             InlineKeyboardButton(
-                text=button_text,
+                text=f"📦 {tariff.name}",
                 callback_data=f"tariff_select:{tariff.id}"
             )
         ])
@@ -265,14 +298,12 @@ async def show_tariffs_list(
         if period_discounts and isinstance(period_discounts, dict) and len(period_discounts) > 0:
             has_period_discounts = True
 
-    discount_hint = ""
-    if has_period_discounts:
-        discount_hint = "\n\n🎁 <i>Скидки зависят от выбранного периода</i>"
+    # Формируем текст со списком тарифов и их характеристиками
+    tariffs_text = format_tariffs_list_text(tariffs, db_user, has_period_discounts)
 
     await callback.message.edit_text(
-        f"📦 <b>Выберите тариф</b>{discount_hint}\n\n"
-        "Выберите подходящий тариф из списка:",
-        reply_markup=get_tariffs_keyboard(tariffs, db_user.language, discount_percent=0),
+        tariffs_text,
+        reply_markup=get_tariffs_keyboard(tariffs, db_user.language),
         parse_mode="HTML"
     )
 
@@ -823,34 +854,79 @@ async def confirm_tariff_extend(
 
 # ==================== Переключение тарифов ====================
 
+def format_tariff_switch_list_text(
+    tariffs: List[Tariff],
+    current_tariff_id: Optional[int],
+    current_tariff_name: str,
+    db_user: Optional[User] = None,
+    has_period_discounts: bool = False,
+) -> str:
+    """Форматирует текст со списком тарифов для переключения."""
+    lines = [
+        "📦 <b>Смена тарифа</b>",
+        "",
+        f"📌 Ваш текущий тариф: <b>{current_tariff_name}</b>",
+    ]
+
+    if has_period_discounts:
+        lines.append("\n🎁 <i>Скидки зависят от выбранного периода</i>")
+
+    lines.append("")
+    lines.append("⚠️ При смене тарифа оплачивается полная стоимость.")
+    lines.append("Остаток времени будет сохранён.")
+    lines.append("")
+    lines.append("<b>Доступные тарифы:</b>")
+    lines.append("")
+
+    for tariff in tariffs:
+        if tariff.id == current_tariff_id:
+            continue
+
+        lines.append(f"<b>{tariff.name}</b>")
+
+        traffic_gb = tariff.traffic_limit_gb
+        traffic = "Безлимит" if traffic_gb == 0 else f"{traffic_gb} ГБ"
+
+        prices = tariff.period_prices or {}
+        price_text = ""
+        discount_icon = ""
+        if prices:
+            min_period = min(prices.keys(), key=int)
+            min_price = prices[min_period]
+            discount_percent = 0
+            if db_user:
+                discount_percent = _get_user_period_discount(db_user, int(min_period))
+            if discount_percent > 0:
+                min_price = _apply_promo_discount(min_price, discount_percent)
+                discount_icon = " 🔥"
+            price_text = f" • от {_format_price_kopeks(min_price)}{discount_icon}"
+
+        lines.append(f"   💾 {traffic} • 📱 {tariff.device_limit} уст.{price_text}")
+
+        if tariff.description:
+            lines.append(f"   📝 <i>{tariff.description}</i>")
+
+        lines.append("")
+
+    return "\n".join(lines)
+
+
 def get_tariff_switch_keyboard(
     tariffs: List[Tariff],
     current_tariff_id: Optional[int],
     language: str,
 ) -> InlineKeyboardMarkup:
-    """Создает клавиатуру выбора тарифа для переключения."""
+    """Создает компактную клавиатуру выбора тарифа для переключения."""
     texts = get_texts(language)
     buttons = []
 
     for tariff in tariffs:
-        # Пропускаем текущий тариф
         if tariff.id == current_tariff_id:
             continue
 
-        prices = tariff.period_prices or {}
-        if prices:
-            min_period = min(prices.keys(), key=int)
-            min_price = prices[min_period]
-            price_text = f"от {_format_price_kopeks(min_price)}"
-        else:
-            price_text = ""
-
-        traffic = _format_traffic(tariff.traffic_limit_gb)
-
-        button_text = f"📦 {tariff.name} • {traffic} • {tariff.device_limit} уст. {price_text}"
         buttons.append([
             InlineKeyboardButton(
-                text=button_text,
+                text=f"📦 {tariff.name}",
                 callback_data=f"tariff_sw_select:{tariff.id}"
             )
         ])
@@ -1002,16 +1078,13 @@ async def show_tariff_switch_list(
         if period_discounts and isinstance(period_discounts, dict) and len(period_discounts) > 0:
             has_period_discounts = True
 
-    discount_hint = ""
-    if has_period_discounts:
-        discount_hint = "\n🎁 <i>Скидки зависят от выбранного периода</i>"
+    # Формируем текст со списком тарифов
+    switch_text = format_tariff_switch_list_text(
+        tariffs, current_tariff_id, current_tariff_name, db_user, has_period_discounts
+    )
 
     await callback.message.edit_text(
-        f"📦 <b>Смена тарифа</b>{discount_hint}\n\n"
-        f"📌 Ваш текущий тариф: <b>{current_tariff_name}</b>\n\n"
-        "⚠️ При смене тарифа оплачивается полная стоимость нового тарифа.\n"
-        "Остаток времени текущей подписки будет сохранён.\n\n"
-        "Выберите новый тариф:",
+        switch_text,
         reply_markup=get_tariff_switch_keyboard(tariffs, current_tariff_id, db_user.language),
         parse_mode="HTML"
     )
