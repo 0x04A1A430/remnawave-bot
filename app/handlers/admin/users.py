@@ -44,6 +44,7 @@ from app.database.crud.server_squad import (
     get_server_squad_by_id,
     get_server_ids_by_uuids,
 )
+from app.database.crud.tariff import get_all_tariffs, get_tariff_by_id
 from app.services.subscription_service import SubscriptionService
 from app.utils.subscription_utils import (
     resolve_hwid_device_limit_for_payload,
@@ -976,6 +977,15 @@ async def _render_user_subscription_overview(
 
         text += f"<b>Статус:</b> {status_emoji} {'Активна' if subscription.is_active else 'Неактивна'}\n"
         text += f"<b>Тип:</b> {type_emoji} {'Триал' if subscription.is_trial else 'Платная'}\n"
+
+        # Отображение тарифа
+        if subscription.tariff_id:
+            tariff = await get_tariff_by_id(db, subscription.tariff_id)
+            if tariff:
+                text += f"<b>Тариф:</b> 📦 {tariff.name}\n"
+            else:
+                text += f"<b>Тариф:</b> ID {subscription.tariff_id} (удалён)\n"
+
         text += f"<b>Начало:</b> {format_datetime(subscription.start_date)}\n"
         text += f"<b>Окончание:</b> {format_datetime(subscription.end_date)}\n"
         text += f"<b>Трафик:</b> {traffic_display}\n"
@@ -1050,6 +1060,15 @@ async def _render_user_subscription_overview(
                 types.InlineKeyboardButton(
                     text=f"📡 Модем ({modem_status})",
                     callback_data=f"admin_user_modem_{user_id}"
+                )
+            ])
+
+        # Кнопка смены тарифа в режиме тарифов
+        if settings.is_tariffs_mode():
+            keyboard.append([
+                types.InlineKeyboardButton(
+                    text="📦 Сменить тариф",
+                    callback_data=f"admin_sub_change_tariff_{user_id}"
                 )
             ])
 
@@ -5037,6 +5056,234 @@ async def _change_subscription_type(db: AsyncSession, user_id: int, new_type: st
         return False
 
 
+# =============================================================================
+# Смена тарифа пользователя администратором
+# =============================================================================
+
+@admin_required
+@error_handler
+async def show_admin_tariff_change(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    """Показывает список доступных тарифов для смены."""
+    user_id = int(callback.data.split('_')[-1])
+
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        await callback.answer("❌ Пользователь не найден", show_alert=True)
+        return
+
+    from app.database.crud.subscription import get_subscription_by_user_id
+    subscription = await get_subscription_by_user_id(db, user_id)
+
+    if not subscription:
+        await callback.answer("❌ У пользователя нет подписки", show_alert=True)
+        return
+
+    # Получаем все активные тарифы
+    tariffs = await get_all_tariffs(db, include_inactive=False)
+
+    if not tariffs:
+        await callback.message.edit_text(
+            "❌ <b>Нет доступных тарифов</b>\n\n"
+            "Создайте тарифы в разделе управления тарифами.",
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                [types.InlineKeyboardButton(text="⬅️ Назад", callback_data=f"admin_user_subscription_{user_id}")]
+            ])
+        )
+        await callback.answer()
+        return
+
+    # Текущий тариф
+    current_tariff = None
+    if subscription.tariff_id:
+        current_tariff = await get_tariff_by_id(db, subscription.tariff_id)
+
+    text = "📦 <b>Смена тарифа пользователя</b>\n\n"
+    user_link = f'<a href="tg://user?id={user.telegram_id}">{user.full_name}</a>'
+    text += f"👤 {user_link}\n\n"
+
+    if current_tariff:
+        text += f"<b>Текущий тариф:</b> {current_tariff.name}\n\n"
+    else:
+        text += "<b>Текущий тариф:</b> не установлен\n\n"
+
+    text += "Выберите новый тариф:\n"
+
+    keyboard = []
+    for tariff in tariffs:
+        # Отмечаем текущий тариф
+        prefix = "✅ " if current_tariff and tariff.id == current_tariff.id else ""
+
+        # Описание тарифа
+        traffic_str = "♾️" if tariff.traffic_limit_gb == 0 else f"{tariff.traffic_limit_gb} ГБ"
+        servers_count = len(tariff.allowed_squads) if tariff.allowed_squads else 0
+
+        button_text = f"{prefix}{tariff.name} ({tariff.device_limit} устр., {traffic_str}, {servers_count} серв.)"
+
+        keyboard.append([
+            types.InlineKeyboardButton(
+                text=button_text,
+                callback_data=f"admin_sub_tariff_select_{tariff.id}_{user_id}"
+            )
+        ])
+
+    keyboard.append([
+        types.InlineKeyboardButton(text="⬅️ Назад", callback_data=f"admin_user_subscription_{user_id}")
+    ])
+
+    await callback.message.edit_text(
+        text,
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def select_admin_tariff_change(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    """Подтверждение выбора тарифа."""
+    parts = callback.data.split('_')
+    tariff_id = int(parts[-2])
+    user_id = int(parts[-1])
+
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        await callback.answer("❌ Пользователь не найден", show_alert=True)
+        return
+
+    tariff = await get_tariff_by_id(db, tariff_id)
+    if not tariff:
+        await callback.answer("❌ Тариф не найден", show_alert=True)
+        return
+
+    from app.database.crud.subscription import get_subscription_by_user_id
+    subscription = await get_subscription_by_user_id(db, user_id)
+
+    if not subscription:
+        await callback.answer("❌ У пользователя нет подписки", show_alert=True)
+        return
+
+    # Проверяем, если это тот же тариф
+    if subscription.tariff_id == tariff_id:
+        await callback.answer("ℹ️ Этот тариф уже установлен", show_alert=True)
+        return
+
+    traffic_str = "♾️" if tariff.traffic_limit_gb == 0 else f"{tariff.traffic_limit_gb} ГБ"
+    servers_count = len(tariff.allowed_squads) if tariff.allowed_squads else 0
+
+    text = f"📦 <b>Подтверждение смены тарифа</b>\n\n"
+    user_link = f'<a href="tg://user?id={user.telegram_id}">{user.full_name}</a>'
+    text += f"👤 {user_link}\n\n"
+    text += f"<b>Новый тариф:</b> {tariff.name}\n"
+    text += f"• Устройства: {tariff.device_limit}\n"
+    text += f"• Трафик: {traffic_str}\n"
+    text += f"• Серверы: {servers_count}\n\n"
+    text += "⚠️ Параметры подписки будут обновлены в соответствии с тарифом.\n"
+    text += "Дата окончания подписки не изменится."
+
+    keyboard = [
+        [
+            types.InlineKeyboardButton(
+                text="✅ Подтвердить",
+                callback_data=f"admin_sub_tariff_confirm_{tariff_id}_{user_id}"
+            ),
+            types.InlineKeyboardButton(
+                text="❌ Отмена",
+                callback_data=f"admin_sub_change_tariff_{user_id}"
+            )
+        ]
+    ]
+
+    await callback.message.edit_text(
+        text,
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def confirm_admin_tariff_change(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    """Применяет смену тарифа."""
+    parts = callback.data.split('_')
+    tariff_id = int(parts[-2])
+    user_id = int(parts[-1])
+
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        await callback.answer("❌ Пользователь не найден", show_alert=True)
+        return
+
+    tariff = await get_tariff_by_id(db, tariff_id)
+    if not tariff:
+        await callback.answer("❌ Тариф не найден", show_alert=True)
+        return
+
+    from app.database.crud.subscription import get_subscription_by_user_id
+    subscription = await get_subscription_by_user_id(db, user_id)
+
+    if not subscription:
+        await callback.answer("❌ У пользователя нет подписки", show_alert=True)
+        return
+
+    try:
+        old_tariff_id = subscription.tariff_id
+
+        # Обновляем параметры подписки в соответствии с тарифом
+        subscription.tariff_id = tariff.id
+        subscription.device_limit = tariff.device_limit
+        subscription.traffic_limit_gb = tariff.traffic_limit_gb
+        subscription.connected_squads = tariff.allowed_squads or []
+        subscription.updated_at = datetime.utcnow()
+
+        await db.commit()
+
+        # Синхронизируем с RemnaWave
+        subscription_service = SubscriptionService()
+        await subscription_service.update_remnawave_user(db, subscription)
+
+        logger.info(
+            f"Админ {db_user.id} изменил тариф пользователя {user_id}: "
+            f"{old_tariff_id} -> {tariff_id} ({tariff.name})"
+        )
+
+        await callback.message.edit_text(
+            f"✅ <b>Тариф успешно изменен</b>\n\n"
+            f"Новый тариф: <b>{tariff.name}</b>\n"
+            f"• Устройства: {tariff.device_limit}\n"
+            f"• Трафик: {'♾️' if tariff.traffic_limit_gb == 0 else f'{tariff.traffic_limit_gb} ГБ'}\n"
+            f"• Серверы: {len(tariff.allowed_squads) if tariff.allowed_squads else 0}",
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                [types.InlineKeyboardButton(text="📱 К подписке", callback_data=f"admin_user_subscription_{user_id}")]
+            ])
+        )
+
+    except Exception as e:
+        logger.error(f"Ошибка смены тарифа: {e}")
+        await db.rollback()
+
+        await callback.message.edit_text(
+            "❌ <b>Ошибка смены тарифа</b>\n\n"
+            f"Детали: {str(e)}",
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                [types.InlineKeyboardButton(text="📱 К подписке", callback_data=f"admin_user_subscription_{user_id}")]
+            ])
+        )
+
+    await callback.answer()
+
+
 def register_handlers(dp: Dispatcher):
     
     dp.callback_query.register(
@@ -5353,7 +5600,23 @@ def register_handlers(dp: Dispatcher):
         toggle_user_modem,
         F.data.startswith("admin_user_modem_")
     )
-    
+
+    # Смена тарифа пользователя
+    dp.callback_query.register(
+        show_admin_tariff_change,
+        F.data.startswith("admin_sub_change_tariff_")
+    )
+
+    dp.callback_query.register(
+        select_admin_tariff_change,
+        F.data.startswith("admin_sub_tariff_select_")
+    )
+
+    dp.callback_query.register(
+        confirm_admin_tariff_change,
+        F.data.startswith("admin_sub_tariff_confirm_")
+    )
+
     dp.message.register(
         process_devices_edit_text,
         AdminStates.editing_user_devices

@@ -65,6 +65,7 @@ from app.handlers.admin import (
     faq as admin_faq,
     payments as admin_payments,
     trials as admin_trials,
+    tariffs as admin_tariffs,
 )
 from app.handlers import contests as user_contests
 from app.handlers.stars_payments import register_stars_handlers
@@ -190,6 +191,7 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     admin_faq.register_handlers(dp)
     admin_payments.register_handlers(dp)
     admin_trials.register_handlers(dp)
+    admin_tariffs.register_handlers(dp)
     admin_bulk_ban.register_bulk_ban_handlers(dp)
     admin_blacklist.register_blacklist_handlers(dp)
     common.register_handlers(dp)

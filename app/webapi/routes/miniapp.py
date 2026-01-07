@@ -33,6 +33,7 @@ from app.database.crud.server_squad import (
     get_server_squad_by_uuid,
     remove_user_from_servers,
 )
+from app.database.crud.tariff import get_all_tariffs, get_tariff_by_id, get_tariffs_for_user
 from app.database.crud.subscription import (
     add_subscription_servers,
     create_trial_subscription,
@@ -183,6 +184,14 @@ from ..schemas.miniapp import (
     MiniAppSubscriptionRenewalPeriod,
     MiniAppSubscriptionRenewalRequest,
     MiniAppSubscriptionRenewalResponse,
+    MiniAppTariff,
+    MiniAppTariffPeriod,
+    MiniAppTariffsRequest,
+    MiniAppTariffsResponse,
+    MiniAppTariffPurchaseRequest,
+    MiniAppTariffPurchaseResponse,
+    MiniAppCurrentTariff,
+    MiniAppConnectedServer,
 )
 
 
@@ -887,6 +896,19 @@ async def get_payment_methods(
             )
         )
 
+    if settings.is_freekassa_enabled():
+        methods.append(
+            MiniAppPaymentMethod(
+                id="freekassa",
+                icon="💳",
+                requires_amount=True,
+                currency="RUB",
+                min_amount_kopeks=settings.FREEKASSA_MIN_AMOUNT_KOPEKS,
+                max_amount_kopeks=settings.FREEKASSA_MAX_AMOUNT_KOPEKS,
+                integration_type=MiniAppPaymentIntegrationType.REDIRECT,
+            )
+        )
+
     if settings.TRIBUTE_ENABLED:
         methods.append(
             MiniAppPaymentMethod(
@@ -903,13 +925,14 @@ async def get_payment_methods(
         "yookassa_sbp": 2,
         "yookassa": 3,
         "cloudpayments": 4,
-        "mulenpay": 5,
-        "pal24": 6,
-        "platega": 7,
-        "wata": 8,
-        "cryptobot": 9,
-        "heleket": 10,
-        "tribute": 11,
+        "freekassa": 5,
+        "mulenpay": 6,
+        "pal24": 7,
+        "platega": 8,
+        "wata": 9,
+        "cryptobot": 10,
+        "heleket": 11,
+        "tribute": 12,
     }
     methods.sort(key=lambda item: order_map.get(item.id, 99))
 
@@ -1383,6 +1406,47 @@ async def create_payment_link(
             },
         )
 
+    if method == "freekassa":
+        if not settings.is_freekassa_enabled():
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Payment method is unavailable")
+        if amount_kopeks is None or amount_kopeks <= 0:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Amount must be positive")
+
+        if amount_kopeks < settings.FREEKASSA_MIN_AMOUNT_KOPEKS:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail=f"Amount is below minimum ({settings.FREEKASSA_MIN_AMOUNT_KOPEKS / 100:.2f} RUB)",
+            )
+        if amount_kopeks > settings.FREEKASSA_MAX_AMOUNT_KOPEKS:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail=f"Amount exceeds maximum ({settings.FREEKASSA_MAX_AMOUNT_KOPEKS / 100:.2f} RUB)",
+            )
+
+        payment_service = PaymentService()
+        result = await payment_service.create_freekassa_payment(
+            db=db,
+            user_id=user.id,
+            amount_kopeks=amount_kopeks,
+            description=settings.get_balance_payment_description(amount_kopeks),
+            email=getattr(user, "email", None),
+            language=user.language or settings.DEFAULT_LANGUAGE,
+        )
+
+        if not result or not result.get("payment_url"):
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail="Failed to create payment")
+
+        return MiniAppPaymentCreateResponse(
+            method=method,
+            payment_url=result["payment_url"],
+            amount_kopeks=amount_kopeks,
+            extra={
+                "local_payment_id": result.get("local_payment_id"),
+                "order_id": result.get("order_id"),
+                "requested_at": _current_request_timestamp(),
+            },
+        )
+
     if method == "tribute":
         if not settings.TRIBUTE_ENABLED:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Payment method is unavailable")
@@ -1481,6 +1545,8 @@ async def _resolve_payment_status_entry(
         return await _resolve_heleket_payment_status(db, user, query)
     if method == "cloudpayments":
         return await _resolve_cloudpayments_payment_status(db, user, query)
+    if method == "freekassa":
+        return await _resolve_freekassa_payment_status(db, user, query)
     if method == "stars":
         return await _resolve_stars_payment_status(db, user, query)
     if method == "tribute":
@@ -2088,6 +2154,64 @@ async def _resolve_cloudpayments_payment_status(
             "transaction_id_cp": payment.transaction_id_cp,
             "card_type": payment.card_type,
             "card_last_four": payment.card_last_four,
+            "payment_url": payment.payment_url,
+            "payload": query.payload,
+            "started_at": query.started_at,
+        },
+    )
+
+
+async def _resolve_freekassa_payment_status(
+    db: AsyncSession,
+    user: User,
+    query: MiniAppPaymentStatusQuery,
+) -> MiniAppPaymentStatusResult:
+    from app.database.crud.freekassa import (
+        get_freekassa_payment_by_id,
+        get_freekassa_payment_by_order_id,
+    )
+
+    payment = None
+    if query.local_payment_id:
+        payment = await get_freekassa_payment_by_id(db, query.local_payment_id)
+    if not payment and query.payment_id:
+        payment = await get_freekassa_payment_by_order_id(db, query.payment_id)
+
+    if not payment or payment.user_id != user.id:
+        return MiniAppPaymentStatusResult(
+            method="freekassa",
+            status="pending",
+            is_paid=False,
+            amount_kopeks=query.amount_kopeks,
+            message="Payment not found",
+            extra={
+                "local_payment_id": query.local_payment_id,
+                "order_id": query.payment_id,
+                "payload": query.payload,
+                "started_at": query.started_at,
+            },
+        )
+
+    status_raw = payment.status
+    is_paid = bool(payment.is_paid)
+    status = _classify_status(status_raw, is_paid)
+    completed_at = payment.paid_at or payment.updated_at or payment.created_at
+
+    return MiniAppPaymentStatusResult(
+        method="freekassa",
+        status=status,
+        is_paid=status == "paid",
+        amount_kopeks=payment.amount_kopeks,
+        currency=payment.currency,
+        completed_at=completed_at,
+        transaction_id=payment.transaction_id,
+        external_id=payment.freekassa_order_id,
+        message=None,
+        extra={
+            "status": payment.status,
+            "local_payment_id": payment.id,
+            "order_id": payment.order_id,
+            "freekassa_order_id": payment.freekassa_order_id,
             "payment_url": payment.payment_url,
             "payload": query.payload,
             "started_at": query.started_at,
@@ -3378,7 +3502,33 @@ async def get_subscription_details(
         trial_payment_required=trial_payment_required,
         trial_price_kopeks=trial_price_kopeks if trial_payment_required else None,
         trial_price_label=trial_price_label,
+        sales_mode=settings.get_sales_mode(),
+        current_tariff=await _get_current_tariff_model(db, subscription) if subscription else None,
         **autopay_extras,
+    )
+
+
+async def _get_current_tariff_model(db: AsyncSession, subscription) -> Optional[MiniAppCurrentTariff]:
+    """Возвращает модель текущего тарифа пользователя."""
+    if not subscription or not getattr(subscription, "tariff_id", None):
+        return None
+
+    tariff = await get_tariff_by_id(db, subscription.tariff_id)
+    if not tariff:
+        return None
+
+    servers_count = len(tariff.allowed_squads) if tariff.allowed_squads else 0
+
+    return MiniAppCurrentTariff(
+        id=tariff.id,
+        name=tariff.name,
+        description=tariff.description,
+        tier_level=tariff.tier_level,
+        traffic_limit_gb=tariff.traffic_limit_gb,
+        traffic_limit_label=_format_traffic_limit_label(tariff.traffic_limit_gb) if settings.is_tariffs_mode() else f"{tariff.traffic_limit_gb} ГБ",
+        is_unlimited_traffic=tariff.traffic_limit_gb == 0,
+        device_limit=tariff.device_limit,
+        servers_count=servers_count,
     )
 
 
@@ -3548,11 +3698,47 @@ async def activate_subscription_trial_endpoint(
     if not settings.is_devices_selection_enabled():
         forced_devices = settings.get_disabled_mode_device_limit()
 
+    # Получаем параметры триала для режима тарифов
+    trial_traffic_limit = None
+    trial_device_limit = forced_devices
+    trial_squads = None
+    tariff_id_for_trial = None
+    trial_duration = None  # None = использовать TRIAL_DURATION_DAYS
+
+    if settings.is_tariffs_mode():
+        try:
+            from app.database.crud.tariff import get_tariff_by_id, get_trial_tariff
+
+            trial_tariff = await get_trial_tariff(db)
+
+            if not trial_tariff:
+                trial_tariff_id = settings.get_trial_tariff_id()
+                if trial_tariff_id > 0:
+                    trial_tariff = await get_tariff_by_id(db, trial_tariff_id)
+                    if trial_tariff and not trial_tariff.is_active:
+                        trial_tariff = None
+
+            if trial_tariff:
+                trial_traffic_limit = trial_tariff.traffic_limit_gb
+                trial_device_limit = trial_tariff.device_limit
+                trial_squads = trial_tariff.allowed_squads or []
+                tariff_id_for_trial = trial_tariff.id
+                tariff_trial_days = getattr(trial_tariff, 'trial_duration_days', None)
+                if tariff_trial_days:
+                    trial_duration = tariff_trial_days
+                logger.info(f"Miniapp: используем триальный тариф {trial_tariff.name}")
+        except Exception as e:
+            logger.error(f"Ошибка получения триального тарифа: {e}")
+
     try:
         subscription = await create_trial_subscription(
             db,
             user.id,
-            device_limit=forced_devices,
+            duration_days=trial_duration,
+            device_limit=trial_device_limit,
+            traffic_limit_gb=trial_traffic_limit,
+            connected_squads=trial_squads,
+            tariff_id=tariff_id_for_trial,
         )
     except Exception as error:  # pragma: no cover - defensive logging
         logger.error(
@@ -5790,3 +5976,278 @@ async def update_subscription_devices_endpoint(
     )
 
     return MiniAppSubscriptionUpdateResponse(success=True)
+
+
+# =============================================================================
+# Тарифы для режима продаж "Тарифы"
+# =============================================================================
+
+def _format_traffic_limit_label(traffic_gb: int) -> str:
+    """Форматирует лимит трафика для отображения."""
+    if traffic_gb == 0:
+        return "♾️ Безлимит"
+    return f"{traffic_gb} ГБ"
+
+
+async def _build_tariff_model(
+    db: AsyncSession,
+    tariff,
+    current_tariff_id: Optional[int] = None,
+) -> MiniAppTariff:
+    """Преобразует объект тарифа в модель для API."""
+    servers: List[MiniAppConnectedServer] = []
+    servers_count = 0
+
+    if tariff.allowed_squads:
+        servers_count = len(tariff.allowed_squads)
+        for squad_uuid in tariff.allowed_squads[:5]:  # Ограничиваем для превью
+            server = await get_server_squad_by_uuid(db, squad_uuid)
+            if server:
+                servers.append(MiniAppConnectedServer(
+                    uuid=squad_uuid,
+                    name=server.display_name or squad_uuid[:8],
+                ))
+
+    periods: List[MiniAppTariffPeriod] = []
+    if tariff.period_prices:
+        for period_str, price_kopeks in sorted(tariff.period_prices.items(), key=lambda x: int(x[0])):
+            period_days = int(period_str)
+            months = max(1, period_days // 30)
+            per_month = price_kopeks // months if months > 0 else price_kopeks
+
+            periods.append(MiniAppTariffPeriod(
+                days=period_days,
+                months=months,
+                label=format_period_description(period_days),
+                price_kopeks=price_kopeks,
+                price_label=settings.format_price(price_kopeks),
+                price_per_month_kopeks=per_month,
+                price_per_month_label=settings.format_price(per_month),
+            ))
+
+    return MiniAppTariff(
+        id=tariff.id,
+        name=tariff.name,
+        description=tariff.description,
+        tier_level=tariff.tier_level,
+        traffic_limit_gb=tariff.traffic_limit_gb,
+        traffic_limit_label=_format_traffic_limit_label(tariff.traffic_limit_gb),
+        is_unlimited_traffic=tariff.traffic_limit_gb == 0,
+        device_limit=tariff.device_limit,
+        servers_count=servers_count,
+        servers=servers,
+        periods=periods,
+        is_current=current_tariff_id == tariff.id if current_tariff_id else False,
+        is_available=tariff.is_active,
+    )
+
+
+async def _build_current_tariff_model(db: AsyncSession, tariff) -> MiniAppCurrentTariff:
+    """Создаёт модель текущего тарифа."""
+    servers_count = len(tariff.allowed_squads) if tariff.allowed_squads else 0
+
+    return MiniAppCurrentTariff(
+        id=tariff.id,
+        name=tariff.name,
+        description=tariff.description,
+        tier_level=tariff.tier_level,
+        traffic_limit_gb=tariff.traffic_limit_gb,
+        traffic_limit_label=_format_traffic_limit_label(tariff.traffic_limit_gb),
+        is_unlimited_traffic=tariff.traffic_limit_gb == 0,
+        device_limit=tariff.device_limit,
+        servers_count=servers_count,
+    )
+
+
+@router.post("/subscription/tariffs", response_model=MiniAppTariffsResponse)
+async def get_tariffs_endpoint(
+    payload: MiniAppTariffsRequest,
+    db: AsyncSession = Depends(get_db_session),
+) -> MiniAppTariffsResponse:
+    """Возвращает список доступных тарифов для пользователя."""
+    user = await _authorize_miniapp_user(payload.init_data, db)
+
+    # Проверяем режим продаж
+    if not settings.is_tariffs_mode():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "tariffs_mode_disabled",
+                "message": "Tariffs mode is not enabled",
+            },
+        )
+
+    # Получаем промогруппу пользователя
+    promo_group = getattr(user, "promo_group", None)
+    promo_group_id = promo_group.id if promo_group else None
+
+    # Получаем тарифы, доступные пользователю
+    tariffs = await get_tariffs_for_user(db, promo_group_id)
+
+    # Текущий тариф пользователя
+    subscription = getattr(user, "subscription", None)
+    current_tariff_id = subscription.tariff_id if subscription else None
+    current_tariff_model: Optional[MiniAppCurrentTariff] = None
+
+    if current_tariff_id:
+        current_tariff = await get_tariff_by_id(db, current_tariff_id)
+        if current_tariff:
+            current_tariff_model = await _build_current_tariff_model(db, current_tariff)
+
+    # Формируем список тарифов
+    tariff_models: List[MiniAppTariff] = []
+    for tariff in tariffs:
+        model = await _build_tariff_model(db, tariff, current_tariff_id)
+        tariff_models.append(model)
+
+    return MiniAppTariffsResponse(
+        success=True,
+        sales_mode="tariffs",
+        tariffs=tariff_models,
+        current_tariff=current_tariff_model,
+        balance_kopeks=user.balance_kopeks,
+        balance_label=settings.format_price(user.balance_kopeks),
+    )
+
+
+@router.post("/subscription/tariff/purchase", response_model=MiniAppTariffPurchaseResponse)
+async def purchase_tariff_endpoint(
+    payload: MiniAppTariffPurchaseRequest,
+    db: AsyncSession = Depends(get_db_session),
+) -> MiniAppTariffPurchaseResponse:
+    """Покупка или смена тарифа."""
+    user = await _authorize_miniapp_user(payload.init_data, db)
+
+    if not settings.is_tariffs_mode():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "tariffs_mode_disabled",
+                "message": "Tariffs mode is not enabled",
+            },
+        )
+
+    tariff = await get_tariff_by_id(db, payload.tariff_id)
+    if not tariff or not tariff.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "code": "tariff_not_found",
+                "message": "Tariff not found or inactive",
+            },
+        )
+
+    # Проверяем доступность тарифа для пользователя
+    promo_group = getattr(user, "promo_group", None)
+    promo_group_id = promo_group.id if promo_group else None
+    if not tariff.is_available_for_promo_group(promo_group_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "tariff_not_available",
+                "message": "This tariff is not available for your promo group",
+            },
+        )
+
+    # Получаем цену за выбранный период
+    price_kopeks = tariff.get_price_for_period(payload.period_days)
+    if price_kopeks is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "invalid_period",
+                "message": "Invalid period for this tariff",
+            },
+        )
+
+    # Проверяем баланс
+    if user.balance_kopeks < price_kopeks:
+        missing = price_kopeks - user.balance_kopeks
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail={
+                "code": "insufficient_funds",
+                "message": f"Недостаточно средств. Не хватает {settings.format_price(missing)}",
+                "missing_amount": missing,
+            },
+        )
+
+    subscription = getattr(user, "subscription", None)
+
+    # Списываем баланс
+    description = f"Покупка тарифа '{tariff.name}' на {payload.period_days} дней"
+    success = await subtract_user_balance(db, user, price_kopeks, description)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={
+                "code": "balance_charge_failed",
+                "message": "Failed to charge balance",
+            },
+        )
+
+    # Создаём транзакцию
+    await create_transaction(
+        db=db,
+        user_id=user.id,
+        type=TransactionType.SUBSCRIPTION_PAYMENT,
+        amount_kopeks=price_kopeks,
+        description=description,
+    )
+
+    if subscription:
+        # Смена/продление тарифа
+        subscription = await extend_subscription(
+            db=db,
+            subscription=subscription,
+            days=payload.period_days,
+            tariff_id=tariff.id,
+            traffic_limit_gb=tariff.traffic_limit_gb,
+            device_limit=tariff.device_limit,
+            connected_squads=tariff.allowed_squads or [],
+        )
+    else:
+        # Создание новой подписки
+        from app.database.crud.subscription import create_paid_subscription
+        subscription = await create_paid_subscription(
+            db=db,
+            user_id=user.id,
+            days=payload.period_days,
+            traffic_limit_gb=tariff.traffic_limit_gb,
+            device_limit=tariff.device_limit,
+            connected_squads=tariff.allowed_squads or [],
+            tariff_id=tariff.id,
+        )
+
+    # Синхронизируем с RemnaWave
+    service = SubscriptionService()
+    await service.update_remnawave_user(db, subscription)
+
+    # Сохраняем корзину для автопродления
+    try:
+        from app.services.user_cart_service import user_cart_service
+        cart_data = {
+            "cart_mode": "extend",
+            "subscription_id": subscription.id,
+            "period_days": payload.period_days,
+            "total_price": price_kopeks,
+            "tariff_id": tariff.id,
+            "description": f"Продление тарифа {tariff.name} на {payload.period_days} дней",
+        }
+        await user_cart_service.save_user_cart(user.id, cart_data)
+        logger.info(f"Корзина тарифа сохранена для автопродления (miniapp) пользователя {user.telegram_id}")
+    except Exception as e:
+        logger.error(f"Ошибка сохранения корзины тарифа (miniapp): {e}")
+
+    await db.refresh(user)
+
+    return MiniAppTariffPurchaseResponse(
+        success=True,
+        message=f"Тариф '{tariff.name}' успешно активирован",
+        subscription_id=subscription.id,
+        tariff_id=tariff.id,
+        tariff_name=tariff.name,
+        new_end_date=subscription.end_date,
+        balance_kopeks=user.balance_kopeks,
+        balance_label=settings.format_price(user.balance_kopeks),
+    )

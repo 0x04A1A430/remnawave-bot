@@ -487,6 +487,85 @@ class MiniAppPaymentStatusResponse(BaseModel):
     results: List[MiniAppPaymentStatusResult] = Field(default_factory=list)
 
 
+# =============================================================================
+# Тарифы для режима продаж "Тарифы"
+# =============================================================================
+
+class MiniAppTariffPeriod(BaseModel):
+    """Период тарифа с ценой."""
+    days: int
+    months: Optional[int] = None
+    label: str
+    price_kopeks: int
+    price_label: str
+    price_per_month_kopeks: Optional[int] = None
+    price_per_month_label: Optional[str] = None
+
+
+class MiniAppTariff(BaseModel):
+    """Тариф для отображения в miniapp."""
+    id: int
+    name: str
+    description: Optional[str] = None
+    tier_level: int = 1
+    traffic_limit_gb: int
+    traffic_limit_label: str
+    is_unlimited_traffic: bool = False
+    device_limit: int
+    servers_count: int
+    servers: List[MiniAppConnectedServer] = Field(default_factory=list)
+    periods: List[MiniAppTariffPeriod] = Field(default_factory=list)
+    is_current: bool = False
+    is_available: bool = True
+
+
+class MiniAppCurrentTariff(BaseModel):
+    """Текущий тариф пользователя."""
+    id: int
+    name: str
+    description: Optional[str] = None
+    tier_level: int = 1
+    traffic_limit_gb: int
+    traffic_limit_label: str
+    is_unlimited_traffic: bool = False
+    device_limit: int
+    servers_count: int
+
+
+class MiniAppTariffsRequest(BaseModel):
+    """Запрос списка тарифов."""
+    init_data: str = Field(..., alias="initData")
+
+
+class MiniAppTariffsResponse(BaseModel):
+    """Ответ со списком тарифов."""
+    success: bool = True
+    sales_mode: str = "tariffs"
+    tariffs: List[MiniAppTariff] = Field(default_factory=list)
+    current_tariff: Optional[MiniAppCurrentTariff] = None
+    balance_kopeks: int = 0
+    balance_label: Optional[str] = None
+
+
+class MiniAppTariffPurchaseRequest(BaseModel):
+    """Запрос на покупку/смену тарифа."""
+    init_data: str = Field(..., alias="initData")
+    tariff_id: int = Field(..., alias="tariffId")
+    period_days: int = Field(..., alias="periodDays")
+
+
+class MiniAppTariffPurchaseResponse(BaseModel):
+    """Ответ на покупку тарифа."""
+    success: bool = True
+    message: Optional[str] = None
+    subscription_id: Optional[int] = None
+    tariff_id: Optional[int] = None
+    tariff_name: Optional[str] = None
+    new_end_date: Optional[datetime] = None
+    balance_kopeks: Optional[int] = None
+    balance_label: Optional[str] = None
+
+
 class MiniAppSubscriptionResponse(BaseModel):
     success: bool = True
     subscription_id: Optional[int] = None
@@ -534,6 +613,10 @@ class MiniAppSubscriptionResponse(BaseModel):
     trial_payment_required: bool = Field(default=False, alias="trialPaymentRequired")
     trial_price_kopeks: Optional[int] = Field(default=None, alias="trialPriceKopeks")
     trial_price_label: Optional[str] = Field(default=None, alias="trialPriceLabel")
+
+    # Режим продаж и тариф
+    sales_mode: str = Field(default="classic", alias="salesMode")
+    current_tariff: Optional[MiniAppCurrentTariff] = Field(default=None, alias="currentTariff")
 
     model_config = ConfigDict(extra="allow", populate_by_name=True)
 

@@ -36,7 +36,10 @@ class WebhookServer:
 
         if settings.is_cryptobot_enabled():
             self.app.router.add_post(settings.CRYPTOBOT_WEBHOOK_PATH, self._cryptobot_webhook_handler)
-        
+
+        if settings.is_freekassa_enabled():
+            self.app.router.add_post(settings.FREEKASSA_WEBHOOK_PATH, self._freekassa_webhook_handler)
+
         self.app.router.add_get('/health', self._health_check)
         
         self.app.router.add_options(settings.TRIBUTE_WEBHOOK_PATH, self._options_handler)
@@ -44,7 +47,9 @@ class WebhookServer:
             self.app.router.add_options(settings.MULENPAY_WEBHOOK_PATH, self._options_handler)
         if settings.is_cryptobot_enabled():
             self.app.router.add_options(settings.CRYPTOBOT_WEBHOOK_PATH, self._options_handler)
-        
+        if settings.is_freekassa_enabled():
+            self.app.router.add_options(settings.FREEKASSA_WEBHOOK_PATH, self._options_handler)
+
         logger.info(f"Webhook сервер настроен:")
         logger.info(f"  - Tribute webhook: POST {settings.TRIBUTE_WEBHOOK_PATH}")
         if settings.is_mulenpay_enabled():
@@ -56,6 +61,8 @@ class WebhookServer:
             )
         if settings.is_cryptobot_enabled():
             logger.info(f"  - CryptoBot webhook: POST {settings.CRYPTOBOT_WEBHOOK_PATH}")
+        if settings.is_freekassa_enabled():
+            logger.info(f"  - Freekassa webhook: POST {settings.FREEKASSA_WEBHOOK_PATH}")
         logger.info(f"  - Health check: GET /health")
         
         return self.app
@@ -446,7 +453,81 @@ class WebhookServer:
             "service": "payment-webhooks",
             "tribute_enabled": settings.TRIBUTE_ENABLED,
             "cryptobot_enabled": settings.is_cryptobot_enabled(),
+            "freekassa_enabled": settings.is_freekassa_enabled(),
             "port": settings.TRIBUTE_WEBHOOK_PORT,
             "tribute_path": settings.TRIBUTE_WEBHOOK_PATH,
-            "cryptobot_path": settings.CRYPTOBOT_WEBHOOK_PATH if settings.is_cryptobot_enabled() else None
+            "cryptobot_path": settings.CRYPTOBOT_WEBHOOK_PATH if settings.is_cryptobot_enabled() else None,
+            "freekassa_path": settings.FREEKASSA_WEBHOOK_PATH if settings.is_freekassa_enabled() else None,
         })
+
+    async def _freekassa_webhook_handler(self, request: web.Request) -> web.Response:
+        """
+        Обработчик webhook от Freekassa.
+
+        Freekassa отправляет POST запрос с form-data:
+        - MERCHANT_ID: ID магазина
+        - AMOUNT: Сумма платежа
+        - MERCHANT_ORDER_ID: Наш order_id
+        - SIGN: Подпись MD5(shop_id:amount:secret2:order_id)
+        - intid: ID транзакции Freekassa
+        - CUR_ID: ID валюты/платежной системы
+        """
+        try:
+            logger.info(f"Получен Freekassa webhook: {request.method} {request.path}")
+
+            # Получаем IP клиента
+            client_ip = request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+            if not client_ip:
+                client_ip = request.remote or "unknown"
+            logger.info(f"Freekassa webhook IP: {client_ip}")
+
+            # Freekassa отправляет form-data
+            try:
+                form_data = await request.post()
+            except Exception as e:
+                logger.error(f"Ошибка парсинга Freekassa form-data: {e}")
+                return web.Response(text="NO", status=400)
+
+            logger.info(f"Freekassa webhook data: {dict(form_data)}")
+
+            # Извлекаем параметры
+            merchant_id = int(form_data.get("MERCHANT_ID", 0))
+            amount = float(form_data.get("AMOUNT", 0))
+            order_id = form_data.get("MERCHANT_ORDER_ID", "")
+            sign = form_data.get("SIGN", "")
+            intid = form_data.get("intid", "")
+            cur_id = form_data.get("CUR_ID")
+
+            if not order_id or not sign:
+                logger.warning("Freekassa webhook: отсутствуют обязательные параметры")
+                return web.Response(text="NO", status=400)
+
+            # Обрабатываем платеж через PaymentService
+            from app.services.payment_service import PaymentService
+            from app.database.database import AsyncSessionLocal
+
+            payment_service = PaymentService(self.bot)
+
+            async with AsyncSessionLocal() as db:
+                success = await payment_service.process_freekassa_webhook(
+                    db=db,
+                    merchant_id=merchant_id,
+                    amount=amount,
+                    order_id=order_id,
+                    sign=sign,
+                    intid=intid,
+                    cur_id=int(cur_id) if cur_id else None,
+                    client_ip=client_ip,
+                )
+
+            if success:
+                logger.info(f"Freekassa webhook обработан успешно: order_id={order_id}")
+                # Freekassa ожидает YES в ответе
+                return web.Response(text="YES", status=200)
+            else:
+                logger.error(f"Ошибка обработки Freekassa webhook: order_id={order_id}")
+                return web.Response(text="NO", status=400)
+
+        except Exception as e:
+            logger.error(f"Критическая ошибка обработки Freekassa webhook: {e}", exc_info=True)
+            return web.Response(text="NO", status=500)

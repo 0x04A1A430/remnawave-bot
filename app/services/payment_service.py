@@ -29,6 +29,7 @@ from app.services.payment import (
     WataPaymentMixin,
 )
 from app.services.payment.cloudpayments import CloudPaymentsPaymentMixin
+from app.services.payment.freekassa import FreekassaPaymentMixin
 from app.services.yookassa_service import YooKassaService
 from app.services.wata_service import WataService
 from app.services.cloudpayments_service import CloudPaymentsService
@@ -297,6 +298,7 @@ class PaymentService(
     PlategaPaymentMixin,
     WataPaymentMixin,
     CloudPaymentsPaymentMixin,
+    FreekassaPaymentMixin,
 ):
     """Основной интерфейс платежей, делегирующий работу специализированным mixin-ам."""
 
