@@ -476,8 +476,10 @@ async def confirm_tariff_purchase(
                 db,
                 db_user,
                 subscription,
-                final_price,
+                None,  # Транзакция отсутствует, оплата с баланса
                 period,
+                was_trial_conversion=False,
+                amount_kopeks=final_price,
             )
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления админу: {e}")
@@ -780,8 +782,10 @@ async def confirm_tariff_extend(
                 db,
                 db_user,
                 subscription,
-                final_price,
+                None,  # Транзакция отсутствует, оплата с баланса
                 period,
+                was_trial_conversion=False,
+                amount_kopeks=final_price,
             )
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления админу: {e}")
@@ -1229,8 +1233,10 @@ async def confirm_tariff_switch(
                 db,
                 db_user,
                 subscription,
-                final_price,
+                None,  # Транзакция отсутствует, оплата с баланса
                 period,
+                was_trial_conversion=False,
+                amount_kopeks=final_price,
             )
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления админу: {e}")
