@@ -82,6 +82,44 @@ async def count_tariffs(db: AsyncSession, *, include_inactive: bool = False) -> 
     return int(result.scalar_one())
 
 
+async def get_trial_tariff(db: AsyncSession) -> Optional[Tariff]:
+    """Получает тариф, доступный для триала (is_trial_available=True)."""
+    query = (
+        select(Tariff)
+        .where(Tariff.is_trial_available.is_(True))
+        .where(Tariff.is_active.is_(True))
+        .options(selectinload(Tariff.allowed_promo_groups))
+        .limit(1)
+    )
+    result = await db.execute(query)
+    return result.scalars().first()
+
+
+async def set_trial_tariff(db: AsyncSession, tariff_id: int) -> Optional[Tariff]:
+    """Устанавливает тариф как триальный (снимает флаг с других тарифов)."""
+    # Снимаем флаг с всех тарифов
+    await db.execute(
+        Tariff.__table__.update().values(is_trial_available=False)
+    )
+
+    # Устанавливаем флаг на выбранный тариф
+    tariff = await get_tariff_by_id(db, tariff_id)
+    if tariff:
+        tariff.is_trial_available = True
+        await db.commit()
+        await db.refresh(tariff)
+
+    return tariff
+
+
+async def clear_trial_tariff(db: AsyncSession) -> None:
+    """Снимает флаг триала со всех тарифов."""
+    await db.execute(
+        Tariff.__table__.update().values(is_trial_available=False)
+    )
+    await db.commit()
+
+
 async def get_tariffs_for_user(
     db: AsyncSession,
     promo_group_id: Optional[int] = None,
