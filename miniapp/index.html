@@ -14251,6 +14251,27 @@
                 payload.autopaySettings,
             );
 
+            // Определяем, триал ли это (из API или из userData)
+            const isTrial = Boolean(
+                root.is_trial
+                ?? root.isTrial
+                ?? payload.is_trial
+                ?? payload.isTrial
+                ?? (userData?.subscription_type === 'trial')
+                ?? (userData?.user?.subscription_type === 'trial')
+            );
+
+            // Режим продаж
+            const salesMode = (
+                root.sales_mode
+                ?? root.salesMode
+                ?? payload.sales_mode
+                ?? payload.salesMode
+                ?? userData?.sales_mode
+                ?? userData?.salesMode
+                ?? 'classic'
+            );
+
             return {
                 subscriptionId,
                 currency,
@@ -14263,6 +14284,8 @@
                 missingAmountKopeks,
                 statusMessage,
                 autopay: autopayData,
+                isTrial,
+                salesMode,
             };
         }
 
