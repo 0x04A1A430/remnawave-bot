@@ -137,7 +137,7 @@ def get_tariff_periods_keyboard(
         if discount_percent > 0:
             original_price = price
             price = _apply_promo_discount(price, discount_percent)
-            price_text = f"{_format_price_kopeks(price)} (было {_format_price_kopeks(original_price)}, -{discount_percent}%)"
+            price_text = f"{_format_price_kopeks(price)} 🔥−{discount_percent}%"
         else:
             price_text = _format_price_kopeks(price)
 
@@ -540,7 +540,7 @@ def get_tariff_extend_keyboard(
         if discount_percent > 0:
             original_price = price
             price = _apply_promo_discount(price, discount_percent)
-            price_text = f"{_format_price_kopeks(price)} (было {_format_price_kopeks(original_price)}, -{discount_percent}%)"
+            price_text = f"{_format_price_kopeks(price)} 🔥−{discount_percent}%"
         else:
             price_text = _format_price_kopeks(price)
 
@@ -884,7 +884,7 @@ def get_tariff_switch_periods_keyboard(
         if discount_percent > 0:
             original_price = price
             price = _apply_promo_discount(price, discount_percent)
-            price_text = f"{_format_price_kopeks(price)} (было {_format_price_kopeks(original_price)}, -{discount_percent}%)"
+            price_text = f"{_format_price_kopeks(price)} 🔥−{discount_percent}%"
         else:
             price_text = _format_price_kopeks(price)
 
