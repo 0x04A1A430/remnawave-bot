@@ -2902,6 +2902,12 @@ async def handle_subscription_settings(
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
 
+    # Получаем тариф подписки если есть
+    tariff = None
+    if subscription and subscription.tariff_id:
+        from app.database.crud.tariff import get_tariff_by_id
+        tariff = await get_tariff_by_id(db, subscription.tariff_id)
+
     if not subscription or subscription.is_trial:
         await callback.answer(
             texts.t(
@@ -2957,7 +2963,7 @@ async def handle_subscription_settings(
 
     await callback.message.edit_text(
         settings_text,
-        reply_markup=get_updated_subscription_settings_keyboard(db_user.language, show_countries),
+        reply_markup=get_updated_subscription_settings_keyboard(db_user.language, show_countries, tariff=tariff),
         parse_mode="HTML"
     )
     await callback.answer()
