@@ -1805,8 +1805,9 @@ def get_change_devices_keyboard(
             period_text = f" (за {months_multiplier} мес)"
 
     # Используем цену из тарифа если есть, иначе глобальную настройку
-    if tariff and tariff.device_price_kopeks:
-        device_price_per_month = tariff.device_price_kopeks
+    tariff_device_price = getattr(tariff, 'device_price_kopeks', None) if tariff else None
+    if tariff and tariff_device_price:
+        device_price_per_month = tariff_device_price
         # Для тарифов все устройства платные (нет бесплатного лимита)
         default_device_limit = 0
     else:
@@ -2446,7 +2447,8 @@ def get_updated_subscription_settings_keyboard(
 
     # Устройства: для тарифов - только если указана цена за устройство
     if has_tariff:
-        if tariff.device_price_kopeks is not None and tariff.device_price_kopeks > 0:
+        tariff_device_price = getattr(tariff, 'device_price_kopeks', None)
+        if tariff_device_price is not None and tariff_device_price > 0:
             keyboard.append([
                 InlineKeyboardButton(
                     text=texts.t("CHANGE_DEVICES_BUTTON", "📱 Изменить устройства"),
