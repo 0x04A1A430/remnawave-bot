@@ -3703,6 +3703,7 @@ async def activate_subscription_trial_endpoint(
     trial_device_limit = forced_devices
     trial_squads = None
     tariff_id_for_trial = None
+    trial_duration = None  # None = использовать TRIAL_DURATION_DAYS
 
     if settings.is_tariffs_mode():
         try:
@@ -3722,6 +3723,8 @@ async def activate_subscription_trial_endpoint(
                 trial_device_limit = trial_tariff.device_limit
                 trial_squads = trial_tariff.allowed_squads or []
                 tariff_id_for_trial = trial_tariff.id
+                if trial_tariff.trial_duration_days:
+                    trial_duration = trial_tariff.trial_duration_days
                 logger.info(f"Miniapp: используем триальный тариф {trial_tariff.name}")
         except Exception as e:
             logger.error(f"Ошибка получения триального тарифа: {e}")
@@ -3730,6 +3733,7 @@ async def activate_subscription_trial_endpoint(
         subscription = await create_trial_subscription(
             db,
             user.id,
+            duration_days=trial_duration,
             device_limit=trial_device_limit,
             traffic_limit_gb=trial_traffic_limit,
             connected_squads=trial_squads,
