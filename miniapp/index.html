@@ -4643,6 +4643,7 @@
         @media (max-width: 480px) {
             .container {
                 padding: 12px;
+                padding-bottom: 100px;
             }
 
             .promo-offer-card {
@@ -5046,6 +5047,10 @@
                     <div class="info-item">
                         <span class="info-label" data-i18n="info.subscription_type">Type</span>
                         <span class="info-value" id="subscriptionType">-</span>
+                    </div>
+                    <div class="info-item hidden" id="currentTariffRow">
+                        <span class="info-label" data-i18n="info.current_tariff">Tariff</span>
+                        <span class="info-value" id="currentTariffName">-</span>
                     </div>
                     <div class="info-item">
                         <span class="info-label" data-i18n="info.device_limit">Device Limit</span>
@@ -5847,6 +5852,7 @@
                 'info.traffic_used': 'Traffic used',
                 'info.traffic_limit': 'Traffic limit',
                 'info.subscription_type': 'Subscription type',
+                'info.current_tariff': 'Current tariff',
                 'info.promo_group': 'Promo group',
                 'info.device_limit': 'Device limit',
                 'info.autopay': 'Auto-pay',
@@ -6282,6 +6288,7 @@
                 'info.traffic_used': 'Использовано трафика',
                 'info.traffic_limit': 'Лимит трафика',
                 'info.subscription_type': 'Тип подписки',
+                'info.current_tariff': 'Текущий тариф',
                 'info.promo_group': 'Уровень',
                 'info.device_limit': 'Лимит устройств',
                 'info.autopay': 'Автоплатеж',
@@ -8594,6 +8601,20 @@
                 subscriptionTypeElement.textContent = subscriptionTypeLabel === subscriptionTypeKey
                     ? subscriptionTypeRaw
                     : subscriptionTypeLabel;
+            }
+
+            // Текущий тариф (только в режиме tariffs)
+            const currentTariffRow = document.getElementById('currentTariffRow');
+            const currentTariffNameEl = document.getElementById('currentTariffName');
+            if (currentTariffRow && currentTariffNameEl) {
+                const salesMode = userData?.salesMode ?? userData?.sales_mode ?? 'classic';
+                const currentTariff = userData?.current_tariff ?? userData?.currentTariff;
+                if (salesMode === 'tariffs' && currentTariff && currentTariff.name) {
+                    currentTariffRow.classList.remove('hidden');
+                    currentTariffNameEl.textContent = currentTariff.name;
+                } else {
+                    currentTariffRow.classList.add('hidden');
+                }
             }
 
             const autopayElement = document.getElementById('autopayStatus');
