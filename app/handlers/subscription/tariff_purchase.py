@@ -1069,6 +1069,8 @@ async def select_tariff_switch_period(
     state: FSMContext,
 ):
     """Обрабатывает выбор периода для переключения тарифа."""
+    from datetime import datetime
+
     parts = callback.data.split(":")
     tariff_id = int(parts[1])
     period = int(parts[2])
@@ -1101,6 +1103,19 @@ async def select_tariff_switch_period(
         if current_tariff:
             current_tariff_name = current_tariff.name
 
+    # Получаем текущую подписку для расчёта оставшегося времени
+    subscription = await get_subscription_by_user_id(db, db_user.id)
+    remaining_days = 0
+    if subscription and subscription.end_date:
+        remaining_days = max(0, (subscription.end_date - datetime.utcnow()).days)
+
+    # Определяем что произойдёт с временем
+    if remaining_days >= period:
+        time_info = f"⏰ Осталось дней: {remaining_days} (будет сохранено)"
+    else:
+        days_to_add = period - remaining_days
+        time_info = f"⏰ Осталось дней: {remaining_days} → будет {period} (+{days_to_add})"
+
     if user_balance >= final_price:
         discount_text = ""
         if discount_percent > 0:
@@ -1112,12 +1127,11 @@ async def select_tariff_switch_period(
             f"📦 Новый тариф: <b>{tariff.name}</b>\n"
             f"📊 Трафик: {traffic}\n"
             f"📱 Устройств: {tariff.device_limit}\n"
-            f"📅 Добавляется период: {_format_period(period)}\n"
+            f"{time_info}\n"
             f"{discount_text}\n"
             f"💰 <b>К оплате: {_format_price_kopeks(final_price)}</b>\n\n"
             f"💳 Ваш баланс: {_format_price_kopeks(user_balance)}\n"
-            f"После оплаты: {_format_price_kopeks(user_balance - final_price)}\n\n"
-            f"⚠️ Остаток времени текущей подписки будет сохранён.",
+            f"После оплаты: {_format_price_kopeks(user_balance - final_price)}",
             reply_markup=get_tariff_switch_confirm_keyboard(tariff_id, period, db_user.language),
             parse_mode="HTML"
         )
@@ -1194,11 +1208,21 @@ async def confirm_tariff_switch(
         # Получаем список серверов из тарифа
         squads = tariff.allowed_squads or []
 
-        # Обновляем подписку с новыми параметрами тарифа и добавляем период
+        # Рассчитываем сколько дней осталось у текущей подписки
+        from datetime import datetime
+        remaining_days = (subscription.end_date - datetime.utcnow()).days
+        if remaining_days < 0:
+            remaining_days = 0
+
+        # Если выбранный период больше оставшегося - добавляем разницу
+        # Пользователь должен получить минимум то, за что заплатил
+        days_to_add = max(0, period - remaining_days)
+
+        # Обновляем подписку с новыми параметрами тарифа
         subscription = await extend_subscription(
             db,
             subscription,
-            days=period,
+            days=days_to_add,  # Добавляем только разницу, если период > остатка
             tariff_id=tariff.id,
             traffic_limit_gb=tariff.traffic_limit_gb,
             device_limit=tariff.device_limit,
@@ -1223,7 +1247,7 @@ async def confirm_tariff_switch(
             user_id=db_user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
             amount_kopeks=-final_price,
-            description=f"Переключение на тариф {tariff.name} на {period} дней",
+            description=f"Смена тарифа на {tariff.name}",
         )
 
         # Отправляем уведомление админу
@@ -1234,7 +1258,7 @@ async def confirm_tariff_switch(
                 db_user,
                 subscription,
                 None,  # Транзакция отсутствует, оплата с баланса
-                period,
+                days_to_add,  # Добавленные дни (0 если остаток >= периода)
                 was_trial_conversion=False,
                 amount_kopeks=final_price,
             )
@@ -1252,13 +1276,19 @@ async def confirm_tariff_switch(
 
         traffic = _format_traffic(tariff.traffic_limit_gb)
 
+        # Формируем текст о времени подписки
+        if days_to_add > 0:
+            time_info = f"📅 Добавлено дней: {days_to_add}"
+        else:
+            time_info = "📅 Остаток времени подписки сохранён"
+
         await callback.message.edit_text(
             f"🎉 <b>Тариф успешно изменён!</b>\n\n"
             f"📦 Новый тариф: <b>{tariff.name}</b>\n"
             f"📊 Трафик: {traffic}\n"
             f"📱 Устройств: {tariff.device_limit}\n"
-            f"📅 Добавлен период: {_format_period(period)}\n"
-            f"💰 Списано: {_format_price_kopeks(final_price)}\n\n"
+            f"💰 Списано: {_format_price_kopeks(final_price)}\n"
+            f"{time_info}\n\n"
             f"Перейдите в раздел «Подписка» для просмотра деталей.",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")],
