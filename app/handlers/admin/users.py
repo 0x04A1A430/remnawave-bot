@@ -5083,7 +5083,7 @@ async def show_admin_tariff_change(
         return
 
     # Получаем все активные тарифы
-    tariffs = await get_all_tariffs(db, only_active=True)
+    tariffs = await get_all_tariffs(db, include_inactive=False)
 
     if not tariffs:
         await callback.message.edit_text(

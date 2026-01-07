@@ -195,6 +195,16 @@ def get_tariff_view_keyboard(
         InlineKeyboardButton(text="👥 Промогруппы", callback_data=f"admin_tariff_edit_promo:{tariff.id}"),
     ])
 
+    # Переключение триала
+    if tariff.is_trial_available:
+        buttons.append([
+            InlineKeyboardButton(text="🎁 ❌ Убрать триал", callback_data=f"admin_tariff_toggle_trial:{tariff.id}")
+        ])
+    else:
+        buttons.append([
+            InlineKeyboardButton(text="🎁 Сделать триальным", callback_data=f"admin_tariff_toggle_trial:{tariff.id}")
+        ])
+
     # Переключение активности
     if tariff.is_active:
         buttons.append([
@@ -405,6 +415,43 @@ async def toggle_tariff(
 
     status = "активирован" if tariff.is_active else "деактивирован"
     await callback.answer(f"Тариф {status}", show_alert=True)
+
+    await callback.message.edit_text(
+        format_tariff_info(tariff, db_user.language, subs_count),
+        reply_markup=get_tariff_view_keyboard(tariff, db_user.language),
+        parse_mode="HTML"
+    )
+
+
+@admin_required
+@error_handler
+async def toggle_trial_tariff(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+):
+    """Переключает тариф как триальный."""
+    from app.database.crud.tariff import set_trial_tariff, clear_trial_tariff
+
+    tariff_id = int(callback.data.split(":")[1])
+    tariff = await get_tariff_by_id(db, tariff_id)
+
+    if not tariff:
+        await callback.answer("Тариф не найден", show_alert=True)
+        return
+
+    if tariff.is_trial_available:
+        # Снимаем флаг триала
+        await clear_trial_tariff(db)
+        await callback.answer("Триал снят с тарифа", show_alert=True)
+    else:
+        # Устанавливаем этот тариф как триальный (снимает флаг с других)
+        await set_trial_tariff(db, tariff_id)
+        await callback.answer(f"Тариф «{tariff.name}» установлен как триальный", show_alert=True)
+
+    # Перезагружаем тариф
+    tariff = await get_tariff_by_id(db, tariff_id)
+    subs_count = await get_tariff_subscriptions_count(db, tariff_id)
 
     await callback.message.edit_text(
         format_tariff_info(tariff, db_user.language, subs_count),
@@ -1665,7 +1712,8 @@ def register_handlers(dp: Dispatcher):
 
     # Просмотр и переключение
     dp.callback_query.register(view_tariff, F.data.startswith("admin_tariff_view:"))
-    dp.callback_query.register(toggle_tariff, F.data.startswith("admin_tariff_toggle:"))
+    dp.callback_query.register(toggle_tariff, F.data.startswith("admin_tariff_toggle:") & ~F.data.startswith("admin_tariff_toggle_trial:"))
+    dp.callback_query.register(toggle_trial_tariff, F.data.startswith("admin_tariff_toggle_trial:"))
 
     # Создание тарифа
     dp.callback_query.register(start_create_tariff, F.data == "admin_tariff_create")
