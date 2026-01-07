@@ -1982,11 +1982,61 @@ async def required_sub_channel_check(
                         language=language,
                         referral_code=referral_code,
                     )
+                    await db.refresh(user, ['subscription'])
 
-                    await bot.send_message(
-                        chat_id=query.from_user.id,
-                        text=texts.t("WELCOME_FALLBACK", "Добро пожаловать, {user_name}!").format(user_name=user.full_name),
+                    # Показываем главное меню после создания пользователя
+                    has_active_subscription, subscription_is_active = _calculate_subscription_flags(
+                        user.subscription
                     )
+
+                    menu_text = await get_main_menu_text(user, texts, db)
+
+                    from app.utils.message_patch import LOGO_PATH
+                    from aiogram.types import FSInputFile
+
+                    is_admin = settings.is_admin(user.telegram_id)
+                    is_moderator = (
+                        (not is_admin)
+                        and SupportSettingsService.is_moderator(user.telegram_id)
+                    )
+
+                    custom_buttons = await MainMenuButtonService.get_buttons_for_user(
+                        db,
+                        is_admin=is_admin,
+                        has_active_subscription=has_active_subscription,
+                        subscription_is_active=subscription_is_active,
+                    )
+
+                    keyboard = await get_main_menu_keyboard_async(
+                        db=db,
+                        user=user,
+                        language=user.language,
+                        is_admin=is_admin,
+                        has_had_paid_subscription=user.has_had_paid_subscription,
+                        has_active_subscription=has_active_subscription,
+                        subscription_is_active=subscription_is_active,
+                        balance_kopeks=user.balance_kopeks,
+                        subscription=user.subscription,
+                        is_moderator=is_moderator,
+                        custom_buttons=custom_buttons,
+                    )
+
+                    if settings.ENABLE_LOGO_MODE:
+                        await bot.send_photo(
+                            chat_id=query.from_user.id,
+                            photo=FSInputFile(LOGO_PATH),
+                            caption=menu_text,
+                            reply_markup=keyboard,
+                            parse_mode="HTML",
+                        )
+                    else:
+                        await bot.send_message(
+                            chat_id=query.from_user.id,
+                            text=menu_text,
+                            reply_markup=keyboard,
+                            parse_mode="HTML",
+                        )
+                    await _send_pinned_message(bot, db, user)
                 else:
                     await bot.send_message(
                         chat_id=query.from_user.id,

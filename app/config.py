@@ -166,7 +166,17 @@ class Settings(BaseSettings):
     TRAFFIC_SELECTION_MODE: str = "selectable"
     FIXED_TRAFFIC_LIMIT_GB: int = 100
     BUY_TRAFFIC_BUTTON_VISIBLE: bool = True
-    
+
+    # Режим продаж подписок:
+    # - classic: классический режим (выбор серверов, трафика, устройств, периода отдельно)
+    # - tariffs: режим тарифов (готовые пакеты с фиксированными параметрами)
+    SALES_MODE: str = "classic"
+
+    # ID тарифа для триала в режиме тарифов (0 = использовать стандартные настройки триала)
+    # Если указан ID тарифа, параметры триала берутся из тарифа (traffic_limit_gb, device_limit, allowed_squads)
+    # Длительность триала всё равно берётся из TRIAL_DURATION_DAYS
+    TRIAL_TARIFF_ID: int = 0
+
     # Настройки докупки трафика
     TRAFFIC_TOPUP_ENABLED: bool = True  # Включить/выключить функцию докупки трафика
     # Пакеты для докупки трафика (формат: "гб:цена:enabled", пустая строка = использовать TRAFFIC_PACKAGES_CONFIG)
@@ -398,6 +408,21 @@ class Settings(BaseSettings):
     CLOUDPAYMENTS_SKIN: str = "mini"  # mini, classic, modern
     CLOUDPAYMENTS_REQUIRE_EMAIL: bool = False
     CLOUDPAYMENTS_TEST_MODE: bool = False
+
+    # Freekassa
+    FREEKASSA_ENABLED: bool = False
+    FREEKASSA_SHOP_ID: Optional[int] = None
+    FREEKASSA_API_KEY: Optional[str] = None
+    FREEKASSA_SECRET_WORD_1: Optional[str] = None  # Для формы оплаты
+    FREEKASSA_SECRET_WORD_2: Optional[str] = None  # Для webhook
+    FREEKASSA_DISPLAY_NAME: str = "Freekassa"
+    FREEKASSA_CURRENCY: str = "RUB"
+    FREEKASSA_MIN_AMOUNT_KOPEKS: int = 10000  # 100 руб
+    FREEKASSA_MAX_AMOUNT_KOPEKS: int = 100000000  # 1 000 000 руб
+    FREEKASSA_PAYMENT_TIMEOUT_SECONDS: int = 3600
+    FREEKASSA_WEBHOOK_PATH: str = "/freekassa-webhook"
+    FREEKASSA_WEBHOOK_HOST: str = "0.0.0.0"
+    FREEKASSA_WEBHOOK_PORT: int = 8088
 
     MAIN_MENU_MODE: str = "default"
     CONNECT_BUTTON_MODE: str = "guide"
@@ -1176,6 +1201,22 @@ class Settings(BaseSettings):
     def is_modem_enabled(self) -> bool:
         return bool(self.MODEM_ENABLED)
 
+    def is_tariffs_mode(self) -> bool:
+        """Проверяет, включен ли режим продаж 'Тарифы'."""
+        return self.SALES_MODE == "tariffs"
+
+    def is_classic_mode(self) -> bool:
+        """Проверяет, включен ли классический режим продаж."""
+        return self.SALES_MODE != "tariffs"
+
+    def get_sales_mode(self) -> str:
+        """Возвращает текущий режим продаж."""
+        return self.SALES_MODE if self.SALES_MODE in ("classic", "tariffs") else "classic"
+
+    def get_trial_tariff_id(self) -> int:
+        """Возвращает ID тарифа для триала (0 = использовать стандартные настройки)."""
+        return self.TRIAL_TARIFF_ID if self.TRIAL_TARIFF_ID > 0 else 0
+
     def get_modem_price_per_month(self) -> int:
         try:
             value = int(self.MODEM_PRICE_PER_MONTH)
@@ -1233,11 +1274,12 @@ class Settings(BaseSettings):
         return applicable_discount
 
     def is_trial_paid_activation_enabled(self) -> bool:
-        # Если цена > 0, триал автоматически платный
-        # (TRIAL_PAYMENT_ENABLED теперь опционален - для обратной совместимости)
-        if self.TRIAL_ACTIVATION_PRICE > 0:
-            return True
-        return bool(self.TRIAL_PAYMENT_ENABLED)
+        # TRIAL_PAYMENT_ENABLED - главный переключатель платной активации
+        # Если выключен - триал бесплатный, независимо от цены
+        if not self.TRIAL_PAYMENT_ENABLED:
+            return False
+        # Если включен - проверяем что цена > 0
+        return self.TRIAL_ACTIVATION_PRICE > 0
 
     def get_trial_activation_price(self) -> int:
         try:
@@ -1413,6 +1455,22 @@ class Settings(BaseSettings):
             and self.CLOUDPAYMENTS_PUBLIC_ID is not None
             and self.CLOUDPAYMENTS_API_SECRET is not None
         )
+
+    def is_freekassa_enabled(self) -> bool:
+        return (
+            self.FREEKASSA_ENABLED
+            and self.FREEKASSA_SHOP_ID is not None
+            and self.FREEKASSA_API_KEY is not None
+            and self.FREEKASSA_SECRET_WORD_1 is not None
+            and self.FREEKASSA_SECRET_WORD_2 is not None
+        )
+
+    def get_freekassa_display_name(self) -> str:
+        name = (self.FREEKASSA_DISPLAY_NAME or "").strip()
+        return name if name else "Freekassa"
+
+    def get_freekassa_display_name_html(self) -> str:
+        return html.escape(self.get_freekassa_display_name())
 
     def is_payment_verification_auto_check_enabled(self) -> bool:
         return self.PAYMENT_VERIFICATION_AUTO_CHECK_ENABLED

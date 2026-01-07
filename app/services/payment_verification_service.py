@@ -19,6 +19,7 @@ from app.database.database import AsyncSessionLocal
 from app.database.models import (
     CloudPaymentsPayment,
     CryptoBotPayment,
+    FreekassaPayment,
     HeleketPayment,
     MulenPayPayment,
     Pal24Payment,
@@ -66,6 +67,7 @@ SUPPORTED_MANUAL_CHECK_METHODS: frozenset[PaymentMethod] = frozenset(
         PaymentMethod.CRYPTOBOT,
         PaymentMethod.PLATEGA,
         PaymentMethod.CLOUDPAYMENTS,
+        PaymentMethod.FREEKASSA,
     }
 )
 
@@ -79,6 +81,7 @@ SUPPORTED_AUTO_CHECK_METHODS: frozenset[PaymentMethod] = frozenset(
         PaymentMethod.CRYPTOBOT,
         PaymentMethod.PLATEGA,
         PaymentMethod.CLOUDPAYMENTS,
+        PaymentMethod.FREEKASSA,
     }
 )
 
@@ -100,6 +103,8 @@ def method_display_name(method: PaymentMethod) -> str:
         return "Heleket"
     if method == PaymentMethod.CLOUDPAYMENTS:
         return "CloudPayments"
+    if method == PaymentMethod.FREEKASSA:
+        return "Freekassa"
     if method == PaymentMethod.TELEGRAM_STARS:
         return "Telegram Stars"
     return method.value
@@ -122,6 +127,8 @@ def _method_is_enabled(method: PaymentMethod) -> bool:
         return settings.is_heleket_enabled()
     if method == PaymentMethod.CLOUDPAYMENTS:
         return settings.is_cloudpayments_enabled()
+    if method == PaymentMethod.FREEKASSA:
+        return settings.is_freekassa_enabled()
     return False
 
 
@@ -360,6 +367,13 @@ def _is_cloudpayments_pending(payment: CloudPaymentsPayment) -> bool:
         return False
     status = (payment.status or "").lower()
     return status in {"pending", "authorized"}
+
+
+def _is_freekassa_pending(payment: FreekassaPayment) -> bool:
+    if payment.is_paid:
+        return False
+    status = (payment.status or "").lower()
+    return status in {"pending", "created", "processing"}
 
 
 def _parse_cryptobot_amount_kopeks(payment: CryptoBotPayment) -> int:
@@ -621,6 +635,31 @@ async def _fetch_cloudpayments_payments(db: AsyncSession, cutoff: datetime) -> L
     return records
 
 
+async def _fetch_freekassa_payments(db: AsyncSession, cutoff: datetime) -> List[PendingPayment]:
+    stmt = (
+        select(FreekassaPayment)
+        .options(selectinload(FreekassaPayment.user))
+        .where(FreekassaPayment.created_at >= cutoff)
+        .order_by(desc(FreekassaPayment.created_at))
+    )
+    result = await db.execute(stmt)
+    records: List[PendingPayment] = []
+    for payment in result.scalars().all():
+        if not _is_freekassa_pending(payment):
+            continue
+        record = _build_record(
+            PaymentMethod.FREEKASSA,
+            payment,
+            identifier=payment.order_id,
+            amount_kopeks=payment.amount_kopeks,
+            status=payment.status or "",
+            is_paid=bool(payment.is_paid),
+        )
+        if record:
+            records.append(record)
+    return records
+
+
 async def _fetch_stars_transactions(db: AsyncSession, cutoff: datetime) -> List[PendingPayment]:
     stmt = (
         select(Transaction)
@@ -666,6 +705,7 @@ async def list_recent_pending_payments(
         await _fetch_heleket_payments(db, cutoff),
         await _fetch_cryptobot_payments(db, cutoff),
         await _fetch_cloudpayments_payments(db, cutoff),
+        await _fetch_freekassa_payments(db, cutoff),
         await _fetch_stars_transactions(db, cutoff),
     )
 
@@ -806,6 +846,20 @@ async def get_payment_record(
             is_paid=bool(payment.is_paid),
         )
 
+    if method == PaymentMethod.FREEKASSA:
+        payment = await db.get(FreekassaPayment, local_payment_id)
+        if not payment:
+            return None
+        await db.refresh(payment, attribute_names=["user"])
+        return _build_record(
+            method,
+            payment,
+            identifier=payment.order_id,
+            amount_kopeks=payment.amount_kopeks,
+            status=payment.status or "",
+            is_paid=bool(payment.is_paid),
+        )
+
     if method == PaymentMethod.TELEGRAM_STARS:
         transaction = await db.get(Transaction, local_payment_id)
         if not transaction:
@@ -859,6 +913,9 @@ async def run_manual_check(
             payment = result.get("payment") if result else None
         elif method == PaymentMethod.CLOUDPAYMENTS:
             result = await payment_service.get_cloudpayments_payment_status(db, local_payment_id)
+            payment = result.get("payment") if result else None
+        elif method == PaymentMethod.FREEKASSA:
+            result = await payment_service.get_freekassa_payment_status(db, local_payment_id)
             payment = result.get("payment") if result else None
         else:
             logger.warning("Manual check requested for unsupported method %s", method)

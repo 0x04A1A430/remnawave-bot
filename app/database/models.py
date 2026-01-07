@@ -46,6 +46,25 @@ server_squad_promo_groups = Table(
 )
 
 
+# M2M таблица для связи тарифов с промогруппами (доступ к тарифу)
+tariff_promo_groups = Table(
+    "tariff_promo_groups",
+    Base.metadata,
+    Column(
+        "tariff_id",
+        Integer,
+        ForeignKey("tariffs.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column(
+        "promo_group_id",
+        Integer,
+        ForeignKey("promo_groups.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+)
+
+
 class UserStatus(Enum):
     ACTIVE = "active"
     BLOCKED = "blocked"
@@ -87,6 +106,7 @@ class PaymentMethod(Enum):
     WATA = "wata"
     PLATEGA = "platega"
     CLOUDPAYMENTS = "cloudpayments"
+    FREEKASSA = "freekassa"
     MANUAL = "manual"
 
 
@@ -545,6 +565,73 @@ class CloudPaymentsPayment(Base):
         )
 
 
+class FreekassaPayment(Base):
+    __tablename__ = "freekassa_payments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    # Идентификаторы
+    order_id = Column(String(64), unique=True, nullable=False, index=True)  # Наш ID заказа
+    freekassa_order_id = Column(String(64), unique=True, nullable=True, index=True)  # intid от Freekassa
+
+    # Суммы
+    amount_kopeks = Column(Integer, nullable=False)
+    currency = Column(String(10), nullable=False, default="RUB")
+    description = Column(Text, nullable=True)
+
+    # Статусы
+    status = Column(String(32), nullable=False, default="pending")  # pending, success, failed, expired
+    is_paid = Column(Boolean, default=False)
+
+    # Данные платежа
+    payment_url = Column(Text, nullable=True)
+    payment_system_id = Column(Integer, nullable=True)  # ID платежной системы FK
+
+    # Метаданные
+    metadata_json = Column(JSON, nullable=True)
+    callback_payload = Column(JSON, nullable=True)
+
+    # Временные метки
+    paid_at = Column(DateTime, nullable=True)
+    expires_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    # Связь с транзакцией
+    transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=True)
+
+    # Relationships
+    user = relationship("User", backref="freekassa_payments")
+    transaction = relationship("Transaction", backref="freekassa_payment")
+
+    @property
+    def amount_rubles(self) -> float:
+        return self.amount_kopeks / 100
+
+    @property
+    def is_pending(self) -> bool:
+        return self.status == "pending"
+
+    @property
+    def is_success(self) -> bool:
+        return self.status == "success" and self.is_paid
+
+    @property
+    def is_failed(self) -> bool:
+        return self.status in ["failed", "expired"]
+
+    def __repr__(self) -> str:  # pragma: no cover - debug helper
+        return (
+            "<FreekassaPayment(id={0}, order_id={1}, amount={2}₽, status={3})>".format(
+                self.id,
+                self.order_id,
+                self.amount_rubles,
+                self.status,
+            )
+        )
+
+
 class PromoGroup(Base):
     __tablename__ = "promo_groups"
 
@@ -644,6 +731,82 @@ class UserPromoGroup(Base):
 
     def __repr__(self):
         return f"<UserPromoGroup(user_id={self.user_id}, promo_group_id={self.promo_group_id}, assigned_by='{self.assigned_by}')>"
+
+
+class Tariff(Base):
+    """Тарифный план для режима продаж 'Тарифы'."""
+    __tablename__ = "tariffs"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Основная информация
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    display_order = Column(Integer, default=0, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+
+    # Параметры тарифа
+    traffic_limit_gb = Column(Integer, nullable=False, default=100)  # 0 = безлимит
+    device_limit = Column(Integer, nullable=False, default=1)
+    device_price_kopeks = Column(Integer, nullable=True, default=None)  # Цена за доп. устройство (None = нельзя докупить)
+
+    # Сквады (серверы) доступные в тарифе
+    allowed_squads = Column(JSON, default=list)  # список UUID сквадов
+
+    # Цены на периоды в копейках (JSON: {"14": 30000, "30": 50000, "90": 120000, ...})
+    period_prices = Column(JSON, nullable=False, default=dict)
+
+    # Уровень тарифа (для визуального отображения, 1 = базовый)
+    tier_level = Column(Integer, default=1, nullable=False)
+
+    # Дополнительные настройки
+    is_trial_available = Column(Boolean, default=False, nullable=False)  # Можно ли взять триал на этом тарифе
+
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    # M2M связь с промогруппами (какие промогруппы имеют доступ к тарифу)
+    allowed_promo_groups = relationship(
+        "PromoGroup",
+        secondary=tariff_promo_groups,
+        lazy="selectin",
+    )
+
+    # Подписки на этом тарифе
+    subscriptions = relationship("Subscription", back_populates="tariff")
+
+    @property
+    def is_unlimited_traffic(self) -> bool:
+        """Проверяет, безлимитный ли трафик."""
+        return self.traffic_limit_gb == 0
+
+    def get_price_for_period(self, period_days: int) -> Optional[int]:
+        """Возвращает цену в копейках для указанного периода."""
+        prices = self.period_prices or {}
+        return prices.get(str(period_days))
+
+    def get_available_periods(self) -> List[int]:
+        """Возвращает список доступных периодов в днях."""
+        prices = self.period_prices or {}
+        return sorted([int(p) for p in prices.keys()])
+
+    def get_price_rubles(self, period_days: int) -> Optional[float]:
+        """Возвращает цену в рублях для указанного периода."""
+        price_kopeks = self.get_price_for_period(period_days)
+        if price_kopeks is not None:
+            return price_kopeks / 100
+        return None
+
+    def is_available_for_promo_group(self, promo_group_id: Optional[int]) -> bool:
+        """Проверяет, доступен ли тариф для указанной промогруппы."""
+        if not self.allowed_promo_groups:
+            return True  # Если нет ограничений - доступен всем
+        if promo_group_id is None:
+            return True  # Если у пользователя нет группы - доступен
+        return any(pg.id == promo_group_id for pg in self.allowed_promo_groups)
+
+    def __repr__(self):
+        return f"<Tariff(id={self.id}, name='{self.name}', tier={self.tier_level}, active={self.is_active})>"
 
 
 class User(Base):
@@ -792,10 +955,14 @@ class Subscription(Base):
     
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
-    
+
     remnawave_short_uuid = Column(String(255), nullable=True)
 
+    # Тариф (для режима продаж "Тарифы")
+    tariff_id = Column(Integer, ForeignKey("tariffs.id", ondelete="SET NULL"), nullable=True, index=True)
+
     user = relationship("User", back_populates="subscription")
+    tariff = relationship("Tariff", back_populates="subscriptions")
     discount_offers = relationship("DiscountOffer", back_populates="subscription")
     temporary_accesses = relationship("SubscriptionTemporaryAccess", back_populates="subscription")
     

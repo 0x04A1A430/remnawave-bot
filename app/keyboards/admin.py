@@ -25,9 +25,15 @@ def get_admin_main_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(
+                text=_t(texts, "ADMIN_MAIN_TARIFFS", "📦 Тарифы"),
+                callback_data="admin_tariffs",
+            ),
+            InlineKeyboardButton(
                 text=_t(texts, "ADMIN_MAIN_PRICING", "💰 Цены"),
                 callback_data="admin_pricing",
             ),
+        ],
+        [
             InlineKeyboardButton(
                 text=_t(texts, "ADMIN_MAIN_PROMO_STATS", "💰 Промокоды/Статистика"),
                 callback_data="admin_submenu_promo",
