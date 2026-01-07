@@ -5052,6 +5052,8 @@ async def get_subscription_renewal_options_endpoint(
         autopay_days_options=renewal_autopay_days_options,
         autopay=renewal_autopay_payload,
         autopay_settings=renewal_autopay_payload,
+        is_trial=bool(getattr(subscription, "is_trial", False)),
+        sales_mode=settings.get_sales_mode(),
         **renewal_autopay_extras,
     )
 
