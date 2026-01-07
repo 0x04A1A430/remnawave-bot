@@ -781,7 +781,7 @@ async def confirm_withdrawal_request(
 
     try:
         notification_service = AdminNotificationService(callback.bot)
-        await notification_service.send_notification(
+        await notification_service.send_to_admins(
             admin_text,
             keyboard=admin_keyboard
         )
@@ -790,10 +790,10 @@ async def confirm_withdrawal_request(
 
     # Уведомление в топик, если настроено
     topic_id = settings.REFERRAL_WITHDRAWAL_NOTIFICATIONS_TOPIC_ID
-    if topic_id and settings.NOTIFICATIONS_CHAT_ID:
+    if topic_id and settings.ADMIN_NOTIFICATIONS_CHAT_ID:
         try:
             await callback.bot.send_message(
-                chat_id=settings.NOTIFICATIONS_CHAT_ID,
+                chat_id=settings.ADMIN_NOTIFICATIONS_CHAT_ID,
                 message_thread_id=topic_id,
                 text=admin_text,
                 reply_markup=admin_keyboard,
