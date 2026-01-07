@@ -458,34 +458,73 @@ async def show_trial_offer(
         await callback.answer()
         return
 
+    # Получаем параметры триала (из тарифа или из глобальных настроек)
+    trial_days = settings.TRIAL_DURATION_DAYS
+    trial_traffic = settings.TRIAL_TRAFFIC_LIMIT_GB
+    trial_device_limit = settings.TRIAL_DEVICE_LIMIT
+    trial_tariff = None
     trial_server_name = texts.t("TRIAL_SERVER_DEFAULT_NAME", "🎯 Тестовый сервер")
+
+    # Проверяем триальный тариф
+    if settings.is_tariffs_mode():
+        try:
+            from app.database.crud.tariff import get_trial_tariff, get_tariff_by_id as get_tariff
+
+            trial_tariff = await get_trial_tariff(db)
+            if not trial_tariff:
+                trial_tariff_id = settings.get_trial_tariff_id()
+                if trial_tariff_id > 0:
+                    trial_tariff = await get_tariff(db, trial_tariff_id)
+                    if trial_tariff and not trial_tariff.is_active:
+                        trial_tariff = None
+
+            if trial_tariff:
+                trial_traffic = trial_tariff.traffic_limit_gb
+                trial_device_limit = trial_tariff.device_limit
+                if trial_tariff.trial_duration_days:
+                    trial_days = trial_tariff.trial_duration_days
+                logger.info(f"Показываем триал с тарифом {trial_tariff.name}")
+        except Exception as e:
+            logger.error(f"Ошибка получения триального тарифа: {e}")
+
     try:
         from app.database.crud.server_squad import get_trial_eligible_server_squads
 
-        trial_squads = await get_trial_eligible_server_squads(db, include_unavailable=True)
-
-        if trial_squads:
-            if len(trial_squads) == 1:
-                trial_server_name = trial_squads[0].display_name
-            else:
-                trial_server_name = texts.t(
-                    "TRIAL_SERVER_RANDOM_POOL",
-                    "🎲 Случайный из {count} серверов",
-                ).format(count=len(trial_squads))
+        # Для тарифа используем его сервера
+        if trial_tariff and trial_tariff.allowed_squads:
+            from app.database.crud.server_squad import get_server_squads_by_uuids
+            tariff_squads = await get_server_squads_by_uuids(db, trial_tariff.allowed_squads)
+            if tariff_squads:
+                if len(tariff_squads) == 1:
+                    trial_server_name = tariff_squads[0].display_name
+                else:
+                    trial_server_name = texts.t(
+                        "TRIAL_SERVER_RANDOM_POOL",
+                        "🎲 Случайный из {count} серверов",
+                    ).format(count=len(tariff_squads))
         else:
-            logger.warning("Не настроены сквады для выдачи триалов")
+            trial_squads = await get_trial_eligible_server_squads(db, include_unavailable=True)
+            if trial_squads:
+                if len(trial_squads) == 1:
+                    trial_server_name = trial_squads[0].display_name
+                else:
+                    trial_server_name = texts.t(
+                        "TRIAL_SERVER_RANDOM_POOL",
+                        "🎲 Случайный из {count} серверов",
+                    ).format(count=len(trial_squads))
+            else:
+                logger.warning("Не настроены сквады для выдачи триалов")
 
     except Exception as e:
         logger.error(f"Ошибка получения триального сервера: {e}")
 
-    trial_device_limit = settings.TRIAL_DEVICE_LIMIT
     if not settings.is_devices_selection_enabled():
         forced_limit = settings.get_disabled_mode_device_limit()
         if forced_limit is not None:
             trial_device_limit = forced_limit
 
     devices_line = ""
-    if settings.is_devices_selection_enabled():
+    if settings.is_devices_selection_enabled() or trial_tariff:
         devices_line_template = texts.t(
             "TRIAL_AVAILABLE_DEVICES_LINE",
             "\n📱 <b>Устройства:</b> {devices} шт.",
@@ -504,8 +543,8 @@ async def show_trial_offer(
             ).format(price=settings.format_price(trial_price))
 
     trial_text = texts.TRIAL_AVAILABLE.format(
-        days=settings.TRIAL_DURATION_DAYS,
-        traffic=texts.format_traffic(settings.TRIAL_TRAFFIC_LIMIT_GB),
+        days=trial_days,
+        traffic=texts.format_traffic(trial_traffic),
         devices=trial_device_limit if trial_device_limit is not None else "",
         devices_line=devices_line,
         server_name=trial_server_name,
@@ -686,6 +725,7 @@ async def activate_trial(
         trial_device_limit = forced_devices
         trial_squads = None
         tariff_id_for_trial = None
+        trial_duration = None  # None = использовать TRIAL_DURATION_DAYS
 
         if settings.is_tariffs_mode():
             try:
@@ -707,6 +747,8 @@ async def activate_trial(
                     trial_device_limit = trial_tariff.device_limit
                     trial_squads = trial_tariff.allowed_squads or []
                     tariff_id_for_trial = trial_tariff.id
+                    if trial_tariff.trial_duration_days:
+                        trial_duration = trial_tariff.trial_duration_days
                     logger.info(f"Используем триальный тариф {trial_tariff.name} (ID: {trial_tariff.id})")
             except Exception as e:
                 logger.error(f"Ошибка получения триального тарифа: {e}")
@@ -714,6 +756,7 @@ async def activate_trial(
         subscription = await create_trial_subscription(
             db,
             db_user.id,
+            duration_days=trial_duration,
             device_limit=trial_device_limit,
             traffic_limit_gb=trial_traffic_limit,
             connected_squads=trial_squads,
