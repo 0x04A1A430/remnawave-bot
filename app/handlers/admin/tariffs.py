@@ -188,6 +188,9 @@ def get_tariff_view_keyboard(
         InlineKeyboardButton(text="🎚️ Уровень", callback_data=f"admin_tariff_edit_tier:{tariff.id}"),
     ])
     buttons.append([
+        InlineKeyboardButton(text="📱💰 Цена за устройство", callback_data=f"admin_tariff_edit_device_price:{tariff.id}"),
+    ])
+    buttons.append([
         InlineKeyboardButton(text="🌐 Серверы", callback_data=f"admin_tariff_edit_squads:{tariff.id}"),
         InlineKeyboardButton(text="👥 Промогруппы", callback_data=f"admin_tariff_edit_promo:{tariff.id}"),
     ])
@@ -236,6 +239,12 @@ def format_tariff_info(tariff: Tariff, language: str, subs_count: int = 0) -> st
 
     trial_status = "✅ Да" if tariff.is_trial_available else "❌ Нет"
 
+    # Форматируем цену за устройство
+    if tariff.device_price_kopeks is not None and tariff.device_price_kopeks > 0:
+        device_price_display = _format_price_kopeks(tariff.device_price_kopeks) + "/мес"
+    else:
+        device_price_display = "Недоступно"
+
     return f"""📦 <b>Тариф: {tariff.name}</b>
 
 {status}
@@ -245,6 +254,7 @@ def format_tariff_info(tariff: Tariff, language: str, subs_count: int = 0) -> st
 <b>Параметры:</b>
 • Трафик: {traffic}
 • Устройств: {tariff.device_limit}
+• Цена за доп. устройство: {device_price_display}
 • Триал: {trial_status}
 
 <b>Цены:</b>
@@ -1065,6 +1075,94 @@ async def process_edit_tariff_prices(
     )
 
 
+# ============ РЕДАКТИРОВАНИЕ ЦЕНЫ ЗА УСТРОЙСТВО ============
+
+@admin_required
+@error_handler
+async def start_edit_tariff_device_price(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    """Начинает редактирование цены за устройство."""
+    texts = get_texts(db_user.language)
+    tariff_id = int(callback.data.split(":")[1])
+    tariff = await get_tariff_by_id(db, tariff_id)
+
+    if not tariff:
+        await callback.answer("Тариф не найден", show_alert=True)
+        return
+
+    await state.set_state(AdminStates.editing_tariff_device_price)
+    await state.update_data(tariff_id=tariff_id, language=db_user.language)
+
+    if tariff.device_price_kopeks is not None and tariff.device_price_kopeks > 0:
+        current_price = _format_price_kopeks(tariff.device_price_kopeks) + "/мес"
+    else:
+        current_price = "Недоступно (докупка устройств запрещена)"
+
+    await callback.message.edit_text(
+        f"📱💰 <b>Редактирование цены за устройство</b>\n\n"
+        f"Текущая цена: <b>{current_price}</b>\n\n"
+        "Введите цену в копейках за одно устройство в месяц.\n\n"
+        "• <code>0</code> или <code>-</code> — докупка устройств недоступна\n"
+        "• Например: <code>5000</code> = 50₽/мес за устройство",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=texts.CANCEL, callback_data=f"admin_tariff_view:{tariff_id}")]
+        ]),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def process_edit_tariff_device_price(
+    message: types.Message,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    """Обрабатывает новую цену за устройство."""
+    data = await state.get_data()
+    tariff_id = data.get("tariff_id")
+
+    tariff = await get_tariff_by_id(db, tariff_id)
+    if not tariff:
+        await message.answer("Тариф не найден")
+        await state.clear()
+        return
+
+    text = message.text.strip()
+
+    if text == "-" or text == "0":
+        device_price = None
+    else:
+        try:
+            device_price = int(text)
+            if device_price < 0:
+                raise ValueError
+        except ValueError:
+            await message.answer(
+                "Введите корректное число (0 или больше).\n"
+                "Для отключения докупки введите <code>0</code> или <code>-</code>",
+                parse_mode="HTML"
+            )
+            return
+
+    tariff = await update_tariff(db, tariff, device_price_kopeks=device_price)
+    await state.clear()
+
+    subs_count = await get_tariff_subscriptions_count(db, tariff_id)
+
+    await message.answer(
+        f"✅ Цена за устройство изменена!\n\n" + format_tariff_info(tariff, db_user.language, subs_count),
+        reply_markup=get_tariff_view_keyboard(tariff, db_user.language),
+        parse_mode="HTML"
+    )
+
+
 # ============ УДАЛЕНИЕ ТАРИФА ============
 
 @admin_required
@@ -1600,6 +1698,10 @@ def register_handlers(dp: Dispatcher):
     # Редактирование цен
     dp.callback_query.register(start_edit_tariff_prices, F.data.startswith("admin_tariff_edit_prices:"))
     dp.message.register(process_edit_tariff_prices, AdminStates.editing_tariff_prices)
+
+    # Редактирование цены за устройство
+    dp.callback_query.register(start_edit_tariff_device_price, F.data.startswith("admin_tariff_edit_device_price:"))
+    dp.message.register(process_edit_tariff_device_price, AdminStates.editing_tariff_device_price)
 
     # Удаление
     dp.callback_query.register(confirm_delete_tariff, F.data.startswith("admin_tariff_delete:"))
