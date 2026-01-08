@@ -438,6 +438,10 @@ class Settings(BaseSettings):
     FREEKASSA_WEBHOOK_PATH: str = "/freekassa-webhook"
     FREEKASSA_WEBHOOK_HOST: str = "0.0.0.0"
     FREEKASSA_WEBHOOK_PORT: int = 8088
+    # Способ оплаты: None = форма выбора, 42 = обычный СБП, 44 = NSPK СБП
+    FREEKASSA_PAYMENT_SYSTEM_ID: Optional[int] = None
+    # Использовать API для создания заказов (нужно для NSPK СБП)
+    FREEKASSA_USE_API: bool = False
 
     MAIN_MENU_MODE: str = "default"
     CONNECT_BUTTON_MODE: str = "guide"
