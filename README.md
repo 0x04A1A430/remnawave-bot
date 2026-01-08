@@ -35,7 +35,7 @@
 
 ### ⚡ **Полная автоматизация VPN бизнеса**
 - 🎯 **Готовое решение** - разверни за 5 минут, начни продавать сегодня
-- 💰 **Многоканальные платежи** - Telegram Stars + Tribute + CryptoBot + Heleket + YooKassa (СБП + карты) + MulenPay + PayPalych (СБП + карты) + Platega (карты + СБП) + WATA + Freekassa (NSPK СБП + карты)
+- 💰 **Многоканальные платежи** - Telegram Stars + Tribute + CryptoBot + Heleket + YooKassa (СБП + карты) + MulenPay + PayPalych (СБП + карты) + Platega (карты + СБП) + WATA + Freekassa (NSPK СБП + карты) + CloudPayments (карты + СБП)
 - 🔄 **Автоматизация 99%** - от регистрации до продления подписок
 - 📱 **MiniApp лк** - личный кабинет с возможностью покупки/продления подписки
 - 📊 **Детальная аналитика** - полная картина вашего бизнеса
@@ -555,6 +555,16 @@ hooks.domain.com {
         }
     }
 
+    handle /cloudpayments-webhook {
+        reverse_proxy remnawave_bot:8080 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            transport http {
+                read_buffer 0
+            }
+        }
+    }
+
     # app-config.json с CORS
     handle /app-config.json {
         header Access-Control-Allow-Origin "*"
@@ -740,6 +750,18 @@ http {
         }
 
         location = /freekassa-webhook {
+            proxy_pass http://remnawave_bot_unified;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_read_timeout 120s;
+            proxy_send_timeout 120s;
+            proxy_buffering off;
+            proxy_request_buffering off;
+        }
+
+        location = /cloudpayments-webhook {
             proxy_pass http://remnawave_bot_unified;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
@@ -1000,6 +1022,23 @@ FREEKASSA_PAYMENT_SYSTEM_ID=44  # 44 = NSPK СБП, 42 = обычный СБП
 - `FREEKASSA_PAYMENT_SYSTEM_ID=44` - для NSPK СБП (быстрее и надежнее)
 - Настройте webhook на `https://your-domain.com/freekassa-webhook`
 
+### 💳 CloudPayments
+
+Платёжный провайдер [CloudPayments](https://cloudpayments.ru) поддерживает оплату банковскими картами и СБП.
+
+```env
+CLOUDPAYMENTS_ENABLED=true
+CLOUDPAYMENTS_PUBLIC_ID=pk_xxxxxxxxxxxxx
+CLOUDPAYMENTS_API_SECRET=your_api_secret
+CLOUDPAYMENTS_CURRENCY=RUB
+```
+
+**Важно:**
+- `CLOUDPAYMENTS_PUBLIC_ID` - Public ID из личного кабинета CloudPayments
+- `CLOUDPAYMENTS_API_SECRET` - API Secret для подписи запросов
+- Настройте webhook (Pay/Fail уведомления) на `https://your-domain.com/cloudpayments-webhook`
+- Поддерживает 3D-Secure для безопасных платежей
+
 ### 💳 Platega.io
 
 Платёжный провайдер [Platega.io](https://platega.io) добавляет ещё один способ приёма оплат картой и по СБП. Включите его, если у вас есть кабинет мерчанта и доступ к API.
@@ -1233,6 +1272,7 @@ CONTEST_BUTTON_VISIBLE=true
 - 💳 Platega (СБП + банковские карты)
 - 💳 **WATA**
 - 💳 **Freekassa** (NSPK СБП + карты)
+- 💳 **CloudPayments** (карты + СБП)
 - 🔥 Автогенерация счетов и webhook-уведомления
 - 💼 История операций
 - 🔄 Автоплатёж с настройкой дня списания
@@ -1418,7 +1458,7 @@ CONTEST_BUTTON_VISIBLE=true
 - ⚙️ **FastAPI Web API** с эндпоинтами для управления всеми аспектами бота
 - 🔒 **Управление API-ключами** - выпуск, отзыв, реактивация токенов
 - 🛰️ **Mini App** - полноценный личный кабинет внутри Telegram
-- 💳 **Интегрированные платежи** в Mini App (Stars, Pal24, YooKassa, WATA, Freekassa)
+- 💳 **Интегрированные платежи** в Mini App (Stars, Pal24, YooKassa, WATA, Freekassa, CloudPayments)
 - 🧭 **Единый стандартный app-config.json** - централизованная раздача ссылок на клиенты
 - 🪙 **Платёжные вебхуки** - встроенные серверы для всех платёжных систем
 - 📡 **Мониторинг серверов** - REST-эндпоинты для просмотра нод и статистики
@@ -1473,6 +1513,7 @@ CONTEST_BUTTON_VISIBLE=true
    - **Platega**: Настрой webhook на `https://your-domain.com/platega-webhook`
    - **WATA**: Настрой webhook на `https://your-domain.com/wata-webhook`
    - **Freekassa**: Настрой webhook на `https://your-domain.com/freekassa-webhook`
+   - **CloudPayments**: Настрой Pay/Fail уведомления на `https://your-domain.com/cloudpayments-webhook`
 
 4. **🔄 Настройка автосинхронизации** (опционально)
    - В `.env` установи `REMNAWAVE_AUTO_SYNC_ENABLED=true`
@@ -1796,7 +1837,7 @@ REMNAWAVE_SECRET_KEY=XXXXXXX:DDDDDDDD
 
 | Метрика | Значение |
 |---------|----------|
-| 💳 **Платёжных систем** | 10 (Stars, YooKassa, Tribute, CryptoBot, Heleket, MulenPay, Pal24, Platega, WATA, Freekassa) |
+| 💳 **Платёжных систем** | 11 (Stars, YooKassa, Tribute, CryptoBot, Heleket, MulenPay, Pal24, Platega, WATA, Freekassa, CloudPayments) |
 | 🌍 **Языков интерфейса** | 2 (RU, EN) с возможностью расширения |
 | 📊 **Периодов подписки** | 6 (от 14 дней до года) |
 | 🎁 **Типов промо-акций** | 5 (коды, группы, предложения, скидки, кампании) |
