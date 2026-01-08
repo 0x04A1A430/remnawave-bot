@@ -398,7 +398,7 @@ class MulenPayPaymentMixin:
                     # Умная автоактивация если автопокупка не сработала
                     if not auto_purchase_success:
                         try:
-                            await auto_activate_subscription_after_topup(db, user)
+                            await auto_activate_subscription_after_topup(db, user, bot=getattr(self, "bot", None))
                         except Exception as auto_activate_error:
                             logger.error(
                                 "Ошибка умной автоактивации для пользователя %s: %s",

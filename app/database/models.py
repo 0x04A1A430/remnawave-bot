@@ -1234,6 +1234,48 @@ class ReferralEarning(Base):
         return self.amount_kopeks / 100
 
 
+class WithdrawalRequestStatus(Enum):
+    """Статусы заявки на вывод реферального баланса."""
+    PENDING = "pending"  # Ожидает рассмотрения
+    APPROVED = "approved"  # Одобрена
+    REJECTED = "rejected"  # Отклонена
+    COMPLETED = "completed"  # Выполнена (деньги переведены)
+    CANCELLED = "cancelled"  # Отменена пользователем
+
+
+class WithdrawalRequest(Base):
+    """Заявка на вывод реферального баланса."""
+    __tablename__ = "withdrawal_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    amount_kopeks = Column(Integer, nullable=False)  # Сумма к выводу
+    status = Column(String(50), default=WithdrawalRequestStatus.PENDING.value, nullable=False)
+
+    # Данные для вывода (заполняет пользователь)
+    payment_details = Column(Text, nullable=True)  # Реквизиты для перевода
+
+    # Анализ на отмывание
+    risk_score = Column(Integer, default=0)  # 0-100, чем выше — тем подозрительнее
+    risk_analysis = Column(Text, nullable=True)  # JSON с деталями анализа
+
+    # Обработка админом
+    processed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    processed_at = Column(DateTime, nullable=True)
+    admin_comment = Column(Text, nullable=True)
+
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    user = relationship("User", foreign_keys=[user_id], backref="withdrawal_requests")
+    admin = relationship("User", foreign_keys=[processed_by])
+
+    @property
+    def amount_rubles(self) -> float:
+        return self.amount_kopeks / 100
+
+
 class ReferralContest(Base):
     __tablename__ = "referral_contests"
 

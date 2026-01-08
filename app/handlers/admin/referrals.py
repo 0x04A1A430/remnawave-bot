@@ -1,17 +1,22 @@
+import json
 import logging
 from aiogram import Dispatcher, types, F
+from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 import datetime
 
 from app.config import settings
-from app.database.models import User
+from app.database.models import User, WithdrawalRequest, WithdrawalRequestStatus, ReferralEarning
 from app.localization.texts import get_texts
 from app.database.crud.referral import (
     get_referral_statistics,
     get_top_referrers_by_period,
     get_user_referral_stats,
 )
-from app.database.crud.user import get_user_by_id
+from app.database.crud.user import get_user_by_id, get_user_by_telegram_id
+from app.services.referral_withdrawal_service import referral_withdrawal_service
+from app.states import AdminStates
 from app.utils.decorators import admin_required, error_handler
 
 logger = logging.getLogger(__name__)
@@ -78,12 +83,26 @@ async def show_referral_statistics(
 <i>🕐 Обновлено: {current_time}</i>
 """
         
-        keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+        keyboard_rows = [
             [types.InlineKeyboardButton(text="🔄 Обновить", callback_data="admin_referrals")],
             [types.InlineKeyboardButton(text="👥 Топ рефереров", callback_data="admin_referrals_top")],
+        ]
+
+        # Кнопка заявок на вывод (если функция включена)
+        if settings.is_referral_withdrawal_enabled():
+            keyboard_rows.append([
+                types.InlineKeyboardButton(
+                    text="💸 Заявки на вывод",
+                    callback_data="admin_withdrawal_requests"
+                )
+            ])
+
+        keyboard_rows.extend([
             [types.InlineKeyboardButton(text="⚙️ Настройки", callback_data="admin_referrals_settings")],
             [types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_panel")]
         ])
+
+        keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
         
         try:
             await callback.message.edit_text(text, reply_markup=keyboard)
@@ -292,8 +311,450 @@ async def show_referral_settings(
     await callback.answer()
 
 
+@admin_required
+@error_handler
+async def show_pending_withdrawal_requests(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    """Показывает список ожидающих заявок на вывод."""
+    requests = await referral_withdrawal_service.get_pending_requests(db)
+
+    if not requests:
+        text = "📋 <b>Заявки на вывод</b>\n\nНет ожидающих заявок."
+
+        keyboard_rows = []
+        # Кнопка тестового начисления (только в тестовом режиме)
+        if settings.REFERRAL_WITHDRAWAL_TEST_MODE:
+            keyboard_rows.append([
+                types.InlineKeyboardButton(
+                    text="🧪 Тестовое начисление",
+                    callback_data="admin_test_referral_earning"
+                )
+            ])
+        keyboard_rows.append([
+            types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_referrals")
+        ])
+
+        await callback.message.edit_text(
+            text,
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
+        )
+        await callback.answer()
+        return
+
+    text = f"📋 <b>Заявки на вывод ({len(requests)})</b>\n\n"
+
+    for req in requests[:10]:
+        user = await get_user_by_id(db, req.user_id)
+        user_name = user.full_name if user else "Неизвестно"
+        user_tg_id = user.telegram_id if user else "N/A"
+
+        risk_emoji = "🟢" if req.risk_score < 30 else "🟡" if req.risk_score < 50 else "🟠" if req.risk_score < 70 else "🔴"
+
+        text += f"<b>#{req.id}</b> — {user_name} (ID{user_tg_id})\n"
+        text += f"💰 {req.amount_kopeks / 100:.0f}₽ | {risk_emoji} Риск: {req.risk_score}/100\n"
+        text += f"📅 {req.created_at.strftime('%d.%m.%Y %H:%M')}\n\n"
+
+    keyboard_rows = []
+    for req in requests[:5]:
+        keyboard_rows.append([
+            types.InlineKeyboardButton(
+                text=f"#{req.id} — {req.amount_kopeks / 100:.0f}₽",
+                callback_data=f"admin_withdrawal_view_{req.id}"
+            )
+        ])
+
+    # Кнопка тестового начисления (только в тестовом режиме)
+    if settings.REFERRAL_WITHDRAWAL_TEST_MODE:
+        keyboard_rows.append([
+            types.InlineKeyboardButton(
+                text="🧪 Тестовое начисление",
+                callback_data="admin_test_referral_earning"
+            )
+        ])
+
+    keyboard_rows.append([
+        types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_referrals")
+    ])
+
+    await callback.message.edit_text(
+        text,
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def view_withdrawal_request(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    """Показывает детали заявки на вывод."""
+    request_id = int(callback.data.split("_")[-1])
+
+    result = await db.execute(
+        select(WithdrawalRequest).where(WithdrawalRequest.id == request_id)
+    )
+    request = result.scalar_one_or_none()
+
+    if not request:
+        await callback.answer("Заявка не найдена", show_alert=True)
+        return
+
+    user = await get_user_by_id(db, request.user_id)
+    user_name = user.full_name if user else "Неизвестно"
+    user_tg_id = user.telegram_id if user else "N/A"
+
+    analysis = json.loads(request.risk_analysis) if request.risk_analysis else {}
+
+    status_text = {
+        WithdrawalRequestStatus.PENDING.value: "⏳ Ожидает",
+        WithdrawalRequestStatus.APPROVED.value: "✅ Одобрена",
+        WithdrawalRequestStatus.REJECTED.value: "❌ Отклонена",
+        WithdrawalRequestStatus.COMPLETED.value: "✅ Выполнена",
+        WithdrawalRequestStatus.CANCELLED.value: "🚫 Отменена",
+    }.get(request.status, request.status)
+
+    text = f"""
+📋 <b>Заявка #{request.id}</b>
+
+👤 Пользователь: {user_name}
+🆔 ID: <code>{user_tg_id}</code>
+💰 Сумма: <b>{request.amount_kopeks / 100:.0f}₽</b>
+📊 Статус: {status_text}
+
+💳 <b>Реквизиты:</b>
+<code>{request.payment_details}</code>
+
+📅 Создана: {request.created_at.strftime('%d.%m.%Y %H:%M')}
+
+{referral_withdrawal_service.format_analysis_for_admin(analysis)}
+"""
+
+    keyboard = []
+
+    if request.status == WithdrawalRequestStatus.PENDING.value:
+        keyboard.append([
+            types.InlineKeyboardButton(
+                text="✅ Одобрить",
+                callback_data=f"admin_withdrawal_approve_{request.id}"
+            ),
+            types.InlineKeyboardButton(
+                text="❌ Отклонить",
+                callback_data=f"admin_withdrawal_reject_{request.id}"
+            )
+        ])
+
+    if request.status == WithdrawalRequestStatus.APPROVED.value:
+        keyboard.append([
+            types.InlineKeyboardButton(
+                text="✅ Деньги переведены",
+                callback_data=f"admin_withdrawal_complete_{request.id}"
+            )
+        ])
+
+    keyboard.append([
+        types.InlineKeyboardButton(
+            text="👤 Профиль пользователя",
+            callback_data=f"admin_user_{user_tg_id}"
+        )
+    ])
+    keyboard.append([
+        types.InlineKeyboardButton(text="⬅️ К списку", callback_data="admin_withdrawal_requests")
+    ])
+
+    await callback.message.edit_text(
+        text,
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def approve_withdrawal_request(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    """Одобряет заявку на вывод."""
+    request_id = int(callback.data.split("_")[-1])
+
+    result = await db.execute(
+        select(WithdrawalRequest).where(WithdrawalRequest.id == request_id)
+    )
+    request = result.scalar_one_or_none()
+
+    if not request:
+        await callback.answer("Заявка не найдена", show_alert=True)
+        return
+
+    success, error = await referral_withdrawal_service.approve_request(
+        db, request_id, db_user.id
+    )
+
+    if success:
+        # Уведомляем пользователя
+        user = await get_user_by_id(db, request.user_id)
+        if user:
+            try:
+                texts = get_texts(user.language)
+                await callback.bot.send_message(
+                    user.telegram_id,
+                    texts.t(
+                        "REFERRAL_WITHDRAWAL_APPROVED",
+                        "✅ <b>Заявка на вывод #{id} одобрена!</b>\n\n"
+                        "Сумма: <b>{amount}</b>\n"
+                        "Средства списаны с баланса.\n\n"
+                        "Ожидайте перевод на указанные реквизиты."
+                    ).format(id=request.id, amount=texts.format_price(request.amount_kopeks))
+                )
+            except Exception as e:
+                logger.error(f"Ошибка отправки уведомления пользователю: {e}")
+
+        await callback.answer("✅ Заявка одобрена, средства списаны с баланса")
+
+        # Обновляем отображение
+        await view_withdrawal_request(callback, db_user, db)
+    else:
+        await callback.answer(f"❌ {error}", show_alert=True)
+
+
+@admin_required
+@error_handler
+async def reject_withdrawal_request(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    """Отклоняет заявку на вывод."""
+    request_id = int(callback.data.split("_")[-1])
+
+    result = await db.execute(
+        select(WithdrawalRequest).where(WithdrawalRequest.id == request_id)
+    )
+    request = result.scalar_one_or_none()
+
+    if not request:
+        await callback.answer("Заявка не найдена", show_alert=True)
+        return
+
+    success = await referral_withdrawal_service.reject_request(
+        db, request_id, db_user.id, "Отклонено администратором"
+    )
+
+    if success:
+        # Уведомляем пользователя
+        user = await get_user_by_id(db, request.user_id)
+        if user:
+            try:
+                texts = get_texts(user.language)
+                await callback.bot.send_message(
+                    user.telegram_id,
+                    texts.t(
+                        "REFERRAL_WITHDRAWAL_REJECTED",
+                        "❌ <b>Заявка на вывод #{id} отклонена</b>\n\n"
+                        "Сумма: <b>{amount}</b>\n\n"
+                        "Если у вас есть вопросы, обратитесь в поддержку."
+                    ).format(id=request.id, amount=texts.format_price(request.amount_kopeks))
+                )
+            except Exception as e:
+                logger.error(f"Ошибка отправки уведомления пользователю: {e}")
+
+        await callback.answer("❌ Заявка отклонена")
+
+        # Обновляем отображение
+        await view_withdrawal_request(callback, db_user, db)
+    else:
+        await callback.answer("❌ Ошибка отклонения", show_alert=True)
+
+
+@admin_required
+@error_handler
+async def complete_withdrawal_request(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    """Отмечает заявку как выполненную (деньги переведены)."""
+    request_id = int(callback.data.split("_")[-1])
+
+    result = await db.execute(
+        select(WithdrawalRequest).where(WithdrawalRequest.id == request_id)
+    )
+    request = result.scalar_one_or_none()
+
+    if not request:
+        await callback.answer("Заявка не найдена", show_alert=True)
+        return
+
+    success = await referral_withdrawal_service.complete_request(
+        db, request_id, db_user.id, "Перевод выполнен"
+    )
+
+    if success:
+        # Уведомляем пользователя
+        user = await get_user_by_id(db, request.user_id)
+        if user:
+            try:
+                texts = get_texts(user.language)
+                await callback.bot.send_message(
+                    user.telegram_id,
+                    texts.t(
+                        "REFERRAL_WITHDRAWAL_COMPLETED",
+                        "💸 <b>Выплата по заявке #{id} выполнена!</b>\n\n"
+                        "Сумма: <b>{amount}</b>\n\n"
+                        "Деньги отправлены на указанные реквизиты."
+                    ).format(id=request.id, amount=texts.format_price(request.amount_kopeks))
+                )
+            except Exception as e:
+                logger.error(f"Ошибка отправки уведомления пользователю: {e}")
+
+        await callback.answer("✅ Заявка выполнена")
+
+        # Обновляем отображение
+        await view_withdrawal_request(callback, db_user, db)
+    else:
+        await callback.answer("❌ Ошибка выполнения", show_alert=True)
+
+
+@admin_required
+@error_handler
+async def start_test_referral_earning(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext
+):
+    """Начинает процесс тестового начисления реферального дохода."""
+    if not settings.REFERRAL_WITHDRAWAL_TEST_MODE:
+        await callback.answer("Тестовый режим отключён", show_alert=True)
+        return
+
+    await state.set_state(AdminStates.test_referral_earning_input)
+
+    text = """
+🧪 <b>Тестовое начисление реферального дохода</b>
+
+Введите данные в формате:
+<code>telegram_id сумма_в_рублях</code>
+
+Примеры:
+• <code>123456789 500</code> — начислит 500₽ пользователю 123456789
+• <code>987654321 1000</code> — начислит 1000₽ пользователю 987654321
+
+⚠️ Это создаст реальную запись ReferralEarning, как будто пользователь заработал с реферала.
+"""
+
+    keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+        [types.InlineKeyboardButton(text="❌ Отмена", callback_data="admin_withdrawal_requests")]
+    ])
+
+    await callback.message.edit_text(text, reply_markup=keyboard)
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def process_test_referral_earning(
+    message: types.Message,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext
+):
+    """Обрабатывает ввод тестового начисления."""
+    if not settings.REFERRAL_WITHDRAWAL_TEST_MODE:
+        await message.answer("❌ Тестовый режим отключён")
+        await state.clear()
+        return
+
+    text_input = message.text.strip()
+    parts = text_input.split()
+
+    if len(parts) != 2:
+        await message.answer(
+            "❌ Неверный формат. Введите: <code>telegram_id сумма</code>\n\n"
+            "Например: <code>123456789 500</code>"
+        )
+        return
+
+    try:
+        target_telegram_id = int(parts[0])
+        amount_rubles = float(parts[1].replace(",", "."))
+        amount_kopeks = int(amount_rubles * 100)
+
+        if amount_kopeks <= 0:
+            await message.answer("❌ Сумма должна быть положительной")
+            return
+
+        if amount_kopeks > 10000000:  # Лимит 100 000₽
+            await message.answer("❌ Максимальная сумма тестового начисления: 100 000₽")
+            return
+
+    except ValueError:
+        await message.answer(
+            "❌ Неверный формат чисел. Введите: <code>telegram_id сумма</code>\n\n"
+            "Например: <code>123456789 500</code>"
+        )
+        return
+
+    # Ищем целевого пользователя
+    target_user = await get_user_by_telegram_id(db, target_telegram_id)
+    if not target_user:
+        await message.answer(f"❌ Пользователь с ID {target_telegram_id} не найден в базе")
+        return
+
+    # Создаём тестовое начисление
+    earning = ReferralEarning(
+        user_id=target_user.id,
+        referral_id=target_user.id,  # Сам на себя (тестовое)
+        amount_kopeks=amount_kopeks,
+        reason="test_earning"
+    )
+    db.add(earning)
+
+    # Добавляем на баланс пользователя
+    target_user.balance_kopeks += amount_kopeks
+
+    await db.commit()
+    await state.clear()
+
+    await message.answer(
+        f"✅ <b>Тестовое начисление создано!</b>\n\n"
+        f"👤 Пользователь: {target_user.full_name or 'Без имени'}\n"
+        f"🆔 ID: <code>{target_telegram_id}</code>\n"
+        f"💰 Сумма: <b>{amount_rubles:.0f}₽</b>\n"
+        f"💳 Новый баланс: <b>{target_user.balance_kopeks / 100:.0f}₽</b>\n\n"
+        f"Начисление добавлено как реферальный доход.",
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+            [types.InlineKeyboardButton(text="📋 К заявкам", callback_data="admin_withdrawal_requests")],
+            [types.InlineKeyboardButton(text="👤 Профиль", callback_data=f"admin_user_manage_{target_telegram_id}")]
+        ])
+    )
+
+    logger.info(
+        f"Тестовое начисление: админ {db_user.telegram_id} начислил {amount_rubles}₽ "
+        f"пользователю {target_telegram_id}"
+    )
+
+
 def register_handlers(dp: Dispatcher):
     dp.callback_query.register(show_referral_statistics, F.data == "admin_referrals")
     dp.callback_query.register(show_top_referrers, F.data == "admin_referrals_top")
     dp.callback_query.register(show_top_referrers_filtered, F.data.startswith("admin_top_ref:"))
     dp.callback_query.register(show_referral_settings, F.data == "admin_referrals_settings")
+
+    # Хендлеры заявок на вывод
+    dp.callback_query.register(show_pending_withdrawal_requests, F.data == "admin_withdrawal_requests")
+    dp.callback_query.register(view_withdrawal_request, F.data.startswith("admin_withdrawal_view_"))
+    dp.callback_query.register(approve_withdrawal_request, F.data.startswith("admin_withdrawal_approve_"))
+    dp.callback_query.register(reject_withdrawal_request, F.data.startswith("admin_withdrawal_reject_"))
+    dp.callback_query.register(complete_withdrawal_request, F.data.startswith("admin_withdrawal_complete_"))
+
+    # Тестовое начисление
+    dp.callback_query.register(start_test_referral_earning, F.data == "admin_test_referral_earning")
+    dp.message.register(process_test_referral_earning, AdminStates.test_referral_earning_input)

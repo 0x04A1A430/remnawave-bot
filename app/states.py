@@ -111,6 +111,9 @@ class AdminStates(StatesGroup):
     editing_user_referrals = State()
     editing_user_referral_percent = State()
 
+    # Тестовое начисление реферального дохода
+    test_referral_earning_input = State()
+
     editing_rules_page = State()
     editing_privacy_policy = State()
     editing_public_offer = State()
@@ -239,3 +242,9 @@ class AdminSubmenuStates(StatesGroup):
 
 class BlacklistStates(StatesGroup):
     waiting_for_blacklist_url = State()
+
+
+class ReferralWithdrawalStates(StatesGroup):
+    waiting_for_amount = State()
+    waiting_for_payment_details = State()
+    confirming = State()

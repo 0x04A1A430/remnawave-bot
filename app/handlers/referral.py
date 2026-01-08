@@ -1,9 +1,11 @@
+import json
 import logging
 from pathlib import Path
 
 import qrcode
 from aiogram import Dispatcher, F, types
 from aiogram.exceptions import TelegramBadRequest
+from aiogram.fsm.context import FSMContext
 from aiogram.types import FSInputFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,6 +13,9 @@ from app.config import settings
 from app.database.models import User
 from app.keyboards.inline import get_referral_keyboard
 from app.localization.texts import get_texts
+from app.services.referral_withdrawal_service import referral_withdrawal_service
+from app.services.admin_notification_service import AdminNotificationService
+from app.states import ReferralWithdrawalStates
 from app.utils.photo_message import edit_or_answer_photo
 from app.utils.user_utils import (
     get_detailed_referral_list,
@@ -463,8 +468,386 @@ async def create_invite_message(
     await callback.answer()
 
 
+async def show_withdrawal_info(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext
+):
+    """Показывает информацию о выводе реферального баланса."""
+    texts = get_texts(db_user.language)
+
+    if not settings.is_referral_withdrawal_enabled():
+        await callback.answer(
+            texts.t("REFERRAL_WITHDRAWAL_DISABLED", "Функция вывода отключена"),
+            show_alert=True
+        )
+        return
+
+    # Получаем детальную статистику баланса
+    stats = await referral_withdrawal_service.get_referral_balance_stats(db, db_user.id)
+    min_amount = settings.REFERRAL_WITHDRAWAL_MIN_AMOUNT_KOPEKS
+    cooldown_days = settings.REFERRAL_WITHDRAWAL_COOLDOWN_DAYS
+
+    # Проверяем возможность вывода
+    can_request, reason = await referral_withdrawal_service.can_request_withdrawal(db, db_user.id)
+
+    text = texts.t("REFERRAL_WITHDRAWAL_TITLE", "💸 <b>Вывод реферального баланса</b>") + "\n\n"
+
+    # Показываем детальную статистику
+    text += referral_withdrawal_service.format_balance_stats_for_user(stats, texts)
+    text += "\n"
+
+    text += texts.t(
+        "REFERRAL_WITHDRAWAL_MIN_AMOUNT",
+        "📊 Минимальная сумма: <b>{amount}</b>"
+    ).format(amount=texts.format_price(min_amount)) + "\n"
+    text += texts.t(
+        "REFERRAL_WITHDRAWAL_COOLDOWN",
+        "⏱ Частота вывода: раз в <b>{days}</b> дней"
+    ).format(days=cooldown_days) + "\n\n"
+
+    keyboard = []
+
+    if can_request:
+        text += texts.t(
+            "REFERRAL_WITHDRAWAL_READY",
+            "✅ Вы можете запросить вывод средств"
+        ) + "\n"
+        keyboard.append([types.InlineKeyboardButton(
+            text=texts.t("REFERRAL_WITHDRAWAL_REQUEST_BUTTON", "📝 Оформить заявку"),
+            callback_data="referral_withdrawal_start"
+        )])
+    else:
+        text += f"❌ {reason}\n"
+
+    keyboard.append([types.InlineKeyboardButton(
+        text=texts.BACK,
+        callback_data="menu_referrals"
+    )])
+
+    await edit_or_answer_photo(
+        callback,
+        text,
+        types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+    )
+    await callback.answer()
+
+
+async def start_withdrawal_request(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext
+):
+    """Начинает процесс оформления заявки на вывод."""
+    texts = get_texts(db_user.language)
+
+    # Повторная проверка
+    can_request, reason = await referral_withdrawal_service.can_request_withdrawal(db, db_user.id)
+    if not can_request:
+        await callback.answer(reason, show_alert=True)
+        return
+
+    available = await referral_withdrawal_service.get_available_for_withdrawal(db, db_user.id)
+
+    # Сохраняем доступный баланс в состоянии
+    await state.update_data(available_balance=available)
+    await state.set_state(ReferralWithdrawalStates.waiting_for_amount)
+
+    text = texts.t(
+        "REFERRAL_WITHDRAWAL_ENTER_AMOUNT",
+        "💸 Введите сумму для вывода в рублях\n\nДоступно: <b>{amount}</b>"
+    ).format(amount=texts.format_price(available))
+
+    keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+        [types.InlineKeyboardButton(
+            text=texts.t("REFERRAL_WITHDRAWAL_ALL", f"Вывести всё ({available / 100:.0f}₽)"),
+            callback_data=f"referral_withdrawal_amount_{available}"
+        )],
+        [types.InlineKeyboardButton(
+            text=texts.t("CANCEL", "❌ Отмена"),
+            callback_data="referral_withdrawal_cancel"
+        )]
+    ])
+
+    await edit_or_answer_photo(callback, text, keyboard)
+    await callback.answer()
+
+
+async def process_withdrawal_amount(
+    message: types.Message,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext
+):
+    """Обрабатывает ввод суммы для вывода."""
+    texts = get_texts(db_user.language)
+    data = await state.get_data()
+    available = data.get("available_balance", 0)
+
+    try:
+        # Парсим сумму (в рублях)
+        amount_text = message.text.strip().replace(",", ".").replace("₽", "").replace(" ", "")
+        amount_rubles = float(amount_text)
+        amount_kopeks = int(amount_rubles * 100)
+
+        if amount_kopeks <= 0:
+            await message.answer(texts.t("REFERRAL_WITHDRAWAL_INVALID_AMOUNT", "❌ Введите положительную сумму"))
+            return
+
+        min_amount = settings.REFERRAL_WITHDRAWAL_MIN_AMOUNT_KOPEKS
+        if amount_kopeks < min_amount:
+            await message.answer(
+                texts.t(
+                    "REFERRAL_WITHDRAWAL_MIN_ERROR",
+                    "❌ Минимальная сумма: {amount}"
+                ).format(amount=texts.format_price(min_amount))
+            )
+            return
+
+        if amount_kopeks > available:
+            await message.answer(
+                texts.t(
+                    "REFERRAL_WITHDRAWAL_INSUFFICIENT",
+                    "❌ Недостаточно средств. Доступно: {amount}"
+                ).format(amount=texts.format_price(available))
+            )
+            return
+
+        # Сохраняем сумму и переходим к вводу реквизитов
+        await state.update_data(withdrawal_amount=amount_kopeks)
+        await state.set_state(ReferralWithdrawalStates.waiting_for_payment_details)
+
+        text = texts.t(
+            "REFERRAL_WITHDRAWAL_ENTER_DETAILS",
+            "💳 Введите реквизиты для перевода:\n\n"
+            "Например:\n"
+            "• СБП: +7 999 123-45-67 (Сбербанк)"
+        )
+
+        keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+            [types.InlineKeyboardButton(
+                text=texts.t("CANCEL", "❌ Отмена"),
+                callback_data="referral_withdrawal_cancel"
+            )]
+        ])
+
+        await message.answer(text, reply_markup=keyboard)
+
+    except ValueError:
+        await message.answer(texts.t("REFERRAL_WITHDRAWAL_INVALID_AMOUNT", "❌ Введите корректную сумму"))
+
+
+async def process_withdrawal_amount_callback(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext
+):
+    """Обрабатывает выбор суммы для вывода через кнопку."""
+    texts = get_texts(db_user.language)
+
+    # Получаем сумму из callback_data
+    amount_kopeks = int(callback.data.split("_")[-1])
+
+    # Сохраняем сумму и переходим к вводу реквизитов
+    await state.update_data(withdrawal_amount=amount_kopeks)
+    await state.set_state(ReferralWithdrawalStates.waiting_for_payment_details)
+
+    text = texts.t(
+        "REFERRAL_WITHDRAWAL_ENTER_DETAILS",
+        "💳 Введите реквизиты для перевода:\n\n"
+        "Например:\n"
+        "• СБП: +7 999 123-45-67 (Сбербанк)"
+    )
+
+    keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+        [types.InlineKeyboardButton(
+            text=texts.t("CANCEL", "❌ Отмена"),
+            callback_data="referral_withdrawal_cancel"
+        )]
+    ])
+
+    await edit_or_answer_photo(callback, text, keyboard)
+    await callback.answer()
+
+
+async def process_payment_details(
+    message: types.Message,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext
+):
+    """Обрабатывает ввод реквизитов и показывает подтверждение."""
+    texts = get_texts(db_user.language)
+    data = await state.get_data()
+    amount_kopeks = data.get("withdrawal_amount", 0)
+    payment_details = message.text.strip()
+
+    if len(payment_details) < 10:
+        await message.answer(
+            texts.t("REFERRAL_WITHDRAWAL_DETAILS_TOO_SHORT", "❌ Реквизиты слишком короткие")
+        )
+        return
+
+    # Сохраняем реквизиты
+    await state.update_data(payment_details=payment_details)
+    await state.set_state(ReferralWithdrawalStates.confirming)
+
+    text = texts.t("REFERRAL_WITHDRAWAL_CONFIRM_TITLE", "📋 <b>Подтверждение заявки</b>") + "\n\n"
+    text += texts.t(
+        "REFERRAL_WITHDRAWAL_CONFIRM_AMOUNT",
+        "💰 Сумма: <b>{amount}</b>"
+    ).format(amount=texts.format_price(amount_kopeks)) + "\n\n"
+    text += texts.t(
+        "REFERRAL_WITHDRAWAL_CONFIRM_DETAILS",
+        "💳 Реквизиты:\n<code>{details}</code>"
+    ).format(details=payment_details) + "\n\n"
+    text += texts.t(
+        "REFERRAL_WITHDRAWAL_CONFIRM_WARNING",
+        "⚠️ После отправки заявка будет рассмотрена администрацией"
+    )
+
+    keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+        [types.InlineKeyboardButton(
+            text=texts.t("REFERRAL_WITHDRAWAL_CONFIRM_BUTTON", "✅ Подтвердить"),
+            callback_data="referral_withdrawal_confirm"
+        )],
+        [types.InlineKeyboardButton(
+            text=texts.t("CANCEL", "❌ Отмена"),
+            callback_data="referral_withdrawal_cancel"
+        )]
+    ])
+
+    await message.answer(text, reply_markup=keyboard)
+
+
+async def confirm_withdrawal_request(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext
+):
+    """Подтверждает и создаёт заявку на вывод."""
+    texts = get_texts(db_user.language)
+    data = await state.get_data()
+    amount_kopeks = data.get("withdrawal_amount", 0)
+    payment_details = data.get("payment_details", "")
+
+    await state.clear()
+
+    # Создаём заявку
+    request, error = await referral_withdrawal_service.create_withdrawal_request(
+        db, db_user.id, amount_kopeks, payment_details
+    )
+
+    if error:
+        await callback.answer(f"❌ {error}", show_alert=True)
+        return
+
+    # Отправляем уведомление админам
+    analysis = json.loads(request.risk_analysis) if request.risk_analysis else {}
+
+    admin_text = f"""
+🔔 <b>Новая заявка на вывод #{request.id}</b>
+
+👤 Пользователь: {db_user.full_name or 'Без имени'}
+🆔 ID: <code>{db_user.telegram_id}</code>
+💰 Сумма: <b>{amount_kopeks / 100:.0f}₽</b>
+
+💳 Реквизиты:
+<code>{payment_details}</code>
+
+{referral_withdrawal_service.format_analysis_for_admin(analysis)}
+"""
+
+    admin_keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+        [
+            types.InlineKeyboardButton(
+                text="✅ Одобрить",
+                callback_data=f"admin_withdrawal_approve_{request.id}"
+            ),
+            types.InlineKeyboardButton(
+                text="❌ Отклонить",
+                callback_data=f"admin_withdrawal_reject_{request.id}"
+            )
+        ],
+        [types.InlineKeyboardButton(
+            text="👤 Профиль пользователя",
+            callback_data=f"admin_user_{db_user.telegram_id}"
+        )]
+    ])
+
+    try:
+        notification_service = AdminNotificationService(callback.bot)
+        await notification_service.send_to_admins(
+            admin_text,
+            keyboard=admin_keyboard
+        )
+    except Exception as e:
+        logger.error(f"Ошибка отправки уведомления админам о заявке на вывод: {e}")
+
+    # Уведомление в топик, если настроено
+    topic_id = settings.REFERRAL_WITHDRAWAL_NOTIFICATIONS_TOPIC_ID
+    if topic_id and settings.ADMIN_NOTIFICATIONS_CHAT_ID:
+        try:
+            await callback.bot.send_message(
+                chat_id=settings.ADMIN_NOTIFICATIONS_CHAT_ID,
+                message_thread_id=topic_id,
+                text=admin_text,
+                reply_markup=admin_keyboard,
+                parse_mode="HTML"
+            )
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления в топик о заявке на вывод: {e}")
+
+    # Отвечаем пользователю
+    text = texts.t(
+        "REFERRAL_WITHDRAWAL_SUCCESS",
+        "✅ <b>Заявка #{id} создана!</b>\n\n"
+        "Сумма: <b>{amount}</b>\n\n"
+        "Ваша заявка будет рассмотрена администрацией. "
+        "Мы уведомим вас о результате."
+    ).format(id=request.id, amount=texts.format_price(amount_kopeks))
+
+    keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+        [types.InlineKeyboardButton(
+            text=texts.BACK,
+            callback_data="menu_referrals"
+        )]
+    ])
+
+    await edit_or_answer_photo(callback, text, keyboard)
+    await callback.answer()
+
+
+async def cancel_withdrawal_request(
+    callback: types.CallbackQuery,
+    db_user: User,
+    state: FSMContext
+):
+    """Отменяет процесс создания заявки на вывод."""
+    await state.clear()
+    texts = get_texts(db_user.language)
+    await callback.answer(texts.t("CANCELLED", "Отменено"))
+
+    # Возвращаем в меню партнёрки
+    keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+        [types.InlineKeyboardButton(
+            text=texts.BACK,
+            callback_data="menu_referrals"
+        )]
+    ])
+    await edit_or_answer_photo(
+        callback,
+        texts.t("REFERRAL_WITHDRAWAL_CANCELLED", "❌ Заявка отменена"),
+        keyboard
+    )
+
+
 def register_handlers(dp: Dispatcher):
-    
+
     dp.callback_query.register(
         show_referral_info,
         F.data == "menu_referrals"
@@ -497,4 +880,42 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         handle_referral_list_page,
         F.data.startswith("referral_list_page_")
+    )
+
+    # Хендлеры вывода реферального баланса
+    dp.callback_query.register(
+        show_withdrawal_info,
+        F.data == "referral_withdrawal"
+    )
+
+    dp.callback_query.register(
+        start_withdrawal_request,
+        F.data == "referral_withdrawal_start"
+    )
+
+    dp.callback_query.register(
+        process_withdrawal_amount_callback,
+        F.data.startswith("referral_withdrawal_amount_")
+    )
+
+    dp.callback_query.register(
+        confirm_withdrawal_request,
+        F.data == "referral_withdrawal_confirm"
+    )
+
+    dp.callback_query.register(
+        cancel_withdrawal_request,
+        F.data == "referral_withdrawal_cancel"
+    )
+
+    # Обработка текстового ввода суммы
+    dp.message.register(
+        process_withdrawal_amount,
+        ReferralWithdrawalStates.waiting_for_amount
+    )
+
+    # Обработка текстового ввода реквизитов
+    dp.message.register(
+        process_payment_details,
+        ReferralWithdrawalStates.waiting_for_payment_details
     )

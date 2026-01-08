@@ -1548,7 +1548,7 @@ def get_subscription_expiring_keyboard(subscription_id: int, language: str = DEF
 
 def get_referral_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     texts = get_texts(language)
-    
+
     keyboard = [
         [
             InlineKeyboardButton(
@@ -1574,14 +1574,24 @@ def get_referral_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMar
                 callback_data="referral_analytics"
             )
         ],
-        [
-            InlineKeyboardButton(
-                text=texts.BACK,
-                callback_data="back_to_menu" 
-            )
-        ]
     ]
-    
+
+    # Добавляем кнопку вывода, если включена
+    if settings.is_referral_withdrawal_enabled():
+        keyboard.append([
+            InlineKeyboardButton(
+                text=texts.t("REFERRAL_WITHDRAWAL_BUTTON", "💸 Запросить вывод"),
+                callback_data="referral_withdrawal"
+            )
+        ])
+
+    keyboard.append([
+        InlineKeyboardButton(
+            text=texts.BACK,
+            callback_data="back_to_menu"
+        )
+    ])
+
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
