@@ -538,10 +538,25 @@ class RemnaWaveAPI:
         user = self._parse_user(response['response'])
         return await self.enrich_user_with_happ_link(user)
 
-    async def revoke_user_subscription(self, uuid: str, new_short_uuid: Optional[str] = None) -> RemnaWaveUser:
+    async def revoke_user_subscription(
+        self,
+        uuid: str,
+        new_short_uuid: Optional[str] = None,
+        revoke_only_passwords: bool = False
+    ) -> RemnaWaveUser:
+        """
+        Отзывает подписку пользователя (меняет ссылку/пароли).
+
+        Args:
+            uuid: UUID пользователя
+            new_short_uuid: Новый короткий UUID (опционально, рекомендуется генерировать автоматически)
+            revoke_only_passwords: Если True, меняются только пароли без изменения URL подписки
+        """
         data = {}
         if new_short_uuid:
             data['shortUuid'] = new_short_uuid
+        if revoke_only_passwords:
+            data['revokeOnlyPasswords'] = True
 
         response = await self._make_request('POST', f'/api/users/{uuid}/actions/revoke', data)
         user = self._parse_user(response['response'])
@@ -808,6 +823,19 @@ class RemnaWaveAPI:
     
     async def get_system_stats(self) -> Dict[str, Any]:
         response = await self._make_request('GET', '/api/system/stats')
+        return response['response']
+
+    async def get_system_metadata(self) -> Dict[str, Any]:
+        """
+        Получает метаданные системы Remnawave.
+
+        Returns:
+            Dict с полями:
+            - version: версия Remnawave
+            - build: {time, number} - информация о сборке
+            - git: {backend: {commitSha}, node: {commitSha}} - информация о коммитах
+        """
+        response = await self._make_request('GET', '/api/system/metadata')
         return response['response']
     
     async def get_bandwidth_stats(self) -> Dict[str, Any]:
