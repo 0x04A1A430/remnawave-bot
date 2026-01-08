@@ -90,14 +90,30 @@ class FreekassaPaymentMixin:
         }
 
         try:
-            # Генерируем URL для оплаты
-            payment_url = freekassa_service.build_payment_url(
-                order_id=order_id,
-                amount=amount_rubles,
-                currency=currency,
-                email=email,
-                lang=language,
-            )
+            # Выбираем способ создания платежа: API или форма
+            if settings.FREEKASSA_USE_API:
+                # Используем API для создания заказа (нужно для NSPK СБП)
+                payment_url = await freekassa_service.create_order_and_get_url(
+                    order_id=order_id,
+                    amount=amount_rubles,
+                    currency=currency,
+                    email=email,
+                    payment_system_id=settings.FREEKASSA_PAYMENT_SYSTEM_ID,
+                )
+                logger.info(
+                    "Freekassa API: создан заказ order_id=%s, url=%s",
+                    order_id,
+                    payment_url,
+                )
+            else:
+                # Генерируем URL для формы оплаты (стандартный способ)
+                payment_url = freekassa_service.build_payment_url(
+                    order_id=order_id,
+                    amount=amount_rubles,
+                    currency=currency,
+                    email=email,
+                    lang=language,
+                )
 
             # Импортируем CRUD модуль
             freekassa_crud = import_module("app.database.crud.freekassa")
@@ -116,11 +132,12 @@ class FreekassaPaymentMixin:
             )
 
             logger.info(
-                "Freekassa: создан платеж order_id=%s, user_id=%s, amount=%s %s",
+                "Freekassa: создан платеж order_id=%s, user_id=%s, amount=%s %s, use_api=%s",
                 order_id,
                 user_id,
                 amount_rubles,
                 currency,
+                settings.FREEKASSA_USE_API,
             )
 
             return {
