@@ -1711,22 +1711,28 @@ def get_monitoring_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(
-                text=_t(texts, "ADMIN_MONITORING_FORCE_CHECK", "🔄 Принудительная проверка"),
+                text=_t(texts, "ADMIN_MONITORING_FORCE_CHECK", "🔄 Проверка подписок"),
                 callback_data="admin_mon_force_check"
             ),
             InlineKeyboardButton(
+                text=_t(texts, "ADMIN_MONITORING_TRAFFIC_CHECK", "📊 Проверка трафика"),
+                callback_data="admin_mon_traffic_check"
+            )
+        ],
+        [
+            InlineKeyboardButton(
                 text=_t(texts, "ADMIN_MONITORING_LOGS", "📋 Логи"),
                 callback_data="admin_mon_logs"
+            ),
+            InlineKeyboardButton(
+                text=_t(texts, "ADMIN_MONITORING_STATISTICS", "📈 Статистика"),
+                callback_data="admin_mon_statistics"
             )
         ],
         [
             InlineKeyboardButton(
                 text=_t(texts, "ADMIN_MONITORING_TEST_NOTIFICATIONS", "🧪 Тест уведомлений"),
                 callback_data="admin_mon_test_notifications"
-            ),
-            InlineKeyboardButton(
-                text=_t(texts, "ADMIN_MONITORING_STATISTICS", "📊 Статистика"),
-                callback_data="admin_mon_statistics"
             )
         ],
         [

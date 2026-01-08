@@ -267,7 +267,7 @@ class CloudPaymentsPaymentMixin:
         # Умная автоактивация если автопокупка не сработала
         if not auto_purchase_success:
             try:
-                await auto_activate_subscription_after_topup(db, user)
+                await auto_activate_subscription_after_topup(db, user, bot=getattr(self, "bot", None))
             except Exception as error:
                 logger.exception("Ошибка умной автоактивации после CloudPayments: %s", error)
 
