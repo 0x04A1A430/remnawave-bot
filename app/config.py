@@ -301,6 +301,11 @@ class Settings(BaseSettings):
     AUTO_PURCHASE_AFTER_TOPUP_ENABLED: bool = False
     AUTO_ACTIVATE_AFTER_TOPUP_ENABLED: bool = False
 
+    # Показывать предупреждение об активации подписки после пополнения баланса
+    # Если True - после пополнения показывает большое сообщение с кнопками:
+    # "Активировать", "Продлить", "Добавить устройства"
+    SHOW_ACTIVATION_PROMPT_AFTER_TOPUP: bool = False
+
     # Отключение превью ссылок в сообщениях бота
     DISABLE_WEB_PAGE_PREVIEW: bool = False
     ACTIVATE_BUTTON_VISIBLE: bool = False

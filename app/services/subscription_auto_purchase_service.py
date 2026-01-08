@@ -745,8 +745,12 @@ async def auto_activate_subscription_after_topup(
 
     # Если автоактивация отключена - только отправляем предупреждение
     if not settings.is_auto_activate_after_topup_enabled():
-        # Отправляем предупреждение если нет активной подписки
-        if bot and (not subscription or subscription.status not in ("active", "ACTIVE")):
+        # Отправляем предупреждение если включен режим и нет активной подписки
+        if (
+            settings.SHOW_ACTIVATION_PROMPT_AFTER_TOPUP
+            and bot
+            and (not subscription or subscription.status not in ("active", "ACTIVE"))
+        ):
             try:
                 texts = get_texts(getattr(user, "language", "ru"))
                 warning_message = (
@@ -871,8 +875,12 @@ async def auto_activate_subscription_after_topup(
             user.telegram_id,
             balance,
         )
-        # Отправляем предупреждение пользователю если подписки нет
-        if bot and (not subscription or subscription.status not in ("active", "ACTIVE")):
+        # Отправляем предупреждение пользователю если включен режим и подписки нет
+        if (
+            settings.SHOW_ACTIVATION_PROMPT_AFTER_TOPUP
+            and bot
+            and (not subscription or subscription.status not in ("active", "ACTIVE"))
+        ):
             try:
                 texts = get_texts(getattr(user, "language", "ru"))
                 warning_message = (
