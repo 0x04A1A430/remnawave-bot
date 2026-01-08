@@ -33,7 +33,85 @@ logger = logging.getLogger(__name__)
 
 
 class UserService:
-    
+
+    async def send_topup_success_to_user(
+        self,
+        bot: Bot,
+        user: User,
+        amount_kopeks: int,
+        subscription: Optional[Subscription] = None,
+    ) -> bool:
+        """
+        Отправляет пользователю уведомление об успешном пополнении баланса.
+        Если подписки нет - показывает БОЛЬШОЕ предупреждение что нужно активировать.
+        """
+        try:
+            texts = get_texts(user.language)
+
+            has_active_subscription = (
+                subscription is not None
+                and subscription.status in {"active", "trial"}
+            )
+
+            if has_active_subscription:
+                # У пользователя есть активная подписка - обычное сообщение
+                message = (
+                    f"✅ <b>Баланс пополнен на {settings.format_price(amount_kopeks)}!</b>\n\n"
+                    f"💳 Текущий баланс: {settings.format_price(user.balance_kopeks)}\n\n"
+                    f"Спасибо за использование нашего сервиса! 🎉"
+                )
+                keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+                    [types.InlineKeyboardButton(
+                        text=texts.t("SUBSCRIPTION_EXTEND", "💎 Продлить подписку"),
+                        callback_data="subscription_extend"
+                    )]
+                ])
+            else:
+                # НЕТ активной подписки - БОЛЬШОЕ ПРЕДУПРЕЖДЕНИЕ
+                message = (
+                    f"✅ <b>Баланс пополнен на {settings.format_price(amount_kopeks)}!</b>\n\n"
+                    f"💳 Текущий баланс: {settings.format_price(user.balance_kopeks)}\n\n"
+                    f"{'─' * 25}\n\n"
+                    f"⚠️ <b>ВАЖНО!</b> ⚠️\n\n"
+                    f"🔴 <b>ПОДПИСКА НЕ АКТИВНА!</b>\n\n"
+                    f"Пополнение баланса НЕ активирует подписку автоматически!\n\n"
+                    f"👇 <b>Выберите действие:</b>"
+                )
+                keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+                    [types.InlineKeyboardButton(
+                        text="🚀 АКТИВИРОВАТЬ ПОДПИСКУ",
+                        callback_data="subscription_buy"
+                    )],
+                    [types.InlineKeyboardButton(
+                        text="💎 ПРОДЛИТЬ ПОДПИСКУ",
+                        callback_data="subscription_extend"
+                    )],
+                    [types.InlineKeyboardButton(
+                        text="📱 ДОБАВИТЬ УСТРОЙСТВА",
+                        callback_data="subscription_add_devices"
+                    )]
+                ])
+
+            await bot.send_message(
+                chat_id=user.telegram_id,
+                text=message,
+                parse_mode="HTML",
+                reply_markup=keyboard
+            )
+
+            logger.info(f"✅ Уведомление о пополнении отправлено пользователю {user.telegram_id}")
+            return True
+
+        except TelegramForbiddenError:
+            logger.warning(f"⚠️ Пользователь {user.telegram_id} заблокировал бота")
+            return False
+        except TelegramBadRequest as e:
+            logger.error(f"❌ Ошибка Telegram API: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"❌ Ошибка отправки уведомления: {e}")
+            return False
+
     async def _send_balance_notification(
         self,
         bot: Bot,

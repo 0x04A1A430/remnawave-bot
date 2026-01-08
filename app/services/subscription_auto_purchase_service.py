@@ -738,13 +738,59 @@ async def auto_activate_subscription_after_topup(
     from app.services.subscription_renewal_service import SubscriptionRenewalService
     from app.services.admin_notification_service import AdminNotificationService
 
-    if not settings.is_auto_activate_after_topup_enabled():
-        return False
-
     if not user or not getattr(user, "id", None):
         return False
 
     subscription = await get_subscription_by_user_id(db, user.id)
+
+    # Если автоактивация отключена - только отправляем предупреждение
+    if not settings.is_auto_activate_after_topup_enabled():
+        # Отправляем предупреждение если нет активной подписки
+        if bot and (not subscription or subscription.status not in ("active", "ACTIVE")):
+            try:
+                texts = get_texts(getattr(user, "language", "ru"))
+                warning_message = (
+                    f"✅ <b>Баланс пополнен!</b>\n\n"
+                    f"💳 Текущий баланс: {settings.format_price(user.balance_kopeks)}\n\n"
+                    f"{'─' * 25}\n\n"
+                    f"⚠️ <b>ВАЖНО!</b> ⚠️\n\n"
+                    f"🔴 <b>ПОДПИСКА НЕ АКТИВНА!</b>\n\n"
+                    f"Пополнение баланса <b>НЕ активирует</b> подписку автоматически!\n\n"
+                    f"👇 <b>Выберите действие:</b>"
+                )
+                keyboard = InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [InlineKeyboardButton(
+                            text="🚀 АКТИВИРОВАТЬ ПОДПИСКУ",
+                            callback_data="subscription_buy",
+                        )],
+                        [InlineKeyboardButton(
+                            text="💎 ПРОДЛИТЬ ПОДПИСКУ",
+                            callback_data="subscription_extend",
+                        )],
+                        [InlineKeyboardButton(
+                            text="📱 ДОБАВИТЬ УСТРОЙСТВА",
+                            callback_data="subscription_add_devices",
+                        )],
+                    ]
+                )
+                await bot.send_message(
+                    chat_id=user.telegram_id,
+                    text=warning_message,
+                    reply_markup=keyboard,
+                    parse_mode="HTML",
+                )
+                logger.info(
+                    "⚠️ Отправлено предупреждение об активации подписки пользователю %s (автоактивация выключена)",
+                    user.telegram_id,
+                )
+            except Exception as notify_error:
+                logger.warning(
+                    "⚠️ Не удалось отправить предупреждение пользователю %s: %s",
+                    user.telegram_id,
+                    notify_error,
+                )
+        return False
 
     # Если подписка активна — ничего не делаем
     if subscription and subscription.status == "ACTIVE" and subscription.end_date > datetime.utcnow():
@@ -825,6 +871,51 @@ async def auto_activate_subscription_after_topup(
             user.telegram_id,
             balance,
         )
+        # Отправляем предупреждение пользователю если подписки нет
+        if bot and (not subscription or subscription.status not in ("active", "ACTIVE")):
+            try:
+                texts = get_texts(getattr(user, "language", "ru"))
+                warning_message = (
+                    f"✅ <b>Баланс пополнен!</b>\n\n"
+                    f"💳 Текущий баланс: {settings.format_price(balance)}\n\n"
+                    f"{'─' * 25}\n\n"
+                    f"⚠️ <b>ВАЖНО!</b> ⚠️\n\n"
+                    f"🔴 <b>ПОДПИСКА НЕ АКТИВНА!</b>\n\n"
+                    f"Пополнение баланса <b>НЕ активирует</b> подписку автоматически!\n\n"
+                    f"👇 <b>Выберите действие:</b>"
+                )
+                keyboard = InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [InlineKeyboardButton(
+                            text="🚀 АКТИВИРОВАТЬ ПОДПИСКУ",
+                            callback_data="subscription_buy",
+                        )],
+                        [InlineKeyboardButton(
+                            text="💎 ПРОДЛИТЬ ПОДПИСКУ",
+                            callback_data="subscription_extend",
+                        )],
+                        [InlineKeyboardButton(
+                            text="📱 ДОБАВИТЬ УСТРОЙСТВА",
+                            callback_data="subscription_add_devices",
+                        )],
+                    ]
+                )
+                await bot.send_message(
+                    chat_id=user.telegram_id,
+                    text=warning_message,
+                    reply_markup=keyboard,
+                    parse_mode="HTML",
+                )
+                logger.info(
+                    "⚠️ Отправлено предупреждение об активации подписки пользователю %s",
+                    user.telegram_id,
+                )
+            except Exception as notify_error:
+                logger.warning(
+                    "⚠️ Не удалось отправить предупреждение пользователю %s: %s",
+                    user.telegram_id,
+                    notify_error,
+                )
         return False
 
     texts = get_texts(getattr(user, "language", "ru"))
