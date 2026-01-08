@@ -402,8 +402,9 @@ async def extend_subscription(
         logger.info(f"🌍 Обновлены сквады: {old_squads} → {connected_squads}")
 
     # В режиме fixed_with_topup при продлении сбрасываем трафик до фиксированного лимита
-    # Только если не передан traffic_limit_gb (т.е. не режим тарифов)
-    if traffic_limit_gb is None and settings.is_traffic_fixed() and days > 0:
+    # Только если не передан traffic_limit_gb И у подписки нет тарифа (классический режим)
+    # Если у подписки есть tariff_id - трафик определяется тарифом, не сбрасываем
+    if traffic_limit_gb is None and settings.is_traffic_fixed() and days > 0 and subscription.tariff_id is None:
         fixed_limit = settings.get_fixed_traffic_limit()
         old_limit = subscription.traffic_limit_gb
         if subscription.traffic_limit_gb != fixed_limit or (subscription.purchased_traffic_gb or 0) > 0:
