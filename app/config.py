@@ -237,10 +237,31 @@ class Settings(BaseSettings):
     MENU_LAYOUT_ENABLED: bool = False  # Включить управление меню через API
 
     # Настройки мониторинга трафика
-    TRAFFIC_MONITORING_ENABLED: bool = False
-    TRAFFIC_THRESHOLD_GB_PER_DAY: float = 10.0  # Порог трафика в ГБ за сутки
-    TRAFFIC_MONITORING_INTERVAL_HOURS: int = 24  # Интервал проверки в часах (по умолчанию - раз в сутки)
+    TRAFFIC_MONITORING_ENABLED: bool = False  # Глобальный переключатель (для обратной совместимости)
+    TRAFFIC_THRESHOLD_GB_PER_DAY: float = 10.0  # Порог трафика в ГБ за сутки (для обратной совместимости)
+    TRAFFIC_MONITORING_INTERVAL_HOURS: int = 24  # Интервал проверки в часах (для обратной совместимости)
     SUSPICIOUS_NOTIFICATIONS_TOPIC_ID: Optional[int] = None
+
+    # Новый мониторинг трафика v2
+    # Быстрая проверка (текущий использованный трафик)
+    TRAFFIC_FAST_CHECK_ENABLED: bool = False
+    TRAFFIC_FAST_CHECK_INTERVAL_MINUTES: int = 10  # Интервал проверки в минутах
+    TRAFFIC_FAST_CHECK_THRESHOLD_GB: float = 5.0  # Порог в ГБ для быстрой проверки
+
+    # Суточная проверка (трафик за 24 часа)
+    TRAFFIC_DAILY_CHECK_ENABLED: bool = False
+    TRAFFIC_DAILY_CHECK_TIME: str = "00:00"  # Время суточной проверки (HH:MM)
+    TRAFFIC_DAILY_THRESHOLD_GB: float = 50.0  # Порог суточного трафика в ГБ
+
+    # Фильтрация по серверам (UUID нод через запятую)
+    TRAFFIC_MONITORED_NODES: str = ""  # Только эти ноды (пусто = все)
+    TRAFFIC_IGNORED_NODES: str = ""  # Исключить эти ноды
+
+    # Параллельность и кулдаун
+    TRAFFIC_CHECK_BATCH_SIZE: int = 1000  # Размер батча для получения пользователей
+    TRAFFIC_CHECK_CONCURRENCY: int = 10  # Параллельных запросов
+    TRAFFIC_NOTIFICATION_COOLDOWN_MINUTES: int = 60  # Кулдаун уведомлений (минуты)
+    TRAFFIC_SNAPSHOT_TTL_HOURS: int = 24  # TTL для snapshot трафика в Redis (часы)
 
     AUTOPAY_WARNING_DAYS: str = "3,1"
 
@@ -828,6 +849,23 @@ class Settings(BaseSettings):
 
     def get_remnawave_auto_sync_times(self) -> List[time]:
         return self.parse_daily_time_list(self.REMNAWAVE_AUTO_SYNC_TIMES)
+
+    def get_traffic_monitored_nodes(self) -> List[str]:
+        """Возвращает список UUID нод для мониторинга (пусто = все)"""
+        if not self.TRAFFIC_MONITORED_NODES:
+            return []
+        return [n.strip() for n in self.TRAFFIC_MONITORED_NODES.split(",") if n.strip()]
+
+    def get_traffic_ignored_nodes(self) -> List[str]:
+        """Возвращает список UUID нод для исключения из мониторинга"""
+        if not self.TRAFFIC_IGNORED_NODES:
+            return []
+        return [n.strip() for n in self.TRAFFIC_IGNORED_NODES.split(",") if n.strip()]
+
+    def get_traffic_daily_check_time(self) -> Optional[time]:
+        """Возвращает время суточной проверки трафика"""
+        times = self.parse_daily_time_list(self.TRAFFIC_DAILY_CHECK_TIME)
+        return times[0] if times else None
 
     def get_display_name_banned_keywords(self) -> List[str]:
         raw_value = self.DISPLAY_NAME_BANNED_KEYWORDS

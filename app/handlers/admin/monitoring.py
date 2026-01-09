@@ -774,81 +774,53 @@ async def force_check_callback(callback: CallbackQuery):
 @router.callback_query(F.data == "admin_mon_traffic_check")
 @admin_required
 async def traffic_check_callback(callback: CallbackQuery):
-    """Ручная проверка трафика всех пользователей."""
+    """Ручная проверка трафика — использует snapshot и дельту."""
     try:
         # Проверяем, включен ли мониторинг трафика
         if not traffic_monitoring_scheduler.is_enabled():
             await callback.answer(
                 "⚠️ Мониторинг трафика отключен в настройках\n"
-                "Включите TRAFFIC_MONITORING_ENABLED=true в .env",
+                "Включите TRAFFIC_FAST_CHECK_ENABLED=true в .env",
                 show_alert=True
             )
             return
 
-        await callback.answer("⏳ Запускаем проверку трафика...")
+        await callback.answer("⏳ Запускаем проверку трафика (дельта)...")
+
+        # Используем run_fast_check — он сравнивает с snapshot и отправляет уведомления
+        from app.services.traffic_monitoring_service import traffic_monitoring_scheduler_v2
 
         # Устанавливаем бота, если не установлен
-        if not traffic_monitoring_scheduler.bot:
-            traffic_monitoring_scheduler.set_bot(callback.bot)
+        if not traffic_monitoring_scheduler_v2.bot:
+            traffic_monitoring_scheduler_v2.set_bot(callback.bot)
 
-        checked_count = 0
-        exceeded_count = 0
-        exceeded_users = []
+        violations = await traffic_monitoring_scheduler_v2.run_fast_check_now()
 
-        async for db in get_db():
-            from app.database.crud.user import get_users_with_active_subscriptions
-
-            users = await get_users_with_active_subscriptions(db)
-
-            for user in users:
-                if user.remnawave_uuid:
-                    is_exceeded, traffic_info = await traffic_monitoring_service.check_user_traffic_threshold(
-                        db,
-                        user.remnawave_uuid,
-                        user.telegram_id
-                    )
-                    checked_count += 1
-
-                    if is_exceeded:
-                        exceeded_count += 1
-                        total_gb = traffic_info.get('total_gb', 0)
-                        exceeded_users.append({
-                            'telegram_id': user.telegram_id,
-                            'name': user.full_name or str(user.telegram_id),
-                            'traffic_gb': total_gb
-                        })
-
-                        # Отправляем уведомление админам
-                        if traffic_monitoring_scheduler._should_send_notification(user.remnawave_uuid):
-                            await traffic_monitoring_service.process_suspicious_traffic(
-                                db,
-                                user.remnawave_uuid,
-                                traffic_info,
-                                callback.bot
-                            )
-                            traffic_monitoring_scheduler._record_notification(user.remnawave_uuid)
-
-            break
-
-        threshold_gb = settings.TRAFFIC_THRESHOLD_GB_PER_DAY
+        # Получаем информацию о snapshot
+        snapshot_age = await traffic_monitoring_scheduler_v2.service.get_snapshot_age_minutes()
+        threshold_gb = traffic_monitoring_scheduler_v2.service.get_fast_check_threshold_gb()
 
         text = f"""
 📊 <b>Проверка трафика завершена</b>
 
-🔍 <b>Результаты:</b>
-• Проверено пользователей: {checked_count}
-• Превышений порога: {exceeded_count}
-• Порог: {threshold_gb} ГБ/сутки
+🔍 <b>Результаты (дельта):</b>
+• Превышений за интервал: {len(violations)}
+• Порог дельты: {threshold_gb} ГБ
+• Возраст snapshot: {snapshot_age:.1f} мин
 
 🕐 <b>Время проверки:</b> {datetime.now().strftime('%H:%M:%S')}
 """
 
-        if exceeded_users:
-            text += "\n⚠️ <b>Пользователи с превышением:</b>\n"
-            for u in exceeded_users[:10]:
-                text += f"• {u['name']}: {u['traffic_gb']:.1f} ГБ\n"
-            if len(exceeded_users) > 10:
-                text += f"... и ещё {len(exceeded_users) - 10}\n"
+        if violations:
+            text += "\n⚠️ <b>Превышения дельты:</b>\n"
+            for v in violations[:10]:
+                name = v.full_name or v.user_uuid[:8]
+                text += f"• {name}: +{v.used_traffic_gb:.1f} ГБ\n"
+            if len(violations) > 10:
+                text += f"... и ещё {len(violations) - 10}\n"
+            text += "\n📨 Уведомления отправлены (с учётом кулдауна)"
+        else:
+            text += "\n✅ Превышений не обнаружено"
 
         from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
