@@ -39,6 +39,23 @@ class WebhookServer:
 
         if settings.is_freekassa_enabled():
             self.app.router.add_post(settings.FREEKASSA_WEBHOOK_PATH, self._freekassa_webhook_handler)
+        else:
+            # Диагностика почему Freekassa не включена
+            if settings.FREEKASSA_ENABLED:
+                missing = []
+                if settings.FREEKASSA_SHOP_ID is None:
+                    missing.append("FREEKASSA_SHOP_ID")
+                if settings.FREEKASSA_API_KEY is None:
+                    missing.append("FREEKASSA_API_KEY")
+                if settings.FREEKASSA_SECRET_WORD_1 is None:
+                    missing.append("FREEKASSA_SECRET_WORD_1")
+                if settings.FREEKASSA_SECRET_WORD_2 is None:
+                    missing.append("FREEKASSA_SECRET_WORD_2")
+                if missing:
+                    logger.warning(
+                        f"Freekassa ENABLED=true, но webhook не зарегистрирован. "
+                        f"Отсутствуют параметры: {', '.join(missing)}"
+                    )
 
         self.app.router.add_get('/health', self._health_check)
         
