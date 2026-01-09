@@ -380,6 +380,11 @@ async def extend_subscription(
         subscription.tariff_id = tariff_id
         logger.info(f"📦 Обновлен тариф подписки: {old_tariff_id} → {tariff_id}")
 
+        # При покупке тарифа сбрасываем триальный статус
+        if subscription.is_trial:
+            subscription.is_trial = False
+            logger.info(f"🎓 Подписка {subscription.id} конвертирована из триала в платную")
+
     if traffic_limit_gb is not None:
         old_traffic = subscription.traffic_limit_gb
         subscription.traffic_limit_gb = traffic_limit_gb
