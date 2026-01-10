@@ -5332,6 +5332,64 @@ async def add_tariff_device_price_column() -> bool:
         return False
 
 
+async def add_tariff_traffic_topup_columns() -> bool:
+    """Добавляет колонки для докупки трафика в тарифах."""
+    try:
+        columns_added = 0
+
+        # Колонка traffic_topup_enabled
+        if not await check_column_exists('tariffs', 'traffic_topup_enabled'):
+            async with engine.begin() as conn:
+                db_type = await get_database_type()
+
+                if db_type == 'sqlite':
+                    await conn.execute(text(
+                        "ALTER TABLE tariffs ADD COLUMN traffic_topup_enabled INTEGER DEFAULT 0 NOT NULL"
+                    ))
+                elif db_type == 'postgresql':
+                    await conn.execute(text(
+                        "ALTER TABLE tariffs ADD COLUMN traffic_topup_enabled BOOLEAN DEFAULT FALSE NOT NULL"
+                    ))
+                else:  # MySQL
+                    await conn.execute(text(
+                        "ALTER TABLE tariffs ADD COLUMN traffic_topup_enabled TINYINT(1) DEFAULT 0 NOT NULL"
+                    ))
+
+                logger.info("✅ Колонка traffic_topup_enabled добавлена в tariffs")
+                columns_added += 1
+        else:
+            logger.info("ℹ️ Колонка traffic_topup_enabled уже существует в tariffs")
+
+        # Колонка traffic_topup_packages (JSON)
+        if not await check_column_exists('tariffs', 'traffic_topup_packages'):
+            async with engine.begin() as conn:
+                db_type = await get_database_type()
+
+                if db_type == 'sqlite':
+                    await conn.execute(text(
+                        "ALTER TABLE tariffs ADD COLUMN traffic_topup_packages TEXT DEFAULT '{}'"
+                    ))
+                elif db_type == 'postgresql':
+                    await conn.execute(text(
+                        "ALTER TABLE tariffs ADD COLUMN traffic_topup_packages JSONB DEFAULT '{}'"
+                    ))
+                else:  # MySQL
+                    await conn.execute(text(
+                        "ALTER TABLE tariffs ADD COLUMN traffic_topup_packages JSON DEFAULT NULL"
+                    ))
+
+                logger.info("✅ Колонка traffic_topup_packages добавлена в tariffs")
+                columns_added += 1
+        else:
+            logger.info("ℹ️ Колонка traffic_topup_packages уже существует в tariffs")
+
+        return True
+
+    except Exception as error:
+        logger.error(f"❌ Ошибка добавления колонок докупки трафика: {error}")
+        return False
+
+
 async def run_universal_migration():
     logger.info("=== НАЧАЛО УНИВЕРСАЛЬНОЙ МИГРАЦИИ ===")
     
@@ -5833,6 +5891,12 @@ async def run_universal_migration():
             logger.info("✅ Колонка device_price_kopeks в tariffs готова")
         else:
             logger.warning("⚠️ Проблемы с колонкой device_price_kopeks в tariffs")
+
+        traffic_topup_columns_ready = await add_tariff_traffic_topup_columns()
+        if traffic_topup_columns_ready:
+            logger.info("✅ Колонки докупки трафика в tariffs готовы")
+        else:
+            logger.warning("⚠️ Проблемы с колонками докупки трафика в tariffs")
 
         logger.info("=== ОБНОВЛЕНИЕ ВНЕШНИХ КЛЮЧЕЙ ===")
         fk_updated = await fix_foreign_keys_for_user_deletion()
