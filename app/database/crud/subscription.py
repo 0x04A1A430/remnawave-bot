@@ -409,8 +409,12 @@ async def extend_subscription(
         logger.info(f"📊 Обновлен лимит трафика: {old_traffic} ГБ → {traffic_limit_gb} ГБ")
     elif settings.RESET_TRAFFIC_ON_PAYMENT:
         subscription.traffic_used_gb = 0.0
-        subscription.purchased_traffic_gb = 0
-        logger.info("🔄 Сбрасываем использованный и докупленный трафик согласно настройке RESET_TRAFFIC_ON_PAYMENT")
+        # В режиме тарифов сохраняем докупленный трафик при продлении
+        if subscription.tariff_id is None:
+            subscription.purchased_traffic_gb = 0
+            logger.info("🔄 Сбрасываем использованный и докупленный трафик согласно настройке RESET_TRAFFIC_ON_PAYMENT")
+        else:
+            logger.info("🔄 Сбрасываем использованный трафик, докупленный сохранен (режим тарифов)")
 
     if device_limit is not None:
         old_devices = subscription.device_limit
