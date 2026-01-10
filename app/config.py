@@ -447,6 +447,8 @@ class Settings(BaseSettings):
     FREEKASSA_PAYMENT_SYSTEM_ID: Optional[int] = None
     # Использовать API для создания заказов (нужно для NSPK СБП)
     FREEKASSA_USE_API: bool = False
+    # Публичный IP сервера для Freekassa API (если не задан - определяется автоматически)
+    SERVER_PUBLIC_IP: Optional[str] = None
 
     MAIN_MENU_MODE: str = "default"
     CONNECT_BUTTON_MODE: str = "guide"
