@@ -5543,6 +5543,80 @@
                 </div>
             </div>
 
+            <!-- Tariff Subscription Management (for tariff mode) -->
+            <div class="card expandable hidden" id="tariffManagementCard">
+                <div class="card-header">
+                    <div class="card-title">
+                        <svg class="card-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        </svg>
+                        <span data-i18n="tariff_management.title">Моя подписка</span>
+                    </div>
+                    <div class="subscription-settings-summary" id="tariffManagementSummary"></div>
+                    <svg class="expand-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </div>
+                <div class="card-content">
+                    <div class="subscription-settings-content" id="tariffManagementContent">
+                        <!-- Extend Section -->
+                        <div class="subscription-settings-section" id="tariffExtendSection">
+                            <div class="subscription-settings-section-header">
+                                <div>
+                                    <div class="subscription-settings-section-title" data-i18n="tariff_management.extend.title">Продлить подписку</div>
+                                    <div class="subscription-settings-section-description" data-i18n="tariff_management.extend.subtitle">Выберите период продления</div>
+                                </div>
+                            </div>
+                            <div class="subscription-renewal-options" id="tariffExtendPeriods"></div>
+                            <div class="subscription-renewal-summary hidden" id="tariffExtendSummary">
+                                <div class="subscription-renewal-summary-header">
+                                    <div class="subscription-renewal-summary-prices">
+                                        <div class="subscription-renewal-price-original hidden" id="tariffExtendPriceOriginal"></div>
+                                        <div class="subscription-renewal-price-current" id="tariffExtendPriceCurrent">—</div>
+                                    </div>
+                                </div>
+                                <div class="subscription-renewal-price-discount hidden" id="tariffExtendPriceDiscount"></div>
+                            </div>
+                            <div class="subscription-settings-actions">
+                                <button class="subscription-settings-apply" id="tariffExtendBtn" type="button" disabled data-i18n="tariff_management.extend.button">Продлить</button>
+                            </div>
+                        </div>
+
+                        <!-- Traffic Top-up Section -->
+                        <div class="subscription-settings-section hidden" id="tariffTrafficSection">
+                            <div class="subscription-settings-section-header">
+                                <div>
+                                    <div class="subscription-settings-section-title" data-i18n="tariff_management.traffic.title">Докупить трафик</div>
+                                    <div class="subscription-settings-section-description" data-i18n="tariff_management.traffic.subtitle">Дополнительный трафик на текущий период</div>
+                                </div>
+                            </div>
+                            <div class="traffic-topup-packages" id="tariffTrafficPackages"></div>
+                        </div>
+
+                        <!-- Devices Section -->
+                        <div class="subscription-settings-section hidden" id="tariffDevicesSection">
+                            <div class="subscription-settings-section-header">
+                                <div>
+                                    <div class="subscription-settings-section-title" data-i18n="tariff_management.devices.title">Устройства</div>
+                                    <div class="subscription-settings-section-description" data-i18n="tariff_management.devices.subtitle">Докупить дополнительные слоты</div>
+                                </div>
+                                <div class="subscription-settings-section-meta" id="tariffDevicesMeta"></div>
+                            </div>
+                            <div class="subscription-settings-stepper">
+                                <button type="button" id="tariffDevicesDecrease">−</button>
+                                <div class="subscription-settings-stepper-value" id="tariffDevicesValue">0</div>
+                                <button type="button" id="tariffDevicesIncrease">+</button>
+                            </div>
+                            <div class="subscription-settings-price-note" id="tariffDevicesPrice"></div>
+                            <div class="subscription-settings-actions">
+                                <button class="subscription-settings-apply" id="tariffDevicesApply" type="button" disabled data-i18n="tariff_management.devices.apply">Обновить</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Subscription Settings -->
             <div class="card expandable subscription-settings-card hidden" id="subscriptionSettingsCard">
                 <div class="card-header">
@@ -6367,6 +6441,15 @@
                 'tariffs.select': 'Select tariff',
                 'tariffs.current': 'Current tariff',
                 'tariffs.no_tariffs': 'No tariffs available',
+                'tariff_management.title': 'My Subscription',
+                'tariff_management.extend.title': 'Extend Subscription',
+                'tariff_management.extend.subtitle': 'Choose extension period',
+                'tariff_management.extend.button': 'Extend',
+                'tariff_management.traffic.title': 'Buy Traffic',
+                'tariff_management.traffic.subtitle': 'Additional traffic for current period',
+                'tariff_management.devices.title': 'Devices',
+                'tariff_management.devices.subtitle': 'Buy additional device slots',
+                'tariff_management.devices.apply': 'Update',
                 'card.referral.title': 'Referral Program',
                 'card.history.title': 'Transaction History',
                 'card.servers.title': 'Connected Servers',
@@ -6813,6 +6896,15 @@
                 'tariffs.select': 'Выбрать тариф',
                 'tariffs.current': 'Текущий тариф',
                 'tariffs.no_tariffs': 'Нет доступных тарифов',
+                'tariff_management.title': 'Моя подписка',
+                'tariff_management.extend.title': 'Продлить подписку',
+                'tariff_management.extend.subtitle': 'Выберите период продления',
+                'tariff_management.extend.button': 'Продлить',
+                'tariff_management.traffic.title': 'Докупить трафик',
+                'tariff_management.traffic.subtitle': 'Дополнительный трафик на текущий период',
+                'tariff_management.devices.title': 'Устройства',
+                'tariff_management.devices.subtitle': 'Докупить дополнительные слоты',
+                'tariff_management.devices.apply': 'Обновить',
                 'card.referral.title': 'Реферальная программа',
                 'card.history.title': 'История операций',
                 'card.servers.title': 'Подключённые серверы',
@@ -16019,8 +16111,9 @@
                 return;
             }
 
-            // Для триала НЕ показываем настройки подписки — юзер должен сначала купить
-            const shouldShow = hasActiveSubscription() && !isTrialSubscription();
+            // В режиме тарифов НЕ показываем настройки подписки — там своя логика
+            // Для триала тоже НЕ показываем — юзер должен сначала купить
+            const shouldShow = hasActiveSubscription() && !isTrialSubscription() && !isTariffsMode();
             card.classList.toggle('hidden', !shouldShow);
             if (!shouldShow) {
                 return;
@@ -19993,6 +20086,9 @@
 
             // Обновляем периоды если тариф выбран
             renderTariffPeriods();
+
+            // Рендерим карточку управления тарифом
+            renderTariffManagementCard();
         }
 
         function selectTariff(tariff) {
@@ -20197,12 +20293,490 @@
         document.getElementById('tariffsRetry')?.addEventListener('click', loadTariffs);
         document.getElementById('tariffsSelectBtn')?.addEventListener('click', purchaseTariff);
 
+        // ========== TARIFF MANAGEMENT CARD ==========
+        let tariffManagementData = null;
+        let selectedExtendPeriod = null;
+        let selectedDevicesCount = 0;
+
+        function renderTariffManagementCard() {
+            const card = document.getElementById('tariffManagementCard');
+            if (!card) return;
+
+            // Показываем только в режиме тарифов и при активной подписке (не триал)
+            const shouldShow = isTariffsMode() && hasActiveSubscription() && !isTrialSubscription();
+            card.classList.toggle('hidden', !shouldShow);
+
+            if (!shouldShow) return;
+
+            const currentTariff = tariffsData?.current_tariff || tariffsData?.currentTariff;
+            if (!currentTariff) {
+                card.classList.add('hidden');
+                return;
+            }
+
+            // Развернуть карточку по умолчанию при первом показе
+            if (!card.dataset.initialized) {
+                card.classList.add('expanded');
+                card.dataset.initialized = 'true';
+            }
+
+            tariffManagementData = currentTariff;
+            selectedExtendPeriod = null; // Сброс выбора при перезагрузке
+
+            // Summary chips
+            renderTariffManagementSummary(currentTariff);
+
+            // Render sections
+            renderTariffExtendSection(currentTariff);
+            renderTariffTrafficSection(currentTariff);
+            renderTariffDevicesSection(currentTariff);
+        }
+
+        function renderTariffManagementSummary(tariff) {
+            const summary = document.getElementById('tariffManagementSummary');
+            if (!summary) return;
+
+            summary.innerHTML = '';
+            const fragments = [];
+
+            // Название тарифа
+            if (tariff.name) {
+                const chip = document.createElement('span');
+                chip.className = 'subscription-settings-chip';
+                chip.innerHTML = `<span>📦</span><span>${escapeHtml(tariff.name)}</span>`;
+                fragments.push(chip);
+            }
+
+            fragments.forEach(fragment => summary.appendChild(fragment));
+        }
+
+        function renderTariffExtendSection(tariff) {
+            const section = document.getElementById('tariffExtendSection');
+            const list = document.getElementById('tariffExtendPeriods');
+            if (!section || !list) return;
+
+            const periods = tariff.periods || [];
+            if (periods.length === 0) {
+                section.classList.add('hidden');
+                return;
+            }
+
+            section.classList.remove('hidden');
+            list.innerHTML = '';
+
+            periods.forEach((period, index) => {
+                const days = period.days || period.period_days || period.periodDays;
+                const priceKopeks = period.price_kopeks || period.priceKopeks || 0;
+                const originalKopeks = period.original_price_kopeks || period.originalPriceKopeks || priceKopeks;
+                const hasDiscount = originalKopeks > priceKopeks;
+                const discountPercent = period.discount_percent || period.discountPercent || 0;
+
+                const priceLabel = formatPriceFromKopeks(priceKopeks, tariffsData?.currency || 'RUB');
+                const originalLabel = hasDiscount ? formatPriceFromKopeks(originalKopeks, tariffsData?.currency || 'RUB') : null;
+
+                let periodLabel = period.label || period.name;
+                if (!periodLabel) {
+                    if (days === 30) periodLabel = preferredLanguage === 'en' ? '1 month' : '1 месяц';
+                    else if (days === 90) periodLabel = preferredLanguage === 'en' ? '3 months' : '3 месяца';
+                    else if (days === 180) periodLabel = preferredLanguage === 'en' ? '6 months' : '6 месяцев';
+                    else if (days === 365) periodLabel = preferredLanguage === 'en' ? '12 months' : '12 месяцев';
+                    else periodLabel = days + (preferredLanguage === 'en' ? ' days' : ' дней');
+                }
+
+                const isSelected = selectedExtendPeriod &&
+                    (selectedExtendPeriod.days === days || selectedExtendPeriod.period_days === days);
+
+                const div = document.createElement('div');
+                div.className = 'subscription-settings-toggle' + (isSelected ? ' active' : '');
+
+                div.innerHTML = `
+                    <div class="subscription-settings-toggle-label">
+                        <div class="subscription-settings-toggle-title">${periodLabel}</div>
+                        ${discountPercent > 0 ? `<div class="subscription-renewal-option-discount">-${discountPercent}%</div>` : ''}
+                    </div>
+                    <div class="subscription-renewal-option-price">
+                        ${originalLabel ? `<span class="subscription-renewal-option-price-original">${originalLabel}</span>` : ''}
+                        <span class="subscription-renewal-option-price-current">${priceLabel}</span>
+                    </div>
+                `;
+
+                div.addEventListener('click', () => selectExtendPeriod(period, div));
+                list.appendChild(div);
+
+                // Автовыбор первого периода
+                if (index === 0 && !selectedExtendPeriod) {
+                    selectedExtendPeriod = period;
+                    div.classList.add('active');
+                }
+            });
+
+            updateTariffExtendSummary();
+            updateTariffExtendButton();
+        }
+
+        function selectExtendPeriod(period, element) {
+            selectedExtendPeriod = period;
+
+            document.querySelectorAll('#tariffExtendPeriods .subscription-settings-toggle').forEach(el => {
+                el.classList.remove('active');
+            });
+            element?.classList.add('active');
+
+            updateTariffExtendSummary();
+            updateTariffExtendButton();
+        }
+
+        function updateTariffExtendSummary() {
+            const summary = document.getElementById('tariffExtendSummary');
+            const priceEl = document.getElementById('tariffExtendPriceCurrent');
+            const originalEl = document.getElementById('tariffExtendPriceOriginal');
+            const discountEl = document.getElementById('tariffExtendPriceDiscount');
+
+            if (!selectedExtendPeriod || !summary) {
+                summary?.classList.add('hidden');
+                return;
+            }
+
+            summary.classList.remove('hidden');
+
+            const priceKopeks = selectedExtendPeriod.price_kopeks || selectedExtendPeriod.priceKopeks || 0;
+            const originalKopeks = selectedExtendPeriod.original_price_kopeks || selectedExtendPeriod.originalPriceKopeks || priceKopeks;
+            const hasDiscount = originalKopeks > priceKopeks;
+
+            if (priceEl) {
+                priceEl.textContent = formatPriceFromKopeks(priceKopeks, tariffsData?.currency || 'RUB');
+            }
+
+            if (originalEl) {
+                if (hasDiscount) {
+                    originalEl.textContent = formatPriceFromKopeks(originalKopeks, tariffsData?.currency || 'RUB');
+                    originalEl.classList.remove('hidden');
+                } else {
+                    originalEl.classList.add('hidden');
+                }
+            }
+
+            if (discountEl) {
+                const discountPercent = selectedExtendPeriod.discount_percent || selectedExtendPeriod.discountPercent || 0;
+                if (discountPercent > 0) {
+                    discountEl.textContent = preferredLanguage === 'en'
+                        ? `Save ${discountPercent}%`
+                        : `Экономия ${discountPercent}%`;
+                    discountEl.classList.remove('hidden');
+                } else {
+                    discountEl.classList.add('hidden');
+                }
+            }
+        }
+
+        function updateTariffExtendButton() {
+            const btn = document.getElementById('tariffExtendBtn');
+            if (!btn) return;
+
+            if (selectedExtendPeriod) {
+                btn.disabled = false;
+                const priceKopeks = selectedExtendPeriod.price_kopeks || selectedExtendPeriod.priceKopeks || 0;
+                const priceLabel = formatPriceFromKopeks(priceKopeks, tariffsData?.currency || 'RUB');
+                btn.textContent = preferredLanguage === 'en'
+                    ? `Extend for ${priceLabel}`
+                    : `Продлить за ${priceLabel}`;
+            } else {
+                btn.disabled = true;
+                btn.textContent = t('tariff_management.extend.button');
+            }
+        }
+
+        async function extendTariffSubscription() {
+            if (!selectedExtendPeriod || !tariffManagementData) {
+                showPopup(preferredLanguage === 'en' ? 'Select a period' : 'Выберите период',
+                          preferredLanguage === 'en' ? 'Error' : 'Ошибка');
+                return;
+            }
+
+            const btn = document.getElementById('tariffExtendBtn');
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = preferredLanguage === 'en' ? 'Processing...' : 'Обработка...';
+            }
+
+            try {
+                const initData = tg.initData || '';
+                const periodDays = selectedExtendPeriod.days || selectedExtendPeriod.period_days || selectedExtendPeriod.periodDays;
+                const tariffId = tariffManagementData.id || tariffManagementData.tariff_id;
+
+                const response = await fetch('/miniapp/subscription/tariff/purchase', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        initData,
+                        tariffId: tariffId,
+                        periodDays: periodDays
+                    })
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result?.detail?.message || result?.message ||
+                        (preferredLanguage === 'en' ? 'Extension failed' : 'Ошибка продления'));
+                }
+
+                showPopup(result.message || (preferredLanguage === 'en' ? 'Subscription extended!' : 'Подписка продлена!'),
+                          preferredLanguage === 'en' ? 'Success' : 'Успех');
+                await refreshSubscriptionData();
+            } catch (err) {
+                console.error('Tariff extension failed:', err);
+                showPopup(err.message || (preferredLanguage === 'en' ? 'Extension failed' : 'Не удалось продлить'),
+                          preferredLanguage === 'en' ? 'Error' : 'Ошибка');
+            } finally {
+                updateTariffExtendButton();
+            }
+        }
+
+        function renderTariffTrafficSection(tariff) {
+            const section = document.getElementById('tariffTrafficSection');
+            const list = document.getElementById('tariffTrafficPackages');
+            if (!section || !list) return;
+
+            const trafficEnabled = tariff.traffic_topup_enabled || tariff.trafficTopupEnabled;
+            const packages = tariff.traffic_topup_packages || tariff.trafficTopupPackages || [];
+
+            if (!trafficEnabled || packages.length === 0) {
+                section.classList.add('hidden');
+                return;
+            }
+
+            section.classList.remove('hidden');
+            list.innerHTML = '';
+
+            const userBalance = userData?.balance_kopeks || userData?.balanceKopeks || 0;
+
+            packages.forEach(pkg => {
+                const gb = pkg.gb;
+                const priceKopeks = pkg.price_kopeks || pkg.priceKopeks || 0;
+                const originalKopeks = pkg.original_price_kopeks || pkg.originalPriceKopeks || priceKopeks;
+                const hasDiscount = originalKopeks > priceKopeks;
+                const discountPercent = pkg.discount_percent || pkg.discountPercent || 0;
+                const canAfford = userBalance >= priceKopeks;
+
+                const priceLabel = pkg.price_label || formatPriceFromKopeks(priceKopeks, tariffsData?.currency || 'RUB');
+                const originalLabel = hasDiscount ? (pkg.original_price_label || formatPriceFromKopeks(originalKopeks, tariffsData?.currency || 'RUB')) : null;
+
+                const div = document.createElement('div');
+                div.className = 'traffic-topup-package' + (!canAfford ? ' disabled' : '');
+
+                div.innerHTML = `
+                    <div class="traffic-topup-package-info">
+                        <div class="traffic-topup-package-gb">${gb} ГБ</div>
+                        ${!canAfford ? `<div style="font-size: 11px; color: var(--danger);">${preferredLanguage === 'en' ? 'Insufficient balance' : 'Недостаточно средств'}</div>` : ''}
+                    </div>
+                    <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px;">
+                        ${originalLabel ? `<div style="font-size: 12px; color: var(--text-secondary); text-decoration: line-through;">${originalLabel}</div>` : ''}
+                        <div class="traffic-topup-package-price">${priceLabel}</div>
+                        ${discountPercent > 0 ? `<div class="tariff-discount-badge">-${discountPercent}%</div>` : ''}
+                    </div>
+                `;
+
+                if (canAfford) {
+                    div.addEventListener('click', () => purchaseTariffTraffic(gb, priceKopeks, priceLabel));
+                }
+
+                list.appendChild(div);
+            });
+        }
+
+        async function purchaseTariffTraffic(gb, priceKopeks, priceLabel) {
+            const confirmMsg = preferredLanguage === 'en'
+                ? `Buy ${gb} GB for ${priceLabel}?`
+                : `Купить ${gb} ГБ за ${priceLabel}?`;
+
+            if (!confirm(confirmMsg)) return;
+
+            try {
+                const initData = tg.initData || '';
+                const response = await fetch('/miniapp/tariff/traffic-topup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ initData, gb })
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result?.detail?.message || result?.message ||
+                        (preferredLanguage === 'en' ? 'Purchase failed' : 'Ошибка покупки'));
+                }
+
+                showPopup(result.message || (preferredLanguage === 'en' ? `+${gb} GB added!` : `+${gb} ГБ добавлено!`),
+                          preferredLanguage === 'en' ? 'Success' : 'Успех');
+                await refreshSubscriptionData();
+            } catch (err) {
+                console.error('Traffic purchase failed:', err);
+                showPopup(err.message, preferredLanguage === 'en' ? 'Error' : 'Ошибка');
+            }
+        }
+
+        function renderTariffDevicesSection(tariff) {
+            const section = document.getElementById('tariffDevicesSection');
+            if (!section) return;
+
+            const devicePurchaseEnabled = tariff.device_purchase_enabled || tariff.devicePurchaseEnabled;
+            const devicePriceKopeks = tariff.device_price_kopeks || tariff.devicePriceKopeks || 0;
+            const currentDevices = tariff.device_limit || tariff.deviceLimit || 1;
+            const maxDevices = tariff.max_devices || tariff.maxDevices || 10;
+
+            if (!devicePurchaseEnabled || devicePriceKopeks <= 0) {
+                section.classList.add('hidden');
+                return;
+            }
+
+            section.classList.remove('hidden');
+            selectedDevicesCount = currentDevices;
+
+            const metaEl = document.getElementById('tariffDevicesMeta');
+            if (metaEl) {
+                metaEl.textContent = `${currentDevices} / ${maxDevices}`;
+            }
+
+            updateTariffDevicesUI(tariff);
+        }
+
+        function updateTariffDevicesUI(tariff) {
+            const valueEl = document.getElementById('tariffDevicesValue');
+            const priceEl = document.getElementById('tariffDevicesPrice');
+            const applyBtn = document.getElementById('tariffDevicesApply');
+            const decreaseBtn = document.getElementById('tariffDevicesDecrease');
+            const increaseBtn = document.getElementById('tariffDevicesIncrease');
+
+            const currentDevices = tariff.device_limit || tariff.deviceLimit || 1;
+            const maxDevices = tariff.max_devices || tariff.maxDevices || 10;
+            const devicePriceKopeks = tariff.device_price_kopeks || tariff.devicePriceKopeks || 0;
+
+            if (valueEl) {
+                valueEl.textContent = selectedDevicesCount;
+            }
+
+            if (decreaseBtn) {
+                decreaseBtn.disabled = selectedDevicesCount <= currentDevices;
+            }
+
+            if (increaseBtn) {
+                increaseBtn.disabled = selectedDevicesCount >= maxDevices;
+            }
+
+            const diff = selectedDevicesCount - currentDevices;
+            if (priceEl) {
+                if (diff > 0) {
+                    const totalPrice = diff * devicePriceKopeks;
+                    const priceLabel = formatPriceFromKopeks(totalPrice, tariffsData?.currency || 'RUB');
+                    priceEl.textContent = `+${diff} ${preferredLanguage === 'en' ? 'devices' : 'устр.'}: ${priceLabel}`;
+                } else {
+                    const singlePrice = formatPriceFromKopeks(devicePriceKopeks, tariffsData?.currency || 'RUB');
+                    priceEl.textContent = `${singlePrice} ${preferredLanguage === 'en' ? 'per device' : 'за устройство'}`;
+                }
+            }
+
+            if (applyBtn) {
+                applyBtn.disabled = diff <= 0;
+                if (diff > 0) {
+                    const totalPrice = diff * devicePriceKopeks;
+                    const priceLabel = formatPriceFromKopeks(totalPrice, tariffsData?.currency || 'RUB');
+                    applyBtn.textContent = preferredLanguage === 'en'
+                        ? `Add for ${priceLabel}`
+                        : `Добавить за ${priceLabel}`;
+                } else {
+                    applyBtn.textContent = t('tariff_management.devices.apply');
+                }
+            }
+
+            // Event handlers
+            if (decreaseBtn && !decreaseBtn._tariffHandler) {
+                decreaseBtn._tariffHandler = true;
+                decreaseBtn.addEventListener('click', () => {
+                    if (selectedDevicesCount > currentDevices) {
+                        selectedDevicesCount--;
+                        updateTariffDevicesUI(tariff);
+                    }
+                });
+            }
+
+            if (increaseBtn && !increaseBtn._tariffHandler) {
+                increaseBtn._tariffHandler = true;
+                increaseBtn.addEventListener('click', () => {
+                    if (selectedDevicesCount < maxDevices) {
+                        selectedDevicesCount++;
+                        updateTariffDevicesUI(tariff);
+                    }
+                });
+            }
+
+            if (applyBtn && !applyBtn._tariffHandler) {
+                applyBtn._tariffHandler = true;
+                applyBtn.addEventListener('click', () => purchaseTariffDevices(tariff));
+            }
+        }
+
+        async function purchaseTariffDevices(tariff) {
+            const currentDevices = tariff.device_limit || tariff.deviceLimit || 1;
+            const diff = selectedDevicesCount - currentDevices;
+
+            if (diff <= 0) return;
+
+            const devicePriceKopeks = tariff.device_price_kopeks || tariff.devicePriceKopeks || 0;
+            const totalPrice = diff * devicePriceKopeks;
+            const priceLabel = formatPriceFromKopeks(totalPrice, tariffsData?.currency || 'RUB');
+
+            const confirmMsg = preferredLanguage === 'en'
+                ? `Add ${diff} device(s) for ${priceLabel}?`
+                : `Добавить ${diff} устр. за ${priceLabel}?`;
+
+            if (!confirm(confirmMsg)) return;
+
+            const applyBtn = document.getElementById('tariffDevicesApply');
+            if (applyBtn) {
+                applyBtn.disabled = true;
+                applyBtn.textContent = preferredLanguage === 'en' ? 'Processing...' : 'Обработка...';
+            }
+
+            try {
+                const initData = tg.initData || '';
+                const response = await fetch('/miniapp/tariff/devices/purchase', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ initData, count: diff })
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result?.detail?.message || result?.message ||
+                        (preferredLanguage === 'en' ? 'Purchase failed' : 'Ошибка покупки'));
+                }
+
+                showPopup(result.message || (preferredLanguage === 'en' ? 'Devices added!' : 'Устройства добавлены!'),
+                          preferredLanguage === 'en' ? 'Success' : 'Успех');
+                await refreshSubscriptionData();
+            } catch (err) {
+                console.error('Device purchase failed:', err);
+                showPopup(err.message, preferredLanguage === 'en' ? 'Error' : 'Ошибка');
+            } finally {
+                if (tariffManagementData) {
+                    updateTariffDevicesUI(tariffManagementData);
+                }
+            }
+        }
+
+        // Setup tariff management events
+        document.getElementById('tariffExtendBtn')?.addEventListener('click', extendTariffSubscription);
+
+        // ========== END TARIFF MANAGEMENT CARD ==========
+
         // Загружаем тарифы после загрузки данных подписки
         const originalApplySubscriptionData = applySubscriptionData;
         applySubscriptionData = function(payload) {
             const result = originalApplySubscriptionData(payload);
             if (isTariffsMode()) {
-                loadTariffs();
+                loadTariffs(); // renderTariffManagementCard вызывается внутри renderTariffs
             }
             return result;
         };
