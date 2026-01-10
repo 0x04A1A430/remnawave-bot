@@ -316,11 +316,22 @@ async def extend_subscription(
     current_time = datetime.utcnow()
 
     logger.info(f"🔄 Продление подписки {subscription.id} на {days} дней")
-    logger.info(f"📊 Текущие параметры: статус={subscription.status}, окончание={subscription.end_date}")
+    logger.info(f"📊 Текущие параметры: статус={subscription.status}, окончание={subscription.end_date}, тариф={subscription.tariff_id}")
+
+    # Определяем, происходит ли СМЕНА тарифа (а не продление того же)
+    is_tariff_change = (
+        tariff_id is not None
+        and subscription.tariff_id is not None
+        and tariff_id != subscription.tariff_id
+    )
+
+    if is_tariff_change:
+        logger.info(f"🔄 Обнаружена СМЕНА тарифа: {subscription.tariff_id} → {tariff_id}")
 
     # НОВОЕ: Вычисляем бонусные дни от триала ДО изменения end_date
+    # Бонусные дни НЕ начисляются при смене тарифа
     bonus_days = 0
-    if subscription.is_trial and settings.TRIAL_ADD_REMAINING_DAYS_TO_PAID:
+    if not is_tariff_change and subscription.is_trial and settings.TRIAL_ADD_REMAINING_DAYS_TO_PAID:
         # Вычисляем остаток триала
         if subscription.end_date and subscription.end_date > current_time:
             remaining = subscription.end_date - current_time
@@ -342,6 +353,11 @@ async def extend_subscription(
             abs(days),
             subscription.end_date,
         )
+    elif is_tariff_change:
+        # При СМЕНЕ тарифа срок начинается с текущей даты
+        subscription.end_date = current_time + timedelta(days=total_days)
+        subscription.start_date = current_time
+        logger.info(f"📅 СМЕНА тарифа: срок начинается с текущей даты + {total_days} дней")
     elif subscription.end_date > current_time:
         subscription.end_date = subscription.end_date + timedelta(days=total_days)
         logger.info(f"📅 Подписка активна, добавляем {total_days} дней ({days} + {bonus_days} бонус) к текущей дате окончания")
