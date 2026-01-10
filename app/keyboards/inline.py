@@ -975,36 +975,36 @@ def get_subscription_keyboard(
         if happ_row:
             keyboard.append(happ_row)
 
-        if not is_trial:
+        if is_trial:
             keyboard.append([
-                InlineKeyboardButton(text=texts.MENU_EXTEND_SUBSCRIPTION, callback_data="subscription_extend")
+                InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data="subscription_upgrade")
             ])
+        else:
+            # Ряд: [Продлить] [Автоплатеж]
             keyboard.append([
+                InlineKeyboardButton(text=texts.MENU_EXTEND_SUBSCRIPTION, callback_data="subscription_extend"),
                 InlineKeyboardButton(
                     text=texts.t("AUTOPAY_BUTTON", "💳 Автоплатеж"),
                     callback_data="subscription_autopay",
                 )
             ])
 
-        if is_trial:
-            keyboard.append([
-                InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data="subscription_upgrade")
-            ])
-        else:
-            keyboard.append([
+            # Ряд: [Настройки] [Тариф] (если режим тарифов)
+            settings_row = [
                 InlineKeyboardButton(
-                    text=texts.t("SUBSCRIPTION_SETTINGS_BUTTON", "⚙️ Настройки подписки"),
+                    text=texts.t("SUBSCRIPTION_SETTINGS_BUTTON", "⚙️ Настройки"),
                     callback_data="subscription_settings",
                 )
-            ])
-            # Кнопка смены тарифа для режима тарифов
+            ]
             if settings.is_tariffs_mode() and subscription:
-                keyboard.append([
+                settings_row.append(
                     InlineKeyboardButton(
-                        text=texts.t("CHANGE_TARIFF_BUTTON", "📦 Сменить тариф"),
+                        text=texts.t("CHANGE_TARIFF_BUTTON", "📦 Тариф"),
                         callback_data="tariff_switch"
                     )
-                ])
+                )
+            keyboard.append(settings_row)
+
             # Кнопка докупки трафика для платных подписок
             # В режиме тарифов проверяем tariff_id, в классическом - глобальные настройки
             show_traffic_topup = False
