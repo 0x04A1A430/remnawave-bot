@@ -1795,7 +1795,81 @@ def get_add_traffic_keyboard(
     ])
     
     return InlineKeyboardMarkup(inline_keyboard=buttons)
-    
+
+
+def get_add_traffic_keyboard_from_tariff(
+    language: str,
+    packages: dict,  # {gb: price_kopeks}
+    subscription_end_date: datetime = None,
+    discount_percent: int = 0,
+) -> InlineKeyboardMarkup:
+    """
+    Клавиатура для докупки трафика из настроек тарифа.
+
+    Args:
+        language: Язык интерфейса
+        packages: Словарь {ГБ: цена_в_копейках} из тарифа
+        subscription_end_date: Дата окончания подписки для расчета цены
+        discount_percent: Процент скидки
+    """
+    from app.utils.pricing_utils import get_remaining_months
+
+    texts = get_texts(language)
+
+    months_multiplier = 1
+    period_text = ""
+    if subscription_end_date:
+        months_multiplier = get_remaining_months(subscription_end_date)
+        if months_multiplier > 1:
+            period_text = f" (за {months_multiplier} мес)"
+
+    if not packages:
+        return InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(
+                text=texts.t("NO_TRAFFIC_PACKAGES", "❌ Нет доступных пакетов"),
+                callback_data="no_traffic_packages"
+            )],
+            [InlineKeyboardButton(
+                text=texts.BACK,
+                callback_data="menu_subscription"
+            )]
+        ])
+
+    buttons = []
+
+    # Сортируем пакеты по размеру
+    sorted_packages = sorted(packages.items(), key=lambda x: x[0])
+
+    for gb, price_per_month in sorted_packages:
+        discounted_per_month, discount_per_month = apply_percentage_discount(
+            price_per_month,
+            discount_percent,
+        )
+        total_price = discounted_per_month * months_multiplier
+        total_discount = discount_per_month * months_multiplier
+
+        if language == "ru":
+            text = f"📊 +{gb} ГБ трафика - {total_price // 100} ₽{period_text}"
+        else:
+            text = f"📊 +{gb} GB traffic - {total_price // 100} ₽{period_text}"
+
+        if discount_percent > 0 and total_discount > 0:
+            text += f" (скидка {discount_percent}%: -{total_discount // 100}₽)"
+
+        buttons.append([
+            InlineKeyboardButton(text=text, callback_data=f"add_traffic_{gb}")
+        ])
+
+    buttons.append([
+        InlineKeyboardButton(
+            text=texts.BACK,
+            callback_data="menu_subscription"
+        )
+    ])
+
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
 def get_change_devices_keyboard(
     current_devices: int,
     language: str = DEFAULT_LANGUAGE,
