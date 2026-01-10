@@ -1176,12 +1176,8 @@ async def select_tariff_switch_period(
     if subscription and subscription.end_date:
         remaining_days = max(0, (subscription.end_date - datetime.utcnow()).days)
 
-    # Определяем что произойдёт с временем
-    if remaining_days >= period:
-        time_info = f"⏰ Осталось дней: {remaining_days} (будет сохранено)"
-    else:
-        days_to_add = period - remaining_days
-        time_info = f"⏰ Осталось дней: {remaining_days} → будет {period} (+{days_to_add})"
+    # При смене тарифа устанавливается ровно оплаченный период
+    time_info = f"⏰ Будет установлено: {period} дней"
 
     if user_balance >= final_price:
         discount_text = ""
@@ -1275,22 +1271,15 @@ async def confirm_tariff_switch(
         # Получаем список серверов из тарифа
         squads = tariff.allowed_squads or []
 
-        # Рассчитываем сколько дней осталось у текущей подписки
-        from datetime import datetime
-        remaining_days = (subscription.end_date - datetime.utcnow()).days
-        if remaining_days < 0:
-            remaining_days = 0
-
-        # При смене тарифа пользователь получает максимум из:
-        # - оплаченного периода (за что заплатил)
-        # - оставшихся дней (если их больше)
-        days_for_new_tariff = max(period, remaining_days)
+        # При смене тарифа пользователь получает ровно тот период, за который заплатил
+        # Старые дни не сохраняются - это смена тарифа, а не продление
+        days_for_new_tariff = period
 
         # Обновляем подписку с новыми параметрами тарифа
         subscription = await extend_subscription(
             db,
             subscription,
-            days=days_for_new_tariff,  # Даем максимум из оплаченного и остатка
+            days=days_for_new_tariff,  # Даем ровно оплаченный период
             tariff_id=tariff.id,
             traffic_limit_gb=tariff.traffic_limit_gb,
             device_limit=tariff.device_limit,
@@ -1344,11 +1333,8 @@ async def confirm_tariff_switch(
 
         traffic = _format_traffic(tariff.traffic_limit_gb)
 
-        # Формируем текст о времени подписки
-        if days_to_add > 0:
-            time_info = f"📅 Добавлено дней: {days_to_add}"
-        else:
-            time_info = "📅 Остаток времени подписки сохранён"
+        # При смене тарифа устанавливается оплаченный период
+        time_info = f"📅 Период: {days_for_new_tariff} дней"
 
         await callback.message.edit_text(
             f"🎉 <b>Тариф успешно изменён!</b>\n\n"
