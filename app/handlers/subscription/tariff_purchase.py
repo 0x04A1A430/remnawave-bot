@@ -1281,15 +1281,16 @@ async def confirm_tariff_switch(
         if remaining_days < 0:
             remaining_days = 0
 
-        # Если выбранный период больше оставшегося - добавляем разницу
-        # Пользователь должен получить минимум то, за что заплатил
-        days_to_add = max(0, period - remaining_days)
+        # При смене тарифа пользователь получает максимум из:
+        # - оплаченного периода (за что заплатил)
+        # - оставшихся дней (если их больше)
+        days_for_new_tariff = max(period, remaining_days)
 
         # Обновляем подписку с новыми параметрами тарифа
         subscription = await extend_subscription(
             db,
             subscription,
-            days=days_to_add,  # Добавляем только разницу, если период > остатка
+            days=days_for_new_tariff,  # Даем максимум из оплаченного и остатка
             tariff_id=tariff.id,
             traffic_limit_gb=tariff.traffic_limit_gb,
             device_limit=tariff.device_limit,
@@ -1325,7 +1326,7 @@ async def confirm_tariff_switch(
                 db_user,
                 subscription,
                 None,  # Транзакция отсутствует, оплата с баланса
-                days_to_add,  # Добавленные дни (0 если остаток >= периода)
+                days_for_new_tariff,  # Итоговый срок подписки
                 was_trial_conversion=False,
                 amount_kopeks=final_price,
             )
