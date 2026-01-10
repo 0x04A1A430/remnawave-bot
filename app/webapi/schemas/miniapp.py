@@ -55,7 +55,7 @@ class MiniAppPromoGroup(BaseModel):
     server_discount_percent: int = 0
     traffic_discount_percent: int = 0
     device_discount_percent: int = 0
-    period_discounts: Dict[int, int] = Field(default_factory=dict)
+    period_discounts: Dict[str, int] = Field(default_factory=dict)
     apply_discounts_to_addons: bool = True
 
 
@@ -70,7 +70,7 @@ class MiniAppAutoPromoGroupLevel(BaseModel):
     server_discount_percent: int = 0
     traffic_discount_percent: int = 0
     device_discount_percent: int = 0
-    period_discounts: Dict[int, int] = Field(default_factory=dict)
+    period_discounts: Dict[str, int] = Field(default_factory=dict)
     apply_discounts_to_addons: bool = True
 
 
@@ -556,7 +556,7 @@ class MiniAppCurrentTariff(BaseModel):
 class MiniAppTrafficTopupRequest(BaseModel):
     """Запрос на докупку трафика."""
     init_data: str = Field(..., alias="initData")
-    subscription_id: int = Field(..., alias="subscriptionId")
+    subscription_id: Optional[int] = Field(None, alias="subscriptionId")
     gb: int
 
 
