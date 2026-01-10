@@ -1402,6 +1402,7 @@ async def start_edit_tariff_traffic_topup(
 
     is_enabled = getattr(tariff, 'traffic_topup_enabled', False)
     packages = tariff.get_traffic_topup_packages() if hasattr(tariff, 'get_traffic_topup_packages') else {}
+    max_topup_traffic = getattr(tariff, 'max_topup_traffic_gb', 0) or 0
 
     # Форматируем текущие настройки
     if is_enabled:
@@ -1413,6 +1414,12 @@ async def start_edit_tariff_traffic_topup(
     else:
         status = "❌ Отключено"
         packages_display = "  -"
+
+    # Форматируем лимит
+    if max_topup_traffic > 0:
+        max_limit_display = f"{max_topup_traffic} ГБ"
+    else:
+        max_limit_display = "Без ограничений"
 
     buttons = []
 
@@ -1426,10 +1433,13 @@ async def start_edit_tariff_traffic_topup(
             InlineKeyboardButton(text="✅ Включить", callback_data=f"admin_tariff_toggle_traffic_topup:{tariff_id}")
         ])
 
-    # Редактирование пакетов (только если включено)
+    # Редактирование пакетов и лимита (только если включено)
     if is_enabled:
         buttons.append([
             InlineKeyboardButton(text="📦 Настроить пакеты", callback_data=f"admin_tariff_edit_topup_packages:{tariff_id}")
+        ])
+        buttons.append([
+            InlineKeyboardButton(text="📊 Макс. лимит трафика", callback_data=f"admin_tariff_edit_max_topup:{tariff_id}")
         ])
 
     buttons.append([
@@ -1440,6 +1450,7 @@ async def start_edit_tariff_traffic_topup(
         f"📈 <b>Докупка трафика для «{tariff.name}»</b>\n\n"
         f"Статус: {status}\n\n"
         f"<b>Пакеты:</b>\n{packages_display}\n\n"
+        f"<b>Макс. лимит:</b> {max_limit_display}\n\n"
         "Пользователи смогут докупать трафик по заданным ценам.",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
         parse_mode="HTML"
@@ -1473,6 +1484,7 @@ async def toggle_tariff_traffic_topup(
     # Перерисовываем меню
     texts = get_texts(db_user.language)
     packages = tariff.get_traffic_topup_packages() if hasattr(tariff, 'get_traffic_topup_packages') else {}
+    max_topup_traffic = getattr(tariff, 'max_topup_traffic_gb', 0) or 0
 
     if new_value:
         status = "✅ Включено"
@@ -1484,6 +1496,12 @@ async def toggle_tariff_traffic_topup(
         status = "❌ Отключено"
         packages_display = "  -"
 
+    # Форматируем лимит
+    if max_topup_traffic > 0:
+        max_limit_display = f"{max_topup_traffic} ГБ"
+    else:
+        max_limit_display = "Без ограничений"
+
     buttons = []
 
     if new_value:
@@ -1492,6 +1510,9 @@ async def toggle_tariff_traffic_topup(
         ])
         buttons.append([
             InlineKeyboardButton(text="📦 Настроить пакеты", callback_data=f"admin_tariff_edit_topup_packages:{tariff_id}")
+        ])
+        buttons.append([
+            InlineKeyboardButton(text="📊 Макс. лимит трафика", callback_data=f"admin_tariff_edit_max_topup:{tariff_id}")
         ])
     else:
         buttons.append([
@@ -1507,6 +1528,7 @@ async def toggle_tariff_traffic_topup(
             f"📈 <b>Докупка трафика для «{tariff.name}»</b>\n\n"
             f"Статус: {status}\n\n"
             f"<b>Пакеты:</b>\n{packages_display}\n\n"
+            f"<b>Макс. лимит:</b> {max_limit_display}\n\n"
             "Пользователи смогут докупать трафик по заданным ценам.",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
             parse_mode="HTML"
@@ -1597,10 +1619,13 @@ async def process_edit_traffic_topup_packages(
     # Показываем обновленное меню
     texts = get_texts(db_user.language)
     packages_display = "\n".join(f"  • {gb} ГБ: {_format_price_kopeks(price)}" for gb, price in sorted(packages.items()))
+    max_topup_traffic = getattr(tariff, 'max_topup_traffic_gb', 0) or 0
+    max_limit_display = f"{max_topup_traffic} ГБ" if max_topup_traffic > 0 else "Без ограничений"
 
     buttons = [
         [InlineKeyboardButton(text="❌ Отключить", callback_data=f"admin_tariff_toggle_traffic_topup:{tariff_id}")],
         [InlineKeyboardButton(text="📦 Настроить пакеты", callback_data=f"admin_tariff_edit_topup_packages:{tariff_id}")],
+        [InlineKeyboardButton(text="📊 Макс. лимит трафика", callback_data=f"admin_tariff_edit_max_topup:{tariff_id}")],
         [InlineKeyboardButton(text=texts.BACK, callback_data=f"admin_tariff_view:{tariff_id}")]
     ]
 
@@ -1609,6 +1634,115 @@ async def process_edit_traffic_topup_packages(
         f"📈 <b>Докупка трафика для «{tariff.name}»</b>\n\n"
         f"Статус: ✅ Включено\n\n"
         f"<b>Пакеты:</b>\n{packages_display}\n\n"
+        f"<b>Макс. лимит:</b> {max_limit_display}\n\n"
+        "Пользователи смогут докупать трафик по заданным ценам.",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
+        parse_mode="HTML"
+    )
+
+
+# ============ МАКСИМАЛЬНЫЙ ЛИМИТ ДОКУПКИ ТРАФИКА ============
+
+@admin_required
+@error_handler
+async def start_edit_max_topup_traffic(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    """Начинает редактирование максимального лимита докупки трафика."""
+    texts = get_texts(db_user.language)
+    tariff_id = int(callback.data.split(":")[1])
+    tariff = await get_tariff_by_id(db, tariff_id)
+
+    if not tariff:
+        await callback.answer("Тариф не найден", show_alert=True)
+        return
+
+    await state.set_state(AdminStates.editing_tariff_max_topup_traffic)
+    await state.update_data(tariff_id=tariff_id)
+
+    current_limit = getattr(tariff, 'max_topup_traffic_gb', 0) or 0
+    if current_limit > 0:
+        current_display = f"{current_limit} ГБ"
+    else:
+        current_display = "Без ограничений"
+
+    await callback.message.edit_text(
+        f"📊 <b>Максимальный лимит трафика</b>\n\n"
+        f"Тариф: <b>{tariff.name}</b>\n"
+        f"Текущий лимит: <b>{current_display}</b>\n\n"
+        f"Введите максимальный общий объем трафика (в ГБ), который может быть на подписке после всех докупок.\n\n"
+        f"• Например, если тариф дает 100 ГБ и лимит 200 ГБ — пользователь сможет докупить еще 100 ГБ\n"
+        f"• Введите <code>0</code> для снятия ограничения",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=texts.CANCEL, callback_data=f"admin_tariff_edit_traffic_topup:{tariff_id}")]
+        ]),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def process_edit_max_topup_traffic(
+    message: types.Message,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    """Обрабатывает новое значение максимального лимита докупки трафика."""
+    texts = get_texts(db_user.language)
+    state_data = await state.get_data()
+    tariff_id = state_data.get("tariff_id")
+
+    tariff = await get_tariff_by_id(db, tariff_id)
+    if not tariff:
+        await message.answer("Тариф не найден")
+        await state.clear()
+        return
+
+    # Парсим значение
+    text = message.text.strip()
+    try:
+        new_limit = int(text)
+        if new_limit < 0:
+            raise ValueError("Negative value")
+    except ValueError:
+        await message.answer(
+            "Введите целое число (0 или больше).\n\n"
+            "• <code>0</code> — без ограничений\n"
+            "• <code>200</code> — максимум 200 ГБ на подписке",
+            parse_mode="HTML"
+        )
+        return
+
+    tariff = await update_tariff(db, tariff, max_topup_traffic_gb=new_limit)
+    await state.clear()
+
+    # Показываем обновленное меню
+    packages = tariff.get_traffic_topup_packages() if hasattr(tariff, 'get_traffic_topup_packages') else {}
+    if packages:
+        packages_display = "\n".join(f"  • {gb} ГБ: {_format_price_kopeks(price)}" for gb, price in sorted(packages.items()))
+    else:
+        packages_display = "  Пакеты не настроены"
+
+    max_limit_display = f"{new_limit} ГБ" if new_limit > 0 else "Без ограничений"
+
+    buttons = [
+        [InlineKeyboardButton(text="❌ Отключить", callback_data=f"admin_tariff_toggle_traffic_topup:{tariff_id}")],
+        [InlineKeyboardButton(text="📦 Настроить пакеты", callback_data=f"admin_tariff_edit_topup_packages:{tariff_id}")],
+        [InlineKeyboardButton(text="📊 Макс. лимит трафика", callback_data=f"admin_tariff_edit_max_topup:{tariff_id}")],
+        [InlineKeyboardButton(text=texts.BACK, callback_data=f"admin_tariff_view:{tariff_id}")]
+    ]
+
+    await message.answer(
+        f"✅ <b>Лимит обновлен!</b>\n\n"
+        f"📈 <b>Докупка трафика для «{tariff.name}»</b>\n\n"
+        f"Статус: ✅ Включено\n\n"
+        f"<b>Пакеты:</b>\n{packages_display}\n\n"
+        f"<b>Макс. лимит:</b> {max_limit_display}\n\n"
         "Пользователи смогут докупать трафик по заданным ценам.",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
         parse_mode="HTML"
@@ -2165,6 +2299,10 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(toggle_tariff_traffic_topup, F.data.startswith("admin_tariff_toggle_traffic_topup:"))
     dp.callback_query.register(start_edit_traffic_topup_packages, F.data.startswith("admin_tariff_edit_topup_packages:"))
     dp.message.register(process_edit_traffic_topup_packages, AdminStates.editing_tariff_traffic_topup_packages)
+
+    # Редактирование макс. лимита докупки трафика
+    dp.callback_query.register(start_edit_max_topup_traffic, F.data.startswith("admin_tariff_edit_max_topup:"))
+    dp.message.register(process_edit_max_topup_traffic, AdminStates.editing_tariff_max_topup_traffic)
 
     # Удаление
     dp.callback_query.register(confirm_delete_tariff, F.data.startswith("admin_tariff_delete:"))
