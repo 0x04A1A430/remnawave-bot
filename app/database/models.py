@@ -766,6 +766,8 @@ class Tariff(Base):
     traffic_topup_enabled = Column(Boolean, default=False, nullable=False)  # Разрешена ли докупка трафика
     # Пакеты трафика: JSON {"5": 5000, "10": 9000, "20": 15000} (ГБ: цена в копейках)
     traffic_topup_packages = Column(JSON, default=dict)
+    # Максимальный лимит трафика после докупки (0 = без ограничений)
+    max_topup_traffic_gb = Column(Integer, default=0, nullable=False)
 
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
