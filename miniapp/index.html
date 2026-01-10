@@ -8916,8 +8916,8 @@
                         trafficTopupBtn.classList.remove('hidden');
                         // Сохраняем данные для модального окна
                         window._trafficTopupPackages = trafficTopupPackages;
-                        window._subscriptionId = userData?.subscription_id;
-                        window._userBalance = userData?.balance_kopeks || 0;
+                        window._subscriptionId = userData?.subscription_id ?? userData?.subscriptionId;
+                        window._userBalance = userData?.balance_kopeks || userData?.balanceKopeks || 0;
                     } else {
                         trafficTopupBtn.classList.add('hidden');
                     }
@@ -12251,14 +12251,19 @@
             clearTrafficTopupError();
 
             try {
+                const initData = tg.initData || '';
+                const requestBody = {
+                    initData: initData,
+                    gb: gb
+                };
+                if (window._subscriptionId) {
+                    requestBody.subscriptionId = window._subscriptionId;
+                }
+
                 const response = await fetch('/miniapp/subscription/traffic-topup', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        initData: window._initData,
-                        subscriptionId: window._subscriptionId,
-                        gb: gb
-                    })
+                    body: JSON.stringify(requestBody)
                 });
 
                 const data = await response.json();
