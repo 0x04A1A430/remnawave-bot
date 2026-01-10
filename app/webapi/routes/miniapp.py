@@ -3525,7 +3525,7 @@ async def _get_current_tariff_model(db: AsyncSession, subscription, user=None) -
 
     # Получаем скидку на трафик из промогруппы
     traffic_discount_percent = 0
-    promo_group = getattr(user, "promo_group", None) if user else None
+    promo_group = (user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else getattr(user, "promo_group", None)) if user else None
     if promo_group:
         apply_to_addons = getattr(promo_group, 'apply_discounts_to_addons', True)
         if apply_to_addons:
@@ -6141,8 +6141,8 @@ async def get_tariffs_endpoint(
             },
         )
 
-    # Получаем промогруппу пользователя
-    promo_group = getattr(user, "promo_group", None)
+    # Получаем промогруппу пользователя (с приоритетом)
+    promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else getattr(user, "promo_group", None)
     promo_group_id = promo_group.id if promo_group else None
 
     # Получаем тарифы, доступные пользователю
@@ -6212,7 +6212,7 @@ async def purchase_tariff_endpoint(
         )
 
     # Проверяем доступность тарифа для пользователя
-    promo_group = getattr(user, "promo_group", None)
+    promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else getattr(user, "promo_group", None)
     promo_group_id = promo_group.id if promo_group else None
     if not tariff.is_available_for_promo_group(promo_group_id):
         raise HTTPException(
@@ -6428,7 +6428,7 @@ async def purchase_traffic_topup_endpoint(
 
     # Применяем скидку промогруппы на трафик
     traffic_discount_percent = 0
-    promo_group = getattr(user, "promo_group", None)
+    promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else getattr(user, "promo_group", None)
     if promo_group:
         apply_to_addons = getattr(promo_group, 'apply_discounts_to_addons', True)
         if apply_to_addons:
