@@ -508,14 +508,18 @@ def get_main_menu_keyboard(
         )
 
         # Добавляем кнопку докупки трафика для лимитированных подписок
-        if (
-            settings.BUY_TRAFFIC_BUTTON_VISIBLE
-            and settings.is_traffic_topup_enabled()
-            and not settings.is_traffic_topup_blocked()
-            and subscription
-            and not subscription.is_trial
-            and (subscription.traffic_limit_gb or 0) > 0
-        ):
+        # В режиме тарифов проверяем tariff_id (детальная проверка в хендлере)
+        # В классическом режиме проверяем глобальные настройки
+        show_traffic_topup = False
+        if subscription and not subscription.is_trial and (subscription.traffic_limit_gb or 0) > 0:
+            if settings.is_tariffs_mode() and getattr(subscription, 'tariff_id', None):
+                # Режим тарифов - показываем кнопку, проверка настроек тарифа в хендлере
+                show_traffic_topup = settings.BUY_TRAFFIC_BUTTON_VISIBLE
+            elif settings.is_traffic_topup_enabled() and not settings.is_traffic_topup_blocked():
+                # Классический режим - проверяем глобальные настройки
+                show_traffic_topup = settings.BUY_TRAFFIC_BUTTON_VISIBLE
+
+        if show_traffic_topup:
             paired_buttons.append(
                 InlineKeyboardButton(text=texts.t("BUY_TRAFFIC_BUTTON", "📈 Докупить трафик"), callback_data="buy_traffic")
             )
@@ -1002,12 +1006,15 @@ def get_subscription_keyboard(
                     )
                 ])
             # Кнопка докупки трафика для платных подписок
-            if (
-                settings.is_traffic_topup_enabled()
-                and not settings.is_traffic_topup_blocked()
-                and subscription
-                and (subscription.traffic_limit_gb or 0) > 0
-            ):
+            # В режиме тарифов проверяем tariff_id, в классическом - глобальные настройки
+            show_traffic_topup = False
+            if subscription and (subscription.traffic_limit_gb or 0) > 0:
+                if settings.is_tariffs_mode() and getattr(subscription, 'tariff_id', None):
+                    show_traffic_topup = True
+                elif settings.is_traffic_topup_enabled() and not settings.is_traffic_topup_blocked():
+                    show_traffic_topup = True
+
+            if show_traffic_topup:
                 keyboard.append([
                     InlineKeyboardButton(
                         text=texts.t("BUY_TRAFFIC_BUTTON", "📈 Докупить трафик"),
