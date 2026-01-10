@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import time
 import logging
+import asyncio
 from typing import Optional, Dict, Any, Set
 
 import aiohttp
@@ -11,6 +12,10 @@ import aiohttp
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+# Кэш для публичного IP
+_cached_public_ip: Optional[str] = None
+_ip_fetch_lock = asyncio.Lock()
 
 # IP-адреса Freekassa для проверки webhook
 FREEKASSA_IPS: Set[str] = {
@@ -21,6 +26,62 @@ FREEKASSA_IPS: Set[str] = {
 }
 
 API_BASE_URL = "https://api.fk.life/v1"
+
+# Сервисы для определения публичного IP (в порядке приоритета)
+IP_SERVICES = [
+    "https://api.ipify.org",
+    "https://ifconfig.me/ip",
+    "https://icanhazip.com",
+    "https://ipinfo.io/ip",
+]
+
+
+async def get_public_ip() -> str:
+    """
+    Получает публичный IP сервера.
+    1. Сначала проверяет переменную окружения SERVER_PUBLIC_IP
+    2. Если нет - запрашивает через внешние сервисы и кэширует
+    """
+    global _cached_public_ip
+
+    # Проверяем переменную окружения
+    env_ip = getattr(settings, 'SERVER_PUBLIC_IP', None)
+    if env_ip:
+        return env_ip
+
+    # Возвращаем кэшированный IP если есть
+    if _cached_public_ip:
+        return _cached_public_ip
+
+    async with _ip_fetch_lock:
+        # Повторная проверка после получения блокировки
+        if _cached_public_ip:
+            return _cached_public_ip
+
+        # Пробуем получить IP от внешних сервисов
+        async with aiohttp.ClientSession() as session:
+            for service_url in IP_SERVICES:
+                try:
+                    async with session.get(
+                        service_url,
+                        timeout=aiohttp.ClientTimeout(total=5)
+                    ) as response:
+                        if response.status == 200:
+                            ip = (await response.text()).strip()
+                            # Простая валидация IPv4
+                            if ip and len(ip.split('.')) == 4:
+                                _cached_public_ip = ip
+                                logger.info(f"Определён публичный IP сервера: {ip}")
+                                return ip
+                except Exception as e:
+                    logger.debug(f"Не удалось получить IP от {service_url}: {e}")
+                    continue
+
+        # Fallback на известный рабочий IP если ничего не получилось
+        fallback_ip = "185.92.183.173"
+        logger.warning(f"Не удалось определить публичный IP, используем fallback: {fallback_ip}")
+        _cached_public_ip = fallback_ip
+        return fallback_ip
 
 
 class FreekassaService:
@@ -177,13 +238,16 @@ class FreekassaService:
         # Используем payment_system_id из настроек, если не передан явно
         ps_id = payment_system_id or settings.FREEKASSA_PAYMENT_SYSTEM_ID or 1
 
+        # Определяем публичный IP сервера (127.0.0.1 отклоняется API)
+        server_ip = ip or await get_public_ip()
+
         params = {
             "shopId": self.shop_id,
             "nonce": int(time.time_ns()),  # Наносекунды для уникальности
             "paymentId": str(order_id),
             "i": ps_id,
             "email": email or "user@example.com",
-            "ip": ip or "127.0.0.1",
+            "ip": server_ip,
             "amount": final_amount,
             "currency": currency,
         }
