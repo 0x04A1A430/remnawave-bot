@@ -227,6 +227,8 @@ async def update_tariff(
     tier_level: Optional[int] = None,
     is_trial_available: Optional[bool] = None,
     promo_group_ids: Optional[List[int]] = None,
+    traffic_topup_enabled: Optional[bool] = None,
+    traffic_topup_packages: Optional[Dict[str, int]] = None,
 ) -> Tariff:
     """Обновляет существующий тариф."""
     if name is not None:
@@ -252,6 +254,10 @@ async def update_tariff(
         tariff.tier_level = max(1, tier_level)
     if is_trial_available is not None:
         tariff.is_trial_available = is_trial_available
+    if traffic_topup_enabled is not None:
+        tariff.traffic_topup_enabled = traffic_topup_enabled
+    if traffic_topup_packages is not None:
+        tariff.traffic_topup_packages = traffic_topup_packages
 
     # Обновляем промогруппы если указаны
     if promo_group_ids is not None:

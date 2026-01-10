@@ -725,6 +725,80 @@
             font-size: 14px;
         }
 
+        /* Бейдж скидки промогруппы на карточке тарифа */
+        .tariff-discount-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            color: #fff;
+            font-size: 11px;
+            font-weight: 700;
+            border-radius: 8px;
+            margin-top: 4px;
+            box-shadow: 0 2px 4px rgba(34, 197, 94, 0.3);
+            animation: discount-pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes discount-pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        :root[data-theme="dark"] .tariff-discount-badge {
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            box-shadow: 0 2px 8px rgba(34, 197, 94, 0.4);
+        }
+
+        /* Баннер скидки промогруппы */
+        .promo-group-discount-banner {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 16px;
+            margin-bottom: 16px;
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.12) 0%, rgba(16, 163, 74, 0.08) 100%);
+            border: 1px solid rgba(34, 197, 94, 0.25);
+            border-radius: 14px;
+            animation: banner-glow 3s ease-in-out infinite;
+        }
+
+        @keyframes banner-glow {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+            50% { box-shadow: 0 0 15px 2px rgba(34, 197, 94, 0.15); }
+        }
+
+        .promo-group-discount-icon {
+            font-size: 28px;
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+        }
+
+        .promo-group-discount-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .promo-group-discount-title {
+            font-weight: 700;
+            font-size: 14px;
+            color: #22c55e;
+            line-height: 1.3;
+        }
+
+        .promo-group-discount-subtitle {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+
+        :root[data-theme="dark"] .promo-group-discount-banner {
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.18) 0%, rgba(16, 163, 74, 0.1) 100%);
+            border-color: rgba(34, 197, 94, 0.35);
+        }
+
+        :root[data-theme="dark"] .promo-group-discount-title {
+            color: #4ade80;
+        }
+
         :root[data-theme="dark"] .tariff-name-badge {
             background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.25), rgba(var(--primary-rgb), 0.1));
         }
@@ -2416,6 +2490,167 @@
             font-weight: 700;
             color: var(--text-primary);
             text-align: right;
+        }
+
+        .info-action-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: none;
+            background: var(--primary);
+            color: white;
+            cursor: pointer;
+            margin-left: 8px;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+        }
+
+        .info-action-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 2px 8px rgba(var(--primary-rgb), 0.4);
+        }
+
+        .info-action-btn:active {
+            transform: scale(0.95);
+        }
+
+        .info-action-btn svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        /* Traffic Topup Modal */
+        .traffic-topup-packages {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+
+        .traffic-topup-package {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 16px;
+            border-radius: var(--radius);
+            border: 1px solid var(--border-color);
+            background: var(--card-bg);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .traffic-topup-package:hover {
+            border-color: var(--primary);
+            background: rgba(var(--primary-rgb), 0.05);
+        }
+
+        .traffic-topup-package.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .traffic-topup-package.disabled:hover {
+            border-color: var(--border-color);
+            background: var(--card-bg);
+        }
+
+        .traffic-topup-package-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .traffic-topup-package-gb {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .traffic-topup-package-price {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .traffic-topup-price-original {
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-decoration: line-through;
+            font-weight: 400;
+        }
+
+        .traffic-topup-price-current {
+            color: var(--primary);
+        }
+
+        .traffic-topup-discount-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            color: #fff;
+            font-size: 10px;
+            font-weight: 700;
+            border-radius: 6px;
+            box-shadow: 0 1px 3px rgba(34, 197, 94, 0.3);
+        }
+
+        .traffic-topup-package-btn {
+            padding: 8px 16px;
+            border-radius: var(--radius);
+            border: none;
+            background: var(--primary);
+            color: white;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .traffic-topup-package-btn:hover {
+            box-shadow: 0 2px 8px rgba(var(--primary-rgb), 0.4);
+        }
+
+        .traffic-topup-package-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .traffic-topup-balance {
+            text-align: center;
+            font-size: 13px;
+            color: var(--text-secondary);
+            padding: 8px;
+            border-radius: var(--radius);
+            background: var(--surface);
+        }
+
+        .traffic-topup-success {
+            text-align: center;
+            padding: 20px;
+        }
+
+        .traffic-topup-success-icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+        }
+
+        .traffic-topup-success-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+
+        .traffic-topup-success-message {
+            font-size: 14px;
+            color: var(--text-secondary);
         }
 
         /* Promo card */
@@ -5043,6 +5278,11 @@
                     <div class="info-item">
                         <span class="info-label" data-i18n="info.traffic_limit">Traffic Limit</span>
                         <span class="info-value" id="trafficLimit">-</span>
+                        <button class="info-action-btn hidden" id="trafficTopupBtn" type="button" title="Докупить трафик">
+                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                            </svg>
+                        </button>
                     </div>
                     <div class="info-item">
                         <span class="info-label" data-i18n="info.subscription_type">Type</span>
@@ -5270,6 +5510,14 @@
                                 <div class="subscription-renewal-meta-title" data-i18n="tariffs.current">Текущий тариф</div>
                                 <div class="subscription-renewal-meta-body" id="tariffsCurrentTariffName"></div>
                             </div>
+                            <!-- Баннер скидки промогруппы -->
+                            <div id="tariffsPromoGroupBanner" class="promo-group-discount-banner hidden">
+                                <div class="promo-group-discount-icon">🎁</div>
+                                <div class="promo-group-discount-content">
+                                    <div class="promo-group-discount-title" id="tariffsPromoGroupName"></div>
+                                    <div class="promo-group-discount-subtitle" id="tariffsPromoGroupDiscount"></div>
+                                </div>
+                            </div>
                             <div class="subscription-renewal-section">
                                 <div class="subscription-renewal-section-title">Выберите тариф</div>
                                 <div id="tariffsList" class="subscription-renewal-options"></div>
@@ -5467,6 +5715,27 @@
                     <div id="subscriptionPurchaseModalBody"></div>
                     <div class="modal-actions">
                         <button class="modal-button secondary" type="button" id="subscriptionPurchaseModalCloseBtn" data-i18n="subscription_purchase.action.close">Закрыть</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-backdrop hidden" id="trafficTopupModal">
+                <div class="modal" role="dialog" aria-modal="true" aria-labelledby="trafficTopupModalTitle">
+                    <div class="modal-header">
+                        <div class="modal-title" id="trafficTopupModalTitle" data-i18n="traffic_topup.title">Докупить трафик</div>
+                        <div class="modal-subtitle" id="trafficTopupModalSubtitle" data-i18n="traffic_topup.subtitle">Выберите пакет трафика</div>
+                    </div>
+                    <div class="modal-body" id="trafficTopupModalBody">
+                        <div class="traffic-topup-loading hidden" id="trafficTopupLoading">
+                            <div class="subscription-settings-loading-line"></div>
+                            <div class="subscription-settings-loading-line" style="width: 70%;"></div>
+                        </div>
+                        <div class="traffic-topup-packages" id="trafficTopupPackages"></div>
+                        <div class="traffic-topup-balance" id="trafficTopupBalance"></div>
+                    </div>
+                    <div class="modal-error hidden" id="trafficTopupModalError"></div>
+                    <div class="modal-actions" id="trafficTopupModalFooter">
+                        <button class="modal-button secondary" type="button" id="trafficTopupModalCancelBtn" data-i18n="traffic_topup.cancel">Закрыть</button>
                     </div>
                 </div>
             </div>
@@ -5922,6 +6191,16 @@
                 'topup.status.failed.description': 'We could not confirm the payment automatically. Please check later or contact support.',
                 'topup.status.retry': 'Try again',
                 'topup.done': 'Done',
+                'traffic_topup.title': 'Buy extra traffic',
+                'traffic_topup.subtitle': 'Choose a traffic package',
+                'traffic_topup.cancel': 'Close',
+                'traffic_topup.gb_suffix': 'GB',
+                'traffic_topup.buy_button': 'Buy',
+                'traffic_topup.your_balance': 'Your balance',
+                'traffic_topup.empty': 'No packages available',
+                'traffic_topup.error.generic': 'Failed to purchase traffic. Please try again.',
+                'traffic_topup.success.title': 'Traffic added!',
+                'traffic_topup.success.message': '+{gb} GB has been added to your subscription.',
                 'button.buy_subscription': 'Buy Subscription',
                 'button.open_bot': 'Open Telegram bot',
                 'subscription_purchase.title': 'Purchase subscription',
@@ -6358,6 +6637,16 @@
                 'topup.status.failed.description': 'Не удалось подтвердить платеж автоматически. Проверьте позже или обратитесь в поддержку.',
                 'topup.status.retry': 'Повторить попытку',
                 'topup.done': 'Готово',
+                'traffic_topup.title': 'Докупить трафик',
+                'traffic_topup.subtitle': 'Выберите пакет трафика',
+                'traffic_topup.cancel': 'Закрыть',
+                'traffic_topup.gb_suffix': 'ГБ',
+                'traffic_topup.buy_button': 'Купить',
+                'traffic_topup.your_balance': 'Ваш баланс',
+                'traffic_topup.empty': 'Нет доступных пакетов',
+                'traffic_topup.error.generic': 'Не удалось докупить трафик. Попробуйте снова.',
+                'traffic_topup.success.title': 'Трафик добавлен!',
+                'traffic_topup.success.message': '+{gb} ГБ добавлено к вашей подписке.',
                 'button.buy_subscription': 'Купить подписку',
                 'button.open_bot': 'Открыть бота',
                 'subscription_purchase.title': 'Оформление подписки',
@@ -8614,6 +8903,24 @@
                     currentTariffNameEl.textContent = currentTariff.name;
                 } else {
                     currentTariffRow.classList.add('hidden');
+                }
+
+                // Кнопка докупки трафика
+                const trafficTopupBtn = document.getElementById('trafficTopupBtn');
+                if (trafficTopupBtn) {
+                    const trafficTopupEnabled = currentTariff?.traffic_topup_enabled || currentTariff?.trafficTopupEnabled;
+                    const trafficTopupPackages = currentTariff?.traffic_topup_packages || currentTariff?.trafficTopupPackages || [];
+                    const isTrial = (user?.subscription_status || '').toLowerCase() === 'trial';
+
+                    if (trafficTopupEnabled && trafficTopupPackages.length > 0 && !isTrial) {
+                        trafficTopupBtn.classList.remove('hidden');
+                        // Сохраняем данные для модального окна
+                        window._trafficTopupPackages = trafficTopupPackages;
+                        window._subscriptionId = userData?.subscription_id;
+                        window._userBalance = userData?.balance_kopeks || 0;
+                    } else {
+                        trafficTopupBtn.classList.add('hidden');
+                    }
                 }
             }
 
@@ -11838,6 +12145,177 @@
             stopAllPaymentMonitors();
             clearTopupError();
         }
+
+        // ============ Traffic Topup Modal ============
+        function openTrafficTopupModal() {
+            const modal = document.getElementById('trafficTopupModal');
+            if (!modal) return;
+
+            modal.classList.remove('hidden');
+            document.body.classList.add('modal-open');
+            renderTrafficTopupPackages();
+        }
+
+        function closeTrafficTopupModal() {
+            const modal = document.getElementById('trafficTopupModal');
+            if (modal) {
+                modal.classList.add('hidden');
+            }
+            document.body.classList.remove('modal-open');
+            clearTrafficTopupError();
+        }
+
+        function clearTrafficTopupError() {
+            const errorEl = document.getElementById('trafficTopupModalError');
+            if (errorEl) {
+                errorEl.classList.add('hidden');
+                errorEl.textContent = '';
+            }
+        }
+
+        function showTrafficTopupError(message) {
+            const errorEl = document.getElementById('trafficTopupModalError');
+            if (errorEl) {
+                errorEl.textContent = message;
+                errorEl.classList.remove('hidden');
+            }
+        }
+
+        function renderTrafficTopupPackages() {
+            const packagesContainer = document.getElementById('trafficTopupPackages');
+            const balanceContainer = document.getElementById('trafficTopupBalance');
+
+            if (!packagesContainer) return;
+
+            const packages = window._trafficTopupPackages || [];
+            const balance = window._userBalance || 0;
+
+            packagesContainer.innerHTML = '';
+
+            if (packages.length === 0) {
+                packagesContainer.innerHTML = '<div class="traffic-topup-empty">' + t('traffic_topup.empty') + '</div>';
+                return;
+            }
+
+            packages.forEach(pkg => {
+                const gb = pkg.gb;
+                const priceKopeks = pkg.price_kopeks || pkg.priceKopeks;
+                const priceLabel = pkg.price_label || pkg.priceLabel || formatPrice(priceKopeks);
+                const originalPriceKopeks = pkg.original_price_kopeks || pkg.originalPriceKopeks;
+                const originalPriceLabel = pkg.original_price_label || pkg.originalPriceLabel;
+                const discountPercent = pkg.discount_percent || pkg.discountPercent || 0;
+                const hasDiscount = discountPercent > 0 && originalPriceKopeks;
+                const canAfford = balance >= priceKopeks;
+
+                const packageEl = document.createElement('div');
+                packageEl.className = 'traffic-topup-package' + (canAfford ? '' : ' disabled');
+
+                packageEl.innerHTML = `
+                    <div class="traffic-topup-package-info">
+                        <div class="traffic-topup-package-gb">+${gb} ${t('traffic_topup.gb_suffix')}</div>
+                        <div class="traffic-topup-package-price">
+                            ${hasDiscount ? `<span class="traffic-topup-price-original">${originalPriceLabel}</span>` : ''}
+                            <span class="traffic-topup-price-current">${priceLabel}</span>
+                            ${hasDiscount ? `<span class="traffic-topup-discount-badge">-${discountPercent}%</span>` : ''}
+                        </div>
+                    </div>
+                    <button class="traffic-topup-package-btn" ${canAfford ? '' : 'disabled'}>
+                        ${t('traffic_topup.buy_button')}
+                    </button>
+                `;
+
+                if (canAfford) {
+                    const btn = packageEl.querySelector('.traffic-topup-package-btn');
+                    btn.addEventListener('click', () => purchaseTrafficPackage(gb, priceKopeks));
+                }
+
+                packagesContainer.appendChild(packageEl);
+            });
+
+            if (balanceContainer) {
+                balanceContainer.innerHTML = t('traffic_topup.your_balance') + ': <strong>' + formatPrice(balance) + '</strong>';
+            }
+        }
+
+        async function purchaseTrafficPackage(gb, priceKopeks) {
+            const packagesContainer = document.getElementById('trafficTopupPackages');
+            if (!packagesContainer) return;
+
+            // Показываем загрузку
+            const buttons = packagesContainer.querySelectorAll('.traffic-topup-package-btn');
+            buttons.forEach(btn => {
+                btn.disabled = true;
+                btn.textContent = '...';
+            });
+
+            clearTrafficTopupError();
+
+            try {
+                const response = await fetch('/miniapp/subscription/traffic-topup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        initData: window._initData,
+                        subscriptionId: window._subscriptionId,
+                        gb: gb
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    const errorMessage = data?.detail?.message || data?.message || t('traffic_topup.error.generic');
+                    showTrafficTopupError(errorMessage);
+                    renderTrafficTopupPackages();
+                    return;
+                }
+
+                // Успех - показываем сообщение
+                packagesContainer.innerHTML = `
+                    <div class="traffic-topup-success">
+                        <div class="traffic-topup-success-icon">✅</div>
+                        <div class="traffic-topup-success-title">${t('traffic_topup.success.title')}</div>
+                        <div class="traffic-topup-success-message">${t('traffic_topup.success.message').replace('{gb}', gb)}</div>
+                    </div>
+                `;
+
+                // Обновляем баланс
+                window._userBalance = data.new_balance_kopeks || data.newBalanceKopeks || 0;
+                const balanceContainer = document.getElementById('trafficTopupBalance');
+                if (balanceContainer) {
+                    balanceContainer.innerHTML = t('traffic_topup.your_balance') + ': <strong>' + formatPrice(window._userBalance) + '</strong>';
+                }
+
+                // Обновляем отображение баланса на странице
+                const balanceAmountEl = document.getElementById('balanceAmount');
+                if (balanceAmountEl) {
+                    balanceAmountEl.textContent = formatPrice(window._userBalance);
+                }
+
+                // Обновляем лимит трафика
+                const trafficLimitEl = document.getElementById('trafficLimit');
+                if (trafficLimitEl && data.new_traffic_limit_gb) {
+                    trafficLimitEl.textContent = formatTrafficLimit(data.new_traffic_limit_gb);
+                }
+
+                // Обновляем данные через 2 секунды
+                setTimeout(() => {
+                    refreshSubscriptionData({ silent: true });
+                }, 2000);
+
+            } catch (error) {
+                console.error('Traffic topup error:', error);
+                showTrafficTopupError(t('traffic_topup.error.generic'));
+                renderTrafficTopupPackages();
+            }
+        }
+
+        function formatPrice(kopeks) {
+            const rubles = Math.floor(kopeks / 100);
+            return rubles + ' ₽';
+        }
+
+        // ============ End Traffic Topup Modal ============
 
         function renderTopupLoading(messageKey = 'topup.loading') {
             const { body } = getTopupElements();
@@ -19097,6 +19575,31 @@
             });
         }
 
+        // Кнопка докупки трафика
+        const trafficTopupBtn = document.getElementById('trafficTopupBtn');
+        if (trafficTopupBtn) {
+            trafficTopupBtn.addEventListener('click', () => {
+                openTrafficTopupModal();
+            });
+        }
+
+        // Модальное окно докупки трафика
+        const trafficTopupModal = document.getElementById('trafficTopupModal');
+        if (trafficTopupModal) {
+            trafficTopupModal.addEventListener('click', event => {
+                if (event.target === trafficTopupModal) {
+                    closeTrafficTopupModal();
+                }
+            });
+        }
+
+        const trafficTopupCancelBtn = document.getElementById('trafficTopupModalCancelBtn');
+        if (trafficTopupCancelBtn) {
+            trafficTopupCancelBtn.addEventListener('click', () => {
+                closeTrafficTopupModal();
+            });
+        }
+
         const topupModal = document.getElementById('topupModal');
         if (topupModal) {
             topupModal.addEventListener('click', event => {
@@ -19314,6 +19817,40 @@
                 currentBlock?.classList.add('hidden');
             }
 
+            // Баннер скидки промогруппы
+            const promoGroupBanner = document.getElementById('tariffsPromoGroupBanner');
+            const promoGroupNameEl = document.getElementById('tariffsPromoGroupName');
+            const promoGroupDiscountEl = document.getElementById('tariffsPromoGroupDiscount');
+            const promoGroup = tariffsData?.promo_group || tariffsData?.promoGroup;
+
+            if (promoGroup && promoGroupBanner) {
+                // Вычисляем максимальную скидку из period_discounts
+                const periodDiscounts = promoGroup.period_discounts || promoGroup.periodDiscounts || {};
+                let maxDiscount = 0;
+                Object.values(periodDiscounts).forEach(discount => {
+                    const d = parseInt(discount) || 0;
+                    if (d > maxDiscount) maxDiscount = d;
+                });
+
+                if (maxDiscount > 0) {
+                    promoGroupBanner.classList.remove('hidden');
+                    if (promoGroupNameEl) {
+                        promoGroupNameEl.textContent = currentLang === 'en'
+                            ? `Promo group "${promoGroup.name}"`
+                            : `Промогруппа «${promoGroup.name}»`;
+                    }
+                    if (promoGroupDiscountEl) {
+                        promoGroupDiscountEl.textContent = currentLang === 'en'
+                            ? `Your discount: up to ${maxDiscount}%`
+                            : `Ваша скидка: до ${maxDiscount}%`;
+                    }
+                } else {
+                    promoGroupBanner.classList.add('hidden');
+                }
+            } else {
+                promoGroupBanner?.classList.add('hidden');
+            }
+
             // Список тарифов
             if (!list) return;
             list.innerHTML = '';
@@ -19327,14 +19864,33 @@
             tariffs.forEach(tariff => {
                 const isCurrent = tariff.is_current || tariff.isCurrent;
                 const periods = tariff.periods || [];
-                const minPrice = periods.length > 0
-                    ? periods.reduce((min, p) => {
+
+                // Находим минимальную цену и максимальную скидку
+                let minPrice = null;
+                let minPriceOriginal = null;
+                let maxDiscountPercent = 0;
+
+                if (periods.length > 0) {
+                    periods.forEach(p => {
                         const price = p.price_kopeks || p.priceKopeks || 0;
-                        return price < min ? price : min;
-                    }, Infinity)
-                    : null;
-                const minPriceLabel = minPrice !== null && minPrice !== Infinity
+                        const originalPrice = p.original_price_kopeks || p.originalPriceKopeks || price;
+                        const discountPct = p.discount_percent || p.discountPercent || 0;
+
+                        if (minPrice === null || price < minPrice) {
+                            minPrice = price;
+                            minPriceOriginal = originalPrice > price ? originalPrice : null;
+                        }
+                        if (discountPct > maxDiscountPercent) {
+                            maxDiscountPercent = discountPct;
+                        }
+                    });
+                }
+
+                const minPriceLabel = minPrice !== null
                     ? formatPriceFromKopeks(minPrice, tariffsData?.currency || 'RUB')
+                    : null;
+                const minPriceOriginalLabel = minPriceOriginal !== null
+                    ? formatPriceFromKopeks(minPriceOriginal, tariffsData?.currency || 'RUB')
                     : null;
 
                 const div = document.createElement('div');
@@ -19403,7 +19959,9 @@
                             ${minPriceLabel ? `
                                 <div style="text-align: right; flex-shrink: 0;">
                                     <div style="font-size: 10px; color: var(--text-secondary); text-transform: uppercase;">от</div>
+                                    ${minPriceOriginalLabel ? `<div style="font-size: 12px; color: var(--text-secondary); text-decoration: line-through;">${minPriceOriginalLabel}</div>` : ''}
                                     <div style="font-weight: 600; color: var(--primary); font-size: 15px;">${minPriceLabel}</div>
+                                    ${maxDiscountPercent > 0 ? `<div class="tariff-discount-badge">-${maxDiscountPercent}%</div>` : ''}
                                 </div>
                             ` : ''}
                         </div>
@@ -19476,9 +20034,9 @@
             periods.forEach((period, index) => {
                 const days = period.days || period.period_days || period.periodDays;
                 const priceKopeks = period.price_kopeks || period.priceKopeks || period.final_price || period.finalPrice || 0;
-                const originalKopeks = period.original_price || period.originalPrice || period.base_price || period.basePrice || priceKopeks;
+                const originalKopeks = period.original_price_kopeks || period.originalPriceKopeks || period.original_price || period.originalPrice || period.base_price || period.basePrice || priceKopeks;
                 const hasDiscount = originalKopeks > priceKopeks;
-                const discountPercent = hasDiscount ? Math.round((1 - priceKopeks / originalKopeks) * 100) : 0;
+                const discountPercent = period.discount_percent || period.discountPercent || (hasDiscount ? Math.round((1 - priceKopeks / originalKopeks) * 100) : 0);
 
                 const priceLabel = formatPriceFromKopeks(priceKopeks, tariffsData?.currency || 'RUB');
                 const originalLabel = hasDiscount ? formatPriceFromKopeks(originalKopeks, tariffsData?.currency || 'RUB') : null;

@@ -503,6 +503,10 @@ class MiniAppTariffPeriod(BaseModel):
     price_label: str
     price_per_month_kopeks: Optional[int] = None
     price_per_month_label: Optional[str] = None
+    # Скидка промогруппы
+    original_price_kopeks: Optional[int] = None  # Цена без скидки
+    original_price_label: Optional[str] = None
+    discount_percent: int = 0  # Процент скидки
 
 
 class MiniAppTariff(BaseModel):
@@ -522,6 +526,17 @@ class MiniAppTariff(BaseModel):
     is_available: bool = True
 
 
+class MiniAppTrafficTopupPackage(BaseModel):
+    """Пакет докупки трафика."""
+    gb: int
+    price_kopeks: int
+    price_label: str
+    # Скидка промогруппы на трафик
+    original_price_kopeks: Optional[int] = None
+    original_price_label: Optional[str] = None
+    discount_percent: int = 0
+
+
 class MiniAppCurrentTariff(BaseModel):
     """Текущий тариф пользователя."""
     id: int
@@ -533,6 +548,25 @@ class MiniAppCurrentTariff(BaseModel):
     is_unlimited_traffic: bool = False
     device_limit: int
     servers_count: int
+    # Докупка трафика
+    traffic_topup_enabled: bool = False
+    traffic_topup_packages: List[MiniAppTrafficTopupPackage] = Field(default_factory=list)
+
+
+class MiniAppTrafficTopupRequest(BaseModel):
+    """Запрос на докупку трафика."""
+    init_data: str = Field(..., alias="initData")
+    subscription_id: int = Field(..., alias="subscriptionId")
+    gb: int
+
+
+class MiniAppTrafficTopupResponse(BaseModel):
+    """Ответ на докупку трафика."""
+    success: bool = True
+    message: str = ""
+    new_traffic_limit_gb: int = 0
+    new_balance_kopeks: int = 0
+    charged_kopeks: int = 0
 
 
 class MiniAppTariffsRequest(BaseModel):
@@ -548,6 +582,7 @@ class MiniAppTariffsResponse(BaseModel):
     current_tariff: Optional[MiniAppCurrentTariff] = None
     balance_kopeks: int = 0
     balance_label: Optional[str] = None
+    promo_group: Optional[MiniAppPromoGroup] = None  # Промогруппа пользователя для отображения скидок
 
 
 class MiniAppTariffPurchaseRequest(BaseModel):

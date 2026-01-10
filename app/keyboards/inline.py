@@ -508,14 +508,18 @@ def get_main_menu_keyboard(
         )
 
         # Добавляем кнопку докупки трафика для лимитированных подписок
-        if (
-            settings.BUY_TRAFFIC_BUTTON_VISIBLE
-            and settings.is_traffic_topup_enabled()
-            and not settings.is_traffic_topup_blocked()
-            and subscription
-            and not subscription.is_trial
-            and (subscription.traffic_limit_gb or 0) > 0
-        ):
+        # В режиме тарифов проверяем tariff_id (детальная проверка в хендлере)
+        # В классическом режиме проверяем глобальные настройки
+        show_traffic_topup = False
+        if subscription and not subscription.is_trial and (subscription.traffic_limit_gb or 0) > 0:
+            if settings.is_tariffs_mode() and getattr(subscription, 'tariff_id', None):
+                # Режим тарифов - показываем кнопку, проверка настроек тарифа в хендлере
+                show_traffic_topup = settings.BUY_TRAFFIC_BUTTON_VISIBLE
+            elif settings.is_traffic_topup_enabled() and not settings.is_traffic_topup_blocked():
+                # Классический режим - проверяем глобальные настройки
+                show_traffic_topup = settings.BUY_TRAFFIC_BUTTON_VISIBLE
+
+        if show_traffic_topup:
             paired_buttons.append(
                 InlineKeyboardButton(text=texts.t("BUY_TRAFFIC_BUTTON", "📈 Докупить трафик"), callback_data="buy_traffic")
             )
@@ -971,43 +975,46 @@ def get_subscription_keyboard(
         if happ_row:
             keyboard.append(happ_row)
 
-        if not is_trial:
+        if is_trial:
             keyboard.append([
-                InlineKeyboardButton(text=texts.MENU_EXTEND_SUBSCRIPTION, callback_data="subscription_extend")
+                InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data="subscription_upgrade")
             ])
+        else:
+            # Ряд: [Продлить] [Автоплатеж]
             keyboard.append([
+                InlineKeyboardButton(text=texts.MENU_EXTEND_SUBSCRIPTION, callback_data="subscription_extend"),
                 InlineKeyboardButton(
                     text=texts.t("AUTOPAY_BUTTON", "💳 Автоплатеж"),
                     callback_data="subscription_autopay",
                 )
             ])
 
-        if is_trial:
-            keyboard.append([
-                InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data="subscription_upgrade")
-            ])
-        else:
-            keyboard.append([
+            # Ряд: [Настройки] [Тариф] (если режим тарифов)
+            settings_row = [
                 InlineKeyboardButton(
-                    text=texts.t("SUBSCRIPTION_SETTINGS_BUTTON", "⚙️ Настройки подписки"),
+                    text=texts.t("SUBSCRIPTION_SETTINGS_BUTTON", "⚙️ Настройки"),
                     callback_data="subscription_settings",
                 )
-            ])
-            # Кнопка смены тарифа для режима тарифов
+            ]
             if settings.is_tariffs_mode() and subscription:
-                keyboard.append([
+                settings_row.append(
                     InlineKeyboardButton(
-                        text=texts.t("CHANGE_TARIFF_BUTTON", "📦 Сменить тариф"),
+                        text=texts.t("CHANGE_TARIFF_BUTTON", "📦 Тариф"),
                         callback_data="tariff_switch"
                     )
-                ])
+                )
+            keyboard.append(settings_row)
+
             # Кнопка докупки трафика для платных подписок
-            if (
-                settings.is_traffic_topup_enabled()
-                and not settings.is_traffic_topup_blocked()
-                and subscription
-                and (subscription.traffic_limit_gb or 0) > 0
-            ):
+            # В режиме тарифов проверяем tariff_id, в классическом - глобальные настройки
+            show_traffic_topup = False
+            if subscription and (subscription.traffic_limit_gb or 0) > 0:
+                if settings.is_tariffs_mode() and getattr(subscription, 'tariff_id', None):
+                    show_traffic_topup = True
+                elif settings.is_traffic_topup_enabled() and not settings.is_traffic_topup_blocked():
+                    show_traffic_topup = True
+
+            if show_traffic_topup:
                 keyboard.append([
                     InlineKeyboardButton(
                         text=texts.t("BUY_TRAFFIC_BUTTON", "📈 Докупить трафик"),
@@ -1795,7 +1802,81 @@ def get_add_traffic_keyboard(
     ])
     
     return InlineKeyboardMarkup(inline_keyboard=buttons)
-    
+
+
+def get_add_traffic_keyboard_from_tariff(
+    language: str,
+    packages: dict,  # {gb: price_kopeks}
+    subscription_end_date: datetime = None,
+    discount_percent: int = 0,
+) -> InlineKeyboardMarkup:
+    """
+    Клавиатура для докупки трафика из настроек тарифа.
+
+    Args:
+        language: Язык интерфейса
+        packages: Словарь {ГБ: цена_в_копейках} из тарифа
+        subscription_end_date: Дата окончания подписки для расчета цены
+        discount_percent: Процент скидки
+    """
+    from app.utils.pricing_utils import get_remaining_months
+
+    texts = get_texts(language)
+
+    months_multiplier = 1
+    period_text = ""
+    if subscription_end_date:
+        months_multiplier = get_remaining_months(subscription_end_date)
+        if months_multiplier > 1:
+            period_text = f" (за {months_multiplier} мес)"
+
+    if not packages:
+        return InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(
+                text=texts.t("NO_TRAFFIC_PACKAGES", "❌ Нет доступных пакетов"),
+                callback_data="no_traffic_packages"
+            )],
+            [InlineKeyboardButton(
+                text=texts.BACK,
+                callback_data="menu_subscription"
+            )]
+        ])
+
+    buttons = []
+
+    # Сортируем пакеты по размеру
+    sorted_packages = sorted(packages.items(), key=lambda x: x[0])
+
+    for gb, price_per_month in sorted_packages:
+        discounted_per_month, discount_per_month = apply_percentage_discount(
+            price_per_month,
+            discount_percent,
+        )
+        total_price = discounted_per_month * months_multiplier
+        total_discount = discount_per_month * months_multiplier
+
+        if language == "ru":
+            text = f"📊 +{gb} ГБ трафика - {total_price // 100} ₽{period_text}"
+        else:
+            text = f"📊 +{gb} GB traffic - {total_price // 100} ₽{period_text}"
+
+        if discount_percent > 0 and total_discount > 0:
+            text += f" (скидка {discount_percent}%: -{total_discount // 100}₽)"
+
+        buttons.append([
+            InlineKeyboardButton(text=text, callback_data=f"add_traffic_{gb}")
+        ])
+
+    buttons.append([
+        InlineKeyboardButton(
+            text=texts.BACK,
+            callback_data="menu_subscription"
+        )
+    ])
+
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
 def get_change_devices_keyboard(
     current_devices: int,
     language: str = DEFAULT_LANGUAGE,

@@ -192,6 +192,8 @@ from ..schemas.miniapp import (
     MiniAppTariffPurchaseResponse,
     MiniAppCurrentTariff,
     MiniAppConnectedServer,
+    MiniAppTrafficTopupRequest,
+    MiniAppTrafficTopupResponse,
 )
 
 
@@ -3503,13 +3505,15 @@ async def get_subscription_details(
         trial_price_kopeks=trial_price_kopeks if trial_payment_required else None,
         trial_price_label=trial_price_label,
         sales_mode=settings.get_sales_mode(),
-        current_tariff=await _get_current_tariff_model(db, subscription) if subscription else None,
+        current_tariff=await _get_current_tariff_model(db, subscription, user) if subscription else None,
         **autopay_extras,
     )
 
 
-async def _get_current_tariff_model(db: AsyncSession, subscription) -> Optional[MiniAppCurrentTariff]:
+async def _get_current_tariff_model(db: AsyncSession, subscription, user=None) -> Optional[MiniAppCurrentTariff]:
     """Возвращает модель текущего тарифа пользователя."""
+    from app.webapi.schemas.miniapp import MiniAppTrafficTopupPackage
+
     if not subscription or not getattr(subscription, "tariff_id", None):
         return None
 
@@ -3518,6 +3522,40 @@ async def _get_current_tariff_model(db: AsyncSession, subscription) -> Optional[
         return None
 
     servers_count = len(tariff.allowed_squads) if tariff.allowed_squads else 0
+
+    # Получаем скидку на трафик из промогруппы
+    traffic_discount_percent = 0
+    promo_group = getattr(user, "promo_group", None) if user else None
+    if promo_group:
+        apply_to_addons = getattr(promo_group, 'apply_discounts_to_addons', True)
+        if apply_to_addons:
+            traffic_discount_percent = max(0, min(100, int(getattr(promo_group, 'traffic_discount_percent', 0) or 0)))
+
+    # Пакеты докупки трафика
+    traffic_topup_enabled = getattr(tariff, 'traffic_topup_enabled', False) and tariff.traffic_limit_gb > 0
+    traffic_topup_packages = []
+
+    if traffic_topup_enabled and hasattr(tariff, 'get_traffic_topup_packages'):
+        packages = tariff.get_traffic_topup_packages()
+        for gb in sorted(packages.keys()):
+            base_price = packages[gb]
+            # Применяем скидку
+            if traffic_discount_percent > 0:
+                discounted_price = int(base_price * (100 - traffic_discount_percent) / 100)
+                traffic_topup_packages.append(MiniAppTrafficTopupPackage(
+                    gb=gb,
+                    price_kopeks=discounted_price,
+                    price_label=settings.format_price(discounted_price),
+                    original_price_kopeks=base_price,
+                    original_price_label=settings.format_price(base_price),
+                    discount_percent=traffic_discount_percent,
+                ))
+            else:
+                traffic_topup_packages.append(MiniAppTrafficTopupPackage(
+                    gb=gb,
+                    price_kopeks=base_price,
+                    price_label=settings.format_price(base_price),
+                ))
 
     return MiniAppCurrentTariff(
         id=tariff.id,
@@ -3529,6 +3567,8 @@ async def _get_current_tariff_model(db: AsyncSession, subscription) -> Optional[
         is_unlimited_traffic=tariff.traffic_limit_gb == 0,
         device_limit=tariff.device_limit,
         servers_count=servers_count,
+        traffic_topup_enabled=traffic_topup_enabled,
+        traffic_topup_packages=traffic_topup_packages,
     )
 
 
@@ -5995,6 +6035,7 @@ async def _build_tariff_model(
     db: AsyncSession,
     tariff,
     current_tariff_id: Optional[int] = None,
+    promo_group=None,
 ) -> MiniAppTariff:
     """Преобразует объект тарифа в модель для API."""
     servers: List[MiniAppConnectedServer] = []
@@ -6010,10 +6051,28 @@ async def _build_tariff_model(
                     name=server.display_name or squad_uuid[:8],
                 ))
 
+    # Получаем скидки промогруппы по периодам
+    period_discounts = {}
+    if promo_group:
+        raw_discounts = getattr(promo_group, 'period_discounts', None) or {}
+        for k, v in raw_discounts.items():
+            try:
+                period_discounts[int(k)] = max(0, min(100, int(v)))
+            except (TypeError, ValueError):
+                pass
+
     periods: List[MiniAppTariffPeriod] = []
     if tariff.period_prices:
-        for period_str, price_kopeks in sorted(tariff.period_prices.items(), key=lambda x: int(x[0])):
+        for period_str, original_price_kopeks in sorted(tariff.period_prices.items(), key=lambda x: int(x[0])):
             period_days = int(period_str)
+
+            # Применяем скидку промогруппы
+            discount_percent = period_discounts.get(period_days, 0)
+            if discount_percent > 0:
+                price_kopeks = int(original_price_kopeks * (100 - discount_percent) / 100)
+            else:
+                price_kopeks = original_price_kopeks
+
             months = max(1, period_days // 30)
             per_month = price_kopeks // months if months > 0 else price_kopeks
 
@@ -6025,6 +6084,9 @@ async def _build_tariff_model(
                 price_label=settings.format_price(price_kopeks),
                 price_per_month_kopeks=per_month,
                 price_per_month_label=settings.format_price(per_month),
+                original_price_kopeks=original_price_kopeks if discount_percent > 0 else None,
+                original_price_label=settings.format_price(original_price_kopeks) if discount_percent > 0 else None,
+                discount_percent=discount_percent,
             ))
 
     return MiniAppTariff(
@@ -6099,8 +6161,17 @@ async def get_tariffs_endpoint(
     # Формируем список тарифов
     tariff_models: List[MiniAppTariff] = []
     for tariff in tariffs:
-        model = await _build_tariff_model(db, tariff, current_tariff_id)
+        model = await _build_tariff_model(db, tariff, current_tariff_id, promo_group)
         tariff_models.append(model)
+
+    # Формируем модель промогруппы для ответа
+    promo_group_model = None
+    if promo_group:
+        promo_group_model = MiniAppPromoGroup(
+            id=promo_group.id,
+            name=promo_group.name,
+            **_extract_promo_discounts(promo_group),
+        )
 
     return MiniAppTariffsResponse(
         success=True,
@@ -6109,6 +6180,7 @@ async def get_tariffs_endpoint(
         current_tariff=current_tariff_model,
         balance_kopeks=user.balance_kopeks,
         balance_label=settings.format_price(user.balance_kopeks),
+        promo_group=promo_group_model,
     )
 
 
@@ -6152,8 +6224,8 @@ async def purchase_tariff_endpoint(
         )
 
     # Получаем цену за выбранный период
-    price_kopeks = tariff.get_price_for_period(payload.period_days)
-    if price_kopeks is None:
+    base_price_kopeks = tariff.get_price_for_period(payload.period_days)
+    if base_price_kopeks is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
@@ -6161,6 +6233,21 @@ async def purchase_tariff_endpoint(
                 "message": "Invalid period for this tariff",
             },
         )
+
+    # Применяем скидку промогруппы
+    price_kopeks = base_price_kopeks
+    discount_percent = 0
+    if promo_group:
+        raw_discounts = getattr(promo_group, 'period_discounts', None) or {}
+        for k, v in raw_discounts.items():
+            try:
+                if int(k) == payload.period_days:
+                    discount_percent = max(0, min(100, int(v)))
+                    break
+            except (TypeError, ValueError):
+                pass
+        if discount_percent > 0:
+            price_kopeks = int(base_price_kopeks * (100 - discount_percent) / 100)
 
     # Проверяем баланс
     if user.balance_kopeks < price_kopeks:
@@ -6177,7 +6264,10 @@ async def purchase_tariff_endpoint(
     subscription = getattr(user, "subscription", None)
 
     # Списываем баланс
-    description = f"Покупка тарифа '{tariff.name}' на {payload.period_days} дней"
+    if discount_percent > 0:
+        description = f"Покупка тарифа '{tariff.name}' на {payload.period_days} дней (скидка {discount_percent}%)"
+    else:
+        description = f"Покупка тарифа '{tariff.name}' на {payload.period_days} дней"
     success = await subtract_user_balance(db, user, price_kopeks, description)
     if not success:
         raise HTTPException(
@@ -6214,7 +6304,7 @@ async def purchase_tariff_endpoint(
         subscription = await create_paid_subscription(
             db=db,
             user_id=user.id,
-            days=payload.period_days,
+            duration_days=payload.period_days,
             traffic_limit_gb=tariff.traffic_limit_gb,
             device_limit=tariff.device_limit,
             connected_squads=tariff.allowed_squads or [],
@@ -6252,4 +6342,168 @@ async def purchase_tariff_endpoint(
         new_end_date=subscription.end_date,
         balance_kopeks=user.balance_kopeks,
         balance_label=settings.format_price(user.balance_kopeks),
+    )
+
+
+@router.post("/subscription/traffic-topup")
+async def purchase_traffic_topup_endpoint(
+    payload: MiniAppTrafficTopupRequest,
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Докупка трафика для подписки."""
+    from app.webapi.schemas.miniapp import MiniAppTrafficTopupRequest, MiniAppTrafficTopupResponse
+    from app.database.crud.subscription import add_subscription_traffic
+    from app.database.crud.user import subtract_user_balance
+    from app.database.crud.transaction import create_transaction
+    from app.database.models import TransactionType
+    from app.utils.pricing_utils import calculate_prorated_price
+
+    user = await _authorize_miniapp_user(payload.init_data, db)
+    subscription = _ensure_paid_subscription(user)
+    _validate_subscription_id(payload.subscription_id, subscription)
+
+    # Проверяем режим тарифов
+    if not settings.is_tariffs_mode():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "tariffs_mode_disabled",
+                "message": "Traffic top-up is only available in tariffs mode",
+            },
+        )
+
+    # Проверяем наличие тарифа
+    tariff_id = getattr(subscription, 'tariff_id', None)
+    if not tariff_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "no_tariff",
+                "message": "Subscription has no tariff",
+            },
+        )
+
+    tariff = await get_tariff_by_id(db, tariff_id)
+    if not tariff:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "code": "tariff_not_found",
+                "message": "Tariff not found",
+            },
+        )
+
+    # Проверяем, разрешена ли докупка трафика
+    if not getattr(tariff, 'traffic_topup_enabled', False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "traffic_topup_disabled",
+                "message": "Traffic top-up is disabled for this tariff",
+            },
+        )
+
+    # Проверяем безлимит
+    if tariff.traffic_limit_gb == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "unlimited_traffic",
+                "message": "Cannot add traffic to unlimited subscription",
+            },
+        )
+
+    # Получаем цену пакета
+    packages = tariff.get_traffic_topup_packages() if hasattr(tariff, 'get_traffic_topup_packages') else {}
+    if payload.gb not in packages:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "invalid_package",
+                "message": f"Traffic package {payload.gb}GB is not available",
+            },
+        )
+
+    base_price_kopeks = packages[payload.gb]
+
+    # Применяем скидку промогруппы на трафик
+    traffic_discount_percent = 0
+    promo_group = getattr(user, "promo_group", None)
+    if promo_group:
+        apply_to_addons = getattr(promo_group, 'apply_discounts_to_addons', True)
+        if apply_to_addons:
+            traffic_discount_percent = max(0, min(100, int(getattr(promo_group, 'traffic_discount_percent', 0) or 0)))
+
+    if traffic_discount_percent > 0:
+        base_price_kopeks = int(base_price_kopeks * (100 - traffic_discount_percent) / 100)
+
+    # Пропорциональный расчет цены с учетом оставшегося времени подписки
+    final_price, months_charged = calculate_prorated_price(
+        base_price_kopeks,
+        subscription.end_date,
+    )
+
+    # Проверяем баланс
+    if user.balance_kopeks < final_price:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail={
+                "code": "insufficient_balance",
+                "message": "Insufficient balance",
+                "required": final_price,
+                "balance": user.balance_kopeks,
+            },
+        )
+
+    # Списываем баланс
+    if traffic_discount_percent > 0:
+        traffic_description = f"Докупка {payload.gb} ГБ трафика (скидка {traffic_discount_percent}%)"
+    else:
+        traffic_description = f"Докупка {payload.gb} ГБ трафика"
+    success = await subtract_user_balance(
+        db, user, final_price,
+        traffic_description
+    )
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "code": "balance_error",
+                "message": "Failed to subtract balance",
+            },
+        )
+
+    # Добавляем трафик
+    await add_subscription_traffic(db, subscription, payload.gb)
+
+    # Обновляем purchased_traffic_gb
+    current_purchased = getattr(subscription, 'purchased_traffic_gb', 0) or 0
+    subscription.purchased_traffic_gb = current_purchased + payload.gb
+    await db.commit()
+
+    # Синхронизируем с RemnaWave
+    try:
+        service = SubscriptionService()
+        await service.update_remnawave_user(db, subscription)
+    except Exception as e:
+        logger.error(f"Ошибка синхронизации с RemnaWave при докупке трафика: {e}")
+
+    # Создаем транзакцию
+    await create_transaction(
+        db,
+        user_id=user.id,
+        type=TransactionType.SUBSCRIPTION_PAYMENT,
+        amount_kopeks=-final_price,
+        description=traffic_description,
+    )
+
+    await db.refresh(user)
+    await db.refresh(subscription)
+
+    return MiniAppTrafficTopupResponse(
+        success=True,
+        message=f"Добавлено {payload.gb} ГБ трафика",
+        new_traffic_limit_gb=subscription.traffic_limit_gb,
+        new_balance_kopeks=user.balance_kopeks,
+        charged_kopeks=final_price,
     )
