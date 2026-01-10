@@ -3505,12 +3505,12 @@ async def get_subscription_details(
         trial_price_kopeks=trial_price_kopeks if trial_payment_required else None,
         trial_price_label=trial_price_label,
         sales_mode=settings.get_sales_mode(),
-        current_tariff=await _get_current_tariff_model(db, subscription) if subscription else None,
+        current_tariff=await _get_current_tariff_model(db, subscription, user) if subscription else None,
         **autopay_extras,
     )
 
 
-async def _get_current_tariff_model(db: AsyncSession, subscription) -> Optional[MiniAppCurrentTariff]:
+async def _get_current_tariff_model(db: AsyncSession, subscription, user=None) -> Optional[MiniAppCurrentTariff]:
     """Возвращает модель текущего тарифа пользователя."""
     from app.webapi.schemas.miniapp import MiniAppTrafficTopupPackage
 
@@ -3523,6 +3523,14 @@ async def _get_current_tariff_model(db: AsyncSession, subscription) -> Optional[
 
     servers_count = len(tariff.allowed_squads) if tariff.allowed_squads else 0
 
+    # Получаем скидку на трафик из промогруппы
+    traffic_discount_percent = 0
+    promo_group = getattr(user, "promo_group", None) if user else None
+    if promo_group:
+        apply_to_addons = getattr(promo_group, 'apply_discounts_to_addons', True)
+        if apply_to_addons:
+            traffic_discount_percent = max(0, min(100, int(getattr(promo_group, 'traffic_discount_percent', 0) or 0)))
+
     # Пакеты докупки трафика
     traffic_topup_enabled = getattr(tariff, 'traffic_topup_enabled', False) and tariff.traffic_limit_gb > 0
     traffic_topup_packages = []
@@ -3530,12 +3538,24 @@ async def _get_current_tariff_model(db: AsyncSession, subscription) -> Optional[
     if traffic_topup_enabled and hasattr(tariff, 'get_traffic_topup_packages'):
         packages = tariff.get_traffic_topup_packages()
         for gb in sorted(packages.keys()):
-            price = packages[gb]
-            traffic_topup_packages.append(MiniAppTrafficTopupPackage(
-                gb=gb,
-                price_kopeks=price,
-                price_label=settings.format_price(price),
-            ))
+            base_price = packages[gb]
+            # Применяем скидку
+            if traffic_discount_percent > 0:
+                discounted_price = int(base_price * (100 - traffic_discount_percent) / 100)
+                traffic_topup_packages.append(MiniAppTrafficTopupPackage(
+                    gb=gb,
+                    price_kopeks=discounted_price,
+                    price_label=settings.format_price(discounted_price),
+                    original_price_kopeks=base_price,
+                    original_price_label=settings.format_price(base_price),
+                    discount_percent=traffic_discount_percent,
+                ))
+            else:
+                traffic_topup_packages.append(MiniAppTrafficTopupPackage(
+                    gb=gb,
+                    price_kopeks=base_price,
+                    price_label=settings.format_price(base_price),
+                ))
 
     return MiniAppCurrentTariff(
         id=tariff.id,
@@ -6406,6 +6426,17 @@ async def purchase_traffic_topup_endpoint(
 
     base_price_kopeks = packages[payload.gb]
 
+    # Применяем скидку промогруппы на трафик
+    traffic_discount_percent = 0
+    promo_group = getattr(user, "promo_group", None)
+    if promo_group:
+        apply_to_addons = getattr(promo_group, 'apply_discounts_to_addons', True)
+        if apply_to_addons:
+            traffic_discount_percent = max(0, min(100, int(getattr(promo_group, 'traffic_discount_percent', 0) or 0)))
+
+    if traffic_discount_percent > 0:
+        base_price_kopeks = int(base_price_kopeks * (100 - traffic_discount_percent) / 100)
+
     # Пропорциональный расчет цены с учетом оставшегося времени подписки
     final_price, months_charged = calculate_prorated_price(
         base_price_kopeks,
@@ -6425,9 +6456,13 @@ async def purchase_traffic_topup_endpoint(
         )
 
     # Списываем баланс
+    if traffic_discount_percent > 0:
+        traffic_description = f"Докупка {payload.gb} ГБ трафика (скидка {traffic_discount_percent}%)"
+    else:
+        traffic_description = f"Докупка {payload.gb} ГБ трафика"
     success = await subtract_user_balance(
         db, user, final_price,
-        f"Докупка {payload.gb} ГБ трафика"
+        traffic_description
     )
     if not success:
         raise HTTPException(
@@ -6459,7 +6494,7 @@ async def purchase_traffic_topup_endpoint(
         user_id=user.id,
         type=TransactionType.SUBSCRIPTION_PAYMENT,
         amount_kopeks=-final_price,
-        description=f"Докупка {payload.gb} ГБ трафика",
+        description=traffic_description,
     )
 
     await db.refresh(user)
