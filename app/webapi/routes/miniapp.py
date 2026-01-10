@@ -6214,7 +6214,7 @@ async def purchase_tariff_endpoint(
         subscription = await create_paid_subscription(
             db=db,
             user_id=user.id,
-            days=payload.period_days,
+            duration_days=payload.period_days,
             traffic_limit_gb=tariff.traffic_limit_gb,
             device_limit=tariff.device_limit,
             connected_squads=tariff.allowed_squads or [],
