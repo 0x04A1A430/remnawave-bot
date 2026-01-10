@@ -4329,15 +4329,15 @@ def _safe_int(value: Any) -> int:
 
 def _normalize_period_discounts(
     raw: Optional[Dict[Any, Any]]
-) -> Dict[int, int]:
+) -> Dict[str, int]:
     if not isinstance(raw, dict):
         return {}
 
-    normalized: Dict[int, int] = {}
+    normalized: Dict[str, int] = {}
     for key, value in raw.items():
         try:
             period = int(key)
-            normalized[period] = int(value)
+            normalized[str(period)] = int(value)
         except (TypeError, ValueError):
             continue
 
@@ -4517,57 +4517,128 @@ async def _prepare_subscription_renewal_options(
     user: User,
     subscription: Subscription,
 ) -> Tuple[List[MiniAppSubscriptionRenewalPeriod], Dict[Union[str, int], Dict[str, Any]], Optional[str]]:
-    available_periods = [
-        period for period in settings.get_available_renewal_periods() if period > 0
-    ]
-
     option_payloads: List[Tuple[MiniAppSubscriptionRenewalPeriod, Dict[str, Any]]] = []
 
-    for period_days in available_periods:
-        try:
-            pricing_model = await _calculate_subscription_renewal_pricing(
-                db,
-                user,
-                subscription,
+    # Проверяем, есть ли у подписки тариф (режим тарифов)
+    tariff_id = getattr(subscription, 'tariff_id', None)
+    tariff = None
+    if tariff_id:
+        from app.database.crud.tariff import get_tariff_by_id
+        tariff = await get_tariff_by_id(db, tariff_id)
+
+    if tariff and tariff.period_prices:
+        # Режим тарифов: используем периоды и цены из тарифа
+        promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else getattr(user, "promo_group", None)
+
+        # Получаем скидки промогруппы по периодам
+        period_discounts = {}
+        if promo_group:
+            raw_discounts = getattr(promo_group, 'period_discounts', None) or {}
+            for k, v in raw_discounts.items():
+                try:
+                    period_discounts[int(k)] = max(0, min(100, int(v)))
+                except (TypeError, ValueError):
+                    pass
+
+        for period_str, original_price_kopeks in sorted(tariff.period_prices.items(), key=lambda x: int(x[0])):
+            period_days = int(period_str)
+
+            # Применяем скидку промогруппы
+            discount_percent = period_discounts.get(period_days, 0)
+            if discount_percent > 0:
+                price_kopeks = int(original_price_kopeks * (100 - discount_percent) / 100)
+            else:
+                price_kopeks = original_price_kopeks
+
+            months = max(1, period_days // 30)
+            per_month = price_kopeks // months if months > 0 else price_kopeks
+
+            label = format_period_description(
                 period_days,
+                getattr(user, "language", settings.DEFAULT_LANGUAGE),
             )
-            pricing = pricing_model.to_payload()
-        except Exception as error:  # pragma: no cover - defensive logging
-            logger.warning(
-                "Failed to calculate renewal pricing for subscription %s (period %s): %s",
-                subscription.id,
+
+            price_label = settings.format_price(price_kopeks)
+            original_label = settings.format_price(original_price_kopeks) if discount_percent > 0 else None
+            per_month_label = settings.format_price(per_month)
+
+            option_model = MiniAppSubscriptionRenewalPeriod(
+                id=f"tariff_{tariff.id}_{period_days}",
+                days=period_days,
+                months=months,
+                price_kopeks=price_kopeks,
+                price_label=price_label,
+                original_price_kopeks=original_price_kopeks if discount_percent > 0 else None,
+                original_price_label=original_label,
+                discount_percent=discount_percent,
+                price_per_month_kopeks=per_month,
+                price_per_month_label=per_month_label,
+                title=label,
+            )
+
+            pricing = {
+                "period_id": option_model.id,
+                "period_days": period_days,
+                "months": months,
+                "final_total": price_kopeks,
+                "base_original_total": original_price_kopeks if discount_percent > 0 else price_kopeks,
+                "overall_discount_percent": discount_percent,
+                "per_month": per_month,
+                "tariff_id": tariff.id,
+            }
+
+            option_payloads.append((option_model, pricing))
+    else:
+        # Классический режим: используем периоды из настроек
+        available_periods = [
+            period for period in settings.get_available_renewal_periods() if period > 0
+        ]
+
+        for period_days in available_periods:
+            try:
+                pricing_model = await _calculate_subscription_renewal_pricing(
+                    db,
+                    user,
+                    subscription,
+                    period_days,
+                )
+                pricing = pricing_model.to_payload()
+            except Exception as error:  # pragma: no cover - defensive logging
+                logger.warning(
+                    "Failed to calculate renewal pricing for subscription %s (period %s): %s",
+                    subscription.id,
+                    period_days,
+                    error,
+                )
+                continue
+
+            label = format_period_description(
                 period_days,
-                error,
+                getattr(user, "language", settings.DEFAULT_LANGUAGE),
             )
-            continue
 
-        label = format_period_description(
-            period_days,
-            getattr(user, "language", settings.DEFAULT_LANGUAGE),
-        )
+            price_label = settings.format_price(pricing["final_total"])
+            original_label = None
+            if pricing["base_original_total"] and pricing["base_original_total"] != pricing["final_total"]:
+                original_label = settings.format_price(pricing["base_original_total"])
 
-        price_label = settings.format_price(pricing["final_total"])
-        original_label = None
-        if pricing["base_original_total"] and pricing["base_original_total"] != pricing["final_total"]:
-            original_label = settings.format_price(pricing["base_original_total"])
+            per_month_label = settings.format_price(pricing["per_month"])
 
-        per_month_label = settings.format_price(pricing["per_month"])
+            option_model = MiniAppSubscriptionRenewalPeriod(
+                id=pricing["period_id"],
+                days=period_days,
+                months=pricing["months"],
+                price_kopeks=pricing["final_total"],
+                price_label=price_label,
+                original_price_kopeks=pricing["base_original_total"],
+                original_price_label=original_label,
+                discount_percent=pricing["overall_discount_percent"],
+                price_per_month_kopeks=pricing["per_month"],
+                price_per_month_label=per_month_label,
+                title=label,
+            )
 
-        option_model = MiniAppSubscriptionRenewalPeriod(
-            id=pricing["period_id"],
-            days=period_days,
-            months=pricing["months"],
-            price_kopeks=pricing["final_total"],
-            price_label=price_label,
-            original_price_kopeks=pricing["base_original_total"],
-            original_price_label=original_label,
-            discount_percent=pricing["overall_discount_percent"],
-            price_per_month_kopeks=pricing["per_month"],
-            price_per_month_label=per_month_label,
-            title=label,
-        )
-
-        option_payloads.append((option_model, pricing))
+            option_payloads.append((option_model, pricing))
 
     if not option_payloads:
         return [], {}, None
@@ -5132,79 +5203,196 @@ async def submit_subscription_renewal_endpoint(
             detail={"code": "invalid_period", "message": "Invalid renewal period"},
         )
 
-    available_periods = [
-        period for period in settings.get_available_renewal_periods() if period > 0
-    ]
-    if period_days not in available_periods:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            detail={"code": "period_unavailable", "message": "Selected renewal period is not available"},
-        )
+    # Проверяем, есть ли у подписки тариф (режим тарифов)
+    tariff_id = getattr(subscription, 'tariff_id', None)
+    tariff = None
+    tariff_pricing = None
+
+    if tariff_id:
+        from app.database.crud.tariff import get_tariff_by_id
+        tariff = await get_tariff_by_id(db, tariff_id)
+
+    if tariff and tariff.period_prices:
+        # Режим тарифов: проверяем периоды из тарифа
+        available_periods = [int(p) for p in tariff.period_prices.keys()]
+        if period_days not in available_periods:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail={"code": "period_unavailable", "message": "Selected renewal period is not available for this tariff"},
+            )
+
+        # Рассчитываем цену из тарифа
+        original_price_kopeks = tariff.period_prices.get(str(period_days), tariff.period_prices.get(period_days, 0))
+
+        # Применяем скидку промогруппы
+        promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else getattr(user, "promo_group", None)
+        discount_percent = 0
+        if promo_group:
+            raw_discounts = getattr(promo_group, 'period_discounts', None) or {}
+            for k, v in raw_discounts.items():
+                try:
+                    if int(k) == period_days:
+                        discount_percent = max(0, min(100, int(v)))
+                        break
+                except (TypeError, ValueError):
+                    pass
+
+        if discount_percent > 0:
+            final_total = int(original_price_kopeks * (100 - discount_percent) / 100)
+        else:
+            final_total = original_price_kopeks
+
+        tariff_pricing = {
+            "period_days": period_days,
+            "original_price_kopeks": original_price_kopeks,
+            "discount_percent": discount_percent,
+            "final_total": final_total,
+            "tariff_id": tariff.id,
+        }
+    else:
+        # Классический режим
+        available_periods = [
+            period for period in settings.get_available_renewal_periods() if period > 0
+        ]
+        if period_days not in available_periods:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail={"code": "period_unavailable", "message": "Selected renewal period is not available"},
+            )
 
     method = (payload.method or "").strip().lower()
 
-    try:
-        pricing_model = await _calculate_subscription_renewal_pricing(
-            db,
-            user,
-            subscription,
-            period_days,
-        )
-    except HTTPException:
-        raise
-    except Exception as error:
-        logger.error(
-            "Failed to calculate renewal pricing for subscription %s (period %s): %s",
-            subscription.id,
-            period_days,
-            error,
-        )
-        raise HTTPException(
-            status.HTTP_502_BAD_GATEWAY,
-            detail={"code": "pricing_failed", "message": "Failed to calculate renewal pricing"},
-        ) from error
+    # Для тарифного режима используем упрощённый расчёт
+    if tariff_pricing:
+        final_total = tariff_pricing["final_total"]
+        pricing = tariff_pricing
+    else:
+        try:
+            pricing_model = await _calculate_subscription_renewal_pricing(
+                db,
+                user,
+                subscription,
+                period_days,
+            )
+        except HTTPException:
+            raise
+        except Exception as error:
+            logger.error(
+                "Failed to calculate renewal pricing for subscription %s (period %s): %s",
+                subscription.id,
+                period_days,
+                error,
+            )
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY,
+                detail={"code": "pricing_failed", "message": "Failed to calculate renewal pricing"},
+            ) from error
 
-    pricing = pricing_model.to_payload()
-    final_total = int(pricing_model.final_total)
+        pricing = pricing_model.to_payload()
+        final_total = int(pricing_model.final_total)
     balance_kopeks = getattr(user, "balance_kopeks", 0)
     missing_amount = calculate_missing_amount(balance_kopeks, final_total)
     description = f"Продление подписки на {period_days} дней"
 
     if missing_amount <= 0:
-        try:
-            result = await renewal_service.finalize(
-                db,
+        if tariff_pricing:
+            # Тарифный режим: простое продление
+            from datetime import timedelta
+            from app.database.crud.user import update_user_balance
+            from app.database.crud.subscription import update_subscription
+            from app.database.crud.transaction import create_transaction
+
+            try:
+                # Списываем баланс
+                new_balance = await update_user_balance(db, user.id, -final_total)
+                user.balance_kopeks = new_balance
+
+                # Продлеваем подписку
+                from datetime import datetime
+                base_date = subscription.end_date if subscription.end_date and subscription.end_date > datetime.utcnow() else datetime.utcnow()
+                new_end_date = base_date + timedelta(days=period_days)
+
+                await update_subscription(
+                    db,
+                    subscription.id,
+                    end_date=new_end_date,
+                    status="active",
+                )
+                subscription.end_date = new_end_date
+                subscription.status = "active"
+
+                # Записываем транзакцию
+                await create_transaction(
+                    db,
+                    user_id=user.id,
+                    amount_kopeks=-final_total,
+                    transaction_type="renewal",
+                    description=description,
+                    subscription_id=subscription.id,
+                )
+
+                await db.commit()
+
+                lang = getattr(user, "language", settings.DEFAULT_LANGUAGE)
+                if lang == "ru":
+                    message = f"Подписка продлена до {new_end_date.strftime('%d.%m.%Y')}"
+                else:
+                    message = f"Subscription extended until {new_end_date.strftime('%Y-%m-%d')}"
+
+                return MiniAppSubscriptionRenewalResponse(
+                    message=message,
+                    balance_kopeks=user.balance_kopeks,
+                    balance_label=settings.format_price(user.balance_kopeks),
+                    subscription_id=subscription.id,
+                    renewed_until=new_end_date,
+                )
+            except Exception as error:
+                await db.rollback()
+                logger.error(
+                    "Failed to renew tariff subscription %s: %s",
+                    subscription.id,
+                    error,
+                )
+                raise HTTPException(
+                    status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail={"code": "renewal_failed", "message": "Failed to renew subscription"},
+                ) from error
+        else:
+            # Классический режим
+            try:
+                result = await renewal_service.finalize(
+                    db,
+                    user,
+                    subscription,
+                    pricing_model,
+                    description=description,
+                )
+            except SubscriptionRenewalChargeError as error:
+                logger.error(
+                    "Failed to charge balance for subscription renewal %s: %s",
+                    subscription.id,
+                    error,
+                )
+                raise HTTPException(
+                    status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail={"code": "charge_failed", "message": "Failed to charge balance"},
+                ) from error
+
+            updated_subscription = result.subscription
+            message = _build_renewal_success_message(
                 user,
-                subscription,
-                pricing_model,
-                description=description,
+                updated_subscription,
+                result.total_amount_kopeks,
+                pricing_model.promo_discount_value,
             )
-        except SubscriptionRenewalChargeError as error:
-            logger.error(
-                "Failed to charge balance for subscription renewal %s: %s",
-                subscription.id,
-                error,
+
+            return MiniAppSubscriptionRenewalResponse(
+                message=message,
+                balance_kopeks=user.balance_kopeks,
+                balance_label=settings.format_price(user.balance_kopeks),
+                subscription_id=updated_subscription.id,
+                renewed_until=updated_subscription.end_date,
             )
-            raise HTTPException(
-                status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail={"code": "charge_failed", "message": "Failed to charge balance"},
-            ) from error
-
-        updated_subscription = result.subscription
-        message = _build_renewal_success_message(
-            user,
-            updated_subscription,
-            result.total_amount_kopeks,
-            pricing_model.promo_discount_value,
-        )
-
-        return MiniAppSubscriptionRenewalResponse(
-            message=message,
-            balance_kopeks=user.balance_kopeks,
-            balance_label=settings.format_price(user.balance_kopeks),
-            subscription_id=updated_subscription.id,
-            renewed_until=updated_subscription.end_date,
-        )
 
     if not method:
         if final_total > 0 and balance_kopeks < final_total:
