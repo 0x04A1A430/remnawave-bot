@@ -180,6 +180,7 @@ class AdminStates(StatesGroup):
     editing_tariff_trial_days = State()
     editing_tariff_squads = State()
     editing_tariff_promo_groups = State()
+    editing_tariff_traffic_topup_packages = State()
 
 
 class SupportStates(StatesGroup):
