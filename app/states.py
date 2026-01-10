@@ -181,6 +181,7 @@ class AdminStates(StatesGroup):
     editing_tariff_squads = State()
     editing_tariff_promo_groups = State()
     editing_tariff_traffic_topup_packages = State()
+    editing_tariff_max_topup_traffic = State()
 
 
 class SupportStates(StatesGroup):
