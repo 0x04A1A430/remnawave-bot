@@ -762,6 +762,11 @@ class Tariff(Base):
     # Дополнительные настройки
     is_trial_available = Column(Boolean, default=False, nullable=False)  # Можно ли взять триал на этом тарифе
 
+    # Докупка трафика
+    traffic_topup_enabled = Column(Boolean, default=False, nullable=False)  # Разрешена ли докупка трафика
+    # Пакеты трафика: JSON {"5": 5000, "10": 9000, "20": 15000} (ГБ: цена в копейках)
+    traffic_topup_packages = Column(JSON, default=dict)
+
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
@@ -804,6 +809,29 @@ class Tariff(Base):
         if promo_group_id is None:
             return True  # Если у пользователя нет группы - доступен
         return any(pg.id == promo_group_id for pg in self.allowed_promo_groups)
+
+    def get_traffic_topup_packages(self) -> Dict[int, int]:
+        """Возвращает пакеты трафика для докупки: {ГБ: цена в копейках}."""
+        packages = self.traffic_topup_packages or {}
+        return {int(gb): int(price) for gb, price in packages.items()}
+
+    def get_traffic_topup_price(self, gb: int) -> Optional[int]:
+        """Возвращает цену в копейках для указанного пакета трафика."""
+        packages = self.get_traffic_topup_packages()
+        return packages.get(gb)
+
+    def get_available_traffic_packages(self) -> List[int]:
+        """Возвращает список доступных пакетов трафика в ГБ."""
+        packages = self.get_traffic_topup_packages()
+        return sorted(packages.keys())
+
+    def can_topup_traffic(self) -> bool:
+        """Проверяет, можно ли докупить трафик на этом тарифе."""
+        return (
+            self.traffic_topup_enabled
+            and bool(self.traffic_topup_packages)
+            and not self.is_unlimited_traffic
+        )
 
     def __repr__(self):
         return f"<Tariff(id={self.id}, name='{self.name}', tier={self.tier_level}, active={self.is_active})>"
