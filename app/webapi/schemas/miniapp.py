@@ -551,6 +551,9 @@ class MiniAppCurrentTariff(BaseModel):
     # Докупка трафика
     traffic_topup_enabled: bool = False
     traffic_topup_packages: List[MiniAppTrafficTopupPackage] = Field(default_factory=list)
+    # Лимит докупки трафика (0 = без лимита)
+    max_topup_traffic_gb: int = 0
+    available_topup_gb: Optional[int] = None  # Сколько еще можно докупить (None = без лимита)
 
 
 class MiniAppTrafficTopupRequest(BaseModel):
