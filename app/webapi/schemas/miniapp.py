@@ -503,6 +503,10 @@ class MiniAppTariffPeriod(BaseModel):
     price_label: str
     price_per_month_kopeks: Optional[int] = None
     price_per_month_label: Optional[str] = None
+    # Скидка промогруппы
+    original_price_kopeks: Optional[int] = None  # Цена без скидки
+    original_price_label: Optional[str] = None
+    discount_percent: int = 0  # Процент скидки
 
 
 class MiniAppTariff(BaseModel):
@@ -574,6 +578,7 @@ class MiniAppTariffsResponse(BaseModel):
     current_tariff: Optional[MiniAppCurrentTariff] = None
     balance_kopeks: int = 0
     balance_label: Optional[str] = None
+    promo_group: Optional[MiniAppPromoGroup] = None  # Промогруппа пользователя для отображения скидок
 
 
 class MiniAppTariffPurchaseRequest(BaseModel):
