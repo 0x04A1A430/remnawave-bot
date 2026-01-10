@@ -19835,12 +19835,12 @@
                 if (maxDiscount > 0) {
                     promoGroupBanner.classList.remove('hidden');
                     if (promoGroupNameEl) {
-                        promoGroupNameEl.textContent = currentLang === 'en'
+                        promoGroupNameEl.textContent = preferredLanguage === 'en'
                             ? `Promo group "${promoGroup.name}"`
                             : `Промогруппа «${promoGroup.name}»`;
                     }
                     if (promoGroupDiscountEl) {
-                        promoGroupDiscountEl.textContent = currentLang === 'en'
+                        promoGroupDiscountEl.textContent = preferredLanguage === 'en'
                             ? `Your discount: up to ${maxDiscount}%`
                             : `Ваша скидка: до ${maxDiscount}%`;
                     }
