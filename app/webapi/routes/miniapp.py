@@ -6015,6 +6015,7 @@ async def _build_tariff_model(
     db: AsyncSession,
     tariff,
     current_tariff_id: Optional[int] = None,
+    promo_group=None,
 ) -> MiniAppTariff:
     """Преобразует объект тарифа в модель для API."""
     servers: List[MiniAppConnectedServer] = []
@@ -6030,10 +6031,28 @@ async def _build_tariff_model(
                     name=server.display_name or squad_uuid[:8],
                 ))
 
+    # Получаем скидки промогруппы по периодам
+    period_discounts = {}
+    if promo_group:
+        raw_discounts = getattr(promo_group, 'period_discounts', None) or {}
+        for k, v in raw_discounts.items():
+            try:
+                period_discounts[int(k)] = max(0, min(100, int(v)))
+            except (TypeError, ValueError):
+                pass
+
     periods: List[MiniAppTariffPeriod] = []
     if tariff.period_prices:
-        for period_str, price_kopeks in sorted(tariff.period_prices.items(), key=lambda x: int(x[0])):
+        for period_str, original_price_kopeks in sorted(tariff.period_prices.items(), key=lambda x: int(x[0])):
             period_days = int(period_str)
+
+            # Применяем скидку промогруппы
+            discount_percent = period_discounts.get(period_days, 0)
+            if discount_percent > 0:
+                price_kopeks = int(original_price_kopeks * (100 - discount_percent) / 100)
+            else:
+                price_kopeks = original_price_kopeks
+
             months = max(1, period_days // 30)
             per_month = price_kopeks // months if months > 0 else price_kopeks
 
@@ -6045,6 +6064,9 @@ async def _build_tariff_model(
                 price_label=settings.format_price(price_kopeks),
                 price_per_month_kopeks=per_month,
                 price_per_month_label=settings.format_price(per_month),
+                original_price_kopeks=original_price_kopeks if discount_percent > 0 else None,
+                original_price_label=settings.format_price(original_price_kopeks) if discount_percent > 0 else None,
+                discount_percent=discount_percent,
             ))
 
     return MiniAppTariff(
@@ -6119,8 +6141,17 @@ async def get_tariffs_endpoint(
     # Формируем список тарифов
     tariff_models: List[MiniAppTariff] = []
     for tariff in tariffs:
-        model = await _build_tariff_model(db, tariff, current_tariff_id)
+        model = await _build_tariff_model(db, tariff, current_tariff_id, promo_group)
         tariff_models.append(model)
+
+    # Формируем модель промогруппы для ответа
+    promo_group_model = None
+    if promo_group:
+        promo_group_model = MiniAppPromoGroup(
+            id=promo_group.id,
+            name=promo_group.name,
+            **_extract_promo_discounts(promo_group),
+        )
 
     return MiniAppTariffsResponse(
         success=True,
@@ -6129,6 +6160,7 @@ async def get_tariffs_endpoint(
         current_tariff=current_tariff_model,
         balance_kopeks=user.balance_kopeks,
         balance_label=settings.format_price(user.balance_kopeks),
+        promo_group=promo_group_model,
     )
 
 
@@ -6172,8 +6204,8 @@ async def purchase_tariff_endpoint(
         )
 
     # Получаем цену за выбранный период
-    price_kopeks = tariff.get_price_for_period(payload.period_days)
-    if price_kopeks is None:
+    base_price_kopeks = tariff.get_price_for_period(payload.period_days)
+    if base_price_kopeks is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
@@ -6181,6 +6213,21 @@ async def purchase_tariff_endpoint(
                 "message": "Invalid period for this tariff",
             },
         )
+
+    # Применяем скидку промогруппы
+    price_kopeks = base_price_kopeks
+    discount_percent = 0
+    if promo_group:
+        raw_discounts = getattr(promo_group, 'period_discounts', None) or {}
+        for k, v in raw_discounts.items():
+            try:
+                if int(k) == payload.period_days:
+                    discount_percent = max(0, min(100, int(v)))
+                    break
+            except (TypeError, ValueError):
+                pass
+        if discount_percent > 0:
+            price_kopeks = int(base_price_kopeks * (100 - discount_percent) / 100)
 
     # Проверяем баланс
     if user.balance_kopeks < price_kopeks:
@@ -6197,7 +6244,10 @@ async def purchase_tariff_endpoint(
     subscription = getattr(user, "subscription", None)
 
     # Списываем баланс
-    description = f"Покупка тарифа '{tariff.name}' на {payload.period_days} дней"
+    if discount_percent > 0:
+        description = f"Покупка тарифа '{tariff.name}' на {payload.period_days} дней (скидка {discount_percent}%)"
+    else:
+        description = f"Покупка тарифа '{tariff.name}' на {payload.period_days} дней"
     success = await subtract_user_balance(db, user, price_kopeks, description)
     if not success:
         raise HTTPException(
