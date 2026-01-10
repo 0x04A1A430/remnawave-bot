@@ -192,6 +192,8 @@ from ..schemas.miniapp import (
     MiniAppTariffPurchaseResponse,
     MiniAppCurrentTariff,
     MiniAppConnectedServer,
+    MiniAppTrafficTopupRequest,
+    MiniAppTrafficTopupResponse,
 )
 
 
@@ -3510,6 +3512,8 @@ async def get_subscription_details(
 
 async def _get_current_tariff_model(db: AsyncSession, subscription) -> Optional[MiniAppCurrentTariff]:
     """Возвращает модель текущего тарифа пользователя."""
+    from app.webapi.schemas.miniapp import MiniAppTrafficTopupPackage
+
     if not subscription or not getattr(subscription, "tariff_id", None):
         return None
 
@@ -3518,6 +3522,20 @@ async def _get_current_tariff_model(db: AsyncSession, subscription) -> Optional[
         return None
 
     servers_count = len(tariff.allowed_squads) if tariff.allowed_squads else 0
+
+    # Пакеты докупки трафика
+    traffic_topup_enabled = getattr(tariff, 'traffic_topup_enabled', False) and tariff.traffic_limit_gb > 0
+    traffic_topup_packages = []
+
+    if traffic_topup_enabled and hasattr(tariff, 'get_traffic_topup_packages'):
+        packages = tariff.get_traffic_topup_packages()
+        for gb in sorted(packages.keys()):
+            price = packages[gb]
+            traffic_topup_packages.append(MiniAppTrafficTopupPackage(
+                gb=gb,
+                price_kopeks=price,
+                price_label=settings.format_price(price),
+            ))
 
     return MiniAppCurrentTariff(
         id=tariff.id,
@@ -3529,6 +3547,8 @@ async def _get_current_tariff_model(db: AsyncSession, subscription) -> Optional[
         is_unlimited_traffic=tariff.traffic_limit_gb == 0,
         device_limit=tariff.device_limit,
         servers_count=servers_count,
+        traffic_topup_enabled=traffic_topup_enabled,
+        traffic_topup_packages=traffic_topup_packages,
     )
 
 
@@ -6252,4 +6272,153 @@ async def purchase_tariff_endpoint(
         new_end_date=subscription.end_date,
         balance_kopeks=user.balance_kopeks,
         balance_label=settings.format_price(user.balance_kopeks),
+    )
+
+
+@router.post("/subscription/traffic-topup")
+async def purchase_traffic_topup_endpoint(
+    payload: MiniAppTrafficTopupRequest,
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Докупка трафика для подписки."""
+    from app.webapi.schemas.miniapp import MiniAppTrafficTopupRequest, MiniAppTrafficTopupResponse
+    from app.database.crud.subscription import add_subscription_traffic
+    from app.database.crud.user import subtract_user_balance
+    from app.database.crud.transaction import create_transaction
+    from app.database.models import TransactionType
+    from app.utils.pricing_utils import calculate_prorated_price
+
+    user = await _authorize_miniapp_user(payload.init_data, db)
+    subscription = _ensure_paid_subscription(user)
+    _validate_subscription_id(payload.subscription_id, subscription)
+
+    # Проверяем режим тарифов
+    if not settings.is_tariffs_mode():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "tariffs_mode_disabled",
+                "message": "Traffic top-up is only available in tariffs mode",
+            },
+        )
+
+    # Проверяем наличие тарифа
+    tariff_id = getattr(subscription, 'tariff_id', None)
+    if not tariff_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "no_tariff",
+                "message": "Subscription has no tariff",
+            },
+        )
+
+    tariff = await get_tariff_by_id(db, tariff_id)
+    if not tariff:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "code": "tariff_not_found",
+                "message": "Tariff not found",
+            },
+        )
+
+    # Проверяем, разрешена ли докупка трафика
+    if not getattr(tariff, 'traffic_topup_enabled', False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "traffic_topup_disabled",
+                "message": "Traffic top-up is disabled for this tariff",
+            },
+        )
+
+    # Проверяем безлимит
+    if tariff.traffic_limit_gb == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "unlimited_traffic",
+                "message": "Cannot add traffic to unlimited subscription",
+            },
+        )
+
+    # Получаем цену пакета
+    packages = tariff.get_traffic_topup_packages() if hasattr(tariff, 'get_traffic_topup_packages') else {}
+    if payload.gb not in packages:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "invalid_package",
+                "message": f"Traffic package {payload.gb}GB is not available",
+            },
+        )
+
+    base_price_kopeks = packages[payload.gb]
+
+    # Пропорциональный расчет цены с учетом оставшегося времени подписки
+    final_price, months_charged = calculate_prorated_price(
+        base_price_kopeks,
+        subscription.end_date,
+    )
+
+    # Проверяем баланс
+    if user.balance_kopeks < final_price:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail={
+                "code": "insufficient_balance",
+                "message": "Insufficient balance",
+                "required": final_price,
+                "balance": user.balance_kopeks,
+            },
+        )
+
+    # Списываем баланс
+    success = await subtract_user_balance(
+        db, user, final_price,
+        f"Докупка {payload.gb} ГБ трафика"
+    )
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "code": "balance_error",
+                "message": "Failed to subtract balance",
+            },
+        )
+
+    # Добавляем трафик
+    await add_subscription_traffic(db, subscription, payload.gb)
+
+    # Обновляем purchased_traffic_gb
+    current_purchased = getattr(subscription, 'purchased_traffic_gb', 0) or 0
+    subscription.purchased_traffic_gb = current_purchased + payload.gb
+    await db.commit()
+
+    # Синхронизируем с RemnaWave
+    try:
+        service = SubscriptionService()
+        await service.update_remnawave_user(db, subscription)
+    except Exception as e:
+        logger.error(f"Ошибка синхронизации с RemnaWave при докупке трафика: {e}")
+
+    # Создаем транзакцию
+    await create_transaction(
+        db,
+        user_id=user.id,
+        type=TransactionType.SUBSCRIPTION_PAYMENT,
+        amount_kopeks=-final_price,
+        description=f"Докупка {payload.gb} ГБ трафика",
+    )
+
+    await db.refresh(user)
+    await db.refresh(subscription)
+
+    return MiniAppTrafficTopupResponse(
+        success=True,
+        message=f"Добавлено {payload.gb} ГБ трафика",
+        new_traffic_limit_gb=subscription.traffic_limit_gb,
+        new_balance_kopeks=user.balance_kopeks,
+        charged_kopeks=final_price,
     )
