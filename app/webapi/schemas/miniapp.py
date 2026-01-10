@@ -531,6 +531,10 @@ class MiniAppTrafficTopupPackage(BaseModel):
     gb: int
     price_kopeks: int
     price_label: str
+    # Скидка промогруппы на трафик
+    original_price_kopeks: Optional[int] = None
+    original_price_label: Optional[str] = None
+    discount_percent: int = 0
 
 
 class MiniAppCurrentTariff(BaseModel):
