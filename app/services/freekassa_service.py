@@ -206,10 +206,12 @@ class FreekassaService:
 
                     data = await response.json()
 
-                    if response.status != 200 or data.get("type") == "error":
+                    # Проверяем на ошибку - API может вернуть error или type=error
+                    error_msg = data.get("error") or data.get("message")
+                    if response.status != 200 or data.get("type") == "error" or error_msg:
                         logger.error(f"Freekassa create_order error: {data}")
                         raise Exception(
-                            f"Freekassa API error: {data.get('message', 'Unknown error')}"
+                            f"Freekassa API error: {error_msg or 'Unknown error'}"
                         )
 
                     return data
