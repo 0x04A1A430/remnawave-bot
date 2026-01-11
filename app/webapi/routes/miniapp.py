@@ -5335,13 +5335,13 @@ async def submit_subscription_renewal_endpoint(
                 new_end_date = subscription.end_date
 
                 # Записываем транзакцию
+                from app.database.models import TransactionType
                 await create_transaction(
                     db,
                     user_id=user.id,
+                    type=TransactionType.SUBSCRIPTION_PAYMENT,
                     amount_kopeks=-final_total,
-                    transaction_type="renewal",
                     description=description,
-                    subscription_id=subscription.id,
                 )
 
                 await db.commit()
