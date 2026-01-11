@@ -5822,96 +5822,6 @@
                 </div>
             </div>
 
-            <!-- Instant Tariff Switch Section (для пользователей с подпиской) -->
-            <div class="card expandable hidden" id="instantSwitchCard">
-                <div class="card-header">
-                    <div class="card-title">
-                        <svg class="card-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
-                        </svg>
-                        <span data-i18n="instant_switch.title">Сменить тариф</span>
-                    </div>
-                    <svg class="expand-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                    </svg>
-                </div>
-                <div class="card-content">
-                    <div id="instantSwitchContent">
-                        <div class="subscription-settings-loading" id="instantSwitchLoading">
-                            <div class="subscription-settings-loading-line"></div>
-                            <div class="subscription-settings-loading-line" style="width: 70%;"></div>
-                        </div>
-                        <div class="subscription-settings-error hidden" id="instantSwitchError">
-                            <div id="instantSwitchErrorText">Не удалось загрузить тарифы</div>
-                            <button class="subscription-settings-retry" id="instantSwitchRetry" type="button">Повторить</button>
-                        </div>
-                        <div id="instantSwitchBody" class="hidden">
-                            <!-- Текущий тариф и остаток дней -->
-                            <div class="instant-switch-current-info" id="instantSwitchCurrentInfo">
-                                <div class="instant-switch-current-tariff">
-                                    <div class="instant-switch-label">Текущий тариф</div>
-                                    <div class="instant-switch-value" id="instantSwitchCurrentName">—</div>
-                                </div>
-                                <div class="instant-switch-remaining">
-                                    <div class="instant-switch-label">Осталось</div>
-                                    <div class="instant-switch-value" id="instantSwitchRemainingDays">— дн.</div>
-                                </div>
-                            </div>
-
-                            <!-- Пояснение -->
-                            <div class="instant-switch-hint">
-                                <div class="instant-switch-hint-icon">💡</div>
-                                <div class="instant-switch-hint-text">
-                                    При смене тарифа ваш остаток дней сохраняется.
-                                    Повышение тарифа — доплата за разницу, понижение — бесплатно.
-                                </div>
-                            </div>
-
-                            <!-- Список тарифов для переключения -->
-                            <div class="subscription-renewal-section" style="margin-top: 16px;">
-                                <div class="subscription-renewal-section-title">Выберите новый тариф</div>
-                                <div id="instantSwitchList" class="subscription-renewal-options"></div>
-                            </div>
-
-                            <!-- Подтверждение переключения -->
-                            <div id="instantSwitchConfirm" class="instant-switch-confirm hidden">
-                                <div class="instant-switch-confirm-header">
-                                    <div class="instant-switch-confirm-title">Подтверждение</div>
-                                    <button class="instant-switch-confirm-close" id="instantSwitchConfirmClose" type="button">×</button>
-                                </div>
-                                <div class="instant-switch-confirm-body">
-                                    <div class="instant-switch-compare">
-                                        <div class="instant-switch-compare-item">
-                                            <div class="instant-switch-compare-label">Текущий</div>
-                                            <div class="instant-switch-compare-value" id="instantSwitchFromTariff">—</div>
-                                        </div>
-                                        <div class="instant-switch-compare-arrow">→</div>
-                                        <div class="instant-switch-compare-item">
-                                            <div class="instant-switch-compare-label">Новый</div>
-                                            <div class="instant-switch-compare-value" id="instantSwitchToTariff">—</div>
-                                        </div>
-                                    </div>
-                                    <div class="instant-switch-cost" id="instantSwitchCost">
-                                        <span class="instant-switch-cost-label">Стоимость:</span>
-                                        <span class="instant-switch-cost-value" id="instantSwitchCostValue">Бесплатно</span>
-                                    </div>
-                                    <div class="instant-switch-balance" id="instantSwitchBalance">
-                                        Ваш баланс: <span id="instantSwitchBalanceValue">—</span>
-                                    </div>
-                                    <div class="instant-switch-insufficient hidden" id="instantSwitchInsufficient">
-                                        ⚠️ Недостаточно средств. Не хватает: <span id="instantSwitchMissing">—</span>
-                                    </div>
-                                </div>
-                                <div class="instant-switch-confirm-actions">
-                                    <button class="btn btn-secondary" id="instantSwitchCancelBtn" type="button">Отмена</button>
-                                    <button class="btn btn-primary" id="instantSwitchConfirmBtn" type="button">Подтвердить</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <!-- Subscription Settings -->
             <div class="card expandable subscription-settings-card hidden" id="subscriptionSettingsCard">
                 <div class="card-header">
@@ -20187,6 +20097,25 @@
         }
 
         let selectedTariffData = null;
+        let isInstantSwitchMode = false;
+        let instantSwitchPreviewData = null;
+
+        function getMonthlyPrice(tariff) {
+            if (!tariff) return 0;
+            const periods = tariff.periods || [];
+            const period30 = periods.find(p => (p.days || p.period_days || p.periodDays) === 30);
+            if (period30) {
+                return period30.price_kopeks || period30.priceKopeks || period30.final_price || period30.finalPrice || 0;
+            }
+            // Fallback - пропорционально пересчитываем
+            if (periods.length > 0) {
+                const firstPeriod = periods[0];
+                const days = firstPeriod.days || firstPeriod.period_days || firstPeriod.periodDays || 30;
+                const price = firstPeriod.price_kopeks || firstPeriod.priceKopeks || 0;
+                return Math.round(price * 30 / days);
+            }
+            return 0;
+        }
 
         function renderTariffs() {
             const loading = document.getElementById('tariffsLoading');
@@ -20194,20 +20123,29 @@
             const list = document.getElementById('tariffsList');
             const currentBlock = document.getElementById('tariffsCurrentTariff');
             const currentName = document.getElementById('tariffsCurrentTariffName');
+            const periodsSection = document.getElementById('tariffPeriodsSection');
+            const summary = document.getElementById('tariffsSummary');
+            const selectBtn = document.getElementById('tariffsSelectBtn');
 
             loading?.classList.add('hidden');
             body?.classList.remove('hidden');
 
-            // Текущий тариф
-            if (tariffsData?.current_tariff || tariffsData?.currentTariff) {
-                const current = tariffsData.current_tariff || tariffsData.currentTariff;
+            // Определяем режим: мгновенная смена или покупка
+            const hasActiveSubscription = userData?.subscription_status === 'active' || userData?.subscriptionStatus === 'active';
+            const currentTariff = tariffsData?.current_tariff || tariffsData?.currentTariff;
+            isInstantSwitchMode = hasActiveSubscription && currentTariff;
+
+            const daysLeft = userData?.days_left ?? userData?.daysLeft ?? 0;
+
+            // Текущий тариф с информацией о режиме
+            if (currentTariff) {
                 currentBlock?.classList.remove('hidden');
                 if (currentName) {
-                    const trafficLabel = current.traffic_limit_label || current.trafficLimitLabel
-                        || ((current.traffic_limit_gb || current.trafficLimitGb) === 0 ? '∞' : (current.traffic_limit_gb || current.trafficLimitGb) + ' ГБ');
-                    const deviceLimit = current.device_limit || current.deviceLimit || 1;
-                    const servers = current.servers || [];
-                    const serversCount = current.servers_count || current.serversCount || servers.length || 0;
+                    const trafficLabel = currentTariff.traffic_limit_label || currentTariff.trafficLimitLabel
+                        || ((currentTariff.traffic_limit_gb || currentTariff.trafficLimitGb) === 0 ? '∞' : (currentTariff.traffic_limit_gb || currentTariff.trafficLimitGb) + ' ГБ');
+                    const deviceLimit = currentTariff.device_limit || currentTariff.deviceLimit || 1;
+                    const servers = currentTariff.servers || [];
+                    const serversCount = currentTariff.servers_count || currentTariff.serversCount || servers.length || 0;
 
                     let serverTags = '';
                     if (servers.length > 0) {
@@ -20222,10 +20160,18 @@
                         serverTags = `<span style="display: inline-block; padding: 2px 8px; background: var(--bg-tertiary, var(--bg-secondary)); border-radius: 12px; font-size: 11px;">🌍 Все серверы</span>`;
                     }
 
+                    // В режиме смены тарифа показываем остаток дней
+                    const remainingInfo = isInstantSwitchMode
+                        ? `<div style="display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 8px 12px; background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(59, 130, 246, 0.05) 100%); border-radius: 8px; border: 1px solid rgba(59, 130, 246, 0.2);">
+                               <span style="font-size: 16px;">⏰</span>
+                               <span style="font-size: 13px; color: var(--text-primary);">Осталось <b>${daysLeft} дн.</b> — при смене тарифа сохраняются</span>
+                           </div>`
+                        : '';
+
                     currentName.innerHTML = `
                         <div class="tariff-current-name">
                             <span class="check-icon">✓</span>
-                            <span>${escapeHtml(current.name)}</span>
+                            <span>${escapeHtml(currentTariff.name)}</span>
                         </div>
                         <div style="display: flex; gap: 12px; margin-top: 10px; font-size: 13px; color: var(--text-secondary);">
                             <span style="display: inline-flex; align-items: center; gap: 4px;">
@@ -20244,6 +20190,7 @@
                         <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;">
                             ${serverTags}
                         </div>
+                        ${remainingInfo}
                     `;
                 }
             } else {
@@ -20257,7 +20204,6 @@
             const promoGroup = tariffsData?.promo_group || tariffsData?.promoGroup;
 
             if (promoGroup && promoGroupBanner) {
-                // Вычисляем максимальную скидку из period_discounts
                 const periodDiscounts = promoGroup.period_discounts || promoGroup.periodDiscounts || {};
                 let maxDiscount = 0;
                 Object.values(periodDiscounts).forEach(discount => {
@@ -20294,138 +20240,294 @@
                 return;
             }
 
+            // В режиме мгновенной смены скрываем периоды и summary
+            if (isInstantSwitchMode) {
+                periodsSection?.classList.add('hidden');
+                summary?.classList.add('hidden');
+                if (selectBtn) selectBtn.classList.add('hidden');
+            }
+
+            const currentTariffId = currentTariff?.id;
+            const currentMonthly = currentTariff ? getMonthlyPrice(currentTariff) : 0;
+
             tariffs.forEach(tariff => {
-                const isCurrent = tariff.is_current || tariff.isCurrent;
+                const isCurrent = tariff.id === currentTariffId;
                 const periods = tariff.periods || [];
 
-                // Находим минимальную цену и максимальную скидку
-                let minPrice = null;
-                let minPriceOriginal = null;
-                let maxDiscountPercent = 0;
-
-                if (periods.length > 0) {
-                    periods.forEach(p => {
-                        const price = p.price_kopeks || p.priceKopeks || 0;
-                        const originalPrice = p.original_price_kopeks || p.originalPriceKopeks || price;
-                        const discountPct = p.discount_percent || p.discountPercent || 0;
-
-                        if (minPrice === null || price < minPrice) {
-                            minPrice = price;
-                            minPriceOriginal = originalPrice > price ? originalPrice : null;
-                        }
-                        if (discountPct > maxDiscountPercent) {
-                            maxDiscountPercent = discountPct;
-                        }
-                    });
+                // В режиме смены пропускаем текущий тариф
+                if (isInstantSwitchMode && isCurrent) {
+                    return;
                 }
-
-                const minPriceLabel = minPrice !== null
-                    ? formatPriceFromKopeks(minPrice, tariffsData?.currency || 'RUB')
-                    : null;
-                const minPriceOriginalLabel = minPriceOriginal !== null
-                    ? formatPriceFromKopeks(minPriceOriginal, tariffsData?.currency || 'RUB')
-                    : null;
 
                 const div = document.createElement('div');
-                div.className = 'subscription-settings-toggle' + (selectedTariffId === tariff.id ? ' active' : '');
 
-                const trafficLabel = tariff.traffic_limit_label || tariff.trafficLimitLabel
-                    || ((tariff.traffic_limit_gb || tariff.trafficLimitGb) === 0 ? '∞' : (tariff.traffic_limit_gb || tariff.trafficLimitGb) + ' ГБ');
+                // Разные стили для режима смены и покупки
+                if (isInstantSwitchMode) {
+                    // Режим мгновенной смены тарифа
+                    const newMonthly = getMonthlyPrice(tariff);
+                    const priceDiff = newMonthly - currentMonthly;
+                    const isUpgrade = priceDiff > 0;
+                    const upgradeCost = isUpgrade ? Math.round(priceDiff * daysLeft / 30) : 0;
 
-                const deviceLimit = tariff.device_limit || tariff.deviceLimit || 1;
+                    const trafficLabel = tariff.traffic_limit_label || tariff.trafficLimitLabel
+                        || ((tariff.traffic_limit_gb || tariff.trafficLimitGb) === 0 ? '∞' : (tariff.traffic_limit_gb || tariff.trafficLimitGb) + ' ГБ');
+                    const deviceLimit = tariff.device_limit || tariff.deviceLimit || 1;
+                    const description = tariff.description || '';
 
-                // Серверы - показываем названия или количество
-                const servers = tariff.servers || [];
-                const serversCount = tariff.servers_count || tariff.serversCount || servers.length || 0;
-                let serversText = '';
-                if (servers.length > 0) {
-                    const serverNames = servers.slice(0, 3).map(s => s.name || s.display_name || s.displayName).filter(Boolean);
-                    if (serverNames.length > 0) {
-                        serversText = serverNames.join(', ');
-                        if (serversCount > serverNames.length) {
-                            serversText += ` +${serversCount - serverNames.length}`;
-                        }
-                    } else {
-                        serversText = serversCount + ' серв.';
-                    }
-                } else if (serversCount > 0) {
-                    serversText = serversCount + ' серв.';
-                } else {
-                    serversText = 'Все серверы';
-                }
+                    // Определяем тип тарифа
+                    const tariffNameLower = (tariff.name || '').toLowerCase();
+                    const isPremium = tariffNameLower.includes('премиум') || tariffNameLower.includes('premium') ||
+                                      tariffNameLower.includes('про') || tariffNameLower.includes('pro') ||
+                                      tariffNameLower.includes('vip') || tariffNameLower.includes('ultimate') ||
+                                      tariffNameLower.includes('макс') || tariffNameLower.includes('max');
 
-                const description = tariff.description || '';
-
-                // Серверные теги
-                let serverTags = '';
-                if (servers.length > 0) {
-                    const serverNames = servers.slice(0, 4).map(s => s.name || s.display_name || s.displayName).filter(Boolean);
-                    serverTags = serverNames.map(name =>
-                        `<span style="display: inline-block; padding: 2px 8px; background: var(--bg-secondary); border-radius: 12px; font-size: 11px; color: var(--text-secondary);">${escapeHtml(name)}</span>`
-                    ).join('');
-                    if (serversCount > serverNames.length) {
-                        serverTags += `<span style="display: inline-block; padding: 2px 8px; background: var(--bg-secondary); border-radius: 12px; font-size: 11px; color: var(--text-secondary);">+${serversCount - serverNames.length}</span>`;
-                    }
-                } else if (serversCount === 0) {
-                    serverTags = `<span style="display: inline-block; padding: 2px 8px; background: var(--bg-secondary); border-radius: 12px; font-size: 11px; color: var(--text-secondary);">🌍 Все серверы</span>`;
-                }
-
-                // Determine tariff type for styling
-                const tariffNameLower = (tariff.name || '').toLowerCase();
-                const isPremium = tariffNameLower.includes('премиум') || tariffNameLower.includes('premium') ||
-                                  tariffNameLower.includes('про') || tariffNameLower.includes('pro') ||
-                                  tariffNameLower.includes('vip') || tariffNameLower.includes('ultimate') ||
-                                  tariffNameLower.includes('макс') || tariffNameLower.includes('max');
-                const tariffIcon = isPremium ? '👑' : (isCurrent ? '✓' : '⚡');
-                const badgeClass = isPremium ? 'tariff-name-badge tariff-premium' : (isCurrent ? 'tariff-name-badge tariff-current' : 'tariff-name-badge');
-
-                div.innerHTML = `
-                    <div style="flex: 1; min-width: 0;">
-                        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
-                            <div style="flex: 1; min-width: 0;">
-                                <div class="${badgeClass}">
-                                    <span class="tariff-icon">${tariffIcon}</span>
-                                    <span class="tariff-text">${escapeHtml(tariff.name)}</span>
-                                </div>
-                                ${description ? `<div style="font-size: 12px; color: var(--text-secondary); margin-top: 8px; line-height: 1.4;">${escapeHtml(description)}</div>` : ''}
+                    div.className = 'instant-switch-tariff-item';
+                    div.innerHTML = `
+                        <div class="instant-switch-tariff-info">
+                            <div class="instant-switch-tariff-name">
+                                ${isPremium ? '👑 ' : '⚡ '}${escapeHtml(tariff.name)}
                             </div>
-                            ${minPriceLabel ? `
-                                <div style="text-align: right; flex-shrink: 0;">
-                                    <div style="font-size: 10px; color: var(--text-secondary); text-transform: uppercase;">от</div>
-                                    ${minPriceOriginalLabel ? `<div style="font-size: 12px; color: var(--text-secondary); text-decoration: line-through;">${minPriceOriginalLabel}</div>` : ''}
-                                    <div style="font-weight: 600; color: var(--primary); font-size: 15px;">${minPriceLabel}</div>
-                                    ${maxDiscountPercent > 0 ? `<div class="tariff-discount-badge">-${maxDiscountPercent}%</div>` : ''}
+                            ${description ? `<div style="font-size: 11px; color: var(--text-secondary); margin: 4px 0;">${escapeHtml(description)}</div>` : ''}
+                            <div class="instant-switch-tariff-details">
+                                <span>📱 ${deviceLimit}</span>
+                                <span>📊 ${trafficLabel}</span>
+                            </div>
+                        </div>
+                        <div class="instant-switch-tariff-cost">
+                            <span class="instant-switch-cost-badge ${isUpgrade ? 'upgrade' : 'free'}">
+                                ${isUpgrade
+                                    ? '<span style="font-size: 10px; display: block;">доплата</span>+' + formatPriceFromKopeks(upgradeCost, tariffsData?.currency || 'RUB')
+                                    : '✓ Бесплатно'}
+                            </span>
+                        </div>
+                    `;
+
+                    div.addEventListener('click', () => showInstantSwitchConfirm(tariff, isUpgrade, upgradeCost));
+                } else {
+                    // Обычный режим покупки
+                    let minPrice = null;
+                    let minPriceOriginal = null;
+                    let maxDiscountPercent = 0;
+
+                    if (periods.length > 0) {
+                        periods.forEach(p => {
+                            const price = p.price_kopeks || p.priceKopeks || 0;
+                            const originalPrice = p.original_price_kopeks || p.originalPriceKopeks || price;
+                            const discountPct = p.discount_percent || p.discountPercent || 0;
+
+                            if (minPrice === null || price < minPrice) {
+                                minPrice = price;
+                                minPriceOriginal = originalPrice > price ? originalPrice : null;
+                            }
+                            if (discountPct > maxDiscountPercent) {
+                                maxDiscountPercent = discountPct;
+                            }
+                        });
+                    }
+
+                    const minPriceLabel = minPrice !== null
+                        ? formatPriceFromKopeks(minPrice, tariffsData?.currency || 'RUB')
+                        : null;
+                    const minPriceOriginalLabel = minPriceOriginal !== null
+                        ? formatPriceFromKopeks(minPriceOriginal, tariffsData?.currency || 'RUB')
+                        : null;
+
+                    div.className = 'subscription-settings-toggle' + (selectedTariffId === tariff.id ? ' active' : '');
+
+                    const trafficLabel = tariff.traffic_limit_label || tariff.trafficLimitLabel
+                        || ((tariff.traffic_limit_gb || tariff.trafficLimitGb) === 0 ? '∞' : (tariff.traffic_limit_gb || tariff.trafficLimitGb) + ' ГБ');
+                    const deviceLimit = tariff.device_limit || tariff.deviceLimit || 1;
+                    const description = tariff.description || '';
+
+                    const servers = tariff.servers || [];
+                    const serversCount = tariff.servers_count || tariff.serversCount || servers.length || 0;
+                    let serverTags = '';
+                    if (servers.length > 0) {
+                        const serverNames = servers.slice(0, 4).map(s => s.name || s.display_name || s.displayName).filter(Boolean);
+                        serverTags = serverNames.map(name =>
+                            `<span style="display: inline-block; padding: 2px 8px; background: var(--bg-secondary); border-radius: 12px; font-size: 11px; color: var(--text-secondary);">${escapeHtml(name)}</span>`
+                        ).join('');
+                        if (serversCount > serverNames.length) {
+                            serverTags += `<span style="display: inline-block; padding: 2px 8px; background: var(--bg-secondary); border-radius: 12px; font-size: 11px; color: var(--text-secondary);">+${serversCount - serverNames.length}</span>`;
+                        }
+                    } else if (serversCount === 0) {
+                        serverTags = `<span style="display: inline-block; padding: 2px 8px; background: var(--bg-secondary); border-radius: 12px; font-size: 11px; color: var(--text-secondary);">🌍 Все серверы</span>`;
+                    }
+
+                    const tariffNameLower = (tariff.name || '').toLowerCase();
+                    const isPremium = tariffNameLower.includes('премиум') || tariffNameLower.includes('premium') ||
+                                      tariffNameLower.includes('про') || tariffNameLower.includes('pro') ||
+                                      tariffNameLower.includes('vip') || tariffNameLower.includes('ultimate') ||
+                                      tariffNameLower.includes('макс') || tariffNameLower.includes('max');
+                    const tariffIcon = isPremium ? '👑' : (isCurrent ? '✓' : '⚡');
+                    const badgeClass = isPremium ? 'tariff-name-badge tariff-premium' : (isCurrent ? 'tariff-name-badge tariff-current' : 'tariff-name-badge');
+
+                    div.innerHTML = `
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
+                                <div style="flex: 1; min-width: 0;">
+                                    <div class="${badgeClass}">
+                                        <span class="tariff-icon">${tariffIcon}</span>
+                                        <span class="tariff-text">${escapeHtml(tariff.name)}</span>
+                                    </div>
+                                    ${description ? `<div style="font-size: 12px; color: var(--text-secondary); margin-top: 8px; line-height: 1.4;">${escapeHtml(description)}</div>` : ''}
+                                </div>
+                                ${minPriceLabel ? `
+                                    <div style="text-align: right; flex-shrink: 0;">
+                                        <div style="font-size: 10px; color: var(--text-secondary); text-transform: uppercase;">от</div>
+                                        ${minPriceOriginalLabel ? `<div style="font-size: 12px; color: var(--text-secondary); text-decoration: line-through;">${minPriceOriginalLabel}</div>` : ''}
+                                        <div style="font-weight: 600; color: var(--primary); font-size: 15px;">${minPriceLabel}</div>
+                                        ${maxDiscountPercent > 0 ? `<div class="tariff-discount-badge">-${maxDiscountPercent}%</div>` : ''}
+                                    </div>
+                                ` : ''}
+                            </div>
+                            <div style="display: flex; gap: 12px; margin-top: 10px; font-size: 13px; color: var(--text-secondary);">
+                                <span style="display: inline-flex; align-items: center; gap: 4px;">
+                                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="opacity: 0.6;">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                                    </svg>
+                                    ${deviceLimit}
+                                </span>
+                                <span style="display: inline-flex; align-items: center; gap: 4px;">
+                                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="opacity: 0.6;">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                                    </svg>
+                                    ${trafficLabel}
+                                </span>
+                            </div>
+                            ${serverTags ? `
+                                <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px;">
+                                    ${serverTags}
                                 </div>
                             ` : ''}
                         </div>
-                        <div style="display: flex; gap: 12px; margin-top: 10px; font-size: 13px; color: var(--text-secondary);">
-                            <span style="display: inline-flex; align-items: center; gap: 4px;">
-                                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="opacity: 0.6;">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/>
-                                </svg>
-                                ${deviceLimit}
-                            </span>
-                            <span style="display: inline-flex; align-items: center; gap: 4px;">
-                                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="opacity: 0.6;">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
-                                </svg>
-                                ${trafficLabel}
-                            </span>
+                    `;
+
+                    div.addEventListener('click', () => selectTariff(tariff));
+                }
+
+                list.appendChild(div);
+            });
+
+            // Обновляем периоды если обычный режим и тариф выбран
+            if (!isInstantSwitchMode) {
+                renderTariffPeriods();
+            }
+        }
+
+        // Показать подтверждение мгновенной смены тарифа
+        async function showInstantSwitchConfirm(tariff, isUpgrade, estimatedCost) {
+            const currentTariff = tariffsData?.current_tariff || tariffsData?.currentTariff;
+
+            // Запрашиваем точную стоимость с сервера
+            try {
+                const initData = tg.initData || '';
+                const response = await fetch('/miniapp/subscription/tariff/switch/preview', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ initData, tariffId: tariff.id })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error?.detail?.message || 'Ошибка');
+                }
+
+                instantSwitchPreviewData = await response.json();
+
+                const actualCost = instantSwitchPreviewData.upgrade_cost_kopeks || instantSwitchPreviewData.upgradeCostKopeks || 0;
+                const costLabel = instantSwitchPreviewData.upgrade_cost_label || instantSwitchPreviewData.upgradeCostLabel || formatPriceFromKopeks(actualCost, tariffsData?.currency || 'RUB');
+                const balanceLabel = instantSwitchPreviewData.balance_label || instantSwitchPreviewData.balanceLabel || '—';
+                const hasEnough = instantSwitchPreviewData.has_enough_balance ?? instantSwitchPreviewData.hasEnoughBalance ?? true;
+                const missingLabel = instantSwitchPreviewData.missing_amount_label || instantSwitchPreviewData.missingAmountLabel || '';
+                const actualIsUpgrade = instantSwitchPreviewData.is_upgrade || instantSwitchPreviewData.isUpgrade || false;
+
+                // Показываем красивый попап подтверждения
+                const confirmHtml = `
+                    <div style="text-align: center; padding: 8px 0;">
+                        <div style="display: flex; justify-content: center; align-items: center; gap: 16px; margin-bottom: 16px;">
+                            <div style="text-align: center;">
+                                <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 4px;">Текущий</div>
+                                <div style="font-weight: 600;">${escapeHtml(currentTariff?.name || '—')}</div>
+                            </div>
+                            <div style="font-size: 24px; color: var(--primary);">→</div>
+                            <div style="text-align: center;">
+                                <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 4px;">Новый</div>
+                                <div style="font-weight: 600;">${escapeHtml(tariff.name)}</div>
+                            </div>
                         </div>
-                        ${serverTags ? `
-                            <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px;">
-                                ${serverTags}
+
+                        <div style="padding: 12px; background: ${actualIsUpgrade ? 'rgba(249, 115, 22, 0.1)' : 'rgba(34, 197, 94, 0.1)'}; border-radius: 10px; margin-bottom: 12px;">
+                            <div style="font-size: 13px; color: var(--text-secondary);">Стоимость</div>
+                            <div style="font-size: 20px; font-weight: 700; color: ${actualIsUpgrade ? '#f97316' : '#22c55e'};">
+                                ${actualIsUpgrade ? costLabel : '✓ Бесплатно'}
+                            </div>
+                        </div>
+
+                        <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 8px;">
+                            Ваш баланс: <b>${balanceLabel}</b>
+                        </div>
+
+                        ${!hasEnough ? `
+                            <div style="padding: 10px; background: rgba(239, 68, 68, 0.1); border-radius: 8px; color: #ef4444; font-size: 13px;">
+                                ⚠️ Недостаточно средств. Не хватает: <b>${missingLabel}</b>
                             </div>
                         ` : ''}
                     </div>
                 `;
 
-                div.addEventListener('click', () => selectTariff(tariff));
-                list.appendChild(div);
-            });
+                // Используем кастомный попап или showConfirm
+                if (typeof tg.showConfirm === 'function' && hasEnough) {
+                    const message = actualIsUpgrade
+                        ? `Сменить тариф на "${tariff.name}"?\n\nДоплата: ${costLabel}\nВаш баланс: ${balanceLabel}`
+                        : `Сменить тариф на "${tariff.name}"?\n\nБесплатно (понижение тарифа)`;
 
-            // Обновляем периоды если тариф выбран
-            renderTariffPeriods();
+                    tg.showConfirm(message, async (confirmed) => {
+                        if (confirmed) {
+                            await executeInstantSwitch(tariff);
+                        }
+                    });
+                } else if (hasEnough) {
+                    // Fallback на простой confirm
+                    const message = actualIsUpgrade
+                        ? `Сменить тариф на "${tariff.name}"? Доплата: ${costLabel}`
+                        : `Сменить тариф на "${tariff.name}"? Бесплатно`;
+
+                    if (confirm(message)) {
+                        await executeInstantSwitch(tariff);
+                    }
+                } else {
+                    showPopup(`Недостаточно средств для смены тарифа. Не хватает: ${missingLabel}`, 'Ошибка');
+                }
+
+            } catch (err) {
+                console.error('Preview failed:', err);
+                showPopup(err.message || 'Не удалось получить информацию', 'Ошибка');
+            }
+        }
+
+        // Выполнить мгновенную смену тарифа
+        async function executeInstantSwitch(tariff) {
+            try {
+                const initData = tg.initData || '';
+                const response = await fetch('/miniapp/subscription/tariff/switch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ initData, tariffId: tariff.id })
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result?.detail?.message || result?.message || 'Ошибка переключения');
+                }
+
+                showPopup(result.message || 'Тариф успешно изменён!', 'Успех');
+                await refreshSubscriptionData();
+            } catch (err) {
+                console.error('Switch failed:', err);
+                showPopup(err.message || 'Не удалось сменить тариф', 'Ошибка');
+            }
         }
 
         function selectTariff(tariff) {
@@ -20633,271 +20735,6 @@
         // ============================================
         // Instant Tariff Switch
         // ============================================
-        let instantSwitchData = null;
-        let instantSwitchSelectedTariff = null;
-        let instantSwitchPreviewData = null;
-
-        async function loadInstantSwitch() {
-            if (!isTariffsMode()) {
-                return;
-            }
-
-            const card = document.getElementById('instantSwitchCard');
-            const loading = document.getElementById('instantSwitchLoading');
-            const error = document.getElementById('instantSwitchError');
-            const body = document.getElementById('instantSwitchBody');
-
-            // Показываем карточку только если есть активная подписка с тарифом
-            const hasActiveSubscription = userData?.subscription_status === 'active' || userData?.subscriptionStatus === 'active';
-            const currentTariff = userData?.current_tariff ?? userData?.currentTariff;
-
-            if (!hasActiveSubscription || !currentTariff) {
-                card?.classList.add('hidden');
-                return;
-            }
-
-            card?.classList.remove('hidden');
-            loading?.classList.remove('hidden');
-            error?.classList.add('hidden');
-            body?.classList.add('hidden');
-
-            try {
-                const initData = tg.initData || '';
-                const response = await fetch('/miniapp/subscription/tariffs', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ initData })
-                });
-
-                if (!response.ok) {
-                    throw new Error('Failed to load tariffs');
-                }
-
-                instantSwitchData = await response.json();
-                renderInstantSwitch();
-            } catch (err) {
-                console.error('Failed to load instant switch:', err);
-                loading?.classList.add('hidden');
-                error?.classList.remove('hidden');
-                document.getElementById('instantSwitchErrorText').textContent =
-                    err.message || 'Не удалось загрузить тарифы';
-            }
-        }
-
-        function renderInstantSwitch() {
-            const loading = document.getElementById('instantSwitchLoading');
-            const body = document.getElementById('instantSwitchBody');
-            const list = document.getElementById('instantSwitchList');
-            const currentNameEl = document.getElementById('instantSwitchCurrentName');
-            const remainingEl = document.getElementById('instantSwitchRemainingDays');
-            const confirmPanel = document.getElementById('instantSwitchConfirm');
-
-            loading?.classList.add('hidden');
-            body?.classList.remove('hidden');
-            confirmPanel?.classList.add('hidden');
-
-            // Текущий тариф и остаток дней
-            const currentTariff = instantSwitchData?.current_tariff || instantSwitchData?.currentTariff;
-            if (currentTariff && currentNameEl) {
-                currentNameEl.textContent = currentTariff.name;
-            }
-
-            // Остаток дней из userData
-            const daysLeft = userData?.days_left ?? userData?.daysLeft ?? 0;
-            if (remainingEl) {
-                remainingEl.textContent = `${daysLeft} дн.`;
-            }
-
-            // Список тарифов
-            if (!list) return;
-            list.innerHTML = '';
-
-            const tariffs = instantSwitchData?.tariffs || [];
-            const currentTariffId = currentTariff?.id;
-            const availableTariffs = tariffs.filter(t => t.id !== currentTariffId);
-
-            if (availableTariffs.length === 0) {
-                list.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 20px;">Нет других доступных тарифов</div>';
-                return;
-            }
-
-            // Рассчитываем стоимость для каждого тарифа
-            const currentMonthly = getMonthlyPrice(currentTariff);
-
-            availableTariffs.forEach(tariff => {
-                const newMonthly = getMonthlyPrice(tariff);
-                const priceDiff = newMonthly - currentMonthly;
-                const isUpgrade = priceDiff > 0;
-                const upgradeCost = isUpgrade ? Math.round(priceDiff * daysLeft / 30) : 0;
-
-                const trafficLabel = tariff.traffic_limit_label || tariff.trafficLimitLabel
-                    || ((tariff.traffic_limit_gb || tariff.trafficLimitGb) === 0 ? '∞' : (tariff.traffic_limit_gb || tariff.trafficLimitGb) + ' ГБ');
-                const deviceLimit = tariff.device_limit || tariff.deviceLimit || 1;
-
-                const div = document.createElement('div');
-                div.className = 'instant-switch-tariff-item';
-                div.innerHTML = `
-                    <div class="instant-switch-tariff-info">
-                        <div class="instant-switch-tariff-name">${escapeHtml(tariff.name)}</div>
-                        <div class="instant-switch-tariff-details">
-                            <span>📱 ${deviceLimit}</span>
-                            <span>📊 ${trafficLabel}</span>
-                        </div>
-                    </div>
-                    <div class="instant-switch-tariff-cost">
-                        <span class="instant-switch-cost-badge ${isUpgrade ? 'upgrade' : 'free'}">
-                            ${isUpgrade ? '+' + formatPriceFromKopeks(upgradeCost, instantSwitchData?.currency || 'RUB') : 'Бесплатно'}
-                        </span>
-                    </div>
-                `;
-
-                div.addEventListener('click', () => previewInstantSwitch(tariff));
-                list.appendChild(div);
-            });
-        }
-
-        function getMonthlyPrice(tariff) {
-            if (!tariff) return 0;
-            const periods = tariff.periods || [];
-            const period30 = periods.find(p => (p.days || p.period_days || p.periodDays) === 30);
-            if (period30) {
-                return period30.price_kopeks || period30.priceKopeks || period30.final_price || period30.finalPrice || 0;
-            }
-            // Fallback - пропорционально пересчитываем
-            if (periods.length > 0) {
-                const firstPeriod = periods[0];
-                const days = firstPeriod.days || firstPeriod.period_days || firstPeriod.periodDays || 30;
-                const price = firstPeriod.price_kopeks || firstPeriod.priceKopeks || 0;
-                return Math.round(price * 30 / days);
-            }
-            return 0;
-        }
-
-        async function previewInstantSwitch(tariff) {
-            instantSwitchSelectedTariff = tariff;
-
-            const confirmPanel = document.getElementById('instantSwitchConfirm');
-            const fromTariffEl = document.getElementById('instantSwitchFromTariff');
-            const toTariffEl = document.getElementById('instantSwitchToTariff');
-            const costValueEl = document.getElementById('instantSwitchCostValue');
-            const balanceValueEl = document.getElementById('instantSwitchBalanceValue');
-            const insufficientEl = document.getElementById('instantSwitchInsufficient');
-            const missingEl = document.getElementById('instantSwitchMissing');
-            const confirmBtn = document.getElementById('instantSwitchConfirmBtn');
-
-            // Показываем панель подтверждения
-            confirmPanel?.classList.remove('hidden');
-
-            // Заполняем сравнение
-            const currentTariff = instantSwitchData?.current_tariff || instantSwitchData?.currentTariff;
-            if (fromTariffEl) fromTariffEl.textContent = currentTariff?.name || '—';
-            if (toTariffEl) toTariffEl.textContent = tariff.name;
-
-            // Запрашиваем превью с сервера
-            try {
-                const initData = tg.initData || '';
-                const response = await fetch('/miniapp/subscription/tariff/switch/preview', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ initData, tariffId: tariff.id })
-                });
-
-                if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error?.detail?.message || 'Ошибка');
-                }
-
-                instantSwitchPreviewData = await response.json();
-
-                // Стоимость
-                if (costValueEl) {
-                    if (instantSwitchPreviewData.is_upgrade || instantSwitchPreviewData.isUpgrade) {
-                        costValueEl.textContent = instantSwitchPreviewData.upgrade_cost_label || instantSwitchPreviewData.upgradeCostLabel || '—';
-                        costValueEl.classList.remove('free');
-                    } else {
-                        costValueEl.textContent = 'Бесплатно';
-                        costValueEl.classList.add('free');
-                    }
-                }
-
-                // Баланс
-                if (balanceValueEl) {
-                    balanceValueEl.textContent = instantSwitchPreviewData.balance_label || instantSwitchPreviewData.balanceLabel || '—';
-                }
-
-                // Недостаточно средств
-                const hasEnough = instantSwitchPreviewData.has_enough_balance ?? instantSwitchPreviewData.hasEnoughBalance ?? true;
-                if (!hasEnough) {
-                    insufficientEl?.classList.remove('hidden');
-                    if (missingEl) {
-                        missingEl.textContent = instantSwitchPreviewData.missing_amount_label || instantSwitchPreviewData.missingAmountLabel || '—';
-                    }
-                    if (confirmBtn) confirmBtn.disabled = true;
-                } else {
-                    insufficientEl?.classList.add('hidden');
-                    if (confirmBtn) confirmBtn.disabled = false;
-                }
-
-            } catch (err) {
-                console.error('Preview failed:', err);
-                showPopup(err.message || 'Не удалось получить информацию', 'Ошибка');
-                confirmPanel?.classList.add('hidden');
-            }
-        }
-
-        function closeInstantSwitchConfirm() {
-            const confirmPanel = document.getElementById('instantSwitchConfirm');
-            confirmPanel?.classList.add('hidden');
-            instantSwitchSelectedTariff = null;
-            instantSwitchPreviewData = null;
-        }
-
-        async function confirmInstantSwitch() {
-            if (!instantSwitchSelectedTariff) return;
-
-            const confirmBtn = document.getElementById('instantSwitchConfirmBtn');
-            const cancelBtn = document.getElementById('instantSwitchCancelBtn');
-
-            if (confirmBtn) {
-                confirmBtn.disabled = true;
-                confirmBtn.textContent = 'Обработка...';
-            }
-            if (cancelBtn) cancelBtn.disabled = true;
-
-            try {
-                const initData = tg.initData || '';
-                const response = await fetch('/miniapp/subscription/tariff/switch', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ initData, tariffId: instantSwitchSelectedTariff.id })
-                });
-
-                const result = await response.json();
-
-                if (!response.ok) {
-                    throw new Error(result?.detail?.message || result?.message || 'Ошибка переключения');
-                }
-
-                showPopup(result.message || 'Тариф успешно изменён!', 'Успех');
-                closeInstantSwitchConfirm();
-                await refreshSubscriptionData();
-            } catch (err) {
-                console.error('Switch failed:', err);
-                showPopup(err.message || 'Не удалось сменить тариф', 'Ошибка');
-            } finally {
-                if (confirmBtn) {
-                    confirmBtn.disabled = false;
-                    confirmBtn.textContent = 'Подтвердить';
-                }
-                if (cancelBtn) cancelBtn.disabled = false;
-            }
-        }
-
-        // Event listeners для instant switch
-        document.getElementById('instantSwitchRetry')?.addEventListener('click', loadInstantSwitch);
-        document.getElementById('instantSwitchConfirmClose')?.addEventListener('click', closeInstantSwitchConfirm);
-        document.getElementById('instantSwitchCancelBtn')?.addEventListener('click', closeInstantSwitchConfirm);
-        document.getElementById('instantSwitchConfirmBtn')?.addEventListener('click', confirmInstantSwitch);
 
         // Загружаем тарифы после загрузки данных подписки
         const originalApplySubscriptionData = applySubscriptionData;
@@ -20905,7 +20742,6 @@
             const result = originalApplySubscriptionData(payload);
             if (isTariffsMode()) {
                 loadTariffs();
-                loadInstantSwitch();
             }
             return result;
         };
