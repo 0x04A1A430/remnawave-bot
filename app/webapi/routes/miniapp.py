@@ -6543,6 +6543,271 @@ async def purchase_tariff_endpoint(
     )
 
 
+def _calculate_tariff_switch_cost(
+    current_tariff,
+    new_tariff,
+    remaining_days: int,
+    promo_group=None,
+) -> tuple[int, bool]:
+    """
+    Рассчитывает стоимость переключения тарифа.
+
+    Returns:
+        (cost_kopeks, is_upgrade) - стоимость доплаты и флаг апгрейда
+    """
+    # Берём месячную цену (30 дней) как базу
+    current_monthly = current_tariff.get_price_for_period(30) or 0
+    new_monthly = new_tariff.get_price_for_period(30) or 0
+
+    # Применяем скидку промогруппы
+    if promo_group:
+        raw_discounts = getattr(promo_group, 'period_discounts', None) or {}
+        for k, v in raw_discounts.items():
+            try:
+                if int(k) == 30:
+                    discount = max(0, min(100, int(v)))
+                    current_monthly = int(current_monthly * (100 - discount) / 100)
+                    new_monthly = int(new_monthly * (100 - discount) / 100)
+                    break
+            except (TypeError, ValueError):
+                pass
+
+    price_diff = new_monthly - current_monthly
+
+    if price_diff <= 0:
+        # Даунгрейд или равная цена - бесплатно
+        return 0, False
+
+    # Апгрейд - рассчитываем доплату пропорционально оставшимся дням
+    upgrade_cost = int(price_diff * remaining_days / 30)
+    return upgrade_cost, True
+
+
+@router.post("/subscription/tariff/switch/preview")
+async def preview_tariff_switch_endpoint(
+    payload: MiniAppTariffSwitchRequest,
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Предпросмотр переключения тарифа - показывает стоимость."""
+    from app.webapi.schemas.miniapp import MiniAppTariffSwitchRequest, MiniAppTariffSwitchPreviewResponse
+    from datetime import datetime
+
+    user = await _authorize_miniapp_user(payload.init_data, db)
+
+    if not settings.is_tariffs_mode():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "tariffs_mode_disabled", "message": "Tariffs mode is not enabled"},
+        )
+
+    subscription = getattr(user, "subscription", None)
+    if not subscription or not subscription.tariff_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "no_subscription", "message": "No active subscription with tariff"},
+        )
+
+    if subscription.status not in ("active", "trial"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "subscription_inactive", "message": "Subscription is not active"},
+        )
+
+    current_tariff = await get_tariff_by_id(db, subscription.tariff_id)
+    new_tariff = await get_tariff_by_id(db, payload.tariff_id)
+
+    if not new_tariff or not new_tariff.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "tariff_not_found", "message": "Tariff not found or inactive"},
+        )
+
+    if subscription.tariff_id == payload.tariff_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "same_tariff", "message": "Already on this tariff"},
+        )
+
+    # Проверяем доступность тарифа для пользователя
+    promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else getattr(user, "promo_group", None)
+    promo_group_id = promo_group.id if promo_group else None
+    if not new_tariff.is_available_for_promo_group(promo_group_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "tariff_not_available", "message": "Tariff not available for your promo group"},
+        )
+
+    # Рассчитываем оставшиеся дни
+    remaining_days = 0
+    if subscription.end_date and subscription.end_date > datetime.utcnow():
+        delta = subscription.end_date - datetime.utcnow()
+        remaining_days = max(0, delta.days)
+
+    # Рассчитываем стоимость переключения
+    upgrade_cost, is_upgrade = _calculate_tariff_switch_cost(
+        current_tariff, new_tariff, remaining_days, promo_group
+    )
+
+    balance = user.balance_kopeks or 0
+    has_enough = balance >= upgrade_cost
+    missing = max(0, upgrade_cost - balance) if not has_enough else 0
+
+    return MiniAppTariffSwitchPreviewResponse(
+        can_switch=has_enough,
+        current_tariff_id=current_tariff.id if current_tariff else None,
+        current_tariff_name=current_tariff.name if current_tariff else None,
+        new_tariff_id=new_tariff.id,
+        new_tariff_name=new_tariff.name,
+        remaining_days=remaining_days,
+        upgrade_cost_kopeks=upgrade_cost,
+        upgrade_cost_label=settings.format_price(upgrade_cost) if upgrade_cost > 0 else "Бесплатно",
+        balance_kopeks=balance,
+        balance_label=settings.format_price(balance),
+        has_enough_balance=has_enough,
+        missing_amount_kopeks=missing,
+        missing_amount_label=settings.format_price(missing) if missing > 0 else "",
+        is_upgrade=is_upgrade,
+        message=None,
+    )
+
+
+@router.post("/subscription/tariff/switch")
+async def switch_tariff_endpoint(
+    payload: MiniAppTariffSwitchRequest,
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Переключение тарифа без изменения даты окончания."""
+    from app.webapi.schemas.miniapp import MiniAppTariffSwitchRequest, MiniAppTariffSwitchResponse
+    from datetime import datetime
+
+    user = await _authorize_miniapp_user(payload.init_data, db)
+
+    if not settings.is_tariffs_mode():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "tariffs_mode_disabled", "message": "Tariffs mode is not enabled"},
+        )
+
+    subscription = getattr(user, "subscription", None)
+    if not subscription or not subscription.tariff_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "no_subscription", "message": "No active subscription with tariff"},
+        )
+
+    if subscription.status not in ("active", "trial"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "subscription_inactive", "message": "Subscription is not active"},
+        )
+
+    current_tariff = await get_tariff_by_id(db, subscription.tariff_id)
+    new_tariff = await get_tariff_by_id(db, payload.tariff_id)
+
+    if not new_tariff or not new_tariff.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "tariff_not_found", "message": "Tariff not found or inactive"},
+        )
+
+    if subscription.tariff_id == payload.tariff_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "same_tariff", "message": "Already on this tariff"},
+        )
+
+    # Проверяем доступность тарифа
+    promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else getattr(user, "promo_group", None)
+    promo_group_id = promo_group.id if promo_group else None
+    if not new_tariff.is_available_for_promo_group(promo_group_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "tariff_not_available", "message": "Tariff not available"},
+        )
+
+    # Рассчитываем оставшиеся дни
+    remaining_days = 0
+    if subscription.end_date and subscription.end_date > datetime.utcnow():
+        delta = subscription.end_date - datetime.utcnow()
+        remaining_days = max(0, delta.days)
+
+    # Рассчитываем стоимость
+    upgrade_cost, is_upgrade = _calculate_tariff_switch_cost(
+        current_tariff, new_tariff, remaining_days, promo_group
+    )
+
+    # Списываем доплату если апгрейд
+    if upgrade_cost > 0:
+        if user.balance_kopeks < upgrade_cost:
+            missing = upgrade_cost - user.balance_kopeks
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail={
+                    "code": "insufficient_funds",
+                    "message": f"Недостаточно средств. Не хватает {settings.format_price(missing)}",
+                    "missing_amount": missing,
+                },
+            )
+
+        description = f"Переход на тариф '{new_tariff.name}' (доплата за {remaining_days} дней)"
+        success = await subtract_user_balance(db, user, upgrade_cost, description)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={"code": "balance_error", "message": "Failed to charge balance"},
+            )
+
+        # Записываем транзакцию
+        await create_transaction(
+            db=db,
+            user_id=user.id,
+            type=TransactionType.SUBSCRIPTION_PAYMENT,
+            amount_kopeks=upgrade_cost,
+            description=description,
+        )
+
+    # Обновляем подписку - меняем тариф без изменения даты
+    subscription.tariff_id = new_tariff.id
+    subscription.traffic_limit_gb = new_tariff.traffic_limit_gb
+    subscription.device_limit = new_tariff.device_limit
+    subscription.connected_squads = new_tariff.allowed_squads or []
+    # Сбрасываем докупленный трафик при смене тарифа
+    subscription.purchased_traffic_gb = 0
+
+    await db.commit()
+    await db.refresh(subscription)
+    await db.refresh(user)
+
+    # Синхронизируем с RemnaWave
+    try:
+        service = SubscriptionService()
+        await service.update_remnawave_user(db, subscription)
+    except Exception as e:
+        logger.error(f"Ошибка синхронизации с RemnaWave при смене тарифа: {e}")
+
+    lang = getattr(user, "language", settings.DEFAULT_LANGUAGE)
+    if upgrade_cost > 0:
+        if lang == "ru":
+            message = f"Тариф изменён на '{new_tariff.name}'. Списано {settings.format_price(upgrade_cost)}"
+        else:
+            message = f"Switched to '{new_tariff.name}'. Charged {settings.format_price(upgrade_cost)}"
+    else:
+        if lang == "ru":
+            message = f"Тариф изменён на '{new_tariff.name}'"
+        else:
+            message = f"Switched to '{new_tariff.name}'"
+
+    return MiniAppTariffSwitchResponse(
+        success=True,
+        message=message,
+        tariff_id=new_tariff.id,
+        tariff_name=new_tariff.name,
+        charged_kopeks=upgrade_cost,
+        balance_kopeks=user.balance_kopeks,
+        balance_label=settings.format_price(user.balance_kopeks),
+    )
+
+
 @router.post("/subscription/traffic-topup")
 async def purchase_traffic_topup_endpoint(
     payload: MiniAppTrafficTopupRequest,
