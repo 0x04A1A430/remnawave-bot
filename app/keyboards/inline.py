@@ -1000,7 +1000,7 @@ def get_subscription_keyboard(
                 settings_row.append(
                     InlineKeyboardButton(
                         text=texts.t("CHANGE_TARIFF_BUTTON", "📦 Тариф"),
-                        callback_data="tariff_switch"
+                        callback_data="instant_switch"
                     )
                 )
             keyboard.append(settings_row)

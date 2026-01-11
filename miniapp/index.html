@@ -816,6 +816,285 @@
             background: linear-gradient(135deg, rgba(34, 197, 94, 0.2), rgba(34, 197, 94, 0.08));
         }
 
+        /* ============================================
+           Instant Tariff Switch Styles
+           ============================================ */
+        .instant-switch-current-info {
+            display: flex;
+            gap: 16px;
+            padding: 16px;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            margin-bottom: 12px;
+        }
+
+        .instant-switch-current-tariff,
+        .instant-switch-remaining {
+            flex: 1;
+        }
+
+        .instant-switch-label {
+            font-size: 11px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .instant-switch-value {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .instant-switch-hint {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 12px 14px;
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(59, 130, 246, 0.04) 100%);
+            border: 1px solid rgba(59, 130, 246, 0.15);
+            border-radius: 10px;
+            margin-bottom: 4px;
+        }
+
+        .instant-switch-hint-icon {
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+
+        .instant-switch-hint-text {
+            font-size: 12px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        /* Tariff item in instant switch */
+        .instant-switch-tariff-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 16px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .instant-switch-tariff-item:hover {
+            border-color: var(--primary);
+            background: rgba(var(--primary-rgb), 0.04);
+        }
+
+        .instant-switch-tariff-item.current {
+            opacity: 0.5;
+            cursor: default;
+            pointer-events: none;
+        }
+
+        .instant-switch-tariff-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .instant-switch-tariff-name {
+            font-weight: 600;
+            font-size: 14px;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .instant-switch-tariff-details {
+            display: flex;
+            gap: 12px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .instant-switch-tariff-cost {
+            text-align: right;
+            flex-shrink: 0;
+        }
+
+        .instant-switch-cost-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .instant-switch-cost-badge.upgrade {
+            background: linear-gradient(135deg, rgba(249, 115, 22, 0.15) 0%, rgba(249, 115, 22, 0.08) 100%);
+            color: #f97316;
+            border: 1px solid rgba(249, 115, 22, 0.25);
+        }
+
+        .instant-switch-cost-badge.free {
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(34, 197, 94, 0.08) 100%);
+            color: #22c55e;
+            border: 1px solid rgba(34, 197, 94, 0.25);
+        }
+
+        /* Confirmation panel */
+        .instant-switch-confirm {
+            margin-top: 20px;
+            padding: 20px;
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            border: 2px solid var(--primary);
+            animation: slideUp 0.3s ease;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .instant-switch-confirm-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .instant-switch-confirm-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .instant-switch-confirm-close {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: none;
+            background: var(--bg-tertiary, var(--bg-primary));
+            color: var(--text-secondary);
+            font-size: 18px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .instant-switch-confirm-close:hover {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+        }
+
+        .instant-switch-compare {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .instant-switch-compare-item {
+            text-align: center;
+            flex: 1;
+        }
+
+        .instant-switch-compare-label {
+            font-size: 11px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .instant-switch-compare-value {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .instant-switch-compare-arrow {
+            font-size: 20px;
+            color: var(--primary);
+            flex-shrink: 0;
+        }
+
+        .instant-switch-cost {
+            text-align: center;
+            padding: 12px;
+            background: var(--bg-primary);
+            border-radius: 10px;
+            margin-bottom: 12px;
+        }
+
+        .instant-switch-cost-label {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .instant-switch-cost-value {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--primary);
+            margin-left: 8px;
+        }
+
+        .instant-switch-cost-value.free {
+            color: #22c55e;
+        }
+
+        .instant-switch-balance {
+            text-align: center;
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+
+        .instant-switch-insufficient {
+            text-align: center;
+            font-size: 13px;
+            color: #ef4444;
+            padding: 10px;
+            background: rgba(239, 68, 68, 0.1);
+            border-radius: 8px;
+            margin-bottom: 12px;
+        }
+
+        .instant-switch-confirm-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .instant-switch-confirm-actions .btn {
+            flex: 1;
+        }
+
+        .instant-switch-confirm-actions .btn-secondary {
+            background: var(--bg-tertiary, var(--bg-primary));
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        :root[data-theme="dark"] .instant-switch-hint {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.12) 0%, rgba(59, 130, 246, 0.06) 100%);
+            border-color: rgba(59, 130, 246, 0.2);
+        }
+
+        :root[data-theme="dark"] .instant-switch-cost-badge.upgrade {
+            background: linear-gradient(135deg, rgba(249, 115, 22, 0.2) 0%, rgba(249, 115, 22, 0.1) 100%);
+            color: #fb923c;
+        }
+
+        :root[data-theme="dark"] .instant-switch-cost-badge.free {
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.2) 0%, rgba(34, 197, 94, 0.1) 100%);
+            color: #4ade80;
+        }
+
         .subscription-settings-toggle.active .tariff-name-badge {
             background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.25), rgba(var(--primary-rgb), 0.12));
             box-shadow: 0 2px 6px rgba(var(--primary-rgb), 0.15);
@@ -5543,6 +5822,96 @@
                 </div>
             </div>
 
+            <!-- Instant Tariff Switch Section (для пользователей с подпиской) -->
+            <div class="card expandable hidden" id="instantSwitchCard">
+                <div class="card-header">
+                    <div class="card-title">
+                        <svg class="card-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
+                        </svg>
+                        <span data-i18n="instant_switch.title">Сменить тариф</span>
+                    </div>
+                    <svg class="expand-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </div>
+                <div class="card-content">
+                    <div id="instantSwitchContent">
+                        <div class="subscription-settings-loading" id="instantSwitchLoading">
+                            <div class="subscription-settings-loading-line"></div>
+                            <div class="subscription-settings-loading-line" style="width: 70%;"></div>
+                        </div>
+                        <div class="subscription-settings-error hidden" id="instantSwitchError">
+                            <div id="instantSwitchErrorText">Не удалось загрузить тарифы</div>
+                            <button class="subscription-settings-retry" id="instantSwitchRetry" type="button">Повторить</button>
+                        </div>
+                        <div id="instantSwitchBody" class="hidden">
+                            <!-- Текущий тариф и остаток дней -->
+                            <div class="instant-switch-current-info" id="instantSwitchCurrentInfo">
+                                <div class="instant-switch-current-tariff">
+                                    <div class="instant-switch-label">Текущий тариф</div>
+                                    <div class="instant-switch-value" id="instantSwitchCurrentName">—</div>
+                                </div>
+                                <div class="instant-switch-remaining">
+                                    <div class="instant-switch-label">Осталось</div>
+                                    <div class="instant-switch-value" id="instantSwitchRemainingDays">— дн.</div>
+                                </div>
+                            </div>
+
+                            <!-- Пояснение -->
+                            <div class="instant-switch-hint">
+                                <div class="instant-switch-hint-icon">💡</div>
+                                <div class="instant-switch-hint-text">
+                                    При смене тарифа ваш остаток дней сохраняется.
+                                    Повышение тарифа — доплата за разницу, понижение — бесплатно.
+                                </div>
+                            </div>
+
+                            <!-- Список тарифов для переключения -->
+                            <div class="subscription-renewal-section" style="margin-top: 16px;">
+                                <div class="subscription-renewal-section-title">Выберите новый тариф</div>
+                                <div id="instantSwitchList" class="subscription-renewal-options"></div>
+                            </div>
+
+                            <!-- Подтверждение переключения -->
+                            <div id="instantSwitchConfirm" class="instant-switch-confirm hidden">
+                                <div class="instant-switch-confirm-header">
+                                    <div class="instant-switch-confirm-title">Подтверждение</div>
+                                    <button class="instant-switch-confirm-close" id="instantSwitchConfirmClose" type="button">×</button>
+                                </div>
+                                <div class="instant-switch-confirm-body">
+                                    <div class="instant-switch-compare">
+                                        <div class="instant-switch-compare-item">
+                                            <div class="instant-switch-compare-label">Текущий</div>
+                                            <div class="instant-switch-compare-value" id="instantSwitchFromTariff">—</div>
+                                        </div>
+                                        <div class="instant-switch-compare-arrow">→</div>
+                                        <div class="instant-switch-compare-item">
+                                            <div class="instant-switch-compare-label">Новый</div>
+                                            <div class="instant-switch-compare-value" id="instantSwitchToTariff">—</div>
+                                        </div>
+                                    </div>
+                                    <div class="instant-switch-cost" id="instantSwitchCost">
+                                        <span class="instant-switch-cost-label">Стоимость:</span>
+                                        <span class="instant-switch-cost-value" id="instantSwitchCostValue">Бесплатно</span>
+                                    </div>
+                                    <div class="instant-switch-balance" id="instantSwitchBalance">
+                                        Ваш баланс: <span id="instantSwitchBalanceValue">—</span>
+                                    </div>
+                                    <div class="instant-switch-insufficient hidden" id="instantSwitchInsufficient">
+                                        ⚠️ Недостаточно средств. Не хватает: <span id="instantSwitchMissing">—</span>
+                                    </div>
+                                </div>
+                                <div class="instant-switch-confirm-actions">
+                                    <button class="btn btn-secondary" id="instantSwitchCancelBtn" type="button">Отмена</button>
+                                    <button class="btn btn-primary" id="instantSwitchConfirmBtn" type="button">Подтвердить</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Subscription Settings -->
             <div class="card expandable subscription-settings-card hidden" id="subscriptionSettingsCard">
                 <div class="card-header">
@@ -6369,6 +6738,20 @@
                 'tariffs.select': 'Select tariff',
                 'tariffs.current': 'Current tariff',
                 'tariffs.no_tariffs': 'No tariffs available',
+                'instant_switch.title': 'Switch tariff',
+                'instant_switch.current': 'Current tariff',
+                'instant_switch.remaining': 'Remaining',
+                'instant_switch.hint': 'When switching, your remaining days are preserved. Upgrade = pay the difference, downgrade = free.',
+                'instant_switch.select': 'Select new tariff',
+                'instant_switch.confirm': 'Confirmation',
+                'instant_switch.from': 'Current',
+                'instant_switch.to': 'New',
+                'instant_switch.cost': 'Cost:',
+                'instant_switch.free': 'Free',
+                'instant_switch.balance': 'Your balance:',
+                'instant_switch.insufficient': 'Insufficient funds. Missing:',
+                'instant_switch.cancel': 'Cancel',
+                'instant_switch.confirm_btn': 'Confirm',
                 'card.referral.title': 'Referral Program',
                 'card.history.title': 'Transaction History',
                 'card.servers.title': 'Connected Servers',
@@ -6817,6 +7200,20 @@
                 'tariffs.select': 'Выбрать тариф',
                 'tariffs.current': 'Текущий тариф',
                 'tariffs.no_tariffs': 'Нет доступных тарифов',
+                'instant_switch.title': 'Сменить тариф',
+                'instant_switch.current': 'Текущий тариф',
+                'instant_switch.remaining': 'Осталось',
+                'instant_switch.hint': 'При смене тарифа остаток дней сохраняется. Повышение = доплата, понижение = бесплатно.',
+                'instant_switch.select': 'Выберите новый тариф',
+                'instant_switch.confirm': 'Подтверждение',
+                'instant_switch.from': 'Текущий',
+                'instant_switch.to': 'Новый',
+                'instant_switch.cost': 'Стоимость:',
+                'instant_switch.free': 'Бесплатно',
+                'instant_switch.balance': 'Ваш баланс:',
+                'instant_switch.insufficient': 'Недостаточно средств. Не хватает:',
+                'instant_switch.cancel': 'Отмена',
+                'instant_switch.confirm_btn': 'Подтвердить',
                 'card.referral.title': 'Реферальная программа',
                 'card.history.title': 'История операций',
                 'card.servers.title': 'Подключённые серверы',
@@ -20233,12 +20630,282 @@
         document.getElementById('tariffsRetry')?.addEventListener('click', loadTariffs);
         document.getElementById('tariffsSelectBtn')?.addEventListener('click', purchaseTariff);
 
+        // ============================================
+        // Instant Tariff Switch
+        // ============================================
+        let instantSwitchData = null;
+        let instantSwitchSelectedTariff = null;
+        let instantSwitchPreviewData = null;
+
+        async function loadInstantSwitch() {
+            if (!isTariffsMode()) {
+                return;
+            }
+
+            const card = document.getElementById('instantSwitchCard');
+            const loading = document.getElementById('instantSwitchLoading');
+            const error = document.getElementById('instantSwitchError');
+            const body = document.getElementById('instantSwitchBody');
+
+            // Показываем карточку только если есть активная подписка с тарифом
+            const hasActiveSubscription = userData?.subscription_status === 'active' || userData?.subscriptionStatus === 'active';
+            const currentTariff = userData?.current_tariff ?? userData?.currentTariff;
+
+            if (!hasActiveSubscription || !currentTariff) {
+                card?.classList.add('hidden');
+                return;
+            }
+
+            card?.classList.remove('hidden');
+            loading?.classList.remove('hidden');
+            error?.classList.add('hidden');
+            body?.classList.add('hidden');
+
+            try {
+                const initData = tg.initData || '';
+                const response = await fetch('/miniapp/subscription/tariffs', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ initData })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to load tariffs');
+                }
+
+                instantSwitchData = await response.json();
+                renderInstantSwitch();
+            } catch (err) {
+                console.error('Failed to load instant switch:', err);
+                loading?.classList.add('hidden');
+                error?.classList.remove('hidden');
+                document.getElementById('instantSwitchErrorText').textContent =
+                    err.message || 'Не удалось загрузить тарифы';
+            }
+        }
+
+        function renderInstantSwitch() {
+            const loading = document.getElementById('instantSwitchLoading');
+            const body = document.getElementById('instantSwitchBody');
+            const list = document.getElementById('instantSwitchList');
+            const currentNameEl = document.getElementById('instantSwitchCurrentName');
+            const remainingEl = document.getElementById('instantSwitchRemainingDays');
+            const confirmPanel = document.getElementById('instantSwitchConfirm');
+
+            loading?.classList.add('hidden');
+            body?.classList.remove('hidden');
+            confirmPanel?.classList.add('hidden');
+
+            // Текущий тариф и остаток дней
+            const currentTariff = instantSwitchData?.current_tariff || instantSwitchData?.currentTariff;
+            if (currentTariff && currentNameEl) {
+                currentNameEl.textContent = currentTariff.name;
+            }
+
+            // Остаток дней из userData
+            const daysLeft = userData?.days_left ?? userData?.daysLeft ?? 0;
+            if (remainingEl) {
+                remainingEl.textContent = `${daysLeft} дн.`;
+            }
+
+            // Список тарифов
+            if (!list) return;
+            list.innerHTML = '';
+
+            const tariffs = instantSwitchData?.tariffs || [];
+            const currentTariffId = currentTariff?.id;
+            const availableTariffs = tariffs.filter(t => t.id !== currentTariffId);
+
+            if (availableTariffs.length === 0) {
+                list.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 20px;">Нет других доступных тарифов</div>';
+                return;
+            }
+
+            // Рассчитываем стоимость для каждого тарифа
+            const currentMonthly = getMonthlyPrice(currentTariff);
+
+            availableTariffs.forEach(tariff => {
+                const newMonthly = getMonthlyPrice(tariff);
+                const priceDiff = newMonthly - currentMonthly;
+                const isUpgrade = priceDiff > 0;
+                const upgradeCost = isUpgrade ? Math.round(priceDiff * daysLeft / 30) : 0;
+
+                const trafficLabel = tariff.traffic_limit_label || tariff.trafficLimitLabel
+                    || ((tariff.traffic_limit_gb || tariff.trafficLimitGb) === 0 ? '∞' : (tariff.traffic_limit_gb || tariff.trafficLimitGb) + ' ГБ');
+                const deviceLimit = tariff.device_limit || tariff.deviceLimit || 1;
+
+                const div = document.createElement('div');
+                div.className = 'instant-switch-tariff-item';
+                div.innerHTML = `
+                    <div class="instant-switch-tariff-info">
+                        <div class="instant-switch-tariff-name">${escapeHtml(tariff.name)}</div>
+                        <div class="instant-switch-tariff-details">
+                            <span>📱 ${deviceLimit}</span>
+                            <span>📊 ${trafficLabel}</span>
+                        </div>
+                    </div>
+                    <div class="instant-switch-tariff-cost">
+                        <span class="instant-switch-cost-badge ${isUpgrade ? 'upgrade' : 'free'}">
+                            ${isUpgrade ? '+' + formatPriceFromKopeks(upgradeCost, instantSwitchData?.currency || 'RUB') : 'Бесплатно'}
+                        </span>
+                    </div>
+                `;
+
+                div.addEventListener('click', () => previewInstantSwitch(tariff));
+                list.appendChild(div);
+            });
+        }
+
+        function getMonthlyPrice(tariff) {
+            if (!tariff) return 0;
+            const periods = tariff.periods || [];
+            const period30 = periods.find(p => (p.days || p.period_days || p.periodDays) === 30);
+            if (period30) {
+                return period30.price_kopeks || period30.priceKopeks || period30.final_price || period30.finalPrice || 0;
+            }
+            // Fallback - пропорционально пересчитываем
+            if (periods.length > 0) {
+                const firstPeriod = periods[0];
+                const days = firstPeriod.days || firstPeriod.period_days || firstPeriod.periodDays || 30;
+                const price = firstPeriod.price_kopeks || firstPeriod.priceKopeks || 0;
+                return Math.round(price * 30 / days);
+            }
+            return 0;
+        }
+
+        async function previewInstantSwitch(tariff) {
+            instantSwitchSelectedTariff = tariff;
+
+            const confirmPanel = document.getElementById('instantSwitchConfirm');
+            const fromTariffEl = document.getElementById('instantSwitchFromTariff');
+            const toTariffEl = document.getElementById('instantSwitchToTariff');
+            const costValueEl = document.getElementById('instantSwitchCostValue');
+            const balanceValueEl = document.getElementById('instantSwitchBalanceValue');
+            const insufficientEl = document.getElementById('instantSwitchInsufficient');
+            const missingEl = document.getElementById('instantSwitchMissing');
+            const confirmBtn = document.getElementById('instantSwitchConfirmBtn');
+
+            // Показываем панель подтверждения
+            confirmPanel?.classList.remove('hidden');
+
+            // Заполняем сравнение
+            const currentTariff = instantSwitchData?.current_tariff || instantSwitchData?.currentTariff;
+            if (fromTariffEl) fromTariffEl.textContent = currentTariff?.name || '—';
+            if (toTariffEl) toTariffEl.textContent = tariff.name;
+
+            // Запрашиваем превью с сервера
+            try {
+                const initData = tg.initData || '';
+                const response = await fetch('/miniapp/subscription/tariff/switch/preview', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ initData, tariffId: tariff.id })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error?.detail?.message || 'Ошибка');
+                }
+
+                instantSwitchPreviewData = await response.json();
+
+                // Стоимость
+                if (costValueEl) {
+                    if (instantSwitchPreviewData.is_upgrade || instantSwitchPreviewData.isUpgrade) {
+                        costValueEl.textContent = instantSwitchPreviewData.upgrade_cost_label || instantSwitchPreviewData.upgradeCostLabel || '—';
+                        costValueEl.classList.remove('free');
+                    } else {
+                        costValueEl.textContent = 'Бесплатно';
+                        costValueEl.classList.add('free');
+                    }
+                }
+
+                // Баланс
+                if (balanceValueEl) {
+                    balanceValueEl.textContent = instantSwitchPreviewData.balance_label || instantSwitchPreviewData.balanceLabel || '—';
+                }
+
+                // Недостаточно средств
+                const hasEnough = instantSwitchPreviewData.has_enough_balance ?? instantSwitchPreviewData.hasEnoughBalance ?? true;
+                if (!hasEnough) {
+                    insufficientEl?.classList.remove('hidden');
+                    if (missingEl) {
+                        missingEl.textContent = instantSwitchPreviewData.missing_amount_label || instantSwitchPreviewData.missingAmountLabel || '—';
+                    }
+                    if (confirmBtn) confirmBtn.disabled = true;
+                } else {
+                    insufficientEl?.classList.add('hidden');
+                    if (confirmBtn) confirmBtn.disabled = false;
+                }
+
+            } catch (err) {
+                console.error('Preview failed:', err);
+                showPopup(err.message || 'Не удалось получить информацию', 'Ошибка');
+                confirmPanel?.classList.add('hidden');
+            }
+        }
+
+        function closeInstantSwitchConfirm() {
+            const confirmPanel = document.getElementById('instantSwitchConfirm');
+            confirmPanel?.classList.add('hidden');
+            instantSwitchSelectedTariff = null;
+            instantSwitchPreviewData = null;
+        }
+
+        async function confirmInstantSwitch() {
+            if (!instantSwitchSelectedTariff) return;
+
+            const confirmBtn = document.getElementById('instantSwitchConfirmBtn');
+            const cancelBtn = document.getElementById('instantSwitchCancelBtn');
+
+            if (confirmBtn) {
+                confirmBtn.disabled = true;
+                confirmBtn.textContent = 'Обработка...';
+            }
+            if (cancelBtn) cancelBtn.disabled = true;
+
+            try {
+                const initData = tg.initData || '';
+                const response = await fetch('/miniapp/subscription/tariff/switch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ initData, tariffId: instantSwitchSelectedTariff.id })
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result?.detail?.message || result?.message || 'Ошибка переключения');
+                }
+
+                showPopup(result.message || 'Тариф успешно изменён!', 'Успех');
+                closeInstantSwitchConfirm();
+                await refreshSubscriptionData();
+            } catch (err) {
+                console.error('Switch failed:', err);
+                showPopup(err.message || 'Не удалось сменить тариф', 'Ошибка');
+            } finally {
+                if (confirmBtn) {
+                    confirmBtn.disabled = false;
+                    confirmBtn.textContent = 'Подтвердить';
+                }
+                if (cancelBtn) cancelBtn.disabled = false;
+            }
+        }
+
+        // Event listeners для instant switch
+        document.getElementById('instantSwitchRetry')?.addEventListener('click', loadInstantSwitch);
+        document.getElementById('instantSwitchConfirmClose')?.addEventListener('click', closeInstantSwitchConfirm);
+        document.getElementById('instantSwitchCancelBtn')?.addEventListener('click', closeInstantSwitchConfirm);
+        document.getElementById('instantSwitchConfirmBtn')?.addEventListener('click', confirmInstantSwitch);
+
         // Загружаем тарифы после загрузки данных подписки
         const originalApplySubscriptionData = applySubscriptionData;
         applySubscriptionData = function(payload) {
             const result = originalApplySubscriptionData(payload);
             if (isTariffsMode()) {
                 loadTariffs();
+                loadInstantSwitch();
             }
             return result;
         };
