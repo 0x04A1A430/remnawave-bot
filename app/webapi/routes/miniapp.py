@@ -190,6 +190,9 @@ from ..schemas.miniapp import (
     MiniAppTariffsResponse,
     MiniAppTariffPurchaseRequest,
     MiniAppTariffPurchaseResponse,
+    MiniAppTariffSwitchRequest,
+    MiniAppTariffSwitchPreviewResponse,
+    MiniAppTariffSwitchResponse,
     MiniAppCurrentTariff,
     MiniAppConnectedServer,
     MiniAppTrafficTopupRequest,
@@ -6543,6 +6546,23 @@ async def purchase_tariff_endpoint(
     )
 
 
+def _get_tariff_monthly_price(tariff) -> int:
+    """Получает месячную цену тарифа (30 дней) с fallback на пропорциональный расчёт."""
+    price = tariff.get_price_for_period(30)
+    if price is not None:
+        return price
+
+    # Fallback: пропорционально пересчитываем из первого доступного периода
+    periods = tariff.get_available_periods()
+    if periods:
+        first_period = periods[0]
+        first_price = tariff.get_price_for_period(first_period)
+        if first_price:
+            return int(first_price * 30 / first_period)
+
+    return 0
+
+
 def _calculate_tariff_switch_cost(
     current_tariff,
     new_tariff,
@@ -6552,12 +6572,15 @@ def _calculate_tariff_switch_cost(
     """
     Рассчитывает стоимость переключения тарифа.
 
+    Формула: (new_monthly - current_monthly) * remaining_days / 30
+    Скидка промогруппы применяется к обоим тарифам одинаково.
+
     Returns:
         (cost_kopeks, is_upgrade) - стоимость доплаты и флаг апгрейда
     """
-    # Берём месячную цену (30 дней) как базу
-    current_monthly = current_tariff.get_price_for_period(30) or 0
-    new_monthly = new_tariff.get_price_for_period(30) or 0
+    # Берём месячную цену (30 дней) как базу (с fallback)
+    current_monthly = _get_tariff_monthly_price(current_tariff)
+    new_monthly = _get_tariff_monthly_price(new_tariff)
 
     # Применяем скидку промогруппы
     if promo_group:
@@ -6589,8 +6612,6 @@ async def preview_tariff_switch_endpoint(
     db: AsyncSession = Depends(get_db_session),
 ):
     """Предпросмотр переключения тарифа - показывает стоимость."""
-    from app.webapi.schemas.miniapp import MiniAppTariffSwitchRequest, MiniAppTariffSwitchPreviewResponse
-    from datetime import datetime
 
     user = await _authorize_miniapp_user(payload.init_data, db)
 
@@ -6677,9 +6698,6 @@ async def switch_tariff_endpoint(
     db: AsyncSession = Depends(get_db_session),
 ):
     """Переключение тарифа без изменения даты окончания."""
-    from app.webapi.schemas.miniapp import MiniAppTariffSwitchRequest, MiniAppTariffSwitchResponse
-    from datetime import datetime
-
     user = await _authorize_miniapp_user(payload.init_data, db)
 
     if not settings.is_tariffs_mode():
