@@ -20517,15 +20517,25 @@
             // Запрашиваем точную стоимость с сервера
             try {
                 const initData = tg.initData || '';
+                const tariffId = parseInt(tariff.id, 10);
+
+                if (!initData) {
+                    throw new Error(preferredLanguage === 'en' ? 'Authorization error' : 'Ошибка авторизации');
+                }
+                if (isNaN(tariffId)) {
+                    throw new Error(preferredLanguage === 'en' ? 'Invalid tariff' : 'Неверный тариф');
+                }
+
                 const response = await fetch('/miniapp/subscription/tariff/switch/preview', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ initData, tariffId: tariff.id })
+                    body: JSON.stringify({ initData, tariffId })
                 });
 
                 if (!response.ok) {
                     const error = await response.json();
-                    throw new Error(error?.detail?.message || 'Ошибка');
+                    console.error('Switch preview error:', error);
+                    throw new Error(error?.detail?.message || error?.message || 'Ошибка');
                 }
 
                 instantSwitchPreviewData = await response.json();
@@ -20589,10 +20599,16 @@
         async function executeInstantSwitch(tariff) {
             try {
                 const initData = tg.initData || '';
+                const tariffId = parseInt(tariff.id, 10);
+
+                if (!initData || isNaN(tariffId)) {
+                    throw new Error(preferredLanguage === 'en' ? 'Invalid data' : 'Неверные данные');
+                }
+
                 const response = await fetch('/miniapp/subscription/tariff/switch', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ initData, tariffId: tariff.id })
+                    body: JSON.stringify({ initData, tariffId })
                 });
 
                 const result = await response.json();
