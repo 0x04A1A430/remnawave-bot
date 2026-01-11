@@ -5321,14 +5321,13 @@ async def submit_subscription_renewal_endpoint(
             from app.database.crud.transaction import create_transaction
 
             try:
-                # Списываем баланс
+                # Списываем баланс (subtract_user_balance делает commit и обновляет user.balance_kopeks)
                 success = await subtract_user_balance(db, user, final_total, description)
                 if not success:
                     raise HTTPException(
                         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                         detail={"code": "balance_error", "message": "Failed to subtract balance"},
                     )
-                user.balance_kopeks -= final_total
 
                 # Продлеваем подписку
                 subscription = await extend_subscription(db, subscription, period_days)
@@ -5343,8 +5342,6 @@ async def submit_subscription_renewal_endpoint(
                     amount_kopeks=-final_total,
                     description=description,
                 )
-
-                await db.commit()
 
                 lang = getattr(user, "language", settings.DEFAULT_LANGUAGE)
                 if lang == "ru":
