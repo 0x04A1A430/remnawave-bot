@@ -524,6 +524,11 @@ class MiniAppTariff(BaseModel):
     periods: List[MiniAppTariffPeriod] = Field(default_factory=list)
     is_current: bool = False
     is_available: bool = True
+    # Для режима мгновенного переключения тарифа
+    switch_cost_kopeks: Optional[int] = None  # Стоимость переключения (None если не в режиме switch)
+    switch_cost_label: Optional[str] = None   # Форматированная стоимость
+    is_upgrade: Optional[bool] = None         # True = повышение, False = понижение
+    is_switch_free: Optional[bool] = None     # True = бесплатное переключение
 
 
 class MiniAppTrafficTopupPackage(BaseModel):
