@@ -378,7 +378,7 @@ class FreekassaService:
         }
         params["signature"] = self._generate_api_signature(params)
 
-        logger.info(f"Freekassa get_order_status params: {params}")
+        logger.debug(f"Freekassa get_order_status params: {params}")
 
         try:
             async with aiohttp.ClientSession() as session:
@@ -389,7 +389,7 @@ class FreekassaService:
                     timeout=aiohttp.ClientTimeout(total=30),
                 ) as response:
                     text = await response.text()
-                    logger.info(f"Freekassa get_order_status response: {text}")
+                    logger.debug(f"Freekassa get_order_status response: {text}")
                     return await response.json()
         except aiohttp.ClientError as e:
             logger.exception(f"Freekassa API connection error: {e}")

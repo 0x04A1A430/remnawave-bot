@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import logging
 import json
@@ -9,12 +11,14 @@ from ipaddress import (
     ip_address,
     ip_network,
 )
-from typing import Iterable, Optional, Dict, Any, List, Union, Tuple
+from typing import Iterable, Optional, Dict, Any, List, Union, Tuple, TYPE_CHECKING
 from aiohttp import web
 
 from app.config import settings
-from app.services.payment_service import PaymentService
 from app.database.database import get_db
+
+if TYPE_CHECKING:
+    from app.services.payment_service import PaymentService
 
 logger = logging.getLogger(__name__)
 

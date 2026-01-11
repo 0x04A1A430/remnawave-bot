@@ -135,6 +135,16 @@ def _status_info(
             return "✅", texts.t("ADMIN_PAYMENT_STATUS_PAID", "✅ Paid")
         return "⏳", texts.t("ADMIN_PAYMENT_STATUS_PENDING", "⏳ Pending")
 
+    if record.method == PaymentMethod.FREEKASSA:
+        mapping = {
+            "pending": ("⏳", texts.t("ADMIN_PAYMENT_STATUS_PENDING", "⏳ Pending")),
+            "success": ("✅", texts.t("ADMIN_PAYMENT_STATUS_PAID", "✅ Paid")),
+            "paid": ("✅", texts.t("ADMIN_PAYMENT_STATUS_PAID", "✅ Paid")),
+            "canceled": ("❌", texts.t("ADMIN_PAYMENT_STATUS_CANCELED", "❌ Cancelled")),
+            "error": ("❌", texts.t("ADMIN_PAYMENT_STATUS_FAILED", "❌ Failed")),
+        }
+        return mapping.get(status, ("❓", texts.t("ADMIN_PAYMENT_STATUS_UNKNOWN", "❓ Unknown")))
+
     return "❓", texts.t("ADMIN_PAYMENT_STATUS_UNKNOWN", "❓ Unknown")
 
 
@@ -158,6 +168,8 @@ def _is_checkable(record: PendingPayment) -> bool:
         return status in {"pending", "waiting_for_capture"}
     if record.method == PaymentMethod.CRYPTOBOT:
         return status in {"active"}
+    if record.method == PaymentMethod.FREEKASSA:
+        return status in {"pending", ""}
     return False
 
 
