@@ -6269,6 +6269,8 @@ async def _build_tariff_model(
     tariff,
     current_tariff_id: Optional[int] = None,
     promo_group=None,
+    current_tariff=None,
+    remaining_days: int = 0,
 ) -> MiniAppTariff:
     """Преобразует объект тарифа в модель для API."""
     servers: List[MiniAppConnectedServer] = []
@@ -6322,6 +6324,21 @@ async def _build_tariff_model(
                 discount_percent=discount_percent,
             ))
 
+    # Расчёт стоимости переключения тарифа (если есть текущий тариф и это не он же)
+    switch_cost_kopeks = None
+    switch_cost_label = None
+    is_upgrade = None
+    is_switch_free = None
+
+    if current_tariff and current_tariff.id != tariff.id and remaining_days > 0:
+        cost, upgrade = _calculate_tariff_switch_cost(
+            current_tariff, tariff, remaining_days, promo_group
+        )
+        switch_cost_kopeks = cost
+        switch_cost_label = settings.format_price(cost) if cost > 0 else None
+        is_upgrade = upgrade
+        is_switch_free = cost == 0
+
     return MiniAppTariff(
         id=tariff.id,
         name=tariff.name,
@@ -6336,6 +6353,10 @@ async def _build_tariff_model(
         periods=periods,
         is_current=current_tariff_id == tariff.id if current_tariff_id else False,
         is_available=tariff.is_active,
+        switch_cost_kopeks=switch_cost_kopeks,
+        switch_cost_label=switch_cost_label,
+        is_upgrade=is_upgrade,
+        is_switch_free=is_switch_free,
     )
 
 
@@ -6399,6 +6420,13 @@ async def get_tariffs_endpoint(
     subscription = getattr(user, "subscription", None)
     current_tariff_id = subscription.tariff_id if subscription else None
     current_tariff_model: Optional[MiniAppCurrentTariff] = None
+    current_tariff = None
+
+    # Вычисляем оставшиеся дни подписки
+    remaining_days = 0
+    if subscription and subscription.end_date:
+        delta = subscription.end_date - datetime.utcnow()
+        remaining_days = max(0, delta.days)
 
     if current_tariff_id:
         current_tariff = await get_tariff_by_id(db, current_tariff_id)
@@ -6408,7 +6436,11 @@ async def get_tariffs_endpoint(
     # Формируем список тарифов
     tariff_models: List[MiniAppTariff] = []
     for tariff in tariffs:
-        model = await _build_tariff_model(db, tariff, current_tariff_id, promo_group)
+        model = await _build_tariff_model(
+            db, tariff, current_tariff_id, promo_group,
+            current_tariff=current_tariff,
+            remaining_days=remaining_days,
+        )
         tariff_models.append(model)
 
     # Формируем модель промогруппы для ответа
