@@ -5316,41 +5316,32 @@ async def submit_subscription_renewal_endpoint(
     if missing_amount <= 0:
         if tariff_pricing:
             # Тарифный режим: простое продление
-            from datetime import timedelta
-            from app.database.crud.user import update_user_balance
-            from app.database.crud.subscription import update_subscription
+            from app.database.crud.user import subtract_user_balance
+            from app.database.crud.subscription import extend_subscription
             from app.database.crud.transaction import create_transaction
 
             try:
-                # Списываем баланс
-                new_balance = await update_user_balance(db, user.id, -final_total)
-                user.balance_kopeks = new_balance
+                # Списываем баланс (subtract_user_balance делает commit и обновляет user.balance_kopeks)
+                success = await subtract_user_balance(db, user, final_total, description)
+                if not success:
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail={"code": "balance_error", "message": "Failed to subtract balance"},
+                    )
 
                 # Продлеваем подписку
-                from datetime import datetime
-                base_date = subscription.end_date if subscription.end_date and subscription.end_date > datetime.utcnow() else datetime.utcnow()
-                new_end_date = base_date + timedelta(days=period_days)
-
-                await update_subscription(
-                    db,
-                    subscription.id,
-                    end_date=new_end_date,
-                    status="active",
-                )
-                subscription.end_date = new_end_date
-                subscription.status = "active"
+                subscription = await extend_subscription(db, subscription, period_days)
+                new_end_date = subscription.end_date
 
                 # Записываем транзакцию
+                from app.database.models import TransactionType
                 await create_transaction(
                     db,
                     user_id=user.id,
+                    type=TransactionType.SUBSCRIPTION_PAYMENT,
                     amount_kopeks=-final_total,
-                    transaction_type="renewal",
                     description=description,
-                    subscription_id=subscription.id,
                 )
-
-                await db.commit()
 
                 lang = getattr(user, "language", settings.DEFAULT_LANGUAGE)
                 if lang == "ru":

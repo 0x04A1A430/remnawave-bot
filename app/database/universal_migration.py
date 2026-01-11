@@ -5383,6 +5383,29 @@ async def add_tariff_traffic_topup_columns() -> bool:
         else:
             logger.info("ℹ️ Колонка traffic_topup_packages уже существует в tariffs")
 
+        # Колонка max_topup_traffic_gb (максимальный лимит трафика после докупок)
+        if not await check_column_exists('tariffs', 'max_topup_traffic_gb'):
+            async with engine.begin() as conn:
+                db_type = await get_database_type()
+
+                if db_type == 'sqlite':
+                    await conn.execute(text(
+                        "ALTER TABLE tariffs ADD COLUMN max_topup_traffic_gb INTEGER DEFAULT 0 NOT NULL"
+                    ))
+                elif db_type == 'postgresql':
+                    await conn.execute(text(
+                        "ALTER TABLE tariffs ADD COLUMN max_topup_traffic_gb INTEGER DEFAULT 0 NOT NULL"
+                    ))
+                else:  # MySQL
+                    await conn.execute(text(
+                        "ALTER TABLE tariffs ADD COLUMN max_topup_traffic_gb INT DEFAULT 0 NOT NULL"
+                    ))
+
+                logger.info("✅ Колонка max_topup_traffic_gb добавлена в tariffs")
+                columns_added += 1
+        else:
+            logger.info("ℹ️ Колонка max_topup_traffic_gb уже существует в tariffs")
+
         return True
 
     except Exception as error:
