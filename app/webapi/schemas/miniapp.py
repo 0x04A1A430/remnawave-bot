@@ -607,6 +607,42 @@ class MiniAppTariffPurchaseResponse(BaseModel):
     balance_label: Optional[str] = None
 
 
+class MiniAppTariffSwitchRequest(BaseModel):
+    """Запрос на переключение тарифа (без выбора периода)."""
+    init_data: str = Field(..., alias="initData")
+    tariff_id: int = Field(..., alias="tariffId")
+
+
+class MiniAppTariffSwitchPreviewResponse(BaseModel):
+    """Предпросмотр переключения тарифа."""
+    can_switch: bool = True
+    current_tariff_id: Optional[int] = None
+    current_tariff_name: Optional[str] = None
+    new_tariff_id: int
+    new_tariff_name: str
+    remaining_days: int = 0
+    upgrade_cost_kopeks: int = 0  # 0 если даунгрейд или равная цена
+    upgrade_cost_label: str = ""
+    balance_kopeks: int = 0
+    balance_label: str = ""
+    has_enough_balance: bool = True
+    missing_amount_kopeks: int = 0
+    missing_amount_label: str = ""
+    is_upgrade: bool = False  # True если новый тариф дороже
+    message: Optional[str] = None
+
+
+class MiniAppTariffSwitchResponse(BaseModel):
+    """Ответ на переключение тарифа."""
+    success: bool = True
+    message: Optional[str] = None
+    tariff_id: int
+    tariff_name: str
+    charged_kopeks: int = 0
+    balance_kopeks: int = 0
+    balance_label: str = ""
+
+
 class MiniAppSubscriptionResponse(BaseModel):
     success: bool = True
     subscription_id: Optional[int] = None
