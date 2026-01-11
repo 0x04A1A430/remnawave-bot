@@ -5316,9 +5316,8 @@ async def submit_subscription_renewal_endpoint(
     if missing_amount <= 0:
         if tariff_pricing:
             # Тарифный режим: простое продление
-            from datetime import timedelta
             from app.database.crud.user import subtract_user_balance
-            from app.database.crud.subscription import update_subscription
+            from app.database.crud.subscription import extend_subscription
             from app.database.crud.transaction import create_transaction
 
             try:
@@ -5332,18 +5331,8 @@ async def submit_subscription_renewal_endpoint(
                 user.balance_kopeks -= final_total
 
                 # Продлеваем подписку
-                from datetime import datetime
-                base_date = subscription.end_date if subscription.end_date and subscription.end_date > datetime.utcnow() else datetime.utcnow()
-                new_end_date = base_date + timedelta(days=period_days)
-
-                await update_subscription(
-                    db,
-                    subscription.id,
-                    end_date=new_end_date,
-                    status="active",
-                )
-                subscription.end_date = new_end_date
-                subscription.status = "active"
+                subscription = await extend_subscription(db, subscription, period_days)
+                new_end_date = subscription.end_date
 
                 # Записываем транзакцию
                 await create_transaction(
