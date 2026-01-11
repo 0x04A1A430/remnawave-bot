@@ -69,19 +69,13 @@ def _apply_promo_discount(price: int, discount_percent: int) -> int:
 def _get_user_period_discount(db_user: User, period_days: int) -> int:
     """Получает скидку пользователя на период из промогруппы."""
     promo_group = getattr(db_user, 'promo_group', None)
-    print(f"[BOT _get_user_period_discount] db_user={db_user}, period_days={period_days}")
-    print(f"[BOT _get_user_period_discount] promo_group={promo_group}")
 
     if promo_group:
-        # Используем метод get_discount_percent с категорией "period"
         discount = promo_group.get_discount_percent("period", period_days)
-        print(f"[BOT _get_user_period_discount] promo_group.get_discount_percent('period', {period_days})={discount}")
         if discount > 0:
             return discount
 
-    # Проверяем персональную скидку
     personal_discount = get_user_active_promo_discount_percent(db_user)
-    print(f"[BOT _get_user_period_discount] personal_discount={personal_discount}")
     return personal_discount
 
 
@@ -1394,47 +1388,28 @@ def _calculate_instant_switch_cost(
     Если дешевле или равен - бесплатно.
 
     Формула: (new_monthly - current_monthly) * remaining_days / 30
-    Скидка промогруппы применяется к обоим тарифам одинаково.
+    Скидка применяется к обоим тарифам одинаково.
 
     Returns:
         (upgrade_cost_kopeks, is_upgrade)
     """
-    # Получаем месячные цены тарифов (с fallback)
     current_monthly = _get_tariff_monthly_price(current_tariff)
     new_monthly = _get_tariff_monthly_price(new_tariff)
 
-    # DEBUG: логируем начальные значения
-    print(f"[BOT SWITCH DEBUG] current_tariff={current_tariff.name}, new_tariff={new_tariff.name}")
-    print(f"[BOT SWITCH DEBUG] current_monthly={current_monthly}, new_monthly={new_monthly}")
-    print(f"[BOT SWITCH DEBUG] remaining_days={remaining_days}")
-    print(f"[BOT SWITCH DEBUG] db_user={db_user}")
-
-    user_promo_group = getattr(db_user, 'promo_group', None) if db_user else None
-    print(f"[BOT SWITCH DEBUG] db_user.promo_group={user_promo_group}")
-
-    # Применяем скидку промогруппы к ОБОИМ тарифам
     discount_percent = 0
     if db_user:
         discount_percent = _get_user_period_discount(db_user, 30)
-    print(f"[BOT SWITCH DEBUG] discount_percent={discount_percent}")
 
     if discount_percent > 0:
         current_monthly = _apply_promo_discount(current_monthly, discount_percent)
         new_monthly = _apply_promo_discount(new_monthly, discount_percent)
-        print(f"[BOT SWITCH DEBUG] after discount: current_monthly={current_monthly}, new_monthly={new_monthly}")
 
-    # Рассчитываем разницу
     price_diff = new_monthly - current_monthly
-    print(f"[BOT SWITCH DEBUG] price_diff={price_diff}")
 
     if price_diff <= 0:
-        # Downgrade или тот же уровень - бесплатно
-        print(f"[BOT SWITCH DEBUG] downgrade/equal, returning 0")
         return 0, False
 
-    # Upgrade - доплата пропорционально оставшимся дням
     upgrade_cost = int(price_diff * remaining_days / 30)
-    print(f"[BOT SWITCH DEBUG] upgrade_cost={upgrade_cost}")
     return upgrade_cost, True
 
 
