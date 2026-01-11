@@ -3596,6 +3596,18 @@ async def _get_current_tariff_model(db: AsyncSession, subscription, user=None) -
 
     monthly_price = _get_tariff_monthly_price(tariff)
 
+    # Применяем скидку промогруппы для 30-дневного периода
+    if promo_group:
+        raw_discounts = getattr(promo_group, 'period_discounts', None) or {}
+        for k, v in raw_discounts.items():
+            try:
+                if int(k) == 30:
+                    discount = max(0, min(100, int(v)))
+                    monthly_price = int(monthly_price * (100 - discount) / 100)
+                    break
+            except (TypeError, ValueError):
+                pass
+
     return MiniAppCurrentTariff(
         id=tariff.id,
         name=tariff.name,
@@ -6327,10 +6339,22 @@ async def _build_tariff_model(
     )
 
 
-async def _build_current_tariff_model(db: AsyncSession, tariff) -> MiniAppCurrentTariff:
+async def _build_current_tariff_model(db: AsyncSession, tariff, promo_group=None) -> MiniAppCurrentTariff:
     """Создаёт модель текущего тарифа."""
     servers_count = len(tariff.allowed_squads) if tariff.allowed_squads else 0
     monthly_price = _get_tariff_monthly_price(tariff)
+
+    # Применяем скидку промогруппы для 30-дневного периода
+    if promo_group:
+        raw_discounts = getattr(promo_group, 'period_discounts', None) or {}
+        for k, v in raw_discounts.items():
+            try:
+                if int(k) == 30:
+                    discount = max(0, min(100, int(v)))
+                    monthly_price = int(monthly_price * (100 - discount) / 100)
+                    break
+            except (TypeError, ValueError):
+                pass
 
     return MiniAppCurrentTariff(
         id=tariff.id,
@@ -6379,7 +6403,7 @@ async def get_tariffs_endpoint(
     if current_tariff_id:
         current_tariff = await get_tariff_by_id(db, current_tariff_id)
         if current_tariff:
-            current_tariff_model = await _build_current_tariff_model(db, current_tariff)
+            current_tariff_model = await _build_current_tariff_model(db, current_tariff, promo_group)
 
     # Формируем список тарифов
     tariff_models: List[MiniAppTariff] = []
