@@ -20323,7 +20323,8 @@
             }
 
             const currentTariffId = currentTariff?.id;
-            const currentMonthly = currentTariff ? getMonthlyPrice(currentTariff) : 0;
+            // Используем monthly_price_kopeks из текущего тарифа (там нет periods)
+            const currentMonthly = currentTariff?.monthly_price_kopeks || currentTariff?.monthlyPriceKopeks || getMonthlyPrice(currentTariff);
 
             tariffs.forEach(tariff => {
                 const isCurrent = tariff.id === currentTariffId;
