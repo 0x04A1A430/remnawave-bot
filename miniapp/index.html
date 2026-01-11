@@ -20526,16 +20526,24 @@
                     throw new Error(preferredLanguage === 'en' ? 'Invalid tariff' : 'Неверный тариф');
                 }
 
+                const requestBody = { initData, tariffId };
+                console.log('Switch preview request:', JSON.stringify(requestBody, null, 2));
+
                 const response = await fetch('/miniapp/subscription/tariff/switch/preview', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ initData, tariffId })
+                    body: JSON.stringify(requestBody)
                 });
 
                 if (!response.ok) {
                     const error = await response.json();
                     console.error('Switch preview error:', error);
-                    throw new Error(error?.detail?.message || error?.message || 'Ошибка');
+                    // Показываем детали ошибки валидации
+                    let errorMsg = error?.detail?.message || error?.message || 'Ошибка';
+                    if (Array.isArray(error?.detail)) {
+                        errorMsg = error.detail.map(e => e.msg || e.message).join('; ');
+                    }
+                    throw new Error(errorMsg);
                 }
 
                 instantSwitchPreviewData = await response.json();
