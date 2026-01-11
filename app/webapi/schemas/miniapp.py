@@ -590,6 +590,8 @@ class MiniAppTariffsResponse(BaseModel):
 
 class MiniAppTariffPurchaseRequest(BaseModel):
     """Запрос на покупку/смену тарифа."""
+    model_config = ConfigDict(populate_by_name=True)
+
     init_data: str = Field(..., alias="initData")
     tariff_id: int = Field(..., alias="tariffId")
     period_days: int = Field(..., alias="periodDays")
@@ -609,6 +611,8 @@ class MiniAppTariffPurchaseResponse(BaseModel):
 
 class MiniAppTariffSwitchRequest(BaseModel):
     """Запрос на переключение тарифа (без выбора периода)."""
+    model_config = ConfigDict(populate_by_name=True)
+
     init_data: str = Field(..., alias="initData")
     tariff_id: int = Field(..., alias="tariffId")
 
