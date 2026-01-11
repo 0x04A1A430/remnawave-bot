@@ -6630,15 +6630,19 @@ def _get_user_period_discount(user, period_days: int) -> int:
     """Получает скидку пользователя на период (унифицировано с ботом)."""
     # Используем ту же логику, что и в боте: getattr(db_user, 'promo_group', None)
     promo_group = getattr(user, 'promo_group', None) if user else None
+    print(f"[MINIAPP _get_user_period_discount] user={user}, period_days={period_days}")
+    print(f"[MINIAPP _get_user_period_discount] promo_group={promo_group}")
 
     if promo_group:
         # Используем метод get_discount_percent с категорией "period"
         discount = promo_group.get_discount_percent("period", period_days)
+        print(f"[MINIAPP _get_user_period_discount] promo_group.get_discount_percent('period', {period_days})={discount}")
         if discount > 0:
             return discount
 
     # Проверяем персональную скидку
     personal_discount = get_user_active_promo_discount_percent(user) if user else 0
+    print(f"[MINIAPP _get_user_period_discount] personal_discount={personal_discount}")
     return personal_discount
 
 
@@ -6671,8 +6675,18 @@ def _calculate_tariff_switch_cost(
     current_monthly = _get_tariff_monthly_price(current_tariff)
     new_monthly = _get_tariff_monthly_price(new_tariff)
 
+    # DEBUG: логируем начальные значения
+    print(f"[MINIAPP SWITCH DEBUG] current_tariff={current_tariff.name}, new_tariff={new_tariff.name}")
+    print(f"[MINIAPP SWITCH DEBUG] current_monthly={current_monthly}, new_monthly={new_monthly}")
+    print(f"[MINIAPP SWITCH DEBUG] remaining_days={remaining_days}")
+    print(f"[MINIAPP SWITCH DEBUG] user={user}, promo_group={promo_group}")
+
+    user_promo_group = getattr(user, 'promo_group', None) if user else None
+    print(f"[MINIAPP SWITCH DEBUG] user.promo_group={user_promo_group}")
+
     # Получаем скидку (унифицировано с ботом)
     discount_percent = _get_user_period_discount(user, 30) if user else 0
+    print(f"[MINIAPP SWITCH DEBUG] discount_percent from _get_user_period_discount={discount_percent}")
 
     # Fallback на promo_group.period_discounts если user не передан
     if discount_percent == 0 and promo_group:
@@ -6684,20 +6698,25 @@ def _calculate_tariff_switch_cost(
                     break
             except (TypeError, ValueError):
                 pass
+        print(f"[MINIAPP SWITCH DEBUG] discount_percent after fallback={discount_percent}")
 
     # Применяем скидку к обоим тарифам
     if discount_percent > 0:
         current_monthly = _apply_promo_discount(current_monthly, discount_percent)
         new_monthly = _apply_promo_discount(new_monthly, discount_percent)
+        print(f"[MINIAPP SWITCH DEBUG] after discount: current_monthly={current_monthly}, new_monthly={new_monthly}")
 
     price_diff = new_monthly - current_monthly
+    print(f"[MINIAPP SWITCH DEBUG] price_diff={price_diff}")
 
     if price_diff <= 0:
         # Даунгрейд или равная цена - бесплатно
+        print(f"[MINIAPP SWITCH DEBUG] downgrade/equal, returning 0")
         return 0, False
 
     # Апгрейд - рассчитываем доплату пропорционально оставшимся дням
     upgrade_cost = int(price_diff * remaining_days / 30)
+    print(f"[MINIAPP SWITCH DEBUG] upgrade_cost={upgrade_cost}")
     return upgrade_cost, True
 
 
