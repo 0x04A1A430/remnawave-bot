@@ -20526,8 +20526,7 @@
                     throw new Error(preferredLanguage === 'en' ? 'Invalid tariff' : 'Неверный тариф');
                 }
 
-                const requestBody = { initData, tariffId };
-                console.log('Switch preview request:', JSON.stringify(requestBody, null, 2));
+                const requestBody = { init_data: initData, tariff_id: tariffId };
 
                 const response = await fetch('/miniapp/subscription/tariff/switch/preview', {
                     method: 'POST',
@@ -20616,7 +20615,7 @@
                 const response = await fetch('/miniapp/subscription/tariff/switch', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ initData, tariffId })
+                    body: JSON.stringify({ init_data: initData, tariff_id: tariffId })
                 });
 
                 const result = await response.json();
