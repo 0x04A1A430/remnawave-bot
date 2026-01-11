@@ -20323,8 +20323,6 @@
             }
 
             const currentTariffId = currentTariff?.id;
-            // Используем monthly_price_kopeks из текущего тарифа (там нет periods)
-            const currentMonthly = currentTariff?.monthly_price_kopeks || currentTariff?.monthlyPriceKopeks || getMonthlyPrice(currentTariff);
 
             tariffs.forEach(tariff => {
                 const isCurrent = tariff.id === currentTariffId;
@@ -20339,11 +20337,11 @@
 
                 // Разные стили для режима смены и покупки
                 if (isInstantSwitchMode) {
-                    // Режим мгновенной смены тарифа
-                    const newMonthly = getMonthlyPrice(tariff);
-                    const priceDiff = newMonthly - currentMonthly;
-                    const isUpgrade = priceDiff > 0;
-                    const upgradeCost = isUpgrade ? Math.round(priceDiff * daysLeft / 30) : 0;
+                    // Режим мгновенной смены тарифа - используем точные данные с сервера
+                    const isUpgrade = tariff.is_upgrade ?? tariff.isUpgrade ?? false;
+                    const isSwitchFree = tariff.is_switch_free ?? tariff.isSwitchFree ?? !isUpgrade;
+                    const upgradeCost = tariff.switch_cost_kopeks ?? tariff.switchCostKopeks ?? 0;
+                    const upgradeCostLabel = tariff.switch_cost_label ?? tariff.switchCostLabel ?? formatPriceFromKopeks(upgradeCost, tariffsData?.currency || 'RUB');
 
                     const trafficLabel = tariff.traffic_limit_label || tariff.trafficLimitLabel
                         || ((tariff.traffic_limit_gb || tariff.trafficLimitGb) === 0 ? '∞' : (tariff.traffic_limit_gb || tariff.trafficLimitGb) + ' ГБ');
@@ -20392,7 +20390,7 @@
                         <div class="instant-switch-tariff-cost">
                             <span class="instant-switch-cost-badge ${isUpgrade ? 'upgrade' : 'free'}">
                                 ${isUpgrade
-                                    ? `<span style="font-size: 10px; display: block; text-transform: uppercase; opacity: 0.8;">${upgradeLabel}</span>+${formatPriceFromKopeks(upgradeCost, tariffsData?.currency || 'RUB')}`
+                                    ? `<span style="font-size: 10px; display: block; text-transform: uppercase; opacity: 0.8;">${upgradeLabel}</span>+${upgradeCostLabel}`
                                     : freeLabel}
                             </span>
                         </div>
