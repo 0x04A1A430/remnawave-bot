@@ -548,6 +548,8 @@ class MiniAppCurrentTariff(BaseModel):
     is_unlimited_traffic: bool = False
     device_limit: int
     servers_count: int
+    # Месячная цена для расчёта стоимости переключения тарифа
+    monthly_price_kopeks: int = 0
     # Докупка трафика
     traffic_topup_enabled: bool = False
     traffic_topup_packages: List[MiniAppTrafficTopupPackage] = Field(default_factory=list)
