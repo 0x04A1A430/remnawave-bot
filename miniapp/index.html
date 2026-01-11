@@ -875,11 +875,16 @@
             align-items: center;
             justify-content: space-between;
             padding: 14px 16px;
+            margin-bottom: 10px;
             background: var(--bg-primary);
             border: 1px solid var(--border-color);
             border-radius: 12px;
             cursor: pointer;
             transition: all 0.2s ease;
+        }
+
+        .instant-switch-tariff-item:last-child {
+            margin-bottom: 0;
         }
 
         .instant-switch-tariff-item:hover {
@@ -20131,7 +20136,14 @@
             body?.classList.remove('hidden');
 
             // Определяем режим: мгновенная смена или покупка
-            const hasActiveSubscription = userData?.subscription_status === 'active' || userData?.subscriptionStatus === 'active';
+            const actualStatus = (
+                userData?.subscription_actual_status ||
+                userData?.subscriptionActualStatus ||
+                userData?.subscription_status ||
+                userData?.subscriptionStatus ||
+                ''
+            ).toLowerCase();
+            const hasActiveSubscription = actualStatus === 'active' || actualStatus === 'trial';
             const currentTariff = tariffsData?.current_tariff || tariffsData?.currentTariff;
             isInstantSwitchMode = hasActiveSubscription && currentTariff;
 
@@ -20240,11 +20252,36 @@
                 return;
             }
 
-            // В режиме мгновенной смены скрываем периоды и summary
+            // Добавляем информационный блок в режиме мгновенной смены
+            if (isInstantSwitchMode) {
+                const hintDiv = document.createElement('div');
+                hintDiv.className = 'instant-switch-mode-hint';
+                hintDiv.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%); border-radius: 12px; margin-bottom: 12px; border: 1px solid rgba(99, 102, 241, 0.2);">
+                        <span style="font-size: 20px;">🔄</span>
+                        <div style="flex: 1;">
+                            <div style="font-weight: 600; font-size: 14px; color: var(--text-primary); margin-bottom: 2px;">
+                                ${preferredLanguage === 'en' ? 'Switch tariff' : 'Смена тарифа'}
+                            </div>
+                            <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.4;">
+                                ${preferredLanguage === 'en'
+                                    ? 'Upgrade = pay difference, downgrade = free. Days preserved.'
+                                    : 'Повышение = доплата, понижение = бесплатно. Дни сохраняются.'}
+                            </div>
+                        </div>
+                    </div>
+                `;
+                list.appendChild(hintDiv);
+            }
+
+            // В режиме мгновенной смены скрываем периоды и summary, в обычном - показываем
             if (isInstantSwitchMode) {
                 periodsSection?.classList.add('hidden');
                 summary?.classList.add('hidden');
                 if (selectBtn) selectBtn.classList.add('hidden');
+            } else {
+                // В обычном режиме покупки - убедимся что элементы видны
+                if (selectBtn) selectBtn.classList.remove('hidden');
             }
 
             const currentTariffId = currentTariff?.id;
@@ -20281,6 +20318,9 @@
                                       tariffNameLower.includes('vip') || tariffNameLower.includes('ultimate') ||
                                       tariffNameLower.includes('макс') || tariffNameLower.includes('max');
 
+                    const upgradeLabel = preferredLanguage === 'en' ? 'upgrade' : 'доплата';
+                    const freeLabel = preferredLanguage === 'en' ? '✓ Free' : '✓ Бесплатно';
+
                     div.className = 'instant-switch-tariff-item';
                     div.innerHTML = `
                         <div class="instant-switch-tariff-info">
@@ -20296,8 +20336,8 @@
                         <div class="instant-switch-tariff-cost">
                             <span class="instant-switch-cost-badge ${isUpgrade ? 'upgrade' : 'free'}">
                                 ${isUpgrade
-                                    ? '<span style="font-size: 10px; display: block;">доплата</span>+' + formatPriceFromKopeks(upgradeCost, tariffsData?.currency || 'RUB')
-                                    : '✓ Бесплатно'}
+                                    ? `<span style="font-size: 10px; display: block; text-transform: uppercase; opacity: 0.8;">${upgradeLabel}</span>+${formatPriceFromKopeks(upgradeCost, tariffsData?.currency || 'RUB')}`
+                                    : freeLabel}
                             </span>
                         </div>
                     `;
@@ -20442,45 +20482,29 @@
                 const missingLabel = instantSwitchPreviewData.missing_amount_label || instantSwitchPreviewData.missingAmountLabel || '';
                 const actualIsUpgrade = instantSwitchPreviewData.is_upgrade || instantSwitchPreviewData.isUpgrade || false;
 
-                // Показываем красивый попап подтверждения
-                const confirmHtml = `
-                    <div style="text-align: center; padding: 8px 0;">
-                        <div style="display: flex; justify-content: center; align-items: center; gap: 16px; margin-bottom: 16px;">
-                            <div style="text-align: center;">
-                                <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 4px;">Текущий</div>
-                                <div style="font-weight: 600;">${escapeHtml(currentTariff?.name || '—')}</div>
-                            </div>
-                            <div style="font-size: 24px; color: var(--primary);">→</div>
-                            <div style="text-align: center;">
-                                <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 4px;">Новый</div>
-                                <div style="font-weight: 600;">${escapeHtml(tariff.name)}</div>
-                            </div>
-                        </div>
-
-                        <div style="padding: 12px; background: ${actualIsUpgrade ? 'rgba(249, 115, 22, 0.1)' : 'rgba(34, 197, 94, 0.1)'}; border-radius: 10px; margin-bottom: 12px;">
-                            <div style="font-size: 13px; color: var(--text-secondary);">Стоимость</div>
-                            <div style="font-size: 20px; font-weight: 700; color: ${actualIsUpgrade ? '#f97316' : '#22c55e'};">
-                                ${actualIsUpgrade ? costLabel : '✓ Бесплатно'}
-                            </div>
-                        </div>
-
-                        <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 8px;">
-                            Ваш баланс: <b>${balanceLabel}</b>
-                        </div>
-
-                        ${!hasEnough ? `
-                            <div style="padding: 10px; background: rgba(239, 68, 68, 0.1); border-radius: 8px; color: #ef4444; font-size: 13px;">
-                                ⚠️ Недостаточно средств. Не хватает: <b>${missingLabel}</b>
-                            </div>
-                        ` : ''}
-                    </div>
-                `;
+                // Тексты для подтверждения
+                const txt = {
+                    current: preferredLanguage === 'en' ? 'Current' : 'Текущий',
+                    new: preferredLanguage === 'en' ? 'New' : 'Новый',
+                    cost: preferredLanguage === 'en' ? 'Cost' : 'Стоимость',
+                    free: preferredLanguage === 'en' ? '✓ Free' : '✓ Бесплатно',
+                    balance: preferredLanguage === 'en' ? 'Your balance:' : 'Ваш баланс:',
+                    insufficient: preferredLanguage === 'en' ? '⚠️ Insufficient funds. Missing:' : '⚠️ Недостаточно средств. Не хватает:',
+                    confirmUpgrade: preferredLanguage === 'en'
+                        ? `Switch to "${tariff.name}"?\n\nUpgrade cost: ${costLabel}\nYour balance: ${balanceLabel}`
+                        : `Сменить тариф на «${tariff.name}»?\n\nДоплата: ${costLabel}\nВаш баланс: ${balanceLabel}`,
+                    confirmDowngrade: preferredLanguage === 'en'
+                        ? `Switch to "${tariff.name}"?\n\nFree (downgrade)`
+                        : `Сменить тариф на «${tariff.name}»?\n\nБесплатно (понижение тарифа)`,
+                    error: preferredLanguage === 'en' ? 'Error' : 'Ошибка',
+                    insufficientError: preferredLanguage === 'en'
+                        ? `Insufficient funds to switch tariff. Missing: ${missingLabel}`
+                        : `Недостаточно средств для смены тарифа. Не хватает: ${missingLabel}`,
+                };
 
                 // Используем кастомный попап или showConfirm
                 if (typeof tg.showConfirm === 'function' && hasEnough) {
-                    const message = actualIsUpgrade
-                        ? `Сменить тариф на "${tariff.name}"?\n\nДоплата: ${costLabel}\nВаш баланс: ${balanceLabel}`
-                        : `Сменить тариф на "${tariff.name}"?\n\nБесплатно (понижение тарифа)`;
+                    const message = actualIsUpgrade ? txt.confirmUpgrade : txt.confirmDowngrade;
 
                     tg.showConfirm(message, async (confirmed) => {
                         if (confirmed) {
@@ -20489,20 +20513,20 @@
                     });
                 } else if (hasEnough) {
                     // Fallback на простой confirm
-                    const message = actualIsUpgrade
-                        ? `Сменить тариф на "${tariff.name}"? Доплата: ${costLabel}`
-                        : `Сменить тариф на "${tariff.name}"? Бесплатно`;
+                    const message = actualIsUpgrade ? txt.confirmUpgrade : txt.confirmDowngrade;
 
                     if (confirm(message)) {
                         await executeInstantSwitch(tariff);
                     }
                 } else {
-                    showPopup(`Недостаточно средств для смены тарифа. Не хватает: ${missingLabel}`, 'Ошибка');
+                    showPopup(txt.insufficientError, txt.error);
                 }
 
             } catch (err) {
                 console.error('Preview failed:', err);
-                showPopup(err.message || 'Не удалось получить информацию', 'Ошибка');
+                const errTitle = preferredLanguage === 'en' ? 'Error' : 'Ошибка';
+                const errMsg = preferredLanguage === 'en' ? 'Failed to load info' : 'Не удалось получить информацию';
+                showPopup(err.message || errMsg, errTitle);
             }
         }
 
@@ -20519,14 +20543,19 @@
                 const result = await response.json();
 
                 if (!response.ok) {
-                    throw new Error(result?.detail?.message || result?.message || 'Ошибка переключения');
+                    const defaultErr = preferredLanguage === 'en' ? 'Switch failed' : 'Ошибка переключения';
+                    throw new Error(result?.detail?.message || result?.message || defaultErr);
                 }
 
-                showPopup(result.message || 'Тариф успешно изменён!', 'Успех');
+                const successTitle = preferredLanguage === 'en' ? 'Success' : 'Успех';
+                const successMsg = preferredLanguage === 'en' ? 'Tariff changed successfully!' : 'Тариф успешно изменён!';
+                showPopup(result.message || successMsg, successTitle);
                 await refreshSubscriptionData();
             } catch (err) {
                 console.error('Switch failed:', err);
-                showPopup(err.message || 'Не удалось сменить тариф', 'Ошибка');
+                const errTitle = preferredLanguage === 'en' ? 'Error' : 'Ошибка';
+                const errMsg = preferredLanguage === 'en' ? 'Failed to switch tariff' : 'Не удалось сменить тариф';
+                showPopup(err.message || errMsg, errTitle);
             }
         }
 
