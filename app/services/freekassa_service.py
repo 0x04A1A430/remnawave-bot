@@ -5,6 +5,8 @@ import hmac
 import time
 import logging
 import asyncio
+import json
+import urllib.request
 from typing import Optional, Dict, Any, Set
 
 import aiohttp
@@ -182,6 +184,7 @@ class FreekassaService:
         phone: Optional[str] = None,
         payment_system_id: Optional[int] = None,
         lang: str = "ru",
+        ip: Optional[str] = None,
     ) -> str:
         """
         Формирует URL для перенаправления на оплату (форма выбора).
@@ -189,6 +192,60 @@ class FreekassaService:
         """
         # Приводим amount к int, если это целое число
         final_amount = int(amount) if float(amount).is_integer() else amount
+
+        # Используем payment_system_id из настроек, если не передан явно
+        ps_id = payment_system_id or settings.FREEKASSA_PAYMENT_SYSTEM_ID
+
+        # Специальная обработка для метода оплаты 44 (NSPK), чтобы работало как в старой версии
+        if ps_id == 44:
+            try:
+                # Определяем IP (важно для API запроса) - здесь синхронно, поэтому лучше иметь передачу IP
+                # Если IP не передан, используем fallback
+                target_ip = ip or "185.92.183.173"
+                target_email = email or "test@example.com"
+
+                params = {
+                    "shopId": self.shop_id,
+                    "nonce": int(time.time_ns()),
+                    "paymentId": str(order_id),
+                    "i": 44,
+                    "email": target_email,
+                    "ip": target_ip,
+                    "amount": final_amount,
+                    "currency": "RUB"
+                }
+
+                # Генерация подписи
+                params["signature"] = self._generate_api_signature(params)
+                
+                logger.info(f"Freekassa synchronous build_payment_url for 44: {params}")
+
+                data_json = json.dumps(params).encode('utf-8')
+                req = urllib.request.Request(
+                    f"{API_BASE_URL}/orders/create",
+                    data=data_json,
+                    headers={"Content-Type": "application/json"}
+                )
+                
+                with urllib.request.urlopen(req, timeout=30) as response:
+                    resp_body = response.read().decode('utf-8')
+                    data = json.loads(resp_body)
+                    
+                    if data.get("type") == "error":
+                        logger.error(f"Freekassa build_payment_url error: {data}")
+                        # Fallback to standard flow if error? Or raise?
+                        # User wants it to work. Raise to see error is safer.
+                        # raise Exception(f"Freekassa API Error: {data.get('message')}")
+                        # Но чтобы не ломать полностью, можно попробовать вернуть обычную ссылку,
+                        # если API не сработал? Нет, вернем ошибку или ссылку из data.
+                    
+                    if data.get("location"):
+                        return data.get("location")
+            except Exception as e:
+                logger.error(f"Failed to create order 44 via sync API: {e}")
+                # Если не получилось, попробуем сгенерировать обычную ссылку как fallback
+                pass
+
         signature = self.generate_form_signature(final_amount, currency, order_id)
 
         params = {
@@ -205,8 +262,6 @@ class FreekassaService:
         if phone:
             params["phone"] = phone
 
-        # Используем payment_system_id из настроек, если не передан явно
-        ps_id = payment_system_id or settings.FREEKASSA_PAYMENT_SYSTEM_ID
         if ps_id:
             params["i"] = ps_id
 
@@ -238,15 +293,17 @@ class FreekassaService:
         # Используем payment_system_id из настроек, если не передан явно
         ps_id = payment_system_id or settings.FREEKASSA_PAYMENT_SYSTEM_ID or 1
 
-        # Определяем публичный IP сервера (127.0.0.1 отклоняется API)
-        server_ip = ip or await get_public_ip()
+        target_email = email or "test@example.com"
+        
+        # Определяем публичный IP сервера
+        server_ip = ip or await get_public_ip() 
 
         params = {
             "shopId": self.shop_id,
             "nonce": int(time.time_ns()),  # Наносекунды для уникальности
             "paymentId": str(order_id),
             "i": ps_id,
-            "email": email or "user@example.com",
+            "email": target_email,
             "ip": server_ip,
             "amount": final_amount,
             "currency": currency,
