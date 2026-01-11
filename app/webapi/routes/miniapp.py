@@ -213,6 +213,23 @@ _CRYPTOBOT_MAX_USD = 1000.0
 _CRYPTOBOT_FALLBACK_RATE = 95.0
 
 
+def _get_tariff_monthly_price(tariff) -> int:
+    """Получает месячную цену тарифа (30 дней) с fallback на пропорциональный расчёт."""
+    price = tariff.get_price_for_period(30)
+    if price is not None:
+        return price
+
+    # Fallback: пропорционально пересчитываем из первого доступного периода
+    periods = tariff.get_available_periods()
+    if periods:
+        first_period = periods[0]
+        first_price = tariff.get_price_for_period(first_period)
+        if first_price:
+            return int(first_price * 30 / first_period)
+
+    return 0
+
+
 @router.get("/app-config.json")
 async def get_app_config() -> Dict[str, Any]:
     data = _load_app_config_data()
@@ -3577,6 +3594,8 @@ async def _get_current_tariff_model(db: AsyncSession, subscription, user=None) -
     if traffic_topup_enabled and not traffic_topup_packages and available_topup_gb == 0:
         traffic_topup_enabled = False
 
+    monthly_price = _get_tariff_monthly_price(tariff)
+
     return MiniAppCurrentTariff(
         id=tariff.id,
         name=tariff.name,
@@ -3587,6 +3606,7 @@ async def _get_current_tariff_model(db: AsyncSession, subscription, user=None) -
         is_unlimited_traffic=tariff.traffic_limit_gb == 0,
         device_limit=tariff.device_limit,
         servers_count=servers_count,
+        monthly_price_kopeks=monthly_price,
         traffic_topup_enabled=traffic_topup_enabled,
         traffic_topup_packages=traffic_topup_packages,
         max_topup_traffic_gb=max_topup_traffic_gb,
@@ -6310,6 +6330,7 @@ async def _build_tariff_model(
 async def _build_current_tariff_model(db: AsyncSession, tariff) -> MiniAppCurrentTariff:
     """Создаёт модель текущего тарифа."""
     servers_count = len(tariff.allowed_squads) if tariff.allowed_squads else 0
+    monthly_price = _get_tariff_monthly_price(tariff)
 
     return MiniAppCurrentTariff(
         id=tariff.id,
@@ -6321,6 +6342,7 @@ async def _build_current_tariff_model(db: AsyncSession, tariff) -> MiniAppCurren
         is_unlimited_traffic=tariff.traffic_limit_gb == 0,
         device_limit=tariff.device_limit,
         servers_count=servers_count,
+        monthly_price_kopeks=monthly_price,
     )
 
 
@@ -6544,23 +6566,6 @@ async def purchase_tariff_endpoint(
         balance_kopeks=user.balance_kopeks,
         balance_label=settings.format_price(user.balance_kopeks),
     )
-
-
-def _get_tariff_monthly_price(tariff) -> int:
-    """Получает месячную цену тарифа (30 дней) с fallback на пропорциональный расчёт."""
-    price = tariff.get_price_for_period(30)
-    if price is not None:
-        return price
-
-    # Fallback: пропорционально пересчитываем из первого доступного периода
-    periods = tariff.get_available_periods()
-    if periods:
-        first_period = periods[0]
-        first_price = tariff.get_price_for_period(first_period)
-        if first_price:
-            return int(first_price * 30 / first_period)
-
-    return 0
 
 
 def _calculate_tariff_switch_cost(
