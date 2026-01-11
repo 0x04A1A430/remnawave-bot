@@ -6271,6 +6271,7 @@ async def _build_tariff_model(
     promo_group=None,
     current_tariff=None,
     remaining_days: int = 0,
+    user=None,
 ) -> MiniAppTariff:
     """Преобразует объект тарифа в модель для API."""
     servers: List[MiniAppConnectedServer] = []
@@ -6332,7 +6333,7 @@ async def _build_tariff_model(
 
     if current_tariff and current_tariff.id != tariff.id and remaining_days > 0:
         cost, upgrade = _calculate_tariff_switch_cost(
-            current_tariff, tariff, remaining_days, promo_group
+            current_tariff, tariff, remaining_days, promo_group, user
         )
         switch_cost_kopeks = cost
         switch_cost_label = settings.format_price(cost) if cost > 0 else None
@@ -6440,6 +6441,7 @@ async def get_tariffs_endpoint(
             db, tariff, current_tariff_id, promo_group,
             current_tariff=current_tariff,
             remaining_days=remaining_days,
+            user=user,
         )
         tariff_models.append(model)
 
@@ -6624,14 +6626,40 @@ async def purchase_tariff_endpoint(
     )
 
 
+def _get_user_period_discount(user, period_days: int) -> int:
+    """Получает скидку пользователя на период (унифицировано с ботом)."""
+    # Используем ту же логику, что и в боте: getattr(db_user, 'promo_group', None)
+    promo_group = getattr(user, 'promo_group', None) if user else None
+
+    if promo_group:
+        # Используем метод get_discount_percent с категорией "period"
+        discount = promo_group.get_discount_percent("period", period_days)
+        if discount > 0:
+            return discount
+
+    # Проверяем персональную скидку
+    personal_discount = get_user_active_promo_discount_percent(user) if user else 0
+    return personal_discount
+
+
+def _apply_promo_discount(price: int, discount_percent: int) -> int:
+    """Применяет скидку к цене."""
+    if discount_percent <= 0:
+        return price
+    discount = int(price * discount_percent / 100)
+    return max(0, price - discount)
+
+
 def _calculate_tariff_switch_cost(
     current_tariff,
     new_tariff,
     remaining_days: int,
     promo_group=None,
+    user=None,
 ) -> tuple[int, bool]:
     """
     Рассчитывает стоимость переключения тарифа.
+    Логика унифицирована с ботом (tariff_purchase.py).
 
     Формула: (new_monthly - current_monthly) * remaining_days / 30
     Скидка промогруппы применяется к обоим тарифам одинаково.
@@ -6643,18 +6671,24 @@ def _calculate_tariff_switch_cost(
     current_monthly = _get_tariff_monthly_price(current_tariff)
     new_monthly = _get_tariff_monthly_price(new_tariff)
 
-    # Применяем скидку промогруппы
-    if promo_group:
+    # Получаем скидку (унифицировано с ботом)
+    discount_percent = _get_user_period_discount(user, 30) if user else 0
+
+    # Fallback на promo_group.period_discounts если user не передан
+    if discount_percent == 0 and promo_group:
         raw_discounts = getattr(promo_group, 'period_discounts', None) or {}
         for k, v in raw_discounts.items():
             try:
                 if int(k) == 30:
-                    discount = max(0, min(100, int(v)))
-                    current_monthly = int(current_monthly * (100 - discount) / 100)
-                    new_monthly = int(new_monthly * (100 - discount) / 100)
+                    discount_percent = max(0, min(100, int(v)))
                     break
             except (TypeError, ValueError):
                 pass
+
+    # Применяем скидку к обоим тарифам
+    if discount_percent > 0:
+        current_monthly = _apply_promo_discount(current_monthly, discount_percent)
+        new_monthly = _apply_promo_discount(new_monthly, discount_percent)
 
     price_diff = new_monthly - current_monthly
 
@@ -6727,7 +6761,7 @@ async def preview_tariff_switch_endpoint(
 
     # Рассчитываем стоимость переключения
     upgrade_cost, is_upgrade = _calculate_tariff_switch_cost(
-        current_tariff, new_tariff, remaining_days, promo_group
+        current_tariff, new_tariff, remaining_days, promo_group, user
     )
 
     balance = user.balance_kopeks or 0
@@ -6812,7 +6846,7 @@ async def switch_tariff_endpoint(
 
     # Рассчитываем стоимость
     upgrade_cost, is_upgrade = _calculate_tariff_switch_cost(
-        current_tariff, new_tariff, remaining_days, promo_group
+        current_tariff, new_tariff, remaining_days, promo_group, user
     )
 
     # Списываем доплату если апгрейд
