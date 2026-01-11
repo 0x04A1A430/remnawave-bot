@@ -3531,6 +3531,15 @@ async def _get_current_tariff_model(db: AsyncSession, subscription, user=None) -
         if apply_to_addons:
             traffic_discount_percent = max(0, min(100, int(getattr(promo_group, 'traffic_discount_percent', 0) or 0)))
 
+    # Лимит докупки трафика
+    max_topup_traffic_gb = getattr(tariff, 'max_topup_traffic_gb', 0) or 0
+    current_subscription_traffic = subscription.traffic_limit_gb or 0
+
+    # Рассчитываем доступный лимит докупки
+    available_topup_gb = None
+    if max_topup_traffic_gb > 0:
+        available_topup_gb = max(0, max_topup_traffic_gb - current_subscription_traffic)
+
     # Пакеты докупки трафика
     traffic_topup_enabled = getattr(tariff, 'traffic_topup_enabled', False) and tariff.traffic_limit_gb > 0
     traffic_topup_packages = []
@@ -3538,6 +3547,10 @@ async def _get_current_tariff_model(db: AsyncSession, subscription, user=None) -
     if traffic_topup_enabled and hasattr(tariff, 'get_traffic_topup_packages'):
         packages = tariff.get_traffic_topup_packages()
         for gb in sorted(packages.keys()):
+            # Фильтруем пакеты, которые превышают доступный лимит
+            if available_topup_gb is not None and gb > available_topup_gb:
+                continue
+
             base_price = packages[gb]
             # Применяем скидку
             if traffic_discount_percent > 0:
@@ -3557,6 +3570,10 @@ async def _get_current_tariff_model(db: AsyncSession, subscription, user=None) -
                     price_label=settings.format_price(base_price),
                 ))
 
+    # Если нет доступных пакетов из-за лимита - отключаем докупку
+    if traffic_topup_enabled and not traffic_topup_packages and available_topup_gb == 0:
+        traffic_topup_enabled = False
+
     return MiniAppCurrentTariff(
         id=tariff.id,
         name=tariff.name,
@@ -3569,6 +3586,8 @@ async def _get_current_tariff_model(db: AsyncSession, subscription, user=None) -
         servers_count=servers_count,
         traffic_topup_enabled=traffic_topup_enabled,
         traffic_topup_packages=traffic_topup_packages,
+        max_topup_traffic_gb=max_topup_traffic_gb,
+        available_topup_gb=available_topup_gb,
     )
 
 
@@ -6600,6 +6619,24 @@ async def purchase_traffic_topup_endpoint(
                 "message": "Cannot add traffic to unlimited subscription",
             },
         )
+
+    # Проверяем лимит докупки трафика
+    max_topup_limit = getattr(tariff, 'max_topup_traffic_gb', 0) or 0
+    if max_topup_limit > 0:
+        current_traffic = subscription.traffic_limit_gb or 0
+        new_traffic = current_traffic + payload.gb
+        if new_traffic > max_topup_limit:
+            available_gb = max(0, max_topup_limit - current_traffic)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "code": "topup_limit_exceeded",
+                    "message": f"Traffic top-up limit exceeded. Maximum allowed: {max_topup_limit} GB, current: {current_traffic} GB, available: {available_gb} GB",
+                    "max_limit_gb": max_topup_limit,
+                    "current_gb": current_traffic,
+                    "available_gb": available_gb,
+                },
+            )
 
     # Получаем цену пакета
     packages = tariff.get_traffic_topup_packages() if hasattr(tariff, 'get_traffic_topup_packages') else {}

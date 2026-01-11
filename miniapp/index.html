@@ -6201,6 +6201,8 @@
                 'traffic_topup.error.generic': 'Failed to purchase traffic. Please try again.',
                 'traffic_topup.success.title': 'Traffic added!',
                 'traffic_topup.success.message': '+{gb} GB has been added to your subscription.',
+                'traffic_topup.available_limit': 'Available to purchase: {gb} GB',
+                'traffic_topup.limit_reached': 'Maximum traffic limit reached',
                 'button.buy_subscription': 'Buy Subscription',
                 'button.open_bot': 'Open Telegram bot',
                 'subscription_purchase.title': 'Purchase subscription',
@@ -6647,6 +6649,8 @@
                 'traffic_topup.error.generic': 'Не удалось докупить трафик. Попробуйте снова.',
                 'traffic_topup.success.title': 'Трафик добавлен!',
                 'traffic_topup.success.message': '+{gb} ГБ добавлено к вашей подписке.',
+                'traffic_topup.available_limit': 'Доступно для покупки: {gb} ГБ',
+                'traffic_topup.limit_reached': 'Достигнут максимальный лимит трафика',
                 'button.buy_subscription': 'Купить подписку',
                 'button.open_bot': 'Открыть бота',
                 'subscription_purchase.title': 'Оформление подписки',
@@ -8918,6 +8922,9 @@
                         window._trafficTopupPackages = trafficTopupPackages;
                         window._subscriptionId = userData?.subscription_id ?? userData?.subscriptionId;
                         window._userBalance = userData?.balance_kopeks || userData?.balanceKopeks || 0;
+                        // Лимит докупки трафика (null = без лимита)
+                        window._availableTopupGb = currentTariff?.available_topup_gb ?? currentTariff?.availableTopupGb ?? null;
+                        window._maxTopupTrafficGb = currentTariff?.max_topup_traffic_gb ?? currentTariff?.maxTopupTrafficGb ?? 0;
                     } else {
                         trafficTopupBtn.classList.add('hidden');
                     }
@@ -12189,11 +12196,29 @@
 
             const packages = window._trafficTopupPackages || [];
             const balance = window._userBalance || 0;
+            const availableTopupGb = window._availableTopupGb;
 
             packagesContainer.innerHTML = '';
 
+            // Показываем доступный лимит, если он есть
+            if (availableTopupGb !== null && availableTopupGb !== undefined) {
+                const limitEl = document.createElement('div');
+                limitEl.className = 'traffic-topup-limit-info';
+                limitEl.style.cssText = 'text-align: center; padding: 8px 12px; margin-bottom: 12px; background: var(--bg-tertiary); border-radius: 8px; font-size: 13px; color: var(--text-secondary);';
+                if (availableTopupGb <= 0) {
+                    limitEl.textContent = t('traffic_topup.limit_reached');
+                    limitEl.style.color = 'var(--danger-color)';
+                } else {
+                    limitEl.textContent = t('traffic_topup.available_limit').replace('{gb}', availableTopupGb);
+                }
+                packagesContainer.appendChild(limitEl);
+            }
+
             if (packages.length === 0) {
-                packagesContainer.innerHTML = '<div class="traffic-topup-empty">' + t('traffic_topup.empty') + '</div>';
+                const emptyEl = document.createElement('div');
+                emptyEl.className = 'traffic-topup-empty';
+                emptyEl.textContent = t('traffic_topup.empty');
+                packagesContainer.appendChild(emptyEl);
                 return;
             }
 
@@ -12301,6 +12326,11 @@
                 const trafficLimitEl = document.getElementById('trafficLimit');
                 if (trafficLimitEl && data.new_traffic_limit_gb) {
                     trafficLimitEl.textContent = formatTrafficLimit(data.new_traffic_limit_gb);
+                }
+
+                // Обновляем доступный лимит докупки
+                if (window._availableTopupGb !== null && window._availableTopupGb !== undefined) {
+                    window._availableTopupGb = Math.max(0, window._availableTopupGb - gb);
                 }
 
                 // Обновляем данные через 2 секунды
