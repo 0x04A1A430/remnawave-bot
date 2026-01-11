@@ -5317,14 +5317,19 @@ async def submit_subscription_renewal_endpoint(
         if tariff_pricing:
             # Тарифный режим: простое продление
             from datetime import timedelta
-            from app.database.crud.user import update_user_balance
+            from app.database.crud.user import subtract_user_balance
             from app.database.crud.subscription import update_subscription
             from app.database.crud.transaction import create_transaction
 
             try:
                 # Списываем баланс
-                new_balance = await update_user_balance(db, user.id, -final_total)
-                user.balance_kopeks = new_balance
+                success = await subtract_user_balance(db, user, final_total, description)
+                if not success:
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail={"code": "balance_error", "message": "Failed to subtract balance"},
+                    )
+                user.balance_kopeks -= final_total
 
                 # Продлеваем подписку
                 from datetime import datetime
