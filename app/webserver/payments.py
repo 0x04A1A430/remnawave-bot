@@ -798,6 +798,100 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
         routes_registered = True
 
+    if settings.is_freekassa_enabled():
+        @router.options(settings.FREEKASSA_WEBHOOK_PATH)
+        async def freekassa_options() -> Response:
+            return Response(
+                status_code=status.HTTP_200_OK,
+                headers={
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+                    "Access-Control-Allow-Headers": "Content-Type",
+                },
+            )
+
+        @router.get(settings.FREEKASSA_WEBHOOK_PATH)
+        async def freekassa_health() -> JSONResponse:
+            return JSONResponse(
+                {
+                    "status": "ok",
+                    "service": "freekassa_webhook",
+                    "enabled": settings.is_freekassa_enabled(),
+                }
+            )
+
+        @router.post(settings.FREEKASSA_WEBHOOK_PATH)
+        async def freekassa_webhook(request: Request) -> Response:
+            # Получаем IP клиента с учетом прокси
+            x_forwarded_for = request.headers.get("X-Forwarded-For")
+            if x_forwarded_for:
+                client_ip = x_forwarded_for.split(",")[0].strip()
+            else:
+                real_ip = request.headers.get("X-Real-IP")
+                if real_ip:
+                    client_ip = real_ip.strip()
+                else:
+                    client_ip = request.client.host if request.client else "127.0.0.1"
+
+            # Получаем данные формы
+            try:
+                form_data = await request.form()
+            except Exception:
+                logger.error("Freekassa webhook: не удалось прочитать данные формы")
+                return Response("Error reading form data", status_code=status.HTTP_400_BAD_REQUEST)
+
+            # Извлекаем параметры
+            merchant_id = form_data.get("MERCHANT_ID")
+            amount = form_data.get("AMOUNT")
+            order_id = form_data.get("MERCHANT_ORDER_ID")
+            sign = form_data.get("SIGN")
+            intid = form_data.get("intid")
+            cur_id = form_data.get("CUR_ID")
+
+            if not all([merchant_id, amount, order_id, sign, intid]):
+                logger.warning("Freekassa webhook: отсутствуют обязательные параметры")
+                return Response("Missing parameters", status_code=status.HTTP_400_BAD_REQUEST)
+
+            # Преобразуем типы
+            try:
+                merchant_id_int = int(merchant_id)
+                amount_float = float(amount)
+                cur_id_int = int(cur_id) if cur_id else None
+            except ValueError:
+                logger.warning("Freekassa webhook: неверный формат параметров")
+                return Response("Invalid parameters format", status_code=status.HTTP_400_BAD_REQUEST)
+
+            # Обрабатываем callback
+            db_generator = get_db()
+            try:
+                db = await db_generator.__anext__()
+            except StopAsyncIteration:
+                return Response("DB Error", status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            try:
+                success = await payment_service.process_freekassa_webhook(
+                    db,
+                    merchant_id=merchant_id_int,
+                    amount=amount_float,
+                    order_id=order_id,
+                    sign=sign,
+                    intid=intid,
+                    cur_id=cur_id_int,
+                    client_ip=client_ip,
+                )
+            finally:
+                try:
+                    await db_generator.__anext__()
+                except StopAsyncIteration:
+                    pass
+
+            if success:
+                return Response("YES", status_code=status.HTTP_200_OK)
+
+            return Response("Error", status_code=status.HTTP_400_BAD_REQUEST)
+
+        routes_registered = True
+
     if routes_registered:
         @router.get("/health/payment-webhooks")
         async def payment_webhooks_health() -> JSONResponse:
@@ -813,6 +907,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                     "pal24_enabled": settings.is_pal24_enabled(),
                     "platega_enabled": settings.is_platega_enabled(),
                     "cloudpayments_enabled": settings.is_cloudpayments_enabled(),
+                    "freekassa_enabled": settings.is_freekassa_enabled(),
                 }
             )
 
