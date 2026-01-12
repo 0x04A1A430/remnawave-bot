@@ -1861,8 +1861,16 @@ async def update_daily_charge_time(
     subscription: Subscription,
     charge_time: datetime = None,
 ) -> Subscription:
-    """Обновляет время последнего суточного списания."""
-    subscription.last_daily_charge_at = charge_time or datetime.utcnow()
+    """Обновляет время последнего суточного списания и продлевает подписку на 1 день."""
+    now = charge_time or datetime.utcnow()
+    subscription.last_daily_charge_at = now
+
+    # Продлеваем подписку на 1 день от текущего момента
+    new_end_date = now + timedelta(days=1)
+    if subscription.end_date is None or subscription.end_date < new_end_date:
+        subscription.end_date = new_end_date
+        logger.info(f"📅 Продлена подписка {subscription.id} до {new_end_date}")
+
     await db.commit()
     await db.refresh(subscription)
 
