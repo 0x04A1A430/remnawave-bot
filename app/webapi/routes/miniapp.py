@@ -7222,7 +7222,7 @@ async def toggle_daily_subscription_pause_endpoint(
     new_paused_state = not is_currently_paused
     subscription.is_daily_paused = new_paused_state
 
-    # Если снимаем с паузы и подписка активна, нужно проверить баланс для активации
+    # Если снимаем с паузы, нужно проверить баланс для активации
     if not new_paused_state:
         daily_price = getattr(tariff, 'daily_price_kopeks', 0)
         if daily_price > 0 and user.balance_kopeks < daily_price:
@@ -7234,6 +7234,17 @@ async def toggle_daily_subscription_pause_endpoint(
                     "required": daily_price,
                     "balance": user.balance_kopeks,
                 },
+            )
+
+        # Восстанавливаем статус ACTIVE если подписка была DISABLED (недостаток средств)
+        from app.database.models import SubscriptionStatus
+        if subscription.status == SubscriptionStatus.DISABLED.value:
+            subscription.status = SubscriptionStatus.ACTIVE.value
+            # Обновляем время последнего списания для корректного расчёта следующего
+            subscription.last_daily_charge_at = datetime.utcnow()
+            subscription.end_date = datetime.utcnow() + timedelta(days=1)
+            logger.info(
+                f"✅ Суточная подписка {subscription.id} восстановлена из DISABLED в ACTIVE"
             )
 
     await db.commit()
