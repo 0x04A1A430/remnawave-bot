@@ -980,23 +980,38 @@ def get_subscription_keyboard(
                 InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data="subscription_upgrade")
             ])
         else:
-            # Ряд: [Продлить] [Автоплатеж]
-            keyboard.append([
-                InlineKeyboardButton(text=texts.MENU_EXTEND_SUBSCRIPTION, callback_data="subscription_extend"),
-                InlineKeyboardButton(
-                    text=texts.t("AUTOPAY_BUTTON", "💳 Автоплатеж"),
-                    callback_data="subscription_autopay",
-                )
-            ])
+            # Проверяем, является ли тариф суточным
+            tariff = getattr(subscription, 'tariff', None) if subscription else None
+            is_daily_tariff = tariff and getattr(tariff, 'is_daily', False)
 
-            # Ряд: [Настройки] [Тариф] (если режим тарифов)
+            if is_daily_tariff:
+                # Для суточного тарифа показываем кнопку паузы/возобновления
+                is_paused = getattr(subscription, 'is_daily_paused', False)
+                if is_paused:
+                    pause_text = texts.t("RESUME_DAILY_BUTTON", "▶️ Возобновить подписку")
+                else:
+                    pause_text = texts.t("PAUSE_DAILY_BUTTON", "⏸️ Приостановить подписку")
+                keyboard.append([
+                    InlineKeyboardButton(text=pause_text, callback_data="toggle_daily_subscription_pause")
+                ])
+            else:
+                # Для обычного тарифа: [Продлить] [Автоплатеж]
+                keyboard.append([
+                    InlineKeyboardButton(text=texts.MENU_EXTEND_SUBSCRIPTION, callback_data="subscription_extend"),
+                    InlineKeyboardButton(
+                        text=texts.t("AUTOPAY_BUTTON", "💳 Автоплатеж"),
+                        callback_data="subscription_autopay",
+                    )
+                ])
+
+            # Ряд: [Настройки] [Тариф] (если режим тарифов и не суточный)
             settings_row = [
                 InlineKeyboardButton(
                     text=texts.t("SUBSCRIPTION_SETTINGS_BUTTON", "⚙️ Настройки"),
                     callback_data="subscription_settings",
                 )
             ]
-            if settings.is_tariffs_mode() and subscription:
+            if settings.is_tariffs_mode() and subscription and not is_daily_tariff:
                 settings_row.append(
                     InlineKeyboardButton(
                         text=texts.t("CHANGE_TARIFF_BUTTON", "📦 Тариф"),
@@ -2524,16 +2539,7 @@ def get_updated_subscription_settings_keyboard(
     # Если подписка на тарифе - отключаем страны, модем, трафик
     has_tariff = tariff is not None
 
-    # Кнопка паузы/возобновления суточной подписки
-    if tariff and getattr(tariff, 'is_daily', False) and subscription:
-        is_paused = getattr(subscription, 'is_daily_paused', False)
-        if is_paused:
-            button_text = texts.t("RESUME_DAILY_SUBSCRIPTION_BUTTON", "▶️ Возобновить суточный тариф")
-        else:
-            button_text = texts.t("PAUSE_DAILY_SUBSCRIPTION_BUTTON", "⏸️ Приостановить суточный тариф")
-        keyboard.append([
-            InlineKeyboardButton(text=button_text, callback_data="toggle_daily_subscription_pause")
-        ])
+    # Для суточных тарифов кнопка паузы теперь в главном меню подписки
 
     if show_countries_management and not has_tariff:
         keyboard.append([
