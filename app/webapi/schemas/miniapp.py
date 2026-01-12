@@ -47,6 +47,13 @@ class MiniAppSubscriptionUser(BaseModel):
     promo_offer_discount_percent: int = 0
     promo_offer_discount_expires_at: Optional[datetime] = None
     promo_offer_discount_source: Optional[str] = None
+    # Суточные тарифы
+    is_daily_tariff: bool = False
+    is_daily_paused: bool = False
+    daily_tariff_name: Optional[str] = None
+    daily_price_kopeks: Optional[int] = None
+    daily_price_label: Optional[str] = None
+    daily_next_charge_at: Optional[datetime] = None  # Время следующего списания
 
 
 class MiniAppPromoGroup(BaseModel):
@@ -529,6 +536,10 @@ class MiniAppTariff(BaseModel):
     switch_cost_label: Optional[str] = None   # Форматированная стоимость
     is_upgrade: Optional[bool] = None         # True = повышение, False = понижение
     is_switch_free: Optional[bool] = None     # True = бесплатное переключение
+    # Суточные тарифы
+    is_daily: bool = False
+    daily_price_kopeks: int = 0
+    daily_price_label: Optional[str] = None
 
 
 class MiniAppTrafficTopupPackage(BaseModel):
@@ -561,6 +572,10 @@ class MiniAppCurrentTariff(BaseModel):
     # Лимит докупки трафика (0 = без лимита)
     max_topup_traffic_gb: int = 0
     available_topup_gb: Optional[int] = None  # Сколько еще можно докупить (None = без лимита)
+    # Суточные тарифы
+    is_daily: bool = False
+    daily_price_kopeks: int = 0
+    daily_price_label: Optional[str] = None
 
 
 class MiniAppTrafficTopupRequest(BaseModel):
@@ -646,6 +661,20 @@ class MiniAppTariffSwitchResponse(BaseModel):
     tariff_id: int
     tariff_name: str
     charged_kopeks: int = 0
+    balance_kopeks: int = 0
+    balance_label: str = ""
+
+
+class MiniAppDailySubscriptionToggleRequest(BaseModel):
+    """Запрос на паузу/возобновление суточной подписки."""
+    init_data: str = Field(...)
+
+
+class MiniAppDailySubscriptionToggleResponse(BaseModel):
+    """Ответ на паузу/возобновление суточной подписки."""
+    success: bool = True
+    message: Optional[str] = None
+    is_paused: bool = False
     balance_kopeks: int = 0
     balance_label: str = ""
 
