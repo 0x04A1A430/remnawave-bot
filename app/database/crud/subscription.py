@@ -328,23 +328,10 @@ async def extend_subscription(
     if is_tariff_change:
         logger.info(f"🔄 Обнаружена СМЕНА тарифа: {subscription.tariff_id} → {tariff_id}")
 
-    # НОВОЕ: Вычисляем бонусные дни от триала ДО изменения end_date
-    # Бонусные дни НЕ начисляются при смене тарифа
+    # Бонусные дни от триала - добавляются ТОЛЬКО когда подписка истекла
+    # и мы начинаем отсчёт с текущей даты. НЕ начисляются при смене тарифа.
+    # Если подписка ещё активна - просто добавляем дни к существующей дате окончания.
     bonus_days = 0
-    if not is_tariff_change and subscription.is_trial and settings.TRIAL_ADD_REMAINING_DAYS_TO_PAID:
-        # Вычисляем остаток триала
-        if subscription.end_date and subscription.end_date > current_time:
-            remaining = subscription.end_date - current_time
-            if remaining.total_seconds() > 0:
-                bonus_days = max(0, remaining.days)
-                logger.info(
-                    "🎁 Обнаружен остаток триала: %s дней для подписки %s",
-                    bonus_days,
-                    subscription.id,
-                )
-
-    # Применяем продление с учетом бонусных дней
-    total_days = days + bonus_days
 
     if days < 0:
         subscription.end_date = subscription.end_date + timedelta(days=days)
@@ -354,16 +341,34 @@ async def extend_subscription(
             subscription.end_date,
         )
     elif is_tariff_change:
-        # При СМЕНЕ тарифа срок начинается с текущей даты
+        # При СМЕНЕ тарифа срок начинается с текущей даты + бонус от триала
+        if subscription.is_trial and settings.TRIAL_ADD_REMAINING_DAYS_TO_PAID:
+            if subscription.end_date and subscription.end_date > current_time:
+                remaining = subscription.end_date - current_time
+                if remaining.total_seconds() > 0:
+                    bonus_days = max(0, remaining.days)
+                    logger.info(
+                        "🎁 Обнаружен остаток триала: %s дней для подписки %s",
+                        bonus_days,
+                        subscription.id,
+                    )
+        total_days = days + bonus_days
         subscription.end_date = current_time + timedelta(days=total_days)
         subscription.start_date = current_time
         logger.info(f"📅 СМЕНА тарифа: срок начинается с текущей даты + {total_days} дней")
     elif subscription.end_date > current_time:
-        subscription.end_date = subscription.end_date + timedelta(days=total_days)
-        logger.info(f"📅 Подписка активна, добавляем {total_days} дней ({days} + {bonus_days} бонус) к текущей дате окончания")
+        # Подписка активна - просто добавляем дни к текущей дате окончания
+        # БЕЗ бонусных дней (они уже учтены в end_date)
+        subscription.end_date = subscription.end_date + timedelta(days=days)
+        logger.info(f"📅 Подписка активна, добавляем {days} дней к текущей дате окончания")
     else:
+        # Подписка истекла - начинаем с текущей даты + бонус от триала
+        if subscription.is_trial and settings.TRIAL_ADD_REMAINING_DAYS_TO_PAID:
+            # Триал истёк, но бонус всё равно не добавляем (триал уже истёк)
+            pass
+        total_days = days + bonus_days
         subscription.end_date = current_time + timedelta(days=total_days)
-        logger.info(f"📅 Подписка истекла, устанавливаем новую дату окончания на {total_days} дней ({days} + {bonus_days} бонус)")
+        logger.info(f"📅 Подписка истекла, устанавливаем новую дату окончания на {total_days} дней")
 
     # УДАЛЕНО: Автоматическая конвертация триала по длительности
     # Теперь триал конвертируется ТОЛЬКО после успешного коммита продления
