@@ -2,6 +2,8 @@ import base64
 import json
 import logging
 from datetime import datetime, timedelta
+
+logger = logging.getLogger(__name__)
 from typing import Dict, List, Any, Tuple, Optional
 from urllib.parse import quote
 from aiogram import Dispatcher, types, F
@@ -134,7 +136,7 @@ from app.handlers.simple_subscription import (
     _get_simple_subscription_payment_keyboard,
 )
 
-from .common import _apply_promo_offer_discount, _get_promo_offer_discount_percent, logger, update_traffic_prices
+from .common import _apply_promo_offer_discount, _get_promo_offer_discount_percent, update_traffic_prices
 from .autopay import (
     handle_autopay_menu,
     handle_subscription_cancel,
@@ -337,10 +339,14 @@ async def show_subscription_info(
     tariff_line = ""
     tariff_info_block = ""
     tariff = None
+    print(f"[DEBUG TARIFF] Режим тарифов: {settings.is_tariffs_mode()}, tariff_id: {subscription.tariff_id}")
+    logger.info(f"🔍 Режим тарифов: {settings.is_tariffs_mode()}, tariff_id: {subscription.tariff_id}")
     if settings.is_tariffs_mode() and subscription.tariff_id:
         try:
             from app.database.crud.tariff import get_tariff_by_id
             tariff = await get_tariff_by_id(db, subscription.tariff_id)
+            print(f"[DEBUG TARIFF] Загружен тариф: {tariff.name if tariff else None}")
+            logger.info(f"🔍 Загружен тариф: {tariff.name if tariff else None}, is_daily: {getattr(tariff, 'is_daily', None) if tariff else None}")
             if tariff:
                 tariff_line = f"\n📦 Тариф: {tariff.name}"
                 # Прикрепляем тариф к подписке для использования в клавиатуре
@@ -398,13 +404,35 @@ async def show_subscription_info(
                         tariff_info_lines.append("⏳ Первое списание скоро")
 
                 tariff_info_block = "\n<blockquote expandable>" + "\n".join(tariff_info_lines) + "</blockquote>"
+                print(f"[DEBUG TARIFF] Сформирован блок: {len(tariff_info_block)} символов")
+                logger.info(f"🔍 Сформирован блок тарифа: {len(tariff_info_block)} символов")
 
         except Exception as e:
-            logger.warning(f"Ошибка получения тарифа: {e}")
+            print(f"[DEBUG TARIFF] ОШИБКА: {e}")
+            logger.warning(f"Ошибка получения тарифа: {e}", exc_info=True)
 
-    message_template = texts.t(
-        "SUBSCRIPTION_OVERVIEW_TEMPLATE",
-        """👤 {full_name}
+    print(f"[DEBUG TARIFF] tariff_line='{tariff_line}', tariff_info_block_len={len(tariff_info_block)}")
+    # Определяем, суточный ли тариф для выбора шаблона
+    is_daily_tariff = tariff and getattr(tariff, 'is_daily', False)
+
+    if is_daily_tariff:
+        # Для суточных тарифов другой шаблон без "Действует до" и "Осталось"
+        message_template = texts.t(
+            "SUBSCRIPTION_DAILY_OVERVIEW_TEMPLATE",
+            """👤 {full_name}
+💰 Баланс: {balance}
+📱 Подписка: {status_emoji} {status_display}{warning}{tariff_info_block}
+
+📱 Информация о подписке
+🎭 Тип: {subscription_type}{tariff_line}
+📈 Трафик: {traffic}
+🌍 Серверы: {servers}
+📱 Устройства: {devices_used} / {device_limit}""",
+        )
+    else:
+        message_template = texts.t(
+            "SUBSCRIPTION_OVERVIEW_TEMPLATE",
+            """👤 {full_name}
 💰 Баланс: {balance}
 📱 Подписка: {status_emoji} {status_display}{warning}{tariff_info_block}
 
@@ -415,7 +443,7 @@ async def show_subscription_info(
 📈 Трафик: {traffic}
 🌍 Серверы: {servers}
 📱 Устройства: {devices_used} / {device_limit}""",
-    )
+        )
 
     if not show_devices:
         message_template = message_template.replace(
