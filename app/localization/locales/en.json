@@ -1660,5 +1660,9 @@
   "ADMIN_USER_RESTRICTIONS": "⚠️ Restrict",
   "USER_RESTRICTION_TOPUP_BLOCKED": "🚫 <b>Top-up restricted</b>\n\n{reason}\n\nIf you believe this is an error, you can appeal the decision.",
   "USER_RESTRICTION_SUBSCRIPTION_BLOCKED": "🚫 <b>Subscription purchase/renewal restricted</b>\n\n{reason}\n\nIf you believe this is an error, you can appeal the decision.",
-  "USER_RESTRICTION_APPEAL_BUTTON": "🆘 Appeal"
+  "USER_RESTRICTION_APPEAL_BUTTON": "🆘 Appeal",
+
+  "PAUSE_DAILY_BUTTON": "⏸️ Pause subscription",
+  "RESUME_DAILY_BUTTON": "▶️ Resume subscription",
+  "DAILY_SWITCH_WARNING": "⚠️ <b>Warning!</b> You have {days} days left.\nThey will be lost when switching to daily tariff!"
 }
