@@ -2369,24 +2369,42 @@ async def confirm_instant_switch(
 
         traffic = _format_traffic(new_tariff.traffic_limit_gb)
 
-        if is_upgrade:
-            cost_text = f"💰 Списано: {_format_price_kopeks(upgrade_cost)}"
+        # Для суточного тарифа другое сообщение об успехе
+        if is_new_daily:
+            daily_price = getattr(new_tariff, 'daily_price_kopeks', 0)
+            await callback.message.edit_text(
+                f"🎉 <b>Тариф успешно изменён!</b>\n\n"
+                f"📦 Новый тариф: <b>{new_tariff.name}</b>\n"
+                f"📊 Трафик: {traffic}\n"
+                f"📱 Устройств: {new_tariff.device_limit}\n"
+                f"🔄 Тип: Суточный\n"
+                f"💰 Списано: {_format_price_kopeks(daily_price)}\n\n"
+                f"ℹ️ Следующее списание через 24 часа.",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")],
+                    [InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")]
+                ]),
+                parse_mode="HTML"
+            )
         else:
-            cost_text = "💰 Бесплатно"
+            if is_upgrade:
+                cost_text = f"💰 Списано: {_format_price_kopeks(upgrade_cost)}"
+            else:
+                cost_text = "💰 Бесплатно"
 
-        await callback.message.edit_text(
-            f"🎉 <b>Тариф успешно изменён!</b>\n\n"
-            f"📦 Новый тариф: <b>{new_tariff.name}</b>\n"
-            f"📊 Трафик: {traffic}\n"
-            f"📱 Устройств: {new_tariff.device_limit}\n"
-            f"⏰ Осталось дней: {remaining_days}\n"
-            f"{cost_text}",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")],
-                [InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")]
-            ]),
-            parse_mode="HTML"
-        )
+            await callback.message.edit_text(
+                f"🎉 <b>Тариф успешно изменён!</b>\n\n"
+                f"📦 Новый тариф: <b>{new_tariff.name}</b>\n"
+                f"📊 Трафик: {traffic}\n"
+                f"📱 Устройств: {new_tariff.device_limit}\n"
+                f"⏰ Осталось дней: {remaining_days}\n"
+                f"{cost_text}",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")],
+                    [InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")]
+                ]),
+                parse_mode="HTML"
+            )
         await callback.answer("Тариф изменён!", show_alert=True)
 
     except Exception as e:
