@@ -2131,6 +2131,61 @@ async def preview_instant_switch(
 
     texts = get_texts(db_user.language)
 
+    # Проверяем, суточный ли новый тариф
+    is_new_daily = getattr(new_tariff, 'is_daily', False)
+    daily_warning = ""
+    if is_new_daily and remaining_days > 1:
+        daily_warning = texts.t(
+            "DAILY_SWITCH_WARNING",
+            f"\n\n⚠️ <b>Внимание!</b> У вас осталось {remaining_days} дн. подписки.\nПри смене на суточный тариф они будут утеряны!"
+        ).format(days=remaining_days)
+
+    # Для суточного тарифа особая логика показа
+    if is_new_daily:
+        daily_price = getattr(new_tariff, 'daily_price_kopeks', 0)
+        user_balance = db_user.balance_kopeks or 0
+
+        if user_balance >= daily_price:
+            await callback.message.edit_text(
+                f"🔄 <b>Переключение на суточный тариф</b>\n\n"
+                f"📌 Текущий: <b>{current_tariff.name}</b>\n"
+                f"   • Трафик: {current_traffic}\n"
+                f"   • Устройств: {current_tariff.device_limit}\n\n"
+                f"📦 Новый: <b>{new_tariff.name}</b>\n"
+                f"   • Трафик: {traffic}\n"
+                f"   • Устройств: {new_tariff.device_limit}\n"
+                f"   • Тип: 🔄 Суточный\n\n"
+                f"💰 <b>Цена: {_format_price_kopeks(daily_price)}/день</b>\n\n"
+                f"💳 Ваш баланс: {_format_price_kopeks(user_balance)}"
+                f"{daily_warning}\n\n"
+                f"ℹ️ Средства будут списываться автоматически раз в сутки.",
+                reply_markup=get_instant_switch_confirm_keyboard(tariff_id, db_user.language),
+                parse_mode="HTML"
+            )
+        else:
+            missing = daily_price - user_balance
+            await callback.message.edit_text(
+                f"❌ <b>Недостаточно средств</b>\n\n"
+                f"📦 Тариф: <b>{new_tariff.name}</b>\n"
+                f"🔄 Тип: Суточный\n"
+                f"💰 Цена: {_format_price_kopeks(daily_price)}/день\n\n"
+                f"💳 Ваш баланс: {_format_price_kopeks(user_balance)}\n"
+                f"⚠️ Не хватает: <b>{_format_price_kopeks(missing)}</b>"
+                f"{daily_warning}",
+                reply_markup=get_instant_switch_insufficient_balance_keyboard(tariff_id, db_user.language),
+                parse_mode="HTML"
+            )
+
+        await state.update_data(
+            switch_tariff_id=tariff_id,
+            upgrade_cost=0,
+            is_upgrade=False,
+            current_tariff_id=current_tariff_id,
+            remaining_days=remaining_days,
+        )
+        await callback.answer()
+        return
+
     if is_upgrade:
         # Upgrade - нужна доплата
         if user_balance >= upgrade_cost:
@@ -2237,12 +2292,38 @@ async def confirm_instant_switch(
         # Получаем список серверов из нового тарифа
         squads = new_tariff.allowed_squads or []
 
+        # Проверяем, суточный ли новый тариф
+        is_new_daily = getattr(new_tariff, 'is_daily', False)
+
         # Обновляем подписку с новыми параметрами тарифа
-        # НЕ меняем end_date - только параметры тарифа
         subscription.tariff_id = new_tariff.id
         subscription.traffic_limit_gb = new_tariff.traffic_limit_gb
         subscription.device_limit = new_tariff.device_limit
         subscription.connected_squads = squads
+
+        if is_new_daily:
+            # Для суточного тарифа - сбрасываем на 1 день и настраиваем суточные параметры
+            daily_price = getattr(new_tariff, 'daily_price_kopeks', 0)
+
+            # Списываем первый день если ещё не списано (upgrade_cost был 0)
+            if upgrade_cost == 0 and daily_price > 0:
+                if user_balance >= daily_price:
+                    await subtract_user_balance(
+                        db, db_user, daily_price,
+                        f"Переключение на суточный тариф {new_tariff.name} (первый день)"
+                    )
+                    await create_transaction(
+                        db,
+                        user_id=db_user.id,
+                        type=TransactionType.SUBSCRIPTION_PAYMENT,
+                        amount_kopeks=-daily_price,
+                        description=f"Переключение на суточный тариф {new_tariff.name} (первый день)",
+                    )
+
+            subscription.end_date = datetime.utcnow() + timedelta(days=1)
+            subscription.is_trial = False
+            subscription.is_daily_paused = False
+            subscription.last_daily_charge_at = datetime.utcnow()
 
         await db.commit()
         await db.refresh(subscription)
