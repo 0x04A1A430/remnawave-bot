@@ -1358,8 +1358,8 @@ async def confirm_broadcast(
 
 async def get_target_users_count(db: AsyncSession, target: str) -> int:
     """Быстрый подсчёт пользователей через SQL COUNT вместо загрузки всех в память."""
-    from sqlalchemy import func as sql_func
-    from datetime import datetime
+    from sqlalchemy import func as sql_func, distinct
+    from datetime import datetime, timedelta
 
     base_filter = User.status == UserStatus.ACTIVE.value
 
@@ -1371,7 +1371,7 @@ async def get_target_users_count(db: AsyncSession, target: str) -> int:
     if target == "active":
         # Активные платные подписки (не триал)
         query = (
-            select(sql_func.count(User.id))
+            select(sql_func.count(distinct(User.id)))
             .join(Subscription, User.id == Subscription.user_id)
             .where(
                 base_filter,
@@ -1383,9 +1383,9 @@ async def get_target_users_count(db: AsyncSession, target: str) -> int:
         return result.scalar() or 0
 
     if target == "trial":
-        # Триальные подписки
+        # Триальные подписки (без проверки is_active, как в оригинале)
         query = (
-            select(sql_func.count(User.id))
+            select(sql_func.count(distinct(User.id)))
             .join(Subscription, User.id == Subscription.user_id)
             .where(
                 base_filter,
@@ -1396,17 +1396,18 @@ async def get_target_users_count(db: AsyncSession, target: str) -> int:
         return result.scalar() or 0
 
     if target == "no":
-        # Без активной подписки (LEFT JOIN + фильтр)
+        # Без активной подписки - используем NOT EXISTS для корректности
+        subquery = (
+            select(Subscription.id)
+            .where(
+                Subscription.user_id == User.id,
+                Subscription.status == SubscriptionStatus.ACTIVE.value,
+            )
+            .exists()
+        )
         query = (
             select(sql_func.count(User.id))
-            .outerjoin(Subscription, User.id == Subscription.user_id)
-            .where(
-                base_filter,
-                or_(
-                    Subscription.id == None,
-                    Subscription.status != SubscriptionStatus.ACTIVE.value,
-                )
-            )
+            .where(base_filter, ~subquery)
         )
         result = await db.execute(query)
         return result.scalar() or 0
@@ -1414,10 +1415,26 @@ async def get_target_users_count(db: AsyncSession, target: str) -> int:
     if target == "expiring":
         # Истекающие в ближайшие 3 дня
         now = datetime.utcnow()
-        from datetime import timedelta
         expiry_threshold = now + timedelta(days=3)
         query = (
-            select(sql_func.count(User.id))
+            select(sql_func.count(distinct(User.id)))
+            .join(Subscription, User.id == Subscription.user_id)
+            .where(
+                base_filter,
+                Subscription.status == SubscriptionStatus.ACTIVE.value,
+                Subscription.end_date <= expiry_threshold,
+                Subscription.end_date > now,
+            )
+        )
+        result = await db.execute(query)
+        return result.scalar() or 0
+
+    if target == "expiring_subscribers":
+        # Истекающие в ближайшие 7 дней
+        now = datetime.utcnow()
+        expiry_threshold = now + timedelta(days=7)
+        query = (
+            select(sql_func.count(distinct(User.id)))
             .join(Subscription, User.id == Subscription.user_id)
             .where(
                 base_filter,
@@ -1434,7 +1451,26 @@ async def get_target_users_count(db: AsyncSession, target: str) -> int:
         now = datetime.utcnow()
         expired_statuses = [SubscriptionStatus.EXPIRED.value, SubscriptionStatus.DISABLED.value]
         query = (
-            select(sql_func.count(User.id))
+            select(sql_func.count(distinct(User.id)))
+            .outerjoin(Subscription, User.id == Subscription.user_id)
+            .where(
+                base_filter,
+                or_(
+                    Subscription.status.in_(expired_statuses),
+                    and_(Subscription.end_date <= now, Subscription.status != SubscriptionStatus.ACTIVE.value),
+                    and_(Subscription.id == None, User.has_had_paid_subscription == True),
+                )
+            )
+        )
+        result = await db.execute(query)
+        return result.scalar() or 0
+
+    if target == "expired_subscribers":
+        # То же что и expired
+        now = datetime.utcnow()
+        expired_statuses = [SubscriptionStatus.EXPIRED.value, SubscriptionStatus.DISABLED.value]
+        query = (
+            select(sql_func.count(distinct(User.id)))
             .outerjoin(Subscription, User.id == Subscription.user_id)
             .where(
                 base_filter,
@@ -1451,7 +1487,7 @@ async def get_target_users_count(db: AsyncSession, target: str) -> int:
     if target == "active_zero":
         # Активные платные с нулевым трафиком
         query = (
-            select(sql_func.count(User.id))
+            select(sql_func.count(distinct(User.id)))
             .join(Subscription, User.id == Subscription.user_id)
             .where(
                 base_filter,
@@ -1466,7 +1502,7 @@ async def get_target_users_count(db: AsyncSession, target: str) -> int:
     if target == "trial_zero":
         # Триальные с нулевым трафиком
         query = (
-            select(sql_func.count(User.id))
+            select(sql_func.count(distinct(User.id)))
             .join(Subscription, User.id == Subscription.user_id)
             .where(
                 base_filter,
@@ -1481,7 +1517,7 @@ async def get_target_users_count(db: AsyncSession, target: str) -> int:
     if target == "zero":
         # Все активные с нулевым трафиком
         query = (
-            select(sql_func.count(User.id))
+            select(sql_func.count(distinct(User.id)))
             .join(Subscription, User.id == Subscription.user_id)
             .where(
                 base_filter,
