@@ -1456,6 +1456,7 @@
   "SUB_STATUS_ACTIVE_LONG": "💎 Active\n📅 until {end_date} ({days} days)",
   "SUB_STATUS_ACTIVE_TODAY": "💎 Active\n⚠️ expires today!",
   "SUB_STATUS_ACTIVE_TOMORROW": "💎 Active\n⚠️ expires tomorrow!",
+  "SUB_STATUS_DAILY_ACTIVE": "💎 Active",
   "SUB_STATUS_EXPIRED": "🔴 Expired\n📅 {end_date}",
   "SUB_STATUS_DISABLED": "⚫ Disabled",
   "SUB_STATUS_PENDING": "⏳ Pending activation",

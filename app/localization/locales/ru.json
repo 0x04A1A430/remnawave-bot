@@ -1473,6 +1473,7 @@
   "SUB_STATUS_ACTIVE_LONG": "💎 Активна\n📅 до {end_date} ({days} дн.)",
   "SUB_STATUS_ACTIVE_TODAY": "💎 Активна\n⚠️ истекает сегодня!",
   "SUB_STATUS_ACTIVE_TOMORROW": "💎 Активна\n⚠️ истекает завтра!",
+  "SUB_STATUS_DAILY_ACTIVE": "💎 Активна",
   "SUB_STATUS_EXPIRED": "🔴 Истекла\n📅 {end_date}",
   "SUB_STATUS_DISABLED": "⚫ Отключена",
   "SUB_STATUS_PENDING": "⏳ Ожидает активации",
