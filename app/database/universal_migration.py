@@ -5413,6 +5413,122 @@ async def add_tariff_traffic_topup_columns() -> bool:
         return False
 
 
+async def add_tariff_daily_columns() -> bool:
+    """Добавляет колонки для суточных тарифов."""
+    try:
+        columns_added = 0
+
+        # Колонка is_daily
+        if not await check_column_exists('tariffs', 'is_daily'):
+            async with engine.begin() as conn:
+                db_type = await get_database_type()
+
+                if db_type == 'sqlite':
+                    await conn.execute(text(
+                        "ALTER TABLE tariffs ADD COLUMN is_daily INTEGER DEFAULT 0 NOT NULL"
+                    ))
+                elif db_type == 'postgresql':
+                    await conn.execute(text(
+                        "ALTER TABLE tariffs ADD COLUMN is_daily BOOLEAN DEFAULT FALSE NOT NULL"
+                    ))
+                else:  # MySQL
+                    await conn.execute(text(
+                        "ALTER TABLE tariffs ADD COLUMN is_daily TINYINT(1) DEFAULT 0 NOT NULL"
+                    ))
+
+                logger.info("✅ Колонка is_daily добавлена в tariffs")
+                columns_added += 1
+        else:
+            logger.info("ℹ️ Колонка is_daily уже существует в tariffs")
+
+        # Колонка daily_price_kopeks
+        if not await check_column_exists('tariffs', 'daily_price_kopeks'):
+            async with engine.begin() as conn:
+                db_type = await get_database_type()
+
+                if db_type == 'sqlite':
+                    await conn.execute(text(
+                        "ALTER TABLE tariffs ADD COLUMN daily_price_kopeks INTEGER DEFAULT 0 NOT NULL"
+                    ))
+                elif db_type == 'postgresql':
+                    await conn.execute(text(
+                        "ALTER TABLE tariffs ADD COLUMN daily_price_kopeks INTEGER DEFAULT 0 NOT NULL"
+                    ))
+                else:  # MySQL
+                    await conn.execute(text(
+                        "ALTER TABLE tariffs ADD COLUMN daily_price_kopeks INT DEFAULT 0 NOT NULL"
+                    ))
+
+                logger.info("✅ Колонка daily_price_kopeks добавлена в tariffs")
+                columns_added += 1
+        else:
+            logger.info("ℹ️ Колонка daily_price_kopeks уже существует в tariffs")
+
+        return True
+
+    except Exception as error:
+        logger.error(f"❌ Ошибка добавления колонок суточного тарифа: {error}")
+        return False
+
+
+async def add_subscription_daily_columns() -> bool:
+    """Добавляет колонки для суточных подписок."""
+    try:
+        columns_added = 0
+
+        # Колонка is_daily_paused
+        if not await check_column_exists('subscriptions', 'is_daily_paused'):
+            async with engine.begin() as conn:
+                db_type = await get_database_type()
+
+                if db_type == 'sqlite':
+                    await conn.execute(text(
+                        "ALTER TABLE subscriptions ADD COLUMN is_daily_paused INTEGER DEFAULT 0 NOT NULL"
+                    ))
+                elif db_type == 'postgresql':
+                    await conn.execute(text(
+                        "ALTER TABLE subscriptions ADD COLUMN is_daily_paused BOOLEAN DEFAULT FALSE NOT NULL"
+                    ))
+                else:  # MySQL
+                    await conn.execute(text(
+                        "ALTER TABLE subscriptions ADD COLUMN is_daily_paused TINYINT(1) DEFAULT 0 NOT NULL"
+                    ))
+
+                logger.info("✅ Колонка is_daily_paused добавлена в subscriptions")
+                columns_added += 1
+        else:
+            logger.info("ℹ️ Колонка is_daily_paused уже существует в subscriptions")
+
+        # Колонка last_daily_charge_at
+        if not await check_column_exists('subscriptions', 'last_daily_charge_at'):
+            async with engine.begin() as conn:
+                db_type = await get_database_type()
+
+                if db_type == 'sqlite':
+                    await conn.execute(text(
+                        "ALTER TABLE subscriptions ADD COLUMN last_daily_charge_at DATETIME NULL"
+                    ))
+                elif db_type == 'postgresql':
+                    await conn.execute(text(
+                        "ALTER TABLE subscriptions ADD COLUMN last_daily_charge_at TIMESTAMP NULL"
+                    ))
+                else:  # MySQL
+                    await conn.execute(text(
+                        "ALTER TABLE subscriptions ADD COLUMN last_daily_charge_at DATETIME NULL"
+                    ))
+
+                logger.info("✅ Колонка last_daily_charge_at добавлена в subscriptions")
+                columns_added += 1
+        else:
+            logger.info("ℹ️ Колонка last_daily_charge_at уже существует в subscriptions")
+
+        return True
+
+    except Exception as error:
+        logger.error(f"❌ Ошибка добавления колонок суточной подписки: {error}")
+        return False
+
+
 async def run_universal_migration():
     logger.info("=== НАЧАЛО УНИВЕРСАЛЬНОЙ МИГРАЦИИ ===")
     
@@ -5920,6 +6036,20 @@ async def run_universal_migration():
             logger.info("✅ Колонки докупки трафика в tariffs готовы")
         else:
             logger.warning("⚠️ Проблемы с колонками докупки трафика в tariffs")
+
+        logger.info("=== ДОБАВЛЕНИЕ КОЛОНОК СУТОЧНЫХ ТАРИФОВ ===")
+        daily_tariff_columns_ready = await add_tariff_daily_columns()
+        if daily_tariff_columns_ready:
+            logger.info("✅ Колонки суточных тарифов в tariffs готовы")
+        else:
+            logger.warning("⚠️ Проблемы с колонками суточных тарифов в tariffs")
+
+        logger.info("=== ДОБАВЛЕНИЕ КОЛОНОК СУТОЧНЫХ ПОДПИСОК ===")
+        daily_subscription_columns_ready = await add_subscription_daily_columns()
+        if daily_subscription_columns_ready:
+            logger.info("✅ Колонки суточных подписок в subscriptions готовы")
+        else:
+            logger.warning("⚠️ Проблемы с колонками суточных подписок в subscriptions")
 
         logger.info("=== ОБНОВЛЕНИЕ ВНЕШНИХ КЛЮЧЕЙ ===")
         fk_updated = await fix_foreign_keys_for_user_deletion()

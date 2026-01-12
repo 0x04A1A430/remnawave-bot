@@ -1441,7 +1441,8 @@
   "SUBSCRIPTION_NOT_FOUND": "❌ Подписка не найдена",
   "SUBSCRIPTION_NO_ACTIVE_LINK": "⚠ У вас нет активной подписки или ссылка еще генерируется",
   "SUBSCRIPTION_NO_SERVERS": "Нет серверов",
-  "SUBSCRIPTION_OVERVIEW_TEMPLATE": "👤 {full_name}\n💰 Баланс: {balance}\n📱 Подписка: {status_emoji} {status_display}{warning}\n\n📱 Информация о подписке\n🎭 Тип: {subscription_type}\n📅 Действует до: {end_date}\n⏰ Осталось: {time_left}\n📈 Трафик: {traffic}\n🌍 Серверы: {servers}\n📱 Устройства: {devices_used} / {device_limit}",
+  "SUBSCRIPTION_OVERVIEW_TEMPLATE": "👤 {full_name}\n💰 Баланс: {balance}\n📱 Подписка: {status_emoji} {status_display}{warning}{tariff_info_block}\n\n📱 Информация о подписке\n🎭 Тип: {subscription_type}\n📅 Действует до: {end_date}\n⏰ Осталось: {time_left}\n📈 Трафик: {traffic}\n🌍 Серверы: {servers}\n📱 Устройства: {devices_used} / {device_limit}",
+  "SUBSCRIPTION_DAILY_OVERVIEW_TEMPLATE": "👤 {full_name}\n💰 Баланс: {balance}\n📱 Подписка: {status_emoji} {status_display}{warning}{tariff_info_block}\n\n📱 Информация о подписке\n🎭 Тип: {subscription_type}\n📈 Трафик: {traffic}\n🌍 Серверы: {servers}\n📱 Устройства: {devices_used} / {device_limit}",
   "SUBSCRIPTION_PROMO_DISCOUNT_HINT": "⚡ Активирована доп. скидка {percent}%. \n\nСуммируется с другими скидками!",
   "SUBSCRIPTION_PROMO_DISCOUNT_NOTE": "⚡ Доп. скидка {percent}%: -{amount}",
   "SUBSCRIPTION_PROMO_DISCOUNT_TIMER": "⏳ Скидка действует ещё: {time_left}\n<code>{bar}</code>",
@@ -1472,6 +1473,7 @@
   "SUB_STATUS_ACTIVE_LONG": "💎 Активна\n📅 до {end_date} ({days} дн.)",
   "SUB_STATUS_ACTIVE_TODAY": "💎 Активна\n⚠️ истекает сегодня!",
   "SUB_STATUS_ACTIVE_TOMORROW": "💎 Активна\n⚠️ истекает завтра!",
+  "SUB_STATUS_DAILY_ACTIVE": "💎 Активна",
   "SUB_STATUS_EXPIRED": "🔴 Истекла\n📅 {end_date}",
   "SUB_STATUS_DISABLED": "⚫ Отключена",
   "SUB_STATUS_PENDING": "⏳ Ожидает активации",
@@ -1677,5 +1679,11 @@
   "ADMIN_USER_RESTRICTIONS": "⚠️ Ограничить",
   "USER_RESTRICTION_TOPUP_BLOCKED": "🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.",
   "USER_RESTRICTION_SUBSCRIPTION_BLOCKED": "🚫 <b>Покупка/продление подписки ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.",
-  "USER_RESTRICTION_APPEAL_BUTTON": "🆘 Обжаловать"
+  "USER_RESTRICTION_APPEAL_BUTTON": "🆘 Обжаловать",
+
+  "PAUSE_DAILY_BUTTON": "⏸️ Приостановить подписку",
+  "RESUME_DAILY_BUTTON": "▶️ Возобновить подписку",
+  "DAILY_SWITCH_WARNING": "⚠️ <b>Внимание!</b> У вас осталось {days} дн. подписки.\nПри смене на суточный тариф они будут утеряны!",
+  "DAILY_SUBSCRIPTION_PAUSED": "⏸️ Подписка приостановлена",
+  "DAILY_SUBSCRIPTION_RESUMED": "▶️ Подписка возобновлена!"
 }

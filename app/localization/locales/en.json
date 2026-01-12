@@ -1424,7 +1424,8 @@
   "SUBSCRIPTION_NOT_FOUND": "❌ Subscription not found",
   "SUBSCRIPTION_NO_ACTIVE_LINK": "⚠ You don't have an active subscription or the link is still being generated",
   "SUBSCRIPTION_NO_SERVERS": "No servers",
-  "SUBSCRIPTION_OVERVIEW_TEMPLATE": "👤 {full_name}\n💰 Balance: {balance}\n📱 Subscription: {status_emoji} {status_display}{warning}\n\n📱 Subscription details\n🎭 Type: {subscription_type}\n📅 Valid until: {end_date}\n⏰ Time left: {time_left}\n📈 Traffic: {traffic}\n🌍 Servers: {servers}\n📱 Devices: {devices_used} / {device_limit}",
+  "SUBSCRIPTION_OVERVIEW_TEMPLATE": "👤 {full_name}\n💰 Balance: {balance}\n📱 Subscription: {status_emoji} {status_display}{warning}{tariff_info_block}\n\n📱 Subscription details\n🎭 Type: {subscription_type}\n📅 Valid until: {end_date}\n⏰ Time left: {time_left}\n📈 Traffic: {traffic}\n🌍 Servers: {servers}\n📱 Devices: {devices_used} / {device_limit}",
+  "SUBSCRIPTION_DAILY_OVERVIEW_TEMPLATE": "👤 {full_name}\n💰 Balance: {balance}\n📱 Subscription: {status_emoji} {status_display}{warning}{tariff_info_block}\n\n📱 Subscription details\n🎭 Type: {subscription_type}\n📈 Traffic: {traffic}\n🌍 Servers: {servers}\n📱 Devices: {devices_used} / {device_limit}",
   "SUBSCRIPTION_PROMO_DISCOUNT_HINT": "⚡ Extra {percent}% discount is active and will apply automatically. It stacks with other discounts.",
   "SUBSCRIPTION_PROMO_DISCOUNT_NOTE": "⚡ Extra discount {percent}%: -{amount}",
   "SUBSCRIPTION_PROMO_DISCOUNT_TIMER": "⏳ Discount active for {time_left}\n<code>{bar}</code>",
@@ -1455,6 +1456,7 @@
   "SUB_STATUS_ACTIVE_LONG": "💎 Active\n📅 until {end_date} ({days} days)",
   "SUB_STATUS_ACTIVE_TODAY": "💎 Active\n⚠️ expires today!",
   "SUB_STATUS_ACTIVE_TOMORROW": "💎 Active\n⚠️ expires tomorrow!",
+  "SUB_STATUS_DAILY_ACTIVE": "💎 Active",
   "SUB_STATUS_EXPIRED": "🔴 Expired\n📅 {end_date}",
   "SUB_STATUS_DISABLED": "⚫ Disabled",
   "SUB_STATUS_PENDING": "⏳ Pending activation",
@@ -1660,5 +1662,11 @@
   "ADMIN_USER_RESTRICTIONS": "⚠️ Restrict",
   "USER_RESTRICTION_TOPUP_BLOCKED": "🚫 <b>Top-up restricted</b>\n\n{reason}\n\nIf you believe this is an error, you can appeal the decision.",
   "USER_RESTRICTION_SUBSCRIPTION_BLOCKED": "🚫 <b>Subscription purchase/renewal restricted</b>\n\n{reason}\n\nIf you believe this is an error, you can appeal the decision.",
-  "USER_RESTRICTION_APPEAL_BUTTON": "🆘 Appeal"
+  "USER_RESTRICTION_APPEAL_BUTTON": "🆘 Appeal",
+
+  "PAUSE_DAILY_BUTTON": "⏸️ Pause subscription",
+  "RESUME_DAILY_BUTTON": "▶️ Resume subscription",
+  "DAILY_SWITCH_WARNING": "⚠️ <b>Warning!</b> You have {days} days left.\nThey will be lost when switching to daily tariff!",
+  "DAILY_SUBSCRIPTION_PAUSED": "⏸️ Subscription paused",
+  "DAILY_SUBSCRIPTION_RESUMED": "▶️ Subscription resumed!"
 }

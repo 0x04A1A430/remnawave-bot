@@ -1,5 +1,6 @@
 """Покупка подписки по тарифам."""
 import logging
+from datetime import timedelta
 from typing import List, Optional
 
 from aiogram import Dispatcher, types, F
@@ -98,19 +99,27 @@ def format_tariffs_list_text(
         traffic = "∞" if traffic_gb == 0 else f"{traffic_gb}ГБ"
 
         # Цена
-        prices = tariff.period_prices or {}
+        is_daily = getattr(tariff, 'is_daily', False)
         price_text = ""
         discount_icon = ""
-        if prices:
-            min_period = min(prices.keys(), key=int)
-            min_price = prices[min_period]
-            discount_percent = 0
-            if db_user:
-                discount_percent = _get_user_period_discount(db_user, int(min_period))
-            if discount_percent > 0:
-                min_price = _apply_promo_discount(min_price, discount_percent)
-                discount_icon = "🔥"
-            price_text = f"от {_format_price_kopeks(min_price, compact=True)}{discount_icon}"
+
+        if is_daily:
+            # Для суточных тарифов показываем цену за день
+            daily_price = getattr(tariff, 'daily_price_kopeks', 0)
+            price_text = f"🔄 {_format_price_kopeks(daily_price, compact=True)}/день"
+        else:
+            # Для периодных тарифов показываем минимальную цену
+            prices = tariff.period_prices or {}
+            if prices:
+                min_period = min(prices.keys(), key=int)
+                min_price = prices[min_period]
+                discount_percent = 0
+                if db_user:
+                    discount_percent = _get_user_period_discount(db_user, int(min_period))
+                if discount_percent > 0:
+                    min_price = _apply_promo_discount(min_price, discount_percent)
+                    discount_icon = "🔥"
+                price_text = f"от {_format_price_kopeks(min_price, compact=True)}{discount_icon}"
 
         # Компактный формат: Название — 250ГБ/10📱 от 179₽🔥
         lines.append(f"<b>{tariff.name}</b> — {traffic}/{tariff.device_limit}📱 {price_text}")
@@ -257,9 +266,56 @@ def format_tariff_info_for_user(
     if discount_percent > 0:
         text += f"\n🎁 <b>Ваша скидка: {discount_percent}%</b>\n"
 
-    text += "\nВыберите период подписки:"
+    # Для суточных тарифов не показываем выбор периода
+    is_daily = getattr(tariff, 'is_daily', False)
+    if not is_daily:
+        text += "\nВыберите период подписки:"
 
     return text
+
+
+def get_daily_tariff_confirm_keyboard(
+    tariff_id: int,
+    language: str,
+) -> InlineKeyboardMarkup:
+    """Создает клавиатуру подтверждения покупки суточного тарифа."""
+    texts = get_texts(language)
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="✅ Подтвердить покупку",
+                callback_data=f"daily_tariff_confirm:{tariff_id}"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=texts.BACK,
+                callback_data="tariff_list"
+            )
+        ]
+    ])
+
+
+def get_daily_tariff_insufficient_balance_keyboard(
+    tariff_id: int,
+    language: str,
+) -> InlineKeyboardMarkup:
+    """Создает клавиатуру при недостаточном балансе для суточного тарифа."""
+    texts = get_texts(language)
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="💳 Пополнить баланс",
+                callback_data="balance_topup"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=texts.BACK,
+                callback_data="tariff_list"
+            )
+        ]
+    ])
 
 
 @error_handler
@@ -324,11 +380,48 @@ async def select_tariff(
         await callback.answer("Тариф недоступен", show_alert=True)
         return
 
-    await callback.message.edit_text(
-        format_tariff_info_for_user(tariff, db_user.language),
-        reply_markup=get_tariff_periods_keyboard(tariff, db_user.language, db_user=db_user),
-        parse_mode="HTML"
-    )
+    # Проверяем, суточный ли это тариф
+    is_daily = getattr(tariff, 'is_daily', False)
+
+    if is_daily:
+        # Для суточного тарифа показываем подтверждение без выбора периода
+        daily_price = getattr(tariff, 'daily_price_kopeks', 0)
+        user_balance = db_user.balance_kopeks or 0
+        traffic = _format_traffic(tariff.traffic_limit_gb)
+
+        if user_balance >= daily_price:
+            await callback.message.edit_text(
+                f"✅ <b>Подтверждение покупки</b>\n\n"
+                f"📦 Тариф: <b>{tariff.name}</b>\n"
+                f"📊 Трафик: {traffic}\n"
+                f"📱 Устройств: {tariff.device_limit}\n"
+                f"🔄 Тип: <b>Суточный</b>\n\n"
+                f"💰 <b>Цена: {_format_price_kopeks(daily_price)}/день</b>\n\n"
+                f"💳 Ваш баланс: {_format_price_kopeks(user_balance)}\n\n"
+                f"ℹ️ Средства будут списываться автоматически раз в сутки.\n"
+                f"Вы можете приостановить подписку в любой момент.",
+                reply_markup=get_daily_tariff_confirm_keyboard(tariff_id, db_user.language),
+                parse_mode="HTML"
+            )
+        else:
+            missing = daily_price - user_balance
+            await callback.message.edit_text(
+                f"❌ <b>Недостаточно средств</b>\n\n"
+                f"📦 Тариф: <b>{tariff.name}</b>\n"
+                f"🔄 Тип: Суточный\n"
+                f"💰 Цена: {_format_price_kopeks(daily_price)}/день\n\n"
+                f"💳 Ваш баланс: {_format_price_kopeks(user_balance)}\n"
+                f"⚠️ Не хватает: <b>{_format_price_kopeks(missing)}</b>",
+                reply_markup=get_daily_tariff_insufficient_balance_keyboard(tariff_id, db_user.language),
+                parse_mode="HTML"
+            )
+    else:
+        # Для обычного тарифа показываем выбор периода
+        await callback.message.edit_text(
+            format_tariff_info_for_user(tariff, db_user.language),
+            reply_markup=get_tariff_periods_keyboard(tariff, db_user.language, db_user=db_user),
+            parse_mode="HTML"
+        )
 
     await state.update_data(selected_tariff_id=tariff_id)
     await callback.answer()
@@ -452,6 +545,12 @@ async def confirm_tariff_purchase(
         # Получаем список серверов из тарифа
         squads = tariff.allowed_squads or []
 
+        # Если allowed_squads пустой - значит "все серверы", получаем их
+        if not squads:
+            from app.database.crud.server_squad import get_all_server_squads
+            all_servers, _ = await get_all_server_squads(db, available_only=True)
+            squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
+
         # Проверяем есть ли уже подписка
         existing_subscription = await get_subscription_by_user_id(db, db_user.id)
 
@@ -543,6 +642,167 @@ async def confirm_tariff_purchase(
 
     except Exception as e:
         logger.error(f"Ошибка при покупке тарифа: {e}", exc_info=True)
+        await callback.answer("Произошла ошибка при оформлении подписки", show_alert=True)
+
+
+# ==================== Покупка суточного тарифа ====================
+
+@error_handler
+async def confirm_daily_tariff_purchase(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    """Подтверждает покупку суточного тарифа."""
+    from datetime import datetime
+
+    tariff_id = int(callback.data.split(":")[1])
+    tariff = await get_tariff_by_id(db, tariff_id)
+
+    if not tariff or not tariff.is_active:
+        await callback.answer("Тариф недоступен", show_alert=True)
+        return
+
+    is_daily = getattr(tariff, 'is_daily', False)
+    if not is_daily:
+        await callback.answer("Это не суточный тариф", show_alert=True)
+        return
+
+    daily_price = getattr(tariff, 'daily_price_kopeks', 0)
+    if daily_price <= 0:
+        await callback.answer("Некорректная цена тарифа", show_alert=True)
+        return
+
+    # Проверяем баланс
+    user_balance = db_user.balance_kopeks or 0
+    if user_balance < daily_price:
+        await callback.answer("Недостаточно средств на балансе", show_alert=True)
+        return
+
+    texts = get_texts(db_user.language)
+
+    try:
+        # Списываем первый день сразу
+        success = await subtract_user_balance(
+            db, db_user, daily_price,
+            f"Покупка суточного тарифа {tariff.name} (первый день)"
+        )
+        if not success:
+            await callback.answer("Ошибка списания баланса", show_alert=True)
+            return
+
+        # Получаем список серверов из тарифа
+        squads = tariff.allowed_squads or []
+
+        # Если allowed_squads пустой - значит "все серверы", получаем их
+        if not squads:
+            from app.database.crud.server_squad import get_all_server_squads
+            all_servers, _ = await get_all_server_squads(db, available_only=True)
+            squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
+
+        # Проверяем есть ли уже подписка
+        existing_subscription = await get_subscription_by_user_id(db, db_user.id)
+
+        if existing_subscription:
+            # Обновляем существующую подписку на суточный тариф
+            existing_subscription.tariff_id = tariff.id
+            existing_subscription.traffic_limit_gb = tariff.traffic_limit_gb
+            existing_subscription.device_limit = tariff.device_limit
+            existing_subscription.connected_squads = squads
+            existing_subscription.status = "active"
+            existing_subscription.is_trial = False  # Сбрасываем триальный статус
+            existing_subscription.is_daily_paused = False
+            existing_subscription.last_daily_charge_at = datetime.utcnow()
+            # Для суточного тарифа ставим срок на 1 день
+            existing_subscription.end_date = datetime.utcnow() + timedelta(days=1)
+
+            await db.commit()
+            await db.refresh(existing_subscription)
+            subscription = existing_subscription
+        else:
+            # Создаем новую подписку на 1 день
+            subscription = await create_paid_subscription(
+                db=db,
+                user_id=db_user.id,
+                duration_days=1,
+                traffic_limit_gb=tariff.traffic_limit_gb,
+                device_limit=tariff.device_limit,
+                connected_squads=squads,
+                tariff_id=tariff.id,
+            )
+            # Устанавливаем время последнего списания
+            subscription.last_daily_charge_at = datetime.utcnow()
+            subscription.is_daily_paused = False
+            await db.commit()
+            await db.refresh(subscription)
+
+        # Обновляем пользователя в Remnawave
+        try:
+            subscription_service = SubscriptionService()
+            await subscription_service.create_remnawave_user(
+                db,
+                subscription,
+                reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT,
+                reset_reason="покупка суточного тарифа",
+            )
+        except Exception as e:
+            logger.error(f"Ошибка обновления Remnawave: {e}")
+
+        # Создаем транзакцию
+        await create_transaction(
+            db,
+            user_id=db_user.id,
+            type=TransactionType.SUBSCRIPTION_PAYMENT,
+            amount_kopeks=-daily_price,
+            description=f"Покупка суточного тарифа {tariff.name} (первый день)",
+        )
+
+        # Отправляем уведомление админу
+        try:
+            admin_notification_service = AdminNotificationService(callback.bot)
+            await admin_notification_service.send_subscription_purchase_notification(
+                db,
+                db_user,
+                subscription,
+                None,
+                1,  # 1 день
+                was_trial_conversion=False,
+                amount_kopeks=daily_price,
+            )
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления админу: {e}")
+
+        # Очищаем корзину после успешной покупки
+        try:
+            await user_cart_service.delete_user_cart(db_user.id)
+            logger.info(f"Корзина очищена после покупки суточного тарифа для пользователя {db_user.telegram_id}")
+        except Exception as e:
+            logger.error(f"Ошибка очистки корзины: {e}")
+
+        await state.clear()
+
+        traffic = _format_traffic(tariff.traffic_limit_gb)
+
+        await callback.message.edit_text(
+            f"🎉 <b>Суточная подписка оформлена!</b>\n\n"
+            f"📦 Тариф: <b>{tariff.name}</b>\n"
+            f"📊 Трафик: {traffic}\n"
+            f"📱 Устройств: {tariff.device_limit}\n"
+            f"🔄 Тип: Суточный\n"
+            f"💰 Списано: {_format_price_kopeks(daily_price)}\n\n"
+            f"ℹ️ Следующее списание через 24 часа.\n"
+            f"Перейдите в раздел «Подписка» для подключения.",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")],
+                [InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")]
+            ]),
+            parse_mode="HTML"
+        )
+        await callback.answer("Подписка оформлена!", show_alert=True)
+
+    except Exception as e:
+        logger.error(f"Ошибка при покупке суточного тарифа: {e}", exc_info=True)
         await callback.answer("Произошла ошибка при оформлении подписки", show_alert=True)
 
 
@@ -880,19 +1140,27 @@ def format_tariff_switch_list_text(
         traffic_gb = tariff.traffic_limit_gb
         traffic = "∞" if traffic_gb == 0 else f"{traffic_gb}ГБ"
 
-        prices = tariff.period_prices or {}
+        # Проверяем суточный ли тариф
+        is_daily = getattr(tariff, 'is_daily', False)
         price_text = ""
         discount_icon = ""
-        if prices:
-            min_period = min(prices.keys(), key=int)
-            min_price = prices[min_period]
-            discount_percent = 0
-            if db_user:
-                discount_percent = _get_user_period_discount(db_user, int(min_period))
-            if discount_percent > 0:
-                min_price = _apply_promo_discount(min_price, discount_percent)
-                discount_icon = "🔥"
-            price_text = f"от {_format_price_kopeks(min_price, compact=True)}{discount_icon}"
+
+        if is_daily:
+            # Для суточных тарифов показываем цену за день
+            daily_price = getattr(tariff, 'daily_price_kopeks', 0)
+            price_text = f"🔄 {_format_price_kopeks(daily_price, compact=True)}/день"
+        else:
+            prices = tariff.period_prices or {}
+            if prices:
+                min_period = min(prices.keys(), key=int)
+                min_price = prices[min_period]
+                discount_percent = 0
+                if db_user:
+                    discount_percent = _get_user_period_discount(db_user, int(min_period))
+                if discount_percent > 0:
+                    min_price = _apply_promo_discount(min_price, discount_percent)
+                    discount_icon = "🔥"
+                price_text = f"от {_format_price_kopeks(min_price, compact=True)}{discount_icon}"
 
         lines.append(f"<b>{tariff.name}</b> — {traffic}/{tariff.device_limit}📱 {price_text}")
 
@@ -1105,23 +1373,89 @@ async def select_tariff_switch(
 
     traffic = _format_traffic(tariff.traffic_limit_gb)
 
-    info_text = f"""📦 <b>{tariff.name}</b>
+    # Проверяем, суточный ли это тариф
+    is_daily = getattr(tariff, 'is_daily', False)
+
+    if is_daily:
+        # Для суточного тарифа показываем подтверждение без выбора периода
+        daily_price = getattr(tariff, 'daily_price_kopeks', 0)
+        user_balance = db_user.balance_kopeks or 0
+
+        # Проверяем текущую подписку на оставшиеся дни
+        current_subscription = await get_subscription_by_user_id(db, db_user.id)
+        days_warning = ""
+        if current_subscription and current_subscription.end_date:
+            from datetime import datetime
+            remaining = current_subscription.end_date - datetime.utcnow()
+            remaining_days = max(0, remaining.days)
+            if remaining_days > 1:
+                days_warning = f"\n\n⚠️ <b>Внимание!</b> У вас осталось {remaining_days} дн. подписки.\nПри смене на суточный тариф они будут утеряны!"
+
+        if user_balance >= daily_price:
+            await callback.message.edit_text(
+                f"✅ <b>Подтверждение смены тарифа</b>\n\n"
+                f"📦 Новый тариф: <b>{tariff.name}</b>\n"
+                f"📊 Трафик: {traffic}\n"
+                f"📱 Устройств: {tariff.device_limit}\n"
+                f"🔄 Тип: <b>Суточный</b>\n\n"
+                f"💰 <b>Цена: {_format_price_kopeks(daily_price)}/день</b>\n\n"
+                f"💳 Ваш баланс: {_format_price_kopeks(user_balance)}"
+                f"{days_warning}\n\n"
+                f"ℹ️ Средства будут списываться автоматически раз в сутки.\n"
+                f"Вы можете приостановить подписку в любой момент.",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(
+                        text="✅ Подтвердить смену",
+                        callback_data=f"daily_tariff_switch_confirm:{tariff_id}"
+                    )],
+                    [InlineKeyboardButton(
+                        text=get_texts(db_user.language).BACK,
+                        callback_data="tariff_switch"
+                    )]
+                ]),
+                parse_mode="HTML"
+            )
+        else:
+            missing = daily_price - user_balance
+            await callback.message.edit_text(
+                f"❌ <b>Недостаточно средств</b>\n\n"
+                f"📦 Тариф: <b>{tariff.name}</b>\n"
+                f"🔄 Тип: Суточный\n"
+                f"💰 Цена: {_format_price_kopeks(daily_price)}/день\n\n"
+                f"💳 Ваш баланс: {_format_price_kopeks(user_balance)}\n"
+                f"⚠️ Не хватает: <b>{_format_price_kopeks(missing)}</b>"
+                f"{days_warning}",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(
+                        text="💳 Пополнить баланс",
+                        callback_data="balance_topup"
+                    )],
+                    [InlineKeyboardButton(
+                        text=get_texts(db_user.language).BACK,
+                        callback_data="tariff_switch"
+                    )]
+                ]),
+                parse_mode="HTML"
+            )
+    else:
+        # Для обычного тарифа показываем выбор периода
+        info_text = f"""📦 <b>{tariff.name}</b>
 
 <b>Параметры нового тарифа:</b>
 • Трафик: {traffic}
 • Устройств: {tariff.device_limit}
 """
 
-    if tariff.description:
-        info_text += f"\n📝 {tariff.description}\n"
+        if tariff.description:
+            info_text += f"\n📝 {tariff.description}\n"
 
-    info_text += "\n⚠️ Оплачивается полная стоимость тарифа.\nВыберите период:"
+        info_text += "\n⚠️ Оплачивается полная стоимость тарифа.\nВыберите период:"
 
-    await callback.message.edit_text(
-        info_text,
-        reply_markup=get_tariff_switch_periods_keyboard(tariff, db_user.language, db_user=db_user),
-        parse_mode="HTML"
-    )
+        await callback.message.edit_text(
+            info_text,
+            reply_markup=get_tariff_switch_periods_keyboard(tariff, db_user.language, db_user=db_user),
+            parse_mode="HTML"
+        )
 
     await state.update_data(switch_tariff_id=tariff_id)
     await callback.answer()
@@ -1270,6 +1604,12 @@ async def confirm_tariff_switch(
         # Получаем список серверов из тарифа
         squads = tariff.allowed_squads or []
 
+        # Если allowed_squads пустой - значит "все серверы", получаем их
+        if not squads:
+            from app.database.crud.server_squad import get_all_server_squads
+            all_servers, _ = await get_all_server_squads(db, available_only=True)
+            squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
+
         # При смене тарифа пользователь получает ровно тот период, за который заплатил
         # Старые дни не сохраняются - это смена тарифа, а не продление
         days_for_new_tariff = period
@@ -1354,6 +1694,144 @@ async def confirm_tariff_switch(
     except Exception as e:
         logger.error(f"Ошибка при переключении тарифа: {e}", exc_info=True)
         await callback.answer("Произошла ошибка при переключении тарифа", show_alert=True)
+
+
+# ==================== Смена на суточный тариф ====================
+
+@error_handler
+async def confirm_daily_tariff_switch(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    """Подтверждает смену на суточный тариф."""
+    from datetime import datetime
+
+    tariff_id = int(callback.data.split(":")[1])
+    tariff = await get_tariff_by_id(db, tariff_id)
+
+    if not tariff or not tariff.is_active:
+        await callback.answer("Тариф недоступен", show_alert=True)
+        return
+
+    is_daily = getattr(tariff, 'is_daily', False)
+    if not is_daily:
+        await callback.answer("Это не суточный тариф", show_alert=True)
+        return
+
+    daily_price = getattr(tariff, 'daily_price_kopeks', 0)
+    if daily_price <= 0:
+        await callback.answer("Некорректная цена тарифа", show_alert=True)
+        return
+
+    # Проверяем баланс
+    user_balance = db_user.balance_kopeks or 0
+    if user_balance < daily_price:
+        await callback.answer("Недостаточно средств на балансе", show_alert=True)
+        return
+
+    # Проверяем наличие подписки
+    subscription = await get_subscription_by_user_id(db, db_user.id)
+    if not subscription:
+        await callback.answer("У вас нет активной подписки", show_alert=True)
+        return
+
+    texts = get_texts(db_user.language)
+
+    try:
+        # Списываем первый день сразу
+        success = await subtract_user_balance(
+            db, db_user, daily_price,
+            f"Смена на суточный тариф {tariff.name} (первый день)"
+        )
+        if not success:
+            await callback.answer("Ошибка списания баланса", show_alert=True)
+            return
+
+        # Получаем список серверов из тарифа
+        squads = tariff.allowed_squads or []
+
+        # Если allowed_squads пустой - значит "все серверы", получаем их
+        if not squads:
+            from app.database.crud.server_squad import get_all_server_squads
+            all_servers, _ = await get_all_server_squads(db, available_only=True)
+            squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
+
+        # Обновляем подписку на суточный тариф
+        subscription.tariff_id = tariff.id
+        subscription.traffic_limit_gb = tariff.traffic_limit_gb
+        subscription.device_limit = tariff.device_limit
+        subscription.connected_squads = squads
+        subscription.status = "active"
+        subscription.is_trial = False  # Сбрасываем триальный статус
+        subscription.is_daily_paused = False
+        subscription.last_daily_charge_at = datetime.utcnow()
+        # Для суточного тарифа ставим срок на 1 день
+        subscription.end_date = datetime.utcnow() + timedelta(days=1)
+
+        await db.commit()
+        await db.refresh(subscription)
+
+        # Обновляем пользователя в Remnawave
+        try:
+            subscription_service = SubscriptionService()
+            await subscription_service.create_remnawave_user(
+                db,
+                subscription,
+                reset_traffic=True,
+                reset_reason="смена на суточный тариф",
+            )
+        except Exception as e:
+            logger.error(f"Ошибка обновления Remnawave: {e}")
+
+        # Создаем транзакцию
+        await create_transaction(
+            db,
+            user_id=db_user.id,
+            type=TransactionType.SUBSCRIPTION_PAYMENT,
+            amount_kopeks=-daily_price,
+            description=f"Смена на суточный тариф {tariff.name} (первый день)",
+        )
+
+        # Отправляем уведомление админу
+        try:
+            admin_notification_service = AdminNotificationService(callback.bot)
+            await admin_notification_service.send_subscription_purchase_notification(
+                db,
+                db_user,
+                subscription,
+                None,
+                1,  # 1 день
+                was_trial_conversion=False,
+                amount_kopeks=daily_price,
+            )
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления админу: {e}")
+
+        await state.clear()
+
+        traffic = _format_traffic(tariff.traffic_limit_gb)
+
+        await callback.message.edit_text(
+            f"🎉 <b>Тариф успешно изменён!</b>\n\n"
+            f"📦 Новый тариф: <b>{tariff.name}</b>\n"
+            f"📊 Трафик: {traffic}\n"
+            f"📱 Устройств: {tariff.device_limit}\n"
+            f"🔄 Тип: Суточный\n"
+            f"💰 Списано: {_format_price_kopeks(daily_price)}\n\n"
+            f"ℹ️ Следующее списание через 24 часа.",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")],
+                [InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")]
+            ]),
+            parse_mode="HTML"
+        )
+        await callback.answer("Тариф изменён!", show_alert=True)
+
+    except Exception as e:
+        logger.error(f"Ошибка при смене на суточный тариф: {e}", exc_info=True)
+        await callback.answer("Произошла ошибка при смене тарифа", show_alert=True)
 
 
 # ==================== Мгновенное переключение тарифов (без выбора периода) ====================
@@ -1677,6 +2155,61 @@ async def preview_instant_switch(
 
     texts = get_texts(db_user.language)
 
+    # Проверяем, суточный ли новый тариф
+    is_new_daily = getattr(new_tariff, 'is_daily', False)
+    daily_warning = ""
+    if is_new_daily and remaining_days > 1:
+        daily_warning = texts.t(
+            "DAILY_SWITCH_WARNING",
+            f"\n\n⚠️ <b>Внимание!</b> У вас осталось {remaining_days} дн. подписки.\nПри смене на суточный тариф они будут утеряны!"
+        ).format(days=remaining_days)
+
+    # Для суточного тарифа особая логика показа
+    if is_new_daily:
+        daily_price = getattr(new_tariff, 'daily_price_kopeks', 0)
+        user_balance = db_user.balance_kopeks or 0
+
+        if user_balance >= daily_price:
+            await callback.message.edit_text(
+                f"🔄 <b>Переключение на суточный тариф</b>\n\n"
+                f"📌 Текущий: <b>{current_tariff.name}</b>\n"
+                f"   • Трафик: {current_traffic}\n"
+                f"   • Устройств: {current_tariff.device_limit}\n\n"
+                f"📦 Новый: <b>{new_tariff.name}</b>\n"
+                f"   • Трафик: {traffic}\n"
+                f"   • Устройств: {new_tariff.device_limit}\n"
+                f"   • Тип: 🔄 Суточный\n\n"
+                f"💰 <b>Цена: {_format_price_kopeks(daily_price)}/день</b>\n\n"
+                f"💳 Ваш баланс: {_format_price_kopeks(user_balance)}"
+                f"{daily_warning}\n\n"
+                f"ℹ️ Средства будут списываться автоматически раз в сутки.",
+                reply_markup=get_instant_switch_confirm_keyboard(tariff_id, db_user.language),
+                parse_mode="HTML"
+            )
+        else:
+            missing = daily_price - user_balance
+            await callback.message.edit_text(
+                f"❌ <b>Недостаточно средств</b>\n\n"
+                f"📦 Тариф: <b>{new_tariff.name}</b>\n"
+                f"🔄 Тип: Суточный\n"
+                f"💰 Цена: {_format_price_kopeks(daily_price)}/день\n\n"
+                f"💳 Ваш баланс: {_format_price_kopeks(user_balance)}\n"
+                f"⚠️ Не хватает: <b>{_format_price_kopeks(missing)}</b>"
+                f"{daily_warning}",
+                reply_markup=get_instant_switch_insufficient_balance_keyboard(tariff_id, db_user.language),
+                parse_mode="HTML"
+            )
+
+        await state.update_data(
+            switch_tariff_id=tariff_id,
+            upgrade_cost=0,
+            is_upgrade=False,
+            current_tariff_id=current_tariff_id,
+            remaining_days=remaining_days,
+        )
+        await callback.answer()
+        return
+
     if is_upgrade:
         # Upgrade - нужна доплата
         if user_balance >= upgrade_cost:
@@ -1783,12 +2316,44 @@ async def confirm_instant_switch(
         # Получаем список серверов из нового тарифа
         squads = new_tariff.allowed_squads or []
 
+        # Если allowed_squads пустой - значит "все серверы", получаем их
+        if not squads:
+            from app.database.crud.server_squad import get_all_server_squads
+            all_servers, _ = await get_all_server_squads(db, available_only=True)
+            squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
+
+        # Проверяем, суточный ли новый тариф
+        is_new_daily = getattr(new_tariff, 'is_daily', False)
+
         # Обновляем подписку с новыми параметрами тарифа
-        # НЕ меняем end_date - только параметры тарифа
         subscription.tariff_id = new_tariff.id
         subscription.traffic_limit_gb = new_tariff.traffic_limit_gb
         subscription.device_limit = new_tariff.device_limit
         subscription.connected_squads = squads
+
+        if is_new_daily:
+            # Для суточного тарифа - сбрасываем на 1 день и настраиваем суточные параметры
+            daily_price = getattr(new_tariff, 'daily_price_kopeks', 0)
+
+            # Списываем первый день если ещё не списано (upgrade_cost был 0)
+            if upgrade_cost == 0 and daily_price > 0:
+                if user_balance >= daily_price:
+                    await subtract_user_balance(
+                        db, db_user, daily_price,
+                        f"Переключение на суточный тариф {new_tariff.name} (первый день)"
+                    )
+                    await create_transaction(
+                        db,
+                        user_id=db_user.id,
+                        type=TransactionType.SUBSCRIPTION_PAYMENT,
+                        amount_kopeks=-daily_price,
+                        description=f"Переключение на суточный тариф {new_tariff.name} (первый день)",
+                    )
+
+            subscription.end_date = datetime.utcnow() + timedelta(days=1)
+            subscription.is_trial = False
+            subscription.is_daily_paused = False
+            subscription.last_daily_charge_at = datetime.utcnow()
 
         await db.commit()
         await db.refresh(subscription)
@@ -1834,24 +2399,42 @@ async def confirm_instant_switch(
 
         traffic = _format_traffic(new_tariff.traffic_limit_gb)
 
-        if is_upgrade:
-            cost_text = f"💰 Списано: {_format_price_kopeks(upgrade_cost)}"
+        # Для суточного тарифа другое сообщение об успехе
+        if is_new_daily:
+            daily_price = getattr(new_tariff, 'daily_price_kopeks', 0)
+            await callback.message.edit_text(
+                f"🎉 <b>Тариф успешно изменён!</b>\n\n"
+                f"📦 Новый тариф: <b>{new_tariff.name}</b>\n"
+                f"📊 Трафик: {traffic}\n"
+                f"📱 Устройств: {new_tariff.device_limit}\n"
+                f"🔄 Тип: Суточный\n"
+                f"💰 Списано: {_format_price_kopeks(daily_price)}\n\n"
+                f"ℹ️ Следующее списание через 24 часа.",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")],
+                    [InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")]
+                ]),
+                parse_mode="HTML"
+            )
         else:
-            cost_text = "💰 Бесплатно"
+            if is_upgrade:
+                cost_text = f"💰 Списано: {_format_price_kopeks(upgrade_cost)}"
+            else:
+                cost_text = "💰 Бесплатно"
 
-        await callback.message.edit_text(
-            f"🎉 <b>Тариф успешно изменён!</b>\n\n"
-            f"📦 Новый тариф: <b>{new_tariff.name}</b>\n"
-            f"📊 Трафик: {traffic}\n"
-            f"📱 Устройств: {new_tariff.device_limit}\n"
-            f"⏰ Осталось дней: {remaining_days}\n"
-            f"{cost_text}",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")],
-                [InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")]
-            ]),
-            parse_mode="HTML"
-        )
+            await callback.message.edit_text(
+                f"🎉 <b>Тариф успешно изменён!</b>\n\n"
+                f"📦 Новый тариф: <b>{new_tariff.name}</b>\n"
+                f"📊 Трафик: {traffic}\n"
+                f"📱 Устройств: {new_tariff.device_limit}\n"
+                f"⏰ Осталось дней: {remaining_days}\n"
+                f"{cost_text}",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")],
+                    [InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")]
+                ]),
+                parse_mode="HTML"
+            )
         await callback.answer("Тариф изменён!", show_alert=True)
 
     except Exception as e:
@@ -1874,6 +2457,9 @@ def register_tariff_purchase_handlers(dp: Dispatcher):
     # Подтверждение покупки
     dp.callback_query.register(confirm_tariff_purchase, F.data.startswith("tariff_confirm:"))
 
+    # Подтверждение покупки суточного тарифа
+    dp.callback_query.register(confirm_daily_tariff_purchase, F.data.startswith("daily_tariff_confirm:"))
+
     # Продление по тарифу
     dp.callback_query.register(select_tariff_extend_period, F.data.startswith("tariff_extend:"))
     dp.callback_query.register(confirm_tariff_extend, F.data.startswith("tariff_ext_confirm:"))
@@ -1883,6 +2469,9 @@ def register_tariff_purchase_handlers(dp: Dispatcher):
     dp.callback_query.register(select_tariff_switch, F.data.startswith("tariff_sw_select:"))
     dp.callback_query.register(select_tariff_switch_period, F.data.startswith("tariff_sw_period:"))
     dp.callback_query.register(confirm_tariff_switch, F.data.startswith("tariff_sw_confirm:"))
+
+    # Смена на суточный тариф
+    dp.callback_query.register(confirm_daily_tariff_switch, F.data.startswith("daily_tariff_switch_confirm:"))
 
     # Мгновенное переключение тарифов (без выбора периода)
     dp.callback_query.register(show_instant_switch_list, F.data == "instant_switch")

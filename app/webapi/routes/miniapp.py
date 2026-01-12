@@ -197,6 +197,8 @@ from ..schemas.miniapp import (
     MiniAppConnectedServer,
     MiniAppTrafficTopupRequest,
     MiniAppTrafficTopupResponse,
+    MiniAppDailySubscriptionToggleRequest,
+    MiniAppDailySubscriptionToggleResponse,
 )
 
 
@@ -3414,6 +3416,26 @@ async def get_subscription_details(
 
     devices_count, devices = await _load_devices_info(user)
 
+    # Загружаем данные суточного тарифа
+    is_daily_tariff = False
+    is_daily_paused = False
+    daily_tariff_name = None
+    daily_price_kopeks = None
+    daily_price_label = None
+    daily_next_charge_at = None
+
+    if subscription and getattr(subscription, "tariff_id", None):
+        tariff = await get_tariff_by_id(db, subscription.tariff_id)
+        if tariff and getattr(tariff, 'is_daily', False):
+            is_daily_tariff = True
+            is_daily_paused = getattr(subscription, 'is_daily_paused', False)
+            daily_tariff_name = tariff.name
+            daily_price_kopeks = getattr(tariff, 'daily_price_kopeks', 0)
+            daily_price_label = settings.format_price(daily_price_kopeks) + "/день" if daily_price_kopeks > 0 else None
+            # Следующее списание - через 24 часа от последнего обновления подписки или от start_date
+            if subscription.end_date and not is_daily_paused:
+                daily_next_charge_at = subscription.end_date
+
     response_user = MiniAppSubscriptionUser(
         telegram_id=user.telegram_id,
         username=user.username,
@@ -3443,6 +3465,12 @@ async def get_subscription_details(
         promo_offer_discount_percent=active_discount_percent,
         promo_offer_discount_expires_at=active_discount_expires_at,
         promo_offer_discount_source=promo_offer_source,
+        is_daily_tariff=is_daily_tariff,
+        is_daily_paused=is_daily_paused,
+        daily_tariff_name=daily_tariff_name,
+        daily_price_kopeks=daily_price_kopeks,
+        daily_price_label=daily_price_label,
+        daily_next_charge_at=daily_next_charge_at,
     )
 
     referral_info = await _build_referral_info(db, user)
@@ -6340,6 +6368,11 @@ async def _build_tariff_model(
         is_upgrade = upgrade
         is_switch_free = cost == 0
 
+    # Суточный тариф
+    is_daily = getattr(tariff, 'is_daily', False)
+    daily_price_kopeks = getattr(tariff, 'daily_price_kopeks', 0) if is_daily else 0
+    daily_price_label = settings.format_price(daily_price_kopeks) + "/день" if is_daily and daily_price_kopeks > 0 else None
+
     return MiniAppTariff(
         id=tariff.id,
         name=tariff.name,
@@ -6358,6 +6391,9 @@ async def _build_tariff_model(
         switch_cost_label=switch_cost_label,
         is_upgrade=is_upgrade,
         is_switch_free=is_switch_free,
+        is_daily=is_daily,
+        daily_price_kopeks=daily_price_kopeks,
+        daily_price_label=daily_price_label,
     )
 
 
@@ -6378,6 +6414,11 @@ async def _build_current_tariff_model(db: AsyncSession, tariff, promo_group=None
             except (TypeError, ValueError):
                 pass
 
+    # Суточный тариф
+    is_daily = getattr(tariff, 'is_daily', False)
+    daily_price_kopeks = getattr(tariff, 'daily_price_kopeks', 0) if is_daily else 0
+    daily_price_label = settings.format_price(daily_price_kopeks) + "/день" if is_daily and daily_price_kopeks > 0 else None
+
     return MiniAppCurrentTariff(
         id=tariff.id,
         name=tariff.name,
@@ -6389,6 +6430,9 @@ async def _build_current_tariff_model(db: AsyncSession, tariff, promo_group=None
         device_limit=tariff.device_limit,
         servers_count=servers_count,
         monthly_price_kopeks=monthly_price,
+        is_daily=is_daily,
+        daily_price_kopeks=daily_price_kopeks,
+        daily_price_label=daily_price_label,
     )
 
 
@@ -6504,21 +6548,37 @@ async def purchase_tariff_endpoint(
             },
         )
 
-    # Получаем цену за выбранный период
-    base_price_kopeks = tariff.get_price_for_period(payload.period_days)
-    if base_price_kopeks is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "code": "invalid_period",
-                "message": "Invalid period for this tariff",
-            },
-        )
+    # Получаем цену
+    is_daily_tariff = getattr(tariff, 'is_daily', False)
+    if is_daily_tariff:
+        # Для суточного тарифа принудительно 1 день (защита от манипуляций с period_days)
+        payload.period_days = 1
+        # Для суточного тарифа берём daily_price_kopeks (первый день)
+        base_price_kopeks = getattr(tariff, 'daily_price_kopeks', 0)
+        if base_price_kopeks <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "code": "invalid_daily_price",
+                    "message": "Daily tariff has no price configured",
+                },
+            )
+    else:
+        # Для обычного тарифа получаем цену за выбранный период
+        base_price_kopeks = tariff.get_price_for_period(payload.period_days)
+        if base_price_kopeks is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "code": "invalid_period",
+                    "message": "Invalid period for this tariff",
+                },
+            )
 
-    # Применяем скидку промогруппы
+    # Применяем скидку промогруппы (только для обычных тарифов, не для суточных)
     price_kopeks = base_price_kopeks
     discount_percent = 0
-    if promo_group:
+    if not is_daily_tariff and promo_group:
         raw_discounts = getattr(promo_group, 'period_discounts', None) or {}
         for k, v in raw_discounts.items():
             try:
@@ -6545,7 +6605,9 @@ async def purchase_tariff_endpoint(
     subscription = getattr(user, "subscription", None)
 
     # Списываем баланс
-    if discount_percent > 0:
+    if is_daily_tariff:
+        description = f"Активация суточного тарифа '{tariff.name}' (первый день)"
+    elif discount_percent > 0:
         description = f"Покупка тарифа '{tariff.name}' на {payload.period_days} дней (скидка {discount_percent}%)"
     else:
         description = f"Покупка тарифа '{tariff.name}' на {payload.period_days} дней"
@@ -6591,6 +6653,16 @@ async def purchase_tariff_endpoint(
             connected_squads=tariff.allowed_squads or [],
             tariff_id=tariff.id,
         )
+
+    # Инициализация daily полей при покупке суточного тарифа
+    is_daily_tariff = getattr(tariff, 'is_daily', False)
+    if is_daily_tariff:
+        subscription.is_daily_paused = False
+        subscription.last_daily_charge_at = datetime.utcnow()
+        # Для суточного тарифа end_date = сейчас + 1 день (первый день уже оплачен)
+        subscription.end_date = datetime.utcnow() + timedelta(days=1)
+        await db.commit()
+        await db.refresh(subscription)
 
     # Синхронизируем с RemnaWave
     service = SubscriptionService()
@@ -6879,6 +6951,23 @@ async def switch_tariff_endpoint(
     # Сбрасываем докупленный трафик при смене тарифа
     subscription.purchased_traffic_gb = 0
 
+    # Обработка daily полей при смене тарифа
+    new_is_daily = getattr(new_tariff, 'is_daily', False)
+    old_is_daily = getattr(current_tariff, 'is_daily', False)
+
+    if new_is_daily:
+        # Переход на суточный тариф
+        subscription.is_daily_paused = False
+        subscription.last_daily_charge_at = datetime.utcnow()
+        # Для суточного тарифа end_date = сейчас + 1 день
+        subscription.end_date = datetime.utcnow() + timedelta(days=1)
+        logger.info(f"🔄 Смена на суточный тариф: установлены daily поля, end_date={subscription.end_date}")
+    elif old_is_daily and not new_is_daily:
+        # Переход с суточного на обычный тариф - очищаем daily поля
+        subscription.is_daily_paused = False
+        subscription.last_daily_charge_at = None
+        logger.info(f"🔄 Смена с суточного на обычный тариф: очищены daily поля")
+
     await db.commit()
     await db.refresh(subscription)
     await db.refresh(user)
@@ -7092,4 +7181,100 @@ async def purchase_traffic_topup_endpoint(
         new_traffic_limit_gb=subscription.traffic_limit_gb,
         new_balance_kopeks=user.balance_kopeks,
         charged_kopeks=final_price,
+    )
+
+
+@router.post("/subscription/daily/toggle-pause")
+async def toggle_daily_subscription_pause_endpoint(
+    payload: MiniAppDailySubscriptionToggleRequest,
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Переключает паузу/активацию суточной подписки."""
+    from app.webapi.schemas.miniapp import MiniAppDailySubscriptionToggleResponse
+    from app.services.subscription_service import SubscriptionService
+
+    user = await _authorize_miniapp_user(payload.init_data, db)
+    subscription = user.subscription
+
+    if not subscription:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "no_subscription", "message": "No subscription found"},
+        )
+
+    # Проверяем наличие тарифа
+    tariff_id = getattr(subscription, 'tariff_id', None)
+    if not tariff_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "no_tariff", "message": "Subscription has no tariff"},
+        )
+
+    tariff = await get_tariff_by_id(db, tariff_id)
+    if not tariff or not getattr(tariff, 'is_daily', False):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "not_daily_tariff", "message": "Subscription is not on a daily tariff"},
+        )
+
+    # Переключаем состояние паузы
+    is_currently_paused = getattr(subscription, 'is_daily_paused', False)
+    new_paused_state = not is_currently_paused
+    subscription.is_daily_paused = new_paused_state
+
+    # Если снимаем с паузы, нужно проверить баланс для активации
+    if not new_paused_state:
+        daily_price = getattr(tariff, 'daily_price_kopeks', 0)
+        if daily_price > 0 and user.balance_kopeks < daily_price:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail={
+                    "code": "insufficient_balance",
+                    "message": "Insufficient balance to resume daily subscription",
+                    "required": daily_price,
+                    "balance": user.balance_kopeks,
+                },
+            )
+
+        # Восстанавливаем статус ACTIVE если подписка была DISABLED (недостаток средств)
+        from app.database.models import SubscriptionStatus
+        if subscription.status == SubscriptionStatus.DISABLED.value:
+            subscription.status = SubscriptionStatus.ACTIVE.value
+            # Обновляем время последнего списания для корректного расчёта следующего
+            subscription.last_daily_charge_at = datetime.utcnow()
+            subscription.end_date = datetime.utcnow() + timedelta(days=1)
+            logger.info(
+                f"✅ Суточная подписка {subscription.id} восстановлена из DISABLED в ACTIVE"
+            )
+
+    await db.commit()
+    await db.refresh(subscription)
+    await db.refresh(user)
+
+    # Синхронизация с RemnaWave
+    try:
+        service = SubscriptionService()
+        if new_paused_state:
+            # При паузе отключаем пользователя в RemnaWave
+            if user.remnawave_uuid:
+                await service.disable_remnawave_user(user.remnawave_uuid)
+        else:
+            # При возобновлении включаем пользователя в RemnaWave
+            if user.remnawave_uuid:
+                await service.enable_remnawave_user(user.remnawave_uuid)
+    except Exception as e:
+        logger.error(f"Ошибка синхронизации с RemnaWave при паузе/возобновлении: {e}")
+
+    lang = getattr(user, "language", settings.DEFAULT_LANGUAGE)
+    if new_paused_state:
+        message = "Суточная подписка приостановлена" if lang == "ru" else "Daily subscription paused"
+    else:
+        message = "Суточная подписка возобновлена" if lang == "ru" else "Daily subscription resumed"
+
+    return MiniAppDailySubscriptionToggleResponse(
+        success=True,
+        message=message,
+        is_paused=new_paused_state,
+        balance_kopeks=user.balance_kopeks,
+        balance_label=settings.format_price(user.balance_kopeks),
     )

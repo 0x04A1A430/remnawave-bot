@@ -242,6 +242,10 @@ class Settings(BaseSettings):
     TRAFFIC_MONITORING_INTERVAL_HOURS: int = 24  # Интервал проверки в часах (по умолчанию - раз в сутки)
     SUSPICIOUS_NOTIFICATIONS_TOPIC_ID: Optional[int] = None
 
+    # Настройки суточных подписок
+    DAILY_SUBSCRIPTIONS_ENABLED: bool = True  # Включить автоматическое списание для суточных тарифов
+    DAILY_SUBSCRIPTIONS_CHECK_INTERVAL_MINUTES: int = 30  # Интервал проверки в минутах
+
     AUTOPAY_WARNING_DAYS: str = "3,1"
 
     ENABLE_AUTOPAY: bool = False

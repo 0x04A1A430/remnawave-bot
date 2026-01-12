@@ -2707,6 +2707,178 @@
             color: #41464b;
         }
 
+        .status-paused {
+            background: linear-gradient(135deg, #e2e3e5, #eeeff1);
+            color: #41464b;
+        }
+
+        /* Daily Subscription Status Bar */
+        .daily-subscription-status {
+            margin-top: 16px;
+            padding: 16px;
+            background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.08), rgba(var(--primary-rgb), 0.04));
+            border-radius: var(--radius-lg);
+            border: 1px solid rgba(var(--primary-rgb), 0.15);
+        }
+
+        .daily-subscription-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .daily-subscription-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .daily-subscription-title .daily-icon {
+            font-size: 18px;
+        }
+
+        .daily-subscription-price {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        .daily-subscription-progress {
+            margin-bottom: 12px;
+            transition: opacity 0.3s ease;
+        }
+
+        .daily-subscription-progress.paused {
+            opacity: 0.5;
+        }
+
+        .daily-subscription-progress.paused .daily-progress-fill {
+            animation: none;
+            background: var(--hint-color);
+        }
+
+        .daily-progress-bar {
+            height: 8px;
+            background: rgba(var(--primary-rgb), 0.15);
+            border-radius: 4px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .daily-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), rgba(var(--primary-rgb), 0.7));
+            border-radius: 4px;
+            transition: width 0.5s ease;
+            position: relative;
+        }
+
+        .daily-progress-fill::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            animation: shimmer 2s infinite;
+        }
+
+        .daily-subscription-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+        }
+
+        .daily-time-remaining {
+            color: var(--text-secondary);
+        }
+
+        .daily-time-remaining strong {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        .daily-next-charge {
+            color: var(--text-secondary);
+        }
+
+        .daily-subscription-actions {
+            margin-top: 12px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .daily-pause-btn {
+            flex: 1;
+            padding: 10px 16px;
+            border-radius: var(--radius);
+            border: 2px solid var(--border-color);
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .daily-pause-btn:hover {
+            border-color: var(--primary);
+            background: rgba(var(--primary-rgb), 0.05);
+        }
+
+        .daily-pause-btn.paused {
+            background: linear-gradient(135deg, var(--primary), rgba(var(--primary-rgb), 0.8));
+            color: white;
+            border-color: transparent;
+        }
+
+        .daily-pause-btn.paused:hover {
+            opacity: 0.9;
+        }
+
+        .daily-pause-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .daily-subscription-paused-notice {
+            margin-top: 12px;
+            padding: 12px;
+            background: rgba(var(--warning-rgb), 0.1);
+            border-radius: var(--radius);
+            border: 1px solid rgba(var(--warning-rgb), 0.2);
+            font-size: 13px;
+            color: var(--text-primary);
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+
+        .daily-subscription-paused-notice .notice-icon {
+            font-size: 18px;
+            line-height: 1;
+        }
+
+        :root[data-theme="dark"] .daily-subscription-status {
+            background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.12), rgba(var(--primary-rgb), 0.06));
+            border-color: rgba(var(--primary-rgb), 0.25);
+        }
+
+        :root[data-theme="dark"] .status-paused {
+            background: linear-gradient(135deg, rgba(100, 116, 139, 0.3), rgba(100, 116, 139, 0.2));
+            color: #94a3b8;
+        }
+
         .status-missing {
             background: linear-gradient(135deg, #e0e7ff, #eef2ff);
             color: #1e3a8a;
@@ -5569,6 +5741,39 @@
                     </div>
                 </div>
 
+                <!-- Daily Subscription Status Bar -->
+                <div class="daily-subscription-status hidden" id="dailySubscriptionStatus">
+                    <div class="daily-subscription-header">
+                        <div class="daily-subscription-title">
+                            <span class="daily-icon">🔄</span>
+                            <span id="dailyTariffName" data-i18n="daily.tariff_name">Суточный тариф</span>
+                        </div>
+                        <div class="daily-subscription-price" id="dailyPrice">-/день</div>
+                    </div>
+                    <div class="daily-subscription-progress" id="dailyProgressSection">
+                        <div class="daily-progress-bar">
+                            <div class="daily-progress-fill" id="dailyProgressFill" style="width: 100%"></div>
+                        </div>
+                    </div>
+                    <div class="daily-subscription-info">
+                        <div class="daily-time-remaining">
+                            <span data-i18n="daily.time_remaining">Осталось:</span>
+                            <strong id="dailyTimeRemaining">--:--:--</strong>
+                        </div>
+                        <div class="daily-next-charge" id="dailyNextCharge"></div>
+                    </div>
+                    <div class="daily-subscription-actions">
+                        <button class="daily-pause-btn" id="dailyPauseBtn" type="button">
+                            <span id="dailyPauseBtnIcon">⏸️</span>
+                            <span id="dailyPauseBtnText" data-i18n="daily.pause">Приостановить</span>
+                        </button>
+                    </div>
+                    <div class="daily-subscription-paused-notice hidden" id="dailyPausedNotice">
+                        <span class="notice-icon">⏸️</span>
+                        <span data-i18n="daily.paused_notice">Подписка приостановлена. Ежедневное списание отключено. VPN не работает.</span>
+                    </div>
+                </div>
+
                 <div class="info-list">
                     <div class="info-item">
                         <span class="info-label" data-i18n="info.expires">
@@ -6433,6 +6638,17 @@
                 'info.promo_group': 'Promo group',
                 'info.device_limit': 'Device limit',
                 'info.autopay': 'Auto-pay',
+                // Daily subscription
+                'daily.tariff_name': 'Daily tariff',
+                'daily.time_remaining': 'Time left:',
+                'daily.next_charge': 'Next charge at',
+                'daily.pause': 'Pause',
+                'daily.resume': 'Resume',
+                'daily.paused_notice': 'Subscription paused. Daily billing disabled. VPN is not working.',
+                'daily.paused_no_charge': 'Paused — no charge',
+                'daily.status.active': 'Active',
+                'daily.status.paused': 'Paused',
+                'daily.hours_remaining': 'Hours left',
                 'button.connect.default': 'Connect to VPN',
                 'button.connect.happ': 'Connect',
                 'button.copy': 'Copy subscription link',
@@ -6896,6 +7112,17 @@
                 'info.promo_group': 'Уровень',
                 'info.device_limit': 'Лимит устройств',
                 'info.autopay': 'Автоплатеж',
+                // Суточная подписка
+                'daily.tariff_name': 'Суточный тариф',
+                'daily.time_remaining': 'Осталось:',
+                'daily.next_charge': 'Следующее списание',
+                'daily.pause': 'Приостановить',
+                'daily.resume': 'Возобновить',
+                'daily.paused_notice': 'Подписка приостановлена. Ежедневное списание отключено. VPN не работает.',
+                'daily.paused_no_charge': 'Пауза — без списания',
+                'daily.status.active': 'Активна',
+                'daily.status.paused': 'Приостановлена',
+                'daily.hours_remaining': 'Часов осталось',
                 'button.connect.default': 'Подключиться к VPN',
                 'button.connect.happ': 'Подключиться',
                 'button.copy': 'Скопировать ссылку подписки',
@@ -9278,6 +9505,9 @@
                     : autopayLabel;
             }
 
+            // Отображение суточной подписки
+            renderDailySubscriptionStatus();
+
             renderSubscriptionMissingCard();
             renderSubscriptionPurchaseCard();
             renderSubscriptionRenewalCard();
@@ -9293,6 +9523,221 @@
             renderLegalDocuments();
             updateConnectButtonLabel();
             updateActionButtons();
+        }
+
+        // ============================================================
+        // Суточная подписка - отображение и управление
+        // ============================================================
+        let dailyTimerInterval = null;
+
+        function renderDailySubscriptionStatus() {
+            const container = document.getElementById('dailySubscriptionStatus');
+            if (!container) return;
+
+            const user = userData?.user;
+            if (!user) {
+                container.classList.add('hidden');
+                return;
+            }
+
+            const isDailyTariff = user.is_daily_tariff ?? user.isDailyTariff ?? false;
+            const isDailyPaused = user.is_daily_paused ?? user.isDailyPaused ?? false;
+            const dailyTariffName = user.daily_tariff_name ?? user.dailyTariffName ?? '';
+            const dailyPriceLabel = user.daily_price_label ?? user.dailyPriceLabel ?? '';
+            const dailyNextChargeAt = user.daily_next_charge_at ?? user.dailyNextChargeAt ?? null;
+
+            if (!isDailyTariff) {
+                container.classList.add('hidden');
+                if (dailyTimerInterval) {
+                    clearInterval(dailyTimerInterval);
+                    dailyTimerInterval = null;
+                }
+                return;
+            }
+
+            container.classList.remove('hidden');
+
+            // Заполняем данные
+            const tariffNameEl = document.getElementById('dailyTariffName');
+            if (tariffNameEl && dailyTariffName) {
+                tariffNameEl.textContent = dailyTariffName;
+            }
+
+            const priceEl = document.getElementById('dailyPrice');
+            if (priceEl && dailyPriceLabel) {
+                priceEl.textContent = dailyPriceLabel;
+            }
+
+            // Настройка кнопки паузы
+            const pauseBtn = document.getElementById('dailyPauseBtn');
+            const pauseBtnIcon = document.getElementById('dailyPauseBtnIcon');
+            const pauseBtnText = document.getElementById('dailyPauseBtnText');
+            const pausedNotice = document.getElementById('dailyPausedNotice');
+            const progressSection = document.getElementById('dailyProgressSection');
+
+            if (isDailyPaused) {
+                pauseBtn?.classList.add('paused');
+                if (pauseBtnIcon) pauseBtnIcon.textContent = '▶️';
+                if (pauseBtnText) pauseBtnText.textContent = t('daily.resume');
+                pausedNotice?.classList.remove('hidden');
+                // Оставляем прогресс секцию видимой, но затемняем
+                progressSection?.classList.remove('hidden');
+                progressSection?.classList.add('paused');
+
+                // Обновляем статус badge
+                const statusBadge = document.getElementById('statusBadge');
+                if (statusBadge) {
+                    statusBadge.textContent = t('daily.status.paused');
+                    statusBadge.className = 'status-badge status-paused';
+                }
+            } else {
+                pauseBtn?.classList.remove('paused');
+                if (pauseBtnIcon) pauseBtnIcon.textContent = '⏸️';
+                if (pauseBtnText) pauseBtnText.textContent = t('daily.pause');
+                pausedNotice?.classList.add('hidden');
+                progressSection?.classList.remove('hidden');
+                progressSection?.classList.remove('paused');
+            }
+
+            // Обработчик кнопки паузы
+            if (pauseBtn) {
+                pauseBtn.onclick = () => toggleDailyPause();
+            }
+
+            // Запуск таймера обратного отсчета
+            startDailyCountdownTimer(dailyNextChargeAt, isDailyPaused);
+        }
+
+        function startDailyCountdownTimer(nextChargeAt, isPaused) {
+            if (dailyTimerInterval) {
+                clearInterval(dailyTimerInterval);
+                dailyTimerInterval = null;
+            }
+
+            const timeRemainingEl = document.getElementById('dailyTimeRemaining');
+            const progressFill = document.getElementById('dailyProgressFill');
+            const nextChargeEl = document.getElementById('dailyNextCharge');
+
+            if (!nextChargeAt) {
+                if (timeRemainingEl) timeRemainingEl.textContent = '--:--:--';
+                if (progressFill) progressFill.style.width = '0%';
+                if (nextChargeEl) nextChargeEl.textContent = '';
+                return;
+            }
+
+            // При паузе показываем оставшееся время, но без обновления (статичное)
+            if (isPaused) {
+                const nextChargeDate = new Date(nextChargeAt);
+                const now = new Date();
+                const remaining = nextChargeDate - now;
+
+                if (remaining > 0) {
+                    const hours = Math.floor(remaining / (1000 * 60 * 60));
+                    const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
+                    const seconds = Math.floor((remaining % (1000 * 60)) / 1000);
+                    const timeStr = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+                    if (timeRemainingEl) timeRemainingEl.textContent = timeStr;
+                    const totalDuration = 24 * 60 * 60 * 1000;
+                    const progressPercent = Math.max(0, Math.min(100, (remaining / totalDuration) * 100));
+                    if (progressFill) progressFill.style.width = `${progressPercent}%`;
+                } else {
+                    if (timeRemainingEl) timeRemainingEl.textContent = '00:00:00';
+                    if (progressFill) progressFill.style.width = '0%';
+                }
+                if (nextChargeEl) nextChargeEl.textContent = t('daily.paused_no_charge');
+                return;
+            }
+
+            const nextChargeDate = new Date(nextChargeAt);
+            const totalDuration = 24 * 60 * 60 * 1000; // 24 часа в миллисекундах
+
+            function updateTimer() {
+                const now = new Date();
+                const remaining = nextChargeDate - now;
+
+                if (remaining <= 0) {
+                    if (timeRemainingEl) timeRemainingEl.textContent = '00:00:00';
+                    if (progressFill) progressFill.style.width = '0%';
+                    clearInterval(dailyTimerInterval);
+                    return;
+                }
+
+                // Форматируем оставшееся время
+                const hours = Math.floor(remaining / (1000 * 60 * 60));
+                const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((remaining % (1000 * 60)) / 1000);
+                const timeStr = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
+                if (timeRemainingEl) timeRemainingEl.textContent = timeStr;
+
+                // Обновляем прогресс бар (от 100% до 0%)
+                const progressPercent = Math.max(0, Math.min(100, (remaining / totalDuration) * 100));
+                if (progressFill) progressFill.style.width = `${progressPercent}%`;
+
+                // Время следующего списания
+                if (nextChargeEl) {
+                    const chargeTime = nextChargeDate.toLocaleTimeString(currentLanguage === 'ru' ? 'ru-RU' : 'en-US', {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                    nextChargeEl.textContent = `${t('daily.next_charge')} ${chargeTime}`;
+                }
+            }
+
+            updateTimer();
+            dailyTimerInterval = setInterval(updateTimer, 1000);
+        }
+
+        async function toggleDailyPause() {
+            const pauseBtn = document.getElementById('dailyPauseBtn');
+            if (!pauseBtn || pauseBtn.disabled) return;
+
+            pauseBtn.disabled = true;
+
+            try {
+                const initData = window.Telegram?.WebApp?.initData || '';
+                const response = await fetch(`${apiBaseUrl}/miniapp/subscription/daily/toggle-pause`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ init_data: initData })
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    const errorCode = result?.detail?.code || 'unknown';
+                    if (errorCode === 'insufficient_balance') {
+                        showToast(t('daily.error.insufficient_balance') || 'Недостаточно средств для возобновления подписки', 'error');
+                    } else {
+                        showToast(result?.detail?.message || 'Error', 'error');
+                    }
+                    return;
+                }
+
+                // Обновляем локальные данные
+                if (userData?.user) {
+                    userData.user.is_daily_paused = result.is_paused;
+                    userData.user.isDailyPaused = result.is_paused;
+                }
+
+                // Обновляем баланс
+                if (result.balance_kopeks !== undefined) {
+                    userData.balance_kopeks = result.balance_kopeks;
+                    userData.balanceKopeks = result.balance_kopeks;
+                    renderBalanceSection();
+                }
+
+                // Перерисовываем статус
+                renderDailySubscriptionStatus();
+
+                showToast(result.message || 'OK', 'success');
+
+            } catch (error) {
+                console.error('Error toggling daily pause:', error);
+                showToast('Connection error', 'error');
+            } finally {
+                pauseBtn.disabled = false;
+            }
         }
 
         function renderSubscriptionMissingCard() {
@@ -20359,6 +20804,8 @@
                 // Разные стили для режима смены и покупки
                 if (isInstantSwitchMode) {
                     // Режим мгновенной смены тарифа - используем точные данные с сервера
+                    const isDaily = tariff.is_daily ?? tariff.isDaily ?? false;
+                    const dailyPriceLabel = tariff.daily_price_label ?? tariff.dailyPriceLabel ?? null;
                     const isUpgrade = tariff.is_upgrade ?? tariff.isUpgrade ?? false;
                     const isSwitchFree = tariff.is_switch_free ?? tariff.isSwitchFree ?? !isUpgrade;
                     const upgradeCost = tariff.switch_cost_kopeks ?? tariff.switchCostKopeks ?? 0;
@@ -20394,12 +20841,13 @@
 
                     const upgradeLabel = preferredLanguage === 'en' ? 'upgrade' : 'доплата';
                     const freeLabel = preferredLanguage === 'en' ? '✓ Free' : '✓ Бесплатно';
+                    const dailyLabel = preferredLanguage === 'en' ? 'daily' : 'суточный';
 
                     div.className = 'instant-switch-tariff-item';
                     div.innerHTML = `
                         <div class="instant-switch-tariff-info">
                             <div class="instant-switch-tariff-name">
-                                ${isPremium ? '👑 ' : '⚡ '}${escapeHtml(tariff.name)}
+                                ${isDaily ? '🔄 ' : (isPremium ? '👑 ' : '⚡ ')}${escapeHtml(tariff.name)}
                             </div>
                             ${description ? `<div style="font-size: 11px; color: var(--text-secondary); margin: 4px 0; line-height: 1.3;">${escapeHtml(description)}</div>` : ''}
                             <div class="instant-switch-tariff-details">
@@ -20409,22 +20857,40 @@
                             ${serverTags ? `<div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px;">${serverTags}</div>` : ''}
                         </div>
                         <div class="instant-switch-tariff-cost">
-                            <span class="instant-switch-cost-badge ${isUpgrade ? 'upgrade' : 'free'}">
-                                ${isUpgrade
-                                    ? `<span style="font-size: 10px; display: block; text-transform: uppercase; opacity: 0.8;">${upgradeLabel}</span>+${upgradeCostLabel}`
-                                    : freeLabel}
-                            </span>
+                            ${isDaily ? `
+                                <span class="instant-switch-cost-badge" style="background: linear-gradient(135deg, #8b5cf6, #6366f1); color: white;">
+                                    <span style="font-size: 10px; display: block; text-transform: uppercase; opacity: 0.8;">${dailyLabel}</span>
+                                    ${dailyPriceLabel || ''}
+                                </span>
+                            ` : `
+                                <span class="instant-switch-cost-badge ${isUpgrade ? 'upgrade' : 'free'}">
+                                    ${isUpgrade
+                                        ? `<span style="font-size: 10px; display: block; text-transform: uppercase; opacity: 0.8;">${upgradeLabel}</span>+${upgradeCostLabel}`
+                                        : freeLabel}
+                                </span>
+                            `}
                         </div>
                     `;
 
                     div.addEventListener('click', () => showInstantSwitchConfirm(tariff, isUpgrade, upgradeCost));
                 } else {
                     // Обычный режим покупки
+                    const isDaily = tariff.is_daily ?? tariff.isDaily ?? false;
+                    const dailyPriceKopeks = tariff.daily_price_kopeks ?? tariff.dailyPriceKopeks ?? 0;
+                    const dailyPriceLabel = tariff.daily_price_label ?? tariff.dailyPriceLabel ?? null;
+
                     let minPrice = null;
                     let minPriceOriginal = null;
                     let maxDiscountPercent = 0;
+                    let priceDisplayLabel = null;
+                    let priceDisplayOriginalLabel = null;
+                    let pricePrefix = preferredLanguage === 'en' ? 'from' : 'от';
 
-                    if (periods.length > 0) {
+                    if (isDaily && dailyPriceKopeks > 0) {
+                        // Суточный тариф - показываем цену за день
+                        priceDisplayLabel = dailyPriceLabel || formatPriceFromKopeks(dailyPriceKopeks, tariffsData?.currency || 'RUB') + '/день';
+                        pricePrefix = '';
+                    } else if (periods.length > 0) {
                         periods.forEach(p => {
                             const price = p.price_kopeks || p.priceKopeks || 0;
                             const originalPrice = p.original_price_kopeks || p.originalPriceKopeks || price;
@@ -20438,14 +20904,16 @@
                                 maxDiscountPercent = discountPct;
                             }
                         });
+                        priceDisplayLabel = minPrice !== null
+                            ? formatPriceFromKopeks(minPrice, tariffsData?.currency || 'RUB')
+                            : null;
+                        priceDisplayOriginalLabel = minPriceOriginal !== null
+                            ? formatPriceFromKopeks(minPriceOriginal, tariffsData?.currency || 'RUB')
+                            : null;
                     }
 
-                    const minPriceLabel = minPrice !== null
-                        ? formatPriceFromKopeks(minPrice, tariffsData?.currency || 'RUB')
-                        : null;
-                    const minPriceOriginalLabel = minPriceOriginal !== null
-                        ? formatPriceFromKopeks(minPriceOriginal, tariffsData?.currency || 'RUB')
-                        : null;
+                    const minPriceLabel = priceDisplayLabel;
+                    const minPriceOriginalLabel = priceDisplayOriginalLabel;
 
                     div.className = 'subscription-settings-toggle' + (selectedTariffId === tariff.id ? ' active' : '');
 
@@ -20489,10 +20957,11 @@
                                 </div>
                                 ${minPriceLabel ? `
                                     <div style="text-align: right; flex-shrink: 0;">
-                                        <div style="font-size: 10px; color: var(--text-secondary); text-transform: uppercase;">от</div>
+                                        ${pricePrefix ? `<div style="font-size: 10px; color: var(--text-secondary); text-transform: uppercase;">${pricePrefix}</div>` : ''}
                                         ${minPriceOriginalLabel ? `<div style="font-size: 12px; color: var(--text-secondary); text-decoration: line-through;">${minPriceOriginalLabel}</div>` : ''}
                                         <div style="font-weight: 600; color: var(--primary); font-size: 15px;">${minPriceLabel}</div>
                                         ${maxDiscountPercent > 0 ? `<div class="tariff-discount-badge">-${maxDiscountPercent}%</div>` : ''}
+                                        ${isDaily ? `<div style="font-size: 10px; color: var(--primary); margin-top: 2px;">🔄 суточный</div>` : ''}
                                     </div>
                                 ` : ''}
                             </div>
@@ -20683,6 +21152,34 @@
                 return;
             }
 
+            // Для суточных тарифов показываем специальную информацию
+            const isDaily = selectedTariffData.is_daily ?? selectedTariffData.isDaily ?? false;
+            if (isDaily) {
+                const dailyPriceLabel = selectedTariffData.daily_price_label ?? selectedTariffData.dailyPriceLabel ?? '';
+                section.classList.remove('hidden');
+                list.innerHTML = `
+                    <div style="padding: 16px; background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(99, 102, 241, 0.05)); border-radius: 12px; border: 1px solid rgba(139, 92, 246, 0.2);">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                            <span style="font-size: 24px;">🔄</span>
+                            <div>
+                                <div style="font-weight: 600; color: var(--text-primary);">Суточная подписка</div>
+                                <div style="font-size: 12px; color: var(--text-secondary);">Ежедневное списание с баланса</div>
+                            </div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 10px; border-top: 1px solid rgba(139, 92, 246, 0.1);">
+                            <span style="font-size: 13px; color: var(--text-secondary);">Стоимость в день:</span>
+                            <span style="font-weight: 700; color: var(--primary); font-size: 16px;">${dailyPriceLabel}</span>
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 8px; line-height: 1.4;">
+                            💡 Списание происходит автоматически каждые 24 часа. Можно приостановить в любой момент.
+                        </div>
+                    </div>
+                `;
+                summary?.classList.add('hidden');
+                updateTariffButton();
+                return;
+            }
+
             const periods = selectedTariffData.periods || [];
             if (periods.length === 0) {
                 section.classList.add('hidden');
@@ -20802,12 +21299,24 @@
             const btn = document.getElementById('tariffsSelectBtn');
             if (!btn) return;
 
-            if (selectedTariffData && selectedTariffPeriod) {
+            // Для суточных тарифов не требуем выбора периода
+            const isDaily = selectedTariffData?.is_daily ?? selectedTariffData?.isDaily ?? false;
+
+            if (selectedTariffData && (selectedTariffPeriod || isDaily)) {
                 btn.disabled = false;
-                const priceKopeks = selectedTariffPeriod.price_kopeks || selectedTariffPeriod.priceKopeks ||
-                    selectedTariffPeriod.final_price || selectedTariffPeriod.finalPrice || 0;
-                const priceLabel = formatPriceFromKopeks(priceKopeks, tariffsData?.currency || 'RUB');
-                btn.textContent = `Купить за ${priceLabel}`;
+                let priceKopeks, priceLabel;
+
+                if (isDaily) {
+                    // Суточный тариф - используем daily_price
+                    priceKopeks = selectedTariffData.daily_price_kopeks ?? selectedTariffData.dailyPriceKopeks ?? 0;
+                    priceLabel = selectedTariffData.daily_price_label ?? selectedTariffData.dailyPriceLabel ?? formatPriceFromKopeks(priceKopeks, tariffsData?.currency || 'RUB');
+                    btn.textContent = `Активировать за ${priceLabel}`;
+                } else {
+                    priceKopeks = selectedTariffPeriod.price_kopeks || selectedTariffPeriod.priceKopeks ||
+                        selectedTariffPeriod.final_price || selectedTariffPeriod.finalPrice || 0;
+                    priceLabel = formatPriceFromKopeks(priceKopeks, tariffsData?.currency || 'RUB');
+                    btn.textContent = `Купить за ${priceLabel}`;
+                }
             } else {
                 btn.disabled = true;
                 btn.textContent = t('tariffs.select');
@@ -20815,7 +21324,10 @@
         }
 
         async function purchaseTariff() {
-            if (!selectedTariffId || !selectedTariffPeriod) {
+            const isDaily = selectedTariffData?.is_daily ?? selectedTariffData?.isDaily ?? false;
+
+            // Для суточных тарифов не требуем выбора периода
+            if (!selectedTariffId || (!selectedTariffPeriod && !isDaily)) {
                 showPopup('Выберите тариф', 'Ошибка');
                 return;
             }
@@ -20828,7 +21340,10 @@
 
             try {
                 const initData = tg.initData || '';
-                const periodDays = selectedTariffPeriod.days || selectedTariffPeriod.period_days || selectedTariffPeriod.periodDays;
+                // Для суточных тарифов используем period_days=1
+                const periodDays = isDaily
+                    ? 1
+                    : (selectedTariffPeriod.days || selectedTariffPeriod.period_days || selectedTariffPeriod.periodDays);
 
                 const response = await fetch('/miniapp/subscription/tariff/purchase', {
                     method: 'POST',
@@ -20846,7 +21361,10 @@
                     throw new Error(result?.detail?.message || result?.message || 'Ошибка покупки тарифа');
                 }
 
-                showPopup(result.message || 'Тариф успешно активирован!', 'Успех');
+                const successMsg = isDaily
+                    ? (result.message || 'Суточный тариф активирован!')
+                    : (result.message || 'Тариф успешно активирован!');
+                showPopup(successMsg, 'Успех');
                 await refreshSubscriptionData();
             } catch (err) {
                 console.error('Tariff purchase failed:', err);
