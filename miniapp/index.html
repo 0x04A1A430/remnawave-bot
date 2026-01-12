@@ -3626,9 +3626,12 @@
 
         .payment-method-info {
             display: flex;
+            flex-direction: column;
             align-items: center;
-            gap: 12px;
+            justify-content: center;
+            gap: 8px;
             flex: 1;
+            text-align: center;
         }
 
         .payment-method-icon {
@@ -3638,17 +3641,20 @@
         .payment-method-text {
             display: flex;
             flex-direction: column;
+            align-items: center;
             gap: 2px;
         }
 
         .payment-method-label {
             font-weight: 700;
             color: var(--text-primary);
+            text-align: center;
         }
 
         .payment-method-description {
             font-size: 13px;
             color: var(--text-secondary);
+            text-align: center;
         }
 
         .amount-form {
@@ -6669,6 +6675,8 @@
                 'topup.method.stars.adjusted': 'Requested {requested}. Actual charge: {amount} ({stars} ⭐).',
                 'topup.method.yookassa.title': 'Bank card (YooKassa)',
                 'topup.method.yookassa.description': 'Pay securely with a bank card',
+                'topup.method.yookassa_sbp.title': 'SBP (YooKassa)',
+                'topup.method.yookassa_sbp.description': 'Pay via Faster Payments System',
                 'topup.method.mulenpay.title': 'Bank card (Mulen Pay)',
                 'topup.method.mulenpay.description': 'Fast payment with bank card',
                 'topup.method.platega.title': 'Platega.io',
@@ -7143,6 +7151,8 @@
                 'topup.method.stars.adjusted': 'Вы запросили {requested}. Итог к оплате: {amount} ({stars} ⭐).',
                 'topup.method.yookassa.title': 'Банковская карта (YooKassa)',
                 'topup.method.yookassa.description': 'Безопасная оплата банковской картой',
+                'topup.method.yookassa_sbp.title': 'СБП (YooKassa)',
+                'topup.method.yookassa_sbp.description': 'Оплата через Систему быстрых платежей',
                 'topup.method.mulenpay.title': 'Банковская карта (Mulen Pay)',
                 'topup.method.mulenpay.description': 'Мгновенное списание с карты',
                 'topup.method.platega.title': 'Platega.io',
