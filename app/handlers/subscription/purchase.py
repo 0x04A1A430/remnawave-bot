@@ -336,7 +336,6 @@ async def show_subscription_info(
     )
 
     # Получаем информацию о тарифе для режима тарифов
-    tariff_line = ""
     tariff_info_block = ""
     tariff = None
     if settings.is_tariffs_mode() and subscription.tariff_id:
@@ -344,7 +343,6 @@ async def show_subscription_info(
             from app.database.crud.tariff import get_tariff_by_id
             tariff = await get_tariff_by_id(db, subscription.tariff_id)
             if tariff:
-                tariff_line = f"\n📦 Тариф: {tariff.name}"
                 # Прикрепляем тариф к подписке для использования в клавиатуре
                 subscription.tariff = tariff
 
@@ -416,7 +414,7 @@ async def show_subscription_info(
 📱 Подписка: {status_emoji} {status_display}{warning}{tariff_info_block}
 
 📱 Информация о подписке
-🎭 Тип: {subscription_type}{tariff_line}
+🎭 Тип: {subscription_type}
 📈 Трафик: {traffic}
 🌍 Серверы: {servers}
 📱 Устройства: {devices_used} / {device_limit}""",
@@ -429,7 +427,7 @@ async def show_subscription_info(
 📱 Подписка: {status_emoji} {status_display}{warning}{tariff_info_block}
 
 📱 Информация о подписке
-🎭 Тип: {subscription_type}{tariff_line}
+🎭 Тип: {subscription_type}
 📅 Действует до: {end_date}
 ⏰ Осталось: {time_left}
 📈 Трафик: {traffic}
@@ -460,7 +458,6 @@ async def show_subscription_info(
         warning=warning_text,
         tariff_info_block=tariff_info_block,
         subscription_type=subscription_type,
-        tariff_line=tariff_line,
         end_date=format_local_datetime(subscription.end_date, "%d.%m.%Y %H:%M"),
         time_left=time_left_text,
         traffic=traffic_used_display,
