@@ -1666,5 +1666,7 @@
 
   "PAUSE_DAILY_BUTTON": "⏸️ Pause subscription",
   "RESUME_DAILY_BUTTON": "▶️ Resume subscription",
-  "DAILY_SWITCH_WARNING": "⚠️ <b>Warning!</b> You have {days} days left.\nThey will be lost when switching to daily tariff!"
+  "DAILY_SWITCH_WARNING": "⚠️ <b>Warning!</b> You have {days} days left.\nThey will be lost when switching to daily tariff!",
+  "DAILY_SUBSCRIPTION_PAUSED": "⏸️ Subscription paused",
+  "DAILY_SUBSCRIPTION_RESUMED": "▶️ Subscription resumed!"
 }
