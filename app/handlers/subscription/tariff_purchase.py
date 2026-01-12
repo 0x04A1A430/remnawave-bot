@@ -1369,6 +1369,16 @@ async def select_tariff_switch(
         daily_price = getattr(tariff, 'daily_price_kopeks', 0)
         user_balance = db_user.balance_kopeks or 0
 
+        # Проверяем текущую подписку на оставшиеся дни
+        current_subscription = await get_subscription_by_user_id(db, db_user.id)
+        days_warning = ""
+        if current_subscription and current_subscription.end_date:
+            from datetime import datetime
+            remaining = current_subscription.end_date - datetime.utcnow()
+            remaining_days = max(0, remaining.days)
+            if remaining_days > 1:
+                days_warning = f"\n\n⚠️ <b>Внимание!</b> У вас осталось {remaining_days} дн. подписки.\nПри смене на суточный тариф они будут утеряны!"
+
         if user_balance >= daily_price:
             await callback.message.edit_text(
                 f"✅ <b>Подтверждение смены тарифа</b>\n\n"
@@ -1377,7 +1387,8 @@ async def select_tariff_switch(
                 f"📱 Устройств: {tariff.device_limit}\n"
                 f"🔄 Тип: <b>Суточный</b>\n\n"
                 f"💰 <b>Цена: {_format_price_kopeks(daily_price)}/день</b>\n\n"
-                f"💳 Ваш баланс: {_format_price_kopeks(user_balance)}\n\n"
+                f"💳 Ваш баланс: {_format_price_kopeks(user_balance)}"
+                f"{days_warning}\n\n"
                 f"ℹ️ Средства будут списываться автоматически раз в сутки.\n"
                 f"Вы можете приостановить подписку в любой момент.",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -1400,7 +1411,8 @@ async def select_tariff_switch(
                 f"🔄 Тип: Суточный\n"
                 f"💰 Цена: {_format_price_kopeks(daily_price)}/день\n\n"
                 f"💳 Ваш баланс: {_format_price_kopeks(user_balance)}\n"
-                f"⚠️ Не хватает: <b>{_format_price_kopeks(missing)}</b>",
+                f"⚠️ Не хватает: <b>{_format_price_kopeks(missing)}</b>"
+                f"{days_warning}",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(
                         text="💳 Пополнить баланс",
