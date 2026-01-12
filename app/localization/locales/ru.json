@@ -1441,7 +1441,8 @@
   "SUBSCRIPTION_NOT_FOUND": "❌ Подписка не найдена",
   "SUBSCRIPTION_NO_ACTIVE_LINK": "⚠ У вас нет активной подписки или ссылка еще генерируется",
   "SUBSCRIPTION_NO_SERVERS": "Нет серверов",
-  "SUBSCRIPTION_OVERVIEW_TEMPLATE": "👤 {full_name}\n💰 Баланс: {balance}\n📱 Подписка: {status_emoji} {status_display}{warning}\n\n📱 Информация о подписке\n🎭 Тип: {subscription_type}\n📅 Действует до: {end_date}\n⏰ Осталось: {time_left}\n📈 Трафик: {traffic}\n🌍 Серверы: {servers}\n📱 Устройства: {devices_used} / {device_limit}",
+  "SUBSCRIPTION_OVERVIEW_TEMPLATE": "👤 {full_name}\n💰 Баланс: {balance}\n📱 Подписка: {status_emoji} {status_display}{warning}{tariff_info_block}\n\n📱 Информация о подписке\n🎭 Тип: {subscription_type}{tariff_line}\n📅 Действует до: {end_date}\n⏰ Осталось: {time_left}\n📈 Трафик: {traffic}\n🌍 Серверы: {servers}\n📱 Устройства: {devices_used} / {device_limit}",
+  "SUBSCRIPTION_DAILY_OVERVIEW_TEMPLATE": "👤 {full_name}\n💰 Баланс: {balance}\n📱 Подписка: {status_emoji} {status_display}{warning}{tariff_info_block}\n\n📱 Информация о подписке\n🎭 Тип: {subscription_type}{tariff_line}\n📈 Трафик: {traffic}\n🌍 Серверы: {servers}\n📱 Устройства: {devices_used} / {device_limit}",
   "SUBSCRIPTION_PROMO_DISCOUNT_HINT": "⚡ Активирована доп. скидка {percent}%. \n\nСуммируется с другими скидками!",
   "SUBSCRIPTION_PROMO_DISCOUNT_NOTE": "⚡ Доп. скидка {percent}%: -{amount}",
   "SUBSCRIPTION_PROMO_DISCOUNT_TIMER": "⏳ Скидка действует ещё: {time_left}\n<code>{bar}</code>",
