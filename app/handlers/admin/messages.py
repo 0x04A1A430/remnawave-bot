@@ -42,6 +42,41 @@ from app.services.pinned_message_service import (
 
 logger = logging.getLogger(__name__)
 
+
+async def safe_edit_or_send_text(
+    callback: types.CallbackQuery,
+    text: str,
+    reply_markup=None,
+    parse_mode: str = "HTML"
+):
+    """
+    Безопасно редактирует сообщение или удаляет и отправляет новое.
+    Нужно для случаев, когда текущее сообщение - медиа (фото/видео),
+    которое нельзя отредактировать через edit_text.
+    """
+    try:
+        await callback.message.edit_text(
+            text,
+            reply_markup=reply_markup,
+            parse_mode=parse_mode
+        )
+    except TelegramBadRequest as e:
+        if "there is no text in the message to edit" in str(e):
+            # Сообщение - медиа без текста, удаляем и отправляем новое
+            try:
+                await callback.message.delete()
+            except Exception:
+                pass
+            await callback.bot.send_message(
+                chat_id=callback.message.chat.id,
+                text=text,
+                reply_markup=reply_markup,
+                parse_mode=parse_mode
+            )
+        else:
+            raise
+
+
 BUTTON_ROWS = BROADCAST_BUTTON_ROWS
 DEFAULT_SELECTED_BUTTONS = DEFAULT_BROADCAST_BUTTONS
 
@@ -166,10 +201,11 @@ async def show_messages_menu(
 ⚠️ Будьте осторожны с массовыми рассылками!
 """
     
-    await callback.message.edit_text(
+    await safe_edit_or_send_text(
+        callback,
         text,
         reply_markup=get_admin_messages_keyboard(db_user.language),
-        parse_mode="HTML"  
+        parse_mode="HTML"
     )
     await callback.answer()
 
@@ -865,7 +901,8 @@ async def handle_change_media(
     db_user: User,
     state: FSMContext
 ):
-    await callback.message.edit_text(
+    await safe_edit_or_send_text(
+        callback,
         "🖼️ <b>Изменение медиафайла</b>\n\n"
         "Выберите новый тип медиа:",
         reply_markup=get_broadcast_media_keyboard(db_user.language),
@@ -1092,7 +1129,10 @@ async def confirm_button_selection(
         media_file_id = data.get('media_file_id')
         if media_file_id:
             # Удаляем текущее сообщение и отправляем новое с фото
-            await callback.message.delete()
+            try:
+                await callback.message.delete()
+            except Exception:
+                pass
             await callback.bot.send_photo(
                 chat_id=callback.message.chat.id,
                 photo=media_file_id,
@@ -1101,21 +1141,25 @@ async def confirm_button_selection(
                 parse_mode="HTML"
             )
         else:
-            # Если нет file_id, используем обычное редактирование
-            await callback.message.edit_text(
+            # Если нет file_id, используем safe редактирование
+            await safe_edit_or_send_text(
+                callback,
                 preview_text,
                 reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
                 parse_mode="HTML"
             )
     else:
-        # Для текстовых сообщений или других типов медиа используем обычное редактирование
-        await callback.message.edit_text(
+        # Для текстовых сообщений или других типов медиа используем safe редактирование
+        await safe_edit_or_send_text(
+            callback,
             preview_text,
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
             parse_mode="HTML"
         )
-    
+
     await callback.answer()
+
+
 @admin_required
 @error_handler
 async def confirm_broadcast(
@@ -1135,13 +1179,14 @@ async def confirm_broadcast(
     media_file_id = data.get('media_file_id')
     media_caption = data.get('media_caption')
     
-    await callback.message.edit_text(
+    await safe_edit_or_send_text(
+        callback,
         "📨 Начинаю рассылку...\n\n"
         "⏳ Это может занять несколько минут.",
         reply_markup=None,
-        parse_mode="HTML" 
+        parse_mode="HTML"
     )
-    
+
     if target.startswith('custom_'):
         users = await get_custom_users(db, target.replace('custom_', ''))
     else:
@@ -1284,14 +1329,29 @@ async def confirm_broadcast(
 <b>Администратор:</b> {db_user.full_name}
 """
     
-    await callback.message.edit_text(
-        result_text,
-        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
-            [types.InlineKeyboardButton(text="📨 К рассылкам", callback_data="admin_messages")]
-        ]),
-        parse_mode="HTML" 
-    )
-    
+    try:
+        await callback.message.edit_text(
+            result_text,
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                [types.InlineKeyboardButton(text="📨 К рассылкам", callback_data="admin_messages")]
+            ]),
+            parse_mode="HTML"
+        )
+    except TelegramBadRequest as e:
+        error_msg = str(e).lower()
+        if "message to edit not found" in error_msg or "there is no text" in error_msg or "message can't be edited" in error_msg:
+            # Сообщение удалено или это медиа - отправляем новое
+            await callback.bot.send_message(
+                chat_id=callback.message.chat.id,
+                text=result_text,
+                reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                    [types.InlineKeyboardButton(text="📨 К рассылкам", callback_data="admin_messages")]
+                ]),
+                parse_mode="HTML"
+            )
+        else:
+            raise
+
     await state.clear()
     logger.info(f"Рассылка выполнена админом {db_user.telegram_id}: {sent_count}/{len(users)} (медиа: {has_media})")
 
