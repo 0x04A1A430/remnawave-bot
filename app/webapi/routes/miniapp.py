@@ -6551,6 +6551,8 @@ async def purchase_tariff_endpoint(
     # Получаем цену
     is_daily_tariff = getattr(tariff, 'is_daily', False)
     if is_daily_tariff:
+        # Для суточного тарифа принудительно 1 день (защита от манипуляций с period_days)
+        payload.period_days = 1
         # Для суточного тарифа берём daily_price_kopeks (первый день)
         base_price_kopeks = getattr(tariff, 'daily_price_kopeks', 0)
         if base_price_kopeks <= 0:
