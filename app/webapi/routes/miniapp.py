@@ -6359,14 +6359,30 @@ async def _build_tariff_model(
     is_upgrade = None
     is_switch_free = None
 
-    if current_tariff and current_tariff.id != tariff.id and remaining_days > 0:
-        cost, upgrade = _calculate_tariff_switch_cost(
-            current_tariff, tariff, remaining_days, promo_group, user
-        )
-        switch_cost_kopeks = cost
-        switch_cost_label = settings.format_price(cost) if cost > 0 else None
-        is_upgrade = upgrade
-        is_switch_free = cost == 0
+    if current_tariff and current_tariff.id != tariff.id:
+        current_is_daily = getattr(current_tariff, 'is_daily', False)
+        new_is_daily = getattr(tariff, 'is_daily', False)
+
+        if current_is_daily and not new_is_daily:
+            # Переключение С суточного НА периодный - полная оплата нового тарифа
+            # Берём минимальную цену из периодов нового тарифа
+            min_period_price = None
+            if periods:
+                min_period_price = min(p.price_kopeks for p in periods)
+            if min_period_price and min_period_price > 0:
+                switch_cost_kopeks = min_period_price
+                switch_cost_label = settings.format_price(min_period_price)
+                is_upgrade = True  # Показываем как платный переход
+                is_switch_free = False
+        elif remaining_days > 0:
+            # Обычный расчёт для периодных тарифов
+            cost, upgrade = _calculate_tariff_switch_cost(
+                current_tariff, tariff, remaining_days, promo_group, user
+            )
+            switch_cost_kopeks = cost
+            switch_cost_label = settings.format_price(cost) if cost > 0 else None
+            is_upgrade = upgrade
+            is_switch_free = cost == 0
 
     # Суточный тариф
     is_daily = getattr(tariff, 'is_daily', False)
@@ -6833,9 +6849,21 @@ async def preview_tariff_switch_endpoint(
         remaining_days = max(0, delta.days)
 
     # Рассчитываем стоимость переключения
-    upgrade_cost, is_upgrade = _calculate_tariff_switch_cost(
-        current_tariff, new_tariff, remaining_days, promo_group, user
-    )
+    current_is_daily = getattr(current_tariff, 'is_daily', False) if current_tariff else False
+    new_is_daily = getattr(new_tariff, 'is_daily', False)
+
+    if current_is_daily and not new_is_daily:
+        # Переключение С суточного НА периодный - полная оплата нового тарифа
+        # Берём минимальную цену из периодов нового тарифа
+        min_period_price = 0
+        if new_tariff.period_prices:
+            min_period_price = min(new_tariff.period_prices.values())
+        upgrade_cost = min_period_price
+        is_upgrade = min_period_price > 0
+    else:
+        upgrade_cost, is_upgrade = _calculate_tariff_switch_cost(
+            current_tariff, new_tariff, remaining_days, promo_group, user
+        )
 
     balance = user.balance_kopeks or 0
     has_enough = balance >= upgrade_cost
@@ -6918,9 +6946,27 @@ async def switch_tariff_endpoint(
         remaining_days = max(0, delta.days)
 
     # Рассчитываем стоимость
-    upgrade_cost, is_upgrade = _calculate_tariff_switch_cost(
-        current_tariff, new_tariff, remaining_days, promo_group, user
-    )
+    current_is_daily = getattr(current_tariff, 'is_daily', False) if current_tariff else False
+    new_is_daily = getattr(new_tariff, 'is_daily', False)
+    switching_from_daily = current_is_daily and not new_is_daily
+
+    if switching_from_daily:
+        # Переключение С суточного НА периодный - полная оплата нового тарифа (минимальный период)
+        min_period_days = 30  # По умолчанию месяц
+        min_period_price = 0
+        if new_tariff.period_prices:
+            # Находим минимальный период и его цену
+            min_period_days = min(int(k) for k in new_tariff.period_prices.keys())
+            min_period_price = new_tariff.period_prices.get(str(min_period_days), 0)
+        upgrade_cost = min_period_price
+        is_upgrade = min_period_price > 0
+        # remaining_days для нового тарифа будет равен min_period_days после покупки
+        new_period_days = min_period_days
+    else:
+        upgrade_cost, is_upgrade = _calculate_tariff_switch_cost(
+            current_tariff, new_tariff, remaining_days, promo_group, user
+        )
+        new_period_days = 0  # Не меняем дату окончания
 
     # Списываем доплату если апгрейд
     if upgrade_cost > 0:
@@ -6935,7 +6981,10 @@ async def switch_tariff_endpoint(
                 },
             )
 
-        description = f"Переход на тариф '{new_tariff.name}' (доплата за {remaining_days} дней)"
+        if switching_from_daily:
+            description = f"Переход с суточного на тариф '{new_tariff.name}' ({new_period_days} дней)"
+        else:
+            description = f"Переход на тариф '{new_tariff.name}' (доплата за {remaining_days} дней)"
         success = await subtract_user_balance(db, user, upgrade_cost, description)
         if not success:
             raise HTTPException(
@@ -6984,7 +7033,12 @@ async def switch_tariff_endpoint(
         # Переход с суточного на обычный тариф - очищаем daily поля
         subscription.is_daily_paused = False
         subscription.last_daily_charge_at = None
-        logger.info(f"🔄 Смена с суточного на обычный тариф: очищены daily поля")
+        # Устанавливаем дату окончания для периодного тарифа
+        if new_period_days > 0:
+            subscription.end_date = datetime.utcnow() + timedelta(days=new_period_days)
+            logger.info(f"🔄 Смена с суточного на периодный тариф: end_date={subscription.end_date} ({new_period_days} дней)")
+        else:
+            logger.info(f"🔄 Смена с суточного на обычный тариф: очищены daily поля")
 
     await db.commit()
     await db.refresh(subscription)
