@@ -9627,7 +9627,9 @@
 
             // При паузе показываем оставшееся время, но без обновления (статичное)
             if (isPaused) {
-                const nextChargeDate = new Date(nextChargeAt);
+                // Сервер возвращает UTC время, добавляем 'Z' если отсутствует
+                const utcDateStr = String(nextChargeAt).endsWith('Z') ? nextChargeAt : nextChargeAt + 'Z';
+                const nextChargeDate = new Date(utcDateStr);
                 const now = new Date();
                 const remaining = nextChargeDate - now;
 
@@ -9648,7 +9650,9 @@
                 return;
             }
 
-            const nextChargeDate = new Date(nextChargeAt);
+            // Сервер возвращает UTC время, добавляем 'Z' если отсутствует
+            const utcDateStr = String(nextChargeAt).endsWith('Z') ? nextChargeAt : nextChargeAt + 'Z';
+            const nextChargeDate = new Date(utcDateStr);
             const totalDuration = 24 * 60 * 60 * 1000; // 24 часа в миллисекундах
 
             function updateTimer() {
@@ -9676,7 +9680,7 @@
 
                 // Время следующего списания
                 if (nextChargeEl) {
-                    const chargeTime = nextChargeDate.toLocaleTimeString(currentLanguage === 'ru' ? 'ru-RU' : 'en-US', {
+                    const chargeTime = nextChargeDate.toLocaleTimeString(preferredLanguage === 'ru' ? 'ru-RU' : 'en-US', {
                         hour: '2-digit',
                         minute: '2-digit'
                     });
@@ -9714,23 +9718,10 @@
                     return;
                 }
 
-                // Обновляем локальные данные
-                if (userData?.user) {
-                    userData.user.is_daily_paused = result.is_paused;
-                    userData.user.isDailyPaused = result.is_paused;
-                }
-
-                // Обновляем баланс
-                if (result.balance_kopeks !== undefined) {
-                    userData.balance_kopeks = result.balance_kopeks;
-                    userData.balanceKopeks = result.balance_kopeks;
-                    renderBalanceSection();
-                }
-
-                // Перерисовываем статус
-                renderDailySubscriptionStatus();
-
                 showToast(result.message || 'OK', 'success');
+
+                // Полное обновление данных подписки для корректного отображения
+                await refreshSubscriptionData({ silent: true });
 
             } catch (error) {
                 console.error('Error toggling daily pause:', error);
