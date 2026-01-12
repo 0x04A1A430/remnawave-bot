@@ -333,8 +333,9 @@ async def show_subscription_info(
         else texts.t("SUBSCRIPTION_NO_SERVERS", "Нет серверов")
     )
 
-    # Получаем название тарифа для режима тарифов
+    # Получаем информацию о тарифе для режима тарифов
     tariff_line = ""
+    tariff_info_block = ""
     tariff = None
     if settings.is_tariffs_mode() and subscription.tariff_id:
         try:
@@ -344,6 +345,60 @@ async def show_subscription_info(
                 tariff_line = f"\n📦 Тариф: {tariff.name}"
                 # Прикрепляем тариф к подписке для использования в клавиатуре
                 subscription.tariff = tariff
+
+                # Формируем блок информации о тарифе
+                is_daily = getattr(tariff, 'is_daily', False)
+                tariff_type_str = "🔄 Суточный" if is_daily else "📅 Периодный"
+
+                tariff_info_lines = [
+                    f"<b>📦 {tariff.name}</b>",
+                    f"Тип: {tariff_type_str}",
+                    f"Трафик: {tariff.traffic_limit_gb} ГБ" if tariff.traffic_limit_gb > 0 else "Трафик: ∞ Безлимит",
+                    f"Устройства: {tariff.device_limit}",
+                ]
+
+                if is_daily:
+                    # Для суточного тарифа показываем цену и прогресс-бар
+                    daily_price = getattr(tariff, 'daily_price_kopeks', 0) / 100
+                    tariff_info_lines.append(f"Цена: {daily_price:.2f} ₽/день")
+
+                    # Прогресс-бар до следующего списания
+                    last_charge = getattr(subscription, 'last_daily_charge_at', None)
+                    is_paused = getattr(subscription, 'is_daily_paused', False)
+
+                    if is_paused:
+                        tariff_info_lines.append("")
+                        tariff_info_lines.append("⏸️ <b>Подписка приостановлена</b>")
+                    elif last_charge:
+                        from datetime import timedelta
+                        next_charge = last_charge + timedelta(hours=24)
+                        now = datetime.utcnow()
+
+                        if next_charge > now:
+                            time_until = next_charge - now
+                            hours_left = time_until.seconds // 3600
+                            minutes_left = (time_until.seconds % 3600) // 60
+
+                            # Процент оставшегося времени (24 часа = 100%)
+                            total_seconds = 24 * 3600
+                            remaining_seconds = time_until.total_seconds()
+                            percent = min(100, max(0, (remaining_seconds / total_seconds) * 100))
+
+                            # Генерируем прогресс-бар
+                            bar_length = 10
+                            filled = int(bar_length * percent / 100)
+                            empty = bar_length - filled
+                            progress_bar = "▓" * filled + "░" * empty
+
+                            tariff_info_lines.append("")
+                            tariff_info_lines.append(f"⏳ До списания: {hours_left}ч {minutes_left}мин")
+                            tariff_info_lines.append(f"[{progress_bar}] {percent:.0f}%")
+                    else:
+                        tariff_info_lines.append("")
+                        tariff_info_lines.append("⏳ Первое списание скоро")
+
+                tariff_info_block = "\n<blockquote expandable>" + "\n".join(tariff_info_lines) + "</blockquote>"
+
         except Exception as e:
             logger.warning(f"Ошибка получения тарифа: {e}")
 
@@ -351,7 +406,7 @@ async def show_subscription_info(
         "SUBSCRIPTION_OVERVIEW_TEMPLATE",
         """👤 {full_name}
 💰 Баланс: {balance}
-📱 Подписка: {status_emoji} {status_display}{warning}
+📱 Подписка: {status_emoji} {status_display}{warning}{tariff_info_block}
 
 📱 Информация о подписке
 🎭 Тип: {subscription_type}{tariff_line}
@@ -383,6 +438,7 @@ async def show_subscription_info(
         status_emoji=status_emoji,
         status_display=status_display,
         warning=warning_text,
+        tariff_info_block=tariff_info_block,
         subscription_type=subscription_type,
         tariff_line=tariff_line,
         end_date=format_local_datetime(subscription.end_date, "%d.%m.%Y %H:%M"),
