@@ -426,6 +426,24 @@ async def extend_subscription(
         subscription.connected_squads = connected_squads
         logger.info(f"🌍 Обновлены сквады: {old_squads} → {connected_squads}")
 
+    # Обработка daily полей при смене тарифа
+    if is_tariff_change and tariff_id is not None:
+        # Получаем информацию о новом тарифе для проверки is_daily
+        from app.database.crud.tariff import get_tariff_by_id
+        new_tariff = await get_tariff_by_id(db, tariff_id)
+        old_was_daily = getattr(subscription, 'is_daily_paused', False) or getattr(subscription, 'last_daily_charge_at', None) is not None
+
+        if new_tariff and getattr(new_tariff, 'is_daily', False):
+            # Переход на суточный тариф - сбрасываем флаги
+            subscription.is_daily_paused = False
+            subscription.last_daily_charge_at = None  # Будет установлено при первом списании
+            logger.info(f"🔄 Переход на суточный тариф: сброшены daily флаги")
+        elif old_was_daily:
+            # Переход с суточного на обычный тариф - очищаем daily поля
+            subscription.is_daily_paused = False
+            subscription.last_daily_charge_at = None
+            logger.info(f"🔄 Переход с суточного тарифа: очищены daily флаги")
+
     # В режиме fixed_with_topup при продлении сбрасываем трафик до фиксированного лимита
     # Только если не передан traffic_limit_gb И у подписки нет тарифа (классический режим)
     # Если у подписки есть tariff_id - трафик определяется тарифом, не сбрасываем
