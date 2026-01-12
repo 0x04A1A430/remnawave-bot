@@ -505,17 +505,7 @@ class FreekassaPaymentMixin:
         local_payment_id: int,
     ) -> Optional[Dict[str, Any]]:
         """
-        Проверяет статус платежа Freekassa по локальному ID.
-
-        Freekassa не предоставляет API для проверки статуса платежа,
-        поэтому возвращаем текущее состояние из БД.
-
-        Args:
-            db: Сессия БД
-            local_payment_id: Внутренний ID платежа
-
-        Returns:
-            Dict с информацией о платеже или None если не найден
+        Проверяет статус платежа Freekassa по локальному ID через API.
         """
         freekassa_crud = import_module("app.database.crud.freekassa")
 
@@ -524,8 +514,73 @@ class FreekassaPaymentMixin:
             logger.warning("Freekassa payment not found: id=%s", local_payment_id)
             return None
 
-        # Freekassa не имеет API для проверки статуса,
-        # информация приходит только через webhook
+        if payment.is_paid:
+            return {
+                "payment": payment,
+                "status": "success",
+                "is_paid": True,
+            }
+
+        if not settings.FREEKASSA_API_KEY:
+            return {
+                "payment": payment,
+                "status": payment.status or "pending",
+                "is_paid": payment.is_paid,
+            }
+
+        try:
+            # Запрашиваем статус заказа в Freekassa
+            response = await freekassa_service.get_order_status(payment.order_id)
+
+            # Freekassa возвращает список заказов
+            orders = response.get("orders", [])
+            target_order = None
+
+            # Ищем наш заказ в списке
+            for order in orders:
+                # В ответе API поле называется merchant_order_id, а не paymentId
+                # Поддерживаем оба варианта на всякий случай
+                order_key = str(order.get("merchant_order_id") or order.get("paymentId"))
+                if order_key == str(payment.order_id):
+                    target_order = order
+                    break
+
+            if target_order:
+                # Статус 1 = Оплачен
+                fk_status = int(target_order.get("status", 0))
+
+                if fk_status == 1:
+                    logger.info("Freekassa payment %s confirmed via API", payment.order_id)
+
+                    callback_payload = {
+                        "check_source": "api",
+                        "fk_order_data": target_order,
+                    }
+
+                    # ID заказа на стороне FK (fk_order_id или id)
+                    fk_intid = str(target_order.get("fk_order_id") or target_order.get("id"))
+
+                    # Обновляем статус
+                    payment = await freekassa_crud.update_freekassa_payment_status(
+                        db=db,
+                        payment=payment,
+                        status="success",
+                        is_paid=True,
+                        freekassa_order_id=fk_intid,
+                        payment_system_id=int(target_order.get("curID")) if target_order.get("curID") else None,
+                        callback_payload=callback_payload,
+                    )
+
+                    # Финализируем
+                    await self._finalize_freekassa_payment(
+                        db,
+                        payment,
+                        intid=fk_intid,
+                        trigger="api_check",
+                    )
+        except Exception as e:
+            logger.error("Error checking Freekassa payment status: %s", e)
+
         return {
             "payment": payment,
             "status": payment.status or "pending",

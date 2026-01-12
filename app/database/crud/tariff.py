@@ -167,6 +167,9 @@ async def create_tariff(
     tier_level: int = 1,
     is_trial_available: bool = False,
     promo_group_ids: Optional[List[int]] = None,
+    traffic_topup_enabled: bool = False,
+    traffic_topup_packages: Optional[Dict[str, int]] = None,
+    max_topup_traffic_gb: int = 0,
 ) -> Tariff:
     """Создает новый тариф."""
     normalized_prices = _normalize_period_prices(period_prices)
@@ -182,6 +185,9 @@ async def create_tariff(
         period_prices=normalized_prices,
         tier_level=max(1, tier_level),
         is_trial_available=is_trial_available,
+        traffic_topup_enabled=traffic_topup_enabled,
+        traffic_topup_packages=traffic_topup_packages or {},
+        max_topup_traffic_gb=max(0, max_topup_traffic_gb),
     )
 
     db.add(tariff)
@@ -227,6 +233,9 @@ async def update_tariff(
     tier_level: Optional[int] = None,
     is_trial_available: Optional[bool] = None,
     promo_group_ids: Optional[List[int]] = None,
+    traffic_topup_enabled: Optional[bool] = None,
+    traffic_topup_packages: Optional[Dict[str, int]] = None,
+    max_topup_traffic_gb: Optional[int] = None,
 ) -> Tariff:
     """Обновляет существующий тариф."""
     if name is not None:
@@ -252,6 +261,12 @@ async def update_tariff(
         tariff.tier_level = max(1, tier_level)
     if is_trial_available is not None:
         tariff.is_trial_available = is_trial_available
+    if traffic_topup_enabled is not None:
+        tariff.traffic_topup_enabled = traffic_topup_enabled
+    if traffic_topup_packages is not None:
+        tariff.traffic_topup_packages = traffic_topup_packages
+    if max_topup_traffic_gb is not None:
+        tariff.max_topup_traffic_gb = max(0, max_topup_traffic_gb)
 
     # Обновляем промогруппы если указаны
     if promo_group_ids is not None:

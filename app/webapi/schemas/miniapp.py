@@ -55,7 +55,7 @@ class MiniAppPromoGroup(BaseModel):
     server_discount_percent: int = 0
     traffic_discount_percent: int = 0
     device_discount_percent: int = 0
-    period_discounts: Dict[int, int] = Field(default_factory=dict)
+    period_discounts: Dict[str, int] = Field(default_factory=dict)
     apply_discounts_to_addons: bool = True
 
 
@@ -70,7 +70,7 @@ class MiniAppAutoPromoGroupLevel(BaseModel):
     server_discount_percent: int = 0
     traffic_discount_percent: int = 0
     device_discount_percent: int = 0
-    period_discounts: Dict[int, int] = Field(default_factory=dict)
+    period_discounts: Dict[str, int] = Field(default_factory=dict)
     apply_discounts_to_addons: bool = True
 
 
@@ -503,6 +503,10 @@ class MiniAppTariffPeriod(BaseModel):
     price_label: str
     price_per_month_kopeks: Optional[int] = None
     price_per_month_label: Optional[str] = None
+    # Скидка промогруппы
+    original_price_kopeks: Optional[int] = None  # Цена без скидки
+    original_price_label: Optional[str] = None
+    discount_percent: int = 0  # Процент скидки
 
 
 class MiniAppTariff(BaseModel):
@@ -520,6 +524,22 @@ class MiniAppTariff(BaseModel):
     periods: List[MiniAppTariffPeriod] = Field(default_factory=list)
     is_current: bool = False
     is_available: bool = True
+    # Для режима мгновенного переключения тарифа
+    switch_cost_kopeks: Optional[int] = None  # Стоимость переключения (None если не в режиме switch)
+    switch_cost_label: Optional[str] = None   # Форматированная стоимость
+    is_upgrade: Optional[bool] = None         # True = повышение, False = понижение
+    is_switch_free: Optional[bool] = None     # True = бесплатное переключение
+
+
+class MiniAppTrafficTopupPackage(BaseModel):
+    """Пакет докупки трафика."""
+    gb: int
+    price_kopeks: int
+    price_label: str
+    # Скидка промогруппы на трафик
+    original_price_kopeks: Optional[int] = None
+    original_price_label: Optional[str] = None
+    discount_percent: int = 0
 
 
 class MiniAppCurrentTariff(BaseModel):
@@ -533,6 +553,30 @@ class MiniAppCurrentTariff(BaseModel):
     is_unlimited_traffic: bool = False
     device_limit: int
     servers_count: int
+    # Месячная цена для расчёта стоимости переключения тарифа
+    monthly_price_kopeks: int = 0
+    # Докупка трафика
+    traffic_topup_enabled: bool = False
+    traffic_topup_packages: List[MiniAppTrafficTopupPackage] = Field(default_factory=list)
+    # Лимит докупки трафика (0 = без лимита)
+    max_topup_traffic_gb: int = 0
+    available_topup_gb: Optional[int] = None  # Сколько еще можно докупить (None = без лимита)
+
+
+class MiniAppTrafficTopupRequest(BaseModel):
+    """Запрос на докупку трафика."""
+    init_data: str = Field(..., alias="initData")
+    subscription_id: Optional[int] = Field(None, alias="subscriptionId")
+    gb: int
+
+
+class MiniAppTrafficTopupResponse(BaseModel):
+    """Ответ на докупку трафика."""
+    success: bool = True
+    message: str = ""
+    new_traffic_limit_gb: int = 0
+    new_balance_kopeks: int = 0
+    charged_kopeks: int = 0
 
 
 class MiniAppTariffsRequest(BaseModel):
@@ -548,6 +592,7 @@ class MiniAppTariffsResponse(BaseModel):
     current_tariff: Optional[MiniAppCurrentTariff] = None
     balance_kopeks: int = 0
     balance_label: Optional[str] = None
+    promo_group: Optional[MiniAppPromoGroup] = None  # Промогруппа пользователя для отображения скидок
 
 
 class MiniAppTariffPurchaseRequest(BaseModel):
@@ -567,6 +612,42 @@ class MiniAppTariffPurchaseResponse(BaseModel):
     new_end_date: Optional[datetime] = None
     balance_kopeks: Optional[int] = None
     balance_label: Optional[str] = None
+
+
+class MiniAppTariffSwitchRequest(BaseModel):
+    """Запрос на переключение тарифа (без выбора периода)."""
+    init_data: str = Field(...)
+    tariff_id: int = Field(...)
+
+
+class MiniAppTariffSwitchPreviewResponse(BaseModel):
+    """Предпросмотр переключения тарифа."""
+    can_switch: bool = True
+    current_tariff_id: Optional[int] = None
+    current_tariff_name: Optional[str] = None
+    new_tariff_id: int
+    new_tariff_name: str
+    remaining_days: int = 0
+    upgrade_cost_kopeks: int = 0  # 0 если даунгрейд или равная цена
+    upgrade_cost_label: str = ""
+    balance_kopeks: int = 0
+    balance_label: str = ""
+    has_enough_balance: bool = True
+    missing_amount_kopeks: int = 0
+    missing_amount_label: str = ""
+    is_upgrade: bool = False  # True если новый тариф дороже
+    message: Optional[str] = None
+
+
+class MiniAppTariffSwitchResponse(BaseModel):
+    """Ответ на переключение тарифа."""
+    success: bool = True
+    message: Optional[str] = None
+    tariff_id: int
+    tariff_name: str
+    charged_kopeks: int = 0
+    balance_kopeks: int = 0
+    balance_label: str = ""
 
 
 class MiniAppSubscriptionResponse(BaseModel):

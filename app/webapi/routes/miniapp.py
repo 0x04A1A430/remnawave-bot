@@ -190,8 +190,13 @@ from ..schemas.miniapp import (
     MiniAppTariffsResponse,
     MiniAppTariffPurchaseRequest,
     MiniAppTariffPurchaseResponse,
+    MiniAppTariffSwitchRequest,
+    MiniAppTariffSwitchPreviewResponse,
+    MiniAppTariffSwitchResponse,
     MiniAppCurrentTariff,
     MiniAppConnectedServer,
+    MiniAppTrafficTopupRequest,
+    MiniAppTrafficTopupResponse,
 )
 
 
@@ -206,6 +211,23 @@ renewal_service = SubscriptionRenewalService()
 _CRYPTOBOT_MIN_USD = 1.0
 _CRYPTOBOT_MAX_USD = 1000.0
 _CRYPTOBOT_FALLBACK_RATE = 95.0
+
+
+def _get_tariff_monthly_price(tariff) -> int:
+    """Получает месячную цену тарифа (30 дней) с fallback на пропорциональный расчёт."""
+    price = tariff.get_price_for_period(30)
+    if price is not None:
+        return price
+
+    # Fallback: пропорционально пересчитываем из первого доступного периода
+    periods = tariff.get_available_periods()
+    if periods:
+        first_period = periods[0]
+        first_price = tariff.get_price_for_period(first_period)
+        if first_price:
+            return int(first_price * 30 / first_period)
+
+    return 0
 
 
 @router.get("/app-config.json")
@@ -3503,13 +3525,15 @@ async def get_subscription_details(
         trial_price_kopeks=trial_price_kopeks if trial_payment_required else None,
         trial_price_label=trial_price_label,
         sales_mode=settings.get_sales_mode(),
-        current_tariff=await _get_current_tariff_model(db, subscription) if subscription else None,
+        current_tariff=await _get_current_tariff_model(db, subscription, user) if subscription else None,
         **autopay_extras,
     )
 
 
-async def _get_current_tariff_model(db: AsyncSession, subscription) -> Optional[MiniAppCurrentTariff]:
+async def _get_current_tariff_model(db: AsyncSession, subscription, user=None) -> Optional[MiniAppCurrentTariff]:
     """Возвращает модель текущего тарифа пользователя."""
+    from app.webapi.schemas.miniapp import MiniAppTrafficTopupPackage
+
     if not subscription or not getattr(subscription, "tariff_id", None):
         return None
 
@@ -3518,6 +3542,71 @@ async def _get_current_tariff_model(db: AsyncSession, subscription) -> Optional[
         return None
 
     servers_count = len(tariff.allowed_squads) if tariff.allowed_squads else 0
+
+    # Получаем скидку на трафик из промогруппы
+    traffic_discount_percent = 0
+    promo_group = (user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else getattr(user, "promo_group", None)) if user else None
+    if promo_group:
+        apply_to_addons = getattr(promo_group, 'apply_discounts_to_addons', True)
+        if apply_to_addons:
+            traffic_discount_percent = max(0, min(100, int(getattr(promo_group, 'traffic_discount_percent', 0) or 0)))
+
+    # Лимит докупки трафика
+    max_topup_traffic_gb = getattr(tariff, 'max_topup_traffic_gb', 0) or 0
+    current_subscription_traffic = subscription.traffic_limit_gb or 0
+
+    # Рассчитываем доступный лимит докупки
+    available_topup_gb = None
+    if max_topup_traffic_gb > 0:
+        available_topup_gb = max(0, max_topup_traffic_gb - current_subscription_traffic)
+
+    # Пакеты докупки трафика
+    traffic_topup_enabled = getattr(tariff, 'traffic_topup_enabled', False) and tariff.traffic_limit_gb > 0
+    traffic_topup_packages = []
+
+    if traffic_topup_enabled and hasattr(tariff, 'get_traffic_topup_packages'):
+        packages = tariff.get_traffic_topup_packages()
+        for gb in sorted(packages.keys()):
+            # Фильтруем пакеты, которые превышают доступный лимит
+            if available_topup_gb is not None and gb > available_topup_gb:
+                continue
+
+            base_price = packages[gb]
+            # Применяем скидку
+            if traffic_discount_percent > 0:
+                discounted_price = int(base_price * (100 - traffic_discount_percent) / 100)
+                traffic_topup_packages.append(MiniAppTrafficTopupPackage(
+                    gb=gb,
+                    price_kopeks=discounted_price,
+                    price_label=settings.format_price(discounted_price),
+                    original_price_kopeks=base_price,
+                    original_price_label=settings.format_price(base_price),
+                    discount_percent=traffic_discount_percent,
+                ))
+            else:
+                traffic_topup_packages.append(MiniAppTrafficTopupPackage(
+                    gb=gb,
+                    price_kopeks=base_price,
+                    price_label=settings.format_price(base_price),
+                ))
+
+    # Если нет доступных пакетов из-за лимита - отключаем докупку
+    if traffic_topup_enabled and not traffic_topup_packages and available_topup_gb == 0:
+        traffic_topup_enabled = False
+
+    monthly_price = _get_tariff_monthly_price(tariff)
+
+    # Применяем скидку промогруппы для 30-дневного периода
+    if promo_group:
+        raw_discounts = getattr(promo_group, 'period_discounts', None) or {}
+        for k, v in raw_discounts.items():
+            try:
+                if int(k) == 30:
+                    discount = max(0, min(100, int(v)))
+                    monthly_price = int(monthly_price * (100 - discount) / 100)
+                    break
+            except (TypeError, ValueError):
+                pass
 
     return MiniAppCurrentTariff(
         id=tariff.id,
@@ -3529,6 +3618,11 @@ async def _get_current_tariff_model(db: AsyncSession, subscription) -> Optional[
         is_unlimited_traffic=tariff.traffic_limit_gb == 0,
         device_limit=tariff.device_limit,
         servers_count=servers_count,
+        monthly_price_kopeks=monthly_price,
+        traffic_topup_enabled=traffic_topup_enabled,
+        traffic_topup_packages=traffic_topup_packages,
+        max_topup_traffic_gb=max_topup_traffic_gb,
+        available_topup_gb=available_topup_gb,
     )
 
 
@@ -4289,15 +4383,15 @@ def _safe_int(value: Any) -> int:
 
 def _normalize_period_discounts(
     raw: Optional[Dict[Any, Any]]
-) -> Dict[int, int]:
+) -> Dict[str, int]:
     if not isinstance(raw, dict):
         return {}
 
-    normalized: Dict[int, int] = {}
+    normalized: Dict[str, int] = {}
     for key, value in raw.items():
         try:
             period = int(key)
-            normalized[period] = int(value)
+            normalized[str(period)] = int(value)
         except (TypeError, ValueError):
             continue
 
@@ -4477,57 +4571,128 @@ async def _prepare_subscription_renewal_options(
     user: User,
     subscription: Subscription,
 ) -> Tuple[List[MiniAppSubscriptionRenewalPeriod], Dict[Union[str, int], Dict[str, Any]], Optional[str]]:
-    available_periods = [
-        period for period in settings.get_available_renewal_periods() if period > 0
-    ]
-
     option_payloads: List[Tuple[MiniAppSubscriptionRenewalPeriod, Dict[str, Any]]] = []
 
-    for period_days in available_periods:
-        try:
-            pricing_model = await _calculate_subscription_renewal_pricing(
-                db,
-                user,
-                subscription,
+    # Проверяем, есть ли у подписки тариф (режим тарифов)
+    tariff_id = getattr(subscription, 'tariff_id', None)
+    tariff = None
+    if tariff_id:
+        from app.database.crud.tariff import get_tariff_by_id
+        tariff = await get_tariff_by_id(db, tariff_id)
+
+    if tariff and tariff.period_prices:
+        # Режим тарифов: используем периоды и цены из тарифа
+        promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else getattr(user, "promo_group", None)
+
+        # Получаем скидки промогруппы по периодам
+        period_discounts = {}
+        if promo_group:
+            raw_discounts = getattr(promo_group, 'period_discounts', None) or {}
+            for k, v in raw_discounts.items():
+                try:
+                    period_discounts[int(k)] = max(0, min(100, int(v)))
+                except (TypeError, ValueError):
+                    pass
+
+        for period_str, original_price_kopeks in sorted(tariff.period_prices.items(), key=lambda x: int(x[0])):
+            period_days = int(period_str)
+
+            # Применяем скидку промогруппы
+            discount_percent = period_discounts.get(period_days, 0)
+            if discount_percent > 0:
+                price_kopeks = int(original_price_kopeks * (100 - discount_percent) / 100)
+            else:
+                price_kopeks = original_price_kopeks
+
+            months = max(1, period_days // 30)
+            per_month = price_kopeks // months if months > 0 else price_kopeks
+
+            label = format_period_description(
                 period_days,
+                getattr(user, "language", settings.DEFAULT_LANGUAGE),
             )
-            pricing = pricing_model.to_payload()
-        except Exception as error:  # pragma: no cover - defensive logging
-            logger.warning(
-                "Failed to calculate renewal pricing for subscription %s (period %s): %s",
-                subscription.id,
+
+            price_label = settings.format_price(price_kopeks)
+            original_label = settings.format_price(original_price_kopeks) if discount_percent > 0 else None
+            per_month_label = settings.format_price(per_month)
+
+            option_model = MiniAppSubscriptionRenewalPeriod(
+                id=f"tariff_{tariff.id}_{period_days}",
+                days=period_days,
+                months=months,
+                price_kopeks=price_kopeks,
+                price_label=price_label,
+                original_price_kopeks=original_price_kopeks if discount_percent > 0 else None,
+                original_price_label=original_label,
+                discount_percent=discount_percent,
+                price_per_month_kopeks=per_month,
+                price_per_month_label=per_month_label,
+                title=label,
+            )
+
+            pricing = {
+                "period_id": option_model.id,
+                "period_days": period_days,
+                "months": months,
+                "final_total": price_kopeks,
+                "base_original_total": original_price_kopeks if discount_percent > 0 else price_kopeks,
+                "overall_discount_percent": discount_percent,
+                "per_month": per_month,
+                "tariff_id": tariff.id,
+            }
+
+            option_payloads.append((option_model, pricing))
+    else:
+        # Классический режим: используем периоды из настроек
+        available_periods = [
+            period for period in settings.get_available_renewal_periods() if period > 0
+        ]
+
+        for period_days in available_periods:
+            try:
+                pricing_model = await _calculate_subscription_renewal_pricing(
+                    db,
+                    user,
+                    subscription,
+                    period_days,
+                )
+                pricing = pricing_model.to_payload()
+            except Exception as error:  # pragma: no cover - defensive logging
+                logger.warning(
+                    "Failed to calculate renewal pricing for subscription %s (period %s): %s",
+                    subscription.id,
+                    period_days,
+                    error,
+                )
+                continue
+
+            label = format_period_description(
                 period_days,
-                error,
+                getattr(user, "language", settings.DEFAULT_LANGUAGE),
             )
-            continue
 
-        label = format_period_description(
-            period_days,
-            getattr(user, "language", settings.DEFAULT_LANGUAGE),
-        )
+            price_label = settings.format_price(pricing["final_total"])
+            original_label = None
+            if pricing["base_original_total"] and pricing["base_original_total"] != pricing["final_total"]:
+                original_label = settings.format_price(pricing["base_original_total"])
 
-        price_label = settings.format_price(pricing["final_total"])
-        original_label = None
-        if pricing["base_original_total"] and pricing["base_original_total"] != pricing["final_total"]:
-            original_label = settings.format_price(pricing["base_original_total"])
+            per_month_label = settings.format_price(pricing["per_month"])
 
-        per_month_label = settings.format_price(pricing["per_month"])
+            option_model = MiniAppSubscriptionRenewalPeriod(
+                id=pricing["period_id"],
+                days=period_days,
+                months=pricing["months"],
+                price_kopeks=pricing["final_total"],
+                price_label=price_label,
+                original_price_kopeks=pricing["base_original_total"],
+                original_price_label=original_label,
+                discount_percent=pricing["overall_discount_percent"],
+                price_per_month_kopeks=pricing["per_month"],
+                price_per_month_label=per_month_label,
+                title=label,
+            )
 
-        option_model = MiniAppSubscriptionRenewalPeriod(
-            id=pricing["period_id"],
-            days=period_days,
-            months=pricing["months"],
-            price_kopeks=pricing["final_total"],
-            price_label=price_label,
-            original_price_kopeks=pricing["base_original_total"],
-            original_price_label=original_label,
-            discount_percent=pricing["overall_discount_percent"],
-            price_per_month_kopeks=pricing["per_month"],
-            price_per_month_label=per_month_label,
-            title=label,
-        )
-
-        option_payloads.append((option_model, pricing))
+            option_payloads.append((option_model, pricing))
 
     if not option_payloads:
         return [], {}, None
@@ -5092,79 +5257,187 @@ async def submit_subscription_renewal_endpoint(
             detail={"code": "invalid_period", "message": "Invalid renewal period"},
         )
 
-    available_periods = [
-        period for period in settings.get_available_renewal_periods() if period > 0
-    ]
-    if period_days not in available_periods:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            detail={"code": "period_unavailable", "message": "Selected renewal period is not available"},
-        )
+    # Проверяем, есть ли у подписки тариф (режим тарифов)
+    tariff_id = getattr(subscription, 'tariff_id', None)
+    tariff = None
+    tariff_pricing = None
+
+    if tariff_id:
+        from app.database.crud.tariff import get_tariff_by_id
+        tariff = await get_tariff_by_id(db, tariff_id)
+
+    if tariff and tariff.period_prices:
+        # Режим тарифов: проверяем периоды из тарифа
+        available_periods = [int(p) for p in tariff.period_prices.keys()]
+        if period_days not in available_periods:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail={"code": "period_unavailable", "message": "Selected renewal period is not available for this tariff"},
+            )
+
+        # Рассчитываем цену из тарифа
+        original_price_kopeks = tariff.period_prices.get(str(period_days), tariff.period_prices.get(period_days, 0))
+
+        # Применяем скидку промогруппы
+        promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else getattr(user, "promo_group", None)
+        discount_percent = 0
+        if promo_group:
+            raw_discounts = getattr(promo_group, 'period_discounts', None) or {}
+            for k, v in raw_discounts.items():
+                try:
+                    if int(k) == period_days:
+                        discount_percent = max(0, min(100, int(v)))
+                        break
+                except (TypeError, ValueError):
+                    pass
+
+        if discount_percent > 0:
+            final_total = int(original_price_kopeks * (100 - discount_percent) / 100)
+        else:
+            final_total = original_price_kopeks
+
+        tariff_pricing = {
+            "period_days": period_days,
+            "original_price_kopeks": original_price_kopeks,
+            "discount_percent": discount_percent,
+            "final_total": final_total,
+            "tariff_id": tariff.id,
+        }
+    else:
+        # Классический режим
+        available_periods = [
+            period for period in settings.get_available_renewal_periods() if period > 0
+        ]
+        if period_days not in available_periods:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail={"code": "period_unavailable", "message": "Selected renewal period is not available"},
+            )
 
     method = (payload.method or "").strip().lower()
 
-    try:
-        pricing_model = await _calculate_subscription_renewal_pricing(
-            db,
-            user,
-            subscription,
-            period_days,
-        )
-    except HTTPException:
-        raise
-    except Exception as error:
-        logger.error(
-            "Failed to calculate renewal pricing for subscription %s (period %s): %s",
-            subscription.id,
-            period_days,
-            error,
-        )
-        raise HTTPException(
-            status.HTTP_502_BAD_GATEWAY,
-            detail={"code": "pricing_failed", "message": "Failed to calculate renewal pricing"},
-        ) from error
+    # Для тарифного режима используем упрощённый расчёт
+    if tariff_pricing:
+        final_total = tariff_pricing["final_total"]
+        pricing = tariff_pricing
+    else:
+        try:
+            pricing_model = await _calculate_subscription_renewal_pricing(
+                db,
+                user,
+                subscription,
+                period_days,
+            )
+        except HTTPException:
+            raise
+        except Exception as error:
+            logger.error(
+                "Failed to calculate renewal pricing for subscription %s (period %s): %s",
+                subscription.id,
+                period_days,
+                error,
+            )
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY,
+                detail={"code": "pricing_failed", "message": "Failed to calculate renewal pricing"},
+            ) from error
 
-    pricing = pricing_model.to_payload()
-    final_total = int(pricing_model.final_total)
+        pricing = pricing_model.to_payload()
+        final_total = int(pricing_model.final_total)
     balance_kopeks = getattr(user, "balance_kopeks", 0)
     missing_amount = calculate_missing_amount(balance_kopeks, final_total)
     description = f"Продление подписки на {period_days} дней"
 
     if missing_amount <= 0:
-        try:
-            result = await renewal_service.finalize(
-                db,
+        if tariff_pricing:
+            # Тарифный режим: простое продление
+            from app.database.crud.user import subtract_user_balance
+            from app.database.crud.subscription import extend_subscription
+            from app.database.crud.transaction import create_transaction
+
+            try:
+                # Списываем баланс (subtract_user_balance делает commit и обновляет user.balance_kopeks)
+                success = await subtract_user_balance(db, user, final_total, description)
+                if not success:
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail={"code": "balance_error", "message": "Failed to subtract balance"},
+                    )
+
+                # Продлеваем подписку
+                subscription = await extend_subscription(db, subscription, period_days)
+                new_end_date = subscription.end_date
+
+                # Записываем транзакцию
+                from app.database.models import TransactionType
+                await create_transaction(
+                    db,
+                    user_id=user.id,
+                    type=TransactionType.SUBSCRIPTION_PAYMENT,
+                    amount_kopeks=-final_total,
+                    description=description,
+                )
+
+                lang = getattr(user, "language", settings.DEFAULT_LANGUAGE)
+                if lang == "ru":
+                    message = f"Подписка продлена до {new_end_date.strftime('%d.%m.%Y')}"
+                else:
+                    message = f"Subscription extended until {new_end_date.strftime('%Y-%m-%d')}"
+
+                return MiniAppSubscriptionRenewalResponse(
+                    message=message,
+                    balance_kopeks=user.balance_kopeks,
+                    balance_label=settings.format_price(user.balance_kopeks),
+                    subscription_id=subscription.id,
+                    renewed_until=new_end_date,
+                )
+            except Exception as error:
+                await db.rollback()
+                logger.error(
+                    "Failed to renew tariff subscription %s: %s",
+                    subscription.id,
+                    error,
+                )
+                raise HTTPException(
+                    status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail={"code": "renewal_failed", "message": "Failed to renew subscription"},
+                ) from error
+        else:
+            # Классический режим
+            try:
+                result = await renewal_service.finalize(
+                    db,
+                    user,
+                    subscription,
+                    pricing_model,
+                    description=description,
+                )
+            except SubscriptionRenewalChargeError as error:
+                logger.error(
+                    "Failed to charge balance for subscription renewal %s: %s",
+                    subscription.id,
+                    error,
+                )
+                raise HTTPException(
+                    status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail={"code": "charge_failed", "message": "Failed to charge balance"},
+                ) from error
+
+            updated_subscription = result.subscription
+            message = _build_renewal_success_message(
                 user,
-                subscription,
-                pricing_model,
-                description=description,
+                updated_subscription,
+                result.total_amount_kopeks,
+                pricing_model.promo_discount_value,
             )
-        except SubscriptionRenewalChargeError as error:
-            logger.error(
-                "Failed to charge balance for subscription renewal %s: %s",
-                subscription.id,
-                error,
+
+            return MiniAppSubscriptionRenewalResponse(
+                message=message,
+                balance_kopeks=user.balance_kopeks,
+                balance_label=settings.format_price(user.balance_kopeks),
+                subscription_id=updated_subscription.id,
+                renewed_until=updated_subscription.end_date,
             )
-            raise HTTPException(
-                status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail={"code": "charge_failed", "message": "Failed to charge balance"},
-            ) from error
-
-        updated_subscription = result.subscription
-        message = _build_renewal_success_message(
-            user,
-            updated_subscription,
-            result.total_amount_kopeks,
-            pricing_model.promo_discount_value,
-        )
-
-        return MiniAppSubscriptionRenewalResponse(
-            message=message,
-            balance_kopeks=user.balance_kopeks,
-            balance_label=settings.format_price(user.balance_kopeks),
-            subscription_id=updated_subscription.id,
-            renewed_until=updated_subscription.end_date,
-        )
 
     if not method:
         if final_total > 0 and balance_kopeks < final_total:
@@ -5995,6 +6268,10 @@ async def _build_tariff_model(
     db: AsyncSession,
     tariff,
     current_tariff_id: Optional[int] = None,
+    promo_group=None,
+    current_tariff=None,
+    remaining_days: int = 0,
+    user=None,
 ) -> MiniAppTariff:
     """Преобразует объект тарифа в модель для API."""
     servers: List[MiniAppConnectedServer] = []
@@ -6010,10 +6287,28 @@ async def _build_tariff_model(
                     name=server.display_name or squad_uuid[:8],
                 ))
 
+    # Получаем скидки промогруппы по периодам
+    period_discounts = {}
+    if promo_group:
+        raw_discounts = getattr(promo_group, 'period_discounts', None) or {}
+        for k, v in raw_discounts.items():
+            try:
+                period_discounts[int(k)] = max(0, min(100, int(v)))
+            except (TypeError, ValueError):
+                pass
+
     periods: List[MiniAppTariffPeriod] = []
     if tariff.period_prices:
-        for period_str, price_kopeks in sorted(tariff.period_prices.items(), key=lambda x: int(x[0])):
+        for period_str, original_price_kopeks in sorted(tariff.period_prices.items(), key=lambda x: int(x[0])):
             period_days = int(period_str)
+
+            # Применяем скидку промогруппы
+            discount_percent = period_discounts.get(period_days, 0)
+            if discount_percent > 0:
+                price_kopeks = int(original_price_kopeks * (100 - discount_percent) / 100)
+            else:
+                price_kopeks = original_price_kopeks
+
             months = max(1, period_days // 30)
             per_month = price_kopeks // months if months > 0 else price_kopeks
 
@@ -6025,7 +6320,25 @@ async def _build_tariff_model(
                 price_label=settings.format_price(price_kopeks),
                 price_per_month_kopeks=per_month,
                 price_per_month_label=settings.format_price(per_month),
+                original_price_kopeks=original_price_kopeks if discount_percent > 0 else None,
+                original_price_label=settings.format_price(original_price_kopeks) if discount_percent > 0 else None,
+                discount_percent=discount_percent,
             ))
+
+    # Расчёт стоимости переключения тарифа (если есть текущий тариф и это не он же)
+    switch_cost_kopeks = None
+    switch_cost_label = None
+    is_upgrade = None
+    is_switch_free = None
+
+    if current_tariff and current_tariff.id != tariff.id and remaining_days > 0:
+        cost, upgrade = _calculate_tariff_switch_cost(
+            current_tariff, tariff, remaining_days, promo_group, user
+        )
+        switch_cost_kopeks = cost
+        switch_cost_label = settings.format_price(cost) if cost > 0 else None
+        is_upgrade = upgrade
+        is_switch_free = cost == 0
 
     return MiniAppTariff(
         id=tariff.id,
@@ -6041,12 +6354,29 @@ async def _build_tariff_model(
         periods=periods,
         is_current=current_tariff_id == tariff.id if current_tariff_id else False,
         is_available=tariff.is_active,
+        switch_cost_kopeks=switch_cost_kopeks,
+        switch_cost_label=switch_cost_label,
+        is_upgrade=is_upgrade,
+        is_switch_free=is_switch_free,
     )
 
 
-async def _build_current_tariff_model(db: AsyncSession, tariff) -> MiniAppCurrentTariff:
+async def _build_current_tariff_model(db: AsyncSession, tariff, promo_group=None) -> MiniAppCurrentTariff:
     """Создаёт модель текущего тарифа."""
     servers_count = len(tariff.allowed_squads) if tariff.allowed_squads else 0
+    monthly_price = _get_tariff_monthly_price(tariff)
+
+    # Применяем скидку промогруппы для 30-дневного периода
+    if promo_group:
+        raw_discounts = getattr(promo_group, 'period_discounts', None) or {}
+        for k, v in raw_discounts.items():
+            try:
+                if int(k) == 30:
+                    discount = max(0, min(100, int(v)))
+                    monthly_price = int(monthly_price * (100 - discount) / 100)
+                    break
+            except (TypeError, ValueError):
+                pass
 
     return MiniAppCurrentTariff(
         id=tariff.id,
@@ -6058,6 +6388,7 @@ async def _build_current_tariff_model(db: AsyncSession, tariff) -> MiniAppCurren
         is_unlimited_traffic=tariff.traffic_limit_gb == 0,
         device_limit=tariff.device_limit,
         servers_count=servers_count,
+        monthly_price_kopeks=monthly_price,
     )
 
 
@@ -6079,8 +6410,8 @@ async def get_tariffs_endpoint(
             },
         )
 
-    # Получаем промогруппу пользователя
-    promo_group = getattr(user, "promo_group", None)
+    # Получаем промогруппу пользователя (с приоритетом)
+    promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else getattr(user, "promo_group", None)
     promo_group_id = promo_group.id if promo_group else None
 
     # Получаем тарифы, доступные пользователю
@@ -6090,17 +6421,38 @@ async def get_tariffs_endpoint(
     subscription = getattr(user, "subscription", None)
     current_tariff_id = subscription.tariff_id if subscription else None
     current_tariff_model: Optional[MiniAppCurrentTariff] = None
+    current_tariff = None
+
+    # Вычисляем оставшиеся дни подписки
+    remaining_days = 0
+    if subscription and subscription.end_date:
+        delta = subscription.end_date - datetime.utcnow()
+        remaining_days = max(0, delta.days)
 
     if current_tariff_id:
         current_tariff = await get_tariff_by_id(db, current_tariff_id)
         if current_tariff:
-            current_tariff_model = await _build_current_tariff_model(db, current_tariff)
+            current_tariff_model = await _build_current_tariff_model(db, current_tariff, promo_group)
 
     # Формируем список тарифов
     tariff_models: List[MiniAppTariff] = []
     for tariff in tariffs:
-        model = await _build_tariff_model(db, tariff, current_tariff_id)
+        model = await _build_tariff_model(
+            db, tariff, current_tariff_id, promo_group,
+            current_tariff=current_tariff,
+            remaining_days=remaining_days,
+            user=user,
+        )
         tariff_models.append(model)
+
+    # Формируем модель промогруппы для ответа
+    promo_group_model = None
+    if promo_group:
+        promo_group_model = MiniAppPromoGroup(
+            id=promo_group.id,
+            name=promo_group.name,
+            **_extract_promo_discounts(promo_group),
+        )
 
     return MiniAppTariffsResponse(
         success=True,
@@ -6109,6 +6461,7 @@ async def get_tariffs_endpoint(
         current_tariff=current_tariff_model,
         balance_kopeks=user.balance_kopeks,
         balance_label=settings.format_price(user.balance_kopeks),
+        promo_group=promo_group_model,
     )
 
 
@@ -6140,7 +6493,7 @@ async def purchase_tariff_endpoint(
         )
 
     # Проверяем доступность тарифа для пользователя
-    promo_group = getattr(user, "promo_group", None)
+    promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else getattr(user, "promo_group", None)
     promo_group_id = promo_group.id if promo_group else None
     if not tariff.is_available_for_promo_group(promo_group_id):
         raise HTTPException(
@@ -6152,8 +6505,8 @@ async def purchase_tariff_endpoint(
         )
 
     # Получаем цену за выбранный период
-    price_kopeks = tariff.get_price_for_period(payload.period_days)
-    if price_kopeks is None:
+    base_price_kopeks = tariff.get_price_for_period(payload.period_days)
+    if base_price_kopeks is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
@@ -6161,6 +6514,21 @@ async def purchase_tariff_endpoint(
                 "message": "Invalid period for this tariff",
             },
         )
+
+    # Применяем скидку промогруппы
+    price_kopeks = base_price_kopeks
+    discount_percent = 0
+    if promo_group:
+        raw_discounts = getattr(promo_group, 'period_discounts', None) or {}
+        for k, v in raw_discounts.items():
+            try:
+                if int(k) == payload.period_days:
+                    discount_percent = max(0, min(100, int(v)))
+                    break
+            except (TypeError, ValueError):
+                pass
+        if discount_percent > 0:
+            price_kopeks = int(base_price_kopeks * (100 - discount_percent) / 100)
 
     # Проверяем баланс
     if user.balance_kopeks < price_kopeks:
@@ -6177,7 +6545,10 @@ async def purchase_tariff_endpoint(
     subscription = getattr(user, "subscription", None)
 
     # Списываем баланс
-    description = f"Покупка тарифа '{tariff.name}' на {payload.period_days} дней"
+    if discount_percent > 0:
+        description = f"Покупка тарифа '{tariff.name}' на {payload.period_days} дней (скидка {discount_percent}%)"
+    else:
+        description = f"Покупка тарифа '{tariff.name}' на {payload.period_days} дней"
     success = await subtract_user_balance(db, user, price_kopeks, description)
     if not success:
         raise HTTPException(
@@ -6214,7 +6585,7 @@ async def purchase_tariff_endpoint(
         subscription = await create_paid_subscription(
             db=db,
             user_id=user.id,
-            days=payload.period_days,
+            duration_days=payload.period_days,
             traffic_limit_gb=tariff.traffic_limit_gb,
             device_limit=tariff.device_limit,
             connected_squads=tariff.allowed_squads or [],
@@ -6252,4 +6623,473 @@ async def purchase_tariff_endpoint(
         new_end_date=subscription.end_date,
         balance_kopeks=user.balance_kopeks,
         balance_label=settings.format_price(user.balance_kopeks),
+    )
+
+
+def _get_user_period_discount(user, period_days: int) -> int:
+    """Получает скидку пользователя на период (унифицировано с ботом)."""
+    promo_group = getattr(user, 'promo_group', None) if user else None
+
+    if promo_group:
+        discount = promo_group.get_discount_percent("period", period_days)
+        if discount > 0:
+            return discount
+
+    personal_discount = get_user_active_promo_discount_percent(user) if user else 0
+    return personal_discount
+
+
+def _apply_promo_discount(price: int, discount_percent: int) -> int:
+    """Применяет скидку к цене."""
+    if discount_percent <= 0:
+        return price
+    discount = int(price * discount_percent / 100)
+    return max(0, price - discount)
+
+
+def _calculate_tariff_switch_cost(
+    current_tariff,
+    new_tariff,
+    remaining_days: int,
+    promo_group=None,
+    user=None,
+) -> tuple[int, bool]:
+    """
+    Рассчитывает стоимость переключения тарифа.
+    Логика унифицирована с ботом (tariff_purchase.py).
+
+    Формула: (new_monthly - current_monthly) * remaining_days / 30
+    Скидка применяется к обоим тарифам одинаково.
+
+    Returns:
+        (cost_kopeks, is_upgrade) - стоимость доплаты и флаг апгрейда
+    """
+    current_monthly = _get_tariff_monthly_price(current_tariff)
+    new_monthly = _get_tariff_monthly_price(new_tariff)
+
+    discount_percent = _get_user_period_discount(user, 30) if user else 0
+
+    # Fallback на promo_group.period_discounts если user не передан
+    if discount_percent == 0 and promo_group:
+        raw_discounts = getattr(promo_group, 'period_discounts', None) or {}
+        for k, v in raw_discounts.items():
+            try:
+                if int(k) == 30:
+                    discount_percent = max(0, min(100, int(v)))
+                    break
+            except (TypeError, ValueError):
+                pass
+
+    if discount_percent > 0:
+        current_monthly = _apply_promo_discount(current_monthly, discount_percent)
+        new_monthly = _apply_promo_discount(new_monthly, discount_percent)
+
+    price_diff = new_monthly - current_monthly
+
+    if price_diff <= 0:
+        return 0, False
+
+    upgrade_cost = int(price_diff * remaining_days / 30)
+    return upgrade_cost, True
+
+
+@router.post("/subscription/tariff/switch/preview")
+async def preview_tariff_switch_endpoint(
+    payload: MiniAppTariffSwitchRequest,
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Предпросмотр переключения тарифа - показывает стоимость."""
+
+    user = await _authorize_miniapp_user(payload.init_data, db)
+
+    if not settings.is_tariffs_mode():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "tariffs_mode_disabled", "message": "Tariffs mode is not enabled"},
+        )
+
+    subscription = getattr(user, "subscription", None)
+    if not subscription or not subscription.tariff_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "no_subscription", "message": "No active subscription with tariff"},
+        )
+
+    if subscription.status not in ("active", "trial"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "subscription_inactive", "message": "Subscription is not active"},
+        )
+
+    current_tariff = await get_tariff_by_id(db, subscription.tariff_id)
+    new_tariff = await get_tariff_by_id(db, payload.tariff_id)
+
+    if not new_tariff or not new_tariff.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "tariff_not_found", "message": "Tariff not found or inactive"},
+        )
+
+    if subscription.tariff_id == payload.tariff_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "same_tariff", "message": "Already on this tariff"},
+        )
+
+    # Проверяем доступность тарифа для пользователя
+    promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else getattr(user, "promo_group", None)
+    promo_group_id = promo_group.id if promo_group else None
+    if not new_tariff.is_available_for_promo_group(promo_group_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "tariff_not_available", "message": "Tariff not available for your promo group"},
+        )
+
+    # Рассчитываем оставшиеся дни
+    remaining_days = 0
+    if subscription.end_date and subscription.end_date > datetime.utcnow():
+        delta = subscription.end_date - datetime.utcnow()
+        remaining_days = max(0, delta.days)
+
+    # Рассчитываем стоимость переключения
+    upgrade_cost, is_upgrade = _calculate_tariff_switch_cost(
+        current_tariff, new_tariff, remaining_days, promo_group, user
+    )
+
+    balance = user.balance_kopeks or 0
+    has_enough = balance >= upgrade_cost
+    missing = max(0, upgrade_cost - balance) if not has_enough else 0
+
+    return MiniAppTariffSwitchPreviewResponse(
+        can_switch=has_enough,
+        current_tariff_id=current_tariff.id if current_tariff else None,
+        current_tariff_name=current_tariff.name if current_tariff else None,
+        new_tariff_id=new_tariff.id,
+        new_tariff_name=new_tariff.name,
+        remaining_days=remaining_days,
+        upgrade_cost_kopeks=upgrade_cost,
+        upgrade_cost_label=settings.format_price(upgrade_cost) if upgrade_cost > 0 else "Бесплатно",
+        balance_kopeks=balance,
+        balance_label=settings.format_price(balance),
+        has_enough_balance=has_enough,
+        missing_amount_kopeks=missing,
+        missing_amount_label=settings.format_price(missing) if missing > 0 else "",
+        is_upgrade=is_upgrade,
+        message=None,
+    )
+
+
+@router.post("/subscription/tariff/switch")
+async def switch_tariff_endpoint(
+    payload: MiniAppTariffSwitchRequest,
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Переключение тарифа без изменения даты окончания."""
+    user = await _authorize_miniapp_user(payload.init_data, db)
+
+    if not settings.is_tariffs_mode():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "tariffs_mode_disabled", "message": "Tariffs mode is not enabled"},
+        )
+
+    subscription = getattr(user, "subscription", None)
+    if not subscription or not subscription.tariff_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "no_subscription", "message": "No active subscription with tariff"},
+        )
+
+    if subscription.status not in ("active", "trial"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "subscription_inactive", "message": "Subscription is not active"},
+        )
+
+    current_tariff = await get_tariff_by_id(db, subscription.tariff_id)
+    new_tariff = await get_tariff_by_id(db, payload.tariff_id)
+
+    if not new_tariff or not new_tariff.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "tariff_not_found", "message": "Tariff not found or inactive"},
+        )
+
+    if subscription.tariff_id == payload.tariff_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "same_tariff", "message": "Already on this tariff"},
+        )
+
+    # Проверяем доступность тарифа
+    promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else getattr(user, "promo_group", None)
+    promo_group_id = promo_group.id if promo_group else None
+    if not new_tariff.is_available_for_promo_group(promo_group_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "tariff_not_available", "message": "Tariff not available"},
+        )
+
+    # Рассчитываем оставшиеся дни
+    remaining_days = 0
+    if subscription.end_date and subscription.end_date > datetime.utcnow():
+        delta = subscription.end_date - datetime.utcnow()
+        remaining_days = max(0, delta.days)
+
+    # Рассчитываем стоимость
+    upgrade_cost, is_upgrade = _calculate_tariff_switch_cost(
+        current_tariff, new_tariff, remaining_days, promo_group, user
+    )
+
+    # Списываем доплату если апгрейд
+    if upgrade_cost > 0:
+        if user.balance_kopeks < upgrade_cost:
+            missing = upgrade_cost - user.balance_kopeks
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail={
+                    "code": "insufficient_funds",
+                    "message": f"Недостаточно средств. Не хватает {settings.format_price(missing)}",
+                    "missing_amount": missing,
+                },
+            )
+
+        description = f"Переход на тариф '{new_tariff.name}' (доплата за {remaining_days} дней)"
+        success = await subtract_user_balance(db, user, upgrade_cost, description)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={"code": "balance_error", "message": "Failed to charge balance"},
+            )
+
+        # Записываем транзакцию
+        await create_transaction(
+            db=db,
+            user_id=user.id,
+            type=TransactionType.SUBSCRIPTION_PAYMENT,
+            amount_kopeks=upgrade_cost,
+            description=description,
+        )
+
+    # Обновляем подписку - меняем тариф без изменения даты
+    subscription.tariff_id = new_tariff.id
+    subscription.traffic_limit_gb = new_tariff.traffic_limit_gb
+    subscription.device_limit = new_tariff.device_limit
+    subscription.connected_squads = new_tariff.allowed_squads or []
+    # Сбрасываем докупленный трафик при смене тарифа
+    subscription.purchased_traffic_gb = 0
+
+    await db.commit()
+    await db.refresh(subscription)
+    await db.refresh(user)
+
+    # Синхронизируем с RemnaWave
+    try:
+        service = SubscriptionService()
+        await service.update_remnawave_user(db, subscription)
+    except Exception as e:
+        logger.error(f"Ошибка синхронизации с RemnaWave при смене тарифа: {e}")
+
+    lang = getattr(user, "language", settings.DEFAULT_LANGUAGE)
+    if upgrade_cost > 0:
+        if lang == "ru":
+            message = f"Тариф изменён на '{new_tariff.name}'. Списано {settings.format_price(upgrade_cost)}"
+        else:
+            message = f"Switched to '{new_tariff.name}'. Charged {settings.format_price(upgrade_cost)}"
+    else:
+        if lang == "ru":
+            message = f"Тариф изменён на '{new_tariff.name}'"
+        else:
+            message = f"Switched to '{new_tariff.name}'"
+
+    return MiniAppTariffSwitchResponse(
+        success=True,
+        message=message,
+        tariff_id=new_tariff.id,
+        tariff_name=new_tariff.name,
+        charged_kopeks=upgrade_cost,
+        balance_kopeks=user.balance_kopeks,
+        balance_label=settings.format_price(user.balance_kopeks),
+    )
+
+
+@router.post("/subscription/traffic-topup")
+async def purchase_traffic_topup_endpoint(
+    payload: MiniAppTrafficTopupRequest,
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Докупка трафика для подписки."""
+    from app.webapi.schemas.miniapp import MiniAppTrafficTopupRequest, MiniAppTrafficTopupResponse
+    from app.database.crud.subscription import add_subscription_traffic
+    from app.database.crud.user import subtract_user_balance
+    from app.database.crud.transaction import create_transaction
+    from app.database.models import TransactionType
+    from app.utils.pricing_utils import calculate_prorated_price
+
+    user = await _authorize_miniapp_user(payload.init_data, db)
+    subscription = _ensure_paid_subscription(user)
+    _validate_subscription_id(payload.subscription_id, subscription)
+
+    # Проверяем режим тарифов
+    if not settings.is_tariffs_mode():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "tariffs_mode_disabled",
+                "message": "Traffic top-up is only available in tariffs mode",
+            },
+        )
+
+    # Проверяем наличие тарифа
+    tariff_id = getattr(subscription, 'tariff_id', None)
+    if not tariff_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "no_tariff",
+                "message": "Subscription has no tariff",
+            },
+        )
+
+    tariff = await get_tariff_by_id(db, tariff_id)
+    if not tariff:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "code": "tariff_not_found",
+                "message": "Tariff not found",
+            },
+        )
+
+    # Проверяем, разрешена ли докупка трафика
+    if not getattr(tariff, 'traffic_topup_enabled', False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "traffic_topup_disabled",
+                "message": "Traffic top-up is disabled for this tariff",
+            },
+        )
+
+    # Проверяем безлимит
+    if tariff.traffic_limit_gb == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "unlimited_traffic",
+                "message": "Cannot add traffic to unlimited subscription",
+            },
+        )
+
+    # Проверяем лимит докупки трафика
+    max_topup_limit = getattr(tariff, 'max_topup_traffic_gb', 0) or 0
+    if max_topup_limit > 0:
+        current_traffic = subscription.traffic_limit_gb or 0
+        new_traffic = current_traffic + payload.gb
+        if new_traffic > max_topup_limit:
+            available_gb = max(0, max_topup_limit - current_traffic)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "code": "topup_limit_exceeded",
+                    "message": f"Traffic top-up limit exceeded. Maximum allowed: {max_topup_limit} GB, current: {current_traffic} GB, available: {available_gb} GB",
+                    "max_limit_gb": max_topup_limit,
+                    "current_gb": current_traffic,
+                    "available_gb": available_gb,
+                },
+            )
+
+    # Получаем цену пакета
+    packages = tariff.get_traffic_topup_packages() if hasattr(tariff, 'get_traffic_topup_packages') else {}
+    if payload.gb not in packages:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "invalid_package",
+                "message": f"Traffic package {payload.gb}GB is not available",
+            },
+        )
+
+    base_price_kopeks = packages[payload.gb]
+
+    # Применяем скидку промогруппы на трафик
+    traffic_discount_percent = 0
+    promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else getattr(user, "promo_group", None)
+    if promo_group:
+        apply_to_addons = getattr(promo_group, 'apply_discounts_to_addons', True)
+        if apply_to_addons:
+            traffic_discount_percent = max(0, min(100, int(getattr(promo_group, 'traffic_discount_percent', 0) or 0)))
+
+    if traffic_discount_percent > 0:
+        base_price_kopeks = int(base_price_kopeks * (100 - traffic_discount_percent) / 100)
+
+    # Пропорциональный расчет цены с учетом оставшегося времени подписки
+    final_price, months_charged = calculate_prorated_price(
+        base_price_kopeks,
+        subscription.end_date,
+    )
+
+    # Проверяем баланс
+    if user.balance_kopeks < final_price:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail={
+                "code": "insufficient_balance",
+                "message": "Insufficient balance",
+                "required": final_price,
+                "balance": user.balance_kopeks,
+            },
+        )
+
+    # Списываем баланс
+    if traffic_discount_percent > 0:
+        traffic_description = f"Докупка {payload.gb} ГБ трафика (скидка {traffic_discount_percent}%)"
+    else:
+        traffic_description = f"Докупка {payload.gb} ГБ трафика"
+    success = await subtract_user_balance(
+        db, user, final_price,
+        traffic_description
+    )
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "code": "balance_error",
+                "message": "Failed to subtract balance",
+            },
+        )
+
+    # Добавляем трафик
+    await add_subscription_traffic(db, subscription, payload.gb)
+
+    # Обновляем purchased_traffic_gb
+    current_purchased = getattr(subscription, 'purchased_traffic_gb', 0) or 0
+    subscription.purchased_traffic_gb = current_purchased + payload.gb
+    await db.commit()
+
+    # Синхронизируем с RemnaWave
+    try:
+        service = SubscriptionService()
+        await service.update_remnawave_user(db, subscription)
+    except Exception as e:
+        logger.error(f"Ошибка синхронизации с RemnaWave при докупке трафика: {e}")
+
+    # Создаем транзакцию
+    await create_transaction(
+        db,
+        user_id=user.id,
+        type=TransactionType.SUBSCRIPTION_PAYMENT,
+        amount_kopeks=-final_price,
+        description=traffic_description,
+    )
+
+    await db.refresh(user)
+    await db.refresh(subscription)
+
+    return MiniAppTrafficTopupResponse(
+        success=True,
+        message=f"Добавлено {payload.gb} ГБ трафика",
+        new_traffic_limit_gb=subscription.traffic_limit_gb,
+        new_balance_kopeks=user.balance_kopeks,
+        charged_kopeks=final_price,
     )
