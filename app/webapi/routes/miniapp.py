@@ -6548,21 +6548,35 @@ async def purchase_tariff_endpoint(
             },
         )
 
-    # Получаем цену за выбранный период
-    base_price_kopeks = tariff.get_price_for_period(payload.period_days)
-    if base_price_kopeks is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "code": "invalid_period",
-                "message": "Invalid period for this tariff",
-            },
-        )
+    # Получаем цену
+    is_daily_tariff = getattr(tariff, 'is_daily', False)
+    if is_daily_tariff:
+        # Для суточного тарифа берём daily_price_kopeks (первый день)
+        base_price_kopeks = getattr(tariff, 'daily_price_kopeks', 0)
+        if base_price_kopeks <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "code": "invalid_daily_price",
+                    "message": "Daily tariff has no price configured",
+                },
+            )
+    else:
+        # Для обычного тарифа получаем цену за выбранный период
+        base_price_kopeks = tariff.get_price_for_period(payload.period_days)
+        if base_price_kopeks is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "code": "invalid_period",
+                    "message": "Invalid period for this tariff",
+                },
+            )
 
-    # Применяем скидку промогруппы
+    # Применяем скидку промогруппы (только для обычных тарифов, не для суточных)
     price_kopeks = base_price_kopeks
     discount_percent = 0
-    if promo_group:
+    if not is_daily_tariff and promo_group:
         raw_discounts = getattr(promo_group, 'period_discounts', None) or {}
         for k, v in raw_discounts.items():
             try:
@@ -6589,7 +6603,9 @@ async def purchase_tariff_endpoint(
     subscription = getattr(user, "subscription", None)
 
     # Списываем баланс
-    if discount_percent > 0:
+    if is_daily_tariff:
+        description = f"Активация суточного тарифа '{tariff.name}' (первый день)"
+    elif discount_percent > 0:
         description = f"Покупка тарифа '{tariff.name}' на {payload.period_days} дней (скидка {discount_percent}%)"
     else:
         description = f"Покупка тарифа '{tariff.name}' на {payload.period_days} дней"
@@ -6635,6 +6651,16 @@ async def purchase_tariff_endpoint(
             connected_squads=tariff.allowed_squads or [],
             tariff_id=tariff.id,
         )
+
+    # Инициализация daily полей при покупке суточного тарифа
+    is_daily_tariff = getattr(tariff, 'is_daily', False)
+    if is_daily_tariff:
+        subscription.is_daily_paused = False
+        subscription.last_daily_charge_at = datetime.utcnow()
+        # Для суточного тарифа end_date = сейчас + 1 день (первый день уже оплачен)
+        subscription.end_date = datetime.utcnow() + timedelta(days=1)
+        await db.commit()
+        await db.refresh(subscription)
 
     # Синхронизируем с RemnaWave
     service = SubscriptionService()
@@ -6922,6 +6948,23 @@ async def switch_tariff_endpoint(
     subscription.connected_squads = new_tariff.allowed_squads or []
     # Сбрасываем докупленный трафик при смене тарифа
     subscription.purchased_traffic_gb = 0
+
+    # Обработка daily полей при смене тарифа
+    new_is_daily = getattr(new_tariff, 'is_daily', False)
+    old_is_daily = getattr(current_tariff, 'is_daily', False)
+
+    if new_is_daily:
+        # Переход на суточный тариф
+        subscription.is_daily_paused = False
+        subscription.last_daily_charge_at = datetime.utcnow()
+        # Для суточного тарифа end_date = сейчас + 1 день
+        subscription.end_date = datetime.utcnow() + timedelta(days=1)
+        logger.info(f"🔄 Смена на суточный тариф: установлены daily поля, end_date={subscription.end_date}")
+    elif old_is_daily and not new_is_daily:
+        # Переход с суточного на обычный тариф - очищаем daily поля
+        subscription.is_daily_paused = False
+        subscription.last_daily_charge_at = None
+        logger.info(f"🔄 Смена с суточного на обычный тариф: очищены daily поля")
 
     await db.commit()
     await db.refresh(subscription)
