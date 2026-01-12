@@ -1486,9 +1486,9 @@ async def check_and_update_subscription_status(
     db: AsyncSession,
     subscription: Subscription
 ) -> Subscription:
-    
+
     current_time = datetime.utcnow()
-    
+
     logger.info(
         "🔍 Проверка статуса подписки %s, текущий статус: %s, дата окончания: %s, текущее время: %s",
         subscription.id,
@@ -1496,20 +1496,29 @@ async def check_and_update_subscription_status(
         format_local_datetime(subscription.end_date),
         format_local_datetime(current_time),
     )
-    
-    if (subscription.status == SubscriptionStatus.ACTIVE.value and 
+
+    # Для суточных тарифов с паузой не меняем статус на expired
+    # (время "заморожено" пока пользователь на паузе)
+    is_daily_paused = getattr(subscription, 'is_daily_paused', False)
+    if is_daily_paused:
+        logger.info(
+            f"⏸️ Суточная подписка {subscription.id} на паузе, пропускаем проверку истечения"
+        )
+        return subscription
+
+    if (subscription.status == SubscriptionStatus.ACTIVE.value and
         subscription.end_date <= current_time):
-        
+
         subscription.status = SubscriptionStatus.EXPIRED.value
         subscription.updated_at = current_time
-        
+
         await db.commit()
         await db.refresh(subscription)
-        
+
         logger.info(f"⏰ Статус подписки пользователя {subscription.user_id} изменен на 'expired'")
     elif subscription.status == SubscriptionStatus.PENDING.value:
         logger.info(f"ℹ️ Проверка PENDING подписки {subscription.id}, статус остается без изменений")
-    
+
     return subscription
 
 async def create_subscription_no_commit(
