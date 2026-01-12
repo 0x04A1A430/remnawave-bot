@@ -322,7 +322,7 @@ async def create_topup(
                 db=db,
                 user_id=user.id,
                 amount_kopeks=request.amount_kopeks,
-                description=settings.get_balance_payment_description(request.amount_kopeks),
+                description=settings.get_balance_payment_description(request.amount_kopeks, telegram_user_id=user.telegram_id),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
                 payment_method_code=method_code,
             )
