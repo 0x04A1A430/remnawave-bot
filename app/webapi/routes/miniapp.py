@@ -1009,7 +1009,7 @@ async def create_payment_link(
             payment_service = PaymentService(bot)
             invoice_link = await payment_service.create_stars_invoice(
                 amount_kopeks=amount_kopeks,
-                description=settings.get_balance_payment_description(amount_kopeks),
+                description=settings.get_balance_payment_description(amount_kopeks, telegram_user_id=user.telegram_id),
                 payload=invoice_payload,
                 stars_amount=stars_amount,
             )
@@ -1046,7 +1046,7 @@ async def create_payment_link(
             db=db,
             user_id=user.id,
             amount_kopeks=amount_kopeks,
-            description=settings.get_balance_payment_description(amount_kopeks),
+            description=settings.get_balance_payment_description(amount_kopeks, telegram_user_id=user.telegram_id),
         )
         confirmation_url = result.get("confirmation_url") if result else None
         if not result or not confirmation_url:
@@ -1084,7 +1084,7 @@ async def create_payment_link(
             db=db,
             user_id=user.id,
             amount_kopeks=amount_kopeks,
-            description=settings.get_balance_payment_description(amount_kopeks),
+            description=settings.get_balance_payment_description(amount_kopeks, telegram_user_id=user.telegram_id),
         )
         if not result or not result.get("confirmation_url"):
             raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail="Failed to create payment")
@@ -1116,7 +1116,7 @@ async def create_payment_link(
             db=db,
             user_id=user.id,
             amount_kopeks=amount_kopeks,
-            description=settings.get_balance_payment_description(amount_kopeks),
+            description=settings.get_balance_payment_description(amount_kopeks, telegram_user_id=user.telegram_id),
             language=user.language,
         )
         if not result or not result.get("payment_url"):
@@ -1158,7 +1158,7 @@ async def create_payment_link(
             db=db,
             user_id=user.id,
             amount_kopeks=amount_kopeks,
-            description=settings.get_balance_payment_description(amount_kopeks),
+            description=settings.get_balance_payment_description(amount_kopeks, telegram_user_id=user.telegram_id),
             language=user.language or settings.DEFAULT_LANGUAGE,
             payment_method_code=method_code,
         )
@@ -1196,7 +1196,7 @@ async def create_payment_link(
             db=db,
             user_id=user.id,
             amount_kopeks=amount_kopeks,
-            description=settings.get_balance_payment_description(amount_kopeks),
+            description=settings.get_balance_payment_description(amount_kopeks, telegram_user_id=user.telegram_id),
             language=user.language,
         )
         payment_url = result.get("payment_url") if result else None
@@ -1237,7 +1237,7 @@ async def create_payment_link(
             db=db,
             user_id=user.id,
             amount_kopeks=amount_kopeks,
-            description=settings.get_balance_payment_description(amount_kopeks),
+            description=settings.get_balance_payment_description(amount_kopeks, telegram_user_id=user.telegram_id),
             language=user.language or settings.DEFAULT_LANGUAGE,
             payment_method=provider_method,
         )
@@ -1315,7 +1315,7 @@ async def create_payment_link(
             user_id=user.id,
             amount_usd=amount_usd,
             asset=settings.CRYPTOBOT_DEFAULT_ASSET,
-            description=settings.get_balance_payment_description(amount_kopeks),
+            description=settings.get_balance_payment_description(amount_kopeks, telegram_user_id=user.telegram_id),
             payload=f"balance_{user.id}_{amount_kopeks}",
         )
         if not result:
@@ -1366,7 +1366,7 @@ async def create_payment_link(
             db=db,
             user_id=user.id,
             amount_kopeks=amount_kopeks,
-            description=settings.get_balance_payment_description(amount_kopeks),
+            description=settings.get_balance_payment_description(amount_kopeks, telegram_user_id=user.telegram_id),
             language=user.language or settings.DEFAULT_LANGUAGE,
         )
 
@@ -1411,7 +1411,7 @@ async def create_payment_link(
             db=db,
             user_id=user.id,
             amount_kopeks=amount_kopeks,
-            description=settings.get_balance_payment_description(amount_kopeks),
+            description=settings.get_balance_payment_description(amount_kopeks, telegram_user_id=user.telegram_id),
             telegram_id=user.telegram_id,
             language=user.language or settings.DEFAULT_LANGUAGE,
         )
@@ -1452,7 +1452,7 @@ async def create_payment_link(
             db=db,
             user_id=user.id,
             amount_kopeks=amount_kopeks,
-            description=settings.get_balance_payment_description(amount_kopeks),
+            description=settings.get_balance_payment_description(amount_kopeks, telegram_user_id=user.telegram_id),
             email=getattr(user, "email", None),
             language=user.language or settings.DEFAULT_LANGUAGE,
         )
