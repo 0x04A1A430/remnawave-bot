@@ -5406,6 +5406,19 @@ async def submit_subscription_renewal_endpoint(
                     description=description,
                 )
 
+                # Синхронизируем с RemnaWave (сброс трафика по настройке)
+                try:
+                    from app.services.subscription_service import SubscriptionService
+                    service = SubscriptionService()
+                    await service.update_remnawave_user(
+                        db,
+                        subscription,
+                        reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT,
+                        reset_reason="subscription renewal (miniapp)",
+                    )
+                except Exception as e:
+                    logger.error(f"Ошибка синхронизации с RemnaWave при продлении (miniapp): {e}")
+
                 lang = getattr(user, "language", settings.DEFAULT_LANGUAGE)
                 if lang == "ru":
                     message = f"Подписка продлена до {new_end_date.strftime('%d.%m.%Y')}"
