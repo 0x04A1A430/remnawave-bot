@@ -20916,12 +20916,19 @@
                                         </span>
                                     `;
                                 } else if (switchingFromDaily) {
-                                    // Переключение С суточного НА периодный - показываем "от X₽"
+                                    // Переключение С суточного НА периодный - показываем "от X₽ / N дн"
                                     const fromLabel = preferredLanguage === 'en' ? 'from' : 'от';
+                                    // Находим минимальный период тарифа
+                                    const tariffPeriods = tariff.periods || [];
+                                    let minPeriodDays = 30;
+                                    if (tariffPeriods.length > 0) {
+                                        minPeriodDays = Math.min(...tariffPeriods.map(p => p.days || 30));
+                                    }
+                                    const periodSuffix = preferredLanguage === 'en' ? ` / ${minPeriodDays}d` : ` / ${minPeriodDays} дн`;
                                     return `
                                         <span class="instant-switch-cost-badge upgrade">
                                             <span style="font-size: 10px; display: block; text-transform: uppercase; opacity: 0.8;">${fromLabel}</span>
-                                            ${upgradeCostLabel}
+                                            ${upgradeCostLabel}${periodSuffix}
                                         </span>
                                     `;
                                 } else if (isUpgrade) {
@@ -21127,9 +21134,17 @@
                     confirmUpgrade: preferredLanguage === 'en'
                         ? `Switch to "${tariff.name}"?\n\nUpgrade cost: ${costLabel}\nYour balance: ${balanceLabel}`
                         : `Сменить тариф на «${tariff.name}»?\n\nДоплата: ${costLabel}\nВаш баланс: ${balanceLabel}`,
-                    confirmFromDaily: preferredLanguage === 'en'
-                        ? `Switch to "${tariff.name}"?\n\nCost: ${costLabel}\n(Daily subscription time is not transferred)\nYour balance: ${balanceLabel}`
-                        : `Сменить тариф на «${tariff.name}»?\n\nСтоимость: ${costLabel}\n(Время суточной подписки не переносится)\nВаш баланс: ${balanceLabel}`,
+                    confirmFromDaily: (() => {
+                        // Получаем минимальный период для отображения
+                        const tariffPeriods = tariff.periods || [];
+                        let minPeriodDays = 30;
+                        if (tariffPeriods.length > 0) {
+                            minPeriodDays = Math.min(...tariffPeriods.map(p => p.days || 30));
+                        }
+                        return preferredLanguage === 'en'
+                            ? `Switch to "${tariff.name}"?\n\nCost: ${costLabel} for ${minPeriodDays} days\n(Daily subscription time is not transferred)\nYour balance: ${balanceLabel}`
+                            : `Сменить тариф на «${tariff.name}»?\n\nСтоимость: ${costLabel} за ${minPeriodDays} дн.\n(Время суточной подписки не переносится)\nВаш баланс: ${balanceLabel}`;
+                    })(),
                     confirmDowngrade: preferredLanguage === 'en'
                         ? `Switch to "${tariff.name}"?\n\nFree (downgrade)`
                         : `Сменить тариф на «${tariff.name}»?\n\nБесплатно (понижение тарифа)`,
