@@ -20653,10 +20653,13 @@
                 userInfo?.subscriptionStatus ||
                 ''
             ).toLowerCase();
-            const hasActiveSubscription = actualStatus === 'active' || actualStatus === 'trial' ||
-                userInfo?.has_active_subscription || userInfo?.hasActiveSubscription;
+            // Триал НЕ считается активной подпиской для режима смены тарифа - триалу нужно КУПИТЬ
+            const hasActiveSubscription = actualStatus === 'active' ||
+                (userInfo?.has_active_subscription || userInfo?.hasActiveSubscription);
+            const isTrial = actualStatus === 'trial';
             const currentTariff = tariffsData?.current_tariff || tariffsData?.currentTariff;
-            isInstantSwitchMode = hasActiveSubscription && currentTariff;
+            // Режим смены тарифа только для активных (не триал) подписок
+            isInstantSwitchMode = hasActiveSubscription && !isTrial && currentTariff;
 
             // Вычисляем оставшиеся дни из expires_at
             let daysLeft = 0;
