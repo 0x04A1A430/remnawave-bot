@@ -20653,13 +20653,22 @@
                 userInfo?.subscriptionStatus ||
                 ''
             ).toLowerCase();
-            // Триал НЕ считается активной подпиской для режима смены тарифа - триалу нужно КУПИТЬ
-            const hasActiveSubscription = actualStatus === 'active' ||
-                (userInfo?.has_active_subscription || userInfo?.hasActiveSubscription);
-            const isTrial = actualStatus === 'trial';
+
+            // Проверяем триал по всем возможным полям
+            const isTrial = actualStatus === 'trial' ||
+                userInfo?.is_trial ||
+                userInfo?.isTrial ||
+                (userInfo?.subscription_type || userInfo?.subscriptionType || '').toLowerCase() === 'trial';
+
+            console.log('🔍 Status check:', { actualStatus, isTrial, userInfo });
+
             const currentTariff = tariffsData?.current_tariff || tariffsData?.currentTariff;
-            // Режим смены тарифа только для активных (не триал) подписок
-            isInstantSwitchMode = hasActiveSubscription && !isTrial && currentTariff;
+
+            // Режим смены тарифа ТОЛЬКО для ОПЛАЧЕННЫХ активных подписок (НЕ триал!)
+            // Триалу нужно КУПИТЬ подписку, а не менять тариф
+            isInstantSwitchMode = actualStatus === 'active' && !isTrial && currentTariff;
+
+            console.log('🔍 Mode:', { isInstantSwitchMode, actualStatus, isTrial, hasTariff: !!currentTariff });
 
             // Вычисляем оставшиеся дни из expires_at
             let daysLeft = 0;
