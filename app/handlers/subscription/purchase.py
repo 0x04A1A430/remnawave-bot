@@ -335,12 +335,15 @@ async def show_subscription_info(
 
     # Получаем название тарифа для режима тарифов
     tariff_line = ""
+    tariff = None
     if settings.is_tariffs_mode() and subscription.tariff_id:
         try:
             from app.database.crud.tariff import get_tariff_by_id
             tariff = await get_tariff_by_id(db, subscription.tariff_id)
             if tariff:
                 tariff_line = f"\n📦 Тариф: {tariff.name}"
+                # Прикрепляем тариф к подписке для использования в клавиатуре
+                subscription.tariff = tariff
         except Exception as e:
             logger.warning(f"Ошибка получения тарифа: {e}")
 
@@ -3075,77 +3078,31 @@ async def handle_toggle_daily_subscription_pause(
         )
         return
 
+    # Прикрепляем тариф к подписке для CRUD функций
+    subscription.tariff = tariff
+
     # Переключаем статус паузы
-    was_paused = subscription.is_daily_paused
+    was_paused = getattr(subscription, 'is_daily_paused', False)
     subscription = await toggle_daily_subscription_pause(db, subscription)
 
     if was_paused:
         # Была пауза, теперь возобновили
         message = texts.t(
             "DAILY_SUBSCRIPTION_RESUMED",
-            "▶️ Суточная подписка возобновлена.\n\nСписание будет произведено в ближайший цикл проверки."
+            "▶️ Подписка возобновлена!"
         )
     else:
         # Была активна, теперь на паузе
         message = texts.t(
             "DAILY_SUBSCRIPTION_PAUSED",
-            "⏸️ Суточная подписка приостановлена.\n\nСписания не будут производиться до возобновления."
+            "⏸️ Подписка приостановлена!"
         )
 
     await callback.answer(message, show_alert=True)
 
-    # Обновляем клавиатуру настроек
-    show_countries = await _should_show_countries_management(db_user)
-
-    settings_template = texts.t(
-        "SUBSCRIPTION_SETTINGS_OVERVIEW",
-        (
-            "⚙️ <b>Настройки подписки</b>\n\n"
-            "📊 <b>Текущие параметры:</b>\n"
-            "🌐 Стран: {countries_count}\n"
-            "📈 Трафик: {traffic_used} / {traffic_limit}\n"
-            "📱 Устройства: {devices_used} / {devices_limit}\n\n"
-            "Выберите что хотите изменить:"
-        ),
-    )
-
-    show_devices = settings.is_devices_selection_enabled()
-    if not show_devices:
-        settings_template = settings_template.replace(
-            "\n📱 Устройства: {devices_used} / {devices_limit}",
-            "",
-        )
-
-    if show_devices:
-        devices_used = await get_current_devices_count(db_user)
-    else:
-        devices_used = 0
-
-    modem_enabled = getattr(subscription, 'modem_enabled', False) or False
-    if modem_enabled and settings.is_modem_enabled():
-        visible_device_limit = (subscription.device_limit or 1) - 1
-        devices_limit_display = f"{visible_device_limit} + модем"
-    else:
-        devices_limit_display = str(subscription.device_limit)
-
-    settings_text = settings_template.format(
-        countries_count=len(subscription.connected_squads),
-        traffic_used=texts.format_traffic(subscription.traffic_used_gb),
-        traffic_limit=texts.format_traffic(subscription.traffic_limit_gb),
-        devices_used=devices_used,
-        devices_limit=devices_limit_display,
-    )
-
-    await callback.message.edit_text(
-        settings_text,
-        reply_markup=get_updated_subscription_settings_keyboard(
-            db_user.language,
-            show_countries,
-            tariff=tariff,
-            subscription=subscription
-        ),
-        parse_mode="HTML"
-    )
+    # Возвращаемся в меню подписки - вызываем show_subscription_info
+    await db.refresh(db_user)
+    await show_subscription_info(callback, db_user, db)
 
 
 # ============== ХЕНДЛЕРЫ ПЛАТНОГО ТРИАЛА ==============
