@@ -2514,6 +2514,7 @@ def get_updated_subscription_settings_keyboard(
     language: str = DEFAULT_LANGUAGE,
     show_countries_management: bool = True,
     tariff=None,  # Тариф подписки (если есть - ограничиваем настройки)
+    subscription=None,  # Подписка (для проверки суточной паузы)
 ) -> InlineKeyboardMarkup:
     from app.config import settings
 
@@ -2522,6 +2523,17 @@ def get_updated_subscription_settings_keyboard(
 
     # Если подписка на тарифе - отключаем страны, модем, трафик
     has_tariff = tariff is not None
+
+    # Кнопка паузы/возобновления суточной подписки
+    if tariff and getattr(tariff, 'is_daily', False) and subscription:
+        is_paused = getattr(subscription, 'is_daily_paused', False)
+        if is_paused:
+            button_text = texts.t("RESUME_DAILY_SUBSCRIPTION_BUTTON", "▶️ Возобновить суточный тариф")
+        else:
+            button_text = texts.t("PAUSE_DAILY_SUBSCRIPTION_BUTTON", "⏸️ Приостановить суточный тариф")
+        keyboard.append([
+            InlineKeyboardButton(text=button_text, callback_data="toggle_daily_subscription_pause")
+        ])
 
     if show_countries_management and not has_tariff:
         keyboard.append([
