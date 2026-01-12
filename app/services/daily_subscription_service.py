@@ -1,6 +1,7 @@
 """
 Сервис для автоматического списания суточных подписок.
 Проверяет подписки с суточным тарифом и списывает плату раз в сутки.
+Также сбрасывает докупленный трафик по истечении 30 дней.
 """
 import logging
 import asyncio
@@ -8,6 +9,8 @@ from datetime import datetime
 from typing import Optional
 
 from aiogram import Bot
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.database import get_db
@@ -18,7 +21,7 @@ from app.database.crud.subscription import (
 )
 from app.database.crud.user import subtract_user_balance, get_user_by_id
 from app.database.crud.transaction import create_transaction
-from app.database.models import TransactionType, PaymentMethod
+from app.database.models import TransactionType, PaymentMethod, Subscription, User
 from app.localization.texts import get_texts
 
 
@@ -253,8 +256,114 @@ class DailySubscriptionService:
         except Exception as e:
             logger.warning(f"Не удалось отправить уведомление о недостатке средств: {e}")
 
+    async def process_traffic_resets(self) -> dict:
+        """
+        Сбрасывает докупленный трафик у подписок, у которых истёк срок.
+
+        Returns:
+            dict: Статистика обработки
+        """
+        stats = {
+            "checked": 0,
+            "reset": 0,
+            "errors": 0,
+        }
+
+        try:
+            async for db in get_db():
+                # Находим подписки с истёкшим сроком сброса трафика
+                now = datetime.utcnow()
+                query = (
+                    select(Subscription)
+                    .where(Subscription.traffic_reset_at.isnot(None))
+                    .where(Subscription.traffic_reset_at <= now)
+                    .where(Subscription.purchased_traffic_gb > 0)
+                )
+                result = await db.execute(query)
+                subscriptions = result.scalars().all()
+                stats["checked"] = len(subscriptions)
+
+                for subscription in subscriptions:
+                    try:
+                        await self._reset_subscription_traffic(db, subscription)
+                        stats["reset"] += 1
+                    except Exception as e:
+                        logger.error(
+                            f"Ошибка сброса трафика подписки {subscription.id}: {e}",
+                            exc_info=True
+                        )
+                        stats["errors"] += 1
+
+        except Exception as e:
+            logger.error(f"Ошибка при получении подписок для сброса трафика: {e}", exc_info=True)
+
+        return stats
+
+    async def _reset_subscription_traffic(self, db: AsyncSession, subscription: Subscription):
+        """Сбрасывает докупленный трафик у подписки."""
+        purchased_gb = subscription.purchased_traffic_gb or 0
+        old_limit = subscription.traffic_limit_gb
+
+        # Получаем тариф для базового лимита
+        if subscription.tariff_id:
+            from app.database.crud.tariff import get_tariff_by_id
+            tariff = await get_tariff_by_id(db, subscription.tariff_id)
+            base_limit = tariff.traffic_limit_gb if tariff else old_limit - purchased_gb
+        else:
+            base_limit = old_limit - purchased_gb
+
+        # Сбрасываем докупленный трафик
+        subscription.traffic_limit_gb = max(0, base_limit)
+        subscription.purchased_traffic_gb = 0
+        subscription.traffic_reset_at = None
+        subscription.updated_at = datetime.utcnow()
+
+        await db.commit()
+
+        logger.info(
+            f"🔄 Сброс докупленного трафика: подписка {subscription.id}, "
+            f"было {old_limit} ГБ, стало {subscription.traffic_limit_gb} ГБ "
+            f"(сброшено {purchased_gb} ГБ)"
+        )
+
+        # Синхронизируем с RemnaWave
+        try:
+            from app.services.subscription_service import SubscriptionService
+            subscription_service = SubscriptionService()
+            await subscription_service.update_remnawave_user(db, subscription)
+        except Exception as e:
+            logger.warning(f"Не удалось синхронизировать с RemnaWave после сброса трафика: {e}")
+
+        # Уведомляем пользователя
+        if self._bot and subscription.user_id:
+            user = await get_user_by_id(db, subscription.user_id)
+            if user:
+                await self._notify_traffic_reset(user, subscription, purchased_gb)
+
+    async def _notify_traffic_reset(self, user: User, subscription: Subscription, reset_gb: int):
+        """Уведомляет пользователя о сбросе докупленного трафика."""
+        if not self._bot:
+            return
+
+        try:
+            message = (
+                f"ℹ️ <b>Сброс докупленного трафика</b>\n\n"
+                f"Ваш докупленный трафик ({reset_gb} ГБ) был сброшен, "
+                f"так как прошло 30 дней с момента первой докупки.\n\n"
+                f"Текущий лимит трафика: {subscription.traffic_limit_gb} ГБ\n\n"
+                f"Вы можете докупить трафик снова в любое время."
+            )
+
+            await self._bot.send_message(
+                chat_id=user.telegram_id,
+                text=message,
+                parse_mode="HTML",
+            )
+        except Exception as e:
+            logger.warning(f"Не удалось отправить уведомление о сбросе трафика: {e}")
+
     async def start_monitoring(self):
-        """Запускает периодическую проверку суточных подписок."""
+        """Запускает периодическую проверку суточных подписок и сброса трафика."""
         self._running = True
         interval_minutes = self.get_check_interval_minutes()
 
@@ -264,6 +373,7 @@ class DailySubscriptionService:
 
         while self._running:
             try:
+                # Обработка суточных списаний
                 stats = await self.process_daily_charges()
 
                 if stats["charged"] > 0 or stats["suspended"] > 0:
@@ -271,6 +381,14 @@ class DailySubscriptionService:
                         f"📊 Суточные списания: проверено={stats['checked']}, "
                         f"списано={stats['charged']}, приостановлено={stats['suspended']}, "
                         f"ошибок={stats['errors']}"
+                    )
+
+                # Обработка сброса докупленного трафика
+                traffic_stats = await self.process_traffic_resets()
+                if traffic_stats["reset"] > 0:
+                    logger.info(
+                        f"📊 Сброс трафика: проверено={traffic_stats['checked']}, "
+                        f"сброшено={traffic_stats['reset']}, ошибок={traffic_stats['errors']}"
                     )
             except Exception as e:
                 logger.error(f"Ошибка в цикле проверки суточных подписок: {e}", exc_info=True)

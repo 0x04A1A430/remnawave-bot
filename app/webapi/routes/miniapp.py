@@ -7019,6 +7019,7 @@ async def switch_tariff_endpoint(
     subscription.connected_squads = squads
     # Сбрасываем докупленный трафик при смене тарифа
     subscription.purchased_traffic_gb = 0
+    subscription.traffic_reset_at = None  # Сбрасываем дату сброса трафика
 
     # Обработка daily полей при смене тарифа
     new_is_daily = getattr(new_tariff, 'is_daily', False)

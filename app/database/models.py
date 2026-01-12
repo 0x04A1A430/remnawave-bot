@@ -793,6 +793,18 @@ class Tariff(Base):
     is_daily = Column(Boolean, default=False, nullable=False)  # Является ли тариф суточным
     daily_price_kopeks = Column(Integer, default=0, nullable=False)  # Цена за день в копейках
 
+    # Произвольное количество дней
+    custom_days_enabled = Column(Boolean, default=False, nullable=False)  # Разрешить произвольное кол-во дней
+    price_per_day_kopeks = Column(Integer, default=0, nullable=False)  # Цена за 1 день в копейках
+    min_days = Column(Integer, default=1, nullable=False)  # Минимальное количество дней
+    max_days = Column(Integer, default=365, nullable=False)  # Максимальное количество дней
+
+    # Произвольный трафик при покупке
+    custom_traffic_enabled = Column(Boolean, default=False, nullable=False)  # Разрешить произвольный трафик
+    traffic_price_per_gb_kopeks = Column(Integer, default=0, nullable=False)  # Цена за 1 ГБ в копейках
+    min_traffic_gb = Column(Integer, default=1, nullable=False)  # Минимальный трафик в ГБ
+    max_traffic_gb = Column(Integer, default=1000, nullable=False)  # Максимальный трафик в ГБ
+
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
@@ -877,6 +889,30 @@ class Tariff(Base):
     def get_daily_price_rubles(self) -> float:
         """Возвращает суточную цену в рублях."""
         return self.daily_price_kopeks / 100 if self.daily_price_kopeks else 0
+
+    def get_price_for_custom_days(self, days: int) -> Optional[int]:
+        """Возвращает цену для произвольного количества дней."""
+        if not self.custom_days_enabled or not self.price_per_day_kopeks:
+            return None
+        if days < self.min_days or days > self.max_days:
+            return None
+        return self.price_per_day_kopeks * days
+
+    def get_price_for_custom_traffic(self, gb: int) -> Optional[int]:
+        """Возвращает цену для произвольного количества трафика."""
+        if not self.custom_traffic_enabled or not self.traffic_price_per_gb_kopeks:
+            return None
+        if gb < self.min_traffic_gb or gb > self.max_traffic_gb:
+            return None
+        return self.traffic_price_per_gb_kopeks * gb
+
+    def can_purchase_custom_days(self) -> bool:
+        """Проверяет, можно ли купить произвольное количество дней."""
+        return self.custom_days_enabled and self.price_per_day_kopeks > 0
+
+    def can_purchase_custom_traffic(self) -> bool:
+        """Проверяет, можно ли купить произвольный трафик."""
+        return self.custom_traffic_enabled and self.traffic_price_per_gb_kopeks > 0
 
     def __repr__(self):
         return f"<Tariff(id={self.id}, name='{self.name}', tier={self.tier_level}, active={self.is_active})>"
@@ -1013,7 +1049,8 @@ class Subscription(Base):
     
     traffic_limit_gb = Column(Integer, default=0)
     traffic_used_gb = Column(Float, default=0.0)
-    purchased_traffic_gb = Column(Integer, default=0)  # Докупленный трафик (для расчета цены сброса)
+    purchased_traffic_gb = Column(Integer, default=0)  # Докупленный трафик
+    traffic_reset_at = Column(DateTime, nullable=True)  # Дата сброса докупленного трафика (30 дней после первой докупки)
 
     subscription_url = Column(String, nullable=True)
     subscription_crypto_link = Column(String, nullable=True)

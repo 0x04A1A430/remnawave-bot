@@ -5770,6 +5770,130 @@ async def add_tariff_daily_columns() -> bool:
         return False
 
 
+async def add_tariff_custom_days_traffic_columns() -> bool:
+    """Добавляет колонки для произвольных дней и трафика в тарифы."""
+    try:
+        columns_added = 0
+        db_type = await get_database_type()
+
+        # === ПРОИЗВОЛЬНОЕ КОЛИЧЕСТВО ДНЕЙ ===
+        # custom_days_enabled
+        if not await check_column_exists('tariffs', 'custom_days_enabled'):
+            async with engine.begin() as conn:
+                if db_type == 'sqlite':
+                    await conn.execute(text(
+                        "ALTER TABLE tariffs ADD COLUMN custom_days_enabled INTEGER DEFAULT 0 NOT NULL"
+                    ))
+                elif db_type == 'postgresql':
+                    await conn.execute(text(
+                        "ALTER TABLE tariffs ADD COLUMN custom_days_enabled BOOLEAN DEFAULT FALSE NOT NULL"
+                    ))
+                else:  # MySQL
+                    await conn.execute(text(
+                        "ALTER TABLE tariffs ADD COLUMN custom_days_enabled TINYINT(1) DEFAULT 0 NOT NULL"
+                    ))
+                logger.info("✅ Колонка custom_days_enabled добавлена в tariffs")
+                columns_added += 1
+        else:
+            logger.info("ℹ️ Колонка custom_days_enabled уже существует в tariffs")
+
+        # price_per_day_kopeks
+        if not await check_column_exists('tariffs', 'price_per_day_kopeks'):
+            async with engine.begin() as conn:
+                await conn.execute(text(
+                    "ALTER TABLE tariffs ADD COLUMN price_per_day_kopeks INTEGER DEFAULT 0 NOT NULL"
+                ))
+                logger.info("✅ Колонка price_per_day_kopeks добавлена в tariffs")
+                columns_added += 1
+        else:
+            logger.info("ℹ️ Колонка price_per_day_kopeks уже существует в tariffs")
+
+        # min_days
+        if not await check_column_exists('tariffs', 'min_days'):
+            async with engine.begin() as conn:
+                await conn.execute(text(
+                    "ALTER TABLE tariffs ADD COLUMN min_days INTEGER DEFAULT 1 NOT NULL"
+                ))
+                logger.info("✅ Колонка min_days добавлена в tariffs")
+                columns_added += 1
+        else:
+            logger.info("ℹ️ Колонка min_days уже существует в tariffs")
+
+        # max_days
+        if not await check_column_exists('tariffs', 'max_days'):
+            async with engine.begin() as conn:
+                await conn.execute(text(
+                    "ALTER TABLE tariffs ADD COLUMN max_days INTEGER DEFAULT 365 NOT NULL"
+                ))
+                logger.info("✅ Колонка max_days добавлена в tariffs")
+                columns_added += 1
+        else:
+            logger.info("ℹ️ Колонка max_days уже существует в tariffs")
+
+        # === ПРОИЗВОЛЬНЫЙ ТРАФИК ПРИ ПОКУПКЕ ===
+        # custom_traffic_enabled
+        if not await check_column_exists('tariffs', 'custom_traffic_enabled'):
+            async with engine.begin() as conn:
+                if db_type == 'sqlite':
+                    await conn.execute(text(
+                        "ALTER TABLE tariffs ADD COLUMN custom_traffic_enabled INTEGER DEFAULT 0 NOT NULL"
+                    ))
+                elif db_type == 'postgresql':
+                    await conn.execute(text(
+                        "ALTER TABLE tariffs ADD COLUMN custom_traffic_enabled BOOLEAN DEFAULT FALSE NOT NULL"
+                    ))
+                else:  # MySQL
+                    await conn.execute(text(
+                        "ALTER TABLE tariffs ADD COLUMN custom_traffic_enabled TINYINT(1) DEFAULT 0 NOT NULL"
+                    ))
+                logger.info("✅ Колонка custom_traffic_enabled добавлена в tariffs")
+                columns_added += 1
+        else:
+            logger.info("ℹ️ Колонка custom_traffic_enabled уже существует в tariffs")
+
+        # traffic_price_per_gb_kopeks
+        if not await check_column_exists('tariffs', 'traffic_price_per_gb_kopeks'):
+            async with engine.begin() as conn:
+                await conn.execute(text(
+                    "ALTER TABLE tariffs ADD COLUMN traffic_price_per_gb_kopeks INTEGER DEFAULT 0 NOT NULL"
+                ))
+                logger.info("✅ Колонка traffic_price_per_gb_kopeks добавлена в tariffs")
+                columns_added += 1
+        else:
+            logger.info("ℹ️ Колонка traffic_price_per_gb_kopeks уже существует в tariffs")
+
+        # min_traffic_gb
+        if not await check_column_exists('tariffs', 'min_traffic_gb'):
+            async with engine.begin() as conn:
+                await conn.execute(text(
+                    "ALTER TABLE tariffs ADD COLUMN min_traffic_gb INTEGER DEFAULT 1 NOT NULL"
+                ))
+                logger.info("✅ Колонка min_traffic_gb добавлена в tariffs")
+                columns_added += 1
+        else:
+            logger.info("ℹ️ Колонка min_traffic_gb уже существует в tariffs")
+
+        # max_traffic_gb
+        if not await check_column_exists('tariffs', 'max_traffic_gb'):
+            async with engine.begin() as conn:
+                await conn.execute(text(
+                    "ALTER TABLE tariffs ADD COLUMN max_traffic_gb INTEGER DEFAULT 1000 NOT NULL"
+                ))
+                logger.info("✅ Колонка max_traffic_gb добавлена в tariffs")
+                columns_added += 1
+        else:
+            logger.info("ℹ️ Колонка max_traffic_gb уже существует в tariffs")
+
+        if columns_added > 0:
+            logger.info(f"✅ Добавлено {columns_added} колонок для произвольных дней/трафика")
+
+        return True
+
+    except Exception as error:
+        logger.error(f"❌ Ошибка добавления колонок произвольных дней/трафика: {error}")
+        return False
+
+
 async def add_subscription_daily_columns() -> bool:
     """Добавляет колонки для суточных подписок."""
     try:
@@ -5825,6 +5949,37 @@ async def add_subscription_daily_columns() -> bool:
 
     except Exception as error:
         logger.error(f"❌ Ошибка добавления колонок суточной подписки: {error}")
+        return False
+
+
+async def add_subscription_traffic_reset_at_column() -> bool:
+    """Добавляет колонку traffic_reset_at в subscriptions для сброса докупленного трафика через 30 дней."""
+    try:
+        if not await check_column_exists('subscriptions', 'traffic_reset_at'):
+            async with engine.begin() as conn:
+                db_type = await get_database_type()
+
+                if db_type == 'sqlite':
+                    await conn.execute(text(
+                        "ALTER TABLE subscriptions ADD COLUMN traffic_reset_at DATETIME NULL"
+                    ))
+                elif db_type == 'postgresql':
+                    await conn.execute(text(
+                        "ALTER TABLE subscriptions ADD COLUMN traffic_reset_at TIMESTAMP NULL"
+                    ))
+                else:  # MySQL
+                    await conn.execute(text(
+                        "ALTER TABLE subscriptions ADD COLUMN traffic_reset_at DATETIME NULL"
+                    ))
+
+                logger.info("✅ Колонка traffic_reset_at добавлена в subscriptions")
+                return True
+        else:
+            logger.info("ℹ️ Колонка traffic_reset_at уже существует в subscriptions")
+            return True
+
+    except Exception as error:
+        logger.error(f"❌ Ошибка добавления колонки traffic_reset_at: {error}")
         return False
 
 
@@ -6355,12 +6510,26 @@ async def run_universal_migration():
         else:
             logger.warning("⚠️ Проблемы с колонками суточных тарифов в tariffs")
 
+        logger.info("=== ДОБАВЛЕНИЕ КОЛОНОК ПРОИЗВОЛЬНЫХ ДНЕЙ/ТРАФИКА ===")
+        custom_days_traffic_ready = await add_tariff_custom_days_traffic_columns()
+        if custom_days_traffic_ready:
+            logger.info("✅ Колонки произвольных дней/трафика в tariffs готовы")
+        else:
+            logger.warning("⚠️ Проблемы с колонками произвольных дней/трафика в tariffs")
+
         logger.info("=== ДОБАВЛЕНИЕ КОЛОНОК СУТОЧНЫХ ПОДПИСОК ===")
         daily_subscription_columns_ready = await add_subscription_daily_columns()
         if daily_subscription_columns_ready:
             logger.info("✅ Колонки суточных подписок в subscriptions готовы")
         else:
             logger.warning("⚠️ Проблемы с колонками суточных подписок в subscriptions")
+
+        logger.info("=== ДОБАВЛЕНИЕ КОЛОНКИ СБРОСА ТРАФИКА ===")
+        traffic_reset_column_ready = await add_subscription_traffic_reset_at_column()
+        if traffic_reset_column_ready:
+            logger.info("✅ Колонка traffic_reset_at в subscriptions готова")
+        else:
+            logger.warning("⚠️ Проблемы с колонкой traffic_reset_at в subscriptions")
 
         logger.info("=== ОБНОВЛЕНИЕ ВНЕШНИХ КЛЮЧЕЙ ===")
         fk_updated = await fix_foreign_keys_for_user_deletion()

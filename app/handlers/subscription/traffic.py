@@ -603,11 +603,16 @@ async def add_traffic(
             subscription.traffic_limit_gb = 0
             # При переходе на безлимит сбрасываем докупленный трафик
             subscription.purchased_traffic_gb = 0
+            subscription.traffic_reset_at = None
         else:
             await add_subscription_traffic(db, subscription, traffic_gb)
             # Записываем докупленный трафик для корректного расчета цены сброса
             current_purchased = getattr(subscription, 'purchased_traffic_gb', 0) or 0
             subscription.purchased_traffic_gb = current_purchased + traffic_gb
+            # Устанавливаем дату сброса при первой докупке (не продлеваем при повторной)
+            if not subscription.traffic_reset_at:
+                from datetime import timedelta
+                subscription.traffic_reset_at = datetime.utcnow() + timedelta(days=30)
 
         subscription_service = SubscriptionService()
         await subscription_service.update_remnawave_user(db, subscription)
@@ -866,6 +871,7 @@ async def execute_switch_traffic(
         subscription.traffic_limit_gb = new_traffic_gb
         # Сбрасываем докупленный трафик при переключении пакета
         subscription.purchased_traffic_gb = 0
+        subscription.traffic_reset_at = None  # Сбрасываем дату сброса трафика
         subscription.updated_at = datetime.utcnow()
 
         await db.commit()

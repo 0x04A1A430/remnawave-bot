@@ -202,6 +202,19 @@ async def get_tariff(
         servers=servers,
         promo_groups=promo_groups,
         subscriptions_count=subs_count,
+        # Произвольное количество дней
+        custom_days_enabled=tariff.custom_days_enabled,
+        price_per_day_kopeks=tariff.price_per_day_kopeks,
+        min_days=tariff.min_days,
+        max_days=tariff.max_days,
+        # Произвольный трафик при покупке
+        custom_traffic_enabled=tariff.custom_traffic_enabled,
+        traffic_price_per_gb_kopeks=tariff.traffic_price_per_gb_kopeks,
+        min_traffic_gb=tariff.min_traffic_gb,
+        max_traffic_gb=tariff.max_traffic_gb,
+        # Дневной тариф
+        is_daily=tariff.is_daily,
+        daily_price_kopeks=tariff.daily_price_kopeks,
         created_at=tariff.created_at,
         updated_at=tariff.updated_at,
     )
@@ -238,6 +251,19 @@ async def create_new_tariff(
         allowed_squads=request.allowed_squads,
         server_traffic_limits=server_limits_dict,
         promo_group_ids=request.promo_group_ids if request.promo_group_ids else None,
+        # Произвольное количество дней
+        custom_days_enabled=request.custom_days_enabled,
+        price_per_day_kopeks=request.price_per_day_kopeks,
+        min_days=request.min_days,
+        max_days=request.max_days,
+        # Произвольный трафик при покупке
+        custom_traffic_enabled=request.custom_traffic_enabled,
+        traffic_price_per_gb_kopeks=request.traffic_price_per_gb_kopeks,
+        min_traffic_gb=request.min_traffic_gb,
+        max_traffic_gb=request.max_traffic_gb,
+        # Дневной тариф
+        is_daily=request.is_daily,
+        daily_price_kopeks=request.daily_price_kopeks,
     )
 
     logger.info(f"Admin {admin.id} created tariff {tariff.id}: {tariff.name}")
@@ -299,6 +325,29 @@ async def update_existing_tariff(
         updates["server_traffic_limits"] = {
             uuid: limit.model_dump() for uuid, limit in request.server_traffic_limits.items()
         }
+    # Произвольное количество дней
+    if request.custom_days_enabled is not None:
+        updates["custom_days_enabled"] = request.custom_days_enabled
+    if request.price_per_day_kopeks is not None:
+        updates["price_per_day_kopeks"] = request.price_per_day_kopeks
+    if request.min_days is not None:
+        updates["min_days"] = request.min_days
+    if request.max_days is not None:
+        updates["max_days"] = request.max_days
+    # Произвольный трафик при покупке
+    if request.custom_traffic_enabled is not None:
+        updates["custom_traffic_enabled"] = request.custom_traffic_enabled
+    if request.traffic_price_per_gb_kopeks is not None:
+        updates["traffic_price_per_gb_kopeks"] = request.traffic_price_per_gb_kopeks
+    if request.min_traffic_gb is not None:
+        updates["min_traffic_gb"] = request.min_traffic_gb
+    if request.max_traffic_gb is not None:
+        updates["max_traffic_gb"] = request.max_traffic_gb
+    # Дневной тариф
+    if request.is_daily is not None:
+        updates["is_daily"] = request.is_daily
+    if request.daily_price_kopeks is not None:
+        updates["daily_price_kopeks"] = request.daily_price_kopeks
 
     if updates:
         await update_tariff(db, tariff, **updates)

@@ -1967,6 +1967,7 @@ async def confirm_extend_subscription(
                 traffic_was_reset = True
                 subscription.traffic_limit_gb = fixed_limit
                 subscription.purchased_traffic_gb = 0
+                subscription.traffic_reset_at = None  # Сбрасываем дату сброса трафика
                 logger.info(f"🔄 Сброс трафика при продлении: {old_traffic_limit} ГБ → {fixed_limit} ГБ")
 
         await db.commit()

@@ -87,6 +87,19 @@ class TariffDetailResponse(BaseModel):
     servers: List[ServerInfo]
     promo_groups: List[PromoGroupInfo]
     subscriptions_count: int
+    # Произвольное количество дней
+    custom_days_enabled: bool = False
+    price_per_day_kopeks: int = 0
+    min_days: int = 1
+    max_days: int = 365
+    # Произвольный трафик при покупке
+    custom_traffic_enabled: bool = False
+    traffic_price_per_gb_kopeks: int = 0
+    min_traffic_gb: int = 1
+    max_traffic_gb: int = 1000
+    # Дневной тариф
+    is_daily: bool = False
+    daily_price_kopeks: int = 0
     created_at: datetime
     updated_at: Optional[datetime] = None
 
@@ -111,6 +124,19 @@ class TariffCreateRequest(BaseModel):
     allowed_squads: List[str] = Field(default_factory=list, description="Server UUIDs")
     server_traffic_limits: Dict[str, ServerTrafficLimit] = Field(default_factory=dict, description="Per-server traffic limits")
     promo_group_ids: List[int] = Field(default_factory=list)
+    # Произвольное количество дней
+    custom_days_enabled: bool = False
+    price_per_day_kopeks: int = Field(0, ge=0)
+    min_days: int = Field(1, ge=1)
+    max_days: int = Field(365, ge=1)
+    # Произвольный трафик при покупке
+    custom_traffic_enabled: bool = False
+    traffic_price_per_gb_kopeks: int = Field(0, ge=0)
+    min_traffic_gb: int = Field(1, ge=1)
+    max_traffic_gb: int = Field(1000, ge=1)
+    # Дневной тариф
+    is_daily: bool = False
+    daily_price_kopeks: int = Field(0, ge=0)
 
 
 class TariffUpdateRequest(BaseModel):
@@ -131,6 +157,19 @@ class TariffUpdateRequest(BaseModel):
     allowed_squads: Optional[List[str]] = None
     server_traffic_limits: Optional[Dict[str, ServerTrafficLimit]] = None
     promo_group_ids: Optional[List[int]] = None
+    # Произвольное количество дней
+    custom_days_enabled: Optional[bool] = None
+    price_per_day_kopeks: Optional[int] = Field(None, ge=0)
+    min_days: Optional[int] = Field(None, ge=1)
+    max_days: Optional[int] = Field(None, ge=1)
+    # Произвольный трафик при покупке
+    custom_traffic_enabled: Optional[bool] = None
+    traffic_price_per_gb_kopeks: Optional[int] = Field(None, ge=0)
+    min_traffic_gb: Optional[int] = Field(None, ge=1)
+    max_traffic_gb: Optional[int] = Field(None, ge=1)
+    # Дневной тариф
+    is_daily: Optional[bool] = None
+    daily_price_kopeks: Optional[int] = Field(None, ge=0)
 
 
 class TariffToggleResponse(BaseModel):

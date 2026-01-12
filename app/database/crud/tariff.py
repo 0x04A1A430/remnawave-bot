@@ -175,6 +175,16 @@ async def create_tariff(
     max_topup_traffic_gb: int = 0,
     is_daily: bool = False,
     daily_price_kopeks: int = 0,
+    # Произвольное количество дней
+    custom_days_enabled: bool = False,
+    price_per_day_kopeks: int = 0,
+    min_days: int = 1,
+    max_days: int = 365,
+    # Произвольный трафик при покупке
+    custom_traffic_enabled: bool = False,
+    traffic_price_per_gb_kopeks: int = 0,
+    min_traffic_gb: int = 1,
+    max_traffic_gb: int = 1000,
 ) -> Tariff:
     """Создает новый тариф."""
     normalized_prices = _normalize_period_prices(period_prices)
@@ -198,6 +208,16 @@ async def create_tariff(
         max_topup_traffic_gb=max(0, max_topup_traffic_gb),
         is_daily=is_daily,
         daily_price_kopeks=max(0, daily_price_kopeks),
+        # Произвольное количество дней
+        custom_days_enabled=custom_days_enabled,
+        price_per_day_kopeks=max(0, price_per_day_kopeks),
+        min_days=max(1, min_days),
+        max_days=max(1, max_days),
+        # Произвольный трафик при покупке
+        custom_traffic_enabled=custom_traffic_enabled,
+        traffic_price_per_gb_kopeks=max(0, traffic_price_per_gb_kopeks),
+        min_traffic_gb=max(1, min_traffic_gb),
+        max_traffic_gb=max(1, max_traffic_gb),
     )
 
     db.add(tariff)
@@ -250,6 +270,16 @@ async def update_tariff(
     max_topup_traffic_gb: Optional[int] = None,
     is_daily: Optional[bool] = None,
     daily_price_kopeks: Optional[int] = None,
+    # Произвольное количество дней
+    custom_days_enabled: Optional[bool] = None,
+    price_per_day_kopeks: Optional[int] = None,
+    min_days: Optional[int] = None,
+    max_days: Optional[int] = None,
+    # Произвольный трафик при покупке
+    custom_traffic_enabled: Optional[bool] = None,
+    traffic_price_per_gb_kopeks: Optional[int] = None,
+    min_traffic_gb: Optional[int] = None,
+    max_traffic_gb: Optional[int] = None,
 ) -> Tariff:
     """Обновляет существующий тариф."""
     if name is not None:
@@ -289,6 +319,24 @@ async def update_tariff(
         tariff.is_daily = is_daily
     if daily_price_kopeks is not None:
         tariff.daily_price_kopeks = max(0, daily_price_kopeks)
+    # Произвольное количество дней
+    if custom_days_enabled is not None:
+        tariff.custom_days_enabled = custom_days_enabled
+    if price_per_day_kopeks is not None:
+        tariff.price_per_day_kopeks = max(0, price_per_day_kopeks)
+    if min_days is not None:
+        tariff.min_days = max(1, min_days)
+    if max_days is not None:
+        tariff.max_days = max(1, max_days)
+    # Произвольный трафик при покупке
+    if custom_traffic_enabled is not None:
+        tariff.custom_traffic_enabled = custom_traffic_enabled
+    if traffic_price_per_gb_kopeks is not None:
+        tariff.traffic_price_per_gb_kopeks = max(0, traffic_price_per_gb_kopeks)
+    if min_traffic_gb is not None:
+        tariff.min_traffic_gb = max(1, min_traffic_gb)
+    if max_traffic_gb is not None:
+        tariff.max_traffic_gb = max(1, max_traffic_gb)
 
     # Обновляем промогруппы если указаны
     if promo_group_ids is not None:

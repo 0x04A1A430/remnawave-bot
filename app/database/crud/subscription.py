@@ -243,6 +243,7 @@ async def replace_subscription(
     subscription.traffic_limit_gb = traffic_limit_gb
     subscription.traffic_used_gb = 0.0
     subscription.purchased_traffic_gb = 0  # Сбрасываем докупленный трафик при замене подписки
+    subscription.traffic_reset_at = None  # Сбрасываем дату сброса трафика
     subscription.device_limit = device_limit
     subscription.connected_squads = list(new_squads)
     subscription.subscription_url = None
@@ -411,14 +412,17 @@ async def extend_subscription(
         subscription.traffic_limit_gb = traffic_limit_gb
         subscription.traffic_used_gb = 0.0
         subscription.purchased_traffic_gb = 0
+        subscription.traffic_reset_at = None  # Сбрасываем дату сброса трафика
         logger.info(f"📊 Обновлен лимит трафика: {old_traffic} ГБ → {traffic_limit_gb} ГБ")
     elif settings.RESET_TRAFFIC_ON_PAYMENT:
         subscription.traffic_used_gb = 0.0
         # В режиме тарифов сохраняем докупленный трафик при продлении
         if subscription.tariff_id is None:
             subscription.purchased_traffic_gb = 0
+            subscription.traffic_reset_at = None  # Сбрасываем дату сброса трафика
             logger.info("🔄 Сбрасываем использованный и докупленный трафик согласно настройке RESET_TRAFFIC_ON_PAYMENT")
         else:
+            # При продлении в режиме тарифов - сохраняем purchased_traffic_gb и traffic_reset_at
             logger.info("🔄 Сбрасываем использованный трафик, докупленный сохранен (режим тарифов)")
 
     if device_limit is not None:
@@ -458,6 +462,7 @@ async def extend_subscription(
         if subscription.traffic_limit_gb != fixed_limit or (subscription.purchased_traffic_gb or 0) > 0:
             subscription.traffic_limit_gb = fixed_limit
             subscription.purchased_traffic_gb = 0
+            subscription.traffic_reset_at = None  # Сбрасываем дату сброса трафика
             logger.info(f"🔄 Сброс трафика при продлении (fixed_with_topup): {old_limit} ГБ → {fixed_limit} ГБ")
 
     subscription.updated_at = current_time

@@ -98,6 +98,17 @@ def _subscription_to_response(
     else:
         traffic_used_percent = 0
 
+    # Check if this is a daily tariff
+    is_daily_paused = getattr(subscription, 'is_daily_paused', False) or False
+    tariff_id = getattr(subscription, 'tariff_id', None)
+
+    # Use subscription's is_daily_tariff property if available
+    is_daily = False
+    if hasattr(subscription, 'is_daily_tariff'):
+        is_daily = subscription.is_daily_tariff
+    elif tariff_id and hasattr(subscription, 'tariff') and subscription.tariff:
+        is_daily = getattr(subscription.tariff, 'is_daily', False)
+
     return SubscriptionResponse(
         id=subscription.id,
         status=actual_status,  # Use actual_status instead of raw status
@@ -119,6 +130,9 @@ def _subscription_to_response(
         subscription_url=subscription.subscription_url,
         is_active=is_active,
         is_expired=is_expired,
+        is_daily=is_daily,
+        is_daily_paused=is_daily_paused,
+        tariff_id=tariff_id,
     )
 
 
@@ -138,6 +152,12 @@ async def get_subscription(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No subscription found",
         )
+
+    # Load tariff for daily subscription check
+    if fresh_user.subscription.tariff_id:
+        tariff = await get_tariff_by_id(db, fresh_user.subscription.tariff_id)
+        if tariff:
+            fresh_user.subscription.tariff = tariff
 
     # Fetch server names for connected squads
     servers: List[ServerInfo] = []
@@ -263,15 +283,46 @@ async def get_traffic_packages(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get available traffic packages."""
-    # Проверяем глобальную настройку
+    from app.database.crud.user import get_user_by_id
+    from app.database.crud.tariff import get_tariff_by_id
+
+    fresh_user = await get_user_by_id(db, user.id)
+    if not fresh_user or not fresh_user.subscription:
+        return []
+
+    # Режим тарифов - берём пакеты из тарифа
+    if settings.is_tariffs_mode() and fresh_user.subscription.tariff_id:
+        tariff = await get_tariff_by_id(db, fresh_user.subscription.tariff_id)
+        if not tariff:
+            return []
+
+        # Проверяем, разрешена ли докупка для этого тарифа
+        if not getattr(tariff, 'traffic_topup_enabled', False):
+            return []
+
+        # Проверяем безлимит
+        if tariff.traffic_limit_gb == 0:
+            return []
+
+        packages = tariff.get_traffic_topup_packages() if hasattr(tariff, 'get_traffic_topup_packages') else {}
+        result = []
+
+        for gb, price in packages.items():
+            result.append(TrafficPackageResponse(
+                gb=gb,
+                price_kopeks=price,
+                price_rubles=price / 100,
+                is_unlimited=False,
+            ))
+
+        return sorted(result, key=lambda x: x.gb)
+
+    # Classic режим - глобальные настройки
     if not settings.is_traffic_topup_enabled():
         return []
 
-    # Проверяем настройку тарифа пользователя
-    from app.database.crud.user import get_user_by_id
-    fresh_user = await get_user_by_id(db, user.id)
-    if fresh_user and fresh_user.subscription and fresh_user.subscription.tariff_id:
-        from app.database.crud.tariff import get_tariff_by_id
+    # Проверяем настройку тарифа пользователя (allow_traffic_topup)
+    if fresh_user.subscription.tariff_id:
         tariff = await get_tariff_by_id(db, fresh_user.subscription.tariff_id)
         if tariff and not tariff.allow_traffic_topup:
             return []
@@ -300,12 +351,9 @@ async def purchase_traffic(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Purchase additional traffic."""
-    # Проверяем глобальную настройку
-    if not settings.is_traffic_topup_enabled():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Traffic top-up feature is disabled",
-        )
+    from app.database.crud.subscription import add_subscription_traffic
+    from app.database.crud.tariff import get_tariff_by_id
+    from app.utils.pricing_utils import calculate_prorated_price
 
     await db.refresh(user, ["subscription"])
 
@@ -315,56 +363,166 @@ async def purchase_traffic(
             detail="No subscription found",
         )
 
-    # Проверяем настройку тарифа
-    if user.subscription.tariff_id:
-        from app.database.crud.tariff import get_tariff_by_id
-        tariff = await get_tariff_by_id(db, user.subscription.tariff_id)
-        if tariff and not tariff.allow_traffic_topup:
+    subscription = user.subscription
+    tariff = None
+    base_price_kopeks = 0
+    is_tariff_mode = settings.is_tariffs_mode() and subscription.tariff_id
+
+    # Режим тарифов
+    if is_tariff_mode:
+        tariff = await get_tariff_by_id(db, subscription.tariff_id)
+        if not tariff:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Traffic top-up is not available for your tariff",
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Tariff not found",
             )
 
-    # Find matching package
-    packages = settings.get_traffic_packages()
-    matching_pkg = next(
-        (pkg for pkg in packages if pkg["gb"] == request.gb and pkg.get("enabled", True)),
-        None
+        # Проверяем, разрешена ли докупка
+        if not getattr(tariff, 'traffic_topup_enabled', False):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Traffic top-up is disabled for this tariff",
+            )
+
+        # Проверяем безлимит
+        if tariff.traffic_limit_gb == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot add traffic to unlimited subscription",
+            )
+
+        # Проверяем лимит докупки
+        max_topup_limit = getattr(tariff, 'max_topup_traffic_gb', 0) or 0
+        if max_topup_limit > 0:
+            current_traffic = subscription.traffic_limit_gb or 0
+            new_traffic = current_traffic + request.gb
+            if new_traffic > max_topup_limit:
+                available_gb = max(0, max_topup_limit - current_traffic)
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Traffic limit exceeded. Max: {max_topup_limit} GB, available: {available_gb} GB",
+                )
+
+        # Получаем цену из тарифа
+        packages = tariff.get_traffic_topup_packages() if hasattr(tariff, 'get_traffic_topup_packages') else {}
+        if request.gb not in packages:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Traffic package {request.gb}GB is not available",
+            )
+        base_price_kopeks = packages[request.gb]
+
+    else:
+        # Classic режим
+        if not settings.is_traffic_topup_enabled():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Traffic top-up feature is disabled",
+            )
+
+        # Проверяем настройку тарифа (allow_traffic_topup)
+        if subscription.tariff_id:
+            tariff = await get_tariff_by_id(db, subscription.tariff_id)
+            if tariff and not tariff.allow_traffic_topup:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Traffic top-up is not available for your tariff",
+                )
+
+        # Получаем цену из глобальных настроек
+        packages = settings.get_traffic_packages()
+        matching_pkg = next(
+            (pkg for pkg in packages if pkg["gb"] == request.gb and pkg.get("enabled", True)),
+            None
+        )
+        if not matching_pkg:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid traffic package",
+            )
+        base_price_kopeks = matching_pkg["price"]
+
+    # Применяем скидку промогруппы
+    traffic_discount_percent = 0
+    promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else getattr(user, "promo_group", None)
+    if promo_group:
+        apply_to_addons = getattr(promo_group, 'apply_discounts_to_addons', True)
+        if apply_to_addons:
+            traffic_discount_percent = max(0, min(100, int(getattr(promo_group, 'traffic_discount_percent', 0) or 0)))
+
+    if traffic_discount_percent > 0:
+        base_price_kopeks = int(base_price_kopeks * (100 - traffic_discount_percent) / 100)
+
+    # Пропорциональный расчёт цены
+    final_price, months_charged = calculate_prorated_price(
+        base_price_kopeks,
+        subscription.end_date,
     )
 
-    if not matching_pkg:
+    # Проверяем баланс
+    if user.balance_kopeks < final_price:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid traffic package",
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail=f"Insufficient balance. Need {final_price / 100:.2f} RUB, have {user.balance_kopeks / 100:.2f} RUB",
         )
 
-    price_kopeks = matching_pkg["price"]
-
-    # Check balance
-    if user.balance_kopeks < price_kopeks:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Insufficient balance",
-        )
-
-    # Deduct balance and add traffic
-    user.balance_kopeks -= price_kopeks
-
-    if request.gb == 0:
-        # Unlimited traffic
-        user.subscription.traffic_limit = 0  # 0 means unlimited
+    # Формируем описание
+    if traffic_discount_percent > 0:
+        traffic_description = f"Докупка {request.gb} ГБ трафика (скидка {traffic_discount_percent}%)"
     else:
-        # Add GB to current limit
-        current_limit = user.subscription.traffic_limit or 0
-        additional_bytes = request.gb * (1024 ** 3)
-        user.subscription.traffic_limit = current_limit + additional_bytes
+        traffic_description = f"Докупка {request.gb} ГБ трафика"
+
+    # Списываем баланс
+    success = await subtract_user_balance(db, user, final_price, traffic_description)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to charge balance",
+        )
+
+    # Добавляем трафик
+    await add_subscription_traffic(db, subscription, request.gb)
+
+    # Обновляем purchased_traffic_gb
+    current_purchased = getattr(subscription, 'purchased_traffic_gb', 0) or 0
+    subscription.purchased_traffic_gb = current_purchased + request.gb
+
+    # Устанавливаем дату сброса трафика (только при первой докупке)
+    # При повторной докупке дата НЕ продлевается
+    if not subscription.traffic_reset_at:
+        from datetime import timedelta
+        subscription.traffic_reset_at = datetime.utcnow() + timedelta(days=30)
+        logger.info(f"Set traffic_reset_at for subscription {subscription.id}: {subscription.traffic_reset_at}")
 
     await db.commit()
 
+    # Синхронизируем с RemnaWave
+    try:
+        subscription_service = SubscriptionService()
+        await subscription_service.update_remnawave_user(db, subscription)
+    except Exception as e:
+        logger.error(f"Failed to sync traffic with RemnaWave: {e}")
+
+    # Создаём транзакцию
+    await create_transaction(
+        db=db,
+        user_id=user.id,
+        type=TransactionType.SUBSCRIPTION_PAYMENT,
+        amount_kopeks=final_price,
+        description=traffic_description,
+    )
+
+    await db.refresh(user)
+    await db.refresh(subscription)
+
     return {
+        "success": True,
         "message": "Traffic purchased successfully",
         "gb_added": request.gb,
-        "amount_paid_kopeks": price_kopeks,
+        "new_traffic_limit_gb": subscription.traffic_limit_gb,
+        "amount_paid_kopeks": final_price,
+        "discount_percent": traffic_discount_percent,
+        "new_balance_kopeks": user.balance_kopeks,
     }
 
 
@@ -668,11 +826,26 @@ async def _build_tariff_response(
         "traffic_limit_label": traffic_label,
         "is_unlimited_traffic": tariff.traffic_limit_gb == 0,
         "device_limit": tariff.device_limit,
+        "device_price_kopeks": tariff.device_price_kopeks,
         "servers_count": servers_count,
         "servers": servers,
         "periods": periods,
         "is_current": current_tariff_id == tariff.id if current_tariff_id else False,
         "is_available": tariff.is_active,
+        # Произвольное количество дней
+        "custom_days_enabled": tariff.custom_days_enabled,
+        "price_per_day_kopeks": tariff.price_per_day_kopeks,
+        "min_days": tariff.min_days,
+        "max_days": tariff.max_days,
+        # Произвольный трафик при покупке
+        "custom_traffic_enabled": tariff.custom_traffic_enabled,
+        "traffic_price_per_gb_kopeks": tariff.traffic_price_per_gb_kopeks,
+        "min_traffic_gb": tariff.min_traffic_gb,
+        "max_traffic_gb": tariff.max_traffic_gb,
+        # Докупка трафика
+        "traffic_topup_enabled": tariff.traffic_topup_enabled,
+        "traffic_topup_packages": tariff.get_traffic_topup_packages() if hasattr(tariff, 'get_traffic_topup_packages') else {},
+        "max_topup_traffic_gb": tariff.max_topup_traffic_gb,
     }
 
 
@@ -849,13 +1022,36 @@ async def purchase_tariff(
                 detail="This tariff is not available for your promo group",
             )
 
-        # Get price for period
+        # Get price for period (support custom days)
         price_kopeks = tariff.get_price_for_period(request.period_days)
         if price_kopeks is None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid period for this tariff",
-            )
+            # Check for custom days
+            if tariff.can_purchase_custom_days():
+                price_kopeks = tariff.get_price_for_custom_days(request.period_days)
+                if price_kopeks is None:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Period must be between {tariff.min_days} and {tariff.max_days} days",
+                    )
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid period for this tariff",
+                )
+
+        # Calculate traffic limit and price
+        traffic_limit_gb = tariff.traffic_limit_gb
+        traffic_price_kopeks = 0
+        if request.traffic_gb is not None and tariff.can_purchase_custom_traffic():
+            # Custom traffic requested
+            traffic_price_kopeks = tariff.get_price_for_custom_traffic(request.traffic_gb)
+            if traffic_price_kopeks is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Traffic must be between {tariff.min_traffic_gb} and {tariff.max_traffic_gb} GB",
+                )
+            traffic_limit_gb = request.traffic_gb
+            price_kopeks += traffic_price_kopeks
 
         # Check balance
         if user.balance_kopeks < price_kopeks:
@@ -896,7 +1092,7 @@ async def purchase_tariff(
                 subscription=subscription,
                 days=request.period_days,
                 tariff_id=tariff.id,
-                traffic_limit_gb=tariff.traffic_limit_gb,
+                traffic_limit_gb=traffic_limit_gb,
                 device_limit=tariff.device_limit,
                 connected_squads=tariff.allowed_squads or [],
             )
@@ -906,7 +1102,7 @@ async def purchase_tariff(
                 db=db,
                 user_id=user.id,
                 days=request.period_days,
-                traffic_limit_gb=tariff.traffic_limit_gb,
+                traffic_limit_gb=traffic_limit_gb,
                 device_limit=tariff.device_limit,
                 connected_squads=tariff.allowed_squads or [],
                 tariff_id=tariff.id,
@@ -952,6 +1148,169 @@ async def purchase_tariff(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to process tariff purchase",
         )
+
+
+# ============ Device Purchase ============
+
+@router.post("/devices/purchase")
+async def purchase_devices(
+    request: DevicePurchaseRequest,
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Purchase additional device slots for subscription."""
+    try:
+        await db.refresh(user, ["subscription"])
+        subscription = user.subscription
+
+        if not subscription:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="У вас нет активной подписки",
+            )
+
+        if subscription.status not in ['active', 'trial']:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Ваша подписка неактивна",
+            )
+
+        # Get tariff for device price
+        tariff = None
+        if subscription.tariff_id:
+            from app.database.crud.tariff import get_tariff_by_id
+            tariff = await get_tariff_by_id(db, subscription.tariff_id)
+
+        if not tariff or not tariff.device_price_kopeks:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Докупка устройств недоступна для вашего тарифа",
+            )
+
+        # Calculate prorated price based on remaining days
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        end_date = subscription.end_date
+        if end_date.tzinfo is None:
+            end_date = end_date.replace(tzinfo=timezone.utc)
+
+        days_left = max(1, (end_date - now).days)
+        total_days = 30  # Base period for device price calculation
+
+        # Price = device_price * devices * (days_left / 30)
+        price_kopeks = int(tariff.device_price_kopeks * request.devices * days_left / total_days)
+        price_kopeks = max(100, price_kopeks)  # Minimum 1 ruble
+
+        # Check balance
+        if user.balance_kopeks < price_kopeks:
+            missing = price_kopeks - user.balance_kopeks
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail={
+                    "error": "Insufficient balance",
+                    "required_kopeks": price_kopeks,
+                    "current_kopeks": user.balance_kopeks,
+                    "missing_kopeks": missing,
+                },
+            )
+
+        # Deduct balance
+        from app.database.crud.user import subtract_user_balance
+        await subtract_user_balance(
+            db=db,
+            user=user,
+            amount_kopeks=price_kopeks,
+            description=f"Покупка {request.devices} доп. устройств",
+        )
+
+        # Increase device limit
+        subscription.device_limit += request.devices
+        await db.commit()
+        await db.refresh(subscription)
+
+        # Sync with RemnaWave
+        service = SubscriptionService()
+        await service.update_remnawave_user(db, subscription)
+
+        await db.refresh(user)
+
+        logger.info(
+            f"User {user.telegram_id} purchased {request.devices} devices for {price_kopeks} kopeks"
+        )
+
+        return {
+            "success": True,
+            "message": f"Добавлено {request.devices} устройств",
+            "devices_added": request.devices,
+            "new_device_limit": subscription.device_limit,
+            "price_kopeks": price_kopeks,
+            "price_label": settings.format_price(price_kopeks),
+            "balance_kopeks": user.balance_kopeks,
+            "balance_label": settings.format_price(user.balance_kopeks),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to purchase devices for user {user.id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Не удалось обработать покупку устройств",
+        )
+
+
+@router.get("/devices/price")
+async def get_device_price(
+    devices: int = 1,
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Get price for additional devices."""
+    await db.refresh(user, ["subscription"])
+    subscription = user.subscription
+
+    if not subscription or subscription.status not in ['active', 'trial']:
+        return {
+            "available": False,
+            "reason": "Нет активной подписки",
+        }
+
+    tariff = None
+    if subscription.tariff_id:
+        from app.database.crud.tariff import get_tariff_by_id
+        tariff = await get_tariff_by_id(db, subscription.tariff_id)
+
+    if not tariff or not tariff.device_price_kopeks:
+        return {
+            "available": False,
+            "reason": "Докупка устройств недоступна для вашего тарифа",
+        }
+
+    # Calculate prorated price
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    end_date = subscription.end_date
+    if end_date.tzinfo is None:
+        end_date = end_date.replace(tzinfo=timezone.utc)
+
+    days_left = max(1, (end_date - now).days)
+    total_days = 30
+
+    price_per_device_kopeks = int(tariff.device_price_kopeks * days_left / total_days)
+    price_per_device_kopeks = max(100, price_per_device_kopeks)
+    total_price_kopeks = price_per_device_kopeks * devices
+
+    return {
+        "available": True,
+        "devices": devices,
+        "price_per_device_kopeks": price_per_device_kopeks,
+        "price_per_device_label": settings.format_price(price_per_device_kopeks),
+        "total_price_kopeks": total_price_kopeks,
+        "total_price_label": settings.format_price(total_price_kopeks),
+        "current_device_limit": subscription.device_limit,
+        "days_left": days_left,
+        "base_device_price_kopeks": tariff.device_price_kopeks,
+    }
 
 
 # ============ App Config for Connection ============
@@ -1345,4 +1704,682 @@ async def get_app_config(
         "hasSubscription": bool(subscription_url),
         "subscriptionUrl": subscription_url,
         "branding": config.get("config", {}).get("branding", {}),
+    }
+
+
+# ============ Device Management ============
+
+@router.get("/devices")
+async def get_devices(
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> Dict[str, Any]:
+    """Get list of connected devices."""
+    from app.services.remnawave_service import RemnaWaveService
+
+    await db.refresh(user, ["subscription"])
+
+    if not user.subscription:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No subscription found",
+        )
+
+    if not user.remnawave_uuid:
+        return {
+            "devices": [],
+            "total": 0,
+            "device_limit": user.subscription.device_limit or 1,
+        }
+
+    try:
+        service = RemnaWaveService()
+        async with service.get_api_client() as api:
+            response = await api.get_user_devices(user.remnawave_uuid)
+
+            devices_list = response.get('devices', [])
+            formatted_devices = []
+            for device in devices_list:
+                hwid = device.get("hwid") or device.get("deviceId") or device.get("id")
+                platform = device.get("platform") or device.get("platformType") or "Unknown"
+                model = device.get("deviceModel") or device.get("model") or device.get("name") or "Unknown"
+                created_at = device.get("updatedAt") or device.get("lastSeen") or device.get("createdAt")
+
+                formatted_devices.append({
+                    "hwid": hwid,
+                    "platform": platform,
+                    "device_model": model,
+                    "created_at": created_at,
+                })
+
+            return {
+                "devices": formatted_devices,
+                "total": response.get('total', len(formatted_devices)),
+                "device_limit": user.subscription.device_limit or 1,
+            }
+
+    except Exception as e:
+        logger.error(f"Error fetching devices: {e}")
+        return {
+            "devices": [],
+            "total": 0,
+            "device_limit": user.subscription.device_limit or 1,
+        }
+
+
+@router.delete("/devices/{hwid}")
+async def delete_device(
+    hwid: str,
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> Dict[str, Any]:
+    """Delete a specific device by HWID."""
+    from app.services.remnawave_service import RemnaWaveService
+
+    await db.refresh(user, ["subscription"])
+
+    if not user.subscription:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No subscription found",
+        )
+
+    if not user.remnawave_uuid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User UUID not found",
+        )
+
+    try:
+        service = RemnaWaveService()
+        async with service.get_api_client() as api:
+            delete_data = {
+                "userUuid": user.remnawave_uuid,
+                "hwid": hwid
+            }
+            await api._make_request('POST', '/api/hwid/devices/delete', data=delete_data)
+
+            return {
+                "success": True,
+                "message": "Device deleted successfully",
+                "deleted_hwid": hwid,
+            }
+
+    except Exception as e:
+        logger.error(f"Error deleting device: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete device",
+        )
+
+
+@router.delete("/devices")
+async def delete_all_devices(
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> Dict[str, Any]:
+    """Delete all connected devices."""
+    from app.services.remnawave_service import RemnaWaveService
+
+    await db.refresh(user, ["subscription"])
+
+    if not user.subscription:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No subscription found",
+        )
+
+    if not user.remnawave_uuid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User UUID not found",
+        )
+
+    try:
+        service = RemnaWaveService()
+        async with service.get_api_client() as api:
+            # Get all devices first
+            response = await api._make_request('GET', f'/api/hwid/devices/{user.remnawave_uuid}')
+
+            if not response or 'response' not in response:
+                return {
+                    "success": True,
+                    "message": "No devices to delete",
+                    "deleted_count": 0,
+                }
+
+            devices_list = response['response'].get('devices', [])
+            if not devices_list:
+                return {
+                    "success": True,
+                    "message": "No devices to delete",
+                    "deleted_count": 0,
+                }
+
+            deleted_count = 0
+            for device in devices_list:
+                device_hwid = device.get('hwid')
+                if device_hwid:
+                    try:
+                        delete_data = {
+                            "userUuid": user.remnawave_uuid,
+                            "hwid": device_hwid
+                        }
+                        await api._make_request('POST', '/api/hwid/devices/delete', data=delete_data)
+                        deleted_count += 1
+                    except Exception as device_error:
+                        logger.error(f"Error deleting device {device_hwid}: {device_error}")
+
+            return {
+                "success": True,
+                "message": f"Deleted {deleted_count} devices",
+                "deleted_count": deleted_count,
+            }
+
+    except Exception as e:
+        logger.error(f"Error deleting all devices: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete devices",
+        )
+
+
+# ============ Tariff Switch ============
+
+@router.post("/tariff/switch/preview")
+async def preview_tariff_switch(
+    request: TariffPurchaseRequest,
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> Dict[str, Any]:
+    """Preview tariff switch - shows cost calculation."""
+    if not settings.is_tariffs_mode():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tariffs mode is not enabled",
+        )
+
+    await db.refresh(user, ["subscription"])
+
+    if not user.subscription or not user.subscription.tariff_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No active subscription with tariff",
+        )
+
+    if user.subscription.status not in ("active", "trial"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Subscription is not active",
+        )
+
+    current_tariff = await get_tariff_by_id(db, user.subscription.tariff_id)
+    new_tariff = await get_tariff_by_id(db, request.tariff_id)
+
+    if not new_tariff or not new_tariff.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tariff not found or inactive",
+        )
+
+    if user.subscription.tariff_id == request.tariff_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Already on this tariff",
+        )
+
+    # Check tariff availability for user's promo group
+    promo_group = getattr(user, "promo_group", None)
+    promo_group_id = promo_group.id if promo_group else None
+    if not new_tariff.is_available_for_promo_group(promo_group_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Tariff not available for your promo group",
+        )
+
+    # Calculate remaining days
+    remaining_days = 0
+    if user.subscription.end_date and user.subscription.end_date > datetime.utcnow():
+        delta = user.subscription.end_date - datetime.utcnow()
+        remaining_days = max(0, delta.days)
+
+    # Calculate switch cost
+    current_is_daily = getattr(current_tariff, 'is_daily', False) if current_tariff else False
+    new_is_daily = getattr(new_tariff, 'is_daily', False)
+
+    if current_is_daily and not new_is_daily:
+        # Switching FROM daily TO periodic - full payment for new tariff
+        min_period_price = 0
+        if new_tariff.period_prices:
+            min_period_price = min(new_tariff.period_prices.values())
+        upgrade_cost = min_period_price
+        is_upgrade = min_period_price > 0
+    else:
+        # Calculate proportional cost difference
+        current_daily_price = 0
+        new_daily_price = 0
+
+        if current_tariff and current_tariff.period_prices:
+            # Get price per day from current tariff
+            for period_str, price in current_tariff.period_prices.items():
+                period_days = int(period_str)
+                if period_days > 0:
+                    current_daily_price = price / period_days
+                    break
+
+        if new_tariff.period_prices:
+            # Get price per day from new tariff
+            for period_str, price in new_tariff.period_prices.items():
+                period_days = int(period_str)
+                if period_days > 0:
+                    new_daily_price = price / period_days
+                    break
+
+        price_diff_per_day = new_daily_price - current_daily_price
+        if price_diff_per_day > 0:
+            upgrade_cost = int(price_diff_per_day * remaining_days)
+            is_upgrade = True
+        else:
+            upgrade_cost = 0
+            is_upgrade = False
+
+    balance = user.balance_kopeks or 0
+    has_enough = balance >= upgrade_cost
+    missing = max(0, upgrade_cost - balance) if not has_enough else 0
+
+    return {
+        "can_switch": has_enough,
+        "current_tariff_id": current_tariff.id if current_tariff else None,
+        "current_tariff_name": current_tariff.name if current_tariff else None,
+        "new_tariff_id": new_tariff.id,
+        "new_tariff_name": new_tariff.name,
+        "remaining_days": remaining_days,
+        "upgrade_cost_kopeks": upgrade_cost,
+        "upgrade_cost_label": settings.format_price(upgrade_cost) if upgrade_cost > 0 else "Бесплатно",
+        "balance_kopeks": balance,
+        "balance_label": settings.format_price(balance),
+        "has_enough_balance": has_enough,
+        "missing_amount_kopeks": missing,
+        "missing_amount_label": settings.format_price(missing) if missing > 0 else "",
+        "is_upgrade": is_upgrade,
+    }
+
+
+@router.post("/tariff/switch")
+async def switch_tariff(
+    request: TariffPurchaseRequest,
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> Dict[str, Any]:
+    """Switch to a different tariff without changing end date."""
+    from datetime import timedelta
+
+    if not settings.is_tariffs_mode():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tariffs mode is not enabled",
+        )
+
+    await db.refresh(user, ["subscription"])
+
+    if not user.subscription or not user.subscription.tariff_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No active subscription with tariff",
+        )
+
+    if user.subscription.status not in ("active", "trial"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Subscription is not active",
+        )
+
+    current_tariff = await get_tariff_by_id(db, user.subscription.tariff_id)
+    new_tariff = await get_tariff_by_id(db, request.tariff_id)
+
+    if not new_tariff or not new_tariff.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tariff not found or inactive",
+        )
+
+    if user.subscription.tariff_id == request.tariff_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Already on this tariff",
+        )
+
+    # Check tariff availability
+    promo_group = getattr(user, "promo_group", None)
+    promo_group_id = promo_group.id if promo_group else None
+    if not new_tariff.is_available_for_promo_group(promo_group_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Tariff not available",
+        )
+
+    # Calculate remaining days
+    remaining_days = 0
+    if user.subscription.end_date and user.subscription.end_date > datetime.utcnow():
+        delta = user.subscription.end_date - datetime.utcnow()
+        remaining_days = max(0, delta.days)
+
+    # Calculate cost
+    current_is_daily = getattr(current_tariff, 'is_daily', False) if current_tariff else False
+    new_is_daily = getattr(new_tariff, 'is_daily', False)
+    switching_from_daily = current_is_daily and not new_is_daily
+
+    if switching_from_daily:
+        min_period_days = 30
+        min_period_price = 0
+        if new_tariff.period_prices:
+            min_period_days = min(int(k) for k in new_tariff.period_prices.keys())
+            min_period_price = new_tariff.period_prices.get(str(min_period_days), 0)
+        upgrade_cost = min_period_price
+        new_period_days = min_period_days
+    else:
+        # Calculate proportional cost difference
+        current_daily_price = 0
+        new_daily_price = 0
+
+        if current_tariff and current_tariff.period_prices:
+            for period_str, price in current_tariff.period_prices.items():
+                period_days = int(period_str)
+                if period_days > 0:
+                    current_daily_price = price / period_days
+                    break
+
+        if new_tariff.period_prices:
+            for period_str, price in new_tariff.period_prices.items():
+                period_days = int(period_str)
+                if period_days > 0:
+                    new_daily_price = price / period_days
+                    break
+
+        price_diff_per_day = new_daily_price - current_daily_price
+        if price_diff_per_day > 0:
+            upgrade_cost = int(price_diff_per_day * remaining_days)
+        else:
+            upgrade_cost = 0
+        new_period_days = 0
+
+    # Charge if upgrade
+    if upgrade_cost > 0:
+        if user.balance_kopeks < upgrade_cost:
+            missing = upgrade_cost - user.balance_kopeks
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail={
+                    "code": "insufficient_funds",
+                    "message": f"Insufficient funds. Missing {settings.format_price(missing)}",
+                    "missing_amount": missing,
+                },
+            )
+
+        if switching_from_daily:
+            description = f"Switch from daily to tariff '{new_tariff.name}' ({new_period_days} days)"
+        else:
+            description = f"Switch to tariff '{new_tariff.name}' (upgrade for {remaining_days} days)"
+
+        success = await subtract_user_balance(db, user, upgrade_cost, description)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to charge balance",
+            )
+
+        # Create transaction
+        await create_transaction(
+            db=db,
+            user_id=user.id,
+            type=TransactionType.SUBSCRIPTION_PAYMENT,
+            amount_kopeks=upgrade_cost,
+            description=description,
+        )
+
+    # Update subscription
+    old_tariff_name = current_tariff.name if current_tariff else "Unknown"
+    user.subscription.tariff_id = new_tariff.id
+    user.subscription.traffic_limit_gb = new_tariff.traffic_limit_gb
+    user.subscription.device_limit = new_tariff.device_limit
+    user.subscription.connected_squads = new_tariff.allowed_squads or []
+    user.subscription.purchased_traffic_gb = 0  # Reset purchased traffic on tariff switch
+    user.subscription.traffic_reset_at = None  # Reset traffic reset date
+
+    if switching_from_daily:
+        user.subscription.end_date = datetime.utcnow() + timedelta(days=new_period_days)
+        user.subscription.is_daily_paused = False
+
+    user.subscription.updated_at = datetime.utcnow()
+    await db.commit()
+
+    # Sync with RemnaWave
+    try:
+        subscription_service = SubscriptionService()
+        await subscription_service.update_remnawave_user(db, user.subscription)
+    except Exception as e:
+        logger.error(f"Failed to sync tariff switch with RemnaWave: {e}")
+
+    await db.refresh(user)
+    await db.refresh(user.subscription)
+
+    return {
+        "success": True,
+        "message": f"Switched from '{old_tariff_name}' to '{new_tariff.name}'",
+        "subscription": _subscription_to_response(user.subscription),
+        "old_tariff_name": old_tariff_name,
+        "new_tariff_id": new_tariff.id,
+        "new_tariff_name": new_tariff.name,
+        "charged_kopeks": upgrade_cost,
+        "balance_kopeks": user.balance_kopeks,
+        "balance_label": settings.format_price(user.balance_kopeks),
+    }
+
+
+# ============ Daily Subscription Pause ============
+
+@router.post("/pause")
+async def toggle_subscription_pause(
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> Dict[str, Any]:
+    """Toggle pause/resume for daily subscription."""
+    from datetime import timedelta
+
+    await db.refresh(user, ["subscription"])
+
+    if not user.subscription:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No subscription found",
+        )
+
+    tariff_id = getattr(user.subscription, 'tariff_id', None)
+    if not tariff_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Subscription has no tariff",
+        )
+
+    tariff = await get_tariff_by_id(db, tariff_id)
+    if not tariff or not getattr(tariff, 'is_daily', False):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Pause is only available for daily tariffs",
+        )
+
+    # Toggle pause state
+    is_currently_paused = getattr(user.subscription, 'is_daily_paused', False)
+    new_paused_state = not is_currently_paused
+    user.subscription.is_daily_paused = new_paused_state
+
+    # If resuming, check balance
+    if not new_paused_state:
+        daily_price = getattr(tariff, 'daily_price_kopeks', 0)
+        if daily_price > 0 and user.balance_kopeks < daily_price:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail={
+                    "code": "insufficient_balance",
+                    "message": "Insufficient balance to resume daily subscription",
+                    "required": daily_price,
+                    "balance": user.balance_kopeks,
+                },
+            )
+
+        # Restore ACTIVE status if was DISABLED
+        from app.database.models import SubscriptionStatus
+        if user.subscription.status == SubscriptionStatus.DISABLED.value:
+            user.subscription.status = SubscriptionStatus.ACTIVE.value
+            user.subscription.last_daily_charge_at = datetime.utcnow()
+            user.subscription.end_date = datetime.utcnow() + timedelta(days=1)
+
+    await db.commit()
+    await db.refresh(user.subscription)
+    await db.refresh(user)
+
+    # Sync with RemnaWave when resuming
+    if not new_paused_state:
+        try:
+            subscription_service = SubscriptionService()
+            if user.remnawave_uuid:
+                await subscription_service.enable_remnawave_user(user.remnawave_uuid)
+        except Exception as e:
+            logger.error(f"Error syncing with RemnaWave on resume: {e}")
+
+    if new_paused_state:
+        message = "Daily subscription paused"
+    else:
+        message = "Daily subscription resumed"
+
+    return {
+        "success": True,
+        "message": message,
+        "is_paused": new_paused_state,
+        "balance_kopeks": user.balance_kopeks,
+        "balance_label": settings.format_price(user.balance_kopeks),
+    }
+
+
+# ============ Traffic Switch (Change Traffic Package) ============
+
+@router.put("/traffic")
+async def switch_traffic_package(
+    request: TrafficPurchaseRequest,
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> Dict[str, Any]:
+    """Switch to a different traffic package (change limit)."""
+    from app.utils.pricing_utils import calculate_prorated_price, apply_percentage_discount
+
+    await db.refresh(user, ["subscription"])
+
+    if not user.subscription:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No subscription found",
+        )
+
+    if user.subscription.is_trial:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Traffic management is only available for paid subscriptions",
+        )
+
+    current_traffic = user.subscription.traffic_limit_gb or 0
+    new_traffic = request.gb
+
+    if current_traffic == new_traffic:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Already on this traffic package",
+        )
+
+    # Get available packages
+    packages = settings.get_traffic_packages()
+    current_pkg = next((p for p in packages if p["gb"] == current_traffic and p.get("enabled", True)), None)
+    new_pkg = next((p for p in packages if p["gb"] == new_traffic and p.get("enabled", True)), None)
+
+    if not new_pkg:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid traffic package",
+        )
+
+    # Calculate price difference (only charge for upgrade)
+    current_price = current_pkg["price"] if current_pkg else 0
+    new_price = new_pkg["price"]
+
+    if new_price > current_price:
+        # Upgrade - charge difference
+        price_diff = new_price - current_price
+
+        # Apply promo discount
+        traffic_discount_percent = 0
+        promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else getattr(user, "promo_group", None)
+        if promo_group:
+            apply_to_addons = getattr(promo_group, 'apply_discounts_to_addons', True)
+            if apply_to_addons:
+                traffic_discount_percent = max(0, min(100, int(getattr(promo_group, 'traffic_discount_percent', 0) or 0)))
+
+        if traffic_discount_percent > 0:
+            price_diff = int(price_diff * (100 - traffic_discount_percent) / 100)
+
+        # Prorated calculation
+        final_price, months_charged = calculate_prorated_price(price_diff, user.subscription.end_date)
+
+        if user.balance_kopeks < final_price:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail=f"Insufficient balance. Need {final_price / 100:.2f} RUB",
+            )
+
+        # Charge balance
+        description = f"Traffic upgrade from {current_traffic}GB to {new_traffic}GB"
+        success = await subtract_user_balance(db, user, final_price, description)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to charge balance",
+            )
+
+        # Create transaction
+        await create_transaction(
+            db=db,
+            user_id=user.id,
+            type=TransactionType.SUBSCRIPTION_PAYMENT,
+            amount_kopeks=final_price,
+            description=description,
+        )
+
+        charged = final_price
+    else:
+        # Downgrade - no charge, no refund
+        charged = 0
+
+    # Update subscription
+    user.subscription.traffic_limit_gb = new_traffic
+    user.subscription.purchased_traffic_gb = 0  # Reset purchased traffic on switch
+    user.subscription.traffic_reset_at = None  # Reset traffic reset date
+    user.subscription.updated_at = datetime.utcnow()
+    await db.commit()
+
+    # Sync with RemnaWave
+    try:
+        subscription_service = SubscriptionService()
+        await subscription_service.update_remnawave_user(db, user.subscription)
+    except Exception as e:
+        logger.error(f"Failed to sync traffic switch with RemnaWave: {e}")
+
+    await db.refresh(user)
+    await db.refresh(user.subscription)
+
+    return {
+        "success": True,
+        "message": f"Traffic changed from {current_traffic}GB to {new_traffic}GB",
+        "old_traffic_gb": current_traffic,
+        "new_traffic_gb": new_traffic,
+        "charged_kopeks": charged,
+        "balance_kopeks": user.balance_kopeks,
+        "balance_label": settings.format_price(user.balance_kopeks),
     }
