@@ -363,7 +363,7 @@ class BackupService:
                     "tool": pg_dump_path,
                 }
 
-            logger.warning(
+            logger.info(
                 "pg_dump не найден в PATH. Используется ORM-дамп в формате JSON"
             )
             json_info = await self._dump_postgres_json(staging_dir, include_logs)
