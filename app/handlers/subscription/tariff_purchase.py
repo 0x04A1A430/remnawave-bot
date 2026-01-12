@@ -699,6 +699,7 @@ async def confirm_daily_tariff_purchase(
             existing_subscription.device_limit = tariff.device_limit
             existing_subscription.connected_squads = squads
             existing_subscription.status = "active"
+            existing_subscription.is_trial = False  # Сбрасываем триальный статус
             existing_subscription.is_daily_paused = False
             existing_subscription.last_daily_charge_at = datetime.utcnow()
             # Для суточного тарифа ставим далёкую дату окончания
@@ -1727,6 +1728,7 @@ async def confirm_daily_tariff_switch(
         subscription.device_limit = tariff.device_limit
         subscription.connected_squads = squads
         subscription.status = "active"
+        subscription.is_trial = False  # Сбрасываем триальный статус
         subscription.is_daily_paused = False
         subscription.last_daily_charge_at = datetime.utcnow()
         # Для суточного тарифа ставим далёкую дату окончания
