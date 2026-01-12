@@ -369,6 +369,17 @@ async def show_subscription_info(
                     if is_paused:
                         tariff_info_lines.append("")
                         tariff_info_lines.append("⏸️ <b>Подписка приостановлена</b>")
+                        # Показываем оставшееся время даже при паузе
+                        if last_charge:
+                            from datetime import timedelta
+                            next_charge = last_charge + timedelta(hours=24)
+                            now = datetime.utcnow()
+                            if next_charge > now:
+                                time_until = next_charge - now
+                                hours_left = time_until.seconds // 3600
+                                minutes_left = (time_until.seconds % 3600) // 60
+                                tariff_info_lines.append(f"⏳ Осталось: {hours_left}ч {minutes_left}мин")
+                                tariff_info_lines.append("💤 Списание приостановлено")
                     elif last_charge:
                         from datetime import timedelta
                         next_charge = last_charge + timedelta(hours=24)
@@ -3156,6 +3167,20 @@ async def handle_toggle_daily_subscription_pause(
 
     # Переключаем статус паузы
     was_paused = getattr(subscription, 'is_daily_paused', False)
+
+    # При возобновлении проверяем баланс
+    if was_paused:
+        daily_price = getattr(tariff, 'daily_price_kopeks', 0)
+        if daily_price > 0 and db_user.balance_kopeks < daily_price:
+            await callback.answer(
+                texts.t(
+                    "INSUFFICIENT_BALANCE_FOR_RESUME",
+                    f"❌ Недостаточно средств для возобновления. Требуется: {settings.format_price(daily_price)}"
+                ),
+                show_alert=True
+            )
+            return
+
     subscription = await toggle_daily_subscription_pause(db, subscription)
 
     if was_paused:
