@@ -6630,6 +6630,15 @@ async def purchase_tariff_endpoint(
         description=description,
     )
 
+    # Получаем список серверов из тарифа
+    squads = tariff.allowed_squads or []
+
+    # Если allowed_squads пустой - значит "все серверы", получаем их
+    if not squads:
+        from app.database.crud.server_squad import get_all_server_squads
+        all_servers, _ = await get_all_server_squads(db, available_only=True)
+        squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
+
     if subscription:
         # Смена/продление тарифа
         subscription = await extend_subscription(
@@ -6639,7 +6648,7 @@ async def purchase_tariff_endpoint(
             tariff_id=tariff.id,
             traffic_limit_gb=tariff.traffic_limit_gb,
             device_limit=tariff.device_limit,
-            connected_squads=tariff.allowed_squads or [],
+            connected_squads=squads,
         )
     else:
         # Создание новой подписки
@@ -6650,7 +6659,7 @@ async def purchase_tariff_endpoint(
             duration_days=payload.period_days,
             traffic_limit_gb=tariff.traffic_limit_gb,
             device_limit=tariff.device_limit,
-            connected_squads=tariff.allowed_squads or [],
+            connected_squads=squads,
             tariff_id=tariff.id,
         )
 
@@ -6943,11 +6952,20 @@ async def switch_tariff_endpoint(
             description=description,
         )
 
+    # Получаем список серверов из тарифа
+    squads = new_tariff.allowed_squads or []
+
+    # Если allowed_squads пустой - значит "все серверы", получаем их
+    if not squads:
+        from app.database.crud.server_squad import get_all_server_squads
+        all_servers, _ = await get_all_server_squads(db, available_only=True)
+        squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
+
     # Обновляем подписку - меняем тариф без изменения даты
     subscription.tariff_id = new_tariff.id
     subscription.traffic_limit_gb = new_tariff.traffic_limit_gb
     subscription.device_limit = new_tariff.device_limit
-    subscription.connected_squads = new_tariff.allowed_squads or []
+    subscription.connected_squads = squads
     # Сбрасываем докупленный трафик при смене тарифа
     subscription.purchased_traffic_gb = 0
 
