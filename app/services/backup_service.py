@@ -27,7 +27,7 @@ from app.database.models import (
     ServerSquad, SubscriptionServer, UserMessage, YooKassaPayment,
     CryptoBotPayment, WelcomeText, Base, PromoGroup, AdvertisingCampaign,
     AdvertisingCampaignRegistration, SupportAuditLog, Ticket, TicketMessage,
-    MulenPayPayment, Pal24Payment, DiscountOffer, WebApiToken,
+    MulenPayPayment, Pal24Payment, DiscountOffer, WebApiToken, Tariff,
     server_squad_promo_groups
 )
 
@@ -75,6 +75,7 @@ class BackupService:
             Squad,
             ServerSquad,
             PromoGroup,
+            Tariff,  # Tariff должен быть ДО Subscription из-за FK
             User,
             PromoCode,
             WelcomeText,
@@ -825,7 +826,7 @@ class BackupService:
                     model.__tablename__: model for model in models_for_restore
                 }
 
-                pre_restore_tables = {"promo_groups"}
+                pre_restore_tables = {"promo_groups", "tariffs"}
                 for table_name in pre_restore_tables:
                     model = models_by_table.get(table_name)
                     if not model:
