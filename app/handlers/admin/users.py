@@ -5039,7 +5039,7 @@ async def admin_buy_tariff(
     for tariff in tariffs:
         keyboard.append([
             types.InlineKeyboardButton(
-                text=f"📦 {tariff.name}",
+                text=tariff.name,
                 callback_data=f"admin_tariff_buy_select_{user_id}_{tariff.id}"
             )
         ])
