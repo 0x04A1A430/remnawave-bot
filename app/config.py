@@ -1658,11 +1658,25 @@ class Settings(BaseSettings):
         return self.MAINTENANCE_MONITORING_ENABLED
 
     def get_available_subscription_periods(self) -> List[int]:
+        """
+        Возвращает доступные периоды подписки.
+        Приоритет: БД (через PERIOD_PRICES) > .env
+        """
+        from app.config import PERIOD_PRICES, get_db_period_prices
+
+        # Если есть данные из БД - используем их
+        db_prices = get_db_period_prices()
+        if db_prices:
+            # Возвращаем только периоды с ценой > 0
+            periods = sorted([days for days, price in db_prices.items() if price > 0])
+            return periods if periods else [30, 90, 180]
+
+        # Fallback на .env
         try:
             periods_str = self.AVAILABLE_SUBSCRIPTION_PERIODS
             if not periods_str.strip():
-                return [30, 90, 180] 
-            
+                return [30, 90, 180]
+
             periods = []
             for period_str in periods_str.split(','):
                 period_str = period_str.strip()
@@ -1670,18 +1684,32 @@ class Settings(BaseSettings):
                     period = int(period_str)
                     if hasattr(self, f'PRICE_{period}_DAYS'):
                         periods.append(period)
-            
+
             return periods if periods else [30, 90, 180]
-            
+
         except (ValueError, AttributeError):
             return [30, 90, 180]
     
     def get_available_renewal_periods(self) -> List[int]:
+        """
+        Возвращает доступные периоды продления.
+        Приоритет: БД (через PERIOD_PRICES) > .env
+        """
+        from app.config import get_db_period_prices
+
+        # Если есть данные из БД - используем их
+        db_prices = get_db_period_prices()
+        if db_prices:
+            # Возвращаем только периоды с ценой > 0
+            periods = sorted([days for days, price in db_prices.items() if price > 0])
+            return periods if periods else [30, 90, 180]
+
+        # Fallback на .env
         try:
             periods_str = self.AVAILABLE_RENEWAL_PERIODS
             if not periods_str.strip():
-                return [30, 90, 180] 
-            
+                return [30, 90, 180]
+
             periods = []
             for period_str in periods_str.split(','):
                 period_str = period_str.strip()
@@ -1689,9 +1717,9 @@ class Settings(BaseSettings):
                     period = int(period_str)
                     if hasattr(self, f'PRICE_{period}_DAYS'):
                         periods.append(period)
-            
+
             return periods if periods else [30, 90, 180]
-            
+
         except (ValueError, AttributeError):
             return [30, 90, 180]
 
@@ -2188,17 +2216,43 @@ _PERIOD_PRICE_FIELDS: Dict[int, str] = {
     360: "PRICE_360_DAYS",
 }
 
+# Хранилище периодов/цен из БД (приоритет над .env)
+_DB_PERIOD_PRICES: Optional[Dict[int, int]] = None
+
+
+def set_period_prices_from_db(period_prices: Dict[int, int]) -> None:
+    """
+    Устанавливает периоды/цены из БД.
+    Вызывается после синхронизации тарифов при запуске бота.
+    """
+    global _DB_PERIOD_PRICES
+    _DB_PERIOD_PRICES = period_prices.copy() if period_prices else None
+    refresh_period_prices()
+
+
+def get_db_period_prices() -> Optional[Dict[int, int]]:
+    """Возвращает периоды/цены из БД если они загружены."""
+    return _DB_PERIOD_PRICES
+
 
 def refresh_period_prices() -> None:
-    """Rebuild cached period price mapping using the latest settings."""
-
+    """
+    Rebuild cached period price mapping.
+    Приоритет: БД > .env
+    """
     PERIOD_PRICES.clear()
-    PERIOD_PRICES.update(
-        {
-            days: getattr(settings, field_name, 0)
-            for days, field_name in _PERIOD_PRICE_FIELDS.items()
-        }
-    )
+
+    if _DB_PERIOD_PRICES:
+        # Используем цены из БД
+        PERIOD_PRICES.update(_DB_PERIOD_PRICES)
+    else:
+        # Fallback на .env
+        PERIOD_PRICES.update(
+            {
+                days: getattr(settings, field_name, 0)
+                for days, field_name in _PERIOD_PRICE_FIELDS.items()
+            }
+        )
 
 
 PERIOD_PRICES: Dict[int, int] = {}

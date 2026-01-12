@@ -9,10 +9,20 @@ from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.models import User, Subscription, ServerSquad
-from app.database.crud.subscription import create_trial_subscription, get_subscription_by_user_id
+from app.database.models import User, Subscription, ServerSquad, Tariff, TransactionType
+from app.database.crud.subscription import (
+    create_trial_subscription,
+    get_subscription_by_user_id,
+    create_paid_subscription,
+    extend_subscription,
+)
+from app.database.crud.tariff import get_tariffs_for_user, get_tariff_by_id
+from app.database.crud.server_squad import get_server_squad_by_uuid
+from app.database.crud.user import subtract_user_balance
+from app.database.crud.transaction import create_transaction
 from sqlalchemy import select
 from app.config import settings, PERIOD_PRICES
+from app.utils.pricing_utils import format_period_description
 from app.services.subscription_service import SubscriptionService
 from app.services.subscription_purchase_service import (
     MiniAppSubscriptionPurchaseService,
@@ -33,6 +43,7 @@ from ..schemas.subscription import (
     TrialInfoResponse,
     PurchaseSelectionRequest,
     PurchasePreviewRequest,
+    TariffPurchaseRequest,
 )
 
 logger = logging.getLogger(__name__)
@@ -247,8 +258,24 @@ async def renew_subscription(
 
 
 @router.get("/traffic-packages", response_model=List[TrafficPackageResponse])
-async def get_traffic_packages():
+async def get_traffic_packages(
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
     """Get available traffic packages."""
+    # Проверяем глобальную настройку
+    if not settings.is_traffic_topup_enabled():
+        return []
+
+    # Проверяем настройку тарифа пользователя
+    from app.database.crud.user import get_user_by_id
+    fresh_user = await get_user_by_id(db, user.id)
+    if fresh_user and fresh_user.subscription and fresh_user.subscription.tariff_id:
+        from app.database.crud.tariff import get_tariff_by_id
+        tariff = await get_tariff_by_id(db, fresh_user.subscription.tariff_id)
+        if tariff and not tariff.allow_traffic_topup:
+            return []
+
     packages = settings.get_traffic_packages()
     result = []
 
@@ -273,6 +300,13 @@ async def purchase_traffic(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Purchase additional traffic."""
+    # Проверяем глобальную настройку
+    if not settings.is_traffic_topup_enabled():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Traffic top-up feature is disabled",
+        )
+
     await db.refresh(user, ["subscription"])
 
     if not user.subscription:
@@ -280,6 +314,16 @@ async def purchase_traffic(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No subscription found",
         )
+
+    # Проверяем настройку тарифа
+    if user.subscription.tariff_id:
+        from app.database.crud.tariff import get_tariff_by_id
+        tariff = await get_tariff_by_id(db, user.subscription.tariff_id)
+        if tariff and not tariff.allow_traffic_topup:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Traffic top-up is not available for your tariff",
+            )
 
     # Find matching package
     packages = settings.get_traffic_packages()
@@ -502,13 +546,39 @@ async def activate_trial(
         user.balance_kopeks -= price_kopeks
         logger.info(f"User {user.id} paid {price_kopeks} kopeks for trial activation")
 
+    # Get trial parameters from tariff if configured (same logic as bot handler)
+    trial_duration = settings.TRIAL_DURATION_DAYS
+    trial_traffic_limit = settings.TRIAL_TRAFFIC_LIMIT_GB
+    trial_device_limit = settings.TRIAL_DEVICE_LIMIT
+    trial_squads = []
+    tariff_id_for_trial = None
+
+    trial_tariff_id = settings.get_trial_tariff_id()
+    if trial_tariff_id:
+        try:
+            from app.database.crud.tariff import get_tariff_by_id
+            trial_tariff = await get_tariff_by_id(db, trial_tariff_id)
+            if trial_tariff:
+                trial_traffic_limit = trial_tariff.traffic_limit_gb
+                trial_device_limit = trial_tariff.device_limit
+                trial_squads = trial_tariff.allowed_squads or []
+                tariff_id_for_trial = trial_tariff.id
+                tariff_trial_days = getattr(trial_tariff, 'trial_duration_days', None)
+                if tariff_trial_days:
+                    trial_duration = tariff_trial_days
+                logger.info(f"Using trial tariff {trial_tariff.name} (ID: {trial_tariff.id}) with squads: {trial_squads}")
+        except Exception as e:
+            logger.error(f"Error getting trial tariff: {e}")
+
     # Create trial subscription
     subscription = await create_trial_subscription(
         db=db,
         user_id=user.id,
-        duration_days=settings.TRIAL_DURATION_DAYS,
-        traffic_limit_gb=settings.TRIAL_TRAFFIC_LIMIT_GB,
-        device_limit=settings.TRIAL_DEVICE_LIMIT,
+        duration_days=trial_duration,
+        traffic_limit_gb=trial_traffic_limit,
+        device_limit=trial_device_limit,
+        connected_squads=trial_squads if trial_squads else None,
+        tariff_id=tariff_id_for_trial,
     )
 
     logger.info(f"Trial subscription activated for user {user.id}")
@@ -522,12 +592,88 @@ async def activate_trial(
     except Exception as e:
         logger.error(f"Failed to create RemnaWave user for trial: {e}")
 
+    # Send admin notification about trial activation
+    try:
+        from aiogram import Bot
+        from app.services.admin_notification_service import AdminNotificationService
+
+        if getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False) and settings.BOT_TOKEN:
+            bot = Bot(token=settings.BOT_TOKEN)
+            try:
+                notification_service = AdminNotificationService(bot)
+                charged_amount = settings.TRIAL_ACTIVATION_PRICE if requires_payment else None
+                await notification_service.send_trial_activation_notification(
+                    db, user, subscription, charged_amount_kopeks=charged_amount
+                )
+            finally:
+                await bot.session.close()
+    except Exception as e:
+        logger.error(f"Failed to send trial activation notification: {e}")
+
     return _subscription_to_response(subscription)
 
 
 # ============ Full Purchase Flow (like MiniApp) ============
 
 purchase_service = MiniAppSubscriptionPurchaseService()
+
+
+async def _build_tariff_response(
+    db: AsyncSession,
+    tariff: Tariff,
+    current_tariff_id: Optional[int] = None,
+    language: str = "ru",
+) -> Dict[str, Any]:
+    """Build tariff model for API response."""
+    servers = []
+    servers_count = 0
+
+    if tariff.allowed_squads:
+        servers_count = len(tariff.allowed_squads)
+        for squad_uuid in tariff.allowed_squads[:5]:  # Limit for preview
+            server = await get_server_squad_by_uuid(db, squad_uuid)
+            if server:
+                servers.append({
+                    "uuid": squad_uuid,
+                    "name": server.display_name or squad_uuid[:8],
+                })
+
+    periods = []
+    if tariff.period_prices:
+        for period_str, price_kopeks in sorted(tariff.period_prices.items(), key=lambda x: int(x[0])):
+            if int(price_kopeks) <= 0:
+                continue  # Skip disabled periods
+            period_days = int(period_str)
+            months = max(1, period_days // 30)
+            per_month = price_kopeks // months if months > 0 else price_kopeks
+
+            periods.append({
+                "days": period_days,
+                "months": months,
+                "label": format_period_description(period_days, language),
+                "price_kopeks": price_kopeks,
+                "price_label": settings.format_price(price_kopeks),
+                "price_per_month_kopeks": per_month,
+                "price_per_month_label": settings.format_price(per_month),
+            })
+
+    traffic_label = "♾️ Безлимит" if tariff.traffic_limit_gb == 0 else f"{tariff.traffic_limit_gb} ГБ"
+
+    return {
+        "id": tariff.id,
+        "name": tariff.name,
+        "description": tariff.description,
+        "tier_level": tariff.tier_level,
+        "traffic_limit_gb": tariff.traffic_limit_gb,
+        "traffic_limit_label": traffic_label,
+        "is_unlimited_traffic": tariff.traffic_limit_gb == 0,
+        "device_limit": tariff.device_limit,
+        "servers_count": servers_count,
+        "servers": servers,
+        "periods": periods,
+        "is_current": current_tariff_id == tariff.id if current_tariff_id else False,
+        "is_available": tariff.is_active,
+    }
 
 
 @router.get("/purchase-options")
@@ -537,8 +683,37 @@ async def get_purchase_options(
 ) -> Dict[str, Any]:
     """Get all subscription purchase options (periods, servers, traffic, devices)."""
     try:
+        sales_mode = settings.get_sales_mode()
+
+        # Tariffs mode - return list of tariffs
+        if settings.is_tariffs_mode():
+            promo_group = getattr(user, "promo_group", None)
+            promo_group_id = promo_group.id if promo_group else None
+            tariffs = await get_tariffs_for_user(db, promo_group_id)
+
+            subscription = await get_subscription_by_user_id(db, user.id)
+            current_tariff_id = subscription.tariff_id if subscription else None
+            language = getattr(user, "language", "ru") or "ru"
+
+            tariff_responses = []
+            for tariff in tariffs:
+                tariff_data = await _build_tariff_response(db, tariff, current_tariff_id, language)
+                tariff_responses.append(tariff_data)
+
+            return {
+                "sales_mode": "tariffs",
+                "tariffs": tariff_responses,
+                "current_tariff_id": current_tariff_id,
+                "balance_kopeks": user.balance_kopeks,
+                "balance_label": settings.format_price(user.balance_kopeks),
+            }
+
+        # Classic mode - return periods
         context = await purchase_service.build_options(db, user)
-        return context.payload
+        payload = context.payload
+        payload["sales_mode"] = "classic"
+        return payload
+
     except PurchaseValidationError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -640,6 +815,145 @@ async def submit_purchase(
         )
 
 
+# ============ Tariff Purchase (for tariffs mode) ============
+
+@router.post("/purchase-tariff")
+async def purchase_tariff(
+    request: TariffPurchaseRequest,
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> Dict[str, Any]:
+    """Purchase a tariff (for tariffs mode)."""
+    try:
+        # Check tariffs mode
+        if not settings.is_tariffs_mode():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Tariffs mode is not enabled",
+            )
+
+        # Get tariff
+        tariff = await get_tariff_by_id(db, request.tariff_id)
+        if not tariff or not tariff.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Tariff not found or inactive",
+            )
+
+        # Check tariff availability for user's promo group
+        promo_group = getattr(user, "promo_group", None)
+        promo_group_id = promo_group.id if promo_group else None
+        if not tariff.is_available_for_promo_group(promo_group_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This tariff is not available for your promo group",
+            )
+
+        # Get price for period
+        price_kopeks = tariff.get_price_for_period(request.period_days)
+        if price_kopeks is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid period for this tariff",
+            )
+
+        # Check balance
+        if user.balance_kopeks < price_kopeks:
+            missing = price_kopeks - user.balance_kopeks
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail={
+                    "code": "insufficient_funds",
+                    "message": f"Недостаточно средств. Не хватает {settings.format_price(missing)}",
+                    "missing_amount": missing,
+                },
+            )
+
+        subscription = await get_subscription_by_user_id(db, user.id)
+
+        # Charge balance
+        description = f"Покупка тарифа '{tariff.name}' на {request.period_days} дней"
+        success = await subtract_user_balance(db, user, price_kopeks, description)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Failed to charge balance",
+            )
+
+        # Create transaction
+        await create_transaction(
+            db=db,
+            user_id=user.id,
+            type=TransactionType.SUBSCRIPTION_PAYMENT,
+            amount_kopeks=price_kopeks,
+            description=description,
+        )
+
+        if subscription:
+            # Extend/change tariff
+            subscription = await extend_subscription(
+                db=db,
+                subscription=subscription,
+                days=request.period_days,
+                tariff_id=tariff.id,
+                traffic_limit_gb=tariff.traffic_limit_gb,
+                device_limit=tariff.device_limit,
+                connected_squads=tariff.allowed_squads or [],
+            )
+        else:
+            # Create new subscription
+            subscription = await create_paid_subscription(
+                db=db,
+                user_id=user.id,
+                days=request.period_days,
+                traffic_limit_gb=tariff.traffic_limit_gb,
+                device_limit=tariff.device_limit,
+                connected_squads=tariff.allowed_squads or [],
+                tariff_id=tariff.id,
+            )
+
+        # Sync with RemnaWave
+        service = SubscriptionService()
+        await service.update_remnawave_user(db, subscription)
+
+        # Save cart for auto-renewal
+        try:
+            from app.services.user_cart_service import user_cart_service
+            cart_data = {
+                "cart_mode": "extend",
+                "subscription_id": subscription.id,
+                "period_days": request.period_days,
+                "total_price": price_kopeks,
+                "tariff_id": tariff.id,
+                "description": f"Продление тарифа {tariff.name} на {request.period_days} дней",
+            }
+            await user_cart_service.save_user_cart(user.id, cart_data)
+            logger.info(f"Tariff cart saved for auto-renewal (cabinet) user {user.telegram_id}")
+        except Exception as e:
+            logger.error(f"Error saving tariff cart (cabinet): {e}")
+
+        await db.refresh(user)
+
+        return {
+            "success": True,
+            "message": f"Тариф '{tariff.name}' успешно активирован",
+            "subscription": _subscription_to_response(subscription),
+            "tariff_id": tariff.id,
+            "tariff_name": tariff.name,
+            "balance_kopeks": user.balance_kopeks,
+            "balance_label": settings.format_price(user.balance_kopeks),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to purchase tariff for user {user.id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to process tariff purchase",
+        )
+
+
 # ============ App Config for Connection ============
 
 def _load_app_config() -> Dict[str, Any]:
@@ -689,7 +1003,10 @@ async def get_available_countries(
     await db.refresh(user, ["subscription"])
 
     promo_group_id = user.promo_group_id
-    available_servers = await get_available_server_squads(db, promo_group_id=promo_group_id)
+    # Exclude trial-only servers from available servers for purchase
+    available_servers = await get_available_server_squads(
+        db, promo_group_id=promo_group_id, exclude_trial_only=True
+    )
 
     connected_squads = []
     if user.subscription:
@@ -705,7 +1022,6 @@ async def get_available_countries(
             "price_rubles": server.price_kopeks / 100,
             "is_available": server.is_available and not server.is_full,
             "is_connected": server.squad_uuid in connected_squads,
-            "is_trial_eligible": server.is_trial_eligible,
         })
 
     return {
@@ -753,7 +1069,10 @@ async def update_countries(
     current_countries = user.subscription.connected_squads or []
     promo_group_id = user.promo_group_id
 
-    available_servers = await get_available_server_squads(db, promo_group_id=promo_group_id)
+    # Exclude trial-only servers from available servers for purchase
+    available_servers = await get_available_server_squads(
+        db, promo_group_id=promo_group_id, exclude_trial_only=True
+    )
     allowed_country_ids = {server.squad_uuid for server in available_servers}
 
     # Validate selected countries

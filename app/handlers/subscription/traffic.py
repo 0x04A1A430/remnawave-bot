@@ -96,7 +96,7 @@ async def handle_add_traffic(
 
     texts = get_texts(db_user.language)
 
-    # Проверяем, включена ли функция докупки трафика
+    # Проверяем глобальную настройку
     if not settings.is_traffic_topup_enabled():
         await callback.answer(
             texts.t(
@@ -107,16 +107,21 @@ async def handle_add_traffic(
         )
         return
 
-    # В режиме тарифов докупка трафика недоступна
-    if settings.is_tariffs_mode():
-        await callback.answer(
-            texts.t(
-                "TARIFF_TRAFFIC_TOPUP_DISABLED",
-                "⚠️ В режиме тарифов докупка трафика недоступна",
-            ),
-            show_alert=True,
-        )
-        return
+    # Проверяем настройку на уровне тарифа (если тариф задан)
+    subscription = db_user.subscription
+    if subscription and subscription.tariff_id:
+        # Загружаем тариф с проверкой allow_traffic_topup
+        from app.database.crud.tariff import get_tariff_by_id
+        tariff = await get_tariff_by_id(db, subscription.tariff_id)
+        if tariff and not tariff.allow_traffic_topup:
+            await callback.answer(
+                texts.t(
+                    "TARIFF_TRAFFIC_TOPUP_DISABLED",
+                    "⚠️ Для вашего тарифа докупка трафика недоступна",
+                ),
+                show_alert=True,
+            )
+            return
 
     if settings.is_traffic_topup_blocked():
         await callback.answer(
@@ -476,6 +481,15 @@ async def add_traffic(
         await callback.answer("⚠️ В текущем режиме трафик фиксированный", show_alert=True)
         return
 
+    # Проверяем настройку тарифа
+    subscription = db_user.subscription
+    if subscription and subscription.tariff_id:
+        from app.database.crud.tariff import get_tariff_by_id
+        tariff = await get_tariff_by_id(db, subscription.tariff_id)
+        if tariff and not tariff.allow_traffic_topup:
+            await callback.answer("⚠️ Для вашего тарифа докупка трафика недоступна", show_alert=True)
+            return
+
     traffic_gb = int(callback.data.split('_')[2])
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
@@ -630,6 +644,14 @@ async def handle_switch_traffic(
     if not subscription or subscription.is_trial:
         await callback.answer("⚠️ Эта функция доступна только для платных подписок", show_alert=True)
         return
+
+    # Проверяем настройку тарифа
+    if subscription.tariff_id:
+        from app.database.crud.tariff import get_tariff_by_id
+        tariff = await get_tariff_by_id(db, subscription.tariff_id)
+        if tariff and not tariff.allow_traffic_topup:
+            await callback.answer("⚠️ Для вашего тарифа переключение трафика недоступно", show_alert=True)
+            return
 
     current_traffic = subscription.traffic_limit_gb
     # Вычисляем базовый трафик (без докупленного) для корректного расчёта цен

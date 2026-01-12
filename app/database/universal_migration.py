@@ -5332,9 +5332,308 @@ async def add_tariff_device_price_column() -> bool:
         return False
 
 
+async def add_tariff_server_traffic_limits_column() -> bool:
+    """Добавляет колонку server_traffic_limits в таблицу tariffs."""
+    try:
+        if await check_column_exists('tariffs', 'server_traffic_limits'):
+            logger.info("ℹ️ Колонка server_traffic_limits уже существует в tariffs")
+            return True
+
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'sqlite':
+                await conn.execute(text(
+                    "ALTER TABLE tariffs ADD COLUMN server_traffic_limits TEXT DEFAULT '{}'"
+                ))
+            elif db_type == 'postgresql':
+                await conn.execute(text(
+                    "ALTER TABLE tariffs ADD COLUMN server_traffic_limits JSONB DEFAULT '{}'"
+                ))
+            else:  # MySQL
+                await conn.execute(text(
+                    "ALTER TABLE tariffs ADD COLUMN server_traffic_limits JSON DEFAULT NULL"
+                ))
+
+            logger.info("✅ Колонка server_traffic_limits добавлена в tariffs")
+            return True
+
+    except Exception as error:
+        logger.error(f"❌ Ошибка добавления колонки server_traffic_limits: {error}")
+        return False
+
+
+async def add_tariff_allow_traffic_topup_column() -> bool:
+    """Добавляет колонку allow_traffic_topup в таблицу tariffs."""
+    try:
+        if await check_column_exists('tariffs', 'allow_traffic_topup'):
+            logger.info("ℹ️ Колонка allow_traffic_topup уже существует в tariffs")
+            return True
+
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'sqlite':
+                await conn.execute(text(
+                    "ALTER TABLE tariffs ADD COLUMN allow_traffic_topup INTEGER NOT NULL DEFAULT 1"
+                ))
+            elif db_type == 'postgresql':
+                await conn.execute(text(
+                    "ALTER TABLE tariffs ADD COLUMN allow_traffic_topup BOOLEAN NOT NULL DEFAULT TRUE"
+                ))
+            else:  # MySQL
+                await conn.execute(text(
+                    "ALTER TABLE tariffs ADD COLUMN allow_traffic_topup BOOLEAN NOT NULL DEFAULT TRUE"
+                ))
+
+            logger.info("✅ Колонка allow_traffic_topup добавлена в tariffs")
+            return True
+
+    except Exception as error:
+        logger.error(f"❌ Ошибка добавления колонки allow_traffic_topup: {error}")
+        return False
+
+
+async def create_wheel_tables() -> bool:
+    """Создаёт таблицы для колеса удачи: wheel_config, wheel_prizes, wheel_spins."""
+    try:
+        db_type = await get_database_type()
+
+        # Создание wheel_config
+        if not await check_table_exists('wheel_config'):
+            async with engine.begin() as conn:
+                if db_type == 'sqlite':
+                    create_config_sql = """
+                    CREATE TABLE wheel_config (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        is_enabled BOOLEAN NOT NULL DEFAULT 0,
+                        name VARCHAR(255) NOT NULL DEFAULT 'Колесо удачи',
+                        spin_cost_stars INTEGER NOT NULL DEFAULT 50,
+                        spin_cost_days INTEGER NOT NULL DEFAULT 3,
+                        spin_cost_stars_enabled BOOLEAN NOT NULL DEFAULT 1,
+                        spin_cost_days_enabled BOOLEAN NOT NULL DEFAULT 1,
+                        rtp_percent REAL NOT NULL DEFAULT 85.0,
+                        daily_spin_limit INTEGER NOT NULL DEFAULT 5,
+                        min_subscription_days_for_day_payment INTEGER NOT NULL DEFAULT 7,
+                        promo_prefix VARCHAR(50) NOT NULL DEFAULT 'WHEEL',
+                        promo_validity_days INTEGER NOT NULL DEFAULT 30,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    )
+                    """
+                elif db_type == 'postgresql':
+                    create_config_sql = """
+                    CREATE TABLE wheel_config (
+                        id SERIAL PRIMARY KEY,
+                        is_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+                        name VARCHAR(255) NOT NULL DEFAULT 'Колесо удачи',
+                        spin_cost_stars INTEGER NOT NULL DEFAULT 50,
+                        spin_cost_days INTEGER NOT NULL DEFAULT 3,
+                        spin_cost_stars_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                        spin_cost_days_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                        rtp_percent REAL NOT NULL DEFAULT 85.0,
+                        daily_spin_limit INTEGER NOT NULL DEFAULT 5,
+                        min_subscription_days_for_day_payment INTEGER NOT NULL DEFAULT 7,
+                        promo_prefix VARCHAR(50) NOT NULL DEFAULT 'WHEEL',
+                        promo_validity_days INTEGER NOT NULL DEFAULT 30,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                    """
+                else:  # mysql
+                    create_config_sql = """
+                    CREATE TABLE wheel_config (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        is_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+                        name VARCHAR(255) NOT NULL DEFAULT 'Колесо удачи',
+                        spin_cost_stars INT NOT NULL DEFAULT 50,
+                        spin_cost_days INT NOT NULL DEFAULT 3,
+                        spin_cost_stars_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                        spin_cost_days_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                        rtp_percent FLOAT NOT NULL DEFAULT 85.0,
+                        daily_spin_limit INT NOT NULL DEFAULT 5,
+                        min_subscription_days_for_day_payment INT NOT NULL DEFAULT 7,
+                        promo_prefix VARCHAR(50) NOT NULL DEFAULT 'WHEEL',
+                        promo_validity_days INT NOT NULL DEFAULT 30,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                    )
+                    """
+                await conn.execute(text(create_config_sql))
+                logger.info("✅ Таблица wheel_config создана")
+        else:
+            logger.debug("ℹ️ Таблица wheel_config уже существует")
+
+        # Создание wheel_prizes
+        if not await check_table_exists('wheel_prizes'):
+            async with engine.begin() as conn:
+                if db_type == 'sqlite':
+                    create_prizes_sql = """
+                    CREATE TABLE wheel_prizes (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        config_id INTEGER NOT NULL,
+                        prize_type VARCHAR(50) NOT NULL,
+                        prize_value INTEGER NOT NULL DEFAULT 0,
+                        display_name VARCHAR(255) NOT NULL,
+                        emoji VARCHAR(10) NOT NULL DEFAULT '🎁',
+                        color VARCHAR(20) NOT NULL DEFAULT '#3B82F6',
+                        prize_value_kopeks INTEGER NOT NULL DEFAULT 0,
+                        sort_order INTEGER NOT NULL DEFAULT 0,
+                        manual_probability REAL,
+                        is_active BOOLEAN NOT NULL DEFAULT 1,
+                        promo_balance_bonus_kopeks INTEGER NOT NULL DEFAULT 0,
+                        promo_subscription_days INTEGER NOT NULL DEFAULT 0,
+                        promo_traffic_gb INTEGER NOT NULL DEFAULT 0,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (config_id) REFERENCES wheel_config(id) ON DELETE CASCADE
+                    )
+                    """
+                elif db_type == 'postgresql':
+                    create_prizes_sql = """
+                    CREATE TABLE wheel_prizes (
+                        id SERIAL PRIMARY KEY,
+                        config_id INTEGER NOT NULL REFERENCES wheel_config(id) ON DELETE CASCADE,
+                        prize_type VARCHAR(50) NOT NULL,
+                        prize_value INTEGER NOT NULL DEFAULT 0,
+                        display_name VARCHAR(255) NOT NULL,
+                        emoji VARCHAR(10) NOT NULL DEFAULT '🎁',
+                        color VARCHAR(20) NOT NULL DEFAULT '#3B82F6',
+                        prize_value_kopeks INTEGER NOT NULL DEFAULT 0,
+                        sort_order INTEGER NOT NULL DEFAULT 0,
+                        manual_probability REAL,
+                        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                        promo_balance_bonus_kopeks INTEGER NOT NULL DEFAULT 0,
+                        promo_subscription_days INTEGER NOT NULL DEFAULT 0,
+                        promo_traffic_gb INTEGER NOT NULL DEFAULT 0,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                    """
+                else:  # mysql
+                    create_prizes_sql = """
+                    CREATE TABLE wheel_prizes (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        config_id INT NOT NULL,
+                        prize_type VARCHAR(50) NOT NULL,
+                        prize_value INT NOT NULL DEFAULT 0,
+                        display_name VARCHAR(255) NOT NULL,
+                        emoji VARCHAR(10) NOT NULL DEFAULT '🎁',
+                        color VARCHAR(20) NOT NULL DEFAULT '#3B82F6',
+                        prize_value_kopeks INT NOT NULL DEFAULT 0,
+                        sort_order INT NOT NULL DEFAULT 0,
+                        manual_probability FLOAT,
+                        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                        promo_balance_bonus_kopeks INT NOT NULL DEFAULT 0,
+                        promo_subscription_days INT NOT NULL DEFAULT 0,
+                        promo_traffic_gb INT NOT NULL DEFAULT 0,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                        FOREIGN KEY (config_id) REFERENCES wheel_config(id) ON DELETE CASCADE
+                    )
+                    """
+                await conn.execute(text(create_prizes_sql))
+                # Индексы
+                try:
+                    await conn.execute(text(
+                        "CREATE INDEX idx_wheel_prizes_config_id ON wheel_prizes(config_id)"
+                    ))
+                except Exception:
+                    pass
+                logger.info("✅ Таблица wheel_prizes создана")
+        else:
+            logger.debug("ℹ️ Таблица wheel_prizes уже существует")
+
+        # Создание wheel_spins
+        if not await check_table_exists('wheel_spins'):
+            async with engine.begin() as conn:
+                if db_type == 'sqlite':
+                    create_spins_sql = """
+                    CREATE TABLE wheel_spins (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL,
+                        config_id INTEGER NOT NULL,
+                        prize_id INTEGER,
+                        payment_type VARCHAR(50) NOT NULL,
+                        payment_amount INTEGER NOT NULL,
+                        payment_value_kopeks INTEGER NOT NULL DEFAULT 0,
+                        prize_type VARCHAR(50) NOT NULL,
+                        prize_value INTEGER NOT NULL DEFAULT 0,
+                        prize_value_kopeks INTEGER NOT NULL DEFAULT 0,
+                        promocode_id INTEGER,
+                        is_applied BOOLEAN NOT NULL DEFAULT 1,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                        FOREIGN KEY (config_id) REFERENCES wheel_config(id) ON DELETE CASCADE,
+                        FOREIGN KEY (prize_id) REFERENCES wheel_prizes(id) ON DELETE SET NULL,
+                        FOREIGN KEY (promocode_id) REFERENCES promocodes(id) ON DELETE SET NULL
+                    )
+                    """
+                elif db_type == 'postgresql':
+                    create_spins_sql = """
+                    CREATE TABLE wheel_spins (
+                        id SERIAL PRIMARY KEY,
+                        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                        config_id INTEGER NOT NULL REFERENCES wheel_config(id) ON DELETE CASCADE,
+                        prize_id INTEGER REFERENCES wheel_prizes(id) ON DELETE SET NULL,
+                        payment_type VARCHAR(50) NOT NULL,
+                        payment_amount INTEGER NOT NULL,
+                        payment_value_kopeks INTEGER NOT NULL DEFAULT 0,
+                        prize_type VARCHAR(50) NOT NULL,
+                        prize_value INTEGER NOT NULL DEFAULT 0,
+                        prize_value_kopeks INTEGER NOT NULL DEFAULT 0,
+                        promocode_id INTEGER REFERENCES promocodes(id) ON DELETE SET NULL,
+                        is_applied BOOLEAN NOT NULL DEFAULT TRUE,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                    """
+                else:  # mysql
+                    create_spins_sql = """
+                    CREATE TABLE wheel_spins (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        user_id INT NOT NULL,
+                        config_id INT NOT NULL,
+                        prize_id INT,
+                        payment_type VARCHAR(50) NOT NULL,
+                        payment_amount INT NOT NULL,
+                        payment_value_kopeks INT NOT NULL DEFAULT 0,
+                        prize_type VARCHAR(50) NOT NULL,
+                        prize_value INT NOT NULL DEFAULT 0,
+                        prize_value_kopeks INT NOT NULL DEFAULT 0,
+                        promocode_id INT,
+                        is_applied BOOLEAN NOT NULL DEFAULT TRUE,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                        FOREIGN KEY (config_id) REFERENCES wheel_config(id) ON DELETE CASCADE,
+                        FOREIGN KEY (prize_id) REFERENCES wheel_prizes(id) ON DELETE SET NULL,
+                        FOREIGN KEY (promocode_id) REFERENCES promocodes(id) ON DELETE SET NULL
+                    )
+                    """
+                await conn.execute(text(create_spins_sql))
+                # Индексы
+                try:
+                    await conn.execute(text(
+                        "CREATE INDEX idx_wheel_spins_user_id ON wheel_spins(user_id)"
+                    ))
+                    await conn.execute(text(
+                        "CREATE INDEX idx_wheel_spins_created_at ON wheel_spins(created_at)"
+                    ))
+                except Exception:
+                    pass
+                logger.info("✅ Таблица wheel_spins создана")
+        else:
+            logger.debug("ℹ️ Таблица wheel_spins уже существует")
+
+        return True
+
+    except Exception as error:
+        logger.error(f"❌ Ошибка создания таблиц колеса удачи: {error}")
+        return False
+
+
 async def run_universal_migration():
     logger.info("=== НАЧАЛО УНИВЕРСАЛЬНОЙ МИГРАЦИИ ===")
-    
+
     try:
         db_type = await get_database_type()
         logger.info(f"Тип базы данных: {db_type}")
@@ -5834,6 +6133,18 @@ async def run_universal_migration():
         else:
             logger.warning("⚠️ Проблемы с колонкой device_price_kopeks в tariffs")
 
+        server_traffic_limits_ready = await add_tariff_server_traffic_limits_column()
+        if server_traffic_limits_ready:
+            logger.info("✅ Колонка server_traffic_limits в tariffs готова")
+        else:
+            logger.warning("⚠️ Проблемы с колонкой server_traffic_limits в tariffs")
+
+        allow_traffic_topup_ready = await add_tariff_allow_traffic_topup_column()
+        if allow_traffic_topup_ready:
+            logger.info("✅ Колонка allow_traffic_topup в tariffs готова")
+        else:
+            logger.warning("⚠️ Проблемы с колонкой allow_traffic_topup в tariffs")
+
         logger.info("=== ОБНОВЛЕНИЕ ВНЕШНИХ КЛЮЧЕЙ ===")
         fk_updated = await fix_foreign_keys_for_user_deletion()
         if fk_updated:
@@ -5868,6 +6179,13 @@ async def run_universal_migration():
             logger.info("✅ Таблица withdrawal_requests готова")
         else:
             logger.warning("⚠️ Проблемы с таблицей withdrawal_requests")
+
+        logger.info("=== СОЗДАНИЕ ТАБЛИЦ КОЛЕСА УДАЧИ ===")
+        wheel_tables_ready = await create_wheel_tables()
+        if wheel_tables_ready:
+            logger.info("✅ Таблицы колеса удачи готовы")
+        else:
+            logger.warning("⚠️ Проблемы с таблицами колеса удачи")
 
         async with engine.begin() as conn:
             total_subs = await conn.execute(text("SELECT COUNT(*) FROM subscriptions"))

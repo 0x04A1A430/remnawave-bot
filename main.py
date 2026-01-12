@@ -41,6 +41,7 @@ from app.utils.timezone import TimezoneAwareFormatter
 from app.utils.log_handlers import LevelFilterHandler, ExcludePaymentFilter
 from app.utils.payment_logger import payment_logger, configure_payment_logger
 from app.services.log_rotation_service import log_rotation_service
+from app.services.ban_notification_service import ban_notification_service
 
 
 class GracefulExit:
@@ -220,6 +221,34 @@ async def main():
             )
 
         async with timeline.stage(
+            "Синхронизация тарифов из конфига",
+            "💰",
+            success_message="Тарифы синхронизированы",
+        ) as stage:
+            try:
+                from app.database.crud.tariff import ensure_tariffs_synced
+                from app.database.database import AsyncSessionLocal
+                async with AsyncSessionLocal() as db:
+                    await ensure_tariffs_synced(db)
+            except Exception as error:
+                stage.warning(f"Не удалось синхронизировать тарифы: {error}")
+                logger.error(f"❌ Не удалось синхронизировать тарифы: {error}")
+
+        async with timeline.stage(
+            "Синхронизация серверов из RemnaWave",
+            "🖥️",
+            success_message="Серверы синхронизированы",
+        ) as stage:
+            try:
+                from app.database.crud.server_squad import ensure_servers_synced
+                from app.database.database import AsyncSessionLocal
+                async with AsyncSessionLocal() as db:
+                    await ensure_servers_synced(db)
+            except Exception as error:
+                stage.warning(f"Не удалось синхронизировать серверы: {error}")
+                logger.error(f"❌ Не удалось синхронизировать серверы: {error}")
+
+        async with timeline.stage(
             "Загрузка конфигурации из БД",
             "⚙️",
             success_message="Конфигурация загружена",
@@ -239,6 +268,7 @@ async def main():
         monitoring_service.bot = bot
         maintenance_service.set_bot(bot)
         broadcast_service.set_bot(bot)
+        ban_notification_service.set_bot(bot)
         traffic_monitoring_scheduler.set_bot(bot)
 
         from app.services.admin_notification_service import AdminNotificationService

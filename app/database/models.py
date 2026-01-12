@@ -120,6 +120,21 @@ class MainMenuButtonVisibility(Enum):
     ADMINS = "admins"
     SUBSCRIBERS = "subscribers"
 
+
+class WheelPrizeType(Enum):
+    """Типы призов на колесе удачи."""
+    SUBSCRIPTION_DAYS = "subscription_days"
+    BALANCE_BONUS = "balance_bonus"
+    TRAFFIC_GB = "traffic_gb"
+    PROMOCODE = "promocode"
+    NOTHING = "nothing"
+
+
+class WheelSpinPaymentType(Enum):
+    """Способы оплаты спина колеса."""
+    TELEGRAM_STARS = "telegram_stars"
+    SUBSCRIPTION_DAYS = "subscription_days"
+
 class YooKassaPayment(Base):
     __tablename__ = "yookassa_payments"
     
@@ -753,6 +768,10 @@ class Tariff(Base):
     # Сквады (серверы) доступные в тарифе
     allowed_squads = Column(JSON, default=list)  # список UUID сквадов
 
+    # Лимиты трафика по серверам (JSON: {"uuid": {"traffic_limit_gb": 100}, ...})
+    # Если сервер не указан - используется общий traffic_limit_gb
+    server_traffic_limits = Column(JSON, default=dict)
+
     # Цены на периоды в копейках (JSON: {"14": 30000, "30": 50000, "90": 120000, ...})
     period_prices = Column(JSON, nullable=False, default=dict)
 
@@ -761,6 +780,7 @@ class Tariff(Base):
 
     # Дополнительные настройки
     is_trial_available = Column(Boolean, default=False, nullable=False)  # Можно ли взять триал на этом тарифе
+    allow_traffic_topup = Column(Boolean, default=True, nullable=False)  # Разрешена ли докупка трафика для этого тарифа
 
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
@@ -796,6 +816,21 @@ class Tariff(Base):
         if price_kopeks is not None:
             return price_kopeks / 100
         return None
+
+    def get_traffic_limit_for_server(self, squad_uuid: str) -> int:
+        """Возвращает лимит трафика для конкретного сервера.
+
+        Если для сервера настроен отдельный лимит - возвращает его,
+        иначе возвращает общий traffic_limit_gb тарифа.
+        """
+        limits = self.server_traffic_limits or {}
+        if squad_uuid in limits:
+            server_limit = limits[squad_uuid]
+            if isinstance(server_limit, dict) and 'traffic_limit_gb' in server_limit:
+                return server_limit['traffic_limit_gb']
+            elif isinstance(server_limit, int):
+                return server_limit
+        return self.traffic_limit_gb
 
     def is_available_for_promo_group(self, promo_group_id: Optional[int]) -> bool:
         """Проверяет, доступен ли тариф для указанной промогруппы."""
@@ -2250,3 +2285,130 @@ class CabinetRefreshToken(Base):
     def __repr__(self) -> str:
         status = "valid" if self.is_valid else ("revoked" if self.is_revoked else "expired")
         return f"<CabinetRefreshToken id={self.id} user_id={self.user_id} status={status}>"
+
+
+# ==================== FORTUNE WHEEL ====================
+
+
+class WheelConfig(Base):
+    """Глобальная конфигурация колеса удачи."""
+    __tablename__ = "wheel_configs"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Основные настройки
+    is_enabled = Column(Boolean, default=False, nullable=False)
+    name = Column(String(255), default="Колесо удачи", nullable=False)
+
+    # Стоимость спина
+    spin_cost_stars = Column(Integer, default=10, nullable=False)  # Стоимость в Stars
+    spin_cost_days = Column(Integer, default=1, nullable=False)    # Стоимость в днях подписки
+    spin_cost_stars_enabled = Column(Boolean, default=True, nullable=False)
+    spin_cost_days_enabled = Column(Boolean, default=True, nullable=False)
+
+    # RTP настройки (Return to Player) - процент возврата 0-100
+    rtp_percent = Column(Integer, default=80, nullable=False)
+
+    # Лимиты
+    daily_spin_limit = Column(Integer, default=5, nullable=False)  # 0 = без лимита
+    min_subscription_days_for_day_payment = Column(Integer, default=3, nullable=False)
+
+    # Генерация промокодов
+    promo_prefix = Column(String(20), default="WHEEL", nullable=False)
+    promo_validity_days = Column(Integer, default=7, nullable=False)
+
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    prizes = relationship("WheelPrize", back_populates="config", cascade="all, delete-orphan")
+
+    def __repr__(self) -> str:
+        return f"<WheelConfig id={self.id} enabled={self.is_enabled} rtp={self.rtp_percent}%>"
+
+
+class WheelPrize(Base):
+    """Приз на колесе удачи."""
+    __tablename__ = "wheel_prizes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    config_id = Column(Integer, ForeignKey("wheel_configs.id", ondelete="CASCADE"), nullable=False)
+
+    # Тип и значение приза
+    prize_type = Column(String(50), nullable=False)  # WheelPrizeType
+    prize_value = Column(Integer, default=0, nullable=False)  # Дни/копейки/GB в зависимости от типа
+
+    # Отображение
+    display_name = Column(String(100), nullable=False)
+    emoji = Column(String(10), default="🎁", nullable=False)
+    color = Column(String(20), default="#3B82F6", nullable=False)  # HEX цвет сектора
+
+    # Стоимость приза для расчета RTP (в копейках)
+    prize_value_kopeks = Column(Integer, default=0, nullable=False)
+
+    # Порядок и вероятность
+    sort_order = Column(Integer, default=0, nullable=False)
+    manual_probability = Column(Float, nullable=True)  # Если задано - игнорирует RTP расчет (0.0-1.0)
+    is_active = Column(Boolean, default=True, nullable=False)
+
+    # Настройки генерируемого промокода (только для prize_type=promocode)
+    promo_balance_bonus_kopeks = Column(Integer, default=0)
+    promo_subscription_days = Column(Integer, default=0)
+    promo_traffic_gb = Column(Integer, default=0)
+
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    config = relationship("WheelConfig", back_populates="prizes")
+    spins = relationship("WheelSpin", back_populates="prize")
+
+    def __repr__(self) -> str:
+        return f"<WheelPrize id={self.id} type={self.prize_type} name='{self.display_name}'>"
+
+
+class WheelSpin(Base):
+    """История спинов колеса удачи."""
+    __tablename__ = "wheel_spins"
+    __table_args__ = (
+        Index("ix_wheel_spins_user_created", "user_id", "created_at"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    prize_id = Column(Integer, ForeignKey("wheel_prizes.id", ondelete="SET NULL"), nullable=True)
+
+    # Способ оплаты
+    payment_type = Column(String(50), nullable=False)  # WheelSpinPaymentType
+    payment_amount = Column(Integer, nullable=False)  # Stars или дни
+    payment_value_kopeks = Column(Integer, nullable=False)  # Эквивалент в копейках для статистики
+
+    # Результат
+    prize_type = Column(String(50), nullable=False)  # Копируем из WheelPrize на момент спина
+    prize_value = Column(Integer, nullable=False)
+    prize_display_name = Column(String(100), nullable=False)
+    prize_value_kopeks = Column(Integer, nullable=False)  # Стоимость приза в копейках
+
+    # Сгенерированный промокод (если приз - промокод)
+    generated_promocode_id = Column(Integer, ForeignKey("promocodes.id"), nullable=True)
+
+    # Флаг успешного начисления
+    is_applied = Column(Boolean, default=False, nullable=False)
+    applied_at = Column(DateTime, nullable=True)
+
+    created_at = Column(DateTime, default=func.now())
+
+    user = relationship("User", backref="wheel_spins")
+    prize = relationship("WheelPrize", back_populates="spins")
+    generated_promocode = relationship("PromoCode")
+
+    @property
+    def prize_value_rubles(self) -> float:
+        """Стоимость приза в рублях."""
+        return self.prize_value_kopeks / 100
+
+    @property
+    def payment_value_rubles(self) -> float:
+        """Стоимость оплаты в рублях."""
+        return self.payment_value_kopeks / 100
+
+    def __repr__(self) -> str:
+        return f"<WheelSpin id={self.id} user_id={self.user_id} prize='{self.prize_display_name}'>"

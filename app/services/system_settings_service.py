@@ -214,6 +214,7 @@ class BotConfigurationService:
         "DEVICES_SELECTION_ENABLED": "SUBSCRIPTIONS_CORE",
         "DEVICES_SELECTION_DISABLED_AMOUNT": "SUBSCRIPTIONS_CORE",
         "BASE_SUBSCRIPTION_PRICE": "SUBSCRIPTIONS_CORE",
+        "SALES_MODE": "SUBSCRIPTIONS_CORE",
         "DEFAULT_TRAFFIC_RESET_STRATEGY": "TRAFFIC",
         "RESET_TRAFFIC_ON_PAYMENT": "TRAFFIC",
         "TRAFFIC_SELECTION_MODE": "TRAFFIC",
@@ -382,6 +383,10 @@ class BotConfigurationService:
             ChoiceOption("default", "📋 Полное меню"),
             ChoiceOption("text", "📝 Текстовое меню"),
         ],
+        "SALES_MODE": [
+            ChoiceOption("classic", "📋 Классический (периоды из .env)"),
+            ChoiceOption("tariffs", "📦 Тарифы (из кабинета)"),
+        ],
         "SERVER_STATUS_MODE": [
             ChoiceOption("disabled", "🚫 Отключено"),
             ChoiceOption("external_link", "🌐 Внешняя ссылка"),
@@ -440,6 +445,19 @@ class BotConfigurationService:
     }
 
     SETTING_HINTS: Dict[str, Dict[str, str]] = {
+        "SALES_MODE": {
+            "description": (
+                "Режим продажи подписок. "
+                "«Классический» — выбор периода из .env (PRICE_14_DAYS и т.д.). "
+                "«Тарифы» — готовые тарифные планы из кабинета с серверами и лимитами."
+            ),
+            "format": "Выберите один из доступных режимов.",
+            "example": "tariffs",
+            "warning": (
+                "При смене режима логика покупки подписки полностью меняется. "
+                "В режиме «Тарифы» пользователи выбирают готовый тарифный план."
+            ),
+        },
         "YOOKASSA_ENABLED": {
             "description": (
                 "Включает оплату через YooKassa. "

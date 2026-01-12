@@ -269,7 +269,13 @@ async def create_topup(
                 payload=f"cabinet_topup_{user.id}_{request.amount_kopeks}",
             )
             if result:
-                payment_url = result.get("pay_url") or result.get("bot_invoice_url")
+                # Priority: web_app for desktop/browser, mini_app for mobile, bot as fallback
+                payment_url = (
+                    result.get("web_app_invoice_url")
+                    or result.get("mini_app_invoice_url")
+                    or result.get("bot_invoice_url")
+                    or result.get("pay_url")
+                )
                 payment_id = str(result.get("invoice_id"))
             else:
                 raise HTTPException(
@@ -332,6 +338,126 @@ async def create_topup(
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail="Failed to create Platega payment",
+                )
+
+        elif request.payment_method == "heleket":
+            if not settings.is_heleket_enabled():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Heleket payment method is unavailable",
+                )
+
+            payment_service = PaymentService()
+            result = await payment_service.create_heleket_payment(
+                db=db,
+                user_id=user.id,
+                amount_kopeks=request.amount_kopeks,
+                description=settings.get_balance_payment_description(request.amount_kopeks),
+                language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+            )
+
+            if result and result.get("payment_url"):
+                payment_url = result.get("payment_url")
+                payment_id = str(result.get("local_payment_id") or result.get("uuid") or "pending")
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to create Heleket payment",
+                )
+
+        elif request.payment_method == "mulenpay":
+            if not settings.is_mulenpay_enabled():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="MulenPay payment method is unavailable",
+                )
+
+            payment_service = PaymentService()
+            result = await payment_service.create_mulenpay_payment(
+                db=db,
+                user_id=user.id,
+                amount_kopeks=request.amount_kopeks,
+                description=settings.get_balance_payment_description(request.amount_kopeks),
+                language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+            )
+
+            if result and result.get("payment_url"):
+                payment_url = result.get("payment_url")
+                payment_id = str(result.get("local_payment_id") or result.get("mulen_payment_id") or "pending")
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to create MulenPay payment",
+                )
+
+        elif request.payment_method == "pal24":
+            if not settings.is_pal24_enabled():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="PAL24 payment method is unavailable",
+                )
+
+            # Use payment_option to select card or sbp (default: sbp)
+            option = (request.payment_option or "").strip().lower()
+            if option not in {"card", "sbp"}:
+                option = "sbp"
+            provider_method = "card" if option == "card" else "sbp"
+
+            payment_service = PaymentService()
+            result = await payment_service.create_pal24_payment(
+                db=db,
+                user_id=user.id,
+                amount_kopeks=request.amount_kopeks,
+                description=settings.get_balance_payment_description(request.amount_kopeks),
+                language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+                payment_method=provider_method,
+            )
+
+            if result:
+                # Select appropriate URL based on payment option
+                preferred_urls = []
+                if option == "sbp":
+                    preferred_urls.append(result.get("sbp_url") or result.get("transfer_url"))
+                elif option == "card":
+                    preferred_urls.append(result.get("card_url"))
+                preferred_urls.extend([
+                    result.get("link_url"),
+                    result.get("link_page_url"),
+                    result.get("payment_url"),
+                    result.get("transfer_url"),
+                ])
+                payment_url = next((url for url in preferred_urls if url), None)
+                payment_id = str(result.get("local_payment_id") or result.get("bill_id") or "pending")
+
+            if not payment_url:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to create PAL24 payment",
+                )
+
+        elif request.payment_method == "wata":
+            if not settings.is_wata_enabled():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Wata payment method is unavailable",
+                )
+
+            payment_service = PaymentService()
+            result = await payment_service.create_wata_payment(
+                db=db,
+                user_id=user.id,
+                amount_kopeks=request.amount_kopeks,
+                description=settings.get_balance_payment_description(request.amount_kopeks),
+                language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+            )
+
+            if result and result.get("payment_url"):
+                payment_url = result.get("payment_url")
+                payment_id = str(result.get("local_payment_id") or result.get("payment_link_id") or "pending")
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to create Wata payment",
                 )
 
         else:
