@@ -2749,6 +2749,16 @@
 
         .daily-subscription-progress {
             margin-bottom: 12px;
+            transition: opacity 0.3s ease;
+        }
+
+        .daily-subscription-progress.paused {
+            opacity: 0.5;
+        }
+
+        .daily-subscription-progress.paused .daily-progress-fill {
+            animation: none;
+            background: var(--hint-color);
         }
 
         .daily-progress-bar {
@@ -6635,6 +6645,7 @@
                 'daily.pause': 'Pause',
                 'daily.resume': 'Resume',
                 'daily.paused_notice': 'Subscription paused. Daily billing disabled. VPN is not working.',
+                'daily.paused_no_charge': 'Paused — no charge',
                 'daily.status.active': 'Active',
                 'daily.status.paused': 'Paused',
                 'daily.hours_remaining': 'Hours left',
@@ -7108,6 +7119,7 @@
                 'daily.pause': 'Приостановить',
                 'daily.resume': 'Возобновить',
                 'daily.paused_notice': 'Подписка приостановлена. Ежедневное списание отключено. VPN не работает.',
+                'daily.paused_no_charge': 'Пауза — без списания',
                 'daily.status.active': 'Активна',
                 'daily.status.paused': 'Приостановлена',
                 'daily.hours_remaining': 'Часов осталось',
@@ -9568,7 +9580,9 @@
                 if (pauseBtnIcon) pauseBtnIcon.textContent = '▶️';
                 if (pauseBtnText) pauseBtnText.textContent = t('daily.resume');
                 pausedNotice?.classList.remove('hidden');
-                progressSection?.classList.add('hidden');
+                // Оставляем прогресс секцию видимой, но затемняем
+                progressSection?.classList.remove('hidden');
+                progressSection?.classList.add('paused');
 
                 // Обновляем статус badge
                 const statusBadge = document.getElementById('statusBadge');
@@ -9582,6 +9596,7 @@
                 if (pauseBtnText) pauseBtnText.textContent = t('daily.pause');
                 pausedNotice?.classList.add('hidden');
                 progressSection?.classList.remove('hidden');
+                progressSection?.classList.remove('paused');
             }
 
             // Обработчик кнопки паузы
@@ -9603,10 +9618,33 @@
             const progressFill = document.getElementById('dailyProgressFill');
             const nextChargeEl = document.getElementById('dailyNextCharge');
 
-            if (!nextChargeAt || isPaused) {
+            if (!nextChargeAt) {
                 if (timeRemainingEl) timeRemainingEl.textContent = '--:--:--';
                 if (progressFill) progressFill.style.width = '0%';
                 if (nextChargeEl) nextChargeEl.textContent = '';
+                return;
+            }
+
+            // При паузе показываем оставшееся время, но без обновления (статичное)
+            if (isPaused) {
+                const nextChargeDate = new Date(nextChargeAt);
+                const now = new Date();
+                const remaining = nextChargeDate - now;
+
+                if (remaining > 0) {
+                    const hours = Math.floor(remaining / (1000 * 60 * 60));
+                    const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
+                    const seconds = Math.floor((remaining % (1000 * 60)) / 1000);
+                    const timeStr = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+                    if (timeRemainingEl) timeRemainingEl.textContent = timeStr;
+                    const totalDuration = 24 * 60 * 60 * 1000;
+                    const progressPercent = Math.max(0, Math.min(100, (remaining / totalDuration) * 100));
+                    if (progressFill) progressFill.style.width = `${progressPercent}%`;
+                } else {
+                    if (timeRemainingEl) timeRemainingEl.textContent = '00:00:00';
+                    if (progressFill) progressFill.style.width = '0%';
+                }
+                if (nextChargeEl) nextChargeEl.textContent = t('daily.paused_no_charge');
                 return;
             }
 
