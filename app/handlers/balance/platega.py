@@ -280,7 +280,7 @@ async def process_platega_payment_amount(
             db=db,
             user_id=db_user.id,
             amount_kopeks=amount_kopeks,
-            description=settings.get_balance_payment_description(amount_kopeks),
+            description=settings.get_balance_payment_description(amount_kopeks, telegram_user_id=db_user.telegram_id),
             language=db_user.language,
             payment_method_code=method_code,
         )
