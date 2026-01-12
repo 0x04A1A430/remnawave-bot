@@ -5539,6 +5539,7 @@
                     <div class="subscription-missing-hint" id="subscriptionMissingHint" data-i18n="subscription_missing.hint">Top up your balance after activation to stay connected.</div>
                     <div class="subscription-missing-actions">
                         <button class="btn btn-secondary hidden" type="button" id="subscriptionMissingTrialBtn" data-i18n="subscription_missing.action.trial">Activate trial</button>
+                        <button class="btn btn-primary hidden" type="button" id="subscriptionMissingBuyBtn" data-i18n="subscription_missing.action.buy">Buy subscription</button>
                     </div>
                 </div>
             </div>
@@ -6804,6 +6805,7 @@
                 'subscription_missing.hint': 'After activation you can top up your balance here to stay connected.',
                 'subscription_missing.action.trial': 'Activate trial',
                 'subscription_missing.action.trial.loading': 'Activating…',
+                'subscription_missing.action.buy': 'Buy subscription',
                 'trial.activation.title': 'Trial activation',
                 'trial.activation.success': 'Trial activated! Enjoy {days} days of access.',
                 'trial.activation.success.short': 'Trial activated successfully.',
@@ -7266,6 +7268,7 @@
                 'subscription_missing.hint': 'После активации вы сможете пополнить баланс здесь для бесперебойной работы.',
                 'subscription_missing.action.trial': 'Активировать триал',
                 'subscription_missing.action.trial.loading': 'Активация…',
+                'subscription_missing.action.buy': 'Купить подписку',
                 'trial.activation.title': 'Активация триала',
                 'trial.activation.success': 'Триал активирован! Доступ открыт на {days} дн.',
                 'trial.activation.success.short': 'Триал успешно активирован.',
@@ -9382,6 +9385,16 @@
                 trialButton.textContent = label;
                 trialButton.classList.toggle('hidden', !trialAvailable && !trialActivationInProgress);
                 trialButton.disabled = !trialAvailable || trialActivationInProgress;
+            }
+
+            const buyButton = document.getElementById('subscriptionMissingBuyBtn');
+            if (buyButton) {
+                const buyLabel = t('subscription_missing.action.buy');
+                buyButton.textContent = buyLabel && buyLabel !== 'subscription_missing.action.buy'
+                    ? buyLabel
+                    : (preferredLanguage === 'ru' ? 'Купить подписку' : 'Buy subscription');
+                // Показываем кнопку покупки всегда когда subscription_missing
+                buyButton.classList.remove('hidden');
             }
         }
 
@@ -17084,6 +17097,13 @@
             if (subscriptionPurchaseModalOpen) {
                 return true;
             }
+            // Показываем для пользователей с subscription_missing (без активированного триала/подписки)
+            const subscriptionMissing = Boolean(
+                userData?.subscription_missing ?? userData?.subscriptionMissing
+            );
+            if (subscriptionMissing) {
+                return true;
+            }
             // Показываем для пользователей без оплаченной подписки ИЛИ с триалом
             return Boolean(userData?.user) && (!hasPaidSubscription() || isTrialSubscription());
         }
@@ -20076,6 +20096,7 @@
 
         document.getElementById('purchaseBtn')?.addEventListener('click', handlePurchaseAction);
         document.getElementById('subscriptionMissingTrialBtn')?.addEventListener('click', handleTrialAction);
+        document.getElementById('subscriptionMissingBuyBtn')?.addEventListener('click', handlePurchaseAction);
 
         // ============================================
         // Tariffs Mode Support
