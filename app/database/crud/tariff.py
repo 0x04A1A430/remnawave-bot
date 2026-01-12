@@ -173,6 +173,8 @@ async def create_tariff(
     traffic_topup_enabled: bool = False,
     traffic_topup_packages: Optional[Dict[str, int]] = None,
     max_topup_traffic_gb: int = 0,
+    is_daily: bool = False,
+    daily_price_kopeks: int = 0,
 ) -> Tariff:
     """Создает новый тариф."""
     normalized_prices = _normalize_period_prices(period_prices)
@@ -194,6 +196,8 @@ async def create_tariff(
         traffic_topup_enabled=traffic_topup_enabled,
         traffic_topup_packages=traffic_topup_packages or {},
         max_topup_traffic_gb=max(0, max_topup_traffic_gb),
+        is_daily=is_daily,
+        daily_price_kopeks=max(0, daily_price_kopeks),
     )
 
     db.add(tariff)
@@ -244,6 +248,8 @@ async def update_tariff(
     traffic_topup_enabled: Optional[bool] = None,
     traffic_topup_packages: Optional[Dict[str, int]] = None,
     max_topup_traffic_gb: Optional[int] = None,
+    is_daily: Optional[bool] = None,
+    daily_price_kopeks: Optional[int] = None,
 ) -> Tariff:
     """Обновляет существующий тариф."""
     if name is not None:
@@ -279,6 +285,10 @@ async def update_tariff(
         tariff.traffic_topup_packages = traffic_topup_packages
     if max_topup_traffic_gb is not None:
         tariff.max_topup_traffic_gb = max(0, max_topup_traffic_gb)
+    if is_daily is not None:
+        tariff.is_daily = is_daily
+    if daily_price_kopeks is not None:
+        tariff.daily_price_kopeks = max(0, daily_price_kopeks)
 
     # Обновляем промогруппы если указаны
     if promo_group_ids is not None:

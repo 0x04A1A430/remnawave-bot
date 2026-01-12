@@ -789,6 +789,10 @@ class Tariff(Base):
     # Максимальный лимит трафика после докупки (0 = без ограничений)
     max_topup_traffic_gb = Column(Integer, default=0, nullable=False)
 
+    # Суточный тариф - ежедневное списание
+    is_daily = Column(Boolean, default=False, nullable=False)  # Является ли тариф суточным
+    daily_price_kopeks = Column(Integer, default=0, nullable=False)  # Цена за день в копейках
+
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
@@ -869,6 +873,10 @@ class Tariff(Base):
             and bool(self.traffic_topup_packages)
             and not self.is_unlimited_traffic
         )
+
+    def get_daily_price_rubles(self) -> float:
+        """Возвращает суточную цену в рублях."""
+        return self.daily_price_kopeks / 100 if self.daily_price_kopeks else 0
 
     def __repr__(self):
         return f"<Tariff(id={self.id}, name='{self.name}', tier={self.tier_level}, active={self.is_active})>"
@@ -1026,6 +1034,10 @@ class Subscription(Base):
     # Тариф (для режима продаж "Тарифы")
     tariff_id = Column(Integer, ForeignKey("tariffs.id", ondelete="SET NULL"), nullable=True, index=True)
 
+    # Суточная подписка
+    is_daily_paused = Column(Boolean, default=False, nullable=False)  # Приостановлена ли суточная подписка пользователем
+    last_daily_charge_at = Column(DateTime, nullable=True)  # Время последнего суточного списания
+
     user = relationship("User", back_populates="subscription")
     tariff = relationship("Tariff", back_populates="subscriptions")
     discount_offers = relationship("DiscountOffer", back_populates="subscription")
@@ -1158,9 +1170,34 @@ class Subscription(Base):
             self.status = SubscriptionStatus.ACTIVE.value
     
     def add_traffic(self, gb: int):
-        if self.traffic_limit_gb == 0:  
+        if self.traffic_limit_gb == 0:
             return
         self.traffic_limit_gb += gb
+
+    @property
+    def is_daily_tariff(self) -> bool:
+        """Проверяет, является ли тариф подписки суточным."""
+        if self.tariff:
+            return getattr(self.tariff, 'is_daily', False)
+        return False
+
+    @property
+    def daily_price_kopeks(self) -> int:
+        """Возвращает суточную цену тарифа в копейках."""
+        if self.tariff:
+            return getattr(self.tariff, 'daily_price_kopeks', 0)
+        return 0
+
+    @property
+    def can_charge_daily(self) -> bool:
+        """Проверяет, можно ли списать суточную оплату."""
+        if not self.is_daily_tariff:
+            return False
+        if self.is_daily_paused:
+            return False
+        if self.status != SubscriptionStatus.ACTIVE.value:
+            return False
+        return True
 
 
 class Transaction(Base):
