@@ -183,10 +183,17 @@ def get_tariff_view_keyboard(
         InlineKeyboardButton(text="📊 Трафик", callback_data=f"admin_tariff_edit_traffic:{tariff.id}"),
         InlineKeyboardButton(text="📱 Устройства", callback_data=f"admin_tariff_edit_devices:{tariff.id}"),
     ])
-    buttons.append([
-        InlineKeyboardButton(text="💰 Цены", callback_data=f"admin_tariff_edit_prices:{tariff.id}"),
-        InlineKeyboardButton(text="🎚️ Уровень", callback_data=f"admin_tariff_edit_tier:{tariff.id}"),
-    ])
+    # Цены за периоды только для обычных тарифов (не суточных)
+    is_daily = getattr(tariff, 'is_daily', False)
+    if not is_daily:
+        buttons.append([
+            InlineKeyboardButton(text="💰 Цены", callback_data=f"admin_tariff_edit_prices:{tariff.id}"),
+            InlineKeyboardButton(text="🎚️ Уровень", callback_data=f"admin_tariff_edit_tier:{tariff.id}"),
+        ])
+    else:
+        buttons.append([
+            InlineKeyboardButton(text="🎚️ Уровень", callback_data=f"admin_tariff_edit_tier:{tariff.id}"),
+        ])
     buttons.append([
         InlineKeyboardButton(text="📱💰 Цена за устройство", callback_data=f"admin_tariff_edit_device_price:{tariff.id}"),
         InlineKeyboardButton(text="⏰ Дни триала", callback_data=f"admin_tariff_edit_trial_days:{tariff.id}"),
@@ -199,19 +206,13 @@ def get_tariff_view_keyboard(
         InlineKeyboardButton(text="👥 Промогруппы", callback_data=f"admin_tariff_edit_promo:{tariff.id}"),
     ])
 
-    # Суточный режим
-    is_daily = getattr(tariff, 'is_daily', False)
+    # Суточный режим - только для уже суточных тарифов показываем настройки
+    # Новые тарифы делаются суточными только при создании
     if is_daily:
-        buttons.append([
-            InlineKeyboardButton(text="🔄 ❌ Отключить суточный режим", callback_data=f"admin_tariff_toggle_daily:{tariff.id}"),
-        ])
         buttons.append([
             InlineKeyboardButton(text="💰 Суточная цена", callback_data=f"admin_tariff_edit_daily_price:{tariff.id}"),
         ])
-    else:
-        buttons.append([
-            InlineKeyboardButton(text="🔄 Включить суточный режим", callback_data=f"admin_tariff_toggle_daily:{tariff.id}"),
-        ])
+        # Примечание: отключение суточного режима убрано - это необратимое решение при создании
 
     # Переключение триала
     if tariff.is_trial_available:
@@ -304,14 +305,18 @@ def format_tariff_info(tariff: Tariff, language: str, subs_count: int = 0) -> st
     # Форматируем суточный тариф
     is_daily = getattr(tariff, 'is_daily', False)
     daily_price_kopeks = getattr(tariff, 'daily_price_kopeks', 0)
+
+    # Формируем блок цен в зависимости от типа тарифа
     if is_daily:
-        daily_status = f"✅ Включен ({_format_price_kopeks(daily_price_kopeks)}/день)"
+        price_block = f"<b>💰 Суточная цена:</b> {_format_price_kopeks(daily_price_kopeks)}/день"
+        tariff_type = "🔄 Суточный"
     else:
-        daily_status = "❌ Отключен"
+        price_block = f"<b>Цены:</b>\n{prices_display}"
+        tariff_type = "📅 Периодный"
 
     return f"""📦 <b>Тариф: {tariff.name}</b>
 
-{status}
+{status} | {tariff_type}
 🎚️ Уровень: {tariff.tier_level}
 📊 Порядок: {tariff.display_order}
 
@@ -322,13 +327,10 @@ def format_tariff_info(tariff: Tariff, language: str, subs_count: int = 0) -> st
 • Триал: {trial_status}
 • Дней триала: {trial_days_display}
 
-<b>🔄 Суточный режим:</b> {daily_status}
-
 <b>Докупка трафика:</b>
 {traffic_topup_display}
 
-<b>Цены:</b>
-{prices_display}
+{price_block}
 
 <b>Серверы:</b> {squads_display}
 <b>Промогруппы:</b> {promo_display}
@@ -605,46 +607,73 @@ async def process_daily_price_input(
     db: AsyncSession,
     state: FSMContext,
 ):
-    """Обрабатывает ввод суточной цены."""
+    """Обрабатывает ввод суточной цены (создание и редактирование)."""
     texts = get_texts(db_user.language)
     data = await state.get_data()
     tariff_id = data.get("tariff_id")
 
-    if not tariff_id:
-        await state.clear()
-        return
-
-    tariff = await get_tariff_by_id(db, tariff_id)
-    if not tariff:
-        await message.answer("Тариф не найден")
-        await state.clear()
-        return
-
+    # Парсим цену
     try:
         price_rubles = float(message.text.strip().replace(",", "."))
-        if price_rubles < 0:
-            raise ValueError("Цена не может быть отрицательной")
+        if price_rubles <= 0:
+            raise ValueError("Цена должна быть положительной")
 
         price_kopeks = int(price_rubles * 100)
     except ValueError:
         await message.answer(
-            "❌ Некорректная цена. Введите число.\n"
+            "❌ Некорректная цена. Введите положительное число.\n"
             "Пример: <code>50</code> или <code>99.90</code>",
             parse_mode="HTML"
         )
         return
 
-    tariff = await update_tariff(db, tariff, daily_price_kopeks=price_kopeks)
-    await state.clear()
+    # Проверяем - это создание или редактирование
+    is_creating = data.get("tariff_is_daily") and not tariff_id
 
-    subs_count = await get_tariff_subscriptions_count(db, tariff_id)
+    if is_creating:
+        # Создаем новый суточный тариф
+        tariff = await create_tariff(
+            db,
+            name=data['tariff_name'],
+            traffic_limit_gb=data['tariff_traffic'],
+            device_limit=data['tariff_devices'],
+            tier_level=data['tariff_tier'],
+            period_prices={},
+            is_active=True,
+            is_daily=True,
+            daily_price_kopeks=price_kopeks,
+        )
+        await state.clear()
 
-    await message.answer(
-        f"✅ Суточная цена установлена: {_format_price_kopeks(price_kopeks)}/день\n\n"
-        + format_tariff_info(tariff, db_user.language, subs_count),
-        reply_markup=get_tariff_view_keyboard(tariff, db_user.language),
-        parse_mode="HTML"
-    )
+        await message.answer(
+            f"✅ <b>Суточный тариф создан!</b>\n\n"
+            + format_tariff_info(tariff, db_user.language, 0),
+            reply_markup=get_tariff_view_keyboard(tariff, db_user.language),
+            parse_mode="HTML"
+        )
+    else:
+        # Редактируем существующий тариф
+        if not tariff_id:
+            await state.clear()
+            return
+
+        tariff = await get_tariff_by_id(db, tariff_id)
+        if not tariff:
+            await message.answer("Тариф не найден")
+            await state.clear()
+            return
+
+        tariff = await update_tariff(db, tariff, daily_price_kopeks=price_kopeks)
+        await state.clear()
+
+        subs_count = await get_tariff_subscriptions_count(db, tariff_id)
+
+        await message.answer(
+            f"✅ Суточная цена установлена: {_format_price_kopeks(price_kopeks)}/день\n\n"
+            + format_tariff_info(tariff, db_user.language, subs_count),
+            reply_markup=get_tariff_view_keyboard(tariff, db_user.language),
+            parse_mode="HTML"
+        )
 
 
 # ============ СОЗДАНИЕ ТАРИФА ============
@@ -811,17 +840,51 @@ async def process_tariff_tier(
 
     data = await state.get_data()
     await state.update_data(tariff_tier=tier)
-    await state.set_state(AdminStates.creating_tariff_prices)
 
     traffic_display = _format_traffic(data['tariff_traffic'])
 
+    # Шаг 5/6: Выбор типа тарифа
     await message.answer(
         "📦 <b>Создание тарифа</b>\n\n"
         f"Название: <b>{data['tariff_name']}</b>\n"
         f"Трафик: <b>{traffic_display}</b>\n"
         f"Устройств: <b>{data['tariff_devices']}</b>\n"
         f"Уровень: <b>{tier}</b>\n\n"
-        "Шаг 5/6: Введите цены на периоды\n\n"
+        "Шаг 5/6: Выберите тип тарифа",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="📅 Периодный (месяцы)", callback_data="tariff_type_periodic")],
+            [InlineKeyboardButton(text="🔄 Суточный (оплата за день)", callback_data="tariff_type_daily")],
+            [InlineKeyboardButton(text=texts.CANCEL, callback_data="admin_tariffs")]
+        ]),
+        parse_mode="HTML"
+    )
+
+
+@admin_required
+@error_handler
+async def select_tariff_type_periodic(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    """Выбирает периодный тип тарифа."""
+    texts = get_texts(db_user.language)
+    data = await state.get_data()
+
+    await state.update_data(tariff_is_daily=False)
+    await state.set_state(AdminStates.creating_tariff_prices)
+
+    traffic_display = _format_traffic(data['tariff_traffic'])
+
+    await callback.message.edit_text(
+        "📦 <b>Создание тарифа</b>\n\n"
+        f"Название: <b>{data['tariff_name']}</b>\n"
+        f"Трафик: <b>{traffic_display}</b>\n"
+        f"Устройств: <b>{data['tariff_devices']}</b>\n"
+        f"Уровень: <b>{data['tariff_tier']}</b>\n"
+        f"Тип: <b>📅 Периодный</b>\n\n"
+        "Шаг 6/6: Введите цены на периоды\n\n"
         "Формат: <code>дней:цена_в_копейках</code>\n"
         "Несколько периодов через запятую\n\n"
         "Пример:\n<code>30:9900, 90:24900, 180:44900, 360:79900</code>",
@@ -830,6 +893,43 @@ async def process_tariff_tier(
         ]),
         parse_mode="HTML"
     )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def select_tariff_type_daily(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    """Выбирает суточный тип тарифа."""
+    from app.states import AdminStates
+
+    texts = get_texts(db_user.language)
+    data = await state.get_data()
+
+    await state.update_data(tariff_is_daily=True)
+    await state.set_state(AdminStates.editing_tariff_daily_price)
+
+    traffic_display = _format_traffic(data['tariff_traffic'])
+
+    await callback.message.edit_text(
+        "📦 <b>Создание суточного тарифа</b>\n\n"
+        f"Название: <b>{data['tariff_name']}</b>\n"
+        f"Трафик: <b>{traffic_display}</b>\n"
+        f"Устройств: <b>{data['tariff_devices']}</b>\n"
+        f"Уровень: <b>{data['tariff_tier']}</b>\n"
+        f"Тип: <b>🔄 Суточный</b>\n\n"
+        "Шаг 6/6: Введите суточную цену в рублях\n\n"
+        "Пример: <i>50</i> (50 ₽/день), <i>99.90</i> (99.90 ₽/день)",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=texts.CANCEL, callback_data="admin_tariffs")]
+        ]),
+        parse_mode="HTML"
+    )
+    await callback.answer()
 
 
 @admin_required
@@ -2411,6 +2511,8 @@ def register_handlers(dp: Dispatcher):
     dp.message.register(process_tariff_traffic, AdminStates.creating_tariff_traffic)
     dp.message.register(process_tariff_devices, AdminStates.creating_tariff_devices)
     dp.message.register(process_tariff_tier, AdminStates.creating_tariff_tier)
+    dp.callback_query.register(select_tariff_type_periodic, F.data == "tariff_type_periodic")
+    dp.callback_query.register(select_tariff_type_daily, F.data == "tariff_type_daily")
     dp.message.register(process_tariff_prices, AdminStates.creating_tariff_prices)
 
     # Редактирование названия
