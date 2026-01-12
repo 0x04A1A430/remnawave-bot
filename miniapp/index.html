@@ -20644,8 +20644,18 @@
             body?.classList.remove('hidden');
 
             // Определяем режим: мгновенная смена или покупка
-            // Данные пользователя находятся в userData.user (структура MiniAppSubscriptionResponse)
+            // userData - глобальная переменная с данными подписки пользователя
             const userInfo = userData?.user || userData;
+
+            // Проверяем тип подписки - триал или платная
+            // subscription_type хранит 'trial' | 'paid' | 'none'
+            const subscriptionType = (
+                userData?.subscription_type ||
+                userData?.user?.subscription_type ||
+                userInfo?.subscription_type ||
+                ''
+            ).toLowerCase();
+
             const actualStatus = (
                 userInfo?.subscription_actual_status ||
                 userInfo?.subscriptionActualStatus ||
@@ -20654,21 +20664,22 @@
                 ''
             ).toLowerCase();
 
-            // Проверяем триал по всем возможным полям
-            const isTrial = actualStatus === 'trial' ||
+            // Триал определяется по subscription_type = 'trial'
+            const isTrial = subscriptionType === 'trial' ||
+                actualStatus === 'trial' ||
                 userInfo?.is_trial ||
-                userInfo?.isTrial ||
-                (userInfo?.subscription_type || userInfo?.subscriptionType || '').toLowerCase() === 'trial';
+                userInfo?.isTrial;
 
-            console.log('🔍 Status check:', { actualStatus, isTrial, userInfo });
+            console.log('🔍 Status check:', { subscriptionType, actualStatus, isTrial, userData });
 
             const currentTariff = tariffsData?.current_tariff || tariffsData?.currentTariff;
 
-            // Режим смены тарифа ТОЛЬКО для ОПЛАЧЕННЫХ активных подписок (НЕ триал!)
+            // Режим смены тарифа ТОЛЬКО для ОПЛАЧЕННЫХ подписок (subscription_type = 'paid')
             // Триалу нужно КУПИТЬ подписку, а не менять тариф
-            isInstantSwitchMode = actualStatus === 'active' && !isTrial && currentTariff;
+            const isPaid = subscriptionType === 'paid';
+            isInstantSwitchMode = isPaid && !isTrial && currentTariff;
 
-            console.log('🔍 Mode:', { isInstantSwitchMode, actualStatus, isTrial, hasTariff: !!currentTariff });
+            console.log('🔍 Mode:', { isInstantSwitchMode, isPaid, isTrial, subscriptionType, hasTariff: !!currentTariff });
 
             // Вычисляем оставшиеся дни из expires_at
             let daysLeft = 0;
