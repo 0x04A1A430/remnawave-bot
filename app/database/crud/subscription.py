@@ -1756,7 +1756,167 @@ async def activate_pending_subscription(
     
     await db.commit()
     await db.refresh(pending_subscription)
-    
+
     logger.info(f"Подписка пользователя {user_id} активирована, ID: {pending_subscription.id}")
-    
+
     return pending_subscription
+
+
+# ==================== СУТОЧНЫЕ ПОДПИСКИ ====================
+
+
+async def get_daily_subscriptions_for_charge(db: AsyncSession) -> List[Subscription]:
+    """
+    Получает все суточные подписки, которые нужно обработать для списания.
+
+    Критерии:
+    - Тариф подписки суточный (is_daily=True)
+    - Подписка активна
+    - Подписка не приостановлена пользователем
+    - Прошло более 24 часов с последнего списания (или списания ещё не было)
+    """
+    from app.database.models import Tariff
+
+    now = datetime.utcnow()
+    one_day_ago = now - timedelta(hours=24)
+
+    query = (
+        select(Subscription)
+        .join(Tariff, Subscription.tariff_id == Tariff.id)
+        .options(
+            selectinload(Subscription.user),
+            selectinload(Subscription.tariff),
+        )
+        .where(
+            and_(
+                Tariff.is_daily.is_(True),
+                Tariff.is_active.is_(True),
+                Subscription.status == SubscriptionStatus.ACTIVE.value,
+                Subscription.is_daily_paused.is_(False),
+                # Списания ещё не было ИЛИ прошло более 24 часов
+                (
+                    (Subscription.last_daily_charge_at.is_(None)) |
+                    (Subscription.last_daily_charge_at < one_day_ago)
+                ),
+            )
+        )
+    )
+
+    result = await db.execute(query)
+    subscriptions = result.scalars().all()
+
+    logger.info(
+        f"🔍 Найдено {len(subscriptions)} суточных подписок для списания"
+    )
+
+    return list(subscriptions)
+
+
+async def pause_daily_subscription(
+    db: AsyncSession,
+    subscription: Subscription,
+) -> Subscription:
+    """Приостанавливает суточную подписку (списание не будет происходить)."""
+    if not subscription.is_daily_tariff:
+        logger.warning(
+            f"Попытка приостановить не-суточную подписку {subscription.id}"
+        )
+        return subscription
+
+    subscription.is_daily_paused = True
+    await db.commit()
+    await db.refresh(subscription)
+
+    logger.info(
+        f"⏸️ Суточная подписка {subscription.id} приостановлена пользователем {subscription.user_id}"
+    )
+
+    return subscription
+
+
+async def resume_daily_subscription(
+    db: AsyncSession,
+    subscription: Subscription,
+) -> Subscription:
+    """Возобновляет суточную подписку (списание продолжится)."""
+    if not subscription.is_daily_tariff:
+        logger.warning(
+            f"Попытка возобновить не-суточную подписку {subscription.id}"
+        )
+        return subscription
+
+    subscription.is_daily_paused = False
+    await db.commit()
+    await db.refresh(subscription)
+
+    logger.info(
+        f"▶️ Суточная подписка {subscription.id} возобновлена пользователем {subscription.user_id}"
+    )
+
+    return subscription
+
+
+async def update_daily_charge_time(
+    db: AsyncSession,
+    subscription: Subscription,
+    charge_time: datetime = None,
+) -> Subscription:
+    """Обновляет время последнего суточного списания."""
+    subscription.last_daily_charge_at = charge_time or datetime.utcnow()
+    await db.commit()
+    await db.refresh(subscription)
+
+    return subscription
+
+
+async def suspend_daily_subscription_insufficient_balance(
+    db: AsyncSession,
+    subscription: Subscription,
+) -> Subscription:
+    """
+    Приостанавливает подписку из-за недостатка баланса.
+    Отличается от pause_daily_subscription тем, что меняет статус на DISABLED.
+    """
+    subscription.status = SubscriptionStatus.DISABLED.value
+    await db.commit()
+    await db.refresh(subscription)
+
+    logger.info(
+        f"⚠️ Суточная подписка {subscription.id} приостановлена: недостаточно средств (user_id={subscription.user_id})"
+    )
+
+    return subscription
+
+
+async def get_subscription_with_tariff(
+    db: AsyncSession,
+    user_id: int,
+) -> Optional[Subscription]:
+    """Получает подписку пользователя с загруженным тарифом."""
+    result = await db.execute(
+        select(Subscription)
+        .options(
+            selectinload(Subscription.user),
+            selectinload(Subscription.tariff),
+        )
+        .where(Subscription.user_id == user_id)
+        .order_by(Subscription.created_at.desc())
+        .limit(1)
+    )
+    subscription = result.scalar_one_or_none()
+
+    if subscription:
+        subscription = await check_and_update_subscription_status(db, subscription)
+
+    return subscription
+
+
+async def toggle_daily_subscription_pause(
+    db: AsyncSession,
+    subscription: Subscription,
+) -> Subscription:
+    """Переключает состояние паузы суточной подписки."""
+    if subscription.is_daily_paused:
+        return await resume_daily_subscription(db, subscription)
+    else:
+        return await pause_daily_subscription(db, subscription)
