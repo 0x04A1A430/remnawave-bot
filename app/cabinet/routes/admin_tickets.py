@@ -111,6 +111,7 @@ def _message_to_response(message: TicketMessage) -> TicketMessageResponse:
         is_from_admin=message.is_from_admin,
         has_media=bool(message.media_file_id),
         media_type=message.media_type,
+        media_file_id=message.media_file_id,
         media_caption=message.media_caption,
         created_at=message.created_at,
     )
