@@ -144,7 +144,7 @@ def get_tariffs_keyboard(
     for tariff in tariffs:
         buttons.append([
             InlineKeyboardButton(
-                text=f"📦 {tariff.name}",
+                text=tariff.name,
                 callback_data=f"tariff_select:{tariff.id}"
             )
         ])
@@ -1187,7 +1187,7 @@ def get_tariff_switch_keyboard(
 
         buttons.append([
             InlineKeyboardButton(
-                text=f"📦 {tariff.name}",
+                text=tariff.name,
                 callback_data=f"tariff_sw_select:{tariff.id}"
             )
         ])
@@ -1957,9 +1957,9 @@ def get_instant_switch_keyboard(
         )
 
         if is_upgrade:
-            btn_text = f"📦 {tariff.name} (+{_format_price_kopeks(cost, compact=True)})"
+            btn_text = f"{tariff.name} (+{_format_price_kopeks(cost, compact=True)})"
         else:
-            btn_text = f"📦 {tariff.name} (бесплатно)"
+            btn_text = f"{tariff.name} (бесплатно)"
 
         buttons.append([
             InlineKeyboardButton(
