@@ -15,9 +15,9 @@ from pydantic import field_validator, Field
 from pathlib import Path
 
 
-DEFAULT_DISPLAY_NAME_BANNED_KEYWORDS = [
-    "tme",
-    "joingroup",
+DEFAULT_DISPLAY_NAME_BANNED_KEYWORDS: list[str] = [
+    # Пустой по умолчанию - администратор может добавить ключевые слова через DISPLAY_NAME_BANNED_KEYWORDS
+    # Примеры: "tme", "joingroup", "support", "admin"
 ]
 
 USER_TAG_PATTERN = re.compile(r"^[A-Z0-9_]{1,16}$")
