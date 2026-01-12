@@ -149,7 +149,7 @@ class DailySubscriptionService:
                 type=TransactionType.SUBSCRIPTION_PAYMENT,
                 amount_kopeks=daily_price,
                 description=description,
-                payment_method=PaymentMethod.BALANCE,
+                payment_method=PaymentMethod.MANUAL,
             )
 
             # Обновляем время последнего списания
