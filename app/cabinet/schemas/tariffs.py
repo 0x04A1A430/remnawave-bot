@@ -73,6 +73,9 @@ class TariffDetailResponse(BaseModel):
     is_active: bool
     is_trial_available: bool
     allow_traffic_topup: bool = True
+    traffic_topup_enabled: bool = False
+    traffic_topup_packages: Dict[str, int] = Field(default_factory=dict)
+    max_topup_traffic_gb: int = 0
     traffic_limit_gb: int
     device_limit: int
     device_price_kopeks: Optional[int] = None
@@ -97,6 +100,9 @@ class TariffCreateRequest(BaseModel):
     description: Optional[str] = None
     is_active: bool = True
     allow_traffic_topup: bool = True
+    traffic_topup_enabled: bool = False
+    traffic_topup_packages: Dict[str, int] = Field(default_factory=dict)
+    max_topup_traffic_gb: int = Field(0, ge=0)
     traffic_limit_gb: int = Field(0, ge=0, description="0 = unlimited")
     device_limit: int = Field(1, ge=1)
     device_price_kopeks: Optional[int] = Field(None, ge=0)
@@ -113,6 +119,9 @@ class TariffUpdateRequest(BaseModel):
     description: Optional[str] = None
     is_active: Optional[bool] = None
     allow_traffic_topup: Optional[bool] = None
+    traffic_topup_enabled: Optional[bool] = None
+    traffic_topup_packages: Optional[Dict[str, int]] = None
+    max_topup_traffic_gb: Optional[int] = Field(None, ge=0)
     traffic_limit_gb: Optional[int] = Field(None, ge=0)
     device_limit: Optional[int] = Field(None, ge=1)
     device_price_kopeks: Optional[int] = Field(None, ge=0)

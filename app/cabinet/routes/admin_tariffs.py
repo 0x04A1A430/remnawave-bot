@@ -188,6 +188,9 @@ async def get_tariff(
         is_active=tariff.is_active,
         is_trial_available=tariff.is_trial_available,
         allow_traffic_topup=tariff.allow_traffic_topup,
+        traffic_topup_enabled=tariff.traffic_topup_enabled,
+        traffic_topup_packages=tariff.traffic_topup_packages or {},
+        max_topup_traffic_gb=tariff.max_topup_traffic_gb,
         traffic_limit_gb=tariff.traffic_limit_gb,
         device_limit=tariff.device_limit,
         device_price_kopeks=tariff.device_price_kopeks,
@@ -224,6 +227,9 @@ async def create_new_tariff(
         description=request.description,
         is_active=request.is_active,
         allow_traffic_topup=request.allow_traffic_topup,
+        traffic_topup_enabled=request.traffic_topup_enabled,
+        traffic_topup_packages=request.traffic_topup_packages,
+        max_topup_traffic_gb=request.max_topup_traffic_gb,
         traffic_limit_gb=request.traffic_limit_gb,
         device_limit=request.device_limit,
         device_price_kopeks=request.device_price_kopeks,
@@ -268,6 +274,12 @@ async def update_existing_tariff(
         updates["is_active"] = request.is_active
     if request.allow_traffic_topup is not None:
         updates["allow_traffic_topup"] = request.allow_traffic_topup
+    if request.traffic_topup_enabled is not None:
+        updates["traffic_topup_enabled"] = request.traffic_topup_enabled
+    if request.traffic_topup_packages is not None:
+        updates["traffic_topup_packages"] = request.traffic_topup_packages
+    if request.max_topup_traffic_gb is not None:
+        updates["max_topup_traffic_gb"] = request.max_topup_traffic_gb
     if request.traffic_limit_gb is not None:
         updates["traffic_limit_gb"] = request.traffic_limit_gb
     if request.device_limit is not None:

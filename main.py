@@ -678,6 +678,8 @@ async def main():
             webhook_lines.append(f"WATA: {_fmt(settings.WATA_WEBHOOK_PATH)}")
         if settings.is_heleket_enabled():
             webhook_lines.append(f"Heleket: {_fmt(settings.HELEKET_WEBHOOK_PATH)}")
+        if settings.is_freekassa_enabled():
+            webhook_lines.append(f"Freekassa: {_fmt(settings.FREEKASSA_WEBHOOK_PATH)}")
 
         timeline.log_section(
             "Активные webhook endpoints",
