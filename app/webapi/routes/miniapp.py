@@ -3432,8 +3432,8 @@ async def get_subscription_details(
             daily_tariff_name = tariff.name
             daily_price_kopeks = getattr(tariff, 'daily_price_kopeks', 0)
             daily_price_label = settings.format_price(daily_price_kopeks) + "/день" if daily_price_kopeks > 0 else None
-            # Следующее списание - через 24 часа от последнего обновления подписки или от start_date
-            if subscription.end_date and not is_daily_paused:
+            # Оставшееся время подписки (показываем даже при паузе)
+            if subscription.end_date:
                 daily_next_charge_at = subscription.end_date
 
     response_user = MiniAppSubscriptionUser(
@@ -7252,18 +7252,16 @@ async def toggle_daily_subscription_pause_endpoint(
     await db.refresh(user)
 
     # Синхронизация с RemnaWave
-    try:
-        service = SubscriptionService()
-        if new_paused_state:
-            # При паузе отключаем пользователя в RemnaWave
-            if user.remnawave_uuid:
-                await service.disable_remnawave_user(user.remnawave_uuid)
-        else:
-            # При возобновлении включаем пользователя в RemnaWave
+    # При паузе VPN продолжает работать до конца оплаченного времени,
+    # поэтому НЕ отключаем пользователя в RemnaWave
+    # При возобновлении включаем если был отключен (например, из-за истечения срока)
+    if not new_paused_state:
+        try:
+            service = SubscriptionService()
             if user.remnawave_uuid:
                 await service.enable_remnawave_user(user.remnawave_uuid)
-    except Exception as e:
-        logger.error(f"Ошибка синхронизации с RemnaWave при паузе/возобновлении: {e}")
+        except Exception as e:
+            logger.error(f"Ошибка синхронизации с RemnaWave при возобновлении: {e}")
 
     lang = getattr(user, "language", settings.DEFAULT_LANGUAGE)
     if new_paused_state:
