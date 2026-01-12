@@ -545,6 +545,12 @@ async def confirm_tariff_purchase(
         # Получаем список серверов из тарифа
         squads = tariff.allowed_squads or []
 
+        # Если allowed_squads пустой - значит "все серверы", получаем их
+        if not squads:
+            from app.database.crud.server_squad import get_all_server_squads
+            all_servers, _ = await get_all_server_squads(db, available_only=True)
+            squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
+
         # Проверяем есть ли уже подписка
         existing_subscription = await get_subscription_by_user_id(db, db_user.id)
 
@@ -688,6 +694,12 @@ async def confirm_daily_tariff_purchase(
 
         # Получаем список серверов из тарифа
         squads = tariff.allowed_squads or []
+
+        # Если allowed_squads пустой - значит "все серверы", получаем их
+        if not squads:
+            from app.database.crud.server_squad import get_all_server_squads
+            all_servers, _ = await get_all_server_squads(db, available_only=True)
+            squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
 
         # Проверяем есть ли уже подписка
         existing_subscription = await get_subscription_by_user_id(db, db_user.id)
@@ -1592,6 +1604,12 @@ async def confirm_tariff_switch(
         # Получаем список серверов из тарифа
         squads = tariff.allowed_squads or []
 
+        # Если allowed_squads пустой - значит "все серверы", получаем их
+        if not squads:
+            from app.database.crud.server_squad import get_all_server_squads
+            all_servers, _ = await get_all_server_squads(db, available_only=True)
+            squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
+
         # При смене тарифа пользователь получает ровно тот период, за который заплатил
         # Старые дни не сохраняются - это смена тарифа, а не продление
         days_for_new_tariff = period
@@ -1733,6 +1751,12 @@ async def confirm_daily_tariff_switch(
 
         # Получаем список серверов из тарифа
         squads = tariff.allowed_squads or []
+
+        # Если allowed_squads пустой - значит "все серверы", получаем их
+        if not squads:
+            from app.database.crud.server_squad import get_all_server_squads
+            all_servers, _ = await get_all_server_squads(db, available_only=True)
+            squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
 
         # Обновляем подписку на суточный тариф
         subscription.tariff_id = tariff.id
@@ -2291,6 +2315,12 @@ async def confirm_instant_switch(
 
         # Получаем список серверов из нового тарифа
         squads = new_tariff.allowed_squads or []
+
+        # Если allowed_squads пустой - значит "все серверы", получаем их
+        if not squads:
+            from app.database.crud.server_squad import get_all_server_squads
+            all_servers, _ = await get_all_server_squads(db, available_only=True)
+            squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
 
         # Проверяем, суточный ли новый тариф
         is_new_daily = getattr(new_tariff, 'is_daily', False)

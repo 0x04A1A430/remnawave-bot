@@ -339,14 +339,10 @@ async def show_subscription_info(
     tariff_line = ""
     tariff_info_block = ""
     tariff = None
-    print(f"[DEBUG TARIFF] Режим тарифов: {settings.is_tariffs_mode()}, tariff_id: {subscription.tariff_id}")
-    logger.info(f"🔍 Режим тарифов: {settings.is_tariffs_mode()}, tariff_id: {subscription.tariff_id}")
     if settings.is_tariffs_mode() and subscription.tariff_id:
         try:
             from app.database.crud.tariff import get_tariff_by_id
             tariff = await get_tariff_by_id(db, subscription.tariff_id)
-            print(f"[DEBUG TARIFF] Загружен тариф: {tariff.name if tariff else None}")
-            logger.info(f"🔍 Загружен тариф: {tariff.name if tariff else None}, is_daily: {getattr(tariff, 'is_daily', None) if tariff else None}")
             if tariff:
                 tariff_line = f"\n📦 Тариф: {tariff.name}"
                 # Прикрепляем тариф к подписке для использования в клавиатуре
@@ -404,14 +400,10 @@ async def show_subscription_info(
                         tariff_info_lines.append("⏳ Первое списание скоро")
 
                 tariff_info_block = "\n<blockquote expandable>" + "\n".join(tariff_info_lines) + "</blockquote>"
-                print(f"[DEBUG TARIFF] Сформирован блок: {len(tariff_info_block)} символов")
-                logger.info(f"🔍 Сформирован блок тарифа: {len(tariff_info_block)} символов")
 
         except Exception as e:
-            print(f"[DEBUG TARIFF] ОШИБКА: {e}")
             logger.warning(f"Ошибка получения тарифа: {e}", exc_info=True)
 
-    print(f"[DEBUG TARIFF] tariff_line='{tariff_line}', tariff_info_block_len={len(tariff_info_block)}")
     # Определяем, суточный ли тариф для выбора шаблона
     is_daily_tariff = tariff and getattr(tariff, 'is_daily', False)
 
