@@ -244,6 +244,8 @@ async def create_topup(
                 description=f"Пополнение баланса на {amount_rubles:.2f} ₽",
                 metadata={
                     "user_id": str(user.id),
+                    "user_telegram_id": str(user.telegram_id) if user.telegram_id else "",
+                    "user_username": user.username or "",
                     "amount_kopeks": str(request.amount_kopeks),
                     "type": "balance_topup",
                     "source": "cabinet",

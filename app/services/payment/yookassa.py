@@ -110,6 +110,18 @@ class YooKassaPaymentMixin:
             amount_rubles = amount_kopeks / 100
 
             payment_metadata = metadata.copy() if metadata else {}
+
+            # Всегда добавляем telegram_id в метаданные для возможности возврата платежа
+            if "user_telegram_id" not in payment_metadata:
+                try:
+                    from app.database.crud.user import get_user_by_id
+                    user = await get_user_by_id(db, user_id)
+                    if user and user.telegram_id:
+                        payment_metadata["user_telegram_id"] = str(user.telegram_id)
+                        payment_metadata["user_username"] = user.username or ""
+                except Exception as e:
+                    logger.warning(f"Не удалось получить telegram_id для user_id={user_id}: {e}")
+
             payment_metadata.update(
                 {
                     "user_id": str(user_id),
@@ -201,6 +213,18 @@ class YooKassaPaymentMixin:
             amount_rubles = amount_kopeks / 100
 
             payment_metadata = metadata.copy() if metadata else {}
+
+            # Всегда добавляем telegram_id в метаданные для возможности возврата платежа
+            if "user_telegram_id" not in payment_metadata:
+                try:
+                    from app.database.crud.user import get_user_by_id
+                    user = await get_user_by_id(db, user_id)
+                    if user and user.telegram_id:
+                        payment_metadata["user_telegram_id"] = str(user.telegram_id)
+                        payment_metadata["user_username"] = user.username or ""
+                except Exception as e:
+                    logger.warning(f"Не удалось получить telegram_id для user_id={user_id}: {e}")
+
             payment_metadata.update(
                 {
                     "user_id": str(user_id),
