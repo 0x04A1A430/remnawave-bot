@@ -18,6 +18,7 @@ from app.database.models import (
     Subscription,
     SubscriptionStatus,
     BroadcastHistory,
+    Tariff,
 )
 from app.database.database import AsyncSessionLocal
 from app.keyboards.admin import (
@@ -31,6 +32,7 @@ from app.keyboards.admin import (
 from app.localization.texts import get_texts
 from app.database.crud.user import get_users_list
 from app.database.crud.subscription import get_expiring_subscriptions
+from app.database.crud.tariff import get_all_tariffs
 from app.utils.decorators import admin_required, error_handler
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button
 from app.services.pinned_message_service import (
@@ -517,7 +519,63 @@ async def show_broadcast_targets(
         "🎯 <b>Выбор целевой аудитории</b>\n\n"
         "Выберите категорию пользователей для рассылки:",
         reply_markup=get_broadcast_target_keyboard(db_user.language),
-        parse_mode="HTML" 
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def show_tariff_filter(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    """Показывает список тарифов для фильтрации рассылки."""
+    tariffs = await get_all_tariffs(db, include_inactive=False)
+
+    if not tariffs:
+        await callback.message.edit_text(
+            "❌ <b>Нет доступных тарифов</b>\n\n"
+            "Создайте тарифы в разделе управления тарифами.",
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                [types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_msg_by_sub")]
+            ]),
+            parse_mode="HTML"
+        )
+        await callback.answer()
+        return
+
+    # Получаем количество подписчиков на каждом тарифе
+    tariff_counts = {}
+    for tariff in tariffs:
+        count_query = (
+            select(func.count(Subscription.id))
+            .where(
+                Subscription.tariff_id == tariff.id,
+                Subscription.status == SubscriptionStatus.ACTIVE.value,
+            )
+        )
+        result = await db.execute(count_query)
+        tariff_counts[tariff.id] = result.scalar() or 0
+
+    buttons = []
+    for tariff in tariffs:
+        count = tariff_counts.get(tariff.id, 0)
+        buttons.append([
+            types.InlineKeyboardButton(
+                text=f"{tariff.name} ({count} чел.)",
+                callback_data=f"broadcast_tariff_{tariff.id}"
+            )
+        ])
+
+    buttons.append([types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_msg_by_sub")])
+
+    await callback.message.edit_text(
+        "📦 <b>Рассылка по тарифу</b>\n\n"
+        "Выберите тариф для рассылки пользователям с активной подпиской на этот тариф:",
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=buttons),
+        parse_mode="HTML"
     )
     await callback.answer()
 
@@ -690,23 +748,34 @@ async def select_broadcast_target(
         "active_zero": "Активная подписка, трафик 0 ГБ",
         "trial_zero": "Триальная подписка, трафик 0 ГБ",
     }
-    
+
+    # Обработка фильтра по тарифу
+    target_name = target_names.get(target, target)
+    if target.startswith("tariff_"):
+        tariff_id = int(target.split("_")[1])
+        from app.database.crud.tariff import get_tariff_by_id
+        tariff = await get_tariff_by_id(db, tariff_id)
+        if tariff:
+            target_name = f"Тариф «{tariff.name}»"
+        else:
+            target_name = f"Тариф #{tariff_id}"
+
     user_count = await get_target_users_count(db, target)
-    
+
     await state.update_data(broadcast_target=target)
-    
+
     await callback.message.edit_text(
         f"📨 <b>Создание рассылки</b>\n\n"
-        f"🎯 <b>Аудитория:</b> {target_names.get(target, target)}\n"
+        f"🎯 <b>Аудитория:</b> {target_name}\n"
         f"👥 <b>Получателей:</b> {user_count}\n\n"
         f"Введите текст сообщения для рассылки:\n\n"
         f"<i>Поддерживается HTML разметка</i>",
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
             [types.InlineKeyboardButton(text="❌ Отмена", callback_data="admin_messages")]
         ]),
-        parse_mode="HTML" 
+        parse_mode="HTML"
     )
-    
+
     await state.set_state(AdminStates.waiting_for_broadcast_message)
     await callback.answer()
 
@@ -1528,6 +1597,21 @@ async def get_target_users_count(db: AsyncSession, target: str) -> int:
         result = await db.execute(query)
         return result.scalar() or 0
 
+    # Фильтр по тарифу
+    if target.startswith("tariff_"):
+        tariff_id = int(target.split("_")[1])
+        query = (
+            select(sql_func.count(distinct(User.id)))
+            .join(Subscription, User.id == Subscription.user_id)
+            .where(
+                base_filter,
+                Subscription.status == SubscriptionStatus.ACTIVE.value,
+                Subscription.tariff_id == tariff_id,
+            )
+        )
+        result = await db.execute(query)
+        return result.scalar() or 0
+
     # Для остальных фильтров (custom_ и неизвестные) - fallback на старый метод
     users = await get_target_users(db, target)
     return len(users)
@@ -1732,6 +1816,17 @@ async def get_target_users(db: AsyncSession, target: str) -> list:
             if user.last_activity and user.last_activity < threshold
         ]
 
+    # Фильтр по тарифу
+    if target.startswith("tariff_"):
+        tariff_id = int(target.split("_")[1])
+        return [
+            user
+            for user in users
+            if user.subscription
+            and user.subscription.is_active
+            and user.subscription.tariff_id == tariff_id
+        ]
+
     return []
 
 
@@ -1871,6 +1966,10 @@ def get_target_name(target_type: str) -> str:
         "custom_referrals": "Через рефералов",
         "custom_direct": "Прямая регистрация"
     }
+    # Обработка фильтра по тарифу
+    if target_type.startswith("tariff_"):
+        tariff_id = target_type.split("_")[1]
+        return f"По тарифу #{tariff_id}"
     return names.get(target_type, target_type)
 
 
@@ -1888,6 +1987,7 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(handle_pinned_broadcast_now, F.data.startswith("admin_pinned_broadcast_now:"))
     dp.callback_query.register(handle_pinned_broadcast_skip, F.data.startswith("admin_pinned_broadcast_skip:"))
     dp.callback_query.register(show_broadcast_targets, F.data.in_(["admin_msg_all", "admin_msg_by_sub"]))
+    dp.callback_query.register(show_tariff_filter, F.data == "broadcast_by_tariff")
     dp.callback_query.register(select_broadcast_target, F.data.startswith("broadcast_"))
     dp.callback_query.register(confirm_broadcast, F.data == "admin_confirm_broadcast")
     
