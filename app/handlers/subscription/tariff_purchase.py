@@ -702,18 +702,18 @@ async def confirm_daily_tariff_purchase(
             existing_subscription.is_trial = False  # Сбрасываем триальный статус
             existing_subscription.is_daily_paused = False
             existing_subscription.last_daily_charge_at = datetime.utcnow()
-            # Для суточного тарифа ставим далёкую дату окончания
-            existing_subscription.end_date = datetime.utcnow() + timedelta(days=365 * 10)
+            # Для суточного тарифа ставим срок на 1 день
+            existing_subscription.end_date = datetime.utcnow() + timedelta(days=1)
 
             await db.commit()
             await db.refresh(existing_subscription)
             subscription = existing_subscription
         else:
-            # Создаем новую подписку
+            # Создаем новую подписку на 1 день
             subscription = await create_paid_subscription(
                 db=db,
                 user_id=db_user.id,
-                duration_days=365 * 10,  # Суточные подписки не имеют фиксированного срока
+                duration_days=1,
                 traffic_limit_gb=tariff.traffic_limit_gb,
                 device_limit=tariff.device_limit,
                 connected_squads=squads,
@@ -1731,8 +1731,8 @@ async def confirm_daily_tariff_switch(
         subscription.is_trial = False  # Сбрасываем триальный статус
         subscription.is_daily_paused = False
         subscription.last_daily_charge_at = datetime.utcnow()
-        # Для суточного тарифа ставим далёкую дату окончания
-        subscription.end_date = datetime.utcnow() + timedelta(days=365 * 10)
+        # Для суточного тарифа ставим срок на 1 день
+        subscription.end_date = datetime.utcnow() + timedelta(days=1)
 
         await db.commit()
         await db.refresh(subscription)
