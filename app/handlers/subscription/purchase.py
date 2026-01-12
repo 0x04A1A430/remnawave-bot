@@ -3016,7 +3016,12 @@ async def handle_subscription_settings(
 
     await callback.message.edit_text(
         settings_text,
-        reply_markup=get_updated_subscription_settings_keyboard(db_user.language, show_countries, tariff=tariff),
+        reply_markup=get_updated_subscription_settings_keyboard(
+            db_user.language,
+            show_countries,
+            tariff=tariff,
+            subscription=subscription
+        ),
         parse_mode="HTML"
     )
     await callback.answer()
@@ -3035,6 +3040,112 @@ async def clear_saved_cart(
     await show_main_menu(callback, db_user, db)
 
     await callback.answer("🗑️ Корзина очищена")
+
+
+# ============== ХЕНДЛЕР ПАУЗЫ СУТОЧНОЙ ПОДПИСКИ ==============
+
+async def handle_toggle_daily_subscription_pause(
+        callback: types.CallbackQuery,
+        db_user: User,
+        db: AsyncSession
+):
+    """Переключает паузу суточной подписки."""
+    from app.database.crud.subscription import toggle_daily_subscription_pause
+    from app.database.crud.tariff import get_tariff_by_id
+
+    texts = get_texts(db_user.language)
+    subscription = db_user.subscription
+
+    if not subscription:
+        await callback.answer(
+            texts.t("NO_SUBSCRIPTION_ERROR", "❌ У вас нет активной подписки"),
+            show_alert=True
+        )
+        return
+
+    # Проверяем что это суточный тариф
+    tariff = None
+    if subscription.tariff_id:
+        tariff = await get_tariff_by_id(db, subscription.tariff_id)
+
+    if not tariff or not getattr(tariff, 'is_daily', False):
+        await callback.answer(
+            texts.t("NOT_DAILY_TARIFF_ERROR", "❌ Эта функция доступна только для суточных тарифов"),
+            show_alert=True
+        )
+        return
+
+    # Переключаем статус паузы
+    was_paused = subscription.is_daily_paused
+    subscription = await toggle_daily_subscription_pause(db, subscription)
+
+    if was_paused:
+        # Была пауза, теперь возобновили
+        message = texts.t(
+            "DAILY_SUBSCRIPTION_RESUMED",
+            "▶️ Суточная подписка возобновлена.\n\nСписание будет произведено в ближайший цикл проверки."
+        )
+    else:
+        # Была активна, теперь на паузе
+        message = texts.t(
+            "DAILY_SUBSCRIPTION_PAUSED",
+            "⏸️ Суточная подписка приостановлена.\n\nСписания не будут производиться до возобновления."
+        )
+
+    await callback.answer(message, show_alert=True)
+
+    # Обновляем клавиатуру настроек
+    show_countries = await _should_show_countries_management(db_user)
+
+    settings_template = texts.t(
+        "SUBSCRIPTION_SETTINGS_OVERVIEW",
+        (
+            "⚙️ <b>Настройки подписки</b>\n\n"
+            "📊 <b>Текущие параметры:</b>\n"
+            "🌐 Стран: {countries_count}\n"
+            "📈 Трафик: {traffic_used} / {traffic_limit}\n"
+            "📱 Устройства: {devices_used} / {devices_limit}\n\n"
+            "Выберите что хотите изменить:"
+        ),
+    )
+
+    show_devices = settings.is_devices_selection_enabled()
+    if not show_devices:
+        settings_template = settings_template.replace(
+            "\n📱 Устройства: {devices_used} / {devices_limit}",
+            "",
+        )
+
+    if show_devices:
+        devices_used = await get_current_devices_count(db_user)
+    else:
+        devices_used = 0
+
+    modem_enabled = getattr(subscription, 'modem_enabled', False) or False
+    if modem_enabled and settings.is_modem_enabled():
+        visible_device_limit = (subscription.device_limit or 1) - 1
+        devices_limit_display = f"{visible_device_limit} + модем"
+    else:
+        devices_limit_display = str(subscription.device_limit)
+
+    settings_text = settings_template.format(
+        countries_count=len(subscription.connected_squads),
+        traffic_used=texts.format_traffic(subscription.traffic_used_gb),
+        traffic_limit=texts.format_traffic(subscription.traffic_limit_gb),
+        devices_used=devices_used,
+        devices_limit=devices_limit_display,
+    )
+
+    await callback.message.edit_text(
+        settings_text,
+        reply_markup=get_updated_subscription_settings_keyboard(
+            db_user.language,
+            show_countries,
+            tariff=tariff,
+            subscription=subscription
+        ),
+        parse_mode="HTML"
+    )
 
 
 # ============== ХЕНДЛЕРЫ ПЛАТНОГО ТРИАЛА ==============
@@ -3991,6 +4102,11 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         handle_subscription_settings,
         F.data == "subscription_settings"
+    )
+
+    dp.callback_query.register(
+        handle_toggle_daily_subscription_pause,
+        F.data == "toggle_daily_subscription_pause"
     )
 
     dp.callback_query.register(
