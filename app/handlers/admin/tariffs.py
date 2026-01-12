@@ -199,6 +199,20 @@ def get_tariff_view_keyboard(
         InlineKeyboardButton(text="👥 Промогруппы", callback_data=f"admin_tariff_edit_promo:{tariff.id}"),
     ])
 
+    # Суточный режим
+    is_daily = getattr(tariff, 'is_daily', False)
+    if is_daily:
+        buttons.append([
+            InlineKeyboardButton(text="🔄 ❌ Отключить суточный режим", callback_data=f"admin_tariff_toggle_daily:{tariff.id}"),
+        ])
+        buttons.append([
+            InlineKeyboardButton(text="💰 Суточная цена", callback_data=f"admin_tariff_edit_daily_price:{tariff.id}"),
+        ])
+    else:
+        buttons.append([
+            InlineKeyboardButton(text="🔄 Включить суточный режим", callback_data=f"admin_tariff_toggle_daily:{tariff.id}"),
+        ])
+
     # Переключение триала
     if tariff.is_trial_available:
         buttons.append([
@@ -287,6 +301,14 @@ def format_tariff_info(tariff: Tariff, language: str, subs_count: int = 0) -> st
     # Форматируем докупку трафика
     traffic_topup_display = _format_traffic_topup_packages(tariff)
 
+    # Форматируем суточный тариф
+    is_daily = getattr(tariff, 'is_daily', False)
+    daily_price_kopeks = getattr(tariff, 'daily_price_kopeks', 0)
+    if is_daily:
+        daily_status = f"✅ Включен ({_format_price_kopeks(daily_price_kopeks)}/день)"
+    else:
+        daily_status = "❌ Отключен"
+
     return f"""📦 <b>Тариф: {tariff.name}</b>
 
 {status}
@@ -299,6 +321,8 @@ def format_tariff_info(tariff: Tariff, language: str, subs_count: int = 0) -> st
 • Цена за доп. устройство: {device_price_display}
 • Триал: {trial_status}
 • Дней триала: {trial_days_display}
+
+<b>🔄 Суточный режим:</b> {daily_status}
 
 <b>Докупка трафика:</b>
 {traffic_topup_display}
@@ -491,6 +515,133 @@ async def toggle_trial_tariff(
 
     await callback.message.edit_text(
         format_tariff_info(tariff, db_user.language, subs_count),
+        reply_markup=get_tariff_view_keyboard(tariff, db_user.language),
+        parse_mode="HTML"
+    )
+
+
+@admin_required
+@error_handler
+async def toggle_daily_tariff(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+):
+    """Переключает суточный режим тарифа."""
+    tariff_id = int(callback.data.split(":")[1])
+    tariff = await get_tariff_by_id(db, tariff_id)
+
+    if not tariff:
+        await callback.answer("Тариф не найден", show_alert=True)
+        return
+
+    is_daily = getattr(tariff, 'is_daily', False)
+
+    if is_daily:
+        # Отключаем суточный режим
+        tariff = await update_tariff(db, tariff, is_daily=False, daily_price_kopeks=0)
+        await callback.answer("Суточный режим отключен", show_alert=True)
+    else:
+        # Включаем суточный режим (с ценой по умолчанию)
+        tariff = await update_tariff(db, tariff, is_daily=True, daily_price_kopeks=5000)  # 50 руб по умолчанию
+        await callback.answer(
+            f"Суточный режим включен. Цена: 50 ₽/день\n"
+            "Настройте цену через кнопку «💰 Суточная цена»",
+            show_alert=True
+        )
+
+    subs_count = await get_tariff_subscriptions_count(db, tariff_id)
+
+    await callback.message.edit_text(
+        format_tariff_info(tariff, db_user.language, subs_count),
+        reply_markup=get_tariff_view_keyboard(tariff, db_user.language),
+        parse_mode="HTML"
+    )
+
+
+@admin_required
+@error_handler
+async def start_edit_daily_price(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    """Начинает редактирование суточной цены."""
+    texts = get_texts(db_user.language)
+
+    tariff_id = int(callback.data.split(":")[1])
+    tariff = await get_tariff_by_id(db, tariff_id)
+
+    if not tariff:
+        await callback.answer("Тариф не найден", show_alert=True)
+        return
+
+    current_price = getattr(tariff, 'daily_price_kopeks', 0)
+    current_rubles = current_price / 100 if current_price else 0
+
+    await state.set_state(AdminStates.editing_tariff_daily_price)
+    await state.update_data(tariff_id=tariff_id, language=db_user.language)
+
+    await callback.message.edit_text(
+        f"💰 <b>Редактирование суточной цены</b>\n\n"
+        f"Тариф: {tariff.name}\n"
+        f"Текущая цена: {_format_price_kopeks(current_price)}/день\n\n"
+        "Введите новую цену за день в рублях.\n"
+        "Пример: <code>50</code> или <code>99.90</code>",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=texts.CANCEL, callback_data=f"admin_tariff_view:{tariff_id}")]
+        ]),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def process_daily_price_input(
+    message: types.Message,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    """Обрабатывает ввод суточной цены."""
+    texts = get_texts(db_user.language)
+    data = await state.get_data()
+    tariff_id = data.get("tariff_id")
+
+    if not tariff_id:
+        await state.clear()
+        return
+
+    tariff = await get_tariff_by_id(db, tariff_id)
+    if not tariff:
+        await message.answer("Тариф не найден")
+        await state.clear()
+        return
+
+    try:
+        price_rubles = float(message.text.strip().replace(",", "."))
+        if price_rubles < 0:
+            raise ValueError("Цена не может быть отрицательной")
+
+        price_kopeks = int(price_rubles * 100)
+    except ValueError:
+        await message.answer(
+            "❌ Некорректная цена. Введите число.\n"
+            "Пример: <code>50</code> или <code>99.90</code>",
+            parse_mode="HTML"
+        )
+        return
+
+    tariff = await update_tariff(db, tariff, daily_price_kopeks=price_kopeks)
+    await state.clear()
+
+    subs_count = await get_tariff_subscriptions_count(db, tariff_id)
+
+    await message.answer(
+        f"✅ Суточная цена установлена: {_format_price_kopeks(price_kopeks)}/день\n\n"
+        + format_tariff_info(tariff, db_user.language, subs_count),
         reply_markup=get_tariff_view_keyboard(tariff, db_user.language),
         parse_mode="HTML"
     )
@@ -2318,3 +2469,8 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(start_edit_tariff_promo_groups, F.data.startswith("admin_tariff_edit_promo:"))
     dp.callback_query.register(toggle_tariff_promo_group, F.data.startswith("admin_tariff_toggle_promo:"))
     dp.callback_query.register(clear_tariff_promo_groups, F.data.startswith("admin_tariff_clear_promo:"))
+
+    # Суточный режим
+    dp.callback_query.register(toggle_daily_tariff, F.data.startswith("admin_tariff_toggle_daily:"))
+    dp.callback_query.register(start_edit_daily_price, F.data.startswith("admin_tariff_edit_daily_price:"))
+    dp.message.register(process_daily_price_input, AdminStates.editing_tariff_daily_price)
