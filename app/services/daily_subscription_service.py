@@ -152,13 +152,26 @@ class DailySubscriptionService:
                 payment_method=PaymentMethod.MANUAL,
             )
 
-            # Обновляем время последнего списания
-            await update_daily_charge_time(db, subscription)
+            # Обновляем время последнего списания и продлеваем подписку
+            subscription = await update_daily_charge_time(db, subscription)
 
             logger.info(
                 f"✅ Суточное списание: подписка {subscription.id}, "
                 f"сумма {daily_price} коп., пользователь {user.telegram_id}"
             )
+
+            # Синхронизируем с Remnawave (обновляем срок подписки)
+            try:
+                from app.services.subscription_service import SubscriptionService
+                subscription_service = SubscriptionService()
+                await subscription_service.create_remnawave_user(
+                    db,
+                    subscription,
+                    reset_traffic=False,
+                    reset_reason=None,
+                )
+            except Exception as e:
+                logger.warning(f"Не удалось обновить Remnawave: {e}")
 
             # Уведомляем пользователя
             if self._bot:
