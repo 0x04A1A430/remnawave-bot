@@ -1004,18 +1004,20 @@ def get_subscription_keyboard(
                     )
                 ])
 
-            # Ряд: [Настройки] [Тариф] (если режим тарифов и не суточный)
+            # Ряд: [Настройки] [Тариф] (если режим тарифов)
             settings_row = [
                 InlineKeyboardButton(
                     text=texts.t("SUBSCRIPTION_SETTINGS_BUTTON", "⚙️ Настройки"),
                     callback_data="subscription_settings",
                 )
             ]
-            if settings.is_tariffs_mode() and subscription and not is_daily_tariff:
+            if settings.is_tariffs_mode() and subscription:
+                # Для суточных тарифов переходим на список тарифов, для обычных - мгновенное переключение
+                tariff_callback = "tariff_switch" if is_daily_tariff else "instant_switch"
                 settings_row.append(
                     InlineKeyboardButton(
                         text=texts.t("CHANGE_TARIFF_BUTTON", "📦 Тариф"),
-                        callback_data="instant_switch"
+                        callback_data=tariff_callback
                     )
                 )
             keyboard.append(settings_row)
