@@ -9699,8 +9699,8 @@
             pauseBtn.disabled = true;
 
             try {
-                const initData = window.Telegram?.WebApp?.initData || '';
-                const response = await fetch(`${apiBaseUrl}/miniapp/subscription/daily/toggle-pause`, {
+                const initData = tg.initData || '';
+                const response = await fetch('/miniapp/subscription/daily/toggle-pause', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ init_data: initData })
@@ -9710,24 +9710,23 @@
 
                 if (!response.ok) {
                     const errorCode = result?.detail?.code || 'unknown';
-                    if (errorCode === 'insufficient_balance') {
-                        showToast(t('daily.error.insufficient_balance') || 'Недостаточно средств для возобновления подписки', 'error');
-                    } else {
-                        showToast(result?.detail?.message || 'Error', 'error');
-                    }
+                    const errorMsg = errorCode === 'insufficient_balance'
+                        ? (t('daily.error.insufficient_balance') || 'Недостаточно средств для возобновления подписки')
+                        : (result?.detail?.message || 'Error');
+                    showPopup(errorMsg);
                     return;
                 }
-
-                showToast(result.message || 'OK', 'success');
 
                 // Полное обновление данных подписки для корректного отображения
                 await refreshSubscriptionData({ silent: true });
 
             } catch (error) {
                 console.error('Error toggling daily pause:', error);
-                showToast('Connection error', 'error');
+                showPopup(error.message || 'Connection error');
             } finally {
-                pauseBtn.disabled = false;
+                if (pauseBtn) {
+                    pauseBtn.disabled = false;
+                }
             }
         }
 
@@ -15152,6 +15151,13 @@
             return typeRaw === 'paid';
         }
 
+        function isDailyTariffSubscription() {
+            if (!userData?.user) {
+                return false;
+            }
+            return Boolean(userData.user.is_daily_tariff ?? userData.user.isDailyTariff ?? false);
+        }
+
         function isTrialSubscription() {
             if (!userData?.user) {
                 return false;
@@ -16364,8 +16370,10 @@
                 return;
             }
 
-            // Для триала НЕ показываем карточку продления — юзер должен купить подписку
-            const shouldShow = hasActiveSubscription() && !isTrialSubscription();
+            // Для триала и суточных тарифов НЕ показываем карточку продления
+            // Триал — юзер должен купить подписку
+            // Суточный тариф — продление автоматическое
+            const shouldShow = hasActiveSubscription() && !isTrialSubscription() && !isDailyTariffSubscription();
             card.classList.toggle('hidden', !shouldShow);
             if (!shouldShow) {
                 return;
