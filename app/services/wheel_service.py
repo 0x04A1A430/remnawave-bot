@@ -332,8 +332,9 @@ class FortuneWheelService:
 
         # Оцениваем стоимость в копейках (для статистики)
         # Берем цену 30-дневного периода и делим на 30
-        period_prices = settings.PERIOD_PRICES if hasattr(settings, 'PERIOD_PRICES') else {30: 19900}
-        daily_price = period_prices.get(30, 19900) / 30
+        from app.config import PERIOD_PRICES
+        price_30_days = PERIOD_PRICES.get(30, settings.PRICE_30_DAYS) or 19900
+        daily_price = price_30_days / 30
         kopeks = int(daily_price * config.spin_cost_days)
 
         logger.info(f"📅 Списано {config.spin_cost_days} дней подписки у user_id={user.id}")
