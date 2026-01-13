@@ -364,11 +364,12 @@ def _format_core_summary(lang_code: str) -> str:
 
 
 def _get_period_items(lang_code: str) -> List[PriceItem]:
+    from app.config import PERIOD_PRICES
     items: List[PriceItem] = []
     for days in settings.get_available_subscription_periods():
         key = f"PRICE_{days}_DAYS"
-        if hasattr(settings, key):
-            price = getattr(settings, key)
+        price = PERIOD_PRICES.get(days, 0)
+        if price > 0:
             items.append((key, _format_period_label(days, lang_code), price))
     return items
 
