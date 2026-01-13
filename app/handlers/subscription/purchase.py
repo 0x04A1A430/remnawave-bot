@@ -1736,6 +1736,16 @@ async def confirm_extend_subscription(
 
     days = int(callback.data.split('_')[2])
     texts = get_texts(db_user.language)
+
+    # Валидация что период доступен для продления
+    available_renewal_periods = settings.get_available_renewal_periods()
+    if days not in available_renewal_periods:
+        await callback.answer(
+            texts.t("RENEWAL_PERIOD_NOT_AVAILABLE", "❌ Этот период больше недоступен для продления"),
+            show_alert=True
+        )
+        return
+
     subscription = db_user.subscription
 
     if not subscription:
@@ -2080,9 +2090,27 @@ async def select_period(
     period_days = int(callback.data.split('_')[1])
     texts = get_texts(db_user.language)
 
+    # Валидация что период доступен
+    available_periods = settings.get_available_subscription_periods()
+    if period_days not in available_periods:
+        await callback.answer(
+            texts.t("PERIOD_NOT_AVAILABLE", "❌ Этот период больше недоступен"),
+            show_alert=True
+        )
+        return
+
+    # Получаем цену с защитой от KeyError
+    period_price = PERIOD_PRICES.get(period_days, 0)
+    if period_price <= 0:
+        await callback.answer(
+            texts.t("PERIOD_PRICE_NOT_SET", "❌ Цена для этого периода не настроена"),
+            show_alert=True
+        )
+        return
+
     data = await state.get_data()
     data['period_days'] = period_days
-    data['total_price'] = PERIOD_PRICES[period_days]
+    data['total_price'] = period_price
 
     if settings.is_traffic_fixed():
         fixed_traffic_price = settings.get_traffic_price(settings.get_fixed_traffic_limit())
@@ -2168,9 +2196,18 @@ async def select_devices(
 
     data = await state.get_data()
 
+    # Получаем цену периода с защитой от KeyError
+    period_days = data.get('period_days')
+    if not period_days or period_days not in PERIOD_PRICES:
+        await callback.answer(
+            texts.t("PERIOD_NOT_AVAILABLE", "❌ Период больше недоступен, начните заново"),
+            show_alert=True
+        )
+        return
+
     base_price = (
-            PERIOD_PRICES[data['period_days']] +
-            settings.get_traffic_price(data['traffic_gb'])
+            PERIOD_PRICES.get(period_days, 0) +
+            settings.get_traffic_price(data.get('traffic_gb', 0))
     )
 
     countries = await _get_available_countries(db_user.promo_group_id)
@@ -2286,7 +2323,13 @@ async def confirm_purchase(
 
     # Всегда пересчитываем base_price из PERIOD_PRICES для безопасности
     # (не доверяем кэшированным значениям из FSM данных)
-    base_price_original = PERIOD_PRICES[period_days]
+    base_price_original = PERIOD_PRICES.get(period_days, 0)
+    if base_price_original <= 0:
+        await callback.answer(
+            texts.t("PERIOD_PRICE_NOT_SET", "❌ Цена для этого периода не настроена"),
+            show_alert=True
+        )
+        return
     base_discount_percent = db_user.get_promo_discount(
         "period",
         period_days,

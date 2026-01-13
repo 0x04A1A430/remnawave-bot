@@ -95,7 +95,9 @@ async def _prepare_subscription_summary(
     months_in_period = calculate_months_from_days(summary_data['period_days'])
     period_display = format_period_description(summary_data['period_days'], db_user.language)
 
-    base_price_original = PERIOD_PRICES[summary_data['period_days']]
+    base_price_original = PERIOD_PRICES.get(summary_data['period_days'], 0)
+    if base_price_original <= 0:
+        raise ValueError(f"Цена для периода {summary_data['period_days']} дней не настроена")
     period_discount_percent = db_user.get_promo_discount(
         "period",
         summary_data['period_days'],
