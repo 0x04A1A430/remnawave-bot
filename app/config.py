@@ -1666,68 +1666,70 @@ class Settings(BaseSettings):
     def get_available_subscription_periods(self) -> List[int]:
         """
         Возвращает доступные периоды подписки.
-        Приоритет: БД (через PERIOD_PRICES) > .env
+        Использует AVAILABLE_SUBSCRIPTION_PERIODS для фильтрации,
+        а PERIOD_PRICES (из БД или .env) для проверки что цена > 0.
         """
         from app.config import PERIOD_PRICES, get_db_period_prices
 
-        # Если есть данные из БД - используем их
-        db_prices = get_db_period_prices()
-        if db_prices:
-            # Возвращаем только периоды с ценой > 0
-            periods = sorted([days for days, price in db_prices.items() if price > 0])
-            return periods if periods else [30, 90, 180]
-
-        # Fallback на .env
+        # Получаем разрешённые периоды из настройки
         try:
             periods_str = self.AVAILABLE_SUBSCRIPTION_PERIODS
-            if not periods_str.strip():
-                return [30, 90, 180]
-
-            periods = []
-            for period_str in periods_str.split(','):
-                period_str = period_str.strip()
-                if period_str:
-                    period = int(period_str)
-                    if hasattr(self, f'PRICE_{period}_DAYS'):
-                        periods.append(period)
-
-            return periods if periods else [30, 90, 180]
-
+            if not periods_str or not periods_str.strip():
+                allowed_periods = {14, 30, 60, 90, 180, 360}
+            else:
+                allowed_periods = set()
+                for period_str in periods_str.split(','):
+                    period_str = period_str.strip()
+                    if period_str:
+                        allowed_periods.add(int(period_str))
         except (ValueError, AttributeError):
-            return [30, 90, 180]
+            allowed_periods = {14, 30, 60, 90, 180, 360}
+
+        # Получаем цены из БД или .env
+        db_prices = get_db_period_prices()
+        prices = db_prices if db_prices else PERIOD_PRICES
+
+        # Возвращаем только разрешённые периоды с ценой > 0
+        periods = sorted([
+            days for days in allowed_periods
+            if days in prices and prices.get(days, 0) > 0
+        ])
+
+        return periods if periods else [30, 90, 180]
     
     def get_available_renewal_periods(self) -> List[int]:
         """
         Возвращает доступные периоды продления.
-        Приоритет: БД (через PERIOD_PRICES) > .env
+        Использует AVAILABLE_RENEWAL_PERIODS для фильтрации,
+        а PERIOD_PRICES (из БД или .env) для проверки что цена > 0.
         """
-        from app.config import get_db_period_prices
+        from app.config import PERIOD_PRICES, get_db_period_prices
 
-        # Если есть данные из БД - используем их
-        db_prices = get_db_period_prices()
-        if db_prices:
-            # Возвращаем только периоды с ценой > 0
-            periods = sorted([days for days, price in db_prices.items() if price > 0])
-            return periods if periods else [30, 90, 180]
-
-        # Fallback на .env
+        # Получаем разрешённые периоды из настройки
         try:
             periods_str = self.AVAILABLE_RENEWAL_PERIODS
-            if not periods_str.strip():
-                return [30, 90, 180]
-
-            periods = []
-            for period_str in periods_str.split(','):
-                period_str = period_str.strip()
-                if period_str:
-                    period = int(period_str)
-                    if hasattr(self, f'PRICE_{period}_DAYS'):
-                        periods.append(period)
-
-            return periods if periods else [30, 90, 180]
-
+            if not periods_str or not periods_str.strip():
+                allowed_periods = {30, 60, 90, 180, 360}
+            else:
+                allowed_periods = set()
+                for period_str in periods_str.split(','):
+                    period_str = period_str.strip()
+                    if period_str:
+                        allowed_periods.add(int(period_str))
         except (ValueError, AttributeError):
-            return [30, 90, 180]
+            allowed_periods = {30, 60, 90, 180, 360}
+
+        # Получаем цены из БД или .env
+        db_prices = get_db_period_prices()
+        prices = db_prices if db_prices else PERIOD_PRICES
+
+        # Возвращаем только разрешённые периоды с ценой > 0
+        periods = sorted([
+            days for days in allowed_periods
+            if days in prices and prices.get(days, 0) > 0
+        ])
+
+        return periods if periods else [30, 90, 180]
 
     def get_balance_payment_description(self, amount_kopeks: int, telegram_user_id: Optional[int] = None) -> str:
         # Базовое описание
