@@ -553,10 +553,15 @@ async def sync_default_tariff_from_config(db: AsyncSession) -> Optional[Tariff]:
 
 async def load_period_prices_from_db(db: AsyncSession) -> None:
     """
-    Загружает периоды/цены из тарифа "Стандартный" в PERIOD_PRICES.
-    Это позволяет боту использовать цены из кабинета вместо .env.
+    Загружает периоды/цены из тарифа в PERIOD_PRICES.
+    Работает ТОЛЬКО в режиме tariffs. В режиме classic используются цены из .env.
     """
-    from app.config import set_period_prices_from_db
+    from app.config import set_period_prices_from_db, settings
+
+    # В режиме classic НЕ загружаем цены из тарифов - используем .env
+    if settings.is_classic_mode():
+        logger.info("Режим classic: цены периодов берутся из .env, тарифы игнорируются")
+        return
 
     try:
         # Ищем тариф "Стандартный" или первый активный тариф
