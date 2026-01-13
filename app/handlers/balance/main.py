@@ -142,10 +142,9 @@ def get_quick_amount_buttons(language: str, user: User) -> list:
     periods = periods[:6]  # Limit to 6 periods
 
     for period in periods:
-        price_attr = f"PRICE_{period}_DAYS"
-        if hasattr(settings, price_attr):
-            base_price_kopeks = getattr(settings, price_attr)
-
+        from app.config import PERIOD_PRICES
+        base_price_kopeks = PERIOD_PRICES.get(period, 0)
+        if base_price_kopeks > 0:
             # Calculate price with user's promo group discount using unified system
             price_info = calculate_user_price(user, base_price_kopeks, period, "period")
 
