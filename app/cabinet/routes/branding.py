@@ -1,8 +1,8 @@
-"""Branding routes for cabinet - logo and project name management."""
+"""Branding routes for cabinet - logo, project name, and theme colors management."""
 
 import logging
 import os
-import base64
+import json
 from pathlib import Path
 from typing import Optional
 
@@ -23,15 +23,16 @@ router = APIRouter(prefix="/branding", tags=["Branding"])
 
 # Directory for storing branding assets
 BRANDING_DIR = Path("data/branding")
-LOGO_FILENAME = "logo.png"
+LOGO_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp", ".svg"]
 
 # Settings keys
 BRANDING_NAME_KEY = "CABINET_BRANDING_NAME"
 BRANDING_LOGO_KEY = "CABINET_BRANDING_LOGO"  # Stores "custom" or "default"
+THEME_COLORS_KEY = "CABINET_THEME_COLORS"  # Stores JSON with theme colors
 
 # Allowed image types
 ALLOWED_CONTENT_TYPES = {"image/png", "image/jpeg", "image/jpg", "image/webp", "image/svg+xml"}
-MAX_FILE_SIZE = 2 * 1024 * 1024  # 2MB
+MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB for larger logos
 
 
 # ============ Schemas ============
@@ -47,6 +48,55 @@ class BrandingResponse(BaseModel):
 class BrandingNameUpdate(BaseModel):
     """Request to update branding name."""
     name: str
+
+
+class ThemeColorsResponse(BaseModel):
+    """Theme colors settings."""
+    accent: str = "#3b82f6"
+    darkBackground: str = "#0a0f1a"
+    darkSurface: str = "#0f172a"
+    darkText: str = "#f1f5f9"
+    darkTextSecondary: str = "#94a3b8"
+    lightBackground: str = "#F7E7CE"
+    lightSurface: str = "#FEF9F0"
+    lightText: str = "#1F1A12"
+    lightTextSecondary: str = "#7D6B48"
+    success: str = "#22c55e"
+    warning: str = "#f59e0b"
+    error: str = "#ef4444"
+
+
+class ThemeColorsUpdate(BaseModel):
+    """Request to update theme colors (partial update allowed)."""
+    accent: Optional[str] = None
+    darkBackground: Optional[str] = None
+    darkSurface: Optional[str] = None
+    darkText: Optional[str] = None
+    darkTextSecondary: Optional[str] = None
+    lightBackground: Optional[str] = None
+    lightSurface: Optional[str] = None
+    lightText: Optional[str] = None
+    lightTextSecondary: Optional[str] = None
+    success: Optional[str] = None
+    warning: Optional[str] = None
+    error: Optional[str] = None
+
+
+# Default theme colors
+DEFAULT_THEME_COLORS = {
+    "accent": "#3b82f6",
+    "darkBackground": "#0a0f1a",
+    "darkSurface": "#0f172a",
+    "darkText": "#f1f5f9",
+    "darkTextSecondary": "#94a3b8",
+    "lightBackground": "#F7E7CE",
+    "lightSurface": "#FEF9F0",
+    "lightText": "#1F1A12",
+    "lightTextSecondary": "#7D6B48",
+    "success": "#22c55e",
+    "warning": "#f59e0b",
+    "error": "#ef4444",
+}
 
 
 # ============ Helper Functions ============
@@ -81,14 +131,23 @@ async def set_setting_value(db: AsyncSession, key: str, value: str):
     await db.commit()
 
 
-def get_logo_path() -> Path:
-    """Get the path to the custom logo file."""
-    return BRANDING_DIR / LOGO_FILENAME
+def get_logo_path() -> Optional[Path]:
+    """Get the path to the custom logo file (any supported format)."""
+    if not BRANDING_DIR.exists():
+        return None
+
+    # Search for logo file with any supported extension
+    for ext in LOGO_EXTENSIONS:
+        logo_path = BRANDING_DIR / f"logo{ext}"
+        if logo_path.exists():
+            return logo_path
+
+    return None
 
 
 def has_custom_logo() -> bool:
     """Check if a custom logo exists."""
-    return get_logo_path().exists()
+    return get_logo_path() is not None
 
 
 # ============ Routes ============
@@ -129,7 +188,7 @@ async def get_logo():
     """
     logo_path = get_logo_path()
 
-    if not logo_path.exists():
+    if logo_path is None or not logo_path.exists():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No custom logo set"
@@ -279,3 +338,95 @@ async def delete_logo(
         logo_letter=logo_letter,
         has_custom_logo=False,
     )
+
+
+# ============ Theme Colors Routes ============
+
+def validate_hex_color(color: str) -> bool:
+    """Validate hex color format."""
+    if not color or not isinstance(color, str):
+        return False
+    if not color.startswith("#"):
+        return False
+    hex_part = color[1:]
+    if len(hex_part) not in (3, 6):
+        return False
+    try:
+        int(hex_part, 16)
+        return True
+    except ValueError:
+        return False
+
+
+@router.get("/colors", response_model=ThemeColorsResponse)
+async def get_theme_colors(
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """
+    Get current theme colors.
+    This is a public endpoint - no authentication required.
+    """
+    colors_json = await get_setting_value(db, THEME_COLORS_KEY)
+
+    if colors_json:
+        try:
+            colors = json.loads(colors_json)
+            # Merge with defaults to ensure all fields exist
+            merged = {**DEFAULT_THEME_COLORS, **colors}
+            return ThemeColorsResponse(**merged)
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    return ThemeColorsResponse(**DEFAULT_THEME_COLORS)
+
+
+@router.patch("/colors", response_model=ThemeColorsResponse)
+async def update_theme_colors(
+    payload: ThemeColorsUpdate,
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Update theme colors. Admin only. Partial update supported."""
+    # Get current colors
+    colors_json = await get_setting_value(db, THEME_COLORS_KEY)
+    current_colors = DEFAULT_THEME_COLORS.copy()
+
+    if colors_json:
+        try:
+            current_colors.update(json.loads(colors_json))
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    # Update with new values (only non-None fields)
+    update_data = payload.model_dump(exclude_none=True)
+
+    # Validate hex colors
+    for key, value in update_data.items():
+        if not validate_hex_color(value):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid hex color for {key}: {value}"
+            )
+
+    current_colors.update(update_data)
+
+    # Save to database
+    await set_setting_value(db, THEME_COLORS_KEY, json.dumps(current_colors))
+
+    logger.info(f"Admin {admin.telegram_id} updated theme colors: {list(update_data.keys())}")
+
+    return ThemeColorsResponse(**current_colors)
+
+
+@router.post("/colors/reset", response_model=ThemeColorsResponse)
+async def reset_theme_colors(
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Reset theme colors to defaults. Admin only."""
+    # Save default colors
+    await set_setting_value(db, THEME_COLORS_KEY, json.dumps(DEFAULT_THEME_COLORS))
+
+    logger.info(f"Admin {admin.telegram_id} reset theme colors to defaults")
+
+    return ThemeColorsResponse(**DEFAULT_THEME_COLORS)

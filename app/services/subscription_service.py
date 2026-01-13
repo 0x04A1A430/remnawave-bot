@@ -413,6 +413,25 @@ class SubscriptionService:
             logger.error(f"Ошибка включения RemnaWave пользователя: {e}")
             return False
 
+    async def get_remnawave_squads(self) -> Optional[List[dict]]:
+        """Получить список internal squads из RemnaWave."""
+        try:
+            async with self.get_api_client() as api:
+                squads = await api.get_internal_squads()
+                # Преобразуем в формат для sync_with_remnawave
+                result = []
+                for squad in squads:
+                    result.append({
+                        'uuid': squad.uuid,
+                        'name': squad.name,
+                    })
+                logger.info(f"✅ Получено {len(result)} серверов из RemnaWave")
+                return result
+
+        except Exception as e:
+            logger.error(f"Ошибка получения серверов из RemnaWave: {e}")
+            return None
+
     async def revoke_subscription(
         self,
         db: AsyncSession,

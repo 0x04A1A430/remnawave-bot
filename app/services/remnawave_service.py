@@ -2689,3 +2689,7 @@ class RemnaWaveService:
             "api_url": settings.REMNAWAVE_API_URL,
             "attempts_used": attempts,
         }
+
+
+# Singleton instance for backward compatibility
+remnawave_service = RemnaWaveService()

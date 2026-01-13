@@ -14,6 +14,112 @@ from app.localization.texts import get_texts
 logger = logging.getLogger(__name__)
 
 
+async def _handle_wheel_spin_payment(
+    message: types.Message,
+    db: AsyncSession,
+    user,
+    stars_amount: int,
+    payload: str,
+    texts,
+):
+    """Обработка Stars платежа для колеса удачи."""
+    from app.services.wheel_service import wheel_service
+    from app.database.crud.wheel import get_or_create_wheel_config, get_wheel_prizes
+
+    try:
+        config = await get_or_create_wheel_config(db)
+
+        if not config.is_enabled:
+            await message.answer(
+                "❌ Колесо удачи временно недоступно. Звезды будут возвращены.",
+            )
+            return False
+
+        # Выполняем спин напрямую (оплата уже прошла через Stars)
+        prizes = await get_or_create_wheel_config(db)
+        prizes = await get_wheel_prizes(db, config.id, active_only=True)
+
+        if not prizes:
+            await message.answer(
+                "❌ Призы не настроены. Обратитесь в поддержку.",
+            )
+            return False
+
+        # Рассчитываем стоимость в копейках для статистики
+        rubles_amount = TelegramStarsService.calculate_rubles_from_stars(stars_amount)
+        payment_value_kopeks = int((rubles_amount * Decimal(100)).to_integral_value(rounding=ROUND_HALF_UP))
+
+        # Рассчитываем вероятности и выбираем приз
+        prizes_with_probs = wheel_service.calculate_prize_probabilities(config, prizes, payment_value_kopeks)
+        selected_prize = wheel_service._select_prize(prizes_with_probs)
+
+        # Применяем приз
+        generated_promocode = await wheel_service._apply_prize(db, user, selected_prize, config)
+
+        # Создаем запись спина
+        from app.database.crud.wheel import create_wheel_spin
+        from app.database.models import WheelSpinPaymentType
+
+        promocode_id = None
+        if generated_promocode:
+            result = await db.execute(
+                f"SELECT id FROM promocodes WHERE code = '{generated_promocode}'"
+            )
+            row = result.fetchone()
+            if row:
+                promocode_id = row[0]
+
+        logger.info(
+            f"🎰 Creating wheel spin: user.id={user.id}, user.telegram_id={user.telegram_id}, "
+            f"prize={selected_prize.display_name}"
+        )
+
+        spin = await create_wheel_spin(
+            db=db,
+            user_id=user.id,
+            prize_id=selected_prize.id,
+            payment_type=WheelSpinPaymentType.TELEGRAM_STARS.value,
+            payment_amount=stars_amount,
+            payment_value_kopeks=payment_value_kopeks,
+            prize_type=selected_prize.prize_type,
+            prize_value=selected_prize.prize_value,
+            prize_display_name=selected_prize.display_name,
+            prize_value_kopeks=selected_prize.prize_value_kopeks,
+            generated_promocode_id=promocode_id,
+            is_applied=True,
+        )
+
+        logger.info(f"🎰 Wheel spin created: spin.id={spin.id}, spin.user_id={spin.user_id}")
+
+        # Ensure all changes are committed (subscription days, traffic GB, etc.)
+        await db.commit()
+
+        # Отправляем результат
+        prize_message = wheel_service._get_prize_message(selected_prize, generated_promocode)
+
+        emoji = selected_prize.emoji or "🎁"
+        await message.answer(
+            f"🎰 <b>Колесо удачи!</b>\n\n"
+            f"{emoji} <b>{selected_prize.display_name}</b>\n\n"
+            f"{prize_message}\n\n"
+            f"⭐ Потрачено: {stars_amount} Stars",
+            parse_mode="HTML",
+        )
+
+        logger.info(
+            f"🎰 Wheel spin via Stars: user={user.id}, prize={selected_prize.display_name}, "
+            f"stars={stars_amount}"
+        )
+        return True
+
+    except Exception as e:
+        logger.error(f"Ошибка обработки wheel spin payment: {e}", exc_info=True)
+        await message.answer(
+            "❌ Произошла ошибка при обработке спина. Обратитесь в поддержку.",
+        )
+        return False
+
+
 async def handle_pre_checkout_query(query: types.PreCheckoutQuery):
     texts = get_texts(DEFAULT_LANGUAGE)
 
@@ -22,7 +128,7 @@ async def handle_pre_checkout_query(query: types.PreCheckoutQuery):
             f"📋 Pre-checkout query от {query.from_user.id}: {query.total_amount} XTR, payload: {query.invoice_payload}"
         )
 
-        allowed_prefixes = ("balance_", "admin_stars_test_", "simple_sub_")
+        allowed_prefixes = ("balance_", "admin_stars_test_", "simple_sub_", "wheel_spin_")
 
         if not query.invoice_payload or not query.invoice_payload.startswith(allowed_prefixes):
             logger.warning(f"Невалидный payload: {query.invoice_payload}")
@@ -106,6 +212,18 @@ async def handle_successful_payment(
                     "STARS_PAYMENT_USER_NOT_FOUND",
                     "❌ Ошибка: пользователь не найден. Обратитесь в поддержку.",
                 )
+            )
+            return
+
+        # Обработка оплаты спина колеса удачи
+        if payment.invoice_payload and payment.invoice_payload.startswith("wheel_spin_"):
+            await _handle_wheel_spin_payment(
+                message=message,
+                db=db,
+                user=user,
+                stars_amount=payment.total_amount,
+                payload=payment.invoice_payload,
+                texts=texts,
             )
             return
 

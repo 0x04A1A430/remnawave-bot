@@ -558,7 +558,8 @@ class ReportingService:
             select(func.count(func.distinct(Subscription.user_id))).where(
                 or_(
                     Subscription.connected_squads.is_(None),
-                    func.jsonb_array_length(cast(Subscription.connected_squads, JSONB)) == 0,
+                    cast(Subscription.connected_squads, JSONB) == cast('[]', JSONB),
+                    func.jsonb_typeof(cast(Subscription.connected_squads, JSONB)) != 'array',
                 )
             )
         )

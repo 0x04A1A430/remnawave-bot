@@ -34,6 +34,10 @@ class SubscriptionResponse(BaseModel):
     subscription_url: Optional[str] = None
     is_active: bool
     is_expired: bool
+    # Daily tariff fields
+    is_daily: bool = False
+    is_daily_paused: bool = False
+    tariff_id: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -103,3 +107,12 @@ class PurchaseSelectionRequest(BaseModel):
 class PurchasePreviewRequest(BaseModel):
     """Request to preview purchase pricing."""
     selection: PurchaseSelectionRequest
+
+
+# ============ Tariff Purchase Schemas ============
+
+class TariffPurchaseRequest(BaseModel):
+    """Request to purchase a tariff."""
+    tariff_id: int = Field(..., description="Tariff ID to purchase")
+    period_days: int = Field(..., description="Period in days")
+    traffic_gb: Optional[int] = Field(None, ge=0, description="Custom traffic in GB (for custom_traffic_enabled tariffs)")

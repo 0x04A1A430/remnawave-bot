@@ -10,6 +10,7 @@ from .middleware import RequestLoggingMiddleware
 from .routes import (
     broadcasts,
     backups,
+    ban_notifications,
     campaigns,
     config,
     health,
@@ -165,6 +166,13 @@ OPENAPI_TAGS = [
             "настройка показа при /start."
         ),
     },
+    {
+        "name": "ban-notifications",
+        "description": (
+            "Эндпоинты для приема уведомлений от системы мониторинга ban (Banhammer). "
+            "Позволяет отправлять уведомления пользователям о блокировке и разблокировке."
+        ),
+    },
 ]
 
 
@@ -258,6 +266,11 @@ def create_web_api_app() -> FastAPI:
     )
     app.include_router(webhooks.router, prefix="/webhooks", tags=["webhooks"])
     app.include_router(websocket.router, tags=["websocket"])
+    app.include_router(
+        ban_notifications.router,
+        prefix="/ban-notifications",
+        tags=["ban-notifications"],
+    )
 
     # Cabinet (Personal Account) routes
     if settings.is_cabinet_enabled():

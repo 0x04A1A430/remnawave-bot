@@ -1321,10 +1321,11 @@ async def create_payment_link(
         if not result:
             raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail="Failed to create payment")
 
+        # Priority: web_app for desktop/browser, mini_app for mobile, bot as fallback
         payment_url = (
-            result.get("bot_invoice_url")
+            result.get("web_app_invoice_url")
             or result.get("mini_app_invoice_url")
-            or result.get("web_app_invoice_url")
+            or result.get("bot_invoice_url")
         )
         if not payment_url:
             raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail="Failed to obtain payment url")
@@ -5571,10 +5572,11 @@ async def submit_subscription_renewal_endpoint(
                 detail={"code": "payment_creation_failed", "message": "Failed to create payment"},
             )
 
+        # Priority: web_app for desktop/browser, mini_app for mobile, bot as fallback
         payment_url = (
-            result.get("mini_app_invoice_url")
+            result.get("web_app_invoice_url")
+            or result.get("mini_app_invoice_url")
             or result.get("bot_invoice_url")
-            or result.get("web_app_invoice_url")
         )
         if not payment_url:
             raise HTTPException(
@@ -7030,6 +7032,7 @@ async def switch_tariff_endpoint(
     subscription.connected_squads = squads
     # Сбрасываем докупленный трафик при смене тарифа
     subscription.purchased_traffic_gb = 0
+    subscription.traffic_reset_at = None  # Сбрасываем дату сброса трафика
 
     # Обработка daily полей при смене тарифа
     new_is_daily = getattr(new_tariff, 'is_daily', False)
