@@ -1731,6 +1731,44 @@ class Settings(BaseSettings):
 
         return periods if periods else [30, 90, 180]
 
+    def get_configured_subscription_periods(self) -> List[int]:
+        """
+        Возвращает настроенные периоды подписки из AVAILABLE_SUBSCRIPTION_PERIODS.
+        БЕЗ фильтрации по ценам - используется для админки.
+        """
+        try:
+            periods_str = self.AVAILABLE_SUBSCRIPTION_PERIODS
+            if not periods_str or not periods_str.strip():
+                return [14, 30, 60, 90, 180, 360]
+
+            periods = []
+            for period_str in periods_str.split(','):
+                period_str = period_str.strip()
+                if period_str:
+                    periods.append(int(period_str))
+            return sorted(periods) if periods else [14, 30, 60, 90, 180, 360]
+        except (ValueError, AttributeError):
+            return [14, 30, 60, 90, 180, 360]
+
+    def get_configured_renewal_periods(self) -> List[int]:
+        """
+        Возвращает настроенные периоды продления из AVAILABLE_RENEWAL_PERIODS.
+        БЕЗ фильтрации по ценам - используется для админки.
+        """
+        try:
+            periods_str = self.AVAILABLE_RENEWAL_PERIODS
+            if not periods_str or not periods_str.strip():
+                return [30, 60, 90, 180, 360]
+
+            periods = []
+            for period_str in periods_str.split(','):
+                period_str = period_str.strip()
+                if period_str:
+                    periods.append(int(period_str))
+            return sorted(periods) if periods else [30, 60, 90, 180, 360]
+        except (ValueError, AttributeError):
+            return [30, 60, 90, 180, 360]
+
     def get_balance_payment_description(self, amount_kopeks: int, telegram_user_id: Optional[int] = None) -> str:
         # Базовое описание
         description = f"{self.PAYMENT_BALANCE_DESCRIPTION} на {self.format_price(amount_kopeks)}"
