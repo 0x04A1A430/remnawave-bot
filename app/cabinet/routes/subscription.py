@@ -182,13 +182,35 @@ async def get_subscription(
 @router.get("/renewal-options", response_model=List[RenewalOptionResponse])
 async def get_renewal_options(
     user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get available subscription renewal options with prices."""
-    periods = settings.get_available_renewal_periods()
     options = []
 
+    # В режиме тарифов берём цены из тарифа пользователя
+    tariff_prices = None
+    tariff_periods = None
+    if settings.is_tariffs_mode():
+        subscription = await get_subscription_by_user_id(db, user.id)
+        if subscription and subscription.tariff_id:
+            tariff = await get_tariff_by_id(db, subscription.tariff_id)
+            if tariff and tariff.period_prices:
+                tariff_prices = {int(k): v for k, v in tariff.period_prices.items()}
+                tariff_periods = sorted(tariff_prices.keys())
+
+    # Используем периоды тарифа или стандартные
+    if tariff_periods:
+        periods = tariff_periods
+    else:
+        periods = settings.get_available_renewal_periods()
+
     for period in periods:
-        price_kopeks = PERIOD_PRICES.get(period, 0)
+        # Получаем цену из тарифа или из PERIOD_PRICES
+        if tariff_prices and period in tariff_prices:
+            price_kopeks = tariff_prices[period]
+        else:
+            price_kopeks = PERIOD_PRICES.get(period, 0)
+
         if price_kopeks <= 0:
             continue
 
@@ -229,8 +251,17 @@ async def renew_subscription(
             detail="No subscription found",
         )
 
-    # Get price for requested period
-    price_kopeks = PERIOD_PRICES.get(request.period_days, 0)
+    # В режиме тарифов берём цену из тарифа пользователя
+    price_kopeks = 0
+    if settings.is_tariffs_mode() and user.subscription.tariff_id:
+        tariff = await get_tariff_by_id(db, user.subscription.tariff_id)
+        if tariff and tariff.period_prices:
+            price_kopeks = tariff.period_prices.get(str(request.period_days), 0)
+
+    # Fallback на PERIOD_PRICES
+    if price_kopeks <= 0:
+        price_kopeks = PERIOD_PRICES.get(request.period_days, 0)
+
     if price_kopeks <= 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
