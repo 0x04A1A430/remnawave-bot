@@ -572,16 +572,20 @@ class YooKassaPaymentMixin:
             payment_description = getattr(payment, "description", "YooKassa платеж")
 
             payment_purpose = payment_metadata.get("payment_purpose", "")
+            payment_type = payment_metadata.get("type", "")
             is_simple_subscription = payment_purpose == "simple_subscription_purchase"
+            is_trial_payment = payment_type == "trial"
 
             transaction_type = (
                 TransactionType.SUBSCRIPTION_PAYMENT
-                if is_simple_subscription
+                if is_simple_subscription or is_trial_payment
                 else TransactionType.DEPOSIT
             )
             transaction_description = (
                 f"Оплата подписки через YooKassa: {payment_description}"
                 if is_simple_subscription
+                else f"Оплата пробной подписки через YooKassa: {payment_description}"
+                if is_trial_payment
                 else f"Пополнение через YooKassa: {payment_description}"
             )
 
@@ -614,7 +618,74 @@ class YooKassaPaymentMixin:
 
             user = await payment_module.get_user_by_id(db, payment.user_id)
             if user:
-                if is_simple_subscription:
+                if is_trial_payment:
+                    # Обработка платного триала
+                    logger.info(
+                        "YooKassa платеж %s обработан как оплата триала. Баланс пользователя %s не изменяется.",
+                        payment.yookassa_payment_id,
+                        user.id,
+                    )
+                    try:
+                        subscription_id = payment_metadata.get("subscription_id")
+                        if subscription_id:
+                            from app.database.crud.subscription import activate_pending_trial_subscription
+                            from app.services.subscription_service import SubscriptionService
+                            from app.services.admin_notification_service import AdminNotificationService
+
+                            subscription = await activate_pending_trial_subscription(
+                                db=db,
+                                subscription_id=int(subscription_id),
+                                user_id=user.id,
+                            )
+
+                            if subscription:
+                                logger.info(f"Триальная подписка {subscription_id} активирована для пользователя {user.id}")
+
+                                # Создаем пользователя в RemnaWave
+                                subscription_service = SubscriptionService()
+                                try:
+                                    await subscription_service.create_remnawave_user(db, subscription)
+                                except Exception as rw_error:
+                                    logger.error(f"Ошибка создания RemnaWave для триала: {rw_error}")
+
+                                # Уведомление админам
+                                if getattr(self, "bot", None):
+                                    try:
+                                        admin_notification_service = AdminNotificationService(self.bot)
+                                        await admin_notification_service.send_trial_activation_notification(
+                                            user=user,
+                                            subscription=subscription,
+                                            paid_amount=payment.amount_kopeks,
+                                            payment_method="YooKassa",
+                                        )
+                                    except Exception as admin_error:
+                                        logger.warning(f"Ошибка уведомления админов о триале: {admin_error}")
+
+                                # Уведомление пользователю
+                                if getattr(self, "bot", None):
+                                    try:
+                                        from app.config import settings
+                                        await self.bot.send_message(
+                                            chat_id=user.telegram_id,
+                                            text=(
+                                                f"🎉 <b>Пробная подписка активирована!</b>\n\n"
+                                                f"💳 Оплачено: {settings.format_price(payment.amount_kopeks)}\n"
+                                                f"📅 Период: {settings.TRIAL_DURATION_DAYS} дней\n"
+                                                f"📱 Устройств: {subscription.device_limit}\n\n"
+                                                f"Используйте меню для подключения к VPN."
+                                            ),
+                                            parse_mode="HTML",
+                                        )
+                                    except Exception as notify_error:
+                                        logger.warning(f"Ошибка уведомления пользователя о триале: {notify_error}")
+                            else:
+                                logger.error(f"Не удалось активировать триал {subscription_id} для {user.id}")
+                        else:
+                            logger.error(f"Отсутствует subscription_id в metadata триального платежа YooKassa")
+                    except Exception as trial_error:
+                        logger.error(f"Ошибка обработки триального платежа YooKassa: {trial_error}", exc_info=True)
+
+                elif is_simple_subscription:
                     logger.info(
                         "YooKassa платеж %s обработан как покупка подписки. Баланс пользователя %s не изменяется.",
                         payment.yookassa_payment_id,
