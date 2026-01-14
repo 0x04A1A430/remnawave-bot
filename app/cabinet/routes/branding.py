@@ -29,6 +29,7 @@ LOGO_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp", ".svg"]
 BRANDING_NAME_KEY = "CABINET_BRANDING_NAME"
 BRANDING_LOGO_KEY = "CABINET_BRANDING_LOGO"  # Stores "custom" or "default"
 THEME_COLORS_KEY = "CABINET_THEME_COLORS"  # Stores JSON with theme colors
+ENABLED_THEMES_KEY = "CABINET_ENABLED_THEMES"  # Stores JSON with enabled themes {"dark": true, "light": false}
 
 # Allowed image types
 ALLOWED_CONTENT_TYPES = {"image/png", "image/jpeg", "image/jpg", "image/webp", "image/svg+xml"}
@@ -80,6 +81,18 @@ class ThemeColorsUpdate(BaseModel):
     success: Optional[str] = None
     warning: Optional[str] = None
     error: Optional[str] = None
+
+
+class EnabledThemesResponse(BaseModel):
+    """Enabled themes settings."""
+    dark: bool = True
+    light: bool = True
+
+
+class EnabledThemesUpdate(BaseModel):
+    """Request to update enabled themes."""
+    dark: Optional[bool] = None
+    light: Optional[bool] = None
 
 
 # Default theme colors
@@ -430,3 +443,64 @@ async def reset_theme_colors(
     logger.info(f"Admin {admin.telegram_id} reset theme colors to defaults")
 
     return ThemeColorsResponse(**DEFAULT_THEME_COLORS)
+
+
+# ============ Enabled Themes Routes ============
+
+DEFAULT_ENABLED_THEMES = {"dark": True, "light": True}
+
+
+@router.get("/themes", response_model=EnabledThemesResponse)
+async def get_enabled_themes(
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """
+    Get which themes are enabled.
+    This is a public endpoint - no authentication required.
+    """
+    themes_json = await get_setting_value(db, ENABLED_THEMES_KEY)
+
+    if themes_json:
+        try:
+            themes = json.loads(themes_json)
+            return EnabledThemesResponse(**themes)
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    return EnabledThemesResponse(**DEFAULT_ENABLED_THEMES)
+
+
+@router.patch("/themes", response_model=EnabledThemesResponse)
+async def update_enabled_themes(
+    payload: EnabledThemesUpdate,
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Update which themes are enabled. Admin only. At least one theme must be enabled."""
+    # Get current settings
+    themes_json = await get_setting_value(db, ENABLED_THEMES_KEY)
+    current_themes = DEFAULT_ENABLED_THEMES.copy()
+
+    if themes_json:
+        try:
+            current_themes.update(json.loads(themes_json))
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    # Update with new values
+    update_data = payload.model_dump(exclude_none=True)
+    current_themes.update(update_data)
+
+    # Ensure at least one theme is enabled
+    if not current_themes.get("dark") and not current_themes.get("light"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="At least one theme must be enabled"
+        )
+
+    # Save to database
+    await set_setting_value(db, ENABLED_THEMES_KEY, json.dumps(current_themes))
+
+    logger.info(f"Admin {admin.telegram_id} updated enabled themes: {current_themes}")
+
+    return EnabledThemesResponse(**current_themes)
