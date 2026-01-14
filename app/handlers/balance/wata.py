@@ -64,7 +64,7 @@ async def start_wata_payment(
     if settings.is_quick_amount_buttons_enabled():
         from .main import get_quick_amount_buttons
 
-        quick_amount_buttons = get_quick_amount_buttons(db_user.language, db_user)
+        quick_amount_buttons = await get_quick_amount_buttons(db_user.language, db_user)
         if quick_amount_buttons:
             keyboard.inline_keyboard = quick_amount_buttons + keyboard.inline_keyboard
 

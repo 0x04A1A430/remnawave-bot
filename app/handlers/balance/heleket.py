@@ -74,7 +74,7 @@ async def start_heleket_payment(
     if settings.is_quick_amount_buttons_enabled():
         from .main import get_quick_amount_buttons
 
-        quick_buttons = get_quick_amount_buttons(db_user.language, db_user)
+        quick_buttons = await get_quick_amount_buttons(db_user.language, db_user)
         if quick_buttons:
             keyboard.inline_keyboard = quick_buttons + keyboard.inline_keyboard
 
