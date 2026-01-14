@@ -197,6 +197,47 @@ def get_tariff_periods_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
+def get_tariff_periods_keyboard_with_traffic(
+    tariff: Tariff,
+    language: str,
+    db_user: Optional[User] = None,
+) -> InlineKeyboardMarkup:
+    """Клавиатура выбора периода для тарифа с кастомным трафиком (переход к настройке трафика)."""
+    texts = get_texts(language)
+    buttons = []
+
+    prices = tariff.period_prices or {}
+    for period_str in sorted(prices.keys(), key=int):
+        period = int(period_str)
+        price = prices[period_str]
+
+        # Получаем скидку для конкретного периода
+        discount_percent = 0
+        if db_user:
+            discount_percent = _get_user_period_discount(db_user, period)
+
+        if discount_percent > 0:
+            price = _apply_promo_discount(price, discount_percent)
+            price_text = f"{_format_price_kopeks(price)} 🔥−{discount_percent}%"
+        else:
+            price_text = _format_price_kopeks(price)
+
+        button_text = f"{_format_period(period)} — {price_text}"
+        # Используем другой callback для перехода к настройке трафика
+        buttons.append([
+            InlineKeyboardButton(
+                text=button_text,
+                callback_data=f"tariff_period_traffic:{tariff.id}:{period}"
+            )
+        ])
+
+    buttons.append([
+        InlineKeyboardButton(text=texts.BACK, callback_data="tariff_list")
+    ])
+
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
 def get_tariff_confirm_keyboard(
     tariff_id: int,
     period: int,
@@ -403,6 +444,40 @@ def get_custom_tariff_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
+def _calculate_custom_tariff_price(
+    tariff: Tariff,
+    days: int,
+    traffic_gb: int,
+) -> tuple[int, int, int]:
+    """
+    Рассчитывает цену для кастомного тарифа.
+
+    Логика (как в веб-кабинете):
+    1. Цена периода: из period_prices ИЛИ price_per_day * дни (если custom_days)
+    2. Трафик: добавляется СВЕРХУ к цене периода (если custom_traffic)
+
+    Returns:
+        tuple: (period_price, traffic_price, total_price)
+    """
+    period_price = 0
+    traffic_price = 0
+
+    # Цена за период
+    if tariff.can_purchase_custom_days():
+        # Кастомные дни - используем price_per_day
+        period_price = tariff.get_price_for_custom_days(days) or 0
+    else:
+        # Фиксированные периоды - берём из period_prices
+        period_price = tariff.get_price_for_period(days) or 0
+
+    # Цена за трафик (добавляется сверху)
+    if tariff.can_purchase_custom_traffic():
+        traffic_price = tariff.get_price_for_custom_traffic(traffic_gb) or 0
+
+    total_price = period_price + traffic_price
+    return period_price, traffic_price, total_price
+
+
 def format_custom_tariff_preview(
     tariff: Tariff,
     days: int,
@@ -411,17 +486,9 @@ def format_custom_tariff_preview(
     discount_percent: int = 0,
 ) -> str:
     """Форматирует предпросмотр покупки с кастомными параметрами."""
-    # Рассчитываем цену
-    days_price = 0
-    traffic_price = 0
-
-    if tariff.can_purchase_custom_days():
-        days_price = tariff.get_price_for_custom_days(days) or 0
-
-    if tariff.can_purchase_custom_traffic():
-        traffic_price = tariff.get_price_for_custom_traffic(traffic_gb) or 0
-
-    total_price = days_price + traffic_price
+    period_price, traffic_price, total_price = _calculate_custom_tariff_price(
+        tariff, days, traffic_gb
+    )
 
     # Применяем скидку
     if discount_percent > 0:
@@ -436,11 +503,15 @@ def format_custom_tariff_preview(
 
     if tariff.can_purchase_custom_days():
         text += f"📅 Дней: <b>{days}</b> (от {tariff.min_days} до {tariff.max_days})\n"
-        text += f"   💰 {_format_price_kopeks(days_price)}\n"
+        text += f"   💰 {_format_price_kopeks(period_price)}\n"
+    else:
+        # Фиксированный период - показываем без возможности изменения
+        text += f"📅 Период: <b>{_format_period(days)}</b>\n"
+        text += f"   💰 {_format_price_kopeks(period_price)}\n"
 
     if tariff.can_purchase_custom_traffic():
         text += f"📊 Трафик: <b>{traffic_gb} ГБ</b> (от {tariff.min_traffic_gb} до {tariff.max_traffic_gb})\n"
-        text += f"   💰 {_format_price_kopeks(traffic_price)}\n"
+        text += f"   💰 +{_format_price_kopeks(traffic_price)}\n"
     else:
         text += f"📊 Трафик: {traffic_display}\n"
 
@@ -565,19 +636,21 @@ async def select_tariff(
         can_custom_days = tariff.can_purchase_custom_days()
         can_custom_traffic = tariff.can_purchase_custom_traffic()
 
-        if can_custom_days or can_custom_traffic:
-            # Показываем экран настройки кастомных параметров
+        if can_custom_days:
+            # Кастомные дни - показываем экран с +/- для дней (и опционально трафика)
             user_balance = db_user.balance_kopeks or 0
 
-            # Начальные значения - минимальные
-            initial_days = tariff.min_days if can_custom_days else 30
+            initial_days = tariff.min_days
             initial_traffic = tariff.min_traffic_gb if can_custom_traffic else tariff.traffic_limit_gb
 
-            # Сохраняем в состояние
+            # Вычисляем скидку для начального периода
+            discount_percent = _get_user_period_discount(db_user, initial_days)
+
             await state.update_data(
                 selected_tariff_id=tariff_id,
                 custom_days=initial_days,
                 custom_traffic_gb=initial_traffic,
+                period_discount_percent=discount_percent,
             )
 
             preview_text = format_custom_tariff_preview(
@@ -585,6 +658,7 @@ async def select_tariff(
                 days=initial_days,
                 traffic_gb=initial_traffic,
                 user_balance=user_balance,
+                discount_percent=discount_percent,
             )
 
             await callback.message.edit_text(
@@ -600,6 +674,17 @@ async def select_tariff(
                     max_days=tariff.max_days,
                     min_traffic=tariff.min_traffic_gb,
                     max_traffic=tariff.max_traffic_gb,
+                ),
+                parse_mode="HTML"
+            )
+        elif can_custom_traffic:
+            # Только кастомный трафик - сначала выбираем период из period_prices
+            # Показываем обычный выбор периода, трафик будет на следующем шаге
+            await callback.message.edit_text(
+                format_tariff_info_for_user(tariff, db_user.language) +
+                "\n\n📊 <i>После выбора периода вы сможете настроить трафик</i>",
+                reply_markup=get_tariff_periods_keyboard_with_traffic(
+                    tariff, db_user.language, db_user=db_user
                 ),
                 parse_mode="HTML"
             )
@@ -640,7 +725,10 @@ async def handle_custom_days_change(
     new_days = current_days + delta
     new_days = max(tariff.min_days, min(tariff.max_days, new_days))
 
-    await state.update_data(custom_days=new_days)
+    # При изменении дней пересчитываем скидку для нового периода
+    discount_percent = _get_user_period_discount(db_user, new_days)
+
+    await state.update_data(custom_days=new_days, period_discount_percent=discount_percent)
 
     user_balance = db_user.balance_kopeks or 0
 
@@ -649,6 +737,7 @@ async def handle_custom_days_change(
         days=new_days,
         traffic_gb=current_traffic,
         user_balance=user_balance,
+        discount_percent=discount_percent,
     )
 
     await callback.message.edit_text(
@@ -690,6 +779,7 @@ async def handle_custom_traffic_change(
     state_data = await state.get_data()
     current_days = state_data.get('custom_days', tariff.min_days)
     current_traffic = state_data.get('custom_traffic_gb', tariff.min_traffic_gb)
+    discount_percent = state_data.get('period_discount_percent', 0)
 
     # Применяем изменение
     new_traffic = current_traffic + delta
@@ -704,6 +794,7 @@ async def handle_custom_traffic_change(
         days=current_days,
         traffic_gb=new_traffic,
         user_balance=user_balance,
+        discount_percent=discount_percent,
     )
 
     await callback.message.edit_text(
@@ -743,11 +834,23 @@ async def handle_custom_confirm(
     state_data = await state.get_data()
     custom_days = state_data.get('custom_days', tariff.min_days)
     custom_traffic = state_data.get('custom_traffic_gb', tariff.min_traffic_gb)
+    discount_percent = state_data.get('period_discount_percent', 0)
 
-    # Рассчитываем цену
-    days_price = tariff.get_price_for_custom_days(custom_days) or 0
-    traffic_price = tariff.get_price_for_custom_traffic(custom_traffic) or 0
-    total_price = days_price + traffic_price
+    # Рассчитываем цену (используем общую функцию)
+    period_price, traffic_price, total_price = _calculate_custom_tariff_price(
+        tariff, custom_days, custom_traffic
+    )
+
+    # Проверяем, что цена за период валидна
+    if period_price == 0 and not tariff.can_purchase_custom_days():
+        # Период не найден в period_prices - ошибка
+        await callback.answer("Выбранный период недоступен для этого тарифа", show_alert=True)
+        return
+
+    # Применяем скидку к цене периода (не к трафику)
+    if discount_percent > 0:
+        period_price = _apply_promo_discount(period_price, discount_percent)
+        total_price = period_price + traffic_price
 
     # Проверяем баланс
     user_balance = db_user.balance_kopeks or 0
@@ -870,6 +973,68 @@ async def handle_custom_confirm(
     except Exception as e:
         logger.error(f"Ошибка при покупке тарифа с кастомными параметрами: {e}", exc_info=True)
         await callback.answer("Произошла ошибка при оформлении подписки", show_alert=True)
+
+
+@error_handler
+async def select_tariff_period_with_traffic(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    """Обрабатывает выбор периода для тарифа с кастомным трафиком - показывает экран настройки трафика."""
+    parts = callback.data.split(":")
+    tariff_id = int(parts[1])
+    period = int(parts[2])
+
+    tariff = await get_tariff_by_id(db, tariff_id)
+    if not tariff or not tariff.is_active:
+        await callback.answer("Тариф недоступен", show_alert=True)
+        return
+
+    if not tariff.can_purchase_custom_traffic():
+        await callback.answer("Кастомный трафик недоступен для этого тарифа", show_alert=True)
+        return
+
+    user_balance = db_user.balance_kopeks or 0
+    initial_traffic = tariff.min_traffic_gb
+
+    # Получаем скидку для выбранного периода
+    discount_percent = _get_user_period_discount(db_user, period)
+
+    # Сохраняем выбранный период и скидку в состояние
+    await state.update_data(
+        selected_tariff_id=tariff_id,
+        custom_days=period,  # Фиксированный период из period_prices
+        custom_traffic_gb=initial_traffic,
+        period_discount_percent=discount_percent,  # Сохраняем скидку
+    )
+
+    preview_text = format_custom_tariff_preview(
+        tariff=tariff,
+        days=period,
+        traffic_gb=initial_traffic,
+        user_balance=user_balance,
+        discount_percent=discount_percent,  # Применяем скидку при отображении
+    )
+
+    await callback.message.edit_text(
+        preview_text,
+        reply_markup=get_custom_tariff_keyboard(
+            tariff_id=tariff_id,
+            language=db_user.language,
+            days=period,
+            traffic_gb=initial_traffic,
+            can_custom_days=False,  # Период уже выбран, менять нельзя
+            can_custom_traffic=True,
+            min_days=period,
+            max_days=period,
+            min_traffic=tariff.min_traffic_gb,
+            max_traffic=tariff.max_traffic_gb,
+        ),
+        parse_mode="HTML"
+    )
+    await callback.answer()
 
 
 @error_handler
@@ -2909,6 +3074,7 @@ def register_tariff_purchase_handlers(dp: Dispatcher):
     dp.callback_query.register(handle_custom_days_change, F.data.startswith("custom_days:"))
     dp.callback_query.register(handle_custom_traffic_change, F.data.startswith("custom_traffic:"))
     dp.callback_query.register(handle_custom_confirm, F.data.startswith("custom_confirm:"))
+    dp.callback_query.register(select_tariff_period_with_traffic, F.data.startswith("tariff_period_traffic:"))
 
     # Продление по тарифу
     dp.callback_query.register(select_tariff_extend_period, F.data.startswith("tariff_extend:"))
