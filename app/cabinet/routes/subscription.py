@@ -881,6 +881,9 @@ async def _build_tariff_response(
         "traffic_topup_enabled": tariff.traffic_topup_enabled,
         "traffic_topup_packages": tariff.get_traffic_topup_packages() if hasattr(tariff, 'get_traffic_topup_packages') else {},
         "max_topup_traffic_gb": tariff.max_topup_traffic_gb,
+        # Дневной тариф
+        "is_daily": getattr(tariff, 'is_daily', False),
+        "daily_price_kopeks": getattr(tariff, 'daily_price_kopeks', 0),
     }
 
 
