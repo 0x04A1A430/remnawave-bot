@@ -1799,6 +1799,59 @@ async def activate_pending_subscription(
     return pending_subscription
 
 
+async def activate_pending_trial_subscription(
+    db: AsyncSession,
+    subscription_id: int,
+    user_id: int,
+) -> Optional[Subscription]:
+    """Активирует pending триальную подписку по её ID после оплаты."""
+    logger.info(f"Активация pending триальной подписки: subscription_id={subscription_id}, user_id={user_id}")
+
+    # Находим pending подписку по ID
+    result = await db.execute(
+        select(Subscription)
+        .where(
+            and_(
+                Subscription.id == subscription_id,
+                Subscription.user_id == user_id,
+                Subscription.status == SubscriptionStatus.PENDING.value,
+                Subscription.is_trial == True
+            )
+        )
+    )
+    pending_subscription = result.scalar_one_or_none()
+
+    if not pending_subscription:
+        logger.warning(f"Не найдена pending триальная подписка {subscription_id} для пользователя {user_id}")
+        return None
+
+    logger.info(f"Найдена pending триальная подписка {pending_subscription.id}, статус: {pending_subscription.status}")
+
+    # Обновляем статус подписки на ACTIVE
+    current_time = datetime.utcnow()
+    pending_subscription.status = SubscriptionStatus.ACTIVE.value
+
+    # Обновляем даты
+    if not pending_subscription.start_date or pending_subscription.start_date < current_time:
+        pending_subscription.start_date = current_time
+
+    # Пересчитываем end_date на основе duration_days если есть
+    duration_days = pending_subscription.duration_days if hasattr(pending_subscription, 'duration_days') else None
+    if duration_days:
+        pending_subscription.end_date = current_time + timedelta(days=duration_days)
+    elif pending_subscription.end_date and pending_subscription.end_date < current_time:
+        # Если end_date в прошлом, пересчитываем
+        from app.config import settings
+        pending_subscription.end_date = current_time + timedelta(days=settings.TRIAL_DURATION_DAYS)
+
+    await db.commit()
+    await db.refresh(pending_subscription)
+
+    logger.info(f"Триальная подписка {pending_subscription.id} активирована для пользователя {user_id}")
+
+    return pending_subscription
+
+
 # ==================== СУТОЧНЫЕ ПОДПИСКИ ====================
 
 
