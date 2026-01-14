@@ -7,8 +7,8 @@ from pydantic import BaseModel, Field
 class BanNotificationRequest(BaseModel):
     """Запрос на отправку уведомления о бане пользователю"""
 
-    notification_type: Literal["punishment", "enabled", "warning", "network_wifi"] = Field(
-        description="Тип уведомления: punishment (бан за устройства), enabled (разбан), warning (предупреждение), network_wifi (бан за WiFi)"
+    notification_type: Literal["punishment", "enabled", "warning", "network_wifi", "network_mobile"] = Field(
+        description="Тип уведомления: punishment (бан за устройства), enabled (разбан), warning (предупреждение), network_wifi (бан за WiFi), network_mobile (бан за мобильную сеть)"
     )
     user_identifier: str = Field(
         description="Email или user_id пользователя из Remnawave Panel"
