@@ -1077,22 +1077,36 @@ async def purchase_tariff(
                 detail="This tariff is not available for your promo group",
             )
 
-        # Get price for period (support custom days)
-        price_kopeks = tariff.get_price_for_period(request.period_days)
-        if price_kopeks is None:
-            # Check for custom days
-            if tariff.can_purchase_custom_days():
-                price_kopeks = tariff.get_price_for_custom_days(request.period_days)
-                if price_kopeks is None:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f"Period must be between {tariff.min_days} and {tariff.max_days} days",
-                    )
-            else:
+        # Handle daily tariffs specially
+        is_daily_tariff = getattr(tariff, 'is_daily', False)
+        if is_daily_tariff:
+            daily_price = getattr(tariff, 'daily_price_kopeks', 0)
+            if daily_price <= 0:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid period for this tariff",
+                    detail="Daily tariff has invalid price",
                 )
+            # For daily tariffs, charge first day and set period to 1 day
+            price_kopeks = daily_price
+            period_days = 1
+        else:
+            period_days = request.period_days
+            # Get price for period (support custom days)
+            price_kopeks = tariff.get_price_for_period(period_days)
+            if price_kopeks is None:
+                # Check for custom days
+                if tariff.can_purchase_custom_days():
+                    price_kopeks = tariff.get_price_for_custom_days(period_days)
+                    if price_kopeks is None:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"Period must be between {tariff.min_days} and {tariff.max_days} days",
+                        )
+                else:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Invalid period for this tariff",
+                    )
 
         # Calculate traffic limit and price
         traffic_limit_gb = tariff.traffic_limit_gb
@@ -1123,7 +1137,10 @@ async def purchase_tariff(
         subscription = await get_subscription_by_user_id(db, user.id)
 
         # Charge balance
-        description = f"Покупка тарифа '{tariff.name}' на {request.period_days} дней"
+        if is_daily_tariff:
+            description = f"Активация суточного тарифа '{tariff.name}'"
+        else:
+            description = f"Покупка тарифа '{tariff.name}' на {period_days} дней"
         success = await subtract_user_balance(db, user, price_kopeks, description)
         if not success:
             raise HTTPException(
@@ -1145,7 +1162,7 @@ async def purchase_tariff(
             subscription = await extend_subscription(
                 db=db,
                 subscription=subscription,
-                days=request.period_days,
+                days=period_days,
                 tariff_id=tariff.id,
                 traffic_limit_gb=traffic_limit_gb,
                 device_limit=tariff.device_limit,
@@ -1156,32 +1173,40 @@ async def purchase_tariff(
             subscription = await create_paid_subscription(
                 db=db,
                 user_id=user.id,
-                days=request.period_days,
+                days=period_days,
                 traffic_limit_gb=traffic_limit_gb,
                 device_limit=tariff.device_limit,
                 connected_squads=tariff.allowed_squads or [],
                 tariff_id=tariff.id,
             )
 
+        # For daily tariffs, set last_daily_charge_at
+        if is_daily_tariff:
+            subscription.last_daily_charge_at = datetime.utcnow()
+            subscription.is_daily_paused = False
+            await db.commit()
+            await db.refresh(subscription)
+
         # Sync with RemnaWave
         service = SubscriptionService()
         await service.update_remnawave_user(db, subscription)
 
-        # Save cart for auto-renewal
-        try:
-            from app.services.user_cart_service import user_cart_service
-            cart_data = {
-                "cart_mode": "extend",
-                "subscription_id": subscription.id,
-                "period_days": request.period_days,
-                "total_price": price_kopeks,
-                "tariff_id": tariff.id,
-                "description": f"Продление тарифа {tariff.name} на {request.period_days} дней",
-            }
-            await user_cart_service.save_user_cart(user.id, cart_data)
-            logger.info(f"Tariff cart saved for auto-renewal (cabinet) user {user.telegram_id}")
-        except Exception as e:
-            logger.error(f"Error saving tariff cart (cabinet): {e}")
+        # Save cart for auto-renewal (not for daily tariffs - they have their own charging)
+        if not is_daily_tariff:
+            try:
+                from app.services.user_cart_service import user_cart_service
+                cart_data = {
+                    "cart_mode": "extend",
+                    "subscription_id": subscription.id,
+                    "period_days": period_days,
+                    "total_price": price_kopeks,
+                    "tariff_id": tariff.id,
+                    "description": f"Продление тарифа {tariff.name} на {period_days} дней",
+                }
+                await user_cart_service.save_user_cart(user.id, cart_data)
+                logger.info(f"Tariff cart saved for auto-renewal (cabinet) user {user.telegram_id}")
+            except Exception as e:
+                logger.error(f"Error saving tariff cart (cabinet): {e}")
 
         await db.refresh(user)
 
