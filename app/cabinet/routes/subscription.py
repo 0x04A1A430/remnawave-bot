@@ -106,11 +106,17 @@ def _subscription_to_response(
     # Use subscription's is_daily_tariff property if available
     is_daily = False
     daily_price_kopeks = None
+
     if hasattr(subscription, 'is_daily_tariff'):
         is_daily = subscription.is_daily_tariff
     elif tariff_id and hasattr(subscription, 'tariff') and subscription.tariff:
         is_daily = getattr(subscription.tariff, 'is_daily', False)
+
+    # Get daily_price_kopeks and tariff_name from tariff (separate from is_daily check)
+    if tariff_id and hasattr(subscription, 'tariff') and subscription.tariff:
         daily_price_kopeks = getattr(subscription.tariff, 'daily_price_kopeks', None)
+        if not tariff_name:  # Only set if not passed as parameter
+            tariff_name = getattr(subscription.tariff, 'name', None)
 
     # Calculate next daily charge time (24 hours after last charge)
     next_daily_charge_at = None
