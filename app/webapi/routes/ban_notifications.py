@@ -46,7 +46,8 @@ async def send_ban_notification(
     """
     logger.info(
         f"Получен запрос на отправку уведомления типа '{request.notification_type}' "
-        f"для пользователя {request.username} ({request.user_identifier})"
+        f"для пользователя {request.username} ({request.user_identifier}), "
+        f"node_name={request.node_name!r}"
     )
 
     try:
