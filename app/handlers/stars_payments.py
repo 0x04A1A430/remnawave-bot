@@ -120,6 +120,126 @@ async def _handle_wheel_spin_payment(
         return False
 
 
+async def _handle_trial_payment(
+    message: types.Message,
+    db: AsyncSession,
+    user,
+    stars_amount: int,
+    payload: str,
+    texts,
+):
+    """Обработка Stars платежа для платного триала."""
+    from app.database.crud.subscription import activate_pending_trial_subscription
+    from app.services.subscription_service import SubscriptionService
+    from app.services.admin_notification_service import AdminNotificationService
+    from app.database.crud.transaction import create_transaction
+    from app.database.models import TransactionType, PaymentMethod
+
+    try:
+        # Парсим payload: trial_{subscription_id}
+        parts = payload.split("_")
+        if len(parts) < 2:
+            logger.error(f"Невалидный trial payload: {payload}")
+            await message.answer(
+                "❌ Ошибка: неверный формат платежа. Обратитесь в поддержку.",
+            )
+            return False
+
+        try:
+            subscription_id = int(parts[1])
+        except ValueError:
+            logger.error(f"Невалидный subscription_id в trial payload: {payload}")
+            await message.answer(
+                "❌ Ошибка: неверный ID подписки. Обратитесь в поддержку.",
+            )
+            return False
+
+        # Рассчитываем стоимость в копейках
+        rubles_amount = TelegramStarsService.calculate_rubles_from_stars(stars_amount)
+        amount_kopeks = int((rubles_amount * Decimal(100)).to_integral_value(rounding=ROUND_HALF_UP))
+
+        # Создаём транзакцию
+        transaction = await create_transaction(
+            db=db,
+            user_id=user.id,
+            type=TransactionType.SUBSCRIPTION_PAYMENT,
+            amount_kopeks=amount_kopeks,
+            description=f"Оплата пробной подписки через Telegram Stars ({stars_amount} ⭐)",
+            payment_method=PaymentMethod.TELEGRAM_STARS,
+            external_id=f"trial_stars_{subscription_id}",
+            is_completed=True,
+        )
+
+        # Активируем pending триальную подписку
+        subscription = await activate_pending_trial_subscription(
+            db=db,
+            subscription_id=subscription_id,
+            user_id=user.id,
+        )
+
+        if not subscription:
+            logger.error(f"Не удалось активировать триальную подписку {subscription_id} для пользователя {user.id}")
+            # Возвращаем деньги на баланс
+            from app.database.crud.user import add_user_balance
+            await add_user_balance(
+                db,
+                user,
+                amount_kopeks,
+                "Возврат за неудачную активацию триала",
+                transaction_type=TransactionType.REFUND,
+            )
+            await message.answer(
+                "❌ Не удалось активировать пробную подписку. Средства возвращены на баланс.",
+            )
+            return False
+
+        # Создаем пользователя в RemnaWave
+        subscription_service = SubscriptionService()
+        try:
+            await subscription_service.create_remnawave_user(db, subscription)
+        except Exception as rw_error:
+            logger.error(f"Ошибка создания пользователя RemnaWave для триала: {rw_error}")
+            # Не откатываем подписку, просто логируем - RemnaWave может быть временно недоступен
+
+        await db.commit()
+        await db.refresh(user)
+
+        # Отправляем уведомление админам
+        try:
+            admin_notification_service = AdminNotificationService(message.bot)
+            await admin_notification_service.send_trial_activation_notification(
+                user=user,
+                subscription=subscription,
+                paid_amount=amount_kopeks,
+                payment_method="Telegram Stars",
+            )
+        except Exception as admin_error:
+            logger.warning(f"Ошибка отправки уведомления админам о триале: {admin_error}")
+
+        # Отправляем сообщение пользователю
+        await message.answer(
+            f"🎉 <b>Пробная подписка активирована!</b>\n\n"
+            f"⭐ Потрачено: {stars_amount} Stars\n"
+            f"📅 Период: {settings.TRIAL_DURATION_DAYS} дней\n"
+            f"📱 Устройств: {subscription.device_limit}\n\n"
+            f"Используйте меню для подключения к VPN.",
+            parse_mode="HTML",
+        )
+
+        logger.info(
+            f"✅ Платный триал активирован через Stars: user={user.id}, "
+            f"subscription={subscription.id}, stars={stars_amount}"
+        )
+        return True
+
+    except Exception as e:
+        logger.error(f"Ошибка обработки trial payment: {e}", exc_info=True)
+        await message.answer(
+            "❌ Произошла ошибка при активации пробной подписки. Обратитесь в поддержку.",
+        )
+        return False
+
+
 async def handle_pre_checkout_query(query: types.PreCheckoutQuery):
     texts = get_texts(DEFAULT_LANGUAGE)
 
@@ -128,7 +248,7 @@ async def handle_pre_checkout_query(query: types.PreCheckoutQuery):
             f"📋 Pre-checkout query от {query.from_user.id}: {query.total_amount} XTR, payload: {query.invoice_payload}"
         )
 
-        allowed_prefixes = ("balance_", "admin_stars_test_", "simple_sub_", "wheel_spin_")
+        allowed_prefixes = ("balance_", "admin_stars_test_", "simple_sub_", "wheel_spin_", "trial_")
 
         if not query.invoice_payload or not query.invoice_payload.startswith(allowed_prefixes):
             logger.warning(f"Невалидный payload: {query.invoice_payload}")
@@ -218,6 +338,18 @@ async def handle_successful_payment(
         # Обработка оплаты спина колеса удачи
         if payment.invoice_payload and payment.invoice_payload.startswith("wheel_spin_"):
             await _handle_wheel_spin_payment(
+                message=message,
+                db=db,
+                user=user,
+                stars_amount=payment.total_amount,
+                payload=payment.invoice_payload,
+                texts=texts,
+            )
+            return
+
+        # Обработка оплаты платного триала
+        if payment.invoice_payload and payment.invoice_payload.startswith("trial_"):
+            await _handle_trial_payment(
                 message=message,
                 db=db,
                 user=user,
