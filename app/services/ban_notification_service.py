@@ -12,6 +12,7 @@ from sqlalchemy import select
 
 from app.database.models import User
 from app.services.remnawave_service import remnawave_service
+from app.config import settings
 
 
 logger = logging.getLogger(__name__)
@@ -100,15 +101,11 @@ class BanNotificationService:
             logger.warning(f"Пользователь {user_identifier} не найден в базе данных")
             return False, f"Пользователь не найден: {user_identifier}", None
 
-        # Формируем сообщение
-        message_text = (
-            "🚨 <b>Превышение лимита устройств</b>\n\n"
-            f"Ваш аккаунт временно заблокирован из-за превышения лимита подключенных устройств.\n\n"
-            f"📱 Обнаружено устройств: <b>{ip_count}</b>\n"
-            f"📊 Максимально разрешено: <b>{limit}</b>\n"
-            f"⏱ Блокировка на: <b>{ban_minutes} мин</b>\n\n"
-            f"ℹ️ Пожалуйста, отключите лишние устройства и подождите окончания блокировки.\n"
-            f"После разблокировки ваш доступ будет восстановлен автоматически."
+        # Формируем сообщение из настроек
+        message_text = settings.BAN_MSG_PUNISHMENT.format(
+            ip_count=ip_count,
+            limit=limit,
+            ban_minutes=ban_minutes
         )
 
         # Отправляем сообщение
@@ -152,14 +149,8 @@ class BanNotificationService:
             logger.warning(f"Пользователь {user_identifier} не найден в базе данных")
             return False, f"Пользователь не найден: {user_identifier}", None
 
-        # Формируем сообщение
-        message_text = (
-            "✅ <b>Блокировка снята</b>\n\n"
-            f"Ваш аккаунт разблокирован!\n\n"
-            f"Теперь вы снова можете пользоваться VPN. "
-            f"Пожалуйста, следите за количеством подключенных устройств, "
-            f"чтобы избежать повторной блокировки."
-        )
+        # Формируем сообщение из настроек
+        message_text = settings.BAN_MSG_ENABLED
 
         # Отправляем сообщение
         try:
@@ -203,10 +194,9 @@ class BanNotificationService:
             logger.warning(f"Пользователь {user_identifier} не найден в базе данных")
             return False, f"Пользователь не найден: {user_identifier}", None
 
-        # Формируем сообщение
-        message_text = (
-            "⚠️ <b>Предупреждение</b>\n\n"
-            f"{warning_message}"
+        # Формируем сообщение из настроек
+        message_text = settings.BAN_MSG_WARNING.format(
+            warning_message=warning_message
         )
 
         # Отправляем сообщение
@@ -253,19 +243,14 @@ class BanNotificationService:
             logger.warning(f"Пользователь {user_identifier} не найден в базе данных")
             return False, f"Пользователь не найден: {user_identifier}", None
 
-        # Формируем сообщение
+        # Формируем сообщение из настроек
         network_info = f"Тип сети: <b>{network_type}</b>\n" if network_type else ""
         node_info = f"Сервер: <b>{node_name}</b>\n" if node_name else ""
 
-        message_text = (
-            "📶 <b>Блокировка за использование WiFi сети</b>\n\n"
-            f"Ваш аккаунт временно заблокирован из-за использования WiFi сети.\n\n"
-            f"{network_info}"
-            f"{node_info}"
-            f"⏱ Блокировка на: <b>{ban_minutes} мин</b>\n\n"
-            f"ℹ️ Использование VPN через WiFi запрещено правилами сервиса.\n"
-            f"Пожалуйста, используйте мобильную сеть для подключения к VPN.\n\n"
-            f"После окончания блокировки ваш доступ будет восстановлен автоматически."
+        message_text = settings.BAN_MSG_WIFI.format(
+            ban_minutes=ban_minutes,
+            network_info=network_info,
+            node_info=node_info
         )
 
         # Отправляем сообщение
@@ -284,6 +269,60 @@ class BanNotificationService:
         except TelegramAPIError as e:
             logger.error(
                 f"Ошибка отправки WiFi уведомления пользователю {username} "
+                f"(telegram_id: {user.telegram_id}): {e}"
+            )
+            return False, f"Ошибка Telegram API: {str(e)}", user.telegram_id
+
+    async def send_network_mobile_notification(
+        self,
+        db: AsyncSession,
+        user_identifier: str,
+        username: str,
+        ban_minutes: int,
+        network_type: Optional[str] = None,
+        node_name: Optional[str] = None
+    ) -> Tuple[bool, str, Optional[int]]:
+        """
+        Отправить уведомление о блокировке за использование мобильной сети
+
+        Returns:
+            (success, message, telegram_id)
+        """
+        if not self._bot:
+            return False, "Бот не инициализирован", None
+
+        # Находим пользователя
+        user = await self._find_user_by_identifier(db, user_identifier)
+        if not user:
+            logger.warning(f"Пользователь {user_identifier} не найден в базе данных")
+            return False, f"Пользователь не найден: {user_identifier}", None
+
+        # Формируем сообщение из настроек
+        network_info = f"Тип сети: <b>{network_type}</b>\n" if network_type else ""
+        node_info = f"Сервер: <b>{node_name}</b>\n" if node_name else ""
+
+        message_text = settings.BAN_MSG_MOBILE.format(
+            ban_minutes=ban_minutes,
+            network_info=network_info,
+            node_info=node_info
+        )
+
+        # Отправляем сообщение
+        try:
+            await self._bot.send_message(
+                chat_id=user.telegram_id,
+                text=message_text,
+                parse_mode="HTML"
+            )
+            logger.info(
+                f"Уведомление о Mobile бане отправлено пользователю {username} "
+                f"(telegram_id: {user.telegram_id})"
+            )
+            return True, "Уведомление отправлено", user.telegram_id
+
+        except TelegramAPIError as e:
+            logger.error(
+                f"Ошибка отправки Mobile уведомления пользователю {username} "
                 f"(telegram_id: {user.telegram_id}): {e}"
             )
             return False, f"Ошибка Telegram API: {str(e)}", user.telegram_id
