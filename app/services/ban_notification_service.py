@@ -7,6 +7,7 @@ from datetime import datetime
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -16,6 +17,13 @@ from app.config import settings
 
 
 logger = logging.getLogger(__name__)
+
+
+def get_delete_keyboard() -> InlineKeyboardMarkup:
+    """Клавиатура с кнопкой удаления уведомления"""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🗑 Удалить", callback_data="ban_notify:delete")]
+    ])
 
 
 class BanNotificationService:
@@ -102,8 +110,8 @@ class BanNotificationService:
             logger.warning(f"Пользователь {user_identifier} не найден в базе данных")
             return False, f"Пользователь не найден: {user_identifier}", None
 
-        # Формируем информацию о ноде (в формате дерева)
-        node_info = f"├ 🖥 Сервер: <b>{node_name}</b>\n" if node_name else ""
+        # Формируем информацию о ноде (заметно выделяем)
+        node_info = f"🖥 <b>Нода:</b> <code>{node_name}</code>" if node_name else ""
 
         # Формируем сообщение из настроек
         # Используем безопасное форматирование - если {node_info} отсутствует в шаблоне, не будет ошибки
@@ -126,12 +134,13 @@ class BanNotificationService:
             if node_info:
                 message_text = message_text.rstrip() + f"\n\n{node_info.rstrip()}"
 
-        # Отправляем сообщение
+        # Отправляем сообщение с кнопкой удаления
         try:
             await self._bot.send_message(
                 chat_id=user.telegram_id,
                 text=message_text,
-                parse_mode="HTML"
+                parse_mode="HTML",
+                reply_markup=get_delete_keyboard()
             )
             logger.info(
                 f"Уведомление о бане отправлено пользователю {username} "
@@ -170,12 +179,13 @@ class BanNotificationService:
         # Формируем сообщение из настроек
         message_text = settings.BAN_MSG_ENABLED
 
-        # Отправляем сообщение
+        # Отправляем сообщение с кнопкой удаления
         try:
             await self._bot.send_message(
                 chat_id=user.telegram_id,
                 text=message_text,
-                parse_mode="HTML"
+                parse_mode="HTML",
+                reply_markup=get_delete_keyboard()
             )
             logger.info(
                 f"Уведомление о разбане отправлено пользователю {username} "
@@ -217,12 +227,13 @@ class BanNotificationService:
             warning_message=warning_message
         )
 
-        # Отправляем сообщение
+        # Отправляем сообщение с кнопкой удаления
         try:
             await self._bot.send_message(
                 chat_id=user.telegram_id,
                 text=message_text,
-                parse_mode="HTML"
+                parse_mode="HTML",
+                reply_markup=get_delete_keyboard()
             )
             logger.info(
                 f"Предупреждение отправлено пользователю {username} "
@@ -261,9 +272,11 @@ class BanNotificationService:
             logger.warning(f"Пользователь {user_identifier} не найден в базе данных")
             return False, f"Пользователь не найден: {user_identifier}", None
 
-        # Формируем сообщение из настроек (в формате дерева)
+        # Формируем сообщение из настроек (заметно выделяем)
         network_info = f"├ 🌐 Сеть: <b>{network_type}</b>\n" if network_type else ""
-        node_info = f"├ 🖥 Сервер: <b>{node_name}</b>\n" if node_name else ""
+        node_info = f"🖥 <b>Нода:</b> <code>{node_name}</code>" if node_name else ""
+
+        logger.info(f"WiFi notification: node_name={node_name!r}, node_info={node_info!r}")
 
         # Безопасное форматирование
         format_vars = {
@@ -274,17 +287,19 @@ class BanNotificationService:
         try:
             message_text = settings.BAN_MSG_WIFI.format(**format_vars)
         except KeyError:
+            logger.warning("BAN_MSG_WIFI template missing placeholders, adding node_info to end")
             message_text = settings.BAN_MSG_WIFI.format(ban_minutes=ban_minutes)
-            extra_info = network_info + node_info
+            extra_info = (network_info + node_info).strip()
             if extra_info:
-                message_text = message_text.rstrip() + f"\n\n{extra_info.rstrip()}"
+                message_text = message_text.rstrip() + f"\n\n{extra_info}"
 
-        # Отправляем сообщение
+        # Отправляем сообщение с кнопкой удаления
         try:
             await self._bot.send_message(
                 chat_id=user.telegram_id,
                 text=message_text,
-                parse_mode="HTML"
+                parse_mode="HTML",
+                reply_markup=get_delete_keyboard()
             )
             logger.info(
                 f"Уведомление о WiFi бане отправлено пользователю {username} "
@@ -323,9 +338,9 @@ class BanNotificationService:
             logger.warning(f"Пользователь {user_identifier} не найден в базе данных")
             return False, f"Пользователь не найден: {user_identifier}", None
 
-        # Формируем сообщение из настроек (в формате дерева)
+        # Формируем сообщение из настроек (заметно выделяем)
         network_info = f"├ 🌐 Сеть: <b>{network_type}</b>\n" if network_type else ""
-        node_info = f"├ 🖥 Сервер: <b>{node_name}</b>\n" if node_name else ""
+        node_info = f"🖥 <b>Нода:</b> <code>{node_name}</code>" if node_name else ""
 
         # Безопасное форматирование
         format_vars = {
@@ -337,16 +352,17 @@ class BanNotificationService:
             message_text = settings.BAN_MSG_MOBILE.format(**format_vars)
         except KeyError:
             message_text = settings.BAN_MSG_MOBILE.format(ban_minutes=ban_minutes)
-            extra_info = network_info + node_info
+            extra_info = (network_info + node_info).strip()
             if extra_info:
-                message_text = message_text.rstrip() + f"\n\n{extra_info.rstrip()}"
+                message_text = message_text.rstrip() + f"\n\n{extra_info}"
 
-        # Отправляем сообщение
+        # Отправляем сообщение с кнопкой удаления
         try:
             await self._bot.send_message(
                 chat_id=user.telegram_id,
                 text=message_text,
-                parse_mode="HTML"
+                parse_mode="HTML",
+                reply_markup=get_delete_keyboard()
             )
             logger.info(
                 f"Уведомление о Mobile бане отправлено пользователю {username} "
