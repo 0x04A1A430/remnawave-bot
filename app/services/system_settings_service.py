@@ -127,6 +127,7 @@ class BotConfigurationService:
         "LOG": "📝 Логирование",
         "DEBUG": "🧪 Режим разработки",
         "MODERATION": "🛡️ Модерация и фильтры",
+        "BAN_NOTIFICATIONS": "🚫 Тексты уведомлений о блокировках",
     }
 
     CATEGORY_DESCRIPTIONS: Dict[str, str] = {
@@ -184,6 +185,7 @@ class BotConfigurationService:
         "LOG": "Уровни логирования и ротация.",
         "DEBUG": "Отладочные функции и безопасный режим.",
         "MODERATION": "Настройки фильтров отображаемых имен и защиты от фишинга.",
+        "BAN_NOTIFICATIONS": "Тексты уведомлений о блокировках, которые отправляются пользователям.",
     }
 
     @staticmethod
@@ -340,6 +342,7 @@ class BotConfigurationService:
         "WEB_API_": "WEB_API",
         "DEBUG": "DEBUG",
         "DISPLAY_NAME_": "MODERATION",
+        "BAN_MSG_": "BAN_NOTIFICATIONS",
     }
 
     CHOICES: Dict[str, List[ChoiceOption]] = {
