@@ -2026,8 +2026,15 @@ async def preview_tariff_switch(
     # Calculate switch cost
     current_is_daily = getattr(current_tariff, 'is_daily', False) if current_tariff else False
     new_is_daily = getattr(new_tariff, 'is_daily', False)
+    switching_to_daily = not current_is_daily and new_is_daily
+    switching_from_daily = current_is_daily and not new_is_daily
 
-    if current_is_daily and not new_is_daily:
+    if switching_to_daily:
+        # Switching TO daily - pay first day price
+        daily_price = getattr(new_tariff, 'daily_price_kopeks', 0)
+        upgrade_cost = daily_price
+        is_upgrade = daily_price > 0
+    elif switching_from_daily:
         # Switching FROM daily TO periodic - full payment for new tariff
         min_period_price = 0
         if new_tariff.period_prices:
@@ -2148,8 +2155,20 @@ async def switch_tariff(
     current_is_daily = getattr(current_tariff, 'is_daily', False) if current_tariff else False
     new_is_daily = getattr(new_tariff, 'is_daily', False)
     switching_from_daily = current_is_daily and not new_is_daily
+    switching_to_daily = not current_is_daily and new_is_daily
 
-    if switching_from_daily:
+    if switching_to_daily:
+        # Switching TO daily tariff - charge first day price
+        daily_price = getattr(new_tariff, 'daily_price_kopeks', 0)
+        if daily_price <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Daily tariff has invalid price",
+            )
+        upgrade_cost = daily_price
+        new_period_days = 1  # Daily tariff starts with 1 day
+    elif switching_from_daily:
+        # Switch FROM daily to regular tariff - pay for minimum period
         min_period_days = 30
         min_period_price = 0
         if new_tariff.period_prices:
@@ -2158,7 +2177,7 @@ async def switch_tariff(
         upgrade_cost = min_period_price
         new_period_days = min_period_days
     else:
-        # Calculate proportional cost difference
+        # Regular tariff switch - calculate proportional cost difference
         current_daily_price = 0
         new_daily_price = 0
 
@@ -2196,10 +2215,12 @@ async def switch_tariff(
                 },
             )
 
-        if switching_from_daily:
-            description = f"Switch from daily to tariff '{new_tariff.name}' ({new_period_days} days)"
+        if switching_to_daily:
+            description = f"Переход на суточный тариф '{new_tariff.name}'"
+        elif switching_from_daily:
+            description = f"Переход с суточного на тариф '{new_tariff.name}' ({new_period_days} дней)"
         else:
-            description = f"Switch to tariff '{new_tariff.name}' (upgrade for {remaining_days} days)"
+            description = f"Переход на тариф '{new_tariff.name}' (доплата за {remaining_days} дней)"
 
         success = await subtract_user_balance(db, user, upgrade_cost, description)
         if not success:
@@ -2226,7 +2247,12 @@ async def switch_tariff(
     user.subscription.purchased_traffic_gb = 0  # Reset purchased traffic on tariff switch
     user.subscription.traffic_reset_at = None  # Reset traffic reset date
 
-    if switching_from_daily:
+    if switching_to_daily:
+        # Switching TO daily - reset end_date to 1 day, set last_daily_charge_at
+        user.subscription.end_date = datetime.utcnow() + timedelta(days=1)
+        user.subscription.last_daily_charge_at = datetime.utcnow()
+        user.subscription.is_daily_paused = False
+    elif switching_from_daily:
         user.subscription.end_date = datetime.utcnow() + timedelta(days=new_period_days)
         user.subscription.is_daily_paused = False
 
