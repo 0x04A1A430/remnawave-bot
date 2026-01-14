@@ -37,6 +37,8 @@ class SubscriptionResponse(BaseModel):
     # Daily tariff fields
     is_daily: bool = False
     is_daily_paused: bool = False
+    daily_price_kopeks: Optional[int] = None
+    next_daily_charge_at: Optional[datetime] = None  # When next daily charge will happen
     tariff_id: Optional[int] = None
     tariff_name: Optional[str] = None
 
