@@ -3233,12 +3233,27 @@ async def handle_toggle_daily_subscription_pause(
             "DAILY_SUBSCRIPTION_RESUMED",
             "▶️ Подписка возобновлена!"
         )
+        # Синхронизируем с Remnawave - активируем пользователя
+        try:
+            from app.services.subscription_service import SubscriptionService
+            subscription_service = SubscriptionService()
+            await subscription_service.create_remnawave_user(
+                db,
+                subscription,
+                reset_traffic=False,
+                reset_reason=None,
+            )
+            logger.info(f"✅ Синхронизировано с Remnawave после возобновления суточной подписки {subscription.id}")
+        except Exception as e:
+            logger.error(f"Ошибка синхронизации с Remnawave при возобновлении: {e}")
     else:
         # Была активна, теперь на паузе
         message = texts.t(
             "DAILY_SUBSCRIPTION_PAUSED",
             "⏸️ Подписка приостановлена!"
         )
+        # При паузе можно отключить пользователя в Remnawave (опционально)
+        # Пока оставляем активным, т.к. пауза - это только остановка списания
 
     await callback.answer(message, show_alert=True)
 
