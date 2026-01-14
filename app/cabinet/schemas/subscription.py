@@ -38,6 +38,7 @@ class SubscriptionResponse(BaseModel):
     is_daily: bool = False
     is_daily_paused: bool = False
     tariff_id: Optional[int] = None
+    tariff_name: Optional[str] = None
 
     class Config:
         from_attributes = True
