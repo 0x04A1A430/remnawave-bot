@@ -227,7 +227,7 @@ class Settings(BaseSettings):
     BLACKLIST_IGNORE_ADMINS: bool = True
 
     # Настройки простой покупки
-    SIMPLE_SUBSCRIPTION_ENABLED: bool = True
+    SIMPLE_SUBSCRIPTION_ENABLED: bool = False
     SIMPLE_SUBSCRIPTION_PERIOD_DAYS: int = 30
     SIMPLE_SUBSCRIPTION_DEVICE_LIMIT: int = 1
     SIMPLE_SUBSCRIPTION_TRAFFIC_GB: int = 0  # 0 означает безлимит
