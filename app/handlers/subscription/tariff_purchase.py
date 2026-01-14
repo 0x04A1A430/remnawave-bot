@@ -643,10 +643,14 @@ async def select_tariff(
             initial_days = tariff.min_days
             initial_traffic = tariff.min_traffic_gb if can_custom_traffic else tariff.traffic_limit_gb
 
+            # Вычисляем скидку для начального периода
+            discount_percent = _get_user_period_discount(db_user, initial_days)
+
             await state.update_data(
                 selected_tariff_id=tariff_id,
                 custom_days=initial_days,
                 custom_traffic_gb=initial_traffic,
+                period_discount_percent=discount_percent,
             )
 
             preview_text = format_custom_tariff_preview(
@@ -654,6 +658,7 @@ async def select_tariff(
                 days=initial_days,
                 traffic_gb=initial_traffic,
                 user_balance=user_balance,
+                discount_percent=discount_percent,
             )
 
             await callback.message.edit_text(
@@ -720,7 +725,10 @@ async def handle_custom_days_change(
     new_days = current_days + delta
     new_days = max(tariff.min_days, min(tariff.max_days, new_days))
 
-    await state.update_data(custom_days=new_days)
+    # При изменении дней пересчитываем скидку для нового периода
+    discount_percent = _get_user_period_discount(db_user, new_days)
+
+    await state.update_data(custom_days=new_days, period_discount_percent=discount_percent)
 
     user_balance = db_user.balance_kopeks or 0
 
@@ -729,6 +737,7 @@ async def handle_custom_days_change(
         days=new_days,
         traffic_gb=current_traffic,
         user_balance=user_balance,
+        discount_percent=discount_percent,
     )
 
     await callback.message.edit_text(
@@ -770,6 +779,7 @@ async def handle_custom_traffic_change(
     state_data = await state.get_data()
     current_days = state_data.get('custom_days', tariff.min_days)
     current_traffic = state_data.get('custom_traffic_gb', tariff.min_traffic_gb)
+    discount_percent = state_data.get('period_discount_percent', 0)
 
     # Применяем изменение
     new_traffic = current_traffic + delta
@@ -784,6 +794,7 @@ async def handle_custom_traffic_change(
         days=current_days,
         traffic_gb=new_traffic,
         user_balance=user_balance,
+        discount_percent=discount_percent,
     )
 
     await callback.message.edit_text(
@@ -823,6 +834,7 @@ async def handle_custom_confirm(
     state_data = await state.get_data()
     custom_days = state_data.get('custom_days', tariff.min_days)
     custom_traffic = state_data.get('custom_traffic_gb', tariff.min_traffic_gb)
+    discount_percent = state_data.get('period_discount_percent', 0)
 
     # Рассчитываем цену (используем общую функцию)
     period_price, traffic_price, total_price = _calculate_custom_tariff_price(
@@ -834,6 +846,11 @@ async def handle_custom_confirm(
         # Период не найден в period_prices - ошибка
         await callback.answer("Выбранный период недоступен для этого тарифа", show_alert=True)
         return
+
+    # Применяем скидку к цене периода (не к трафику)
+    if discount_percent > 0:
+        period_price = _apply_promo_discount(period_price, discount_percent)
+        total_price = period_price + traffic_price
 
     # Проверяем баланс
     user_balance = db_user.balance_kopeks or 0
@@ -982,11 +999,15 @@ async def select_tariff_period_with_traffic(
     user_balance = db_user.balance_kopeks or 0
     initial_traffic = tariff.min_traffic_gb
 
-    # Сохраняем выбранный период в состояние
+    # Получаем скидку для выбранного периода
+    discount_percent = _get_user_period_discount(db_user, period)
+
+    # Сохраняем выбранный период и скидку в состояние
     await state.update_data(
         selected_tariff_id=tariff_id,
         custom_days=period,  # Фиксированный период из period_prices
         custom_traffic_gb=initial_traffic,
+        period_discount_percent=discount_percent,  # Сохраняем скидку
     )
 
     preview_text = format_custom_tariff_preview(
@@ -994,6 +1015,7 @@ async def select_tariff_period_with_traffic(
         days=period,
         traffic_gb=initial_traffic,
         user_balance=user_balance,
+        discount_percent=discount_percent,  # Применяем скидку при отображении
     )
 
     await callback.message.edit_text(
