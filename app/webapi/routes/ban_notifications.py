@@ -64,6 +64,7 @@ async def send_ban_notification(
                 ip_count=request.ip_count,
                 limit=request.limit,
                 ban_minutes=request.ban_minutes,
+                node_name=request.node_name,
             )
 
         elif request.notification_type == "enabled":

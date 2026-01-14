@@ -84,7 +84,8 @@ class BanNotificationService:
         username: str,
         ip_count: int,
         limit: int,
-        ban_minutes: int
+        ban_minutes: int,
+        node_name: Optional[str] = None
     ) -> Tuple[bool, str, Optional[int]]:
         """
         Отправить уведомление о блокировке пользователю
@@ -101,12 +102,29 @@ class BanNotificationService:
             logger.warning(f"Пользователь {user_identifier} не найден в базе данных")
             return False, f"Пользователь не найден: {user_identifier}", None
 
+        # Формируем информацию о ноде (в формате дерева)
+        node_info = f"├ 🖥 Сервер: <b>{node_name}</b>\n" if node_name else ""
+
         # Формируем сообщение из настроек
-        message_text = settings.BAN_MSG_PUNISHMENT.format(
-            ip_count=ip_count,
-            limit=limit,
-            ban_minutes=ban_minutes
-        )
+        # Используем безопасное форматирование - если {node_info} отсутствует в шаблоне, не будет ошибки
+        format_vars = {
+            "ip_count": ip_count,
+            "limit": limit,
+            "ban_minutes": ban_minutes,
+            "node_info": node_info
+        }
+        try:
+            message_text = settings.BAN_MSG_PUNISHMENT.format(**format_vars)
+        except KeyError:
+            # Старый шаблон без {node_info} - форматируем без него
+            message_text = settings.BAN_MSG_PUNISHMENT.format(
+                ip_count=ip_count,
+                limit=limit,
+                ban_minutes=ban_minutes
+            )
+            # Добавляем информацию о ноде в конец, если она есть
+            if node_info:
+                message_text = message_text.rstrip() + f"\n\n{node_info.rstrip()}"
 
         # Отправляем сообщение
         try:
@@ -243,15 +261,23 @@ class BanNotificationService:
             logger.warning(f"Пользователь {user_identifier} не найден в базе данных")
             return False, f"Пользователь не найден: {user_identifier}", None
 
-        # Формируем сообщение из настроек
-        network_info = f"Тип сети: <b>{network_type}</b>\n" if network_type else ""
-        node_info = f"Сервер: <b>{node_name}</b>\n" if node_name else ""
+        # Формируем сообщение из настроек (в формате дерева)
+        network_info = f"├ 🌐 Сеть: <b>{network_type}</b>\n" if network_type else ""
+        node_info = f"├ 🖥 Сервер: <b>{node_name}</b>\n" if node_name else ""
 
-        message_text = settings.BAN_MSG_WIFI.format(
-            ban_minutes=ban_minutes,
-            network_info=network_info,
-            node_info=node_info
-        )
+        # Безопасное форматирование
+        format_vars = {
+            "ban_minutes": ban_minutes,
+            "network_info": network_info,
+            "node_info": node_info
+        }
+        try:
+            message_text = settings.BAN_MSG_WIFI.format(**format_vars)
+        except KeyError:
+            message_text = settings.BAN_MSG_WIFI.format(ban_minutes=ban_minutes)
+            extra_info = network_info + node_info
+            if extra_info:
+                message_text = message_text.rstrip() + f"\n\n{extra_info.rstrip()}"
 
         # Отправляем сообщение
         try:
@@ -297,15 +323,23 @@ class BanNotificationService:
             logger.warning(f"Пользователь {user_identifier} не найден в базе данных")
             return False, f"Пользователь не найден: {user_identifier}", None
 
-        # Формируем сообщение из настроек
-        network_info = f"Тип сети: <b>{network_type}</b>\n" if network_type else ""
-        node_info = f"Сервер: <b>{node_name}</b>\n" if node_name else ""
+        # Формируем сообщение из настроек (в формате дерева)
+        network_info = f"├ 🌐 Сеть: <b>{network_type}</b>\n" if network_type else ""
+        node_info = f"├ 🖥 Сервер: <b>{node_name}</b>\n" if node_name else ""
 
-        message_text = settings.BAN_MSG_MOBILE.format(
-            ban_minutes=ban_minutes,
-            network_info=network_info,
-            node_info=node_info
-        )
+        # Безопасное форматирование
+        format_vars = {
+            "ban_minutes": ban_minutes,
+            "network_info": network_info,
+            "node_info": node_info
+        }
+        try:
+            message_text = settings.BAN_MSG_MOBILE.format(**format_vars)
+        except KeyError:
+            message_text = settings.BAN_MSG_MOBILE.format(ban_minutes=ban_minutes)
+            extra_info = network_info + node_info
+            if extra_info:
+                message_text = message_text.rstrip() + f"\n\n{extra_info.rstrip()}"
 
         # Отправляем сообщение
         try:
