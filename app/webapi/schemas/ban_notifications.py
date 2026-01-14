@@ -25,9 +25,9 @@ class BanNotificationRequest(BaseModel):
     # Данные для warning
     warning_message: Optional[str] = Field(None, description="Текст предупреждения")
 
-    # Данные для network_wifi
+    # Данные для network_wifi/network_mobile и punishment
     network_type: Optional[str] = Field(None, description="Тип сети (WiFi/Mobile)")
-    node_name: Optional[str] = Field(None, description="Название ноды")
+    node_name: Optional[str] = Field(None, description="Название ноды/сервера с которой пришел бан")
 
     class Config:
         json_schema_extra = {
@@ -37,7 +37,8 @@ class BanNotificationRequest(BaseModel):
                 "username": "john_doe",
                 "ip_count": 5,
                 "limit": 3,
-                "ban_minutes": 30
+                "ban_minutes": 30,
+                "node_name": "DE-Server-1"
             }
         }
 
