@@ -12,16 +12,21 @@ class SubscriptionStates(StatesGroup):
     selecting_countries = State()
     selecting_devices = State()
     confirming_purchase = State()
-    
+
     adding_countries = State()
     adding_traffic = State()
     adding_devices = State()
     extending_subscription = State()
     confirming_traffic_reset = State()
     cart_saved_for_topup = State()
-    
+
     # Состояния для простой подписки
     waiting_for_simple_subscription_payment_method = State()
+
+    # Состояния для кастомных дней/трафика при покупке тарифа
+    selecting_custom_days = State()
+    selecting_custom_traffic = State()
+    confirming_custom_purchase = State()
 
 class BalanceStates(StatesGroup):
     waiting_for_amount = State()

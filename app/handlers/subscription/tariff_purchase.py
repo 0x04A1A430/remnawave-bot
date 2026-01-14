@@ -318,6 +318,151 @@ def get_daily_tariff_insufficient_balance_keyboard(
     ])
 
 
+# ==================== Кастомные дни/трафик ====================
+
+
+def get_custom_tariff_keyboard(
+    tariff_id: int,
+    language: str,
+    days: int,
+    traffic_gb: int,
+    can_custom_days: bool,
+    can_custom_traffic: bool,
+    min_days: int = 1,
+    max_days: int = 365,
+    min_traffic: int = 1,
+    max_traffic: int = 1000,
+) -> InlineKeyboardMarkup:
+    """Создает клавиатуру для настройки кастомных дней и трафика."""
+    texts = get_texts(language)
+    buttons = []
+
+    # Кнопки изменения дней
+    if can_custom_days:
+        days_row = []
+        # -30 / -7 / -1
+        if days > min_days:
+            if days - 30 >= min_days:
+                days_row.append(InlineKeyboardButton(text="-30", callback_data=f"custom_days:{tariff_id}:-30"))
+            if days - 7 >= min_days:
+                days_row.append(InlineKeyboardButton(text="-7", callback_data=f"custom_days:{tariff_id}:-7"))
+            days_row.append(InlineKeyboardButton(text="-1", callback_data=f"custom_days:{tariff_id}:-1"))
+
+        # Текущее значение
+        days_row.append(InlineKeyboardButton(text=f"📅 {days} дн.", callback_data="noop"))
+
+        # +1 / +7 / +30
+        if days < max_days:
+            days_row.append(InlineKeyboardButton(text="+1", callback_data=f"custom_days:{tariff_id}:1"))
+            if days + 7 <= max_days:
+                days_row.append(InlineKeyboardButton(text="+7", callback_data=f"custom_days:{tariff_id}:7"))
+            if days + 30 <= max_days:
+                days_row.append(InlineKeyboardButton(text="+30", callback_data=f"custom_days:{tariff_id}:30"))
+
+        if days_row:
+            buttons.append(days_row)
+
+    # Кнопки изменения трафика
+    if can_custom_traffic:
+        traffic_row = []
+        # -100 / -10 / -1
+        if traffic_gb > min_traffic:
+            if traffic_gb - 100 >= min_traffic:
+                traffic_row.append(InlineKeyboardButton(text="-100", callback_data=f"custom_traffic:{tariff_id}:-100"))
+            if traffic_gb - 10 >= min_traffic:
+                traffic_row.append(InlineKeyboardButton(text="-10", callback_data=f"custom_traffic:{tariff_id}:-10"))
+            traffic_row.append(InlineKeyboardButton(text="-1", callback_data=f"custom_traffic:{tariff_id}:-1"))
+
+        # Текущее значение
+        traffic_row.append(InlineKeyboardButton(text=f"📊 {traffic_gb} ГБ", callback_data="noop"))
+
+        # +1 / +10 / +100
+        if traffic_gb < max_traffic:
+            traffic_row.append(InlineKeyboardButton(text="+1", callback_data=f"custom_traffic:{tariff_id}:1"))
+            if traffic_gb + 10 <= max_traffic:
+                traffic_row.append(InlineKeyboardButton(text="+10", callback_data=f"custom_traffic:{tariff_id}:10"))
+            if traffic_gb + 100 <= max_traffic:
+                traffic_row.append(InlineKeyboardButton(text="+100", callback_data=f"custom_traffic:{tariff_id}:100"))
+
+        if traffic_row:
+            buttons.append(traffic_row)
+
+    # Кнопка подтверждения
+    buttons.append([
+        InlineKeyboardButton(
+            text="✅ Подтвердить покупку",
+            callback_data=f"custom_confirm:{tariff_id}"
+        )
+    ])
+
+    # Кнопка назад
+    buttons.append([
+        InlineKeyboardButton(text=texts.BACK, callback_data="tariff_list")
+    ])
+
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def format_custom_tariff_preview(
+    tariff: Tariff,
+    days: int,
+    traffic_gb: int,
+    user_balance: int,
+    discount_percent: int = 0,
+) -> str:
+    """Форматирует предпросмотр покупки с кастомными параметрами."""
+    # Рассчитываем цену
+    days_price = 0
+    traffic_price = 0
+
+    if tariff.can_purchase_custom_days():
+        days_price = tariff.get_price_for_custom_days(days) or 0
+
+    if tariff.can_purchase_custom_traffic():
+        traffic_price = tariff.get_price_for_custom_traffic(traffic_gb) or 0
+
+    total_price = days_price + traffic_price
+
+    # Применяем скидку
+    if discount_percent > 0:
+        total_price = _apply_promo_discount(total_price, discount_percent)
+
+    traffic_display = f"{traffic_gb} ГБ" if traffic_gb > 0 else _format_traffic(tariff.traffic_limit_gb)
+
+    text = f"""📦 <b>{tariff.name}</b>
+
+<b>Настройте параметры:</b>
+"""
+
+    if tariff.can_purchase_custom_days():
+        text += f"📅 Дней: <b>{days}</b> (от {tariff.min_days} до {tariff.max_days})\n"
+        text += f"   💰 {_format_price_kopeks(days_price)}\n"
+
+    if tariff.can_purchase_custom_traffic():
+        text += f"📊 Трафик: <b>{traffic_gb} ГБ</b> (от {tariff.min_traffic_gb} до {tariff.max_traffic_gb})\n"
+        text += f"   💰 {_format_price_kopeks(traffic_price)}\n"
+    else:
+        text += f"📊 Трафик: {traffic_display}\n"
+
+    text += f"📱 Устройств: {tariff.device_limit}\n"
+
+    if discount_percent > 0:
+        text += f"\n🎁 <b>Скидка: {discount_percent}%</b>\n"
+
+    text += f"""
+<b>💰 Итого: {_format_price_kopeks(total_price)}</b>
+
+💳 Ваш баланс: {_format_price_kopeks(user_balance)}"""
+
+    if user_balance < total_price:
+        missing = total_price - user_balance
+        text += f"\n⚠️ <b>Не хватает: {_format_price_kopeks(missing)}</b>"
+    else:
+        text += f"\nПосле оплаты: {_format_price_kopeks(user_balance - total_price)}"
+
+    return text
+
+
 @error_handler
 async def show_tariffs_list(
     callback: types.CallbackQuery,
@@ -416,15 +561,315 @@ async def select_tariff(
                 parse_mode="HTML"
             )
     else:
-        # Для обычного тарифа показываем выбор периода
-        await callback.message.edit_text(
-            format_tariff_info_for_user(tariff, db_user.language),
-            reply_markup=get_tariff_periods_keyboard(tariff, db_user.language, db_user=db_user),
-            parse_mode="HTML"
-        )
+        # Проверяем, есть ли кастомные дни или трафик
+        can_custom_days = tariff.can_purchase_custom_days()
+        can_custom_traffic = tariff.can_purchase_custom_traffic()
+
+        if can_custom_days or can_custom_traffic:
+            # Показываем экран настройки кастомных параметров
+            user_balance = db_user.balance_kopeks or 0
+
+            # Начальные значения - минимальные
+            initial_days = tariff.min_days if can_custom_days else 30
+            initial_traffic = tariff.min_traffic_gb if can_custom_traffic else tariff.traffic_limit_gb
+
+            # Сохраняем в состояние
+            await state.update_data(
+                selected_tariff_id=tariff_id,
+                custom_days=initial_days,
+                custom_traffic_gb=initial_traffic,
+            )
+
+            preview_text = format_custom_tariff_preview(
+                tariff=tariff,
+                days=initial_days,
+                traffic_gb=initial_traffic,
+                user_balance=user_balance,
+            )
+
+            await callback.message.edit_text(
+                preview_text,
+                reply_markup=get_custom_tariff_keyboard(
+                    tariff_id=tariff_id,
+                    language=db_user.language,
+                    days=initial_days,
+                    traffic_gb=initial_traffic,
+                    can_custom_days=can_custom_days,
+                    can_custom_traffic=can_custom_traffic,
+                    min_days=tariff.min_days,
+                    max_days=tariff.max_days,
+                    min_traffic=tariff.min_traffic_gb,
+                    max_traffic=tariff.max_traffic_gb,
+                ),
+                parse_mode="HTML"
+            )
+        else:
+            # Для обычного тарифа показываем выбор периода
+            await callback.message.edit_text(
+                format_tariff_info_for_user(tariff, db_user.language),
+                reply_markup=get_tariff_periods_keyboard(tariff, db_user.language, db_user=db_user),
+                parse_mode="HTML"
+            )
 
     await state.update_data(selected_tariff_id=tariff_id)
     await callback.answer()
+
+
+@error_handler
+async def handle_custom_days_change(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    """Обрабатывает изменение количества дней."""
+    parts = callback.data.split(":")
+    tariff_id = int(parts[1])
+    delta = int(parts[2])
+
+    tariff = await get_tariff_by_id(db, tariff_id)
+    if not tariff or not tariff.is_active:
+        await callback.answer("Тариф недоступен", show_alert=True)
+        return
+
+    state_data = await state.get_data()
+    current_days = state_data.get('custom_days', tariff.min_days)
+    current_traffic = state_data.get('custom_traffic_gb', tariff.min_traffic_gb)
+
+    # Применяем изменение
+    new_days = current_days + delta
+    new_days = max(tariff.min_days, min(tariff.max_days, new_days))
+
+    await state.update_data(custom_days=new_days)
+
+    user_balance = db_user.balance_kopeks or 0
+
+    preview_text = format_custom_tariff_preview(
+        tariff=tariff,
+        days=new_days,
+        traffic_gb=current_traffic,
+        user_balance=user_balance,
+    )
+
+    await callback.message.edit_text(
+        preview_text,
+        reply_markup=get_custom_tariff_keyboard(
+            tariff_id=tariff_id,
+            language=db_user.language,
+            days=new_days,
+            traffic_gb=current_traffic,
+            can_custom_days=tariff.can_purchase_custom_days(),
+            can_custom_traffic=tariff.can_purchase_custom_traffic(),
+            min_days=tariff.min_days,
+            max_days=tariff.max_days,
+            min_traffic=tariff.min_traffic_gb,
+            max_traffic=tariff.max_traffic_gb,
+        ),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+@error_handler
+async def handle_custom_traffic_change(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    """Обрабатывает изменение количества трафика."""
+    parts = callback.data.split(":")
+    tariff_id = int(parts[1])
+    delta = int(parts[2])
+
+    tariff = await get_tariff_by_id(db, tariff_id)
+    if not tariff or not tariff.is_active:
+        await callback.answer("Тариф недоступен", show_alert=True)
+        return
+
+    state_data = await state.get_data()
+    current_days = state_data.get('custom_days', tariff.min_days)
+    current_traffic = state_data.get('custom_traffic_gb', tariff.min_traffic_gb)
+
+    # Применяем изменение
+    new_traffic = current_traffic + delta
+    new_traffic = max(tariff.min_traffic_gb, min(tariff.max_traffic_gb, new_traffic))
+
+    await state.update_data(custom_traffic_gb=new_traffic)
+
+    user_balance = db_user.balance_kopeks or 0
+
+    preview_text = format_custom_tariff_preview(
+        tariff=tariff,
+        days=current_days,
+        traffic_gb=new_traffic,
+        user_balance=user_balance,
+    )
+
+    await callback.message.edit_text(
+        preview_text,
+        reply_markup=get_custom_tariff_keyboard(
+            tariff_id=tariff_id,
+            language=db_user.language,
+            days=current_days,
+            traffic_gb=new_traffic,
+            can_custom_days=tariff.can_purchase_custom_days(),
+            can_custom_traffic=tariff.can_purchase_custom_traffic(),
+            min_days=tariff.min_days,
+            max_days=tariff.max_days,
+            min_traffic=tariff.min_traffic_gb,
+            max_traffic=tariff.max_traffic_gb,
+        ),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+@error_handler
+async def handle_custom_confirm(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    """Подтверждает покупку тарифа с кастомными параметрами."""
+    tariff_id = int(callback.data.split(":")[1])
+
+    tariff = await get_tariff_by_id(db, tariff_id)
+    if not tariff or not tariff.is_active:
+        await callback.answer("Тариф недоступен", show_alert=True)
+        return
+
+    state_data = await state.get_data()
+    custom_days = state_data.get('custom_days', tariff.min_days)
+    custom_traffic = state_data.get('custom_traffic_gb', tariff.min_traffic_gb)
+
+    # Рассчитываем цену
+    days_price = tariff.get_price_for_custom_days(custom_days) or 0
+    traffic_price = tariff.get_price_for_custom_traffic(custom_traffic) or 0
+    total_price = days_price + traffic_price
+
+    # Проверяем баланс
+    user_balance = db_user.balance_kopeks or 0
+    if user_balance < total_price:
+        await callback.answer("Недостаточно средств на балансе", show_alert=True)
+        return
+
+    texts = get_texts(db_user.language)
+
+    try:
+        # Списываем баланс
+        success = await subtract_user_balance(
+            db, db_user, total_price,
+            f"Покупка тарифа {tariff.name} на {custom_days} дней"
+        )
+        if not success:
+            await callback.answer("Ошибка списания баланса", show_alert=True)
+            return
+
+        # Получаем список серверов из тарифа
+        squads = tariff.allowed_squads or []
+
+        # Если allowed_squads пустой - значит "все серверы", получаем их
+        if not squads:
+            from app.database.crud.server_squad import get_all_server_squads
+            all_servers, _ = await get_all_server_squads(db, available_only=True)
+            squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
+
+        # Определяем трафик
+        traffic_limit = custom_traffic if tariff.can_purchase_custom_traffic() else tariff.traffic_limit_gb
+
+        # Проверяем есть ли уже подписка
+        existing_subscription = await get_subscription_by_user_id(db, db_user.id)
+
+        if existing_subscription:
+            # Продлеваем существующую подписку и обновляем параметры тарифа
+            subscription = await extend_subscription(
+                db,
+                existing_subscription,
+                days=custom_days,
+                tariff_id=tariff.id,
+                traffic_limit_gb=traffic_limit,
+                device_limit=tariff.device_limit,
+                connected_squads=squads,
+            )
+        else:
+            # Создаем новую подписку
+            subscription = await create_paid_subscription(
+                db=db,
+                user_id=db_user.id,
+                duration_days=custom_days,
+                traffic_limit_gb=traffic_limit,
+                device_limit=tariff.device_limit,
+                connected_squads=squads,
+                tariff_id=tariff.id,
+            )
+
+        # Обновляем пользователя в Remnawave
+        try:
+            subscription_service = SubscriptionService()
+            await subscription_service.create_remnawave_user(
+                db,
+                subscription,
+                reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT,
+                reset_reason="покупка тарифа",
+            )
+        except Exception as e:
+            logger.error(f"Ошибка обновления Remnawave: {e}")
+
+        # Создаем транзакцию
+        await create_transaction(
+            db,
+            user_id=db_user.id,
+            type=TransactionType.SUBSCRIPTION_PAYMENT,
+            amount_kopeks=-total_price,
+            description=f"Покупка тарифа {tariff.name} на {custom_days} дней",
+        )
+
+        # Отправляем уведомление админу
+        try:
+            admin_notification_service = AdminNotificationService(callback.bot)
+            await admin_notification_service.send_subscription_purchase_notification(
+                db,
+                db_user,
+                subscription,
+                None,
+                custom_days,
+                was_trial_conversion=False,
+                amount_kopeks=total_price,
+            )
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления админу: {e}")
+
+        # Очищаем корзину после успешной покупки
+        try:
+            await user_cart_service.delete_user_cart(db_user.id)
+        except Exception as e:
+            logger.error(f"Ошибка очистки корзины: {e}")
+
+        await state.clear()
+
+        traffic_display = _format_traffic(traffic_limit)
+
+        await callback.message.edit_text(
+            f"🎉 <b>Подписка успешно оформлена!</b>\n\n"
+            f"📦 Тариф: <b>{tariff.name}</b>\n"
+            f"📊 Трафик: {traffic_display}\n"
+            f"📱 Устройств: {tariff.device_limit}\n"
+            f"📅 Период: {_format_period(custom_days)}\n"
+            f"💰 Списано: {_format_price_kopeks(total_price)}\n\n"
+            f"Перейдите в раздел «Подписка» для подключения.",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")],
+                [InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")]
+            ]),
+            parse_mode="HTML"
+        )
+        await callback.answer("Подписка оформлена!", show_alert=True)
+
+    except Exception as e:
+        logger.error(f"Ошибка при покупке тарифа с кастомными параметрами: {e}", exc_info=True)
+        await callback.answer("Произошла ошибка при оформлении подписки", show_alert=True)
 
 
 @error_handler
@@ -2459,6 +2904,11 @@ def register_tariff_purchase_handlers(dp: Dispatcher):
 
     # Подтверждение покупки суточного тарифа
     dp.callback_query.register(confirm_daily_tariff_purchase, F.data.startswith("daily_tariff_confirm:"))
+
+    # Кастомные дни/трафик
+    dp.callback_query.register(handle_custom_days_change, F.data.startswith("custom_days:"))
+    dp.callback_query.register(handle_custom_traffic_change, F.data.startswith("custom_traffic:"))
+    dp.callback_query.register(handle_custom_confirm, F.data.startswith("custom_confirm:"))
 
     # Продление по тарифу
     dp.callback_query.register(select_tariff_extend_period, F.data.startswith("tariff_extend:"))

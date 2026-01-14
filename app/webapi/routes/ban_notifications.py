@@ -87,6 +87,22 @@ async def send_ban_notification(
                 warning_message=request.warning_message,
             )
 
+        elif request.notification_type == "network_wifi":
+            if request.ban_minutes is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Для типа 'network_wifi' требуется поле: ban_minutes"
+                )
+
+            success, message, telegram_id = await ban_notification_service.send_network_wifi_notification(
+                db=db,
+                user_identifier=request.user_identifier,
+                username=request.username,
+                ban_minutes=request.ban_minutes,
+                network_type=request.network_type,
+                node_name=request.node_name,
+            )
+
         else:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
