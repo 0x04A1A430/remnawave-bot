@@ -3,7 +3,7 @@
 import base64
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -105,10 +105,19 @@ def _subscription_to_response(
 
     # Use subscription's is_daily_tariff property if available
     is_daily = False
+    daily_price_kopeks = None
     if hasattr(subscription, 'is_daily_tariff'):
         is_daily = subscription.is_daily_tariff
     elif tariff_id and hasattr(subscription, 'tariff') and subscription.tariff:
         is_daily = getattr(subscription.tariff, 'is_daily', False)
+        daily_price_kopeks = getattr(subscription.tariff, 'daily_price_kopeks', None)
+
+    # Calculate next daily charge time (24 hours after last charge)
+    next_daily_charge_at = None
+    if is_daily and not is_daily_paused:
+        last_charge = getattr(subscription, 'last_daily_charge_at', None)
+        if last_charge:
+            next_daily_charge_at = last_charge + timedelta(days=1)
 
     return SubscriptionResponse(
         id=subscription.id,
@@ -133,6 +142,8 @@ def _subscription_to_response(
         is_expired=is_expired,
         is_daily=is_daily,
         is_daily_paused=is_daily_paused,
+        daily_price_kopeks=daily_price_kopeks,
+        next_daily_charge_at=next_daily_charge_at,
         tariff_id=tariff_id,
         tariff_name=tariff_name,
     )
