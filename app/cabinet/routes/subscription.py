@@ -53,7 +53,8 @@ router = APIRouter(prefix="/subscription", tags=["Cabinet Subscription"])
 
 def _subscription_to_response(
     subscription: Subscription,
-    servers: Optional[List[ServerInfo]] = None
+    servers: Optional[List[ServerInfo]] = None,
+    tariff_name: Optional[str] = None,
 ) -> SubscriptionResponse:
     """Convert Subscription model to response."""
     now = datetime.utcnow()
@@ -133,6 +134,7 @@ def _subscription_to_response(
         is_daily=is_daily,
         is_daily_paused=is_daily_paused,
         tariff_id=tariff_id,
+        tariff_name=tariff_name,
     )
 
 
@@ -153,11 +155,13 @@ async def get_subscription(
             detail="No subscription found",
         )
 
-    # Load tariff for daily subscription check
+    # Load tariff for daily subscription check and tariff name
+    tariff_name = None
     if fresh_user.subscription.tariff_id:
         tariff = await get_tariff_by_id(db, fresh_user.subscription.tariff_id)
         if tariff:
             fresh_user.subscription.tariff = tariff
+            tariff_name = tariff.name
 
     # Fetch server names for connected squads
     servers: List[ServerInfo] = []
@@ -176,7 +180,7 @@ async def get_subscription(
             for sq in server_squads
         ]
 
-    return _subscription_to_response(fresh_user.subscription, servers)
+    return _subscription_to_response(fresh_user.subscription, servers, tariff_name)
 
 
 @router.get("/renewal-options", response_model=List[RenewalOptionResponse])
