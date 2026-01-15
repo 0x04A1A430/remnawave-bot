@@ -1169,6 +1169,15 @@ async def purchase_tariff(
 
         subscription = await get_subscription_by_user_id(db, user.id)
 
+        # Get server squads from tariff
+        squads = tariff.allowed_squads or []
+
+        # If allowed_squads is empty, it means "all servers"
+        if not squads:
+            from app.database.crud.server_squad import get_all_server_squads
+            all_servers, _ = await get_all_server_squads(db, available_only=True)
+            squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
+
         # Charge balance
         if is_daily_tariff:
             description = f"Активация суточного тарифа '{tariff.name}'"
@@ -1199,17 +1208,17 @@ async def purchase_tariff(
                 tariff_id=tariff.id,
                 traffic_limit_gb=traffic_limit_gb,
                 device_limit=tariff.device_limit,
-                connected_squads=tariff.allowed_squads or [],
+                connected_squads=squads,
             )
         else:
             # Create new subscription
             subscription = await create_paid_subscription(
                 db=db,
                 user_id=user.id,
-                days=period_days,
+                duration_days=period_days,
                 traffic_limit_gb=traffic_limit_gb,
                 device_limit=tariff.device_limit,
-                connected_squads=tariff.allowed_squads or [],
+                connected_squads=squads,
                 tariff_id=tariff.id,
             )
 
