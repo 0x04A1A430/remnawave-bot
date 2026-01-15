@@ -5136,6 +5136,68 @@ async def create_withdrawal_requests_table() -> bool:
 
 
 # =============================================================================
+# МИГРАЦИЯ ДЛЯ ИНДИВИДУАЛЬНЫХ ДОКУПОК ТРАФИКА
+# =============================================================================
+
+async def create_traffic_purchases_table() -> bool:
+    """Создаёт таблицу для индивидуальных докупок трафика с отдельными датами истечения."""
+    try:
+        if await check_table_exists('traffic_purchases'):
+            logger.info("ℹ️ Таблица traffic_purchases уже существует")
+            return True
+
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'sqlite':
+                create_sql = """
+                CREATE TABLE traffic_purchases (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    subscription_id INTEGER NOT NULL,
+                    traffic_gb INTEGER NOT NULL,
+                    expires_at DATETIME NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE
+                );
+                CREATE INDEX idx_traffic_purchases_subscription_id ON traffic_purchases(subscription_id);
+                CREATE INDEX idx_traffic_purchases_expires_at ON traffic_purchases(expires_at);
+                """
+            elif db_type == 'postgresql':
+                create_sql = """
+                CREATE TABLE traffic_purchases (
+                    id SERIAL PRIMARY KEY,
+                    subscription_id INTEGER NOT NULL REFERENCES subscriptions(id) ON DELETE CASCADE,
+                    traffic_gb INTEGER NOT NULL,
+                    expires_at TIMESTAMP NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE INDEX idx_traffic_purchases_subscription_id ON traffic_purchases(subscription_id);
+                CREATE INDEX idx_traffic_purchases_expires_at ON traffic_purchases(expires_at);
+                """
+            else:  # mysql
+                create_sql = """
+                CREATE TABLE traffic_purchases (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    subscription_id INT NOT NULL,
+                    traffic_gb INT NOT NULL,
+                    expires_at DATETIME NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE,
+                    INDEX idx_traffic_purchases_subscription_id (subscription_id),
+                    INDEX idx_traffic_purchases_expires_at (expires_at)
+                );
+                """
+
+            await conn.execute(text(create_sql))
+            logger.info("✅ Таблица traffic_purchases создана")
+
+        return True
+    except Exception as error:
+        logger.error(f"❌ Ошибка создания таблицы traffic_purchases: {error}")
+        return False
+
+
+# =============================================================================
 # МИГРАЦИИ ДЛЯ РЕЖИМА ТАРИФОВ
 # =============================================================================
 
@@ -6459,6 +6521,13 @@ async def run_universal_migration():
             logger.info("✅ Доступ серверов по промогруппам настроен")
         else:
             logger.warning("⚠️ Проблемы с настройкой доступа серверов к промогруппам")
+
+        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ ДОКУПОК ТРАФИКА ===")
+        traffic_purchases_ready = await create_traffic_purchases_table()
+        if traffic_purchases_ready:
+            logger.info("✅ Таблица traffic_purchases готова")
+        else:
+            logger.warning("⚠️ Проблемы с таблицей traffic_purchases")
 
         logger.info("=== СОЗДАНИЕ ТАБЛИЦ ДЛЯ РЕЖИМА ТАРИФОВ ===")
         tariffs_table_ready = await create_tariffs_table()
