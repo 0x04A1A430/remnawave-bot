@@ -34,6 +34,7 @@ from ..dependencies import get_cabinet_db, get_current_cabinet_user
 from ..schemas.subscription import (
     SubscriptionResponse,
     ServerInfo,
+    TrafficPurchaseInfo,
     RenewalOptionResponse,
     RenewalRequest,
     TrafficPackageResponse,
@@ -55,6 +56,7 @@ def _subscription_to_response(
     subscription: Subscription,
     servers: Optional[List[ServerInfo]] = None,
     tariff_name: Optional[str] = None,
+    traffic_purchases: Optional[List[Dict[str, Any]]] = None,
 ) -> SubscriptionResponse:
     """Convert Subscription model to response."""
     now = datetime.utcnow()
@@ -146,6 +148,7 @@ def _subscription_to_response(
         subscription_url=subscription.subscription_url,
         is_active=is_active,
         is_expired=is_expired,
+        traffic_purchases=traffic_purchases or [],
         is_daily=is_daily,
         is_daily_paused=is_daily_paused,
         daily_price_kopeks=daily_price_kopeks,
@@ -197,7 +200,37 @@ async def get_subscription(
             for sq in server_squads
         ]
 
-    return _subscription_to_response(fresh_user.subscription, servers, tariff_name)
+    # Fetch traffic purchases (monthly packages)
+    traffic_purchases_data = []
+    from app.database.models import TrafficPurchase
+
+    now = datetime.utcnow()
+    purchases_query = (
+        select(TrafficPurchase)
+        .where(TrafficPurchase.subscription_id == fresh_user.subscription.id)
+        .where(TrafficPurchase.expires_at > now)
+        .order_by(TrafficPurchase.expires_at.asc())
+    )
+    purchases_result = await db.execute(purchases_query)
+    purchases = purchases_result.scalars().all()
+
+    for purchase in purchases:
+        time_remaining = purchase.expires_at - now
+        days_remaining = max(0, int(time_remaining.total_seconds() / 86400))
+        total_duration_seconds = (purchase.expires_at - purchase.created_at).total_seconds()
+        elapsed_seconds = (now - purchase.created_at).total_seconds()
+        progress_percent = min(100.0, max(0.0, (elapsed_seconds / total_duration_seconds * 100) if total_duration_seconds > 0 else 0))
+
+        traffic_purchases_data.append({
+            "id": purchase.id,
+            "traffic_gb": purchase.traffic_gb,
+            "expires_at": purchase.expires_at,
+            "created_at": purchase.created_at,
+            "days_remaining": days_remaining,
+            "progress_percent": round(progress_percent, 1)
+        })
+
+    return _subscription_to_response(fresh_user.subscription, servers, tariff_name, traffic_purchases_data)
 
 
 @router.get("/renewal-options", response_model=List[RenewalOptionResponse])

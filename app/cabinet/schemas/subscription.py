@@ -12,6 +12,16 @@ class ServerInfo(BaseModel):
     country_code: Optional[str] = None
 
 
+class TrafficPurchaseInfo(BaseModel):
+    """Purchased traffic package info."""
+    id: int
+    traffic_gb: int
+    expires_at: datetime
+    created_at: datetime
+    days_remaining: int
+    progress_percent: float
+
+
 class SubscriptionResponse(BaseModel):
     """User subscription data."""
     id: int
@@ -34,6 +44,7 @@ class SubscriptionResponse(BaseModel):
     subscription_url: Optional[str] = None
     is_active: bool
     is_expired: bool
+    traffic_purchases: List[TrafficPurchaseInfo] = []
     # Daily tariff fields
     is_daily: bool = False
     is_daily_paused: bool = False
