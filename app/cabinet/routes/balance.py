@@ -83,20 +83,25 @@ async def get_transactions(
     result = await db.execute(query)
     transactions = result.scalars().all()
 
-    items = [
-        TransactionResponse(
+    items = []
+    for t in transactions:
+        # Determine sign based on transaction type
+        # Credits (positive): DEPOSIT, REFERRAL_REWARD, REFUND, POLL_REWARD
+        # Debits (negative): SUBSCRIPTION_PAYMENT, WITHDRAWAL
+        is_debit = t.type in ['subscription_payment', 'withdrawal']
+        amount_kopeks = -abs(t.amount_kopeks) if is_debit else abs(t.amount_kopeks)
+
+        items.append(TransactionResponse(
             id=t.id,
             type=t.type,
-            amount_kopeks=t.amount_kopeks,
-            amount_rubles=t.amount_kopeks / 100,
+            amount_kopeks=amount_kopeks,
+            amount_rubles=amount_kopeks / 100,
             description=t.description,
             payment_method=t.payment_method,
             is_completed=t.is_completed,
             created_at=t.created_at,
             completed_at=t.completed_at,
-        )
-        for t in transactions
-    ]
+        ))
 
     pages = math.ceil(total / per_page) if total > 0 else 1
 
