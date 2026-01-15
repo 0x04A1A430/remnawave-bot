@@ -7,6 +7,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc
+from sqlalchemy.orm import selectinload
 
 from app.database.models import User, ReferralEarning
 from app.config import settings
@@ -83,8 +84,8 @@ async def get_referral_list(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get list of invited users."""
-    # Base query
-    query = select(User).where(User.referred_by_id == user.id)
+    # Base query with eager loading of subscription relationship
+    query = select(User).options(selectinload(User.subscription)).where(User.referred_by_id == user.id)
 
     # Get total count
     count_query = select(func.count()).select_from(User).where(User.referred_by_id == user.id)
