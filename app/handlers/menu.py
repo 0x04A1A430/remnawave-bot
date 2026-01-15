@@ -1423,6 +1423,7 @@ async def handle_activate_button(
 
     except Exception as e:
         logger.error(f"Ошибка автоматической активации для {db_user.telegram_id}: {e}")
+        await db.rollback()
         await callback.answer(
             texts.t("ACTIVATION_ERROR", "❌ Ошибка активации. Попробуйте позже."),
             show_alert=True,
