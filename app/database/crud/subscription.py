@@ -486,14 +486,50 @@ async def add_subscription_traffic(
     subscription: Subscription,
     gb: int
 ) -> Subscription:
-    
+
     subscription.add_traffic(gb)
     subscription.updated_at = datetime.utcnow()
-    
+
+    # Создаём новую запись докупки с индивидуальной датой истечения (30 дней)
+    from app.database.models import TrafficPurchase
+    from sqlalchemy import select as sql_select
+    from datetime import timedelta
+
+    new_expires_at = datetime.utcnow() + timedelta(days=30)
+    new_purchase = TrafficPurchase(
+        subscription_id=subscription.id,
+        traffic_gb=gb,
+        expires_at=new_expires_at
+    )
+    db.add(new_purchase)
+
+    # Обновляем общий счетчик докупленного трафика
+    current_purchased = getattr(subscription, 'purchased_traffic_gb', 0) or 0
+    subscription.purchased_traffic_gb = current_purchased + gb
+
+    # Устанавливаем traffic_reset_at на ближайшую дату истечения из всех активных докупок
+    now = datetime.utcnow()
+    active_purchases_query = (
+        sql_select(TrafficPurchase)
+        .where(TrafficPurchase.subscription_id == subscription.id)
+        .where(TrafficPurchase.expires_at > now)
+    )
+    active_purchases_result = await db.execute(active_purchases_query)
+    active_purchases = active_purchases_result.scalars().all()
+
+    if active_purchases:
+        # Добавляем только что созданную покупку к списку
+        all_active = list(active_purchases) + [new_purchase]
+        earliest_expiry = min(p.expires_at for p in all_active)
+        subscription.traffic_reset_at = earliest_expiry
+    else:
+        # Первая докупка
+        subscription.traffic_reset_at = new_expires_at
+
     await db.commit()
     await db.refresh(subscription)
-    
-    logger.info(f"📈 К подписке пользователя {subscription.user_id} добавлено {gb} ГБ трафика")
+
+    logger.info(f"📈 К подписке пользователя {subscription.user_id} добавлено {gb} ГБ трафика (истекает {new_expires_at.strftime('%d.%m.%Y')})")
     return subscription
 
 
