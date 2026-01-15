@@ -108,6 +108,7 @@ class PaymentMethod(Enum):
     CLOUDPAYMENTS = "cloudpayments"
     FREEKASSA = "freekassa"
     MANUAL = "manual"
+    BALANCE = "balance"
 
 
 class MainMenuButtonActionType(Enum):
