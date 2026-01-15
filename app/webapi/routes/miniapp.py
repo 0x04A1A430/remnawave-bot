@@ -7269,13 +7269,8 @@ async def purchase_traffic_topup_endpoint(
             },
         )
 
-    # Добавляем трафик
+    # Добавляем трафик (add_subscription_traffic уже создаёт TrafficPurchase и обновляет все необходимые поля)
     await add_subscription_traffic(db, subscription, payload.gb)
-
-    # Обновляем purchased_traffic_gb
-    current_purchased = getattr(subscription, 'purchased_traffic_gb', 0) or 0
-    subscription.purchased_traffic_gb = current_purchased + payload.gb
-    await db.commit()
 
     # Синхронизируем с RemnaWave
     try:

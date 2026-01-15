@@ -608,42 +608,8 @@ async def add_traffic(
             subscription.purchased_traffic_gb = 0
             subscription.traffic_reset_at = None
         else:
+            # add_subscription_traffic уже создаёт TrafficPurchase и обновляет все необходимые поля
             await add_subscription_traffic(db, subscription, traffic_gb)
-            # Создаём новую запись докупки с индивидуальной датой истечения
-            from app.database.models import TrafficPurchase
-            from sqlalchemy import select as sql_select
-            from datetime import timedelta
-
-            new_expires_at = datetime.utcnow() + timedelta(days=30)
-            new_purchase = TrafficPurchase(
-                subscription_id=subscription.id,
-                traffic_gb=traffic_gb,
-                expires_at=new_expires_at
-            )
-            db.add(new_purchase)
-
-            # Обновляем общий счетчик докупленного трафика
-            current_purchased = getattr(subscription, 'purchased_traffic_gb', 0) or 0
-            subscription.purchased_traffic_gb = current_purchased + traffic_gb
-
-            # Устанавливаем traffic_reset_at на ближайшую дату истечения из всех активных докупок
-            now = datetime.utcnow()
-            active_purchases_query = (
-                sql_select(TrafficPurchase)
-                .where(TrafficPurchase.subscription_id == subscription.id)
-                .where(TrafficPurchase.expires_at > now)
-            )
-            active_purchases_result = await db.execute(active_purchases_query)
-            active_purchases = active_purchases_result.scalars().all()
-
-            if active_purchases:
-                # Добавляем только что созданную покупку к списку
-                all_active = list(active_purchases) + [new_purchase]
-                earliest_expiry = min(p.expires_at for p in all_active)
-                subscription.traffic_reset_at = earliest_expiry
-            else:
-                # Первая докупка
-                subscription.traffic_reset_at = new_expires_at
 
         subscription_service = SubscriptionService()
         await subscription_service.update_remnawave_user(db, subscription)
