@@ -480,6 +480,7 @@ async def get_ticket_settings(
         sla_minutes=settings.SUPPORT_TICKET_SLA_MINUTES,
         sla_check_interval_seconds=settings.SUPPORT_TICKET_SLA_CHECK_INTERVAL_SECONDS,
         sla_reminder_cooldown_minutes=settings.SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES,
+        support_system_mode=settings.get_support_system_mode(),
     )
 
 
@@ -493,6 +494,15 @@ async def update_ticket_settings(
     import os
     from pathlib import Path
 
+    # Validate support_system_mode
+    if request.support_system_mode is not None:
+        mode = request.support_system_mode.strip().lower()
+        if mode not in {"tickets", "contact", "both"}:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid support_system_mode. Must be: tickets, contact, or both",
+            )
+
     # Update in-memory settings
     if request.sla_enabled is not None:
         settings.SUPPORT_TICKET_SLA_ENABLED = request.sla_enabled
@@ -502,6 +512,8 @@ async def update_ticket_settings(
         settings.SUPPORT_TICKET_SLA_CHECK_INTERVAL_SECONDS = request.sla_check_interval_seconds
     if request.sla_reminder_cooldown_minutes is not None:
         settings.SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES = request.sla_reminder_cooldown_minutes
+    if request.support_system_mode is not None:
+        settings.SUPPORT_SYSTEM_MODE = request.support_system_mode.strip().lower()
 
     # Try to persist to .env file
     try:
@@ -518,6 +530,8 @@ async def update_ticket_settings(
                 updates["SUPPORT_TICKET_SLA_CHECK_INTERVAL_SECONDS"] = str(request.sla_check_interval_seconds)
             if request.sla_reminder_cooldown_minutes is not None:
                 updates["SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES"] = str(request.sla_reminder_cooldown_minutes)
+            if request.support_system_mode is not None:
+                updates["SUPPORT_SYSTEM_MODE"] = request.support_system_mode.strip().lower()
 
             new_lines = []
             updated_keys = set()
@@ -548,4 +562,5 @@ async def update_ticket_settings(
         sla_minutes=settings.SUPPORT_TICKET_SLA_MINUTES,
         sla_check_interval_seconds=settings.SUPPORT_TICKET_SLA_CHECK_INTERVAL_SECONDS,
         sla_reminder_cooldown_minutes=settings.SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES,
+        support_system_mode=settings.get_support_system_mode(),
     )
