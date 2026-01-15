@@ -1094,6 +1094,7 @@ async def auto_activate_subscription_after_topup(
             e,
             exc_info=True,
         )
+        await db.rollback()
         return False
 
 
