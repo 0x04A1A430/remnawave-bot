@@ -41,6 +41,11 @@ class Settings(BaseSettings):
     SUPPORT_TICKET_SLA_CHECK_INTERVAL_SECONDS: int = 60
     SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES: int = 15
 
+    # MiniApp tickets settings
+    MINIAPP_TICKETS_ENABLED: bool = True  # Enable/disable tickets section in miniapp
+    MINIAPP_SUPPORT_TYPE: str = "tickets"  # one of: tickets, profile, url
+    MINIAPP_SUPPORT_URL: str = ""  # Custom URL to redirect when tickets disabled (only for url type)
+
     ADMIN_NOTIFICATIONS_ENABLED: bool = False
     ADMIN_NOTIFICATIONS_CHAT_ID: Optional[str] = None
     ADMIN_NOTIFICATIONS_TOPIC_ID: Optional[int] = None
@@ -2215,12 +2220,26 @@ class Settings(BaseSettings):
     def get_support_system_mode(self) -> str:
         mode = (self.SUPPORT_SYSTEM_MODE or "both").strip().lower()
         return mode if mode in {"tickets", "contact", "both"} else "both"
-    
+
     def is_support_tickets_enabled(self) -> bool:
         return self.get_support_system_mode() in {"tickets", "both"}
-    
+
     def is_support_contact_enabled(self) -> bool:
         return self.get_support_system_mode() in {"contact", "both"}
+
+    # MiniApp tickets settings
+    def is_miniapp_tickets_enabled(self) -> bool:
+        """Check if tickets are enabled in miniapp."""
+        return bool(self.MINIAPP_TICKETS_ENABLED)
+
+    def get_miniapp_support_type(self) -> str:
+        """Get miniapp support type: tickets, profile, or url."""
+        support_type = (self.MINIAPP_SUPPORT_TYPE or "tickets").strip().lower()
+        return support_type if support_type in {"tickets", "profile", "url"} else "tickets"
+
+    def get_miniapp_support_url(self) -> str:
+        """Get custom support URL for miniapp (when type is 'url')."""
+        return (self.MINIAPP_SUPPORT_URL or "").strip()
 
     def get_bot_run_mode(self) -> str:
         mode = (self.BOT_RUN_MODE or "polling").strip().lower()
