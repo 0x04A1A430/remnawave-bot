@@ -601,18 +601,49 @@ async def add_traffic(
 
         if traffic_gb == 0:
             subscription.traffic_limit_gb = 0
-            # При переходе на безлимит сбрасываем докупленный трафик
+            # При переходе на безлимит сбрасываем все докупки
+            from app.database.models import TrafficPurchase
+            from sqlalchemy import delete
+            await db.execute(delete(TrafficPurchase).where(TrafficPurchase.subscription_id == subscription.id))
             subscription.purchased_traffic_gb = 0
             subscription.traffic_reset_at = None
         else:
             await add_subscription_traffic(db, subscription, traffic_gb)
-            # Записываем докупленный трафик для корректного расчета цены сброса
+            # Создаём новую запись докупки с индивидуальной датой истечения
+            from app.database.models import TrafficPurchase
+            from sqlalchemy import select as sql_select
+            from datetime import timedelta
+
+            new_expires_at = datetime.utcnow() + timedelta(days=30)
+            new_purchase = TrafficPurchase(
+                subscription_id=subscription.id,
+                traffic_gb=traffic_gb,
+                expires_at=new_expires_at
+            )
+            db.add(new_purchase)
+
+            # Обновляем общий счетчик докупленного трафика
             current_purchased = getattr(subscription, 'purchased_traffic_gb', 0) or 0
             subscription.purchased_traffic_gb = current_purchased + traffic_gb
-            # Устанавливаем дату сброса при первой докупке (не продлеваем при повторной)
-            if not subscription.traffic_reset_at:
-                from datetime import timedelta
-                subscription.traffic_reset_at = datetime.utcnow() + timedelta(days=30)
+
+            # Устанавливаем traffic_reset_at на ближайшую дату истечения из всех активных докупок
+            now = datetime.utcnow()
+            active_purchases_query = (
+                sql_select(TrafficPurchase)
+                .where(TrafficPurchase.subscription_id == subscription.id)
+                .where(TrafficPurchase.expires_at > now)
+            )
+            active_purchases_result = await db.execute(active_purchases_query)
+            active_purchases = active_purchases_result.scalars().all()
+
+            if active_purchases:
+                # Добавляем только что созданную покупку к списку
+                all_active = list(active_purchases) + [new_purchase]
+                earliest_expiry = min(p.expires_at for p in all_active)
+                subscription.traffic_reset_at = earliest_expiry
+            else:
+                # Первая докупка
+                subscription.traffic_reset_at = new_expires_at
 
         subscription_service = SubscriptionService()
         await subscription_service.update_remnawave_user(db, subscription)
@@ -869,7 +900,10 @@ async def execute_switch_traffic(
             )
 
         subscription.traffic_limit_gb = new_traffic_gb
-        # Сбрасываем докупленный трафик при переключении пакета
+        # Сбрасываем все докупки трафика при переключении пакета
+        from app.database.models import TrafficPurchase
+        from sqlalchemy import delete
+        await db.execute(delete(TrafficPurchase).where(TrafficPurchase.subscription_id == subscription.id))
         subscription.purchased_traffic_gb = 0
         subscription.traffic_reset_at = None  # Сбрасываем дату сброса трафика
         subscription.updated_at = datetime.utcnow()
