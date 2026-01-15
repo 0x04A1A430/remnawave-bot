@@ -61,3 +61,15 @@ class TopUpResponse(BaseModel):
     amount_rubles: float
     status: str
     expires_at: Optional[datetime] = None
+
+
+class StarsInvoiceRequest(BaseModel):
+    """Request to create Telegram Stars invoice for balance top-up."""
+    amount_kopeks: int = Field(..., ge=100, description="Amount in kopeks (min 1 ruble)")
+
+
+class StarsInvoiceResponse(BaseModel):
+    """Response with Telegram Stars invoice link."""
+    invoice_url: str
+    stars_amount: int
+    amount_kopeks: int
