@@ -59,6 +59,14 @@ class ServiceInfoResponse(BaseModel):
     website: Optional[str] = None
 
 
+class SupportConfigResponse(BaseModel):
+    """Support/tickets configuration for miniapp."""
+    tickets_enabled: bool
+    support_type: str  # "tickets", "profile", "url"
+    support_url: Optional[str] = None
+    support_username: Optional[str] = None
+
+
 # ============ Routes ============
 
 @router.get("/faq", response_model=List[FaqPageResponse])
@@ -235,3 +243,16 @@ async def update_user_language(
     await db.refresh(user)
 
     return {"language": user.language}
+
+
+@router.get("/support-config", response_model=SupportConfigResponse)
+async def get_support_config():
+    """Get support/tickets configuration for miniapp."""
+    support_type = settings.get_miniapp_support_type()
+
+    return SupportConfigResponse(
+        tickets_enabled=settings.is_miniapp_tickets_enabled(),
+        support_type=support_type,
+        support_url=settings.get_miniapp_support_url() if support_type == "url" else None,
+        support_username=settings.SUPPORT_USERNAME,  # Always return for fallback
+    )
