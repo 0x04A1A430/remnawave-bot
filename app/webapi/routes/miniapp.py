@@ -3495,7 +3495,40 @@ async def get_subscription_details(
         else:
             subscription_missing_reason = "not_found"
 
+    # Получаем докупки трафика
+    traffic_purchases_data = []
+    if subscription:
+        from app.database.models import TrafficPurchase
+        from sqlalchemy import select as sql_select
+
+        now = datetime.utcnow()
+        purchases_query = (
+            sql_select(TrafficPurchase)
+            .where(TrafficPurchase.subscription_id == subscription.id)
+            .where(TrafficPurchase.expires_at > now)
+            .order_by(TrafficPurchase.expires_at.asc())
+        )
+        purchases_result = await db.execute(purchases_query)
+        purchases = purchases_result.scalars().all()
+
+        for purchase in purchases:
+            time_remaining = purchase.expires_at - now
+            days_remaining = max(0, int(time_remaining.total_seconds() / 86400))
+            total_duration_seconds = (purchase.expires_at - purchase.created_at).total_seconds()
+            elapsed_seconds = (now - purchase.created_at).total_seconds()
+            progress_percent = min(100.0, max(0.0, (elapsed_seconds / total_duration_seconds * 100) if total_duration_seconds > 0 else 0))
+
+            traffic_purchases_data.append({
+                "id": purchase.id,
+                "traffic_gb": purchase.traffic_gb,
+                "expires_at": purchase.expires_at,
+                "created_at": purchase.created_at,
+                "days_remaining": days_remaining,
+                "progress_percent": round(progress_percent, 1)
+            })
+
     return MiniAppSubscriptionResponse(
+        traffic_purchases=traffic_purchases_data,
         subscription_id=getattr(subscription, "id", None),
         remnawave_short_uuid=remnawave_short_uuid,
         user=response_user,

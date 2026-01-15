@@ -411,9 +411,13 @@ async def extend_subscription(
         old_traffic = subscription.traffic_limit_gb
         subscription.traffic_limit_gb = traffic_limit_gb
         subscription.traffic_used_gb = 0.0
+        # Сбрасываем все докупки трафика при смене тарифа
+        from app.database.models import TrafficPurchase
+        from sqlalchemy import delete as sql_delete
+        await db.execute(sql_delete(TrafficPurchase).where(TrafficPurchase.subscription_id == subscription.id))
         subscription.purchased_traffic_gb = 0
         subscription.traffic_reset_at = None  # Сбрасываем дату сброса трафика
-        logger.info(f"📊 Обновлен лимит трафика: {old_traffic} ГБ → {traffic_limit_gb} ГБ")
+        logger.info(f"📊 Обновлен лимит трафика: {old_traffic} ГБ → {traffic_limit_gb} ГБ (все докупки сброшены)")
     elif settings.RESET_TRAFFIC_ON_PAYMENT:
         subscription.traffic_used_gb = 0.0
         # В режиме тарифов сохраняем докупленный трафик при продлении

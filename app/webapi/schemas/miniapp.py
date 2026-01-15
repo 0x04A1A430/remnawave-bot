@@ -679,11 +679,22 @@ class MiniAppDailySubscriptionToggleResponse(BaseModel):
     balance_label: str = ""
 
 
+class MiniAppTrafficPurchase(BaseModel):
+    """Докупка трафика с индивидуальной датой истечения."""
+    id: int
+    traffic_gb: int
+    expires_at: datetime
+    created_at: datetime
+    days_remaining: int
+    progress_percent: float
+
+
 class MiniAppSubscriptionResponse(BaseModel):
     success: bool = True
     subscription_id: Optional[int] = None
     remnawave_short_uuid: Optional[str] = None
     user: MiniAppSubscriptionUser
+    traffic_purchases: List[MiniAppTrafficPurchase] = Field(default_factory=list)
     subscription_url: Optional[str] = None
     subscription_crypto_link: Optional[str] = None
     subscription_purchase_url: Optional[str] = None

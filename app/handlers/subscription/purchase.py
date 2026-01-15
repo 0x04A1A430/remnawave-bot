@@ -492,6 +492,58 @@ async def show_subscription_info(
             message += f"• {device_info}\n"
         message += texts.t("SUBSCRIPTION_CONNECTED_DEVICES_FOOTER", "</blockquote>")
 
+    # Отображаем докупленный трафик
+    if subscription.traffic_limit_gb > 0:  # Только для лимитированных тарифов
+        from app.database.models import TrafficPurchase
+        from sqlalchemy import select as sql_select
+
+        now = datetime.utcnow()
+        purchases_query = (
+            sql_select(TrafficPurchase)
+            .where(TrafficPurchase.subscription_id == subscription.id)
+            .where(TrafficPurchase.expires_at > now)
+            .order_by(TrafficPurchase.expires_at.asc())
+        )
+        purchases_result = await db.execute(purchases_query)
+        purchases = purchases_result.scalars().all()
+
+        if purchases:
+            message += "\n\n" + texts.t(
+                "SUBSCRIPTION_PURCHASED_TRAFFIC_TITLE",
+                "<blockquote>📦 <b>Докупленный трафик:</b>\n",
+            )
+
+            for purchase in purchases:
+                time_remaining = purchase.expires_at - now
+                days_remaining = max(0, int(time_remaining.total_seconds() / 86400))
+
+                # Генерируем прогресс-бар
+                total_duration_seconds = (purchase.expires_at - purchase.created_at).total_seconds()
+                elapsed_seconds = (now - purchase.created_at).total_seconds()
+                progress_percent = min(100.0, max(0.0, (elapsed_seconds / total_duration_seconds * 100) if total_duration_seconds > 0 else 0))
+
+                bar_length = 10
+                filled = int((progress_percent / 100) * bar_length)
+                bar = "▰" * filled + "▱" * (bar_length - filled)
+
+                # Форматируем дату истечения
+                expire_date = purchase.expires_at.strftime("%d.%m.%Y")
+
+                # Формируем текст о времени
+                if days_remaining == 0:
+                    time_text = "истекает сегодня"
+                elif days_remaining == 1:
+                    time_text = "остался 1 день"
+                elif days_remaining < 5:
+                    time_text = f"осталось {days_remaining} дня"
+                else:
+                    time_text = f"осталось {days_remaining} дней"
+
+                message += f"• {purchase.traffic_gb} ГБ — {time_text}\n"
+                message += f"  {bar} {progress_percent:.0f}% | до {expire_date}\n"
+
+            message += texts.t("SUBSCRIPTION_PURCHASED_TRAFFIC_FOOTER", "</blockquote>")
+
     subscription_link = get_display_subscription_link(subscription)
     hide_subscription_link = settings.should_hide_subscription_link()
 
