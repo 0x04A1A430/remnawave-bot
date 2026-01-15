@@ -2,8 +2,10 @@
 
 import logging
 import math
+import time
 from typing import List, Optional
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc
@@ -23,6 +25,8 @@ from ..schemas.balance import (
     PaymentMethodResponse,
     TopUpRequest,
     TopUpResponse,
+    StarsInvoiceRequest,
+    StarsInvoiceResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -199,6 +203,99 @@ async def get_payment_methods():
         ))
 
     return methods
+
+
+@router.post("/stars-invoice", response_model=StarsInvoiceResponse)
+async def create_stars_invoice(
+    request: StarsInvoiceRequest,
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """
+    Создать Telegram Stars invoice для пополнения баланса.
+    Используется в Telegram Mini App для прямой оплаты Stars.
+    """
+    if not settings.TELEGRAM_STARS_ENABLED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Telegram Stars payments are not enabled",
+        )
+
+    # Validate amount
+    if request.amount_kopeks < 100:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Minimum amount is 1.00 RUB",
+        )
+
+    if request.amount_kopeks > 1000000:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Maximum amount is 10,000.00 RUB",
+        )
+
+    # Calculate Stars amount
+    try:
+        amount_rubles = request.amount_kopeks / 100
+        stars_amount = settings.rubles_to_stars(amount_rubles)
+
+        if stars_amount <= 0:
+            stars_amount = 1
+    except Exception as e:
+        logger.error(f"Error calculating Stars amount: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to calculate Stars amount",
+        )
+
+    # Create payload for tracking payment
+    payload = f"balance_topup_{user.id}_{request.amount_kopeks}_{int(time.time())}"
+
+    # Create invoice through Telegram Bot API
+    try:
+        bot_token = settings.BOT_TOKEN
+        api_url = f"https://api.telegram.org/bot{bot_token}/createInvoiceLink"
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                api_url,
+                json={
+                    "title": "Пополнение баланса VPN",
+                    "description": f"Пополнение баланса на {amount_rubles:.2f} ₽ ({stars_amount} ⭐)",
+                    "payload": payload,
+                    "provider_token": "",  # Empty for Stars
+                    "currency": "XTR",
+                    "prices": [{"label": "Пополнение баланса", "amount": stars_amount}],
+                },
+            )
+
+            result = response.json()
+
+            if not result.get("ok"):
+                logger.error(f"Telegram API error: {result}")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to create Stars invoice",
+                )
+
+            invoice_url = result["result"]
+            logger.info(
+                f"Created Stars invoice for balance top-up: user={user.id}, "
+                f"amount={request.amount_kopeks} kopeks, stars={stars_amount}"
+            )
+
+            return StarsInvoiceResponse(
+                invoice_url=invoice_url,
+                stars_amount=stars_amount,
+                amount_kopeks=request.amount_kopeks,
+            )
+
+    except httpx.HTTPError as e:
+        logger.error(f"HTTP error creating Stars invoice: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to connect to Telegram API",
+        )
 
 
 @router.post("/topup", response_model=TopUpResponse)
