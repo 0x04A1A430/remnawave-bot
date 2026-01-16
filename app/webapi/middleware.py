@@ -22,7 +22,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         finally:
             duration_ms = (monotonic() - start) * 1000
             status = response.status_code if response else "error"
-            logger.info(
+            logger.debug(
                 "%s %s -> %s (%.2f ms)",
                 request.method,
                 request.url.path,

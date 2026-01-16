@@ -32,6 +32,7 @@ class WebAPIServer:
             log_level=settings.LOG_LEVEL.lower(),
             workers=workers,
             lifespan="on",
+            access_log=False,
         )
         self._server = uvicorn.Server(self._config)
         self._task: Optional[asyncio.Task[None]] = None
