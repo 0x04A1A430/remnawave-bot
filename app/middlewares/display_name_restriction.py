@@ -131,11 +131,35 @@ class DisplayNameRestrictionMiddleware(BaseMiddleware):
         cleaned = ZERO_WIDTH_PATTERN.sub("", value)
         lower_value = cleaned.lower()
 
-        # Убраны жёсткие проверки на @ и паттерны ссылок - слишком много ложных срабатываний
-        # Теперь проверяем только по настраиваемым ключевым словам из DISPLAY_NAME_BANNED_KEYWORDS
+        if "@" in cleaned or "＠" in cleaned:
+            return True
+
+        if any(pattern.search(lower_value) for pattern in LINK_PATTERNS):
+            return True
+
+        # Проверяем обфусцированные ссылки типа "t . m e" или "т м е"
+        # Но НЕ блокируем если это часть обычного слова/имени
+        domain_match = DOMAIN_OBFUSCATION_PATTERN.search(lower_value)
+        if domain_match:
+            # Проверяем контекст: если "tme" внутри слова (с буквами с обеих сторон) - пропускаем
+            start_pos = domain_match.start()
+            end_pos = domain_match.end()
+
+            # Проверяем символ ДО и ПОСЛЕ совпадения
+            has_letter_before = start_pos > 0 and lower_value[start_pos - 1].isalpha()
+            has_letter_after = end_pos < len(lower_value) and lower_value[end_pos].isalpha()
+
+            # Если с ОБЕИХ сторон буквы - скорее всего это просто имя/фамилия
+            if not (has_letter_before and has_letter_after):
+                return True
 
         normalized = self._normalize_text(lower_value)
         collapsed = COLLAPSE_PATTERN.sub("", normalized)
+
+        # Проверяем "tme" с контекстом (ловим t.me ссылки, но не случайные совпадения в именах)
+        # Ищем tme в начале, конце, или с пробелами/спецсимволами вокруг
+        if re.search(r"(?:^|[^a-zа-яё])tme(?:[^a-zа-яё]|$)", collapsed, re.IGNORECASE):
+            return True
 
         banned_keywords = settings.get_display_name_banned_keywords()
 

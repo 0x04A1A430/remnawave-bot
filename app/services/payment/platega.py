@@ -485,9 +485,12 @@ class PlategaPaymentMixin:
                     has_saved_cart = False
 
             # Умная автоактивация если автопокупка не сработала
+            activation_notification_sent = False
             if not auto_purchase_success:
                 try:
-                    await auto_activate_subscription_after_topup(db, user, bot=getattr(self, "bot", None))
+                    _, activation_notification_sent = await auto_activate_subscription_after_topup(
+                        db, user, bot=getattr(self, "bot", None), topup_amount=payment.amount_kopeks
+                    )
                 except Exception as auto_activate_error:
                     logger.error(
                         "Ошибка умной автоактивации для пользователя %s: %s",
@@ -496,7 +499,8 @@ class PlategaPaymentMixin:
                         exc_info=True,
                     )
 
-            if has_saved_cart and getattr(self, "bot", None):
+            # Отправляем уведомление только если его ещё не отправили
+            if has_saved_cart and getattr(self, "bot", None) and not activation_notification_sent:
                 from app.localization.texts import get_texts
 
                 texts = get_texts(user.language)

@@ -377,12 +377,14 @@ class CryptoBotPaymentMixin:
                             has_saved_cart = False
 
                     # Умная автоактивация если автопокупка не сработала
+                    activation_notification_sent = False
                     if not auto_purchase_success:
                         try:
-                            await auto_activate_subscription_after_topup(
+                            _, activation_notification_sent = await auto_activate_subscription_after_topup(
                                 db,
                                 user,
                                 bot=bot_instance,
+                                topup_amount=amount_kopeks,
                             )
                         except Exception as auto_activate_error:
                             logger.error(
@@ -392,7 +394,8 @@ class CryptoBotPaymentMixin:
                                 exc_info=True,
                             )
 
-                    if has_saved_cart and bot_instance:
+                    # Отправляем уведомление только если его ещё не отправили
+                    if has_saved_cart and bot_instance and not activation_notification_sent:
                         from app.localization.texts import get_texts
 
                         texts = get_texts(user.language)
