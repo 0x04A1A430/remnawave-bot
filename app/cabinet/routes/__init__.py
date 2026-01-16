@@ -23,6 +23,7 @@ from .admin_tariffs import router as admin_tariffs_router
 from .admin_servers import router as admin_servers_router
 from .admin_stats import router as admin_stats_router
 from .admin_ban_system import router as admin_ban_system_router
+from .admin_broadcasts import router as admin_broadcasts_router
 from .media import router as media_router
 
 # Main cabinet router
@@ -55,5 +56,6 @@ router.include_router(admin_tariffs_router)
 router.include_router(admin_servers_router)
 router.include_router(admin_stats_router)
 router.include_router(admin_ban_system_router)
+router.include_router(admin_broadcasts_router)
 
 __all__ = ["router"]
