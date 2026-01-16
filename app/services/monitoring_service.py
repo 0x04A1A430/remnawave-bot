@@ -531,7 +531,10 @@ class MonitoringService:
             )
             result = await db.execute(
                 select(Subscription)
-                .options(selectinload(Subscription.user))
+                .options(
+                    selectinload(Subscription.user),
+                    selectinload(Subscription.tariff),
+                )
                 .where(
                     and_(
                         Subscription.is_trial.is_(True),
