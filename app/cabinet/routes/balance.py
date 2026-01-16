@@ -223,6 +223,28 @@ async def get_payment_methods():
             is_available=True,
         ))
 
+    # CloudPayments
+    if settings.is_cloudpayments_enabled():
+        methods.append(PaymentMethodResponse(
+            id="cloudpayments",
+            name="CloudPayments",
+            description="Pay with bank card via CloudPayments",
+            min_amount_kopeks=settings.CLOUDPAYMENTS_MIN_AMOUNT_KOPEKS,
+            max_amount_kopeks=settings.CLOUDPAYMENTS_MAX_AMOUNT_KOPEKS,
+            is_available=True,
+        ))
+
+    # FreeKassa
+    if settings.is_freekassa_enabled():
+        methods.append(PaymentMethodResponse(
+            id="freekassa",
+            name=settings.get_freekassa_display_name(),
+            description="Pay via FreeKassa",
+            min_amount_kopeks=settings.FREEKASSA_MIN_AMOUNT_KOPEKS,
+            max_amount_kopeks=settings.FREEKASSA_MAX_AMOUNT_KOPEKS,
+            is_available=True,
+        ))
+
     return methods
 
 
@@ -578,6 +600,56 @@ async def create_topup(
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail="Failed to create Wata payment",
+                )
+
+        elif request.payment_method == "cloudpayments":
+            if not settings.is_cloudpayments_enabled():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="CloudPayments payment method is unavailable",
+                )
+
+            payment_service = PaymentService()
+            result = await payment_service.create_cloudpayments_payment(
+                db=db,
+                user_id=user.id,
+                amount_kopeks=request.amount_kopeks,
+                description=settings.get_balance_payment_description(request.amount_kopeks),
+                language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+            )
+
+            if result and result.get("payment_url"):
+                payment_url = result.get("payment_url")
+                payment_id = str(result.get("local_payment_id") or result.get("invoice_id") or "pending")
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to create CloudPayments payment",
+                )
+
+        elif request.payment_method == "freekassa":
+            if not settings.is_freekassa_enabled():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="FreeKassa payment method is unavailable",
+                )
+
+            payment_service = PaymentService()
+            result = await payment_service.create_freekassa_payment(
+                db=db,
+                user_id=user.id,
+                amount_kopeks=request.amount_kopeks,
+                description=settings.get_balance_payment_description(request.amount_kopeks),
+                language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+            )
+
+            if result and result.get("payment_url"):
+                payment_url = result.get("payment_url")
+                payment_id = str(result.get("local_payment_id") or result.get("order_id") or "pending")
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to create FreeKassa payment",
                 )
 
         else:
