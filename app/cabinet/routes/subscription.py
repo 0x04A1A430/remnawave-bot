@@ -1505,10 +1505,32 @@ def _convert_remnawave_block_to_step(block: Dict[str, Any], url_scheme: str = ""
     return step
 
 
+# Known app URL schemes (fallback if RemnaWave doesn't provide urlScheme)
+KNOWN_APP_URL_SCHEMES = {
+    "happ": "happ://add/",
+    "streisand": "streisand://import/",
+    "shadowrocket": "sub://",
+    "v2rayn": "v2rayng://install-config?url=",
+    "v2rayng": "v2rayng://install-config?url=",
+    "clash": "clash://install-config?url=",
+    "clash meta": "clash://install-config?url=",
+    "clash verge": "clash://install-config?url=",
+    "hiddify": "hiddify://import/",
+    "nekoray": "sn://subscription?url=",
+    "nekobox": "sn://subscription?url=",
+    "karing": "karing://add/",
+}
+
+
 def _convert_remnawave_app_to_cabinet(app: Dict[str, Any]) -> Dict[str, Any]:
     """Convert RemnaWave app format to cabinet app format."""
     blocks = app.get("blocks", [])
     url_scheme = app.get("urlScheme", "")
+
+    # If urlScheme is missing, try to determine from app name
+    if not url_scheme:
+        app_name = app.get("name", "").lower().strip()
+        url_scheme = KNOWN_APP_URL_SCHEMES.get(app_name, "")
 
     # Map blocks to steps based on position
     installation_step = _convert_remnawave_block_to_step(blocks[0], url_scheme) if len(blocks) > 0 else {"description": {}}
@@ -1599,8 +1621,18 @@ async def _load_app_config_async() -> Dict[str, Any]:
             async with service.get_api_client() as api:
                 config = await api.get_subscription_page_config(remnawave_uuid)
                 if config and config.config:
-                    logger.debug(f"Loaded app config from RemnaWave: {remnawave_uuid}")
-                    return _convert_remnawave_config_to_cabinet(config.config)
+                    logger.info(f"Loaded app config from RemnaWave: {remnawave_uuid}")
+                    # Debug: log raw RemnaWave config structure
+                    import json
+                    logger.info(f"RemnaWave raw config: {json.dumps(config.config, ensure_ascii=False, indent=2)[:2000]}")
+                    converted = _convert_remnawave_config_to_cabinet(config.config)
+                    logger.info(f"Converted config platforms: {list(converted.get('platforms', {}).keys())}")
+                    # Log first app from each platform
+                    for platform, apps in converted.get('platforms', {}).items():
+                        if apps:
+                            first_app = apps[0]
+                            logger.info(f"Platform {platform} first app: name={first_app.get('name')}, urlScheme={first_app.get('urlScheme')}")
+                    return converted
         except Exception as e:
             logger.warning(f"Failed to load RemnaWave config, falling back to file: {e}")
 
@@ -1616,10 +1648,19 @@ def _load_app_config() -> Dict[str, Any]:
 def _create_deep_link(app: Dict[str, Any], subscription_url: str) -> Optional[str]:
     """Create deep link for app with subscription URL."""
     if not subscription_url or not isinstance(app, dict):
+        logger.debug(f"_create_deep_link: no subscription_url or invalid app")
         return None
 
     scheme = str(app.get("urlScheme", "")).strip()
     if not scheme:
+        # Try fallback from app name
+        app_name = app.get("name", "").lower().strip()
+        scheme = KNOWN_APP_URL_SCHEMES.get(app_name, "")
+        if scheme:
+            logger.info(f"_create_deep_link: used fallback urlScheme for '{app_name}': {scheme}")
+
+    if not scheme:
+        logger.warning(f"_create_deep_link: no urlScheme for app '{app.get('name', 'unknown')}'")
         return None
 
     payload = subscription_url
