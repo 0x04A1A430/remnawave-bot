@@ -3,6 +3,7 @@ import logging
 from aiogram import Dispatcher, types, F
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
+from aiogram.types import InaccessibleMessage
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -472,6 +473,16 @@ async def show_payment_methods(
     full_text = payment_text + tariff_info
 
     keyboard = get_payment_methods_keyboard(0, db_user.language)
+
+    # Если сообщение недоступно, отправляем новое
+    if isinstance(callback.message, InaccessibleMessage):
+        await callback.message.answer(
+            full_text,
+            reply_markup=keyboard,
+            parse_mode="HTML"
+        )
+        await callback.answer()
+        return
 
     try:
         await callback.message.edit_text(
