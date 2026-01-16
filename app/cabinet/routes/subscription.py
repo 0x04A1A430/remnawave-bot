@@ -868,8 +868,9 @@ async def _build_tariff_response(
     tariff: Tariff,
     current_tariff_id: Optional[int] = None,
     language: str = "ru",
+    user: Optional[User] = None,
 ) -> Dict[str, Any]:
-    """Build tariff model for API response."""
+    """Build tariff model for API response with promo group discounts applied."""
     servers = []
     servers_count = 0
 
@@ -883,28 +884,89 @@ async def _build_tariff_response(
                     "name": server.display_name or squad_uuid[:8],
                 })
 
+    # Get promo group for discount calculation
+    promo_group = user.get_primary_promo_group() if user and hasattr(user, 'get_primary_promo_group') else None
+    promo_group_name = promo_group.name if promo_group else None
+
     periods = []
     if tariff.period_prices:
         for period_str, price_kopeks in sorted(tariff.period_prices.items(), key=lambda x: int(x[0])):
             if int(price_kopeks) <= 0:
                 continue  # Skip disabled periods
             period_days = int(period_str)
-            months = max(1, period_days // 30)
-            per_month = price_kopeks // months if months > 0 else price_kopeks
 
-            periods.append({
+            # Apply promo group discount for this period
+            original_price = int(price_kopeks)
+            discount_percent = 0
+            discount_amount = 0
+            final_price = original_price
+
+            if promo_group:
+                discount_percent = promo_group.get_discount_percent("period", period_days)
+                if discount_percent > 0:
+                    discount_amount = original_price * discount_percent // 100
+                    final_price = original_price - discount_amount
+
+            months = max(1, period_days // 30)
+            per_month = final_price // months if months > 0 else final_price
+            original_per_month = original_price // months if months > 0 else original_price
+
+            period_data = {
                 "days": period_days,
                 "months": months,
                 "label": format_period_description(period_days, language),
-                "price_kopeks": price_kopeks,
-                "price_label": settings.format_price(price_kopeks),
+                "price_kopeks": final_price,
+                "price_label": settings.format_price(final_price),
                 "price_per_month_kopeks": per_month,
                 "price_per_month_label": settings.format_price(per_month),
-            })
+            }
+
+            # Add discount info if discount is applied
+            if discount_percent > 0:
+                period_data["original_price_kopeks"] = original_price
+                period_data["original_price_label"] = settings.format_price(original_price)
+                period_data["original_per_month_kopeks"] = original_per_month
+                period_data["original_per_month_label"] = settings.format_price(original_per_month)
+                period_data["discount_percent"] = discount_percent
+                period_data["discount_amount_kopeks"] = discount_amount
+                period_data["discount_label"] = f"-{discount_percent}%"
+
+            periods.append(period_data)
 
     traffic_label = "♾️ Безлимит" if tariff.traffic_limit_gb == 0 else f"{tariff.traffic_limit_gb} ГБ"
 
-    return {
+    # Apply discount to daily price if applicable
+    daily_price = getattr(tariff, 'daily_price_kopeks', 0)
+    original_daily_price = daily_price
+    daily_discount_percent = 0
+    if promo_group and daily_price > 0:
+        # For daily tariffs, use period discount with period_days=1
+        daily_discount_percent = promo_group.get_discount_percent("period", 1)
+        if daily_discount_percent > 0:
+            discount_amount = daily_price * daily_discount_percent // 100
+            daily_price = daily_price - discount_amount
+
+    # Apply discount to custom price_per_day if applicable
+    price_per_day = tariff.price_per_day_kopeks
+    original_price_per_day = price_per_day
+    custom_days_discount_percent = 0
+    if promo_group and price_per_day > 0:
+        custom_days_discount_percent = promo_group.get_discount_percent("period", 30)  # Use 30-day rate as base
+        if custom_days_discount_percent > 0:
+            discount_amount = price_per_day * custom_days_discount_percent // 100
+            price_per_day = price_per_day - discount_amount
+
+    # Apply discount to device price if applicable
+    device_price = tariff.device_price_kopeks or 0
+    original_device_price = device_price
+    device_discount_percent = 0
+    if promo_group and device_price > 0:
+        device_discount_percent = promo_group.get_discount_percent("devices")
+        if device_discount_percent > 0:
+            discount_amount = device_price * device_discount_percent // 100
+            device_price = device_price - discount_amount
+
+    response = {
         "id": tariff.id,
         "name": tariff.name,
         "description": tariff.description,
@@ -913,7 +975,7 @@ async def _build_tariff_response(
         "traffic_limit_label": traffic_label,
         "is_unlimited_traffic": tariff.traffic_limit_gb == 0,
         "device_limit": tariff.device_limit,
-        "device_price_kopeks": tariff.device_price_kopeks,
+        "device_price_kopeks": device_price,
         "servers_count": servers_count,
         "servers": servers,
         "periods": periods,
@@ -921,7 +983,7 @@ async def _build_tariff_response(
         "is_available": tariff.is_active,
         # Произвольное количество дней
         "custom_days_enabled": tariff.custom_days_enabled,
-        "price_per_day_kopeks": tariff.price_per_day_kopeks,
+        "price_per_day_kopeks": price_per_day,
         "min_days": tariff.min_days,
         "max_days": tariff.max_days,
         # Произвольный трафик при покупке
@@ -935,8 +997,27 @@ async def _build_tariff_response(
         "max_topup_traffic_gb": tariff.max_topup_traffic_gb,
         # Дневной тариф
         "is_daily": getattr(tariff, 'is_daily', False),
-        "daily_price_kopeks": getattr(tariff, 'daily_price_kopeks', 0),
+        "daily_price_kopeks": daily_price,
     }
+
+    # Add promo group info if user has discounts
+    if promo_group_name:
+        response["promo_group_name"] = promo_group_name
+
+    # Add original prices if discounts were applied
+    if device_discount_percent > 0:
+        response["original_device_price_kopeks"] = original_device_price
+        response["device_discount_percent"] = device_discount_percent
+
+    if daily_discount_percent > 0 and original_daily_price > 0:
+        response["original_daily_price_kopeks"] = original_daily_price
+        response["daily_discount_percent"] = daily_discount_percent
+
+    if custom_days_discount_percent > 0 and original_price_per_day > 0:
+        response["original_price_per_day_kopeks"] = original_price_per_day
+        response["custom_days_discount_percent"] = custom_days_discount_percent
+
+    return response
 
 
 @router.get("/purchase-options")
@@ -960,7 +1041,7 @@ async def get_purchase_options(
 
             tariff_responses = []
             for tariff in tariffs:
-                tariff_data = await _build_tariff_response(db, tariff, current_tariff_id, language)
+                tariff_data = await _build_tariff_response(db, tariff, current_tariff_id, language, user)
                 tariff_responses.append(tariff_data)
 
             return {
@@ -1103,8 +1184,8 @@ async def purchase_tariff(
                 detail="Tariff not found or inactive",
             )
 
-        # Check tariff availability for user's promo group
-        promo_group = getattr(user, "promo_group", None)
+        # Check tariff availability for user's promo group and get promo group for discounts
+        promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else None
         promo_group_id = promo_group.id if promo_group else None
         if not tariff.is_available_for_promo_group(promo_group_id):
             raise HTTPException(
@@ -1114,6 +1195,9 @@ async def purchase_tariff(
 
         # Handle daily tariffs specially
         is_daily_tariff = getattr(tariff, 'is_daily', False)
+        discount_percent = 0
+        original_price = 0
+
         if is_daily_tariff:
             daily_price = getattr(tariff, 'daily_price_kopeks', 0)
             if daily_price <= 0:
@@ -1121,6 +1205,13 @@ async def purchase_tariff(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Daily tariff has invalid price",
                 )
+            original_price = daily_price
+            # Apply promo group discount for daily tariff
+            if promo_group:
+                discount_percent = promo_group.get_discount_percent("period", 1)
+                if discount_percent > 0:
+                    discount_amount = daily_price * discount_percent // 100
+                    daily_price = daily_price - discount_amount
             # For daily tariffs, charge first day and set period to 1 day
             price_kopeks = daily_price
             period_days = 1
@@ -1143,6 +1234,14 @@ async def purchase_tariff(
                         detail="Invalid period for this tariff",
                     )
 
+            original_price = price_kopeks
+            # Apply promo group discount for period
+            if promo_group and price_kopeks > 0:
+                discount_percent = promo_group.get_discount_percent("period", period_days)
+                if discount_percent > 0:
+                    discount_amount = price_kopeks * discount_percent // 100
+                    price_kopeks = price_kopeks - discount_amount
+
         # Calculate traffic limit and price
         traffic_limit_gb = tariff.traffic_limit_gb
         traffic_price_kopeks = 0
@@ -1154,6 +1253,12 @@ async def purchase_tariff(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Traffic must be between {tariff.min_traffic_gb} and {tariff.max_traffic_gb} GB",
                 )
+            # Apply traffic discount if promo group has it
+            if promo_group and traffic_price_kopeks > 0:
+                traffic_discount_percent = promo_group.get_discount_percent("traffic", period_days)
+                if traffic_discount_percent > 0:
+                    traffic_discount = traffic_price_kopeks * traffic_discount_percent // 100
+                    traffic_price_kopeks = traffic_price_kopeks - traffic_discount
             traffic_limit_gb = request.traffic_gb
             price_kopeks += traffic_price_kopeks
 
@@ -1185,6 +1290,8 @@ async def purchase_tariff(
             description = f"Активация суточного тарифа '{tariff.name}'"
         else:
             description = f"Покупка тарифа '{tariff.name}' на {period_days} дней"
+        if discount_percent > 0:
+            description += f" (скидка {discount_percent}%)"
         success = await subtract_user_balance(db, user, price_kopeks, description)
         if not success:
             raise HTTPException(
@@ -1254,15 +1361,29 @@ async def purchase_tariff(
 
         await db.refresh(user)
 
-        return {
+        response = {
             "success": True,
             "message": f"Тариф '{tariff.name}' успешно активирован",
             "subscription": _subscription_to_response(subscription),
             "tariff_id": tariff.id,
             "tariff_name": tariff.name,
+            "charged_amount": price_kopeks,
+            "charged_label": settings.format_price(price_kopeks),
             "balance_kopeks": user.balance_kopeks,
             "balance_label": settings.format_price(user.balance_kopeks),
         }
+
+        # Add discount info if discount was applied
+        if discount_percent > 0:
+            response["discount_percent"] = discount_percent
+            response["original_price_kopeks"] = original_price
+            response["original_price_label"] = settings.format_price(original_price)
+            response["discount_amount_kopeks"] = original_price - price_kopeks
+            response["discount_label"] = settings.format_price(original_price - price_kopeks)
+            if promo_group:
+                response["promo_group_name"] = promo_group.name
+
+        return response
 
     except HTTPException:
         raise
