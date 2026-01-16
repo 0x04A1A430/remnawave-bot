@@ -6,7 +6,7 @@ from typing import Any, Dict, Optional
 from aiohttp import web
 
 from app.config import settings
-from app.database.database import get_db
+from app.database.database import AsyncSessionLocal
 from app.external.heleket import HeleketService
 from app.services.payment_service import PaymentService
 
@@ -33,8 +33,14 @@ class HeleketWebhookHandler:
             return web.json_response({"status": "error", "reason": "invalid_signature"}, status=401)
 
         processed: Optional[bool] = None
-        async for db in get_db():
-            processed = await self.payment_service.process_heleket_webhook(db, payload)
+        async with AsyncSessionLocal() as db:
+            try:
+                processed = await self.payment_service.process_heleket_webhook(db, payload)
+                await db.commit()
+            except Exception as e:
+                logger.error(f"Ошибка обработки Heleket webhook: {e}")
+                await db.rollback()
+                return web.json_response({"status": "error", "reason": "internal_error"}, status=500)
 
         if processed:
             return web.json_response({"status": "ok"}, status=200)
