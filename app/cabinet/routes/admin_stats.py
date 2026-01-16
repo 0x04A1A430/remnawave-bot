@@ -124,6 +124,7 @@ async def get_dashboard_stats(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get complete dashboard statistics for admin panel."""
+    print("🔥 Dashboard endpoint called")
     try:
         # Get nodes status from RemnaWave
         nodes_data = await _get_nodes_overview()
@@ -144,8 +145,9 @@ async def get_dashboard_stats(
         server_stats = await get_server_statistics(db)
 
         # Get tariff statistics
+        print("🔥 Getting tariff stats...")
         tariff_stats = await _get_tariff_stats(db)
-        logger.info(f"📊 Tariff stats result: {tariff_stats}")
+        print(f"🔥 Tariff stats result: {tariff_stats}")
 
         # Build response
         return DashboardStats(
@@ -328,6 +330,7 @@ async def _get_nodes_overview() -> NodesOverview:
 
 async def _get_tariff_stats(db: AsyncSession) -> Optional[TariffStats]:
     """Get statistics for all tariffs."""
+    print("🔥 _get_tariff_stats called")
     try:
         # Получаем ВСЕ тарифы (включая неактивные) для статистики
         tariffs_result = await db.execute(
@@ -336,7 +339,9 @@ async def _get_tariff_stats(db: AsyncSession) -> Optional[TariffStats]:
         )
         tariffs = tariffs_result.scalars().all()
 
-        logger.info(f"📊 Получение статистики по тарифам. Найдено тарифов: {len(tariffs)}")
+        print(f"🔥 Найдено тарифов: {len(tariffs)}")
+        for t in tariffs:
+            print(f"🔥 Тариф: id={t.id}, name={t.name}, is_active={t.is_active}")
 
         if not tariffs:
             logger.info("📊 Нет тарифов в системе, пропускаем статистику")
@@ -427,5 +432,6 @@ async def _get_tariff_stats(db: AsyncSession) -> Optional[TariffStats]:
         )
 
     except Exception as e:
+        print(f"🔥 ERROR in _get_tariff_stats: {e}")
         logger.error(f"Failed to get tariff stats: {e}", exc_info=True)
         return None
