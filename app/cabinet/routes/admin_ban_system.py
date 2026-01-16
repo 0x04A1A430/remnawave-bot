@@ -51,8 +51,8 @@ router = APIRouter(prefix="/admin/ban-system", tags=["Cabinet Admin Ban System"]
 
 def _get_ban_api() -> BanSystemAPI:
     """Get Ban System API instance."""
-    logger.info(f"Ban System check - enabled: {settings.is_ban_system_enabled()}, configured: {settings.is_ban_system_configured()}")
-    logger.info(f"Ban System URL: {settings.get_ban_system_api_url()}")
+    logger.debug(f"Ban System check - enabled: {settings.is_ban_system_enabled()}, configured: {settings.is_ban_system_configured()}")
+    logger.debug(f"Ban System URL: {settings.get_ban_system_api_url()}")
 
     if not settings.is_ban_system_enabled():
         raise HTTPException(
@@ -128,7 +128,7 @@ async def get_stats(
     api = _get_ban_api()
     data = await _api_request(api, "get_stats")
 
-    logger.info(f"Ban System raw stats: {data}")
+    logger.debug(f"Ban System raw stats: {data}")
 
     # Extract punishment stats
     punishment_stats = data.get("punishment_stats") or {}
