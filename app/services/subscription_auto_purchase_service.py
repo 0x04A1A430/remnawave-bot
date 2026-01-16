@@ -754,9 +754,18 @@ async def auto_activate_subscription_after_topup(
 
     # Если автоактивация отключена - только отправляем уведомление
     if not settings.is_auto_activate_after_topup_enabled():
+        # Если включен яркий промпт активации, НЕ отправляем уведомление здесь
+        # т.к. оно будет отправлено через _send_payment_success_notification
+        if settings.SHOW_ACTIVATION_PROMPT_AFTER_TOPUP:
+            logger.info(
+                "⚠️ Пропущена отправка уведомления пользователю %s (SHOW_ACTIVATION_PROMPT_AFTER_TOPUP=true, уведомление будет из payment service)",
+                user.telegram_id,
+            )
+            return (False, False)
+
+        # Старая логика уведомлений для режима без яркого промпта
         notification_sent = False
-        # Отправляем уведомление если включен режим
-        if settings.SHOW_ACTIVATION_PROMPT_AFTER_TOPUP and bot:
+        if bot:
             try:
                 texts = get_texts(getattr(user, "language", "ru"))
                 has_active_subscription = (
@@ -912,9 +921,18 @@ async def auto_activate_subscription_after_topup(
             user.telegram_id,
             balance,
         )
+        # Если включен яркий промпт активации, НЕ отправляем уведомление здесь
+        # т.к. оно будет отправлено через _send_payment_success_notification
+        if settings.SHOW_ACTIVATION_PROMPT_AFTER_TOPUP:
+            logger.info(
+                "⚠️ Пропущена отправка уведомления пользователю %s (SHOW_ACTIVATION_PROMPT_AFTER_TOPUP=true, уведомление будет из payment service)",
+                user.telegram_id,
+            )
+            return (False, False)
+
+        # Старая логика уведомлений для режима без яркого промпта
         notification_sent = False
-        # Отправляем уведомление если включен режим
-        if settings.SHOW_ACTIVATION_PROMPT_AFTER_TOPUP and bot:
+        if bot:
             try:
                 texts = get_texts(getattr(user, "language", "ru"))
                 has_active_subscription = (
