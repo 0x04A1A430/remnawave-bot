@@ -556,10 +556,6 @@ async def select_country(
         return
 
     period_base_price = PERIOD_PRICES.get(data['period_days'], 0)
-    if period_base_price <= 0:
-        await callback.answer("❌ Цена для этого периода не настроена", show_alert=True)
-        return
-
     discounted_base_price, _ = apply_percentage_discount(
         period_base_price,
         db_user.get_promo_discount("period", data['period_days']),
