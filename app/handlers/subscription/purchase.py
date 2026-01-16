@@ -204,6 +204,11 @@ async def show_subscription_info(
         db_user: User,
         db: AsyncSession
 ):
+    # Проверяем, доступно ли сообщение для редактирования
+    if isinstance(callback.message, InaccessibleMessage):
+        await callback.answer()
+        return
+
     await db.refresh(db_user)
 
     texts = get_texts(db_user.language)
@@ -587,6 +592,11 @@ async def show_trial_offer(
         db_user: User,
         db: AsyncSession
 ):
+    # Проверяем, доступно ли сообщение для редактирования
+    if isinstance(callback.message, InaccessibleMessage):
+        await callback.answer()
+        return
+
     texts = get_texts(db_user.language)
 
     if db_user.subscription or db_user.has_had_paid_subscription:
