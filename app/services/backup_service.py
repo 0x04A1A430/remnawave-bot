@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import settings
-from app.database.database import get_db, engine
+from app.database.database import AsyncSessionLocal, engine
 from app.database.models import (
     User, Subscription, Transaction, PromoCode, PromoCodeUse,
     ReferralEarning, Squad, ServiceRule, SystemSetting, MonitoringLog,
@@ -475,7 +475,7 @@ class BackupService:
         backup_data: Dict[str, List[Dict[str, Any]]] = {}
         total_records = 0
 
-        async for db in get_db():
+        async with AsyncSessionLocal() as db:
             try:
                 for model in models_to_backup:
                     table_name = model.__tablename__
@@ -533,10 +533,6 @@ class BackupService:
             except Exception as exc:
                 logger.error("Ошибка при экспорте данных: %s", exc)
                 raise exc
-            finally:
-                await db.close()
-
-        return backup_data, {}, total_records, len(models_to_backup)
 
     async def _collect_files(self, staging_dir: Path, include_logs: bool) -> List[Dict[str, Any]]:
         files_info: List[Dict[str, Any]] = []
@@ -815,7 +811,7 @@ class BackupService:
         restored_records = 0
         restored_tables = 0
 
-        async for db in get_db():
+        async with AsyncSessionLocal() as db:
             try:
                 if clear_existing:
                     logger.warning("🗑️ Очищаем существующие данные...")
@@ -903,14 +899,10 @@ class BackupService:
 
                 await db.commit()
 
-                break
-
             except Exception as exc:
                 await db.rollback()
                 logger.error("Ошибка при восстановлении: %s", exc)
                 raise exc
-            finally:
-                await db.close()
 
         return restored_tables, restored_records
 

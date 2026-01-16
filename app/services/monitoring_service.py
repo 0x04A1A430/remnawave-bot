@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import settings
-from app.database.database import get_db
+from app.database.database import AsyncSessionLocal
 from app.database.crud.discount_offer import (
     deactivate_expired_offers,
     get_latest_claimed_offer_for_user,
@@ -190,7 +190,7 @@ class MonitoringService:
             pass
     
     async def _monitoring_cycle(self):
-        async for db in get_db():
+        async with AsyncSessionLocal() as db:
             try:
                 await self._cleanup_notification_cache()
 
@@ -219,23 +219,26 @@ class MonitoringService:
                     await self._process_autopayments(db)
                 await self._cleanup_inactive_users(db)
                 await self._sync_with_remnawave(db)
-                
+
                 await self._log_monitoring_event(
-                    db, "monitoring_cycle_completed", 
-                    "Цикл мониторинга успешно завершен", 
+                    db, "monitoring_cycle_completed",
+                    "Цикл мониторинга успешно завершен",
                     {"timestamp": datetime.utcnow().isoformat()}
                 )
-                
+                await db.commit()
+
             except Exception as e:
                 logger.error(f"Ошибка в цикле мониторинга: {e}")
-                await self._log_monitoring_event(
-                    db, "monitoring_cycle_error", 
-                    f"Ошибка в цикле мониторинга: {str(e)}", 
-                    {"error": str(e)},
-                    is_success=False
-                )
-            finally:
-                break 
+                try:
+                    await self._log_monitoring_event(
+                        db, "monitoring_cycle_error",
+                        f"Ошибка в цикле мониторинга: {str(e)}",
+                        {"error": str(e)},
+                        is_success=False
+                    )
+                except Exception:
+                    pass
+                await db.rollback() 
     
     async def _cleanup_notification_cache(self):
         current_time = datetime.utcnow()
@@ -1724,11 +1727,13 @@ class MonitoringService:
             interval_seconds = 60
         while self.is_running:
             try:
-                async for db in get_db():
+                async with AsyncSessionLocal() as db:
                     try:
                         await self._check_ticket_sla(db)
-                    finally:
-                        break
+                        await db.commit()
+                    except Exception as e:
+                        logger.error(f"Ошибка в SLA-проверке: {e}")
+                        await db.rollback()
             except asyncio.CancelledError:
                 break
             except Exception as e:
