@@ -83,20 +83,25 @@ async def get_transactions(
     result = await db.execute(query)
     transactions = result.scalars().all()
 
-    items = [
-        TransactionResponse(
+    items = []
+    for t in transactions:
+        # Determine sign based on transaction type
+        # Credits (positive): DEPOSIT, REFERRAL_REWARD, REFUND, POLL_REWARD
+        # Debits (negative): SUBSCRIPTION_PAYMENT, WITHDRAWAL
+        is_debit = t.type in ['subscription_payment', 'withdrawal']
+        amount_kopeks = -abs(t.amount_kopeks) if is_debit else abs(t.amount_kopeks)
+
+        items.append(TransactionResponse(
             id=t.id,
             type=t.type,
-            amount_kopeks=t.amount_kopeks,
-            amount_rubles=t.amount_kopeks / 100,
+            amount_kopeks=amount_kopeks,
+            amount_rubles=amount_kopeks / 100,
             description=t.description,
             payment_method=t.payment_method,
             is_completed=t.is_completed,
             created_at=t.created_at,
             completed_at=t.completed_at,
-        )
-        for t in transactions
-    ]
+        ))
 
     pages = math.ceil(total / per_page) if total > 0 else 1
 
@@ -169,7 +174,7 @@ async def get_payment_methods():
             is_available=True,
         ))
 
-    # PAL24
+    # PAL24 - add options for card/sbp
     if settings.is_pal24_enabled():
         methods.append(PaymentMethodResponse(
             id="pal24",
@@ -178,17 +183,33 @@ async def get_payment_methods():
             min_amount_kopeks=settings.PAL24_MIN_AMOUNT_KOPEKS,
             max_amount_kopeks=settings.PAL24_MAX_AMOUNT_KOPEKS,
             is_available=True,
+            options=[
+                {"id": "sbp", "name": "🏦 СБП", "description": "Система быстрых платежей"},
+                {"id": "card", "name": "💳 Карта", "description": "Банковская карта"},
+            ],
         ))
 
-    # Platega
+    # Platega - add options for different payment methods
     if settings.is_platega_enabled():
+        platega_methods = settings.get_platega_active_methods()
+        definitions = settings.get_platega_method_definitions()
+        platega_options = []
+        for method_code in platega_methods:
+            info = definitions.get(method_code, {})
+            platega_options.append({
+                "id": str(method_code),
+                "name": info.get("title") or info.get("name") or f"Platega {method_code}",
+                "description": info.get("description") or info.get("name") or "",
+            })
+
         methods.append(PaymentMethodResponse(
             id="platega",
-            name="Platega",
+            name=settings.get_platega_display_name(),
             description="Pay via Platega",
             min_amount_kopeks=settings.PLATEGA_MIN_AMOUNT_KOPEKS,
             max_amount_kopeks=settings.PLATEGA_MAX_AMOUNT_KOPEKS,
             is_available=True,
+            options=platega_options if platega_options else None,
         ))
 
     # Wata
@@ -199,6 +220,28 @@ async def get_payment_methods():
             description="Pay via Wata",
             min_amount_kopeks=settings.WATA_MIN_AMOUNT_KOPEKS,
             max_amount_kopeks=settings.WATA_MAX_AMOUNT_KOPEKS,
+            is_available=True,
+        ))
+
+    # CloudPayments
+    if settings.is_cloudpayments_enabled():
+        methods.append(PaymentMethodResponse(
+            id="cloudpayments",
+            name="CloudPayments",
+            description="Pay with bank card via CloudPayments",
+            min_amount_kopeks=settings.CLOUDPAYMENTS_MIN_AMOUNT_KOPEKS,
+            max_amount_kopeks=settings.CLOUDPAYMENTS_MAX_AMOUNT_KOPEKS,
+            is_available=True,
+        ))
+
+    # FreeKassa
+    if settings.is_freekassa_enabled():
+        methods.append(PaymentMethodResponse(
+            id="freekassa",
+            name=settings.get_freekassa_display_name(),
+            description="Pay via FreeKassa",
+            min_amount_kopeks=settings.FREEKASSA_MIN_AMOUNT_KOPEKS,
+            max_amount_kopeks=settings.FREEKASSA_MAX_AMOUNT_KOPEKS,
             is_available=True,
         ))
 
@@ -557,6 +600,56 @@ async def create_topup(
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail="Failed to create Wata payment",
+                )
+
+        elif request.payment_method == "cloudpayments":
+            if not settings.is_cloudpayments_enabled():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="CloudPayments payment method is unavailable",
+                )
+
+            payment_service = PaymentService()
+            result = await payment_service.create_cloudpayments_payment(
+                db=db,
+                user_id=user.id,
+                amount_kopeks=request.amount_kopeks,
+                description=settings.get_balance_payment_description(request.amount_kopeks),
+                language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+            )
+
+            if result and result.get("payment_url"):
+                payment_url = result.get("payment_url")
+                payment_id = str(result.get("local_payment_id") or result.get("invoice_id") or "pending")
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to create CloudPayments payment",
+                )
+
+        elif request.payment_method == "freekassa":
+            if not settings.is_freekassa_enabled():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="FreeKassa payment method is unavailable",
+                )
+
+            payment_service = PaymentService()
+            result = await payment_service.create_freekassa_payment(
+                db=db,
+                user_id=user.id,
+                amount_kopeks=request.amount_kopeks,
+                description=settings.get_balance_payment_description(request.amount_kopeks),
+                language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+            )
+
+            if result and result.get("payment_url"):
+                payment_url = result.get("payment_url")
+                payment_id = str(result.get("local_payment_id") or result.get("order_id") or "pending")
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to create FreeKassa payment",
                 )
 
         else:
