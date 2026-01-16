@@ -1092,7 +1092,7 @@ async def handle_back_to_menu(
     )
     await callback.answer()
 
-def _get_subscription_status(user: User, texts) -> str:
+def _get_subscription_status(user: User, texts, is_daily_tariff: bool = False) -> str:
     subscription = getattr(user, "subscription", None)
     if not subscription:
         return texts.t("SUB_STATUS_NONE", "❌ Отсутствует")
@@ -1144,6 +1144,10 @@ def _get_subscription_status(user: User, texts) -> str:
         )
 
     if actual_status == "active":
+        # Для суточных тарифов не показываем предупреждение об истечении
+        if is_daily_tariff:
+            return texts.t("SUB_STATUS_DAILY_ACTIVE", "💎 Активна")
+
         if days_left > 7 and end_date_text:
             return texts.t(
                 "SUB_STATUS_ACTIVE_LONG",
@@ -1185,11 +1189,38 @@ def _insert_random_message(base_text: str, random_message: str, action_prompt: s
 
 
 async def get_main_menu_text(user, texts, db: AsyncSession):
+    from app.config import settings
+
+    # Загружаем информацию о тарифе если включен режим тарифов
+    tariff = None
+    is_daily_tariff = False
+    tariff_info_block = ""
+
+    subscription = getattr(user, "subscription", None)
+    if settings.is_tariffs_mode() and subscription and subscription.tariff_id:
+        try:
+            from app.database.crud.tariff import get_tariff_by_id
+            tariff = await get_tariff_by_id(db, subscription.tariff_id)
+            if tariff:
+                is_daily_tariff = getattr(tariff, 'is_daily', False)
+                # Формируем краткий блок информации о тарифе для главного меню
+                tariff_info_block = f"\n📦 Тариф: {tariff.name}"
+        except Exception as e:
+            logger.debug(f"Не удалось загрузить тариф для главного меню: {e}")
 
     base_text = texts.MAIN_MENU.format(
         user_name=user.full_name,
-        subscription_status=_get_subscription_status(user, texts)
+        subscription_status=_get_subscription_status(user, texts, is_daily_tariff)
     )
+
+    # Добавляем информацию о тарифе перед "Выберите действие"
+    if tariff_info_block:
+        action_prompt_text = texts.t("MAIN_MENU_ACTION_PROMPT", "Выберите действие:")
+        if action_prompt_text in base_text:
+            base_text = base_text.replace(
+                action_prompt_text,
+                f"{tariff_info_block}\n\n{action_prompt_text}"
+            )
 
     action_prompt = texts.t("MAIN_MENU_ACTION_PROMPT", "Выберите действие:")
 
@@ -1392,6 +1423,7 @@ async def handle_activate_button(
 
     except Exception as e:
         logger.error(f"Ошибка автоматической активации для {db_user.telegram_id}: {e}")
+        await db.rollback()
         await callback.answer(
             texts.t("ACTIVATION_ERROR", "❌ Ошибка активации. Попробуйте позже."),
             show_alert=True,

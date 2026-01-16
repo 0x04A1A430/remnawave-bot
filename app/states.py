@@ -12,16 +12,21 @@ class SubscriptionStates(StatesGroup):
     selecting_countries = State()
     selecting_devices = State()
     confirming_purchase = State()
-    
+
     adding_countries = State()
     adding_traffic = State()
     adding_devices = State()
     extending_subscription = State()
     confirming_traffic_reset = State()
     cart_saved_for_topup = State()
-    
+
     # Состояния для простой подписки
     waiting_for_simple_subscription_payment_method = State()
+
+    # Состояния для кастомных дней/трафика при покупке тарифа
+    selecting_custom_days = State()
+    selecting_custom_traffic = State()
+    confirming_custom_purchase = State()
 
 class BalanceStates(StatesGroup):
     waiting_for_amount = State()
@@ -177,9 +182,13 @@ class AdminStates(StatesGroup):
     editing_tariff_tier = State()
     editing_tariff_prices = State()
     editing_tariff_device_price = State()
+    editing_tariff_max_devices = State()
     editing_tariff_trial_days = State()
     editing_tariff_squads = State()
     editing_tariff_promo_groups = State()
+    editing_tariff_traffic_topup_packages = State()
+    editing_tariff_max_topup_traffic = State()
+    editing_tariff_daily_price = State()
 
 
 class SupportStates(StatesGroup):

@@ -1,17 +1,19 @@
 import logging
 from typing import Callable, Dict, Any, Awaitable, Optional
+from datetime import datetime
 from aiogram import BaseMiddleware, Bot, types
 from aiogram.exceptions import TelegramForbiddenError, TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import TelegramObject, Update, Message, CallbackQuery
 from aiogram.enums import ChatMemberStatus
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.database import get_db
 from app.database.crud.campaign import get_campaign_by_start_parameter
 from app.database.crud.subscription import deactivate_subscription, reactivate_subscription
 from app.database.crud.user import get_user_by_telegram_id
-from app.database.models import SubscriptionStatus
+from app.database.models import SubscriptionStatus, User
 from app.keyboards.inline import get_channel_sub_keyboard
 from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
@@ -23,6 +25,11 @@ logger = logging.getLogger(__name__)
 
 
 class ChannelCheckerMiddleware(BaseMiddleware):
+    """
+    Middleware для проверки подписки на канал.
+    ОПТИМИЗИРОВАНО: создаёт максимум одну сессию БД на запрос.
+    """
+
     def __init__(self):
         self.BAD_MEMBER_STATUS = (
             ChatMemberStatus.LEFT,
@@ -55,10 +62,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
             logger.debug("❌ telegram_id не найден, пропускаем")
             return await handler(event, data)
 
-
-        # Админам разрешаем пропускать проверку подписки, чтобы не блокировать
-        # работу панели управления даже при отсутствии подписки. Важно делать
-        # это до обращения к состоянию, чтобы не выполнять лишние операции.
+        # Админам разрешаем пропускать проверку подписки
         if settings.is_admin(telegram_id):
             logger.debug(
                 "✅ Пользователь %s является администратором — пропускаем проверку подписки",
@@ -71,7 +75,6 @@ class ChannelCheckerMiddleware(BaseMiddleware):
 
         if state:
             current_state = await state.get_state()
-
 
         is_reg_process = is_registration_process(event, current_state)
 
@@ -191,10 +194,10 @@ class ChannelCheckerMiddleware(BaseMiddleware):
 
         payload = parts[1]
 
-        data = await state.get_data() or {}
-        if data.get("pending_start_payload") != payload:
-            data["pending_start_payload"] = payload
-            await state.set_data(data)
+        state_data = await state.get_data() or {}
+        if state_data.get("pending_start_payload") != payload:
+            state_data["pending_start_payload"] = payload
+            await state.set_data(state_data)
             logger.debug("💾 Сохранен start payload %s для последующей обработки", payload)
 
         if bot and message.from_user:
@@ -213,7 +216,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
         payload: str,
     ) -> None:
         try:
-            data = await state.get_data() or {}
+            state_data = await state.get_data() or {}
         except Exception as error:
             logger.error(
                 "❌ Не удалось получить данные состояния для уведомления по кампании %s: %s",
@@ -222,7 +225,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
             )
             return
 
-        if data.get("campaign_notification_sent"):
+        if state_data.get("campaign_notification_sent"):
             return
 
         async for db in get_db():
@@ -246,7 +249,6 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                 )
                 if sent:
                     await state.update_data(campaign_notification_sent=True)
-                break
             except Exception as error:
                 logger.error(
                     "❌ Ошибка отправки уведомления о переходе по кампании %s: %s",
@@ -259,40 +261,24 @@ class ChannelCheckerMiddleware(BaseMiddleware):
     async def _deactivate_subscription_on_unsubscribe(
         self, telegram_id: int, bot: Bot, channel_link: Optional[str]
     ) -> None:
+        """Деактивация подписки при отписке от канала."""
         if not settings.CHANNEL_DISABLE_TRIAL_ON_UNSUBSCRIBE and not settings.CHANNEL_REQUIRED_FOR_ALL:
-            logger.debug(
-                "ℹ️ Пропускаем деактивацию подписки пользователя %s: отключение при отписке выключено",
-                telegram_id,
-            )
             return
 
         async for db in get_db():
             try:
                 user = await get_user_by_telegram_id(db, telegram_id)
                 if not user or not user.subscription:
-                    logger.debug(
-                        "⚠️ Пользователь %s отсутствует или не имеет подписки — пропускаем деактивацию",
-                        telegram_id,
-                    )
                     break
 
                 subscription = user.subscription
 
                 if subscription.status != SubscriptionStatus.ACTIVE.value:
-                    logger.debug(
-                        "ℹ️ Подписка пользователя %s не активна (status=%s) — пропускаем деактивацию",
-                        telegram_id,
-                        subscription.status,
-                    )
                     break
 
                 if settings.CHANNEL_REQUIRED_FOR_ALL:
                     pass
                 elif not subscription.is_trial:
-                    logger.debug(
-                        "ℹ️ Подписка пользователя %s платная, CHANNEL_REQUIRED_FOR_ALL=False — пропускаем деактивацию",
-                        telegram_id,
-                    )
                     break
 
                 await deactivate_subscription(db, subscription)
@@ -324,7 +310,6 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                     )
                     channel_kb = get_channel_sub_keyboard(channel_link, language=user.language)
                     await bot.send_message(telegram_id, notification_text, reply_markup=channel_kb)
-                    logger.info(f"📨 Уведомление о деактивации отправлено пользователю {telegram_id}")
                 except Exception as notify_error:
                     logger.error(
                         "❌ Не удалось отправить уведомление о деактивации пользователю %s: %s",
@@ -341,10 +326,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                 break
 
     async def _reactivate_subscription_on_subscribe(self, telegram_id: int, bot: Bot) -> None:
-        """Реактивация подписки после повторной подписки на канал.
-
-        Вызывается только если подписка в статусе DISABLED.
-        """
+        """Реактивация подписки после повторной подписки на канал."""
         if not settings.CHANNEL_DISABLE_TRIAL_ON_UNSUBSCRIBE and not settings.CHANNEL_REQUIRED_FOR_ALL:
             return
 
@@ -356,13 +338,11 @@ class ChannelCheckerMiddleware(BaseMiddleware):
 
                 subscription = user.subscription
 
-                # Реактивируем только DISABLED подписки (деактивированные из-за отписки)
-                # Тихо выходим если подписка не требует реактивации — без логов
+                # Реактивируем только DISABLED подписки
                 if subscription.status != SubscriptionStatus.DISABLED.value:
                     break
 
                 # Проверяем что подписка ещё не истекла
-                from datetime import datetime
                 if subscription.end_date and subscription.end_date <= datetime.utcnow():
                     break
 

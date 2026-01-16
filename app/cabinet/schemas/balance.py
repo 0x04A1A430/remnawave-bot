@@ -1,7 +1,7 @@
 """Balance and payment schemas for cabinet."""
 
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 
 
@@ -36,6 +36,13 @@ class TransactionListResponse(BaseModel):
     pages: int
 
 
+class PaymentOptionResponse(BaseModel):
+    """Payment method option (e.g. Platega sub-methods)."""
+    id: str
+    name: str
+    description: Optional[str] = None
+
+
 class PaymentMethodResponse(BaseModel):
     """Available payment method."""
     id: str
@@ -44,6 +51,7 @@ class PaymentMethodResponse(BaseModel):
     min_amount_kopeks: int
     max_amount_kopeks: int
     is_available: bool = True
+    options: Optional[List[Dict[str, Any]]] = None
 
 
 class TopUpRequest(BaseModel):
@@ -61,3 +69,15 @@ class TopUpResponse(BaseModel):
     amount_rubles: float
     status: str
     expires_at: Optional[datetime] = None
+
+
+class StarsInvoiceRequest(BaseModel):
+    """Request to create Telegram Stars invoice for balance top-up."""
+    amount_kopeks: int = Field(..., ge=100, description="Amount in kopeks (min 1 ruble)")
+
+
+class StarsInvoiceResponse(BaseModel):
+    """Response with Telegram Stars invoice link."""
+    invoice_url: str
+    stars_amount: int
+    amount_kopeks: int

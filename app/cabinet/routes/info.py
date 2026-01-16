@@ -59,6 +59,14 @@ class ServiceInfoResponse(BaseModel):
     website: Optional[str] = None
 
 
+class SupportConfigResponse(BaseModel):
+    """Support/tickets configuration for miniapp."""
+    tickets_enabled: bool
+    support_type: str  # "tickets", "profile", "url"
+    support_url: Optional[str] = None
+    support_username: Optional[str] = None
+
+
 # ============ Routes ============
 
 @router.get("/faq", response_model=List[FaqPageResponse])
@@ -235,3 +243,31 @@ async def update_user_language(
     await db.refresh(user)
 
     return {"language": user.language}
+
+
+@router.get("/support-config", response_model=SupportConfigResponse)
+async def get_support_config():
+    """Get support/tickets configuration for cabinet."""
+    # Use SUPPORT_SYSTEM_MODE setting (configurable from admin panel)
+    support_mode = settings.get_support_system_mode()  # returns: tickets, contact, or both
+
+    # Map support mode to support type for frontend
+    # - "tickets" mode -> tickets only, no contact
+    # - "contact" mode -> contact only (profile), no tickets
+    # - "both" mode -> tickets enabled, contact available as fallback
+    if support_mode == "tickets":
+        tickets_enabled = True
+        support_type = "tickets"
+    elif support_mode == "contact":
+        tickets_enabled = False
+        support_type = "profile"
+    else:  # both
+        tickets_enabled = True
+        support_type = "tickets"
+
+    return SupportConfigResponse(
+        tickets_enabled=tickets_enabled,
+        support_type=support_type,
+        support_url=None,  # Cabinet doesn't use custom URLs
+        support_username=settings.SUPPORT_USERNAME,  # Always return for fallback
+    )

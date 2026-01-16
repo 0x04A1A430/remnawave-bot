@@ -336,9 +336,11 @@ class MiniAppSubscriptionPurchaseService:
         currency = (getattr(user, "balance_currency", None) or "RUB").upper()
         texts = get_texts(getattr(user, "language", None))
 
+        # Exclude trial-only servers from purchase options
         available_servers = await get_available_server_squads(
             db,
             promo_group_id=getattr(user, "promo_group_id", None),
+            exclude_trial_only=True,
         )
         server_catalog: Dict[str, ServerSquad] = {server.squad_uuid: server for server in available_servers}
 

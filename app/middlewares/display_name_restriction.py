@@ -163,6 +163,10 @@ class DisplayNameRestrictionMiddleware(BaseMiddleware):
 
         banned_keywords = settings.get_display_name_banned_keywords()
 
+        # Если список пустой - не блокируем никого
+        if not banned_keywords:
+            return False
+
         return any(
             keyword in normalized or keyword in collapsed
             for keyword in banned_keywords

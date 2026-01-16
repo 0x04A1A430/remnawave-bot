@@ -725,6 +725,80 @@
             font-size: 14px;
         }
 
+        /* Бейдж скидки промогруппы на карточке тарифа */
+        .tariff-discount-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            color: #fff;
+            font-size: 11px;
+            font-weight: 700;
+            border-radius: 8px;
+            margin-top: 4px;
+            box-shadow: 0 2px 4px rgba(34, 197, 94, 0.3);
+            animation: discount-pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes discount-pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        :root[data-theme="dark"] .tariff-discount-badge {
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            box-shadow: 0 2px 8px rgba(34, 197, 94, 0.4);
+        }
+
+        /* Баннер скидки промогруппы */
+        .promo-group-discount-banner {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 16px;
+            margin-bottom: 16px;
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.12) 0%, rgba(16, 163, 74, 0.08) 100%);
+            border: 1px solid rgba(34, 197, 94, 0.25);
+            border-radius: 14px;
+            animation: banner-glow 3s ease-in-out infinite;
+        }
+
+        @keyframes banner-glow {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+            50% { box-shadow: 0 0 15px 2px rgba(34, 197, 94, 0.15); }
+        }
+
+        .promo-group-discount-icon {
+            font-size: 28px;
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+        }
+
+        .promo-group-discount-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .promo-group-discount-title {
+            font-weight: 700;
+            font-size: 14px;
+            color: #22c55e;
+            line-height: 1.3;
+        }
+
+        .promo-group-discount-subtitle {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+
+        :root[data-theme="dark"] .promo-group-discount-banner {
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.18) 0%, rgba(16, 163, 74, 0.1) 100%);
+            border-color: rgba(34, 197, 94, 0.35);
+        }
+
+        :root[data-theme="dark"] .promo-group-discount-title {
+            color: #4ade80;
+        }
+
         :root[data-theme="dark"] .tariff-name-badge {
             background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.25), rgba(var(--primary-rgb), 0.1));
         }
@@ -740,6 +814,313 @@
 
         :root[data-theme="dark"] .tariff-current-name {
             background: linear-gradient(135deg, rgba(34, 197, 94, 0.2), rgba(34, 197, 94, 0.08));
+        }
+
+        /* ============================================
+           Instant Tariff Switch Styles
+           ============================================ */
+        .instant-switch-current-info {
+            display: flex;
+            gap: 16px;
+            padding: 16px;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            margin-bottom: 12px;
+        }
+
+        .instant-switch-current-tariff,
+        .instant-switch-remaining {
+            flex: 1;
+        }
+
+        .instant-switch-label {
+            font-size: 11px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .instant-switch-value {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .instant-switch-hint {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 12px 14px;
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(59, 130, 246, 0.04) 100%);
+            border: 1px solid rgba(59, 130, 246, 0.15);
+            border-radius: 10px;
+            margin-bottom: 4px;
+        }
+
+        .instant-switch-hint-icon {
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+
+        .instant-switch-hint-text {
+            font-size: 12px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        /* Tariff item in instant switch */
+        .instant-switch-tariff-item {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            padding: 16px;
+            margin-bottom: 12px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+        }
+
+        .instant-switch-tariff-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .instant-switch-tariff-item:hover {
+            border-color: var(--primary);
+            background: rgba(var(--primary-rgb), 0.03);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(var(--primary-rgb), 0.12);
+        }
+
+        .instant-switch-tariff-item:active {
+            transform: translateY(0);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+        }
+
+        .instant-switch-tariff-item.current {
+            opacity: 0.5;
+            cursor: default;
+            pointer-events: none;
+        }
+
+        .instant-switch-tariff-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .instant-switch-tariff-name {
+            font-weight: 600;
+            font-size: 15px;
+            color: var(--text-primary);
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .instant-switch-tariff-details {
+            display: flex;
+            gap: 14px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .instant-switch-tariff-details span {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .instant-switch-tariff-cost {
+            text-align: right;
+            flex-shrink: 0;
+            margin-left: 12px;
+        }
+
+        .instant-switch-cost-badge {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 14px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            min-width: 80px;
+            text-align: center;
+        }
+
+        .instant-switch-cost-badge.upgrade {
+            background: linear-gradient(135deg, rgba(249, 115, 22, 0.12) 0%, rgba(251, 146, 60, 0.08) 100%);
+            color: #ea580c;
+            border: 1px solid rgba(249, 115, 22, 0.2);
+        }
+
+        .instant-switch-cost-badge.free {
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.12) 0%, rgba(74, 222, 128, 0.08) 100%);
+            color: #16a34a;
+            border: 1px solid rgba(34, 197, 94, 0.2);
+        }
+
+        /* Confirmation panel */
+        .instant-switch-confirm {
+            margin-top: 20px;
+            padding: 20px;
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            border: 2px solid var(--primary);
+            animation: slideUp 0.3s ease;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .instant-switch-confirm-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .instant-switch-confirm-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .instant-switch-confirm-close {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: none;
+            background: var(--bg-tertiary, var(--bg-primary));
+            color: var(--text-secondary);
+            font-size: 18px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .instant-switch-confirm-close:hover {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+        }
+
+        .instant-switch-compare {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .instant-switch-compare-item {
+            text-align: center;
+            flex: 1;
+        }
+
+        .instant-switch-compare-label {
+            font-size: 11px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .instant-switch-compare-value {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .instant-switch-compare-arrow {
+            font-size: 20px;
+            color: var(--primary);
+            flex-shrink: 0;
+        }
+
+        .instant-switch-cost {
+            text-align: center;
+            padding: 12px;
+            background: var(--bg-primary);
+            border-radius: 10px;
+            margin-bottom: 12px;
+        }
+
+        .instant-switch-cost-label {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .instant-switch-cost-value {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--primary);
+            margin-left: 8px;
+        }
+
+        .instant-switch-cost-value.free {
+            color: #22c55e;
+        }
+
+        .instant-switch-balance {
+            text-align: center;
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+
+        .instant-switch-insufficient {
+            text-align: center;
+            font-size: 13px;
+            color: #ef4444;
+            padding: 10px;
+            background: rgba(239, 68, 68, 0.1);
+            border-radius: 8px;
+            margin-bottom: 12px;
+        }
+
+        .instant-switch-confirm-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .instant-switch-confirm-actions .btn {
+            flex: 1;
+        }
+
+        .instant-switch-confirm-actions .btn-secondary {
+            background: var(--bg-tertiary, var(--bg-primary));
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        :root[data-theme="dark"] .instant-switch-hint {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.12) 0%, rgba(59, 130, 246, 0.06) 100%);
+            border-color: rgba(59, 130, 246, 0.2);
+        }
+
+        :root[data-theme="dark"] .instant-switch-cost-badge.upgrade {
+            background: linear-gradient(135deg, rgba(249, 115, 22, 0.2) 0%, rgba(249, 115, 22, 0.1) 100%);
+            color: #fb923c;
+        }
+
+        :root[data-theme="dark"] .instant-switch-cost-badge.free {
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.2) 0%, rgba(34, 197, 94, 0.1) 100%);
+            color: #4ade80;
         }
 
         .subscription-settings-toggle.active .tariff-name-badge {
@@ -2326,6 +2707,185 @@
             color: #41464b;
         }
 
+        .status-paused {
+            background: linear-gradient(135deg, #e2e3e5, #eeeff1);
+            color: #41464b;
+        }
+
+        /* Daily Subscription Status Bar */
+        .daily-subscription-status {
+            margin-top: 16px;
+            padding: 16px;
+            background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.08), rgba(var(--primary-rgb), 0.04));
+            border-radius: var(--radius-lg);
+            border: 1px solid rgba(var(--primary-rgb), 0.15);
+        }
+
+        .daily-subscription-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .daily-subscription-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .daily-subscription-title .daily-icon {
+            font-size: 18px;
+        }
+
+        .daily-subscription-price {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        .daily-subscription-progress {
+            margin-bottom: 12px;
+            transition: opacity 0.3s ease;
+        }
+
+        .daily-subscription-progress.paused {
+            opacity: 0.5;
+        }
+
+        .daily-subscription-progress.paused .daily-progress-fill {
+            animation: none;
+            background: var(--hint-color);
+        }
+
+        .daily-progress-bar {
+            height: 8px;
+            background: rgba(var(--primary-rgb), 0.15);
+            border-radius: 4px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .daily-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), rgba(var(--primary-rgb), 0.7));
+            border-radius: 4px;
+            transition: width 0.5s ease;
+            position: relative;
+        }
+
+        .daily-progress-fill::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            animation: shimmer 2s infinite;
+        }
+
+        .daily-subscription-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+        }
+
+        .daily-time-remaining {
+            color: var(--text-secondary);
+        }
+
+        .daily-time-remaining strong {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        .daily-next-charge {
+            color: var(--text-secondary);
+        }
+
+        .daily-subscription-actions {
+            margin-top: 12px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .daily-pause-btn {
+            flex: 1;
+            padding: 10px 16px;
+            border-radius: var(--radius);
+            border: 2px solid var(--border-color);
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .daily-pause-btn:hover {
+            border-color: var(--primary);
+            background: rgba(var(--primary-rgb), 0.05);
+        }
+
+        .daily-pause-btn.paused {
+            background: linear-gradient(135deg, var(--primary), rgba(var(--primary-rgb), 0.8));
+            color: white;
+            border-color: transparent;
+        }
+
+        .daily-pause-btn.paused:hover {
+            opacity: 0.9;
+        }
+
+        .daily-pause-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .daily-subscription-paused-notice {
+            margin: 16px;
+            padding: 14px 16px;
+            background: linear-gradient(135deg, rgba(var(--warning-rgb), 0.12), rgba(var(--warning-rgb), 0.06));
+            border-radius: 12px;
+            border: 1px solid rgba(var(--warning-rgb), 0.25);
+            font-size: 13px;
+            line-height: 1.5;
+            color: var(--text-primary);
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            box-shadow: 0 2px 8px rgba(var(--warning-rgb), 0.08);
+        }
+
+        .daily-subscription-paused-notice .notice-icon {
+            font-size: 20px;
+            line-height: 1;
+            flex-shrink: 0;
+        }
+
+        .daily-subscription-paused-notice span:last-child {
+            flex: 1;
+        }
+
+        :root[data-theme="dark"] .daily-subscription-status {
+            background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.12), rgba(var(--primary-rgb), 0.06));
+            border-color: rgba(var(--primary-rgb), 0.25);
+        }
+
+        :root[data-theme="dark"] .status-paused {
+            background: linear-gradient(135deg, rgba(100, 116, 139, 0.3), rgba(100, 116, 139, 0.2));
+            color: #94a3b8;
+        }
+
         .status-missing {
             background: linear-gradient(135deg, #e0e7ff, #eef2ff);
             color: #1e3a8a;
@@ -2416,6 +2976,167 @@
             font-weight: 700;
             color: var(--text-primary);
             text-align: right;
+        }
+
+        .info-action-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: none;
+            background: var(--primary);
+            color: white;
+            cursor: pointer;
+            margin-left: 8px;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+        }
+
+        .info-action-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 2px 8px rgba(var(--primary-rgb), 0.4);
+        }
+
+        .info-action-btn:active {
+            transform: scale(0.95);
+        }
+
+        .info-action-btn svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        /* Traffic Topup Modal */
+        .traffic-topup-packages {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+
+        .traffic-topup-package {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 16px;
+            border-radius: var(--radius);
+            border: 1px solid var(--border-color);
+            background: var(--card-bg);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .traffic-topup-package:hover {
+            border-color: var(--primary);
+            background: rgba(var(--primary-rgb), 0.05);
+        }
+
+        .traffic-topup-package.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .traffic-topup-package.disabled:hover {
+            border-color: var(--border-color);
+            background: var(--card-bg);
+        }
+
+        .traffic-topup-package-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .traffic-topup-package-gb {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .traffic-topup-package-price {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .traffic-topup-price-original {
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-decoration: line-through;
+            font-weight: 400;
+        }
+
+        .traffic-topup-price-current {
+            color: var(--primary);
+        }
+
+        .traffic-topup-discount-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            color: #fff;
+            font-size: 10px;
+            font-weight: 700;
+            border-radius: 6px;
+            box-shadow: 0 1px 3px rgba(34, 197, 94, 0.3);
+        }
+
+        .traffic-topup-package-btn {
+            padding: 8px 16px;
+            border-radius: var(--radius);
+            border: none;
+            background: var(--primary);
+            color: white;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .traffic-topup-package-btn:hover {
+            box-shadow: 0 2px 8px rgba(var(--primary-rgb), 0.4);
+        }
+
+        .traffic-topup-package-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .traffic-topup-balance {
+            text-align: center;
+            font-size: 13px;
+            color: var(--text-secondary);
+            padding: 8px;
+            border-radius: var(--radius);
+            background: var(--surface);
+        }
+
+        .traffic-topup-success {
+            text-align: center;
+            padding: 20px;
+        }
+
+        .traffic-topup-success-icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+        }
+
+        .traffic-topup-success-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+
+        .traffic-topup-success-message {
+            font-size: 14px;
+            color: var(--text-secondary);
         }
 
         /* Promo card */
@@ -2905,9 +3626,12 @@
 
         .payment-method-info {
             display: flex;
+            flex-direction: column;
             align-items: center;
-            gap: 12px;
+            justify-content: center;
+            gap: 8px;
             flex: 1;
+            text-align: center;
         }
 
         .payment-method-icon {
@@ -2917,17 +3641,20 @@
         .payment-method-text {
             display: flex;
             flex-direction: column;
+            align-items: center;
             gap: 2px;
         }
 
         .payment-method-label {
             font-weight: 700;
             color: var(--text-primary);
+            text-align: center;
         }
 
         .payment-method-description {
             font-size: 13px;
             color: var(--text-secondary);
+            text-align: center;
         }
 
         .amount-form {
@@ -4997,6 +5724,7 @@
                     <div class="subscription-missing-hint" id="subscriptionMissingHint" data-i18n="subscription_missing.hint">Top up your balance after activation to stay connected.</div>
                     <div class="subscription-missing-actions">
                         <button class="btn btn-secondary hidden" type="button" id="subscriptionMissingTrialBtn" data-i18n="subscription_missing.action.trial">Activate trial</button>
+                        <button class="btn btn-primary hidden" type="button" id="subscriptionMissingBuyBtn" data-i18n="subscription_missing.action.buy">Buy subscription</button>
                     </div>
                 </div>
             </div>
@@ -5026,6 +5754,39 @@
                     </div>
                 </div>
 
+                <!-- Daily Subscription Status Bar -->
+                <div class="daily-subscription-status hidden" id="dailySubscriptionStatus">
+                    <div class="daily-subscription-header">
+                        <div class="daily-subscription-title">
+                            <span class="daily-icon">🔄</span>
+                            <span id="dailyTariffName" data-i18n="daily.tariff_name">Суточный тариф</span>
+                        </div>
+                        <div class="daily-subscription-price" id="dailyPrice">-/день</div>
+                    </div>
+                    <div class="daily-subscription-progress" id="dailyProgressSection">
+                        <div class="daily-progress-bar">
+                            <div class="daily-progress-fill" id="dailyProgressFill" style="width: 100%"></div>
+                        </div>
+                    </div>
+                    <div class="daily-subscription-info">
+                        <div class="daily-time-remaining">
+                            <span data-i18n="daily.time_remaining">Осталось:</span>
+                            <strong id="dailyTimeRemaining">--:--:--</strong>
+                        </div>
+                        <div class="daily-next-charge" id="dailyNextCharge"></div>
+                    </div>
+                    <div class="daily-subscription-actions">
+                        <button class="daily-pause-btn" id="dailyPauseBtn" type="button">
+                            <span id="dailyPauseBtnIcon">⏸️</span>
+                            <span id="dailyPauseBtnText" data-i18n="daily.pause">Приостановить</span>
+                        </button>
+                    </div>
+                    <div class="daily-subscription-paused-notice hidden" id="dailyPausedNotice">
+                        <span class="notice-icon">⏸️</span>
+                        <span data-i18n="daily.paused_notice">Подписка приостановлена. Автопродление отключено. VPN работает до конца оплаченного времени.</span>
+                    </div>
+                </div>
+
                 <div class="info-list">
                     <div class="info-item">
                         <span class="info-label" data-i18n="info.expires">
@@ -5043,6 +5804,11 @@
                     <div class="info-item">
                         <span class="info-label" data-i18n="info.traffic_limit">Traffic Limit</span>
                         <span class="info-value" id="trafficLimit">-</span>
+                        <button class="info-action-btn hidden" id="trafficTopupBtn" type="button" title="Докупить трафик">
+                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                            </svg>
+                        </button>
                     </div>
                     <div class="info-item">
                         <span class="info-label" data-i18n="info.subscription_type">Type</span>
@@ -5270,6 +6036,14 @@
                                 <div class="subscription-renewal-meta-title" data-i18n="tariffs.current">Текущий тариф</div>
                                 <div class="subscription-renewal-meta-body" id="tariffsCurrentTariffName"></div>
                             </div>
+                            <!-- Баннер скидки промогруппы -->
+                            <div id="tariffsPromoGroupBanner" class="promo-group-discount-banner hidden">
+                                <div class="promo-group-discount-icon">🎁</div>
+                                <div class="promo-group-discount-content">
+                                    <div class="promo-group-discount-title" id="tariffsPromoGroupName"></div>
+                                    <div class="promo-group-discount-subtitle" id="tariffsPromoGroupDiscount"></div>
+                                </div>
+                            </div>
                             <div class="subscription-renewal-section">
                                 <div class="subscription-renewal-section-title">Выберите тариф</div>
                                 <div id="tariffsList" class="subscription-renewal-options"></div>
@@ -5467,6 +6241,27 @@
                     <div id="subscriptionPurchaseModalBody"></div>
                     <div class="modal-actions">
                         <button class="modal-button secondary" type="button" id="subscriptionPurchaseModalCloseBtn" data-i18n="subscription_purchase.action.close">Закрыть</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-backdrop hidden" id="trafficTopupModal">
+                <div class="modal" role="dialog" aria-modal="true" aria-labelledby="trafficTopupModalTitle">
+                    <div class="modal-header">
+                        <div class="modal-title" id="trafficTopupModalTitle" data-i18n="traffic_topup.title">Докупить трафик</div>
+                        <div class="modal-subtitle" id="trafficTopupModalSubtitle" data-i18n="traffic_topup.subtitle">Выберите пакет трафика</div>
+                    </div>
+                    <div class="modal-body" id="trafficTopupModalBody">
+                        <div class="traffic-topup-loading hidden" id="trafficTopupLoading">
+                            <div class="subscription-settings-loading-line"></div>
+                            <div class="subscription-settings-loading-line" style="width: 70%;"></div>
+                        </div>
+                        <div class="traffic-topup-packages" id="trafficTopupPackages"></div>
+                        <div class="traffic-topup-balance" id="trafficTopupBalance"></div>
+                    </div>
+                    <div class="modal-error hidden" id="trafficTopupModalError"></div>
+                    <div class="modal-actions" id="trafficTopupModalFooter">
+                        <button class="modal-button secondary" type="button" id="trafficTopupModalCancelBtn" data-i18n="traffic_topup.cancel">Закрыть</button>
                     </div>
                 </div>
             </div>
@@ -5856,6 +6651,17 @@
                 'info.promo_group': 'Promo group',
                 'info.device_limit': 'Device limit',
                 'info.autopay': 'Auto-pay',
+                // Daily subscription
+                'daily.tariff_name': 'Daily tariff',
+                'daily.time_remaining': 'Time left:',
+                'daily.next_charge': 'Next charge at',
+                'daily.pause': 'Pause',
+                'daily.resume': 'Resume',
+                'daily.paused_notice': 'Subscription paused. Auto-renewal disabled. VPN works until the end of paid time.',
+                'daily.paused_no_charge': 'Paused — no charge',
+                'daily.status.active': 'Active',
+                'daily.status.paused': 'Paused',
+                'daily.hours_remaining': 'Hours left',
                 'button.connect.default': 'Connect to VPN',
                 'button.connect.happ': 'Connect',
                 'button.copy': 'Copy subscription link',
@@ -5869,6 +6675,8 @@
                 'topup.method.stars.adjusted': 'Requested {requested}. Actual charge: {amount} ({stars} ⭐).',
                 'topup.method.yookassa.title': 'Bank card (YooKassa)',
                 'topup.method.yookassa.description': 'Pay securely with a bank card',
+                'topup.method.yookassa_sbp.title': 'SBP (YooKassa)',
+                'topup.method.yookassa_sbp.description': 'Pay via Faster Payments System',
                 'topup.method.mulenpay.title': 'Bank card (Mulen Pay)',
                 'topup.method.mulenpay.description': 'Fast payment with bank card',
                 'topup.method.platega.title': 'Platega.io',
@@ -5922,6 +6730,18 @@
                 'topup.status.failed.description': 'We could not confirm the payment automatically. Please check later or contact support.',
                 'topup.status.retry': 'Try again',
                 'topup.done': 'Done',
+                'traffic_topup.title': 'Buy extra traffic',
+                'traffic_topup.subtitle': 'Choose a traffic package',
+                'traffic_topup.cancel': 'Close',
+                'traffic_topup.gb_suffix': 'GB',
+                'traffic_topup.buy_button': 'Buy',
+                'traffic_topup.your_balance': 'Your balance',
+                'traffic_topup.empty': 'No packages available',
+                'traffic_topup.error.generic': 'Failed to purchase traffic. Please try again.',
+                'traffic_topup.success.title': 'Traffic added!',
+                'traffic_topup.success.message': '+{gb} GB has been added to your subscription.',
+                'traffic_topup.available_limit': 'Available to purchase: {gb} GB',
+                'traffic_topup.limit_reached': 'Maximum traffic limit reached',
                 'button.buy_subscription': 'Buy Subscription',
                 'button.open_bot': 'Open Telegram bot',
                 'subscription_purchase.title': 'Purchase subscription',
@@ -6088,6 +6908,20 @@
                 'tariffs.select': 'Select tariff',
                 'tariffs.current': 'Current tariff',
                 'tariffs.no_tariffs': 'No tariffs available',
+                'instant_switch.title': 'Switch tariff',
+                'instant_switch.current': 'Current tariff',
+                'instant_switch.remaining': 'Remaining',
+                'instant_switch.hint': 'When switching, your remaining days are preserved. Upgrade = pay the difference, downgrade = free.',
+                'instant_switch.select': 'Select new tariff',
+                'instant_switch.confirm': 'Confirmation',
+                'instant_switch.from': 'Current',
+                'instant_switch.to': 'New',
+                'instant_switch.cost': 'Cost:',
+                'instant_switch.free': 'Free',
+                'instant_switch.balance': 'Your balance:',
+                'instant_switch.insufficient': 'Insufficient funds. Missing:',
+                'instant_switch.cancel': 'Cancel',
+                'instant_switch.confirm_btn': 'Confirm',
                 'card.referral.title': 'Referral Program',
                 'card.history.title': 'Transaction History',
                 'card.servers.title': 'Connected Servers',
@@ -6202,6 +7036,7 @@
                 'subscription_missing.hint': 'After activation you can top up your balance here to stay connected.',
                 'subscription_missing.action.trial': 'Activate trial',
                 'subscription_missing.action.trial.loading': 'Activating…',
+                'subscription_missing.action.buy': 'Buy subscription',
                 'trial.activation.title': 'Trial activation',
                 'trial.activation.success': 'Trial activated! Enjoy {days} days of access.',
                 'trial.activation.success.short': 'Trial activated successfully.',
@@ -6292,6 +7127,17 @@
                 'info.promo_group': 'Уровень',
                 'info.device_limit': 'Лимит устройств',
                 'info.autopay': 'Автоплатеж',
+                // Суточная подписка
+                'daily.tariff_name': 'Суточный тариф',
+                'daily.time_remaining': 'Осталось:',
+                'daily.next_charge': 'Следующее списание',
+                'daily.pause': 'Приостановить',
+                'daily.resume': 'Возобновить',
+                'daily.paused_notice': 'Подписка приостановлена. Автопродление отключено. VPN работает до конца оплаченного времени.',
+                'daily.paused_no_charge': 'Пауза — без списания',
+                'daily.status.active': 'Активна',
+                'daily.status.paused': 'Приостановлена',
+                'daily.hours_remaining': 'Часов осталось',
                 'button.connect.default': 'Подключиться к VPN',
                 'button.connect.happ': 'Подключиться',
                 'button.copy': 'Скопировать ссылку подписки',
@@ -6305,6 +7151,8 @@
                 'topup.method.stars.adjusted': 'Вы запросили {requested}. Итог к оплате: {amount} ({stars} ⭐).',
                 'topup.method.yookassa.title': 'Банковская карта (YooKassa)',
                 'topup.method.yookassa.description': 'Безопасная оплата банковской картой',
+                'topup.method.yookassa_sbp.title': 'СБП (YooKassa)',
+                'topup.method.yookassa_sbp.description': 'Оплата через Систему быстрых платежей',
                 'topup.method.mulenpay.title': 'Банковская карта (Mulen Pay)',
                 'topup.method.mulenpay.description': 'Мгновенное списание с карты',
                 'topup.method.platega.title': 'Platega.io',
@@ -6358,6 +7206,18 @@
                 'topup.status.failed.description': 'Не удалось подтвердить платеж автоматически. Проверьте позже или обратитесь в поддержку.',
                 'topup.status.retry': 'Повторить попытку',
                 'topup.done': 'Готово',
+                'traffic_topup.title': 'Докупить трафик',
+                'traffic_topup.subtitle': 'Выберите пакет трафика',
+                'traffic_topup.cancel': 'Закрыть',
+                'traffic_topup.gb_suffix': 'ГБ',
+                'traffic_topup.buy_button': 'Купить',
+                'traffic_topup.your_balance': 'Ваш баланс',
+                'traffic_topup.empty': 'Нет доступных пакетов',
+                'traffic_topup.error.generic': 'Не удалось докупить трафик. Попробуйте снова.',
+                'traffic_topup.success.title': 'Трафик добавлен!',
+                'traffic_topup.success.message': '+{gb} ГБ добавлено к вашей подписке.',
+                'traffic_topup.available_limit': 'Доступно для покупки: {gb} ГБ',
+                'traffic_topup.limit_reached': 'Достигнут максимальный лимит трафика',
                 'button.buy_subscription': 'Купить подписку',
                 'button.open_bot': 'Открыть бота',
                 'subscription_purchase.title': 'Оформление подписки',
@@ -6524,6 +7384,20 @@
                 'tariffs.select': 'Выбрать тариф',
                 'tariffs.current': 'Текущий тариф',
                 'tariffs.no_tariffs': 'Нет доступных тарифов',
+                'instant_switch.title': 'Сменить тариф',
+                'instant_switch.current': 'Текущий тариф',
+                'instant_switch.remaining': 'Осталось',
+                'instant_switch.hint': 'При смене тарифа остаток дней сохраняется. Повышение = доплата, понижение = бесплатно.',
+                'instant_switch.select': 'Выберите новый тариф',
+                'instant_switch.confirm': 'Подтверждение',
+                'instant_switch.from': 'Текущий',
+                'instant_switch.to': 'Новый',
+                'instant_switch.cost': 'Стоимость:',
+                'instant_switch.free': 'Бесплатно',
+                'instant_switch.balance': 'Ваш баланс:',
+                'instant_switch.insufficient': 'Недостаточно средств. Не хватает:',
+                'instant_switch.cancel': 'Отмена',
+                'instant_switch.confirm_btn': 'Подтвердить',
                 'card.referral.title': 'Реферальная программа',
                 'card.history.title': 'История операций',
                 'card.servers.title': 'Подключённые серверы',
@@ -6638,6 +7512,7 @@
                 'subscription_missing.hint': 'После активации вы сможете пополнить баланс здесь для бесперебойной работы.',
                 'subscription_missing.action.trial': 'Активировать триал',
                 'subscription_missing.action.trial.loading': 'Активация…',
+                'subscription_missing.action.buy': 'Купить подписку',
                 'trial.activation.title': 'Активация триала',
                 'trial.activation.success': 'Триал активирован! Доступ открыт на {days} дн.',
                 'trial.activation.success.short': 'Триал успешно активирован.',
@@ -7657,6 +8532,19 @@
             return div.innerHTML;
         }
 
+        function getDaysWord(count, lang = 'ru') {
+            if (lang === 'en') {
+                return count === 1 ? 'day' : 'days';
+            }
+            // Russian: 1 день, 2-4 дня, 5-20 дней, 21 день, 22-24 дня, etc.
+            const n = Math.abs(count) % 100;
+            const n1 = n % 10;
+            if (n > 10 && n < 20) return 'дней';
+            if (n1 === 1) return 'день';
+            if (n1 >= 2 && n1 <= 4) return 'дня';
+            return 'дней';
+        }
+
         function normalizeUrl(value) {
             if (typeof value !== 'string') {
                 return null;
@@ -8615,6 +9503,27 @@
                 } else {
                     currentTariffRow.classList.add('hidden');
                 }
+
+                // Кнопка докупки трафика
+                const trafficTopupBtn = document.getElementById('trafficTopupBtn');
+                if (trafficTopupBtn) {
+                    const trafficTopupEnabled = currentTariff?.traffic_topup_enabled || currentTariff?.trafficTopupEnabled;
+                    const trafficTopupPackages = currentTariff?.traffic_topup_packages || currentTariff?.trafficTopupPackages || [];
+                    const isTrial = (user?.subscription_status || '').toLowerCase() === 'trial';
+
+                    if (trafficTopupEnabled && trafficTopupPackages.length > 0 && !isTrial) {
+                        trafficTopupBtn.classList.remove('hidden');
+                        // Сохраняем данные для модального окна
+                        window._trafficTopupPackages = trafficTopupPackages;
+                        window._subscriptionId = userData?.subscription_id ?? userData?.subscriptionId;
+                        window._userBalance = userData?.balance_kopeks || userData?.balanceKopeks || 0;
+                        // Лимит докупки трафика (null = без лимита)
+                        window._availableTopupGb = currentTariff?.available_topup_gb ?? currentTariff?.availableTopupGb ?? null;
+                        window._maxTopupTrafficGb = currentTariff?.max_topup_traffic_gb ?? currentTariff?.maxTopupTrafficGb ?? 0;
+                    } else {
+                        trafficTopupBtn.classList.add('hidden');
+                    }
+                }
             }
 
             const autopayElement = document.getElementById('autopayStatus');
@@ -8625,6 +9534,9 @@
                     ? (userData?.autopay_enabled ? 'On' : 'Off')
                     : autopayLabel;
             }
+
+            // Отображение суточной подписки
+            renderDailySubscriptionStatus();
 
             renderSubscriptionMissingCard();
             renderSubscriptionPurchaseCard();
@@ -8641,6 +9553,211 @@
             renderLegalDocuments();
             updateConnectButtonLabel();
             updateActionButtons();
+        }
+
+        // ============================================================
+        // Суточная подписка - отображение и управление
+        // ============================================================
+        let dailyTimerInterval = null;
+
+        function renderDailySubscriptionStatus() {
+            const container = document.getElementById('dailySubscriptionStatus');
+            if (!container) return;
+
+            const user = userData?.user;
+            if (!user) {
+                container.classList.add('hidden');
+                return;
+            }
+
+            const isDailyTariff = user.is_daily_tariff ?? user.isDailyTariff ?? false;
+            const isDailyPaused = user.is_daily_paused ?? user.isDailyPaused ?? false;
+            const dailyTariffName = user.daily_tariff_name ?? user.dailyTariffName ?? '';
+            const dailyPriceLabel = user.daily_price_label ?? user.dailyPriceLabel ?? '';
+            const dailyNextChargeAt = user.daily_next_charge_at ?? user.dailyNextChargeAt ?? null;
+
+            if (!isDailyTariff) {
+                container.classList.add('hidden');
+                if (dailyTimerInterval) {
+                    clearInterval(dailyTimerInterval);
+                    dailyTimerInterval = null;
+                }
+                return;
+            }
+
+            container.classList.remove('hidden');
+
+            // Заполняем данные
+            const tariffNameEl = document.getElementById('dailyTariffName');
+            if (tariffNameEl && dailyTariffName) {
+                tariffNameEl.textContent = dailyTariffName;
+            }
+
+            const priceEl = document.getElementById('dailyPrice');
+            if (priceEl && dailyPriceLabel) {
+                priceEl.textContent = dailyPriceLabel;
+            }
+
+            // Настройка кнопки паузы
+            const pauseBtn = document.getElementById('dailyPauseBtn');
+            const pauseBtnIcon = document.getElementById('dailyPauseBtnIcon');
+            const pauseBtnText = document.getElementById('dailyPauseBtnText');
+            const pausedNotice = document.getElementById('dailyPausedNotice');
+            const progressSection = document.getElementById('dailyProgressSection');
+
+            if (isDailyPaused) {
+                pauseBtn?.classList.add('paused');
+                if (pauseBtnIcon) pauseBtnIcon.textContent = '▶️';
+                if (pauseBtnText) pauseBtnText.textContent = t('daily.resume');
+                pausedNotice?.classList.remove('hidden');
+                // Оставляем прогресс секцию видимой, но затемняем
+                progressSection?.classList.remove('hidden');
+                progressSection?.classList.add('paused');
+
+                // Обновляем статус badge
+                const statusBadge = document.getElementById('statusBadge');
+                if (statusBadge) {
+                    statusBadge.textContent = t('daily.status.paused');
+                    statusBadge.className = 'status-badge status-paused';
+                }
+            } else {
+                pauseBtn?.classList.remove('paused');
+                if (pauseBtnIcon) pauseBtnIcon.textContent = '⏸️';
+                if (pauseBtnText) pauseBtnText.textContent = t('daily.pause');
+                pausedNotice?.classList.add('hidden');
+                progressSection?.classList.remove('hidden');
+                progressSection?.classList.remove('paused');
+            }
+
+            // Обработчик кнопки паузы
+            if (pauseBtn) {
+                pauseBtn.onclick = () => toggleDailyPause();
+            }
+
+            // Запуск таймера обратного отсчета
+            startDailyCountdownTimer(dailyNextChargeAt, isDailyPaused);
+        }
+
+        function startDailyCountdownTimer(nextChargeAt, isPaused) {
+            if (dailyTimerInterval) {
+                clearInterval(dailyTimerInterval);
+                dailyTimerInterval = null;
+            }
+
+            const timeRemainingEl = document.getElementById('dailyTimeRemaining');
+            const progressFill = document.getElementById('dailyProgressFill');
+            const nextChargeEl = document.getElementById('dailyNextCharge');
+
+            if (!nextChargeAt) {
+                if (timeRemainingEl) timeRemainingEl.textContent = '--:--:--';
+                if (progressFill) progressFill.style.width = '0%';
+                if (nextChargeEl) nextChargeEl.textContent = '';
+                return;
+            }
+
+            // При паузе показываем оставшееся время, но без обновления (статичное)
+            if (isPaused) {
+                // Сервер возвращает UTC время, добавляем 'Z' если отсутствует
+                const utcDateStr = String(nextChargeAt).endsWith('Z') ? nextChargeAt : nextChargeAt + 'Z';
+                const nextChargeDate = new Date(utcDateStr);
+                const now = new Date();
+                const remaining = nextChargeDate - now;
+
+                if (remaining > 0) {
+                    const hours = Math.floor(remaining / (1000 * 60 * 60));
+                    const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
+                    const seconds = Math.floor((remaining % (1000 * 60)) / 1000);
+                    const timeStr = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+                    if (timeRemainingEl) timeRemainingEl.textContent = timeStr;
+                    const totalDuration = 24 * 60 * 60 * 1000;
+                    const progressPercent = Math.max(0, Math.min(100, (remaining / totalDuration) * 100));
+                    if (progressFill) progressFill.style.width = `${progressPercent}%`;
+                } else {
+                    if (timeRemainingEl) timeRemainingEl.textContent = '00:00:00';
+                    if (progressFill) progressFill.style.width = '0%';
+                }
+                if (nextChargeEl) nextChargeEl.textContent = t('daily.paused_no_charge');
+                return;
+            }
+
+            // Сервер возвращает UTC время, добавляем 'Z' если отсутствует
+            const utcDateStr = String(nextChargeAt).endsWith('Z') ? nextChargeAt : nextChargeAt + 'Z';
+            const nextChargeDate = new Date(utcDateStr);
+            const totalDuration = 24 * 60 * 60 * 1000; // 24 часа в миллисекундах
+
+            function updateTimer() {
+                const now = new Date();
+                const remaining = nextChargeDate - now;
+
+                if (remaining <= 0) {
+                    if (timeRemainingEl) timeRemainingEl.textContent = '00:00:00';
+                    if (progressFill) progressFill.style.width = '0%';
+                    clearInterval(dailyTimerInterval);
+                    return;
+                }
+
+                // Форматируем оставшееся время
+                const hours = Math.floor(remaining / (1000 * 60 * 60));
+                const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((remaining % (1000 * 60)) / 1000);
+                const timeStr = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
+                if (timeRemainingEl) timeRemainingEl.textContent = timeStr;
+
+                // Обновляем прогресс бар (от 100% до 0%)
+                const progressPercent = Math.max(0, Math.min(100, (remaining / totalDuration) * 100));
+                if (progressFill) progressFill.style.width = `${progressPercent}%`;
+
+                // Время следующего списания
+                if (nextChargeEl) {
+                    const chargeTime = nextChargeDate.toLocaleTimeString(preferredLanguage === 'ru' ? 'ru-RU' : 'en-US', {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                    nextChargeEl.textContent = `${t('daily.next_charge')} ${chargeTime}`;
+                }
+            }
+
+            updateTimer();
+            dailyTimerInterval = setInterval(updateTimer, 1000);
+        }
+
+        async function toggleDailyPause() {
+            const pauseBtn = document.getElementById('dailyPauseBtn');
+            if (!pauseBtn || pauseBtn.disabled) return;
+
+            pauseBtn.disabled = true;
+
+            try {
+                const initData = tg.initData || '';
+                const response = await fetch('/miniapp/subscription/daily/toggle-pause', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ init_data: initData })
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    const errorCode = result?.detail?.code || 'unknown';
+                    const errorMsg = errorCode === 'insufficient_balance'
+                        ? (t('daily.error.insufficient_balance') || 'Недостаточно средств для возобновления подписки')
+                        : (result?.detail?.message || 'Error');
+                    showPopup(errorMsg);
+                    return;
+                }
+
+                // Полное обновление данных подписки для корректного отображения
+                await refreshSubscriptionData({ silent: true });
+
+            } catch (error) {
+                console.error('Error toggling daily pause:', error);
+                showPopup(error.message || 'Connection error');
+            } finally {
+                if (pauseBtn) {
+                    pauseBtn.disabled = false;
+                }
+            }
         }
 
         function renderSubscriptionMissingCard() {
@@ -8733,6 +9850,16 @@
                 trialButton.textContent = label;
                 trialButton.classList.toggle('hidden', !trialAvailable && !trialActivationInProgress);
                 trialButton.disabled = !trialAvailable || trialActivationInProgress;
+            }
+
+            const buyButton = document.getElementById('subscriptionMissingBuyBtn');
+            if (buyButton) {
+                const buyLabel = t('subscription_missing.action.buy');
+                buyButton.textContent = buyLabel && buyLabel !== 'subscription_missing.action.buy'
+                    ? buyLabel
+                    : (preferredLanguage === 'ru' ? 'Купить подписку' : 'Buy subscription');
+                // Показываем кнопку покупки всегда когда subscription_missing
+                buyButton.classList.remove('hidden');
             }
         }
 
@@ -11839,6 +12966,205 @@
             clearTopupError();
         }
 
+        // ============ Traffic Topup Modal ============
+        function openTrafficTopupModal() {
+            const modal = document.getElementById('trafficTopupModal');
+            if (!modal) return;
+
+            modal.classList.remove('hidden');
+            document.body.classList.add('modal-open');
+            renderTrafficTopupPackages();
+        }
+
+        function closeTrafficTopupModal() {
+            const modal = document.getElementById('trafficTopupModal');
+            if (modal) {
+                modal.classList.add('hidden');
+            }
+            document.body.classList.remove('modal-open');
+            clearTrafficTopupError();
+        }
+
+        function clearTrafficTopupError() {
+            const errorEl = document.getElementById('trafficTopupModalError');
+            if (errorEl) {
+                errorEl.classList.add('hidden');
+                errorEl.textContent = '';
+            }
+        }
+
+        function showTrafficTopupError(message) {
+            const errorEl = document.getElementById('trafficTopupModalError');
+            if (errorEl) {
+                errorEl.textContent = message;
+                errorEl.classList.remove('hidden');
+            }
+        }
+
+        function renderTrafficTopupPackages() {
+            const packagesContainer = document.getElementById('trafficTopupPackages');
+            const balanceContainer = document.getElementById('trafficTopupBalance');
+
+            if (!packagesContainer) return;
+
+            const packages = window._trafficTopupPackages || [];
+            const balance = window._userBalance || 0;
+            const availableTopupGb = window._availableTopupGb;
+
+            packagesContainer.innerHTML = '';
+
+            // Показываем доступный лимит, если он есть
+            if (availableTopupGb !== null && availableTopupGb !== undefined) {
+                const limitEl = document.createElement('div');
+                limitEl.className = 'traffic-topup-limit-info';
+                limitEl.style.cssText = 'text-align: center; padding: 8px 12px; margin-bottom: 12px; background: var(--bg-tertiary); border-radius: 8px; font-size: 13px; color: var(--text-secondary);';
+                if (availableTopupGb <= 0) {
+                    limitEl.textContent = t('traffic_topup.limit_reached');
+                    limitEl.style.color = 'var(--danger-color)';
+                } else {
+                    limitEl.textContent = t('traffic_topup.available_limit').replace('{gb}', availableTopupGb);
+                }
+                packagesContainer.appendChild(limitEl);
+            }
+
+            if (packages.length === 0) {
+                const emptyEl = document.createElement('div');
+                emptyEl.className = 'traffic-topup-empty';
+                emptyEl.textContent = t('traffic_topup.empty');
+                packagesContainer.appendChild(emptyEl);
+                return;
+            }
+
+            packages.forEach(pkg => {
+                const gb = pkg.gb;
+                const priceKopeks = pkg.price_kopeks || pkg.priceKopeks;
+                const priceLabel = pkg.price_label || pkg.priceLabel || formatPrice(priceKopeks);
+                const originalPriceKopeks = pkg.original_price_kopeks || pkg.originalPriceKopeks;
+                const originalPriceLabel = pkg.original_price_label || pkg.originalPriceLabel;
+                const discountPercent = pkg.discount_percent || pkg.discountPercent || 0;
+                const hasDiscount = discountPercent > 0 && originalPriceKopeks;
+                const canAfford = balance >= priceKopeks;
+
+                const packageEl = document.createElement('div');
+                packageEl.className = 'traffic-topup-package' + (canAfford ? '' : ' disabled');
+
+                packageEl.innerHTML = `
+                    <div class="traffic-topup-package-info">
+                        <div class="traffic-topup-package-gb">+${gb} ${t('traffic_topup.gb_suffix')}</div>
+                        <div class="traffic-topup-package-price">
+                            ${hasDiscount ? `<span class="traffic-topup-price-original">${originalPriceLabel}</span>` : ''}
+                            <span class="traffic-topup-price-current">${priceLabel}</span>
+                            ${hasDiscount ? `<span class="traffic-topup-discount-badge">-${discountPercent}%</span>` : ''}
+                        </div>
+                    </div>
+                    <button class="traffic-topup-package-btn" ${canAfford ? '' : 'disabled'}>
+                        ${t('traffic_topup.buy_button')}
+                    </button>
+                `;
+
+                if (canAfford) {
+                    const btn = packageEl.querySelector('.traffic-topup-package-btn');
+                    btn.addEventListener('click', () => purchaseTrafficPackage(gb, priceKopeks));
+                }
+
+                packagesContainer.appendChild(packageEl);
+            });
+
+            if (balanceContainer) {
+                balanceContainer.innerHTML = t('traffic_topup.your_balance') + ': <strong>' + formatPrice(balance) + '</strong>';
+            }
+        }
+
+        async function purchaseTrafficPackage(gb, priceKopeks) {
+            const packagesContainer = document.getElementById('trafficTopupPackages');
+            if (!packagesContainer) return;
+
+            // Показываем загрузку
+            const buttons = packagesContainer.querySelectorAll('.traffic-topup-package-btn');
+            buttons.forEach(btn => {
+                btn.disabled = true;
+                btn.textContent = '...';
+            });
+
+            clearTrafficTopupError();
+
+            try {
+                const initData = tg.initData || '';
+                const requestBody = {
+                    initData: initData,
+                    gb: gb
+                };
+                if (window._subscriptionId) {
+                    requestBody.subscriptionId = window._subscriptionId;
+                }
+
+                const response = await fetch('/miniapp/subscription/traffic-topup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestBody)
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    const errorMessage = data?.detail?.message || data?.message || t('traffic_topup.error.generic');
+                    showTrafficTopupError(errorMessage);
+                    renderTrafficTopupPackages();
+                    return;
+                }
+
+                // Успех - показываем сообщение
+                packagesContainer.innerHTML = `
+                    <div class="traffic-topup-success">
+                        <div class="traffic-topup-success-icon">✅</div>
+                        <div class="traffic-topup-success-title">${t('traffic_topup.success.title')}</div>
+                        <div class="traffic-topup-success-message">${t('traffic_topup.success.message').replace('{gb}', gb)}</div>
+                    </div>
+                `;
+
+                // Обновляем баланс
+                window._userBalance = data.new_balance_kopeks || data.newBalanceKopeks || 0;
+                const balanceContainer = document.getElementById('trafficTopupBalance');
+                if (balanceContainer) {
+                    balanceContainer.innerHTML = t('traffic_topup.your_balance') + ': <strong>' + formatPrice(window._userBalance) + '</strong>';
+                }
+
+                // Обновляем отображение баланса на странице
+                const balanceAmountEl = document.getElementById('balanceAmount');
+                if (balanceAmountEl) {
+                    balanceAmountEl.textContent = formatPrice(window._userBalance);
+                }
+
+                // Обновляем лимит трафика
+                const trafficLimitEl = document.getElementById('trafficLimit');
+                if (trafficLimitEl && data.new_traffic_limit_gb) {
+                    trafficLimitEl.textContent = formatTrafficLimit(data.new_traffic_limit_gb);
+                }
+
+                // Обновляем доступный лимит докупки
+                if (window._availableTopupGb !== null && window._availableTopupGb !== undefined) {
+                    window._availableTopupGb = Math.max(0, window._availableTopupGb - gb);
+                }
+
+                // Обновляем данные через 2 секунды
+                setTimeout(() => {
+                    refreshSubscriptionData({ silent: true });
+                }, 2000);
+
+            } catch (error) {
+                console.error('Traffic topup error:', error);
+                showTrafficTopupError(t('traffic_topup.error.generic'));
+                renderTrafficTopupPackages();
+            }
+        }
+
+        function formatPrice(kopeks) {
+            const rubles = Math.floor(kopeks / 100);
+            return rubles + ' ₽';
+        }
+
+        // ============ End Traffic Topup Modal ============
+
         function renderTopupLoading(messageKey = 'topup.loading') {
             const { body } = getTopupElements();
             if (!body) {
@@ -13855,6 +15181,13 @@
             return typeRaw === 'paid';
         }
 
+        function isDailyTariffSubscription() {
+            if (!userData?.user) {
+                return false;
+            }
+            return Boolean(userData.user.is_daily_tariff ?? userData.user.isDailyTariff ?? false);
+        }
+
         function isTrialSubscription() {
             if (!userData?.user) {
                 return false;
@@ -15067,8 +16400,10 @@
                 return;
             }
 
-            // Для триала НЕ показываем карточку продления — юзер должен купить подписку
-            const shouldShow = hasActiveSubscription() && !isTrialSubscription();
+            // Для триала и суточных тарифов НЕ показываем карточку продления
+            // Триал — юзер должен купить подписку
+            // Суточный тариф — продление автоматическое
+            const shouldShow = hasActiveSubscription() && !isTrialSubscription() && !isDailyTariffSubscription();
             card.classList.toggle('hidden', !shouldShow);
             if (!shouldShow) {
                 return;
@@ -15541,8 +16876,9 @@
                 return;
             }
 
-            // Для триала НЕ показываем настройки подписки — юзер должен сначала купить
-            const shouldShow = hasActiveSubscription() && !isTrialSubscription();
+            // В режиме тарифов НЕ показываем настройки подписки — там своя логика
+            // Для триала тоже НЕ показываем — юзер должен сначала купить
+            const shouldShow = hasActiveSubscription() && !isTrialSubscription() && !isTariffsMode();
             card.classList.toggle('hidden', !shouldShow);
             if (!shouldShow) {
                 return;
@@ -16233,6 +17569,13 @@
                 return false;
             }
             if (subscriptionPurchaseModalOpen) {
+                return true;
+            }
+            // Показываем для пользователей с subscription_missing (без активированного триала/подписки)
+            const subscriptionMissing = Boolean(
+                userData?.subscription_missing ?? userData?.subscriptionMissing
+            );
+            if (subscriptionMissing) {
                 return true;
             }
             // Показываем для пользователей без оплаченной подписки ИЛИ с триалом
@@ -19097,6 +20440,31 @@
             });
         }
 
+        // Кнопка докупки трафика
+        const trafficTopupBtn = document.getElementById('trafficTopupBtn');
+        if (trafficTopupBtn) {
+            trafficTopupBtn.addEventListener('click', () => {
+                openTrafficTopupModal();
+            });
+        }
+
+        // Модальное окно докупки трафика
+        const trafficTopupModal = document.getElementById('trafficTopupModal');
+        if (trafficTopupModal) {
+            trafficTopupModal.addEventListener('click', event => {
+                if (event.target === trafficTopupModal) {
+                    closeTrafficTopupModal();
+                }
+            });
+        }
+
+        const trafficTopupCancelBtn = document.getElementById('trafficTopupModalCancelBtn');
+        if (trafficTopupCancelBtn) {
+            trafficTopupCancelBtn.addEventListener('click', () => {
+                closeTrafficTopupModal();
+            });
+        }
+
         const topupModal = document.getElementById('topupModal');
         if (topupModal) {
             topupModal.addEventListener('click', event => {
@@ -19202,6 +20570,7 @@
 
         document.getElementById('purchaseBtn')?.addEventListener('click', handlePurchaseAction);
         document.getElementById('subscriptionMissingTrialBtn')?.addEventListener('click', handleTrialAction);
+        document.getElementById('subscriptionMissingBuyBtn')?.addEventListener('click', handlePurchaseAction);
 
         // ============================================
         // Tariffs Mode Support
@@ -19251,6 +20620,25 @@
         }
 
         let selectedTariffData = null;
+        let isInstantSwitchMode = false;
+        let instantSwitchPreviewData = null;
+
+        function getMonthlyPrice(tariff) {
+            if (!tariff) return 0;
+            const periods = tariff.periods || [];
+            const period30 = periods.find(p => (p.days || p.period_days || p.periodDays) === 30);
+            if (period30) {
+                return period30.price_kopeks || period30.priceKopeks || period30.final_price || period30.finalPrice || 0;
+            }
+            // Fallback - пропорционально пересчитываем
+            if (periods.length > 0) {
+                const firstPeriod = periods[0];
+                const days = firstPeriod.days || firstPeriod.period_days || firstPeriod.periodDays || 30;
+                const price = firstPeriod.price_kopeks || firstPeriod.priceKopeks || 0;
+                return Math.round(price * 30 / days);
+            }
+            return 0;
+        }
 
         function renderTariffs() {
             const loading = document.getElementById('tariffsLoading');
@@ -19258,20 +20646,69 @@
             const list = document.getElementById('tariffsList');
             const currentBlock = document.getElementById('tariffsCurrentTariff');
             const currentName = document.getElementById('tariffsCurrentTariffName');
+            const periodsSection = document.getElementById('tariffPeriodsSection');
+            const summary = document.getElementById('tariffsSummary');
+            const selectBtn = document.getElementById('tariffsSelectBtn');
 
             loading?.classList.add('hidden');
             body?.classList.remove('hidden');
 
-            // Текущий тариф
-            if (tariffsData?.current_tariff || tariffsData?.currentTariff) {
-                const current = tariffsData.current_tariff || tariffsData.currentTariff;
+            // Определяем режим: мгновенная смена или покупка
+            // userData - глобальная переменная с данными подписки пользователя
+            const userInfo = userData?.user || userData;
+
+            // Проверяем тип подписки - триал или платная
+            // subscription_type хранит 'trial' | 'paid' | 'none'
+            const subscriptionType = (
+                userData?.subscription_type ||
+                userData?.user?.subscription_type ||
+                userInfo?.subscription_type ||
+                ''
+            ).toLowerCase();
+
+            const actualStatus = (
+                userInfo?.subscription_actual_status ||
+                userInfo?.subscriptionActualStatus ||
+                userInfo?.subscription_status ||
+                userInfo?.subscriptionStatus ||
+                ''
+            ).toLowerCase();
+
+            // Триал определяется по subscription_type = 'trial'
+            const isTrial = subscriptionType === 'trial' ||
+                actualStatus === 'trial' ||
+                userInfo?.is_trial ||
+                userInfo?.isTrial;
+
+            console.log('🔍 Status check:', { subscriptionType, actualStatus, isTrial, userData });
+
+            const currentTariff = tariffsData?.current_tariff || tariffsData?.currentTariff;
+
+            // Режим смены тарифа ТОЛЬКО для ОПЛАЧЕННЫХ подписок (subscription_type = 'paid')
+            // Триалу нужно КУПИТЬ подписку, а не менять тариф
+            const isPaid = subscriptionType === 'paid';
+            isInstantSwitchMode = isPaid && !isTrial && currentTariff;
+
+            console.log('🔍 Mode:', { isInstantSwitchMode, isPaid, isTrial, subscriptionType, hasTariff: !!currentTariff });
+
+            // Вычисляем оставшиеся дни из expires_at
+            let daysLeft = 0;
+            const expiresAt = userInfo?.expires_at || userInfo?.expiresAt;
+            if (expiresAt) {
+                const endDate = new Date(expiresAt);
+                const now = new Date();
+                daysLeft = Math.max(0, Math.ceil((endDate - now) / (1000 * 60 * 60 * 24)));
+            }
+
+            // Текущий тариф с информацией о режиме
+            if (currentTariff) {
                 currentBlock?.classList.remove('hidden');
                 if (currentName) {
-                    const trafficLabel = current.traffic_limit_label || current.trafficLimitLabel
-                        || ((current.traffic_limit_gb || current.trafficLimitGb) === 0 ? '∞' : (current.traffic_limit_gb || current.trafficLimitGb) + ' ГБ');
-                    const deviceLimit = current.device_limit || current.deviceLimit || 1;
-                    const servers = current.servers || [];
-                    const serversCount = current.servers_count || current.serversCount || servers.length || 0;
+                    const trafficLabel = currentTariff.traffic_limit_label || currentTariff.trafficLimitLabel
+                        || ((currentTariff.traffic_limit_gb || currentTariff.trafficLimitGb) === 0 ? '∞' : (currentTariff.traffic_limit_gb || currentTariff.trafficLimitGb) + ' ГБ');
+                    const deviceLimit = currentTariff.device_limit || currentTariff.deviceLimit || 1;
+                    const servers = currentTariff.servers || [];
+                    const serversCount = currentTariff.servers_count || currentTariff.serversCount || servers.length || 0;
 
                     let serverTags = '';
                     if (servers.length > 0) {
@@ -19286,10 +20723,37 @@
                         serverTags = `<span style="display: inline-block; padding: 2px 8px; background: var(--bg-tertiary, var(--bg-secondary)); border-radius: 12px; font-size: 11px;">🌍 Все серверы</span>`;
                     }
 
+                    // Проверяем, суточный ли текущий тариф
+                    const isCurrentDaily = currentTariff.is_daily ?? currentTariff.isDaily ?? false;
+
+                    // В режиме смены тарифа показываем остаток
+                    let remainingInfo = '';
+                    if (isInstantSwitchMode) {
+                        let remainingText = '';
+                        if (isCurrentDaily) {
+                            // Для суточного тарифа показываем другой текст
+                            remainingText = preferredLanguage === 'en'
+                                ? 'Daily subscription — time is not transferred'
+                                : 'Суточная подписка — время не переносится';
+                        } else if (daysLeft > 0) {
+                            // Для обычных тарифов показываем дни с правильным склонением
+                            const daysWord = getDaysWord(daysLeft, preferredLanguage);
+                            remainingText = preferredLanguage === 'en'
+                                ? `<b>${daysLeft} ${daysWord}</b> remaining — will be preserved on switch`
+                                : `Осталось <b>${daysLeft} ${daysWord}</b> — сохранятся при смене`;
+                        }
+                        if (remainingText) {
+                            remainingInfo = `<div style="display: flex; align-items: center; gap: 8px; margin-top: 12px; padding: 10px 12px; background: linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(99, 102, 241, 0.05) 100%); border-radius: 10px; border: 1px solid rgba(59, 130, 246, 0.15);">
+                               <span style="font-size: 15px;">${isCurrentDaily ? '🔄' : '⏰'}</span>
+                               <span style="font-size: 12px; color: var(--text-primary); line-height: 1.4;">${remainingText}</span>
+                           </div>`;
+                        }
+                    }
+
                     currentName.innerHTML = `
                         <div class="tariff-current-name">
                             <span class="check-icon">✓</span>
-                            <span>${escapeHtml(current.name)}</span>
+                            <span>${escapeHtml(currentTariff.name)}</span>
                         </div>
                         <div style="display: flex; gap: 12px; margin-top: 10px; font-size: 13px; color: var(--text-secondary);">
                             <span style="display: inline-flex; align-items: center; gap: 4px;">
@@ -19308,10 +20772,44 @@
                         <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;">
                             ${serverTags}
                         </div>
+                        ${remainingInfo}
                     `;
                 }
             } else {
                 currentBlock?.classList.add('hidden');
+            }
+
+            // Баннер скидки промогруппы
+            const promoGroupBanner = document.getElementById('tariffsPromoGroupBanner');
+            const promoGroupNameEl = document.getElementById('tariffsPromoGroupName');
+            const promoGroupDiscountEl = document.getElementById('tariffsPromoGroupDiscount');
+            const promoGroup = tariffsData?.promo_group || tariffsData?.promoGroup;
+
+            if (promoGroup && promoGroupBanner) {
+                const periodDiscounts = promoGroup.period_discounts || promoGroup.periodDiscounts || {};
+                let maxDiscount = 0;
+                Object.values(periodDiscounts).forEach(discount => {
+                    const d = parseInt(discount) || 0;
+                    if (d > maxDiscount) maxDiscount = d;
+                });
+
+                if (maxDiscount > 0) {
+                    promoGroupBanner.classList.remove('hidden');
+                    if (promoGroupNameEl) {
+                        promoGroupNameEl.textContent = preferredLanguage === 'en'
+                            ? `Promo group "${promoGroup.name}"`
+                            : `Промогруппа «${promoGroup.name}»`;
+                    }
+                    if (promoGroupDiscountEl) {
+                        promoGroupDiscountEl.textContent = preferredLanguage === 'en'
+                            ? `Your discount: up to ${maxDiscount}%`
+                            : `Ваша скидка: до ${maxDiscount}%`;
+                    }
+                } else {
+                    promoGroupBanner.classList.add('hidden');
+                }
+            } else {
+                promoGroupBanner?.classList.add('hidden');
             }
 
             // Список тарифов
@@ -19324,117 +20822,439 @@
                 return;
             }
 
+            // Добавляем информационный блок в режиме мгновенной смены
+            if (isInstantSwitchMode) {
+                const hintDiv = document.createElement('div');
+                hintDiv.className = 'instant-switch-mode-hint';
+                hintDiv.innerHTML = `
+                    <div style="display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(139, 92, 246, 0.06) 100%); border-radius: 14px; margin-bottom: 16px; border: 1px solid rgba(99, 102, 241, 0.15);">
+                        <div style="width: 36px; height: 36px; border-radius: 10px; background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(139, 92, 246, 0.1) 100%); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                            <span style="font-size: 18px;">🔄</span>
+                        </div>
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="font-weight: 600; font-size: 14px; color: var(--text-primary); margin-bottom: 4px;">
+                                ${preferredLanguage === 'en' ? 'Instant tariff switch' : 'Мгновенная смена тарифа'}
+                            </div>
+                            <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.5;">
+                                ${(() => {
+                                    const isCurrentDailyTariff = currentTariff?.is_daily ?? currentTariff?.isDaily ?? false;
+                                    if (isCurrentDailyTariff) {
+                                        // Переключение с суточного тарифа - оплачивается новый тариф
+                                        return preferredLanguage === 'en'
+                                            ? 'Switching from daily tariff requires full payment for the new tariff'
+                                            : 'Переключение с суточного тарифа — оплата нового тарифа полностью';
+                                    } else {
+                                        const daysWord = getDaysWord(daysLeft, preferredLanguage);
+                                        return preferredLanguage === 'en'
+                                            ? '<span style="color: #ea580c;">⬆️ Upgrade</span> = pay the difference • <span style="color: #16a34a;">⬇️ Downgrade</span> = free<br>Your remaining <b>' + daysLeft + ' ' + daysWord + '</b> will be preserved'
+                                            : '<span style="color: #ea580c;">⬆️ Повышение</span> = доплата • <span style="color: #16a34a;">⬇️ Понижение</span> = бесплатно<br>Ваши <b>' + daysLeft + ' ' + daysWord + '</b> сохраняются';
+                                    }
+                                })()}
+                            </div>
+                        </div>
+                    </div>
+                `;
+                list.appendChild(hintDiv);
+            }
+
+            // В режиме мгновенной смены скрываем периоды и summary, в обычном - показываем
+            if (isInstantSwitchMode) {
+                periodsSection?.classList.add('hidden');
+                summary?.classList.add('hidden');
+                if (selectBtn) selectBtn.classList.add('hidden');
+            } else {
+                // В обычном режиме покупки - убедимся что элементы видны
+                if (selectBtn) selectBtn.classList.remove('hidden');
+            }
+
+            const currentTariffId = currentTariff?.id;
+
             tariffs.forEach(tariff => {
-                const isCurrent = tariff.is_current || tariff.isCurrent;
+                const isCurrent = tariff.id === currentTariffId;
                 const periods = tariff.periods || [];
-                const minPrice = periods.length > 0
-                    ? periods.reduce((min, p) => {
-                        const price = p.price_kopeks || p.priceKopeks || 0;
-                        return price < min ? price : min;
-                    }, Infinity)
-                    : null;
-                const minPriceLabel = minPrice !== null && minPrice !== Infinity
-                    ? formatPriceFromKopeks(minPrice, tariffsData?.currency || 'RUB')
-                    : null;
+
+                // В режиме смены пропускаем текущий тариф
+                if (isInstantSwitchMode && isCurrent) {
+                    return;
+                }
 
                 const div = document.createElement('div');
-                div.className = 'subscription-settings-toggle' + (selectedTariffId === tariff.id ? ' active' : '');
 
-                const trafficLabel = tariff.traffic_limit_label || tariff.trafficLimitLabel
-                    || ((tariff.traffic_limit_gb || tariff.trafficLimitGb) === 0 ? '∞' : (tariff.traffic_limit_gb || tariff.trafficLimitGb) + ' ГБ');
+                // Разные стили для режима смены и покупки
+                if (isInstantSwitchMode) {
+                    // Режим мгновенной смены тарифа - используем точные данные с сервера
+                    const isDaily = tariff.is_daily ?? tariff.isDaily ?? false;
+                    const dailyPriceLabel = tariff.daily_price_label ?? tariff.dailyPriceLabel ?? null;
+                    const isUpgrade = tariff.is_upgrade ?? tariff.isUpgrade ?? false;
+                    const isSwitchFree = tariff.is_switch_free ?? tariff.isSwitchFree ?? !isUpgrade;
+                    const upgradeCost = tariff.switch_cost_kopeks ?? tariff.switchCostKopeks ?? 0;
+                    const upgradeCostLabel = tariff.switch_cost_label ?? tariff.switchCostLabel ?? formatPriceFromKopeks(upgradeCost, tariffsData?.currency || 'RUB');
 
-                const deviceLimit = tariff.device_limit || tariff.deviceLimit || 1;
+                    const trafficLabel = tariff.traffic_limit_label || tariff.trafficLimitLabel
+                        || ((tariff.traffic_limit_gb || tariff.trafficLimitGb) === 0 ? '∞' : (tariff.traffic_limit_gb || tariff.trafficLimitGb) + ' ГБ');
+                    const deviceLimit = tariff.device_limit || tariff.deviceLimit || 1;
+                    const description = tariff.description || '';
 
-                // Серверы - показываем названия или количество
-                const servers = tariff.servers || [];
-                const serversCount = tariff.servers_count || tariff.serversCount || servers.length || 0;
-                let serversText = '';
-                if (servers.length > 0) {
-                    const serverNames = servers.slice(0, 3).map(s => s.name || s.display_name || s.displayName).filter(Boolean);
-                    if (serverNames.length > 0) {
-                        serversText = serverNames.join(', ');
+                    // Серверы тарифа
+                    const servers = tariff.servers || [];
+                    const serversCount = tariff.servers_count || tariff.serversCount || servers.length || 0;
+                    let serverTags = '';
+                    if (servers.length > 0) {
+                        const serverNames = servers.slice(0, 3).map(s => s.name || s.display_name || s.displayName).filter(Boolean);
+                        serverTags = serverNames.map(name =>
+                            `<span style="display: inline-block; padding: 2px 6px; background: var(--bg-tertiary, var(--bg-secondary)); border-radius: 8px; font-size: 10px; color: var(--text-secondary);">${escapeHtml(name)}</span>`
+                        ).join('');
                         if (serversCount > serverNames.length) {
-                            serversText += ` +${serversCount - serverNames.length}`;
+                            serverTags += `<span style="display: inline-block; padding: 2px 6px; background: var(--bg-tertiary, var(--bg-secondary)); border-radius: 8px; font-size: 10px; color: var(--text-secondary);">+${serversCount - serverNames.length}</span>`;
                         }
-                    } else {
-                        serversText = serversCount + ' серв.';
+                    } else if (serversCount === 0) {
+                        serverTags = `<span style="display: inline-block; padding: 2px 6px; background: var(--bg-tertiary, var(--bg-secondary)); border-radius: 8px; font-size: 10px; color: var(--text-secondary);">🌍 Все</span>`;
                     }
-                } else if (serversCount > 0) {
-                    serversText = serversCount + ' серв.';
-                } else {
-                    serversText = 'Все серверы';
-                }
 
-                const description = tariff.description || '';
+                    // Определяем тип тарифа
+                    const tariffNameLower = (tariff.name || '').toLowerCase();
+                    const isPremium = tariffNameLower.includes('премиум') || tariffNameLower.includes('premium') ||
+                                      tariffNameLower.includes('про') || tariffNameLower.includes('pro') ||
+                                      tariffNameLower.includes('vip') || tariffNameLower.includes('ultimate') ||
+                                      tariffNameLower.includes('макс') || tariffNameLower.includes('max');
 
-                // Серверные теги
-                let serverTags = '';
-                if (servers.length > 0) {
-                    const serverNames = servers.slice(0, 4).map(s => s.name || s.display_name || s.displayName).filter(Boolean);
-                    serverTags = serverNames.map(name =>
-                        `<span style="display: inline-block; padding: 2px 8px; background: var(--bg-secondary); border-radius: 12px; font-size: 11px; color: var(--text-secondary);">${escapeHtml(name)}</span>`
-                    ).join('');
-                    if (serversCount > serverNames.length) {
-                        serverTags += `<span style="display: inline-block; padding: 2px 8px; background: var(--bg-secondary); border-radius: 12px; font-size: 11px; color: var(--text-secondary);">+${serversCount - serverNames.length}</span>`;
-                    }
-                } else if (serversCount === 0) {
-                    serverTags = `<span style="display: inline-block; padding: 2px 8px; background: var(--bg-secondary); border-radius: 12px; font-size: 11px; color: var(--text-secondary);">🌍 Все серверы</span>`;
-                }
+                    const upgradeLabel = preferredLanguage === 'en' ? 'upgrade' : 'доплата';
+                    const freeLabel = preferredLanguage === 'en' ? '✓ Free' : '✓ Бесплатно';
+                    const dailyLabel = preferredLanguage === 'en' ? 'daily' : 'суточный';
 
-                // Determine tariff type for styling
-                const tariffNameLower = (tariff.name || '').toLowerCase();
-                const isPremium = tariffNameLower.includes('премиум') || tariffNameLower.includes('premium') ||
-                                  tariffNameLower.includes('про') || tariffNameLower.includes('pro') ||
-                                  tariffNameLower.includes('vip') || tariffNameLower.includes('ultimate') ||
-                                  tariffNameLower.includes('макс') || tariffNameLower.includes('max');
-                const tariffIcon = isPremium ? '👑' : (isCurrent ? '✓' : '⚡');
-                const badgeClass = isPremium ? 'tariff-name-badge tariff-premium' : (isCurrent ? 'tariff-name-badge tariff-current' : 'tariff-name-badge');
-
-                div.innerHTML = `
-                    <div style="flex: 1; min-width: 0;">
-                        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
-                            <div style="flex: 1; min-width: 0;">
-                                <div class="${badgeClass}">
-                                    <span class="tariff-icon">${tariffIcon}</span>
-                                    <span class="tariff-text">${escapeHtml(tariff.name)}</span>
-                                </div>
-                                ${description ? `<div style="font-size: 12px; color: var(--text-secondary); margin-top: 8px; line-height: 1.4;">${escapeHtml(description)}</div>` : ''}
+                    div.className = 'instant-switch-tariff-item';
+                    div.innerHTML = `
+                        <div class="instant-switch-tariff-info">
+                            <div class="instant-switch-tariff-name">
+                                ${isDaily ? '🔄 ' : (isPremium ? '👑 ' : '⚡ ')}${escapeHtml(tariff.name)}
                             </div>
-                            ${minPriceLabel ? `
-                                <div style="text-align: right; flex-shrink: 0;">
-                                    <div style="font-size: 10px; color: var(--text-secondary); text-transform: uppercase;">от</div>
-                                    <div style="font-weight: 600; color: var(--primary); font-size: 15px;">${minPriceLabel}</div>
+                            ${description ? `<div style="font-size: 11px; color: var(--text-secondary); margin: 4px 0; line-height: 1.3;">${escapeHtml(description)}</div>` : ''}
+                            <div class="instant-switch-tariff-details">
+                                <span>📱 ${deviceLimit}</span>
+                                <span>📊 ${trafficLabel}</span>
+                            </div>
+                            ${serverTags ? `<div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px;">${serverTags}</div>` : ''}
+                        </div>
+                        <div class="instant-switch-tariff-cost">
+                            ${(() => {
+                                const currentIsDaily = currentTariff?.is_daily ?? currentTariff?.isDaily ?? false;
+                                const switchingFromDaily = currentIsDaily && !isDaily;
+
+                                if (isDaily) {
+                                    // Переключение на суточный тариф
+                                    return `
+                                        <span class="instant-switch-cost-badge" style="background: linear-gradient(135deg, #8b5cf6, #6366f1); color: white;">
+                                            <span style="font-size: 10px; display: block; text-transform: uppercase; opacity: 0.8;">${dailyLabel}</span>
+                                            ${dailyPriceLabel || ''}
+                                        </span>
+                                    `;
+                                } else if (switchingFromDaily) {
+                                    // Переключение С суточного НА периодный - показываем "от X₽ / N дн"
+                                    const fromLabel = preferredLanguage === 'en' ? 'from' : 'от';
+                                    // Находим минимальный период тарифа
+                                    const tariffPeriods = tariff.periods || [];
+                                    let minPeriodDays = 30;
+                                    if (tariffPeriods.length > 0) {
+                                        minPeriodDays = Math.min(...tariffPeriods.map(p => p.days || 30));
+                                    }
+                                    const periodSuffix = preferredLanguage === 'en' ? ` / ${minPeriodDays}d` : ` / ${minPeriodDays} дн`;
+                                    return `
+                                        <span class="instant-switch-cost-badge upgrade">
+                                            <span style="font-size: 10px; display: block; text-transform: uppercase; opacity: 0.8;">${fromLabel}</span>
+                                            ${upgradeCostLabel}${periodSuffix}
+                                        </span>
+                                    `;
+                                } else if (isUpgrade) {
+                                    // Повышение тарифа - доплата
+                                    return `
+                                        <span class="instant-switch-cost-badge upgrade">
+                                            <span style="font-size: 10px; display: block; text-transform: uppercase; opacity: 0.8;">${upgradeLabel}</span>
+                                            +${upgradeCostLabel}
+                                        </span>
+                                    `;
+                                } else {
+                                    // Понижение тарифа - бесплатно
+                                    return `
+                                        <span class="instant-switch-cost-badge free">
+                                            ${freeLabel}
+                                        </span>
+                                    `;
+                                }
+                            })()}
+                        </div>
+                    `;
+
+                    div.addEventListener('click', () => showInstantSwitchConfirm(tariff, isUpgrade, upgradeCost, currentTariff?.is_daily ?? currentTariff?.isDaily ?? false));
+                } else {
+                    // Обычный режим покупки
+                    const isDaily = tariff.is_daily ?? tariff.isDaily ?? false;
+                    const dailyPriceKopeks = tariff.daily_price_kopeks ?? tariff.dailyPriceKopeks ?? 0;
+                    const dailyPriceLabel = tariff.daily_price_label ?? tariff.dailyPriceLabel ?? null;
+
+                    let minPrice = null;
+                    let minPriceOriginal = null;
+                    let maxDiscountPercent = 0;
+                    let priceDisplayLabel = null;
+                    let priceDisplayOriginalLabel = null;
+                    let pricePrefix = preferredLanguage === 'en' ? 'from' : 'от';
+
+                    if (isDaily && dailyPriceKopeks > 0) {
+                        // Суточный тариф - показываем цену за день
+                        priceDisplayLabel = dailyPriceLabel || formatPriceFromKopeks(dailyPriceKopeks, tariffsData?.currency || 'RUB') + '/день';
+                        pricePrefix = '';
+                    } else if (periods.length > 0) {
+                        periods.forEach(p => {
+                            const price = p.price_kopeks || p.priceKopeks || 0;
+                            const originalPrice = p.original_price_kopeks || p.originalPriceKopeks || price;
+                            const discountPct = p.discount_percent || p.discountPercent || 0;
+
+                            if (minPrice === null || price < minPrice) {
+                                minPrice = price;
+                                minPriceOriginal = originalPrice > price ? originalPrice : null;
+                            }
+                            if (discountPct > maxDiscountPercent) {
+                                maxDiscountPercent = discountPct;
+                            }
+                        });
+                        priceDisplayLabel = minPrice !== null
+                            ? formatPriceFromKopeks(minPrice, tariffsData?.currency || 'RUB')
+                            : null;
+                        priceDisplayOriginalLabel = minPriceOriginal !== null
+                            ? formatPriceFromKopeks(minPriceOriginal, tariffsData?.currency || 'RUB')
+                            : null;
+                    }
+
+                    const minPriceLabel = priceDisplayLabel;
+                    const minPriceOriginalLabel = priceDisplayOriginalLabel;
+
+                    div.className = 'subscription-settings-toggle' + (selectedTariffId === tariff.id ? ' active' : '');
+
+                    const trafficLabel = tariff.traffic_limit_label || tariff.trafficLimitLabel
+                        || ((tariff.traffic_limit_gb || tariff.trafficLimitGb) === 0 ? '∞' : (tariff.traffic_limit_gb || tariff.trafficLimitGb) + ' ГБ');
+                    const deviceLimit = tariff.device_limit || tariff.deviceLimit || 1;
+                    const description = tariff.description || '';
+
+                    const servers = tariff.servers || [];
+                    const serversCount = tariff.servers_count || tariff.serversCount || servers.length || 0;
+                    let serverTags = '';
+                    if (servers.length > 0) {
+                        const serverNames = servers.slice(0, 4).map(s => s.name || s.display_name || s.displayName).filter(Boolean);
+                        serverTags = serverNames.map(name =>
+                            `<span style="display: inline-block; padding: 2px 8px; background: var(--bg-secondary); border-radius: 12px; font-size: 11px; color: var(--text-secondary);">${escapeHtml(name)}</span>`
+                        ).join('');
+                        if (serversCount > serverNames.length) {
+                            serverTags += `<span style="display: inline-block; padding: 2px 8px; background: var(--bg-secondary); border-radius: 12px; font-size: 11px; color: var(--text-secondary);">+${serversCount - serverNames.length}</span>`;
+                        }
+                    } else if (serversCount === 0) {
+                        serverTags = `<span style="display: inline-block; padding: 2px 8px; background: var(--bg-secondary); border-radius: 12px; font-size: 11px; color: var(--text-secondary);">🌍 Все серверы</span>`;
+                    }
+
+                    const tariffNameLower = (tariff.name || '').toLowerCase();
+                    const isPremium = tariffNameLower.includes('премиум') || tariffNameLower.includes('premium') ||
+                                      tariffNameLower.includes('про') || tariffNameLower.includes('pro') ||
+                                      tariffNameLower.includes('vip') || tariffNameLower.includes('ultimate') ||
+                                      tariffNameLower.includes('макс') || tariffNameLower.includes('max');
+                    const tariffIcon = isPremium ? '👑' : (isCurrent ? '✓' : '⚡');
+                    const badgeClass = isPremium ? 'tariff-name-badge tariff-premium' : (isCurrent ? 'tariff-name-badge tariff-current' : 'tariff-name-badge');
+
+                    div.innerHTML = `
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
+                                <div style="flex: 1; min-width: 0;">
+                                    <div class="${badgeClass}">
+                                        <span class="tariff-icon">${tariffIcon}</span>
+                                        <span class="tariff-text">${escapeHtml(tariff.name)}</span>
+                                    </div>
+                                    ${description ? `<div style="font-size: 12px; color: var(--text-secondary); margin-top: 8px; line-height: 1.4;">${escapeHtml(description)}</div>` : ''}
+                                </div>
+                                ${minPriceLabel ? `
+                                    <div style="text-align: right; flex-shrink: 0;">
+                                        ${pricePrefix ? `<div style="font-size: 10px; color: var(--text-secondary); text-transform: uppercase;">${pricePrefix}</div>` : ''}
+                                        ${minPriceOriginalLabel ? `<div style="font-size: 12px; color: var(--text-secondary); text-decoration: line-through;">${minPriceOriginalLabel}</div>` : ''}
+                                        <div style="font-weight: 600; color: var(--primary); font-size: 15px;">${minPriceLabel}</div>
+                                        ${maxDiscountPercent > 0 ? `<div class="tariff-discount-badge">-${maxDiscountPercent}%</div>` : ''}
+                                        ${isDaily ? `<div style="font-size: 10px; color: var(--primary); margin-top: 2px;">🔄 суточный</div>` : ''}
+                                    </div>
+                                ` : ''}
+                            </div>
+                            <div style="display: flex; gap: 12px; margin-top: 10px; font-size: 13px; color: var(--text-secondary);">
+                                <span style="display: inline-flex; align-items: center; gap: 4px;">
+                                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="opacity: 0.6;">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                                    </svg>
+                                    ${deviceLimit}
+                                </span>
+                                <span style="display: inline-flex; align-items: center; gap: 4px;">
+                                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="opacity: 0.6;">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                                    </svg>
+                                    ${trafficLabel}
+                                </span>
+                            </div>
+                            ${serverTags ? `
+                                <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px;">
+                                    ${serverTags}
                                 </div>
                             ` : ''}
                         </div>
-                        <div style="display: flex; gap: 12px; margin-top: 10px; font-size: 13px; color: var(--text-secondary);">
-                            <span style="display: inline-flex; align-items: center; gap: 4px;">
-                                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="opacity: 0.6;">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/>
-                                </svg>
-                                ${deviceLimit}
-                            </span>
-                            <span style="display: inline-flex; align-items: center; gap: 4px;">
-                                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="opacity: 0.6;">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
-                                </svg>
-                                ${trafficLabel}
-                            </span>
-                        </div>
-                        ${serverTags ? `
-                            <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px;">
-                                ${serverTags}
-                            </div>
-                        ` : ''}
-                    </div>
-                `;
+                    `;
 
-                div.addEventListener('click', () => selectTariff(tariff));
+                    div.addEventListener('click', () => selectTariff(tariff));
+                }
+
                 list.appendChild(div);
             });
 
-            // Обновляем периоды если тариф выбран
-            renderTariffPeriods();
+            // Обновляем периоды если обычный режим и тариф выбран
+            if (!isInstantSwitchMode) {
+                renderTariffPeriods();
+            }
+        }
+
+        // Показать подтверждение мгновенной смены тарифа
+        async function showInstantSwitchConfirm(tariff, isUpgrade, estimatedCost, currentIsDaily = false) {
+            const currentTariff = tariffsData?.current_tariff || tariffsData?.currentTariff;
+            const switchingFromDaily = currentIsDaily && !(tariff.is_daily ?? tariff.isDaily ?? false);
+
+            // Запрашиваем точную стоимость с сервера
+            try {
+                const initData = tg.initData || '';
+                const tariffId = parseInt(tariff.id, 10);
+
+                if (!initData) {
+                    throw new Error(preferredLanguage === 'en' ? 'Authorization error' : 'Ошибка авторизации');
+                }
+                if (isNaN(tariffId)) {
+                    throw new Error(preferredLanguage === 'en' ? 'Invalid tariff' : 'Неверный тариф');
+                }
+
+                const requestBody = { init_data: initData, tariff_id: tariffId };
+
+                const response = await fetch('/miniapp/subscription/tariff/switch/preview', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestBody)
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    console.error('Switch preview error:', error);
+                    // Показываем детали ошибки валидации
+                    let errorMsg = error?.detail?.message || error?.message || 'Ошибка';
+                    if (Array.isArray(error?.detail)) {
+                        errorMsg = error.detail.map(e => e.msg || e.message).join('; ');
+                    }
+                    throw new Error(errorMsg);
+                }
+
+                instantSwitchPreviewData = await response.json();
+
+                const actualCost = instantSwitchPreviewData.upgrade_cost_kopeks || instantSwitchPreviewData.upgradeCostKopeks || 0;
+                const costLabel = instantSwitchPreviewData.upgrade_cost_label || instantSwitchPreviewData.upgradeCostLabel || formatPriceFromKopeks(actualCost, tariffsData?.currency || 'RUB');
+                const balanceLabel = instantSwitchPreviewData.balance_label || instantSwitchPreviewData.balanceLabel || '—';
+                const hasEnough = instantSwitchPreviewData.has_enough_balance ?? instantSwitchPreviewData.hasEnoughBalance ?? true;
+                const missingLabel = instantSwitchPreviewData.missing_amount_label || instantSwitchPreviewData.missingAmountLabel || '';
+                const actualIsUpgrade = instantSwitchPreviewData.is_upgrade || instantSwitchPreviewData.isUpgrade || false;
+
+                // Тексты для подтверждения
+                const txt = {
+                    current: preferredLanguage === 'en' ? 'Current' : 'Текущий',
+                    new: preferredLanguage === 'en' ? 'New' : 'Новый',
+                    cost: preferredLanguage === 'en' ? 'Cost' : 'Стоимость',
+                    free: preferredLanguage === 'en' ? '✓ Free' : '✓ Бесплатно',
+                    balance: preferredLanguage === 'en' ? 'Your balance:' : 'Ваш баланс:',
+                    insufficient: preferredLanguage === 'en' ? '⚠️ Insufficient funds. Missing:' : '⚠️ Недостаточно средств. Не хватает:',
+                    confirmUpgrade: preferredLanguage === 'en'
+                        ? `Switch to "${tariff.name}"?\n\nUpgrade cost: ${costLabel}\nYour balance: ${balanceLabel}`
+                        : `Сменить тариф на «${tariff.name}»?\n\nДоплата: ${costLabel}\nВаш баланс: ${balanceLabel}`,
+                    confirmFromDaily: (() => {
+                        // Получаем минимальный период для отображения
+                        const tariffPeriods = tariff.periods || [];
+                        let minPeriodDays = 30;
+                        if (tariffPeriods.length > 0) {
+                            minPeriodDays = Math.min(...tariffPeriods.map(p => p.days || 30));
+                        }
+                        return preferredLanguage === 'en'
+                            ? `Switch to "${tariff.name}"?\n\nCost: ${costLabel} for ${minPeriodDays} days\n(Daily subscription time is not transferred)\nYour balance: ${balanceLabel}`
+                            : `Сменить тариф на «${tariff.name}»?\n\nСтоимость: ${costLabel} за ${minPeriodDays} дн.\n(Время суточной подписки не переносится)\nВаш баланс: ${balanceLabel}`;
+                    })(),
+                    confirmDowngrade: preferredLanguage === 'en'
+                        ? `Switch to "${tariff.name}"?\n\nFree (downgrade)`
+                        : `Сменить тариф на «${tariff.name}»?\n\nБесплатно (понижение тарифа)`,
+                    error: preferredLanguage === 'en' ? 'Error' : 'Ошибка',
+                    insufficientError: preferredLanguage === 'en'
+                        ? `Insufficient funds to switch tariff. Missing: ${missingLabel}`
+                        : `Недостаточно средств для смены тарифа. Не хватает: ${missingLabel}`,
+                };
+
+                // Используем кастомный попап или showConfirm
+                // Выбираем нужное сообщение в зависимости от типа перехода
+                let message;
+                if (switchingFromDaily) {
+                    // Переход с суточного на периодный - особый текст
+                    message = txt.confirmFromDaily;
+                } else if (actualIsUpgrade) {
+                    message = txt.confirmUpgrade;
+                } else {
+                    message = txt.confirmDowngrade;
+                }
+
+                if (typeof tg.showConfirm === 'function' && hasEnough) {
+                    tg.showConfirm(message, async (confirmed) => {
+                        if (confirmed) {
+                            await executeInstantSwitch(tariff);
+                        }
+                    });
+                } else if (hasEnough) {
+                    // Fallback на простой confirm
+                    if (confirm(message)) {
+                        await executeInstantSwitch(tariff);
+                    }
+                } else {
+                    showPopup(txt.insufficientError, txt.error);
+                }
+
+            } catch (err) {
+                console.error('Preview failed:', err);
+                const errTitle = preferredLanguage === 'en' ? 'Error' : 'Ошибка';
+                const errMsg = preferredLanguage === 'en' ? 'Failed to load info' : 'Не удалось получить информацию';
+                showPopup(err.message || errMsg, errTitle);
+            }
+        }
+
+        // Выполнить мгновенную смену тарифа
+        async function executeInstantSwitch(tariff) {
+            try {
+                const initData = tg.initData || '';
+                const tariffId = parseInt(tariff.id, 10);
+
+                if (!initData || isNaN(tariffId)) {
+                    throw new Error(preferredLanguage === 'en' ? 'Invalid data' : 'Неверные данные');
+                }
+
+                const response = await fetch('/miniapp/subscription/tariff/switch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ init_data: initData, tariff_id: tariffId })
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    const defaultErr = preferredLanguage === 'en' ? 'Switch failed' : 'Ошибка переключения';
+                    throw new Error(result?.detail?.message || result?.message || defaultErr);
+                }
+
+                const successTitle = preferredLanguage === 'en' ? 'Success' : 'Успех';
+                const successMsg = preferredLanguage === 'en' ? 'Tariff changed successfully!' : 'Тариф успешно изменён!';
+                showPopup(result.message || successMsg, successTitle);
+                await refreshSubscriptionData();
+            } catch (err) {
+                console.error('Switch failed:', err);
+                const errTitle = preferredLanguage === 'en' ? 'Error' : 'Ошибка';
+                const errMsg = preferredLanguage === 'en' ? 'Failed to switch tariff' : 'Не удалось сменить тариф';
+                showPopup(err.message || errMsg, errTitle);
+            }
         }
 
         function selectTariff(tariff) {
@@ -19463,6 +21283,34 @@
                 return;
             }
 
+            // Для суточных тарифов показываем специальную информацию
+            const isDaily = selectedTariffData.is_daily ?? selectedTariffData.isDaily ?? false;
+            if (isDaily) {
+                const dailyPriceLabel = selectedTariffData.daily_price_label ?? selectedTariffData.dailyPriceLabel ?? '';
+                section.classList.remove('hidden');
+                list.innerHTML = `
+                    <div style="padding: 16px; background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(99, 102, 241, 0.05)); border-radius: 12px; border: 1px solid rgba(139, 92, 246, 0.2);">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                            <span style="font-size: 24px;">🔄</span>
+                            <div>
+                                <div style="font-weight: 600; color: var(--text-primary);">Суточная подписка</div>
+                                <div style="font-size: 12px; color: var(--text-secondary);">Ежедневное списание с баланса</div>
+                            </div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 10px; border-top: 1px solid rgba(139, 92, 246, 0.1);">
+                            <span style="font-size: 13px; color: var(--text-secondary);">Стоимость в день:</span>
+                            <span style="font-weight: 700; color: var(--primary); font-size: 16px;">${dailyPriceLabel}</span>
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 8px; line-height: 1.4;">
+                            💡 Списание происходит автоматически каждые 24 часа. Можно приостановить в любой момент.
+                        </div>
+                    </div>
+                `;
+                summary?.classList.add('hidden');
+                updateTariffButton();
+                return;
+            }
+
             const periods = selectedTariffData.periods || [];
             if (periods.length === 0) {
                 section.classList.add('hidden');
@@ -19476,9 +21324,9 @@
             periods.forEach((period, index) => {
                 const days = period.days || period.period_days || period.periodDays;
                 const priceKopeks = period.price_kopeks || period.priceKopeks || period.final_price || period.finalPrice || 0;
-                const originalKopeks = period.original_price || period.originalPrice || period.base_price || period.basePrice || priceKopeks;
+                const originalKopeks = period.original_price_kopeks || period.originalPriceKopeks || period.original_price || period.originalPrice || period.base_price || period.basePrice || priceKopeks;
                 const hasDiscount = originalKopeks > priceKopeks;
-                const discountPercent = hasDiscount ? Math.round((1 - priceKopeks / originalKopeks) * 100) : 0;
+                const discountPercent = period.discount_percent || period.discountPercent || (hasDiscount ? Math.round((1 - priceKopeks / originalKopeks) * 100) : 0);
 
                 const priceLabel = formatPriceFromKopeks(priceKopeks, tariffsData?.currency || 'RUB');
                 const originalLabel = hasDiscount ? formatPriceFromKopeks(originalKopeks, tariffsData?.currency || 'RUB') : null;
@@ -19582,12 +21430,24 @@
             const btn = document.getElementById('tariffsSelectBtn');
             if (!btn) return;
 
-            if (selectedTariffData && selectedTariffPeriod) {
+            // Для суточных тарифов не требуем выбора периода
+            const isDaily = selectedTariffData?.is_daily ?? selectedTariffData?.isDaily ?? false;
+
+            if (selectedTariffData && (selectedTariffPeriod || isDaily)) {
                 btn.disabled = false;
-                const priceKopeks = selectedTariffPeriod.price_kopeks || selectedTariffPeriod.priceKopeks ||
-                    selectedTariffPeriod.final_price || selectedTariffPeriod.finalPrice || 0;
-                const priceLabel = formatPriceFromKopeks(priceKopeks, tariffsData?.currency || 'RUB');
-                btn.textContent = `Купить за ${priceLabel}`;
+                let priceKopeks, priceLabel;
+
+                if (isDaily) {
+                    // Суточный тариф - используем daily_price
+                    priceKopeks = selectedTariffData.daily_price_kopeks ?? selectedTariffData.dailyPriceKopeks ?? 0;
+                    priceLabel = selectedTariffData.daily_price_label ?? selectedTariffData.dailyPriceLabel ?? formatPriceFromKopeks(priceKopeks, tariffsData?.currency || 'RUB');
+                    btn.textContent = `Активировать за ${priceLabel}`;
+                } else {
+                    priceKopeks = selectedTariffPeriod.price_kopeks || selectedTariffPeriod.priceKopeks ||
+                        selectedTariffPeriod.final_price || selectedTariffPeriod.finalPrice || 0;
+                    priceLabel = formatPriceFromKopeks(priceKopeks, tariffsData?.currency || 'RUB');
+                    btn.textContent = `Купить за ${priceLabel}`;
+                }
             } else {
                 btn.disabled = true;
                 btn.textContent = t('tariffs.select');
@@ -19595,7 +21455,10 @@
         }
 
         async function purchaseTariff() {
-            if (!selectedTariffId || !selectedTariffPeriod) {
+            const isDaily = selectedTariffData?.is_daily ?? selectedTariffData?.isDaily ?? false;
+
+            // Для суточных тарифов не требуем выбора периода
+            if (!selectedTariffId || (!selectedTariffPeriod && !isDaily)) {
                 showPopup('Выберите тариф', 'Ошибка');
                 return;
             }
@@ -19608,7 +21471,10 @@
 
             try {
                 const initData = tg.initData || '';
-                const periodDays = selectedTariffPeriod.days || selectedTariffPeriod.period_days || selectedTariffPeriod.periodDays;
+                // Для суточных тарифов используем period_days=1
+                const periodDays = isDaily
+                    ? 1
+                    : (selectedTariffPeriod.days || selectedTariffPeriod.period_days || selectedTariffPeriod.periodDays);
 
                 const response = await fetch('/miniapp/subscription/tariff/purchase', {
                     method: 'POST',
@@ -19626,7 +21492,10 @@
                     throw new Error(result?.detail?.message || result?.message || 'Ошибка покупки тарифа');
                 }
 
-                showPopup(result.message || 'Тариф успешно активирован!', 'Успех');
+                const successMsg = isDaily
+                    ? (result.message || 'Суточный тариф активирован!')
+                    : (result.message || 'Тариф успешно активирован!');
+                showPopup(successMsg, 'Успех');
                 await refreshSubscriptionData();
             } catch (err) {
                 console.error('Tariff purchase failed:', err);
@@ -19638,6 +21507,10 @@
 
         document.getElementById('tariffsRetry')?.addEventListener('click', loadTariffs);
         document.getElementById('tariffsSelectBtn')?.addEventListener('click', purchaseTariff);
+
+        // ============================================
+        // Instant Tariff Switch
+        // ============================================
 
         // Загружаем тарифы после загрузки данных подписки
         const originalApplySubscriptionData = applySubscriptionData;

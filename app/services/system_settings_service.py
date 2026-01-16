@@ -127,6 +127,7 @@ class BotConfigurationService:
         "LOG": "📝 Логирование",
         "DEBUG": "🧪 Режим разработки",
         "MODERATION": "🛡️ Модерация и фильтры",
+        "BAN_NOTIFICATIONS": "🚫 Тексты уведомлений о блокировках",
     }
 
     CATEGORY_DESCRIPTIONS: Dict[str, str] = {
@@ -184,6 +185,7 @@ class BotConfigurationService:
         "LOG": "Уровни логирования и ротация.",
         "DEBUG": "Отладочные функции и безопасный режим.",
         "MODERATION": "Настройки фильтров отображаемых имен и защиты от фишинга.",
+        "BAN_NOTIFICATIONS": "Тексты уведомлений о блокировках, которые отправляются пользователям.",
     }
 
     @staticmethod
@@ -214,6 +216,7 @@ class BotConfigurationService:
         "DEVICES_SELECTION_ENABLED": "SUBSCRIPTIONS_CORE",
         "DEVICES_SELECTION_DISABLED_AMOUNT": "SUBSCRIPTIONS_CORE",
         "BASE_SUBSCRIPTION_PRICE": "SUBSCRIPTIONS_CORE",
+        "SALES_MODE": "SUBSCRIPTIONS_CORE",
         "DEFAULT_TRAFFIC_RESET_STRATEGY": "TRAFFIC",
         "RESET_TRAFFIC_ON_PAYMENT": "TRAFFIC",
         "TRAFFIC_SELECTION_MODE": "TRAFFIC",
@@ -292,6 +295,7 @@ class BotConfigurationService:
         "REMNAWAVE_USER_USERNAME_TEMPLATE": "REMNAWAVE",
         "REMNAWAVE_AUTO_SYNC_ENABLED": "REMNAWAVE",
         "REMNAWAVE_AUTO_SYNC_TIMES": "REMNAWAVE",
+        "CABINET_REMNA_SUB_CONFIG": "MINIAPP",
     }
 
     CATEGORY_PREFIX_OVERRIDES: Dict[str, str] = {
@@ -339,6 +343,7 @@ class BotConfigurationService:
         "WEB_API_": "WEB_API",
         "DEBUG": "DEBUG",
         "DISPLAY_NAME_": "MODERATION",
+        "BAN_MSG_": "BAN_NOTIFICATIONS",
     }
 
     CHOICES: Dict[str, List[ChoiceOption]] = {
@@ -381,6 +386,10 @@ class BotConfigurationService:
         "MAIN_MENU_MODE": [
             ChoiceOption("default", "📋 Полное меню"),
             ChoiceOption("text", "📝 Текстовое меню"),
+        ],
+        "SALES_MODE": [
+            ChoiceOption("classic", "📋 Классический (периоды из .env)"),
+            ChoiceOption("tariffs", "📦 Тарифы (из кабинета)"),
         ],
         "SERVER_STATUS_MODE": [
             ChoiceOption("disabled", "🚫 Отключено"),
@@ -440,6 +449,19 @@ class BotConfigurationService:
     }
 
     SETTING_HINTS: Dict[str, Dict[str, str]] = {
+        "SALES_MODE": {
+            "description": (
+                "Режим продажи подписок. "
+                "«Классический» — выбор периода из .env (PRICE_14_DAYS и т.д.). "
+                "«Тарифы» — готовые тарифные планы из кабинета с серверами и лимитами."
+            ),
+            "format": "Выберите один из доступных режимов.",
+            "example": "tariffs",
+            "warning": (
+                "При смене режима логика покупки подписки полностью меняется. "
+                "В режиме «Тарифы» пользователи выбирают готовый тарифный план."
+            ),
+        },
         "YOOKASSA_ENABLED": {
             "description": (
                 "Включает оплату через YooKassa. "
@@ -677,6 +699,16 @@ class BotConfigurationService:
             "example": "PAID_USER",
             "warning": "Если тег не задан или невалиден, существующий тег не будет изменён.",
             "dependencies": "Оплата подписки и интеграция с RemnaWave",
+        },
+        "CABINET_REMNA_SUB_CONFIG": {
+            "description": (
+                "UUID конфигурации страницы подписки из RemnaWave. "
+                "Позволяет синхронизировать список приложений напрямую из панели."
+            ),
+            "format": "UUID конфигурации из раздела Subscription Page Configs в RemnaWave.",
+            "example": "d4aa2b8c-9a36-4f31-93a2-6f07dad05fba",
+            "warning": "Убедитесь, что конфигурация существует в панели и содержит нужные приложения.",
+            "dependencies": "Настроенное подключение к RemnaWave API",
         },
     }
 

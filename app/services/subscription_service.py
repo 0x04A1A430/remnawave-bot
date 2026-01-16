@@ -62,17 +62,35 @@ def _resolve_addon_discount_percent(
         period_days=period_days,
     )
 
-def get_traffic_reset_strategy():
+def get_traffic_reset_strategy(tariff=None):
+    """Получает стратегию сброса трафика.
+
+    Args:
+        tariff: Объект тарифа. Если у тарифа задан traffic_reset_mode,
+               используется он, иначе глобальная настройка из конфига.
+
+    Returns:
+        TrafficLimitStrategy: Стратегия сброса трафика для RemnaWave API.
+    """
     from app.config import settings
-    strategy = settings.DEFAULT_TRAFFIC_RESET_STRATEGY.upper()
-    
+
     strategy_mapping = {
         'NO_RESET': 'NO_RESET',
-        'DAY': 'DAY', 
+        'DAY': 'DAY',
         'WEEK': 'WEEK',
         'MONTH': 'MONTH'
     }
-    
+
+    # Проверяем настройку тарифа
+    if tariff is not None:
+        tariff_mode = getattr(tariff, 'traffic_reset_mode', None)
+        if tariff_mode is not None:
+            mapped_strategy = strategy_mapping.get(tariff_mode.upper(), 'NO_RESET')
+            logger.info(f"🔄 Стратегия сброса трафика из тарифа '{getattr(tariff, 'name', 'N/A')}': {tariff_mode} -> {mapped_strategy}")
+            return getattr(TrafficLimitStrategy, mapped_strategy)
+
+    # Используем глобальную настройку
+    strategy = settings.DEFAULT_TRAFFIC_RESET_STRATEGY.upper()
     mapped_strategy = strategy_mapping.get(strategy, 'NO_RESET')
     logger.info(f"🔄 Стратегия сброса трафика из конфига: {strategy} -> {mapped_strategy}")
     return getattr(TrafficLimitStrategy, mapped_strategy)
@@ -205,7 +223,7 @@ class SubscriptionService:
                         status=UserStatus.ACTIVE,
                         expire_at=subscription.end_date,
                         traffic_limit_bytes=self._gb_to_bytes(subscription.traffic_limit_gb),
-                        traffic_limit_strategy=get_traffic_reset_strategy(),
+                        traffic_limit_strategy=get_traffic_reset_strategy(subscription.tariff),
                         description=settings.format_remnawave_user_description(
                             full_name=user.full_name,
                             username=user.username,
@@ -242,7 +260,7 @@ class SubscriptionService:
                         expire_at=subscription.end_date,
                         status=UserStatus.ACTIVE,
                         traffic_limit_bytes=self._gb_to_bytes(subscription.traffic_limit_gb),
-                        traffic_limit_strategy=get_traffic_reset_strategy(),
+                        traffic_limit_strategy=get_traffic_reset_strategy(subscription.tariff),
                         telegram_id=user.telegram_id,
                         description=settings.format_remnawave_user_description(
                             full_name=user.full_name,
@@ -326,7 +344,7 @@ class SubscriptionService:
                     status=UserStatus.ACTIVE if is_actually_active else UserStatus.EXPIRED,
                     expire_at=subscription.end_date,
                     traffic_limit_bytes=self._gb_to_bytes(subscription.traffic_limit_gb),
-                    traffic_limit_strategy=get_traffic_reset_strategy(),
+                    traffic_limit_strategy=get_traffic_reset_strategy(subscription.tariff),
                     description=settings.format_remnawave_user_description(
                         full_name=user.full_name,
                         username=user.username,
@@ -412,6 +430,25 @@ class SubscriptionService:
         except Exception as e:
             logger.error(f"Ошибка включения RemnaWave пользователя: {e}")
             return False
+
+    async def get_remnawave_squads(self) -> Optional[List[dict]]:
+        """Получить список internal squads из RemnaWave."""
+        try:
+            async with self.get_api_client() as api:
+                squads = await api.get_internal_squads()
+                # Преобразуем в формат для sync_with_remnawave
+                result = []
+                for squad in squads:
+                    result.append({
+                        'uuid': squad.uuid,
+                        'name': squad.name,
+                    })
+                logger.info(f"✅ Получено {len(result)} серверов из RemnaWave")
+                return result
+
+        except Exception as e:
+            logger.error(f"Ошибка получения серверов из RemnaWave: {e}")
+            return None
 
     async def revoke_subscription(
         self,

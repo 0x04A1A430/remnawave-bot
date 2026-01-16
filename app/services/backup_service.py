@@ -27,7 +27,7 @@ from app.database.models import (
     ServerSquad, SubscriptionServer, UserMessage, YooKassaPayment,
     CryptoBotPayment, WelcomeText, Base, PromoGroup, AdvertisingCampaign,
     AdvertisingCampaignRegistration, SupportAuditLog, Ticket, TicketMessage,
-    MulenPayPayment, Pal24Payment, DiscountOffer, WebApiToken,
+    MulenPayPayment, Pal24Payment, DiscountOffer, WebApiToken, Tariff,
     server_squad_promo_groups
 )
 
@@ -75,6 +75,7 @@ class BackupService:
             Squad,
             ServerSquad,
             PromoGroup,
+            Tariff,  # Tariff должен быть ДО Subscription из-за FK
             User,
             PromoCode,
             WelcomeText,
@@ -362,7 +363,7 @@ class BackupService:
                     "tool": pg_dump_path,
                 }
 
-            logger.warning(
+            logger.info(
                 "pg_dump не найден в PATH. Используется ORM-дамп в формате JSON"
             )
             json_info = await self._dump_postgres_json(staging_dir, include_logs)
@@ -818,14 +819,14 @@ class BackupService:
             try:
                 if clear_existing:
                     logger.warning("🗑️ Очищаем существующие данные...")
-                    await self._clear_database_tables(db)
+                    await self._clear_database_tables(db, backup_data)
 
                 models_for_restore = self._get_models_for_backup(True)
                 models_by_table = {
                     model.__tablename__: model for model in models_for_restore
                 }
 
-                pre_restore_tables = {"promo_groups"}
+                pre_restore_tables = {"promo_groups", "tariffs"}
                 for table_name in pre_restore_tables:
                     model = models_by_table.get(table_name)
                     if not model:
@@ -886,6 +887,9 @@ class BackupService:
                     if restored:
                         restored_tables += 1
                         logger.info("✅ Таблица %s восстановлена", table_name)
+
+                # Flush все изменения перед обновлением реферальных связей
+                await db.flush()
 
                 await self._update_user_referrals(db, backup_data)
 
@@ -1200,9 +1204,28 @@ class BackupService:
     ) -> int:
         restored_count = 0
 
+        # Кешируем существующие tariff_id для проверки FK
+        existing_tariff_ids = set()
+        if table_name == "subscriptions":
+            try:
+                result = await db.execute(select(Tariff.id))
+                existing_tariff_ids = {row[0] for row in result.fetchall()}
+                logger.info(f"📋 Найдено {len(existing_tariff_ids)} существующих тарифов для валидации FK")
+            except Exception as e:
+                logger.warning(f"⚠️ Не удалось получить список тарифов: {e}")
+
         for record_data in records:
             try:
                 processed_data = self._process_record_data(record_data, model, table_name)
+
+                # Валидация FK для subscriptions.tariff_id
+                if table_name == "subscriptions" and "tariff_id" in processed_data:
+                    tariff_id = processed_data.get("tariff_id")
+                    if tariff_id is not None and tariff_id not in existing_tariff_ids:
+                        logger.warning(
+                            f"⚠️ Тариф {tariff_id} не найден, устанавливаем tariff_id=NULL для подписки"
+                        )
+                        processed_data["tariff_id"] = None
 
                 primary_key_col = self._get_primary_key_column(model)
 
@@ -1235,7 +1258,7 @@ class BackupService:
 
         return restored_count
 
-    async def _clear_database_tables(self, db: AsyncSession):
+    async def _clear_database_tables(self, db: AsyncSession, backup_data: Optional[Dict[str, Any]] = None):
         tables_order = [
             "server_squad_promo_groups",
             "ticket_messages", "tickets", "support_audit_logs",
@@ -1247,11 +1270,22 @@ class BackupService:
             "mulenpay_payments", "pal24_payments",
             "transactions", "welcome_texts", "subscriptions",
             "promocodes", "users", "promo_groups",
+            "tariffs",  # tariffs должен очищаться ПОСЛЕ subscriptions (FK зависимость)
             "server_squads", "squads", "service_rules",
             "system_settings", "web_api_tokens", "monitoring_logs"
         ]
-        
+
+        # Таблицы, которые не нужно очищать если в бекапе нет данных для них
+        # (чтобы сохранить существующие настройки)
+        preserve_if_no_backup = {"tariffs", "promo_groups", "server_squads", "squads"}
+
         for table_name in tables_order:
+            # Проверяем, нужно ли сохранить таблицу
+            if backup_data and table_name in preserve_if_no_backup:
+                if not backup_data.get(table_name):
+                    logger.info(f"⏭️ Пропускаем очистку {table_name} (нет данных в бекапе)")
+                    continue
+
             try:
                 await db.execute(text(f"DELETE FROM {table_name}"))
                 logger.info(f"🗑️ Очищена таблица {table_name}")
