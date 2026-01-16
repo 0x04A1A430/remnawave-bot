@@ -2532,8 +2532,13 @@ async def switch_tariff(
     user.subscription.traffic_limit_gb = new_tariff.traffic_limit_gb
     user.subscription.device_limit = new_tariff.device_limit
     user.subscription.connected_squads = new_tariff.allowed_squads or []
-    user.subscription.purchased_traffic_gb = 0  # Reset purchased traffic on tariff switch
-    user.subscription.traffic_reset_at = None  # Reset traffic reset date
+
+    # Reset purchased traffic and delete TrafficPurchase records on tariff switch
+    from app.database.models import TrafficPurchase
+    from sqlalchemy import delete as sql_delete
+    await db.execute(sql_delete(TrafficPurchase).where(TrafficPurchase.subscription_id == user.subscription.id))
+    user.subscription.purchased_traffic_gb = 0
+    user.subscription.traffic_reset_at = None
 
     if switching_to_daily:
         # Switching TO daily - reset end_date to 1 day, set last_daily_charge_at
