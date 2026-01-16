@@ -15,7 +15,7 @@ from typing import Iterable, Optional, Dict, Any, List, Union, Tuple, TYPE_CHECK
 from aiohttp import web
 
 from app.config import settings
-from app.database.database import get_db
+from app.database.database import AsyncSessionLocal
 
 if TYPE_CHECKING:
     from app.services.payment_service import PaymentService
@@ -273,7 +273,7 @@ class YooKassaWebhookHandler:
                 logger.info(f"ℹ️ Игнорируем событие YooKassa: {event_type}")
                 return web.Response(status=200, text="OK")
 
-            async for db in get_db():
+            async with AsyncSessionLocal() as db:
                 try:
                     # Проверяем, не обрабатывается ли этот платеж уже (защита от дублирования)
                     from app.database.models import PaymentMethod
@@ -285,18 +285,22 @@ class YooKassaWebhookHandler:
                     if existing_transaction and event_type == "payment.succeeded":
                         logger.info(f"ℹ️ Платеж YooKassa {yookassa_payment_id} уже был обработан. Пропускаем дублирующий вебхук.")
                         return web.Response(status=200, text="OK")
-                    
+
                     success = await self.payment_service.process_yookassa_webhook(db, webhook_data)
 
                     if success:
+                        await db.commit()
                         logger.info(f"✅ Успешно обработан webhook YooKassa: {event_type} для платежа {yookassa_payment_id}")
                         return web.Response(status=200, text="OK")
                     else:
+                        await db.rollback()
                         logger.error(f"❌ Ошибка обработки webhook YooKassa: {event_type} для платежа {yookassa_payment_id}")
                         return web.Response(status=500, text="Processing error")
 
-                finally:
-                    await db.close()
+                except Exception as e:
+                    await db.rollback()
+                    logger.error(f"❌ Ошибка обработки webhook YooKassa: {e}", exc_info=True)
+                    return web.Response(status=500, text="Processing error")
 
         except Exception as e:
             logger.error(f"❌ Критическая ошибка обработки webhook YooKassa: {e}", exc_info=True)

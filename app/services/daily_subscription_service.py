@@ -13,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database.database import get_db
+from app.database.database import AsyncSessionLocal
 from app.database.crud.subscription import (
     get_daily_subscriptions_for_charge,
     update_daily_charge_time,
@@ -65,25 +65,30 @@ class DailySubscriptionService:
         }
 
         try:
-            async for db in get_db():
-                subscriptions = await get_daily_subscriptions_for_charge(db)
-                stats["checked"] = len(subscriptions)
+            async with AsyncSessionLocal() as db:
+                try:
+                    subscriptions = await get_daily_subscriptions_for_charge(db)
+                    stats["checked"] = len(subscriptions)
 
-                for subscription in subscriptions:
-                    try:
-                        result = await self._process_single_charge(db, subscription)
-                        if result == "charged":
-                            stats["charged"] += 1
-                        elif result == "suspended":
-                            stats["suspended"] += 1
-                        elif result == "error":
+                    for subscription in subscriptions:
+                        try:
+                            result = await self._process_single_charge(db, subscription)
+                            if result == "charged":
+                                stats["charged"] += 1
+                            elif result == "suspended":
+                                stats["suspended"] += 1
+                            elif result == "error":
+                                stats["errors"] += 1
+                        except Exception as e:
+                            logger.error(
+                                f"Ошибка обработки суточной подписки {subscription.id}: {e}",
+                                exc_info=True
+                            )
                             stats["errors"] += 1
-                    except Exception as e:
-                        logger.error(
-                            f"Ошибка обработки суточной подписки {subscription.id}: {e}",
-                            exc_info=True
-                        )
-                        stats["errors"] += 1
+                    await db.commit()
+                except Exception as e:
+                    logger.error(f"Ошибка при обработке подписок: {e}", exc_info=True)
+                    await db.rollback()
 
         except Exception as e:
             logger.error(f"Ошибка при получении подписок для списания: {e}", exc_info=True)
@@ -272,35 +277,40 @@ class DailySubscriptionService:
         from app.database.models import TrafficPurchase
 
         try:
-            async for db in get_db():
-                # Находим все истекшие докупки
-                now = datetime.utcnow()
-                query = (
-                    select(TrafficPurchase)
-                    .where(TrafficPurchase.expires_at <= now)
-                )
-                result = await db.execute(query)
-                expired_purchases = result.scalars().all()
-                stats["checked"] = len(expired_purchases)
+            async with AsyncSessionLocal() as db:
+                try:
+                    # Находим все истекшие докупки
+                    now = datetime.utcnow()
+                    query = (
+                        select(TrafficPurchase)
+                        .where(TrafficPurchase.expires_at <= now)
+                    )
+                    result = await db.execute(query)
+                    expired_purchases = result.scalars().all()
+                    stats["checked"] = len(expired_purchases)
 
-                # Группируем по подпискам для обновления
-                subscriptions_to_update = {}
-                for purchase in expired_purchases:
-                    if purchase.subscription_id not in subscriptions_to_update:
-                        subscriptions_to_update[purchase.subscription_id] = []
-                    subscriptions_to_update[purchase.subscription_id].append(purchase)
+                    # Группируем по подпискам для обновления
+                    subscriptions_to_update = {}
+                    for purchase in expired_purchases:
+                        if purchase.subscription_id not in subscriptions_to_update:
+                            subscriptions_to_update[purchase.subscription_id] = []
+                        subscriptions_to_update[purchase.subscription_id].append(purchase)
 
-                # Удаляем истекшие докупки и обновляем подписки
-                for subscription_id, purchases in subscriptions_to_update.items():
-                    try:
-                        await self._reset_subscription_traffic(db, subscription_id, purchases)
-                        stats["reset"] += len(purchases)
-                    except Exception as e:
-                        logger.error(
-                            f"Ошибка сброса трафика подписки {subscription_id}: {e}",
-                            exc_info=True
-                        )
-                        stats["errors"] += 1
+                    # Удаляем истекшие докупки и обновляем подписки
+                    for subscription_id, purchases in subscriptions_to_update.items():
+                        try:
+                            await self._reset_subscription_traffic(db, subscription_id, purchases)
+                            stats["reset"] += len(purchases)
+                        except Exception as e:
+                            logger.error(
+                                f"Ошибка сброса трафика подписки {subscription_id}: {e}",
+                                exc_info=True
+                            )
+                            stats["errors"] += 1
+                    await db.commit()
+                except Exception as e:
+                    logger.error(f"Ошибка при обработке сброса трафика: {e}", exc_info=True)
+                    await db.rollback()
 
         except Exception as e:
             logger.error(f"Ошибка при получении подписок для сброса трафика: {e}", exc_info=True)

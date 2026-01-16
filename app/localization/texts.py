@@ -207,15 +207,14 @@ def get_texts(language: str = DEFAULT_LANGUAGE) -> Texts:
 
 async def get_rules_from_db(language: str = DEFAULT_LANGUAGE) -> str:
     try:
-        from app.database.database import get_db
+        from app.database.database import AsyncSessionLocal
         from app.database.crud.rules import get_current_rules_content
 
-        async for db in get_db():
+        async with AsyncSessionLocal() as db:
             rules = await get_current_rules_content(db, language)
             if rules:
                 _cached_rules[language] = rules
                 return rules
-            break
 
     except Exception as error:  # pragma: no cover - defensive logging
         _logger.warning("Failed to load rules from DB for %s: %s", language, error)

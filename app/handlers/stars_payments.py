@@ -262,9 +262,9 @@ async def handle_pre_checkout_query(query: types.PreCheckoutQuery):
             return
 
         try:
-            from app.database.database import get_db
+            from app.database.database import AsyncSessionLocal
 
-            async for db in get_db():
+            async with AsyncSessionLocal() as db:
                 user = await get_user_by_telegram_id(db, query.from_user.id)
                 if not user:
                     logger.warning(f"Пользователь {query.from_user.id} не найден в БД")
@@ -277,7 +277,6 @@ async def handle_pre_checkout_query(query: types.PreCheckoutQuery):
                     )
                     return
                 texts = get_texts(user.language or DEFAULT_LANGUAGE)
-                break
         except Exception as db_error:
             logger.error(f"Ошибка подключения к БД в pre_checkout_query: {db_error}")
             await query.answer(

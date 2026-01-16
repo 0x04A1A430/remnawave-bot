@@ -14,7 +14,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 
 from app.config import settings
-from app.database.database import get_db
+from app.database.database import AsyncSessionLocal
 from app.services.payment_service import PaymentService
 
 logger = logging.getLogger(__name__)
@@ -170,11 +170,14 @@ class WataWebhookHandler:
         )
 
         processed: Optional[bool] = None
-        async for db in get_db():
-            processed = await self.payment_service.process_wata_webhook(db, payload)
-            # Allow the generator to finish naturally so it can commit/rollback.
-            # get_db() yields only once, so exiting the loop body without breaking
-            # triggers the generator cleanup logic on the next iteration attempt.
+        async with AsyncSessionLocal() as db:
+            try:
+                processed = await self.payment_service.process_wata_webhook(db, payload)
+                await db.commit()
+            except Exception as e:
+                logger.error(f"Ошибка обработки WATA webhook: {e}")
+                await db.rollback()
+                return web.json_response({"status": "error", "reason": "internal_error"}, status=500)
 
         if processed is None:
             logger.error("Не удалось обработать WATA webhook: нет сессии БД")
