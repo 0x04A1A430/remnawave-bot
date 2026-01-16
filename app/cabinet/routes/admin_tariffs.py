@@ -121,6 +121,8 @@ async def list_tariffs(
             description=tariff.description,
             is_active=tariff.is_active,
             is_trial_available=tariff.is_trial_available,
+            is_daily=tariff.is_daily,
+            daily_price_kopeks=tariff.daily_price_kopeks,
             allow_traffic_topup=tariff.allow_traffic_topup,
             traffic_limit_gb=tariff.traffic_limit_gb,
             device_limit=tariff.device_limit,
