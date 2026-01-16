@@ -111,6 +111,8 @@ async def get_stats(
     admin: User = Depends(get_current_admin_user),
 ) -> BanSystemStatsResponse:
     """Get overall Ban System statistics."""
+    from datetime import datetime
+
     api = _get_ban_api()
     data = await _api_request(api, "get_stats")
 
@@ -122,8 +124,19 @@ async def get_stats(
     # Extract connected nodes info
     connected_nodes = data.get("connected_nodes", [])
 
-    # Extract panel status
-    panel_status = data.get("panel_status") or {}
+    # Count online nodes/agents
+    nodes_online = sum(1 for n in connected_nodes if n.get("is_online", False))
+
+    # Extract tcp_metrics for uptime
+    tcp_metrics = data.get("tcp_metrics") or {}
+    uptime_seconds = None
+    intake_started = tcp_metrics.get("intake_started_at")
+    if intake_started:
+        try:
+            start_time = datetime.fromisoformat(intake_started.replace("Z", "+00:00"))
+            uptime_seconds = int((datetime.now(start_time.tzinfo) - start_time).total_seconds())
+        except Exception:
+            pass
 
     return BanSystemStatsResponse(
         total_users=data.get("total_users", 0),
@@ -132,12 +145,12 @@ async def get_stats(
         total_requests=data.get("total_requests", 0),
         total_punishments=punishment_stats.get("total_punishments", 0),
         active_punishments=punishment_stats.get("active_punishments", 0),
-        nodes_online=len(connected_nodes),
+        nodes_online=nodes_online,
         nodes_total=len(connected_nodes),
-        agents_online=0,  # Will be fetched from agents endpoint if needed
-        agents_total=0,
+        agents_online=nodes_online,  # Agents = connected nodes with stats
+        agents_total=len(connected_nodes),
         panel_connected=data.get("panel_loaded", False),
-        uptime_seconds=panel_status.get("uptime_seconds"),
+        uptime_seconds=uptime_seconds,
     )
 
 
