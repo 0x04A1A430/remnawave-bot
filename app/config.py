@@ -656,6 +656,12 @@ class Settings(BaseSettings):
     SMTP_FROM_NAME: str = "VPN Service"
     SMTP_USE_TLS: bool = True
 
+    # Ban System Integration (BedolagaBan monitoring)
+    BAN_SYSTEM_ENABLED: bool = False
+    BAN_SYSTEM_API_URL: Optional[str] = None  # e.g., http://ban-server:8000
+    BAN_SYSTEM_API_TOKEN: Optional[str] = None
+    BAN_SYSTEM_REQUEST_TIMEOUT: int = 30
+
     @field_validator('MAIN_MENU_MODE', mode='before')
     @classmethod
     def normalize_main_menu_mode(cls, value: Optional[str]) -> str:
@@ -2333,6 +2339,24 @@ class Settings(BaseSettings):
         if self.SMTP_FROM_EMAIL:
             return self.SMTP_FROM_EMAIL
         return self.SMTP_USER
+
+    # Ban System helpers
+    def is_ban_system_enabled(self) -> bool:
+        return bool(self.BAN_SYSTEM_ENABLED)
+
+    def is_ban_system_configured(self) -> bool:
+        return bool(self.BAN_SYSTEM_API_URL and self.BAN_SYSTEM_API_TOKEN)
+
+    def get_ban_system_api_url(self) -> Optional[str]:
+        if self.BAN_SYSTEM_API_URL:
+            return self.BAN_SYSTEM_API_URL.rstrip('/')
+        return None
+
+    def get_ban_system_api_token(self) -> Optional[str]:
+        return self.BAN_SYSTEM_API_TOKEN
+
+    def get_ban_system_request_timeout(self) -> int:
+        return max(1, self.BAN_SYSTEM_REQUEST_TIMEOUT)
 
     model_config = {
         "env_file": ".env",
