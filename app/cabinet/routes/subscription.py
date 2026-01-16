@@ -1460,7 +1460,7 @@ def _get_remnawave_config_uuid() -> Optional[str]:
         return settings.CABINET_REMNA_SUB_CONFIG
 
 
-def _convert_remnawave_block_to_step(block: Dict[str, Any]) -> Dict[str, Any]:
+def _convert_remnawave_block_to_step(block: Dict[str, Any], url_scheme: str = "") -> Dict[str, Any]:
     """Convert RemnaWave block format to cabinet step format."""
     step = {
         "description": block.get("description", {}),
@@ -1468,24 +1468,59 @@ def _convert_remnawave_block_to_step(block: Dict[str, Any]) -> Dict[str, Any]:
     if block.get("title"):
         step["title"] = block["title"]
     if block.get("buttons"):
-        step["buttons"] = [
-            {
-                "buttonLink": btn.get("url", ""),
+        buttons = []
+        for btn in block["buttons"]:
+            btn_url = btn.get("url", "")
+            # Replace urlScheme-based URLs with {{deepLink}} placeholder
+            # This is needed for the frontend to show the Connect button
+            if url_scheme and btn_url and (
+                btn_url.startswith(url_scheme) or
+                btn_url.endswith("://") or
+                btn_url.endswith("://add/") or
+                "://" in btn_url and not btn_url.startswith("http")
+            ):
+                btn_url = "{{deepLink}}"
+            buttons.append({
+                "buttonLink": btn_url,
                 "buttonText": btn.get("text", {}),
-            }
-            for btn in block["buttons"]
-        ]
+            })
+        step["buttons"] = buttons
     return step
 
 
 def _convert_remnawave_app_to_cabinet(app: Dict[str, Any]) -> Dict[str, Any]:
     """Convert RemnaWave app format to cabinet app format."""
     blocks = app.get("blocks", [])
+    url_scheme = app.get("urlScheme", "")
 
     # Map blocks to steps based on position
-    installation_step = _convert_remnawave_block_to_step(blocks[0]) if len(blocks) > 0 else {"description": {}}
-    subscription_step = _convert_remnawave_block_to_step(blocks[1]) if len(blocks) > 1 else {"description": {}}
-    connect_step = _convert_remnawave_block_to_step(blocks[2]) if len(blocks) > 2 else {"description": {}}
+    installation_step = _convert_remnawave_block_to_step(blocks[0], url_scheme) if len(blocks) > 0 else {"description": {}}
+    subscription_step = _convert_remnawave_block_to_step(blocks[1], url_scheme) if len(blocks) > 1 else {"description": {}}
+    connect_step = _convert_remnawave_block_to_step(blocks[2], url_scheme) if len(blocks) > 2 else {"description": {}}
+
+    # Ensure subscription step has a deepLink button if urlScheme exists
+    if url_scheme:
+        has_deeplink_button = False
+        if "buttons" in subscription_step:
+            for btn in subscription_step["buttons"]:
+                if btn.get("buttonLink") == "{{deepLink}}":
+                    has_deeplink_button = True
+                    break
+
+        if not has_deeplink_button:
+            # Add deepLink button at the beginning
+            deeplink_button = {
+                "buttonLink": "{{deepLink}}",
+                "buttonText": {
+                    "en": "Open app",
+                    "ru": "Открыть приложение",
+                    "zh": "打开应用",
+                    "fa": "باز کردن برنامه",
+                },
+            }
+            if "buttons" not in subscription_step:
+                subscription_step["buttons"] = []
+            subscription_step["buttons"].insert(0, deeplink_button)
 
     return {
         "id": app.get("name", "").lower().replace(" ", "-"),
