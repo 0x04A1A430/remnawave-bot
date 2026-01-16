@@ -9,7 +9,7 @@ from urllib.parse import quote
 from aiogram import Dispatcher, types, F
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import InaccessibleMessage, InlineKeyboardMarkup, InlineKeyboardButton
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings, PERIOD_PRICES, get_traffic_prices
 from app.database.crud.discount_offer import (
@@ -1330,6 +1330,15 @@ async def _edit_message_text_or_caption(
     parse_mode: Optional[str] = "HTML",
 ) -> None:
     """Edits message text when possible, falls back to caption or re-sends message."""
+
+    # Если сообщение недоступно, отправляем новое
+    if isinstance(message, InaccessibleMessage):
+        await message.answer(
+            text,
+            reply_markup=reply_markup,
+            parse_mode=parse_mode,
+        )
+        return
 
     try:
         await message.edit_text(
