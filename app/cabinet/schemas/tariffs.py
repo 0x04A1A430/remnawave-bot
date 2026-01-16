@@ -46,6 +46,8 @@ class TariffListItem(BaseModel):
     description: Optional[str] = None
     is_active: bool
     is_trial_available: bool
+    is_daily: bool = False
+    daily_price_kopeks: int = 0
     allow_traffic_topup: bool = True
     traffic_limit_gb: int
     device_limit: int
