@@ -295,6 +295,7 @@ class BotConfigurationService:
         "REMNAWAVE_USER_USERNAME_TEMPLATE": "REMNAWAVE",
         "REMNAWAVE_AUTO_SYNC_ENABLED": "REMNAWAVE",
         "REMNAWAVE_AUTO_SYNC_TIMES": "REMNAWAVE",
+        "CABINET_REMNA_SUB_CONFIG": "MINIAPP",
     }
 
     CATEGORY_PREFIX_OVERRIDES: Dict[str, str] = {
@@ -698,6 +699,16 @@ class BotConfigurationService:
             "example": "PAID_USER",
             "warning": "Если тег не задан или невалиден, существующий тег не будет изменён.",
             "dependencies": "Оплата подписки и интеграция с RemnaWave",
+        },
+        "CABINET_REMNA_SUB_CONFIG": {
+            "description": (
+                "UUID конфигурации страницы подписки из RemnaWave. "
+                "Позволяет синхронизировать список приложений напрямую из панели."
+            ),
+            "format": "UUID конфигурации из раздела Subscription Page Configs в RemnaWave.",
+            "example": "d4aa2b8c-9a36-4f31-93a2-6f07dad05fba",
+            "warning": "Убедитесь, что конфигурация существует в панели и содержит нужные приложения.",
+            "dependencies": "Настроенное подключение к RemnaWave API",
         },
     }
 

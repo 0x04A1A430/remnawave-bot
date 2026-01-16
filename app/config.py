@@ -99,6 +99,7 @@ class Settings(BaseSettings):
     REMNAWAVE_USER_DELETE_MODE: str = "delete"  # "delete" или "disable"
     REMNAWAVE_AUTO_SYNC_ENABLED: bool = False
     REMNAWAVE_AUTO_SYNC_TIMES: str = "03:00"
+    CABINET_REMNA_SUB_CONFIG: Optional[str] = None  # UUID конфига страницы подписки из RemnaWave
     
     TRIAL_DURATION_DAYS: int = 3
     TRIAL_TRAFFIC_LIMIT_GB: int = 10
