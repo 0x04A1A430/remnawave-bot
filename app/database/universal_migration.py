@@ -5988,6 +5988,28 @@ async def add_tariff_custom_days_traffic_columns() -> bool:
         return False
 
 
+async def add_tariff_traffic_reset_mode_column() -> bool:
+    """Добавляет колонку traffic_reset_mode в tariffs для настройки режима сброса трафика.
+
+    Значения: DAY, WEEK, MONTH, NO_RESET (NULL = использовать глобальную настройку)
+    """
+    try:
+        if not await check_column_exists('tariffs', 'traffic_reset_mode'):
+            async with engine.begin() as conn:
+                await conn.execute(text(
+                    "ALTER TABLE tariffs ADD COLUMN traffic_reset_mode VARCHAR(20) NULL"
+                ))
+                logger.info("✅ Колонка traffic_reset_mode добавлена в tariffs")
+                return True
+        else:
+            logger.info("ℹ️ Колонка traffic_reset_mode уже существует в tariffs")
+            return True
+
+    except Exception as error:
+        logger.error(f"❌ Ошибка добавления колонки traffic_reset_mode: {error}")
+        return False
+
+
 async def add_subscription_daily_columns() -> bool:
     """Добавляет колонки для суточных подписок."""
     try:
@@ -6623,6 +6645,13 @@ async def run_universal_migration():
             logger.info("✅ Колонки произвольных дней/трафика в tariffs готовы")
         else:
             logger.warning("⚠️ Проблемы с колонками произвольных дней/трафика в tariffs")
+
+        logger.info("=== ДОБАВЛЕНИЕ КОЛОНКИ РЕЖИМА СБРОСА ТРАФИКА В ТАРИФАХ ===")
+        traffic_reset_mode_ready = await add_tariff_traffic_reset_mode_column()
+        if traffic_reset_mode_ready:
+            logger.info("✅ Колонка traffic_reset_mode в tariffs готова")
+        else:
+            logger.warning("⚠️ Проблемы с колонкой traffic_reset_mode в tariffs")
 
         logger.info("=== ДОБАВЛЕНИЕ КОЛОНОК СУТОЧНЫХ ПОДПИСОК ===")
         daily_subscription_columns_ready = await add_subscription_daily_columns()
