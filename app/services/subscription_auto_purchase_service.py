@@ -752,95 +752,13 @@ async def auto_activate_subscription_after_topup(
 
     subscription = await get_subscription_by_user_id(db, user.id)
 
-    # Если автоактивация отключена - только отправляем уведомление
+    # Если автоактивация отключена - уведомление отправится из _send_payment_success_notification
     if not settings.is_auto_activate_after_topup_enabled():
-        # Если включен яркий промпт активации, НЕ отправляем уведомление здесь
-        # т.к. оно будет отправлено через _send_payment_success_notification
-        if settings.SHOW_ACTIVATION_PROMPT_AFTER_TOPUP:
-            logger.info(
-                "⚠️ Пропущена отправка уведомления пользователю %s (SHOW_ACTIVATION_PROMPT_AFTER_TOPUP=true, уведомление будет из payment service)",
-                user.telegram_id,
-            )
-            return (False, False)
-
-        # Старая логика уведомлений для режима без яркого промпта
-        notification_sent = False
-        if bot:
-            try:
-                texts = get_texts(getattr(user, "language", "ru"))
-                has_active_subscription = (
-                    subscription
-                    and subscription.status in ("active", "ACTIVE")
-                )
-
-                # Формируем строку с суммой пополнения
-                topup_line = ""
-                if topup_amount:
-                    topup_line = f"➕ Пополнено: <b>{settings.format_price(topup_amount)}</b>\n"
-
-                # Определяем состояние подписки
-                is_trial = subscription and getattr(subscription, 'is_trial', False)
-
-                if has_active_subscription and not is_trial:
-                    # Активная платная подписка — 2 кнопки
-                    warning_message = (
-                        f"✅ <b>Баланс пополнен!</b>\n\n"
-                        f"{topup_line}"
-                        f"💳 Текущий баланс: <b>{settings.format_price(user.balance_kopeks)}</b>\n\n"
-                        f"👇 <b>Выберите действие:</b>"
-                    )
-                    keyboard = InlineKeyboardMarkup(
-                        inline_keyboard=[
-                            [InlineKeyboardButton(
-                                text="💎 Продлить подписку",
-                                callback_data="subscription_extend",
-                            )],
-                            [InlineKeyboardButton(
-                                text="📱 Изменить устройства",
-                                callback_data="subscription_change_devices",
-                            )],
-                        ]
-                    )
-                else:
-                    # Триал или подписка закончилась — 1 кнопка
-                    warning_message = (
-                        f"✅ <b>Баланс пополнен!</b>\n\n"
-                        f"{topup_line}"
-                        f"💳 Текущий баланс: <b>{settings.format_price(user.balance_kopeks)}</b>\n\n"
-                        f"{'━' * 20}\n\n"
-                        f"🚨🚨🚨 <b>ВНИМАНИЕ!</b> 🚨🚨🚨\n\n"
-                        f"🔴 <b>ПОДПИСКА НЕ АКТИВНА!</b>\n\n"
-                        f"⚠️ Пополнение баланса <b>НЕ активирует</b> подписку автоматически!\n\n"
-                        f"👇 <b>Обязательно оформите подписку:</b>"
-                    )
-                    keyboard = InlineKeyboardMarkup(
-                        inline_keyboard=[
-                            [InlineKeyboardButton(
-                                text="🚀 КУПИТЬ ПОДПИСКУ",
-                                callback_data="menu_buy",
-                            )],
-                        ]
-                    )
-
-                await bot.send_message(
-                    chat_id=user.telegram_id,
-                    text=warning_message,
-                    reply_markup=keyboard,
-                    parse_mode="HTML",
-                )
-                notification_sent = True
-                logger.info(
-                    "⚠️ Отправлено уведомление о пополнении баланса пользователю %s (автоактивация выключена, подписка %s)",
-                    user.telegram_id,
-                    "активна" if has_active_subscription else "неактивна",
-                )
-            except Exception as notify_error:
-                logger.warning(
-                    "⚠️ Не удалось отправить уведомление пользователю %s: %s",
-                    user.telegram_id,
-                    notify_error,
-                )
-        return (False, notification_sent)
+        logger.info(
+            "⚠️ Автоактивация отключена для пользователя %s, уведомление будет отправлено из payment service",
+            user.telegram_id,
+        )
+        return (False, False)
 
     # Если подписка активна — ничего не делаем (автоактивация включена, но подписка уже есть)
     if subscription and subscription.status == "ACTIVE" and subscription.end_date > datetime.utcnow():
@@ -921,93 +839,12 @@ async def auto_activate_subscription_after_topup(
             user.telegram_id,
             balance,
         )
-        # Если включен яркий промпт активации, НЕ отправляем уведомление здесь
-        # т.к. оно будет отправлено через _send_payment_success_notification
-        if settings.SHOW_ACTIVATION_PROMPT_AFTER_TOPUP:
-            logger.info(
-                "⚠️ Пропущена отправка уведомления пользователю %s (SHOW_ACTIVATION_PROMPT_AFTER_TOPUP=true, уведомление будет из payment service)",
-                user.telegram_id,
-            )
-            return (False, False)
-
-        # Старая логика уведомлений для режима без яркого промпта
-        notification_sent = False
-        if bot:
-            try:
-                texts = get_texts(getattr(user, "language", "ru"))
-                has_active_subscription = (
-                    subscription
-                    and subscription.status in ("active", "ACTIVE")
-                )
-
-                # Формируем строку с суммой пополнения
-                topup_line2 = ""
-                if topup_amount:
-                    topup_line2 = f"➕ Пополнено: <b>{settings.format_price(topup_amount)}</b>\n"
-
-                # Определяем состояние подписки
-                is_trial2 = subscription and getattr(subscription, 'is_trial', False)
-
-                if has_active_subscription and not is_trial2:
-                    # Активная платная подписка — 2 кнопки
-                    warning_message = (
-                        f"✅ <b>Баланс пополнен!</b>\n\n"
-                        f"{topup_line2}"
-                        f"💳 Текущий баланс: <b>{settings.format_price(balance)}</b>\n\n"
-                        f"👇 <b>Выберите действие:</b>"
-                    )
-                    keyboard = InlineKeyboardMarkup(
-                        inline_keyboard=[
-                            [InlineKeyboardButton(
-                                text="💎 Продлить подписку",
-                                callback_data="subscription_extend",
-                            )],
-                            [InlineKeyboardButton(
-                                text="📱 Изменить устройства",
-                                callback_data="subscription_change_devices",
-                            )],
-                        ]
-                    )
-                else:
-                    # Триал или подписка закончилась — 1 кнопка
-                    warning_message = (
-                        f"✅ <b>Баланс пополнен!</b>\n\n"
-                        f"{topup_line2}"
-                        f"💳 Текущий баланс: <b>{settings.format_price(balance)}</b>\n\n"
-                        f"{'━' * 20}\n\n"
-                        f"🚨🚨🚨 <b>ВНИМАНИЕ!</b> 🚨🚨🚨\n\n"
-                        f"🔴 <b>ПОДПИСКА НЕ АКТИВНА!</b>\n\n"
-                        f"⚠️ Пополнение баланса <b>НЕ активирует</b> подписку автоматически!\n\n"
-                        f"👇 <b>Обязательно оформите подписку:</b>"
-                    )
-                    keyboard = InlineKeyboardMarkup(
-                        inline_keyboard=[
-                            [InlineKeyboardButton(
-                                text="🚀 КУПИТЬ ПОДПИСКУ",
-                                callback_data="menu_buy",
-                            )],
-                        ]
-                    )
-
-                await bot.send_message(
-                    chat_id=user.telegram_id,
-                    text=warning_message,
-                    reply_markup=keyboard,
-                    parse_mode="HTML",
-                )
-                notification_sent = True
-                logger.info(
-                    "⚠️ Отправлено уведомление о пополнении баланса пользователю %s (недостаточно средств, подписка %s)",
-                    user.telegram_id,
-                    "активна" if has_active_subscription else "неактивна",
-                )
-            except Exception as notify_error:
-                logger.warning(
-                    "⚠️ Не удалось отправить уведомление пользователю %s: %s",
-                    user.telegram_id,
-                    notify_error,
-                )
-        return (False, notification_sent)
+        # Уведомление отправится из _send_payment_success_notification
+        logger.info(
+            "⚠️ Недостаточно средств для автоактивации пользователя %s, уведомление будет отправлено из payment service",
+            user.telegram_id,
+        )
+        return (False, False)
 
     texts = get_texts(getattr(user, "language", "ru"))
 
