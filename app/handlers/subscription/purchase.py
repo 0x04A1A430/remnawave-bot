@@ -2162,12 +2162,6 @@ async def select_period(
 
     # Получаем цену с защитой от KeyError
     period_price = PERIOD_PRICES.get(period_days, 0)
-    if period_price <= 0:
-        await callback.answer(
-            texts.t("PERIOD_PRICE_NOT_SET", "❌ Цена для этого периода не настроена"),
-            show_alert=True
-        )
-        return
 
     data = await state.get_data()
     data['period_days'] = period_days
@@ -2385,12 +2379,6 @@ async def confirm_purchase(
     # Всегда пересчитываем base_price из PERIOD_PRICES для безопасности
     # (не доверяем кэшированным значениям из FSM данных)
     base_price_original = PERIOD_PRICES.get(period_days, 0)
-    if base_price_original <= 0:
-        await callback.answer(
-            texts.t("PERIOD_PRICE_NOT_SET", "❌ Цена для этого периода не настроена"),
-            show_alert=True
-        )
-        return
     base_discount_percent = db_user.get_promo_discount(
         "period",
         period_days,
