@@ -69,9 +69,21 @@ class MenuLayoutStatsService:
     ) -> Optional[ButtonClickLog]:
         """Записать клик по кнопке."""
         try:
+            # Проверяем существование пользователя перед вставкой
+            # чтобы избежать ошибки foreign key в логах БД
+            actual_user_id = user_id
+            if user_id is not None:
+                from app.database.models import User
+                from sqlalchemy import select
+                result = await db.execute(
+                    select(User.telegram_id).where(User.telegram_id == user_id).limit(1)
+                )
+                if result.scalar_one_or_none() is None:
+                    actual_user_id = None  # Пользователь не зарегистрирован
+
             click_log = ButtonClickLog(
                 button_id=button_id,
-                user_id=user_id,
+                user_id=actual_user_id,
                 callback_data=callback_data,
                 button_type=button_type,
                 button_text=button_text,
@@ -80,22 +92,8 @@ class MenuLayoutStatsService:
             await db.commit()
             return click_log
         except Exception:
-            # If user doesn't exist (foreign key violation), try without user_id
             await db.rollback()
-            try:
-                click_log = ButtonClickLog(
-                    button_id=button_id,
-                    user_id=None,  # Log without user reference
-                    callback_data=callback_data,
-                    button_type=button_type,
-                    button_text=button_text,
-                )
-                db.add(click_log)
-                await db.commit()
-                return click_log
-            except Exception:
-                await db.rollback()
-                return None
+            return None
 
     @classmethod
     async def get_button_stats(
