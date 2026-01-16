@@ -1669,10 +1669,22 @@ KNOWN_APP_URL_SCHEMES = {
     "clash": "clash://install-config?url=",
     "clash meta": "clash://install-config?url=",
     "clash verge": "clash://install-config?url=",
+    "clashx": "clash://install-config?url=",
+    "clashx meta": "clash://install-config?url=",
+    "flclash": "clash://install-config?url=",
+    "flclashx": "clash://install-config?url=",
     "hiddify": "hiddify://import/",
+    "hiddify next": "hiddify://import/",
     "nekoray": "sn://subscription?url=",
     "nekobox": "sn://subscription?url=",
     "karing": "karing://add/",
+    "sing-box": "sing-box://import-remote-profile?url=",
+    "singbox": "sing-box://import-remote-profile?url=",
+    "quantumult x": "quantumult-x://add-resource?remote-resource=",
+    "quantumultx": "quantumult-x://add-resource?remote-resource=",
+    "surge": "surge3://install-config?url=",
+    "loon": "loon://import?sub=",
+    "stash": "stash://install-config?url=",
 }
 
 
@@ -1719,7 +1731,7 @@ def _convert_remnawave_app_to_cabinet(app: Dict[str, Any]) -> Dict[str, Any]:
         "id": app.get("name", "").lower().replace(" ", "-"),
         "name": app.get("name", ""),
         "isFeatured": app.get("featured", False),
-        "urlScheme": app.get("urlScheme", ""),
+        "urlScheme": url_scheme,  # Use resolved url_scheme (with fallback from app name)
         "isNeedBase64Encoding": app.get("isNeedBase64Encoding", False),
         "installationStep": installation_step,
         "addSubscriptionStep": subscription_step,
