@@ -1311,6 +1311,15 @@ async def purchase_devices(
                 detail="Докупка устройств недоступна для вашего тарифа",
             )
 
+        # Check max device limit
+        current_devices = subscription.device_limit or 1
+        new_device_count = current_devices + request.devices
+        if tariff.max_device_limit and new_device_count > tariff.max_device_limit:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Максимальное количество устройств для вашего тарифа: {tariff.max_device_limit}",
+            )
+
         # Calculate prorated price based on remaining days
         from datetime import datetime, timezone
         now = datetime.now(timezone.utc)
@@ -1410,6 +1419,28 @@ async def get_device_price(
             "reason": "Докупка устройств недоступна для вашего тарифа",
         }
 
+    # Check max device limit
+    current_devices = subscription.device_limit or 1
+    max_device_limit = tariff.max_device_limit
+    can_add = max_device_limit - current_devices if max_device_limit else None
+
+    if max_device_limit and current_devices >= max_device_limit:
+        return {
+            "available": False,
+            "reason": f"Достигнут максимум устройств ({max_device_limit})",
+            "current_device_limit": current_devices,
+            "max_device_limit": max_device_limit,
+        }
+
+    if max_device_limit and current_devices + devices > max_device_limit:
+        return {
+            "available": False,
+            "reason": f"Можно добавить максимум {can_add} устройств",
+            "current_device_limit": current_devices,
+            "max_device_limit": max_device_limit,
+            "can_add": can_add,
+        }
+
     # Calculate prorated price
     from datetime import datetime, timezone
     now = datetime.now(timezone.utc)
@@ -1431,7 +1462,9 @@ async def get_device_price(
         "price_per_device_label": settings.format_price(price_per_device_kopeks),
         "total_price_kopeks": total_price_kopeks,
         "total_price_label": settings.format_price(total_price_kopeks),
-        "current_device_limit": subscription.device_limit,
+        "current_device_limit": current_devices,
+        "max_device_limit": max_device_limit,
+        "can_add": can_add,
         "days_left": days_left,
         "base_device_price_kopeks": tariff.device_price_kopeks,
     }
