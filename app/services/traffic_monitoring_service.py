@@ -97,6 +97,9 @@ class TrafficMonitoringServiceV2:
     def get_ignored_nodes(self) -> List[str]:
         return settings.get_traffic_ignored_nodes()
 
+    def get_excluded_user_uuids(self) -> List[str]:
+        return settings.get_traffic_excluded_user_uuids()
+
     def get_daily_check_time(self) -> Optional[time]:
         return settings.get_traffic_daily_check_time()
 
@@ -133,7 +136,8 @@ class TrafficMonitoringServiceV2:
         """Загружает snapshot трафика из Redis"""
         try:
             snapshot_data = await cache.get(TRAFFIC_SNAPSHOT_KEY)
-            if snapshot_data and isinstance(snapshot_data, dict):
+            # ВАЖНО: пустой словарь {} - это валидный snapshot!
+            if snapshot_data is not None and isinstance(snapshot_data, dict):
                 # Конвертируем обратно в float
                 result = {uuid: float(bytes_val) for uuid, bytes_val in snapshot_data.items()}
                 logger.debug(f"📦 Snapshot загружен из Redis: {len(result)} пользователей")
@@ -175,6 +179,23 @@ class TrafficMonitoringServiceV2:
         except Exception as e:
             logger.error(f"❌ Ошибка получения времени уведомления: {e}")
             return None
+
+    # ============== Работа с нодами ==============
+
+    async def _load_nodes_cache(self):
+        """Загружает названия нод в кеш"""
+        try:
+            nodes = await self.remnawave_service.get_all_nodes()
+            self._nodes_cache = {node['uuid']: node['name'] for node in nodes if node.get('uuid') and node.get('name')}
+            logger.debug(f"📋 Загружено {len(self._nodes_cache)} нод в кеш")
+        except Exception as e:
+            logger.error(f"❌ Ошибка загрузки нод в кеш: {e}")
+
+    def get_node_name(self, node_uuid: Optional[str]) -> Optional[str]:
+        """Возвращает название ноды по UUID из кеша"""
+        if not node_uuid:
+            return None
+        return self._nodes_cache.get(node_uuid)
 
     # ============== Фильтрация по нодам ==============
 
@@ -274,13 +295,13 @@ class TrafficMonitoringServiceV2:
 
     async def has_snapshot(self) -> bool:
         """Проверяет, есть ли сохранённый snapshot (Redis + fallback на память)"""
-        # Проверяем Redis
+        # Проверяем Redis (пустой словарь {} - это тоже валидный snapshot!)
         snapshot = await self._load_snapshot_from_redis()
-        if snapshot:
+        if snapshot is not None:
             return True
 
         # Fallback на память
-        return bool(self._memory_snapshot) and self._memory_snapshot_time is not None
+        return self._memory_snapshot_time is not None
 
     async def get_snapshot_age_minutes(self) -> float:
         """Возвращает возраст snapshot в минутах (Redis + fallback на память)"""
@@ -328,9 +349,9 @@ class TrafficMonitoringServiceV2:
         Если в Redis уже есть snapshot — использует его (персистентность).
         Возвращает количество пользователей в snapshot.
         """
-        # Проверяем есть ли snapshot в Redis
+        # Проверяем есть ли snapshot в Redis (пустой {} тоже валидный snapshot!)
         existing_snapshot = await self._load_snapshot_from_redis()
-        if existing_snapshot:
+        if existing_snapshot is not None:
             age = await self.get_snapshot_age_minutes()
             logger.info(
                 f"📦 Найден существующий snapshot в Redis: {len(existing_snapshot)} пользователей, "
@@ -382,6 +403,24 @@ class TrafficMonitoringServiceV2:
         start_time = datetime.utcnow()
         is_first_run = not await self.has_snapshot()
 
+        # Загружаем кеш нод для красивых названий в уведомлениях
+        await self._load_nodes_cache()
+
+        # Логируем фильтры
+        monitored_nodes = self.get_monitored_nodes()
+        ignored_nodes = self.get_ignored_nodes()
+        excluded_user_uuids = self.get_excluded_user_uuids()
+
+        if monitored_nodes:
+            logger.info(f"🔍 Мониторим только ноды: {monitored_nodes}")
+        elif ignored_nodes:
+            logger.info(f"🚫 Игнорируем ноды: {ignored_nodes}")
+        else:
+            logger.info(f"📊 Мониторим все ноды")
+
+        if excluded_user_uuids:
+            logger.info(f"🚫 Исключены пользователи: {excluded_user_uuids}")
+
         if is_first_run:
             logger.info("🚀 Первый запуск быстрой проверки — создаём snapshot...")
         else:
@@ -396,7 +435,7 @@ class TrafficMonitoringServiceV2:
 
         # Загружаем предыдущий snapshot (из Redis или памяти)
         previous_snapshot = await self._get_current_snapshot()
-        logger.debug(f"📦 Предыдущий snapshot: {len(previous_snapshot)} пользователей")
+        logger.info(f"📦 Предыдущий snapshot: {len(previous_snapshot)} пользователей (is_first_run={is_first_run})")
 
         checked_users = 0
         users_with_delta = 0
@@ -420,6 +459,7 @@ class TrafficMonitoringServiceV2:
 
                 # Пользователя не было в предыдущем snapshot — пропускаем (новый пользователь)
                 if user.uuid not in previous_snapshot:
+                    logger.debug(f"Пользователь {user.uuid[:8]} не найден в предыдущем snapshot, пропускаем")
                     continue
 
                 # Получаем предыдущее значение
@@ -437,15 +477,22 @@ class TrafficMonitoringServiceV2:
                 if delta_bytes < threshold_bytes:
                     continue
 
-                logger.info(f"⚠️ Превышение дельты: {user.uuid[:8]}... +{delta_gb:.2f} ГБ (порог {self.get_fast_check_threshold_gb()} ГБ)")
+                logger.info(f"⚠️ Превышение дельты: {user.uuid[:8]}... +{delta_gb:.2f} ГБ (порог {self.get_fast_check_threshold_gb()} ГБ, previous={previous_bytes / (1024**3):.2f} ГБ, current={current_bytes / (1024**3):.2f} ГБ)")
+
+                # Проверяем исключённых пользователей (служебные/тунельные)
+                if user.uuid.lower() in excluded_user_uuids:
+                    logger.info(f"⏭️ Пропускаем {user.uuid[:8]}... - пользователь в списке исключений (служебный/тунельный)")
+                    continue
 
                 # Проверяем фильтр по нодам
                 last_node_uuid = user_traffic.last_connected_node_uuid
                 if not self.should_monitor_node(last_node_uuid):
+                    logger.warning(f"⏭️ Пропускаем {user.uuid[:8]} - нода {last_node_uuid or 'неизвестна'} не в списке мониторинга")
                     continue
 
                 # Создаём violation
                 delta_gb = round(delta_bytes / (1024 ** 3), 2)
+                node_name = self.get_node_name(last_node_uuid)
                 violation = TrafficViolation(
                     user_uuid=user.uuid,
                     telegram_id=user.telegram_id,
@@ -454,7 +501,7 @@ class TrafficMonitoringServiceV2:
                     used_traffic_gb=delta_gb,  # Это дельта, не общий трафик!
                     threshold_gb=self.get_fast_check_threshold_gb(),
                     last_node_uuid=last_node_uuid,
-                    last_node_name=None,
+                    last_node_name=node_name,
                     check_type="fast"
                 )
                 violations.append(violation)
@@ -464,6 +511,7 @@ class TrafficMonitoringServiceV2:
 
         # Обновляем snapshot (в Redis с fallback на память)
         await self._save_snapshot(new_snapshot)
+        logger.info(f"💾 Новый snapshot сохранён: {len(new_snapshot)} пользователей")
 
         elapsed = (datetime.utcnow() - start_time).total_seconds()
 
@@ -494,6 +542,9 @@ class TrafficMonitoringServiceV2:
 
         logger.info("🚀 Запуск суточной проверки трафика...")
         start_time = datetime.utcnow()
+
+        # Загружаем кеш нод для красивых названий в уведомлениях
+        await self._load_nodes_cache()
 
         violations: List[TrafficViolation] = []
         threshold_bytes = self.get_daily_threshold_gb() * (1024 ** 3)
@@ -537,6 +588,7 @@ class TrafficMonitoringServiceV2:
                         return None
 
                     used_gb = round(total_bytes / (1024 ** 3), 2)
+                    node_name = self.get_node_name(last_node_uuid)
                     return TrafficViolation(
                         user_uuid=user.uuid,
                         telegram_id=user.telegram_id,
@@ -545,7 +597,7 @@ class TrafficMonitoringServiceV2:
                         used_traffic_gb=used_gb,
                         threshold_gb=self.get_daily_threshold_gb(),
                         last_node_uuid=last_node_uuid,
-                        last_node_name=None,
+                        last_node_name=node_name,
                         check_type="daily"
                     )
 
@@ -594,7 +646,7 @@ class TrafficMonitoringServiceV2:
         for i, violation in enumerate(violations):
             try:
                 if not await self.should_send_notification(violation.user_uuid):
-                    logger.debug(f"⏭️ Кулдаун для {violation.user_uuid}, пропускаем")
+                    logger.info(f"⏭️ Кулдаун для {violation.user_uuid[:8]}... - пропускаем уведомление (кулдаун {self.get_notification_cooldown_seconds() // 60} мин)")
                     continue
 
                 # Получаем информацию о пользователе из БД
@@ -632,8 +684,13 @@ class TrafficMonitoringServiceV2:
                     f"🚨 Превышение: <b>{violation.used_traffic_gb - violation.threshold_gb:.2f} ГБ</b>\n"
                 )
 
-                if violation.last_node_uuid:
-                    message += f"\n🖥 Последняя нода: <code>{violation.last_node_uuid}</code>"
+                # Показываем название ноды и UUID
+                if violation.last_node_name:
+                    message += f"\n🖥 Сервер: <b>{violation.last_node_name}</b>"
+                    if violation.last_node_uuid:
+                        message += f"\n   <code>{violation.last_node_uuid}</code>"
+                elif violation.last_node_uuid:
+                    message += f"\n🖥 Сервер: <code>{violation.last_node_uuid}</code>"
 
                 message += f"\n\n⏰ {datetime.utcnow().strftime('%d.%m.%Y %H:%M:%S')} UTC"
 

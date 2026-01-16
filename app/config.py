@@ -256,6 +256,7 @@ class Settings(BaseSettings):
     # Фильтрация по серверам (UUID нод через запятую)
     TRAFFIC_MONITORED_NODES: str = ""  # Только эти ноды (пусто = все)
     TRAFFIC_IGNORED_NODES: str = ""  # Исключить эти ноды
+    TRAFFIC_EXCLUDED_USER_UUIDS: str = ""  # Исключить пользователей (UUID через запятую)
 
     # Параллельность и кулдаун
     TRAFFIC_CHECK_BATCH_SIZE: int = 1000  # Размер батча для получения пользователей
@@ -854,13 +855,31 @@ class Settings(BaseSettings):
         """Возвращает список UUID нод для мониторинга (пусто = все)"""
         if not self.TRAFFIC_MONITORED_NODES:
             return []
-        return [n.strip() for n in self.TRAFFIC_MONITORED_NODES.split(",") if n.strip()]
+        # Убираем комментарии (все после #)
+        value = self.TRAFFIC_MONITORED_NODES.split("#")[0].strip()
+        if not value:
+            return []
+        return [n.strip() for n in value.split(",") if n.strip()]
 
     def get_traffic_ignored_nodes(self) -> List[str]:
         """Возвращает список UUID нод для исключения из мониторинга"""
         if not self.TRAFFIC_IGNORED_NODES:
             return []
-        return [n.strip() for n in self.TRAFFIC_IGNORED_NODES.split(",") if n.strip()]
+        # Убираем комментарии (все после #)
+        value = self.TRAFFIC_IGNORED_NODES.split("#")[0].strip()
+        if not value:
+            return []
+        return [n.strip() for n in value.split(",") if n.strip()]
+
+    def get_traffic_excluded_user_uuids(self) -> List[str]:
+        """Возвращает список UUID пользователей для исключения из мониторинга (например, тунельные/служебные)"""
+        if not self.TRAFFIC_EXCLUDED_USER_UUIDS:
+            return []
+        # Убираем комментарии (все после #)
+        value = self.TRAFFIC_EXCLUDED_USER_UUIDS.split("#")[0].strip()
+        if not value:
+            return []
+        return [uuid.strip().lower() for uuid in value.split(",") if uuid.strip()]
 
     def get_traffic_daily_check_time(self) -> Optional[time]:
         """Возвращает время суточной проверки трафика"""
