@@ -119,15 +119,19 @@ async def get_payment_methods():
     """Get available payment methods."""
     methods = []
 
-    # YooKassa
+    # YooKassa - with card and SBP options
     if settings.is_yookassa_enabled():
         methods.append(PaymentMethodResponse(
             id="yookassa",
-            name="YooKassa (Bank Card)",
-            description="Pay with bank card via YooKassa",
+            name="YooKassa",
+            description="Pay via YooKassa",
             min_amount_kopeks=settings.YOOKASSA_MIN_AMOUNT_KOPEKS,
             max_amount_kopeks=settings.YOOKASSA_MAX_AMOUNT_KOPEKS,
             is_available=True,
+            options=[
+                {"id": "card", "name": "💳 Карта", "description": "Банковская карта"},
+                {"id": "sbp", "name": "🏦 СБП", "description": "Система быстрых платежей (QR)"},
+            ],
         ))
 
     # CryptoBot
@@ -378,19 +382,34 @@ async def create_topup(
     try:
         if request.payment_method == "yookassa":
             yookassa_service = YooKassaService()
-            result = await yookassa_service.create_payment(
-                amount=amount_rubles,
-                currency="RUB",
-                description=f"Пополнение баланса на {amount_rubles:.2f} ₽",
-                metadata={
-                    "user_id": str(user.id),
-                    "user_telegram_id": str(user.telegram_id) if user.telegram_id else "",
-                    "user_username": user.username or "",
-                    "amount_kopeks": str(request.amount_kopeks),
-                    "type": "balance_topup",
-                    "source": "cabinet",
-                },
-            )
+            yookassa_metadata = {
+                "user_id": str(user.id),
+                "user_telegram_id": str(user.telegram_id) if user.telegram_id else "",
+                "user_username": user.username or "",
+                "amount_kopeks": str(request.amount_kopeks),
+                "type": "balance_topup",
+                "source": "cabinet",
+            }
+
+            # Use payment_option to select card or sbp (default: card)
+            option = (request.payment_option or "").strip().lower()
+            if option == "sbp":
+                # Create SBP payment with QR code
+                result = await yookassa_service.create_sbp_payment(
+                    amount=amount_rubles,
+                    currency="RUB",
+                    description=f"Пополнение баланса на {amount_rubles:.2f} ₽",
+                    metadata=yookassa_metadata,
+                )
+            else:
+                # Default: card payment
+                result = await yookassa_service.create_payment(
+                    amount=amount_rubles,
+                    currency="RUB",
+                    description=f"Пополнение баланса на {amount_rubles:.2f} ₽",
+                    metadata=yookassa_metadata,
+                )
+
             if result and not result.get("error"):
                 payment_url = result.get("confirmation_url")
                 payment_id = result.get("id")

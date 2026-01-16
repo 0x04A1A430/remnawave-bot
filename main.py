@@ -622,10 +622,9 @@ async def main():
                 traffic_monitoring_task = asyncio.create_task(
                     traffic_monitoring_scheduler.start_monitoring()
                 )
-                interval_hours = traffic_monitoring_scheduler.get_interval_hours()
-                threshold_gb = settings.TRAFFIC_THRESHOLD_GB_PER_DAY
-                stage.log(f"Интервал проверки: {interval_hours} ч")
-                stage.log(f"Порог трафика: {threshold_gb} ГБ/сутки")
+                # Показываем информацию о новом мониторинге v2
+                status_info = traffic_monitoring_scheduler.get_status_info()
+                stage.log(status_info)
             else:
                 traffic_monitoring_task = None
                 stage.skip("Мониторинг трафика отключен настройками")

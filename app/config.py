@@ -243,11 +243,32 @@ class Settings(BaseSettings):
     MENU_LAYOUT_ENABLED: bool = False  # Включить управление меню через API
 
     # Настройки мониторинга трафика
-    TRAFFIC_MONITORING_ENABLED: bool = False
-    TRAFFIC_THRESHOLD_GB_PER_DAY: float = 10.0  # Порог трафика в ГБ за сутки
-    TRAFFIC_MONITORING_INTERVAL_HOURS: int = 24  # Интервал проверки в часах (по умолчанию - раз в сутки)
+    TRAFFIC_MONITORING_ENABLED: bool = False  # Глобальный переключатель (для обратной совместимости)
+    TRAFFIC_THRESHOLD_GB_PER_DAY: float = 10.0  # Порог трафика в ГБ за сутки (для обратной совместимости)
+    TRAFFIC_MONITORING_INTERVAL_HOURS: int = 24  # Интервал проверки в часах (для обратной совместимости)
     SUSPICIOUS_NOTIFICATIONS_TOPIC_ID: Optional[int] = None
 
+    # Новый мониторинг трафика v2
+    # Быстрая проверка (текущий использованный трафик)
+    TRAFFIC_FAST_CHECK_ENABLED: bool = False
+    TRAFFIC_FAST_CHECK_INTERVAL_MINUTES: int = 10  # Интервал проверки в минутах
+    TRAFFIC_FAST_CHECK_THRESHOLD_GB: float = 5.0  # Порог в ГБ для быстрой проверки
+
+    # Суточная проверка (трафик за 24 часа)
+    TRAFFIC_DAILY_CHECK_ENABLED: bool = False
+    TRAFFIC_DAILY_CHECK_TIME: str = "00:00"  # Время суточной проверки (HH:MM)
+    TRAFFIC_DAILY_THRESHOLD_GB: float = 50.0  # Порог суточного трафика в ГБ
+
+    # Фильтрация по серверам (UUID нод через запятую)
+    TRAFFIC_MONITORED_NODES: str = ""  # Только эти ноды (пусто = все)
+    TRAFFIC_IGNORED_NODES: str = ""  # Исключить эти ноды
+    TRAFFIC_EXCLUDED_USER_UUIDS: str = ""  # Исключить пользователей (UUID через запятую)
+
+    # Параллельность и кулдаун
+    TRAFFIC_CHECK_BATCH_SIZE: int = 1000  # Размер батча для получения пользователей
+    TRAFFIC_CHECK_CONCURRENCY: int = 10  # Параллельных запросов
+    TRAFFIC_NOTIFICATION_COOLDOWN_MINUTES: int = 60  # Кулдаун уведомлений (минуты)
+    TRAFFIC_SNAPSHOT_TTL_HOURS: int = 24  # TTL для snapshot трафика в Redis (часы)
     # Настройки суточных подписок
     DAILY_SUBSCRIPTIONS_ENABLED: bool = True  # Включить автоматическое списание для суточных тарифов
     DAILY_SUBSCRIPTIONS_CHECK_INTERVAL_MINUTES: int = 30  # Интервал проверки в минутах
@@ -656,6 +677,12 @@ class Settings(BaseSettings):
     SMTP_FROM_NAME: str = "VPN Service"
     SMTP_USE_TLS: bool = True
 
+    # Ban System Integration (BedolagaBan monitoring)
+    BAN_SYSTEM_ENABLED: bool = False
+    BAN_SYSTEM_API_URL: Optional[str] = None  # e.g., http://ban-server:8000
+    BAN_SYSTEM_API_TOKEN: Optional[str] = None
+    BAN_SYSTEM_REQUEST_TIMEOUT: int = 30
+
     @field_validator('MAIN_MENU_MODE', mode='before')
     @classmethod
     def normalize_main_menu_mode(cls, value: Optional[str]) -> str:
@@ -922,6 +949,41 @@ class Settings(BaseSettings):
 
     def get_remnawave_auto_sync_times(self) -> List[time]:
         return self.parse_daily_time_list(self.REMNAWAVE_AUTO_SYNC_TIMES)
+
+    def get_traffic_monitored_nodes(self) -> List[str]:
+        """Возвращает список UUID нод для мониторинга (пусто = все)"""
+        if not self.TRAFFIC_MONITORED_NODES:
+            return []
+        # Убираем комментарии (все после #)
+        value = self.TRAFFIC_MONITORED_NODES.split("#")[0].strip()
+        if not value:
+            return []
+        return [n.strip() for n in value.split(",") if n.strip()]
+
+    def get_traffic_ignored_nodes(self) -> List[str]:
+        """Возвращает список UUID нод для исключения из мониторинга"""
+        if not self.TRAFFIC_IGNORED_NODES:
+            return []
+        # Убираем комментарии (все после #)
+        value = self.TRAFFIC_IGNORED_NODES.split("#")[0].strip()
+        if not value:
+            return []
+        return [n.strip() for n in value.split(",") if n.strip()]
+
+    def get_traffic_excluded_user_uuids(self) -> List[str]:
+        """Возвращает список UUID пользователей для исключения из мониторинга (например, тунельные/служебные)"""
+        if not self.TRAFFIC_EXCLUDED_USER_UUIDS:
+            return []
+        # Убираем комментарии (все после #)
+        value = self.TRAFFIC_EXCLUDED_USER_UUIDS.split("#")[0].strip()
+        if not value:
+            return []
+        return [uuid.strip().lower() for uuid in value.split(",") if uuid.strip()]
+
+    def get_traffic_daily_check_time(self) -> Optional[time]:
+        """Возвращает время суточной проверки трафика"""
+        times = self.parse_daily_time_list(self.TRAFFIC_DAILY_CHECK_TIME)
+        return times[0] if times else None
 
     def get_display_name_banned_keywords(self) -> List[str]:
         raw_value = self.DISPLAY_NAME_BANNED_KEYWORDS
@@ -2333,6 +2395,24 @@ class Settings(BaseSettings):
         if self.SMTP_FROM_EMAIL:
             return self.SMTP_FROM_EMAIL
         return self.SMTP_USER
+
+    # Ban System helpers
+    def is_ban_system_enabled(self) -> bool:
+        return bool(self.BAN_SYSTEM_ENABLED)
+
+    def is_ban_system_configured(self) -> bool:
+        return bool(self.BAN_SYSTEM_API_URL and self.BAN_SYSTEM_API_TOKEN)
+
+    def get_ban_system_api_url(self) -> Optional[str]:
+        if self.BAN_SYSTEM_API_URL:
+            return self.BAN_SYSTEM_API_URL.rstrip('/')
+        return None
+
+    def get_ban_system_api_token(self) -> Optional[str]:
+        return self.BAN_SYSTEM_API_TOKEN
+
+    def get_ban_system_request_timeout(self) -> int:
+        return max(1, self.BAN_SYSTEM_REQUEST_TIMEOUT)
 
     model_config = {
         "env_file": ".env",

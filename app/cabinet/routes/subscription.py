@@ -1661,18 +1661,48 @@ def _convert_remnawave_block_to_step(block: Dict[str, Any], url_scheme: str = ""
 
 # Known app URL schemes (fallback if RemnaWave doesn't provide urlScheme)
 KNOWN_APP_URL_SCHEMES = {
+    # iOS
     "happ": "happ://add/",
     "streisand": "streisand://import/",
     "shadowrocket": "sub://",
-    "v2rayn": "v2rayng://install-config?url=",
-    "v2rayng": "v2rayng://install-config?url=",
+    "shadow rocket": "sub://",
+    "karing": "karing://install-config?url=",
+    "foxray": "foxray://yiguo.dev/sub/add/?url=",
+    "fox ray": "foxray://yiguo.dev/sub/add/?url=",
+    "v2box": "v2box://install-sub?url=",
+    "sing-box": "sing-box://import-remote-profile?url=",
+    "singbox": "sing-box://import-remote-profile?url=",
+    "quantumult x": "quantumult-x://add-resource?remote-resource=",
+    "quantumultx": "quantumult-x://add-resource?remote-resource=",
+    "quantumult": "quantumult-x://add-resource?remote-resource=",
+    "surge": "surge3://install-config?url=",
+    "loon": "loon://import?sub=",
+    "stash": "stash://install-config?url=",
+    # Android
+    "v2rayn": "v2rayng://install-sub?url=",
+    "v2rayng": "v2rayng://install-sub?url=",
+    "v2ray ng": "v2rayng://install-sub?url=",
+    "nekoray": "sn://subscription?url=",
+    "nekobox": "sn://subscription?url=",
+    "neko ray": "sn://subscription?url=",
+    "neko box": "sn://subscription?url=",
+    "surfboard": "surfboard://install-config?url=",
+    # PC (Windows/macOS/Linux)
     "clash": "clash://install-config?url=",
     "clash meta": "clash://install-config?url=",
     "clash verge": "clash://install-config?url=",
-    "hiddify": "hiddify://import/",
-    "nekoray": "sn://subscription?url=",
-    "nekobox": "sn://subscription?url=",
-    "karing": "karing://add/",
+    "clash verge rev": "clash://install-config?url=",
+    "clashx": "clashx://install-config?url=",
+    "clashx meta": "clash://install-config?url=",
+    "clashx pro": "clash://install-config?url=",
+    "flclash": "clash://install-config?url=",
+    "flclashx": "clash://install-config?url=",
+    "koala clash": "clash://install-config?url=",
+    "koalaclash": "clash://install-config?url=",
+    "hiddify": "hiddify://install-config/?url=",
+    "hiddify next": "hiddify://install-config/?url=",
+    "mihomo party": "clash://install-config?url=",
+    "mihomo": "clash://install-config?url=",
 }
 
 
@@ -1719,7 +1749,7 @@ def _convert_remnawave_app_to_cabinet(app: Dict[str, Any]) -> Dict[str, Any]:
         "id": app.get("name", "").lower().replace(" ", "-"),
         "name": app.get("name", ""),
         "isFeatured": app.get("featured", False),
-        "urlScheme": app.get("urlScheme", ""),
+        "urlScheme": url_scheme,  # Use resolved url_scheme (with fallback from app name)
         "isNeedBase64Encoding": app.get("isNeedBase64Encoding", False),
         "installationStep": installation_step,
         "addSubscriptionStep": subscription_step,
