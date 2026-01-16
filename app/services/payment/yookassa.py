@@ -782,9 +782,8 @@ class YooKassaPaymentMixin:
                                 exc_info=True,  # Добавляем полный стек вызовов для отладки
                             )
 
-                    # Отправляем уведомление пользователю (если не включен режим SHOW_ACTIVATION_PROMPT_AFTER_TOPUP,
-                    # т.к. в этом случае уведомление будет отправлено из auto_activate_subscription_after_topup)
-                    if getattr(self, "bot", None) and not settings.SHOW_ACTIVATION_PROMPT_AFTER_TOPUP:
+                    # Отправляем уведомление пользователю
+                    if getattr(self, "bot", None):
                         try:
                             # Передаем только простые данные, чтобы избежать проблем с ленивой загрузкой
                             await self._send_payment_success_notification(
@@ -834,14 +833,12 @@ class YooKassaPaymentMixin:
                                 has_saved_cart = False
 
                         # Умная автоактивация если автопокупка не сработала
-                        activation_notification_sent = False
                         if not auto_purchase_success:
                             try:
-                                _, activation_notification_sent = await auto_activate_subscription_after_topup(
+                                await auto_activate_subscription_after_topup(
                                     db,
                                     user,
                                     bot=getattr(self, "bot", None),
-                                    topup_amount=payment.amount_kopeks,
                                 )
                             except Exception as auto_activate_error:
                                 logger.error(
@@ -851,8 +848,7 @@ class YooKassaPaymentMixin:
                                     exc_info=True,
                                 )
 
-                        # Отправляем уведомление только если его ещё не отправили
-                        if has_saved_cart and getattr(self, "bot", None) and not activation_notification_sent:
+                        if has_saved_cart and getattr(self, "bot", None):
                             # Если у пользователя есть сохраненная корзина,
                             # отправляем ему уведомление с кнопкой вернуться к оформлению
                             from app.localization.texts import get_texts
