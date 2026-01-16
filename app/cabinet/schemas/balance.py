@@ -1,7 +1,7 @@
 """Balance and payment schemas for cabinet."""
 
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 
 
@@ -36,6 +36,13 @@ class TransactionListResponse(BaseModel):
     pages: int
 
 
+class PaymentOptionResponse(BaseModel):
+    """Payment method option (e.g. Platega sub-methods)."""
+    id: str
+    name: str
+    description: Optional[str] = None
+
+
 class PaymentMethodResponse(BaseModel):
     """Available payment method."""
     id: str
@@ -44,6 +51,7 @@ class PaymentMethodResponse(BaseModel):
     min_amount_kopeks: int
     max_amount_kopeks: int
     is_available: bool = True
+    options: Optional[List[Dict[str, Any]]] = None
 
 
 class TopUpRequest(BaseModel):
