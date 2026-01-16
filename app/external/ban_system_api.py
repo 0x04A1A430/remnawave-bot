@@ -352,6 +352,64 @@ class BanSystemAPI:
         """
         Check API health.
 
-        GET /api/health
+        GET /health
         """
-        return await self._request("GET", "/api/health")
+        return await self._request("GET", "/health")
+
+    async def health_detailed(self) -> Dict[str, Any]:
+        """
+        Get detailed health information.
+
+        GET /health/detailed
+        """
+        return await self._request("GET", "/health/detailed")
+
+    # === Settings ===
+
+    async def get_settings(self) -> Dict[str, Any]:
+        """
+        Get all settings with their definitions.
+
+        GET /api/settings
+        """
+        return await self._request("GET", "/api/settings")
+
+    async def get_setting(self, key: str) -> Dict[str, Any]:
+        """
+        Get a specific setting value.
+
+        GET /api/settings/{key}
+        """
+        return await self._request("GET", f"/api/settings/{key}")
+
+    async def set_setting(self, key: str, value: Any) -> Dict[str, Any]:
+        """
+        Set a setting value.
+
+        POST /api/settings/{key}?value={value}
+        """
+        return await self._request("POST", f"/api/settings/{key}", params={"value": value})
+
+    async def toggle_setting(self, key: str) -> Dict[str, Any]:
+        """
+        Toggle a boolean setting.
+
+        POST /api/settings/{key}/toggle
+        """
+        return await self._request("POST", f"/api/settings/{key}/toggle")
+
+    async def whitelist_add(self, username: str) -> Dict[str, Any]:
+        """
+        Add user to whitelist.
+
+        POST /api/settings/whitelist/add?username={username}
+        """
+        return await self._request("POST", "/api/settings/whitelist/add", params={"username": username})
+
+    async def whitelist_remove(self, username: str) -> Dict[str, Any]:
+        """
+        Remove user from whitelist.
+
+        POST /api/settings/whitelist/remove?username={username}
+        """
+        return await self._request("POST", "/api/settings/whitelist/remove", params={"username": username})

@@ -230,3 +230,111 @@ class BanTrafficViolationsResponse(BaseModel):
     """List of traffic violations."""
     violations: List[BanTrafficViolationItem] = []
     total: int = 0
+
+
+class BanTrafficTopItem(BaseModel):
+    """Top user by traffic."""
+    username: str
+    bytes_total: int = 0
+    bytes_limit: Optional[int] = None
+    over_limit: bool = False
+
+
+class BanTrafficResponse(BaseModel):
+    """Full traffic statistics response."""
+    enabled: bool = False
+    stats: Optional[Dict[str, Any]] = None
+    top_users: List[BanTrafficTopItem] = []
+    recent_violations: List[BanTrafficViolationItem] = []
+
+
+# === Settings ===
+
+class BanSettingDefinition(BaseModel):
+    """Setting definition with value."""
+    key: str
+    value: Any
+    type: str  # bool, int, str, list
+    min_value: Optional[int] = None
+    max_value: Optional[int] = None
+    editable: bool = True
+    description: Optional[str] = None
+    category: Optional[str] = None
+
+
+class BanSettingsResponse(BaseModel):
+    """All settings response."""
+    settings: List[BanSettingDefinition] = []
+
+
+class BanSettingUpdateRequest(BaseModel):
+    """Request to update a setting."""
+    value: Any
+
+
+class BanWhitelistRequest(BaseModel):
+    """Request to add/remove from whitelist."""
+    username: str = Field(..., min_length=1)
+
+
+# === Reports ===
+
+class BanReportTopViolator(BaseModel):
+    """Top violator in report."""
+    username: str
+    count: int = 0
+
+
+class BanReportResponse(BaseModel):
+    """Period report response."""
+    period_hours: int = 24
+    current_users: int = 0
+    current_ips: int = 0
+    punishment_stats: Optional[Dict[str, Any]] = None
+    top_violators: List[BanReportTopViolator] = []
+
+
+# === Health ===
+
+class BanHealthComponent(BaseModel):
+    """Health component status."""
+    name: str
+    status: str  # healthy, degraded, unhealthy
+    message: Optional[str] = None
+    details: Optional[Dict[str, Any]] = None
+
+
+class BanHealthResponse(BaseModel):
+    """Health status response."""
+    status: str  # healthy, degraded, unhealthy
+    uptime: Optional[int] = None
+    components: List[BanHealthComponent] = []
+
+
+class BanHealthDetailedResponse(BaseModel):
+    """Detailed health response."""
+    status: str
+    uptime: Optional[int] = None
+    components: Dict[str, Any] = {}
+
+
+# === Agent History ===
+
+class BanAgentHistoryItem(BaseModel):
+    """Agent history item."""
+    timestamp: datetime
+    sent_total: int = 0
+    dropped_total: int = 0
+    queue_size: int = 0
+    batches_total: int = 0
+
+
+class BanAgentHistoryResponse(BaseModel):
+    """Agent history response."""
+    node: str
+    hours: int = 24
+    records: int = 0
+    delta: Optional[Dict[str, Any]] = None
+    first: Optional[Dict[str, Any]] = None
+    last: Optional[Dict[str, Any]] = None
+    history: List[BanAgentHistoryItem] = []

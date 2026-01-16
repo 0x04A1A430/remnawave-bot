@@ -30,6 +30,18 @@ from ..schemas.ban_system import (
     BanAgentsSummary,
     BanTrafficViolationsResponse,
     BanTrafficViolationItem,
+    BanTrafficResponse,
+    BanTrafficTopItem,
+    BanSettingsResponse,
+    BanSettingDefinition,
+    BanWhitelistRequest,
+    BanReportResponse,
+    BanReportTopViolator,
+    BanHealthResponse,
+    BanHealthComponent,
+    BanHealthDetailedResponse,
+    BanAgentHistoryResponse,
+    BanAgentHistoryItem,
 )
 
 logger = logging.getLogger(__name__)
@@ -583,4 +595,343 @@ async def get_traffic_violations(
     return BanTrafficViolationsResponse(
         violations=violations,
         total=len(violations),
+    )
+
+
+# === Full Traffic Stats ===
+
+@router.get("/traffic", response_model=BanTrafficResponse)
+async def get_traffic(
+    admin: User = Depends(get_current_admin_user),
+) -> BanTrafficResponse:
+    """Get full traffic statistics including top users."""
+    api = _get_ban_api()
+    data = await _api_request(api, "get_traffic")
+
+    top_users = []
+    for u in data.get("top_users", []):
+        top_users.append(BanTrafficTopItem(
+            username=u.get("username", ""),
+            bytes_total=u.get("bytes_total", u.get("total_bytes", 0)),
+            bytes_limit=u.get("bytes_limit"),
+            over_limit=u.get("over_limit", False),
+        ))
+
+    violations = []
+    for v in data.get("recent_violations", []):
+        violations.append(BanTrafficViolationItem(
+            id=v.get("id"),
+            username=v.get("username", ""),
+            email=v.get("email"),
+            violation_type=v.get("violation_type", v.get("type", "")),
+            description=v.get("description"),
+            bytes_used=v.get("bytes_used", 0),
+            bytes_limit=v.get("bytes_limit", 0),
+            detected_at=v.get("detected_at"),
+            resolved=v.get("resolved", False),
+        ))
+
+    return BanTrafficResponse(
+        enabled=data.get("enabled", False),
+        stats=data.get("stats"),
+        top_users=top_users,
+        recent_violations=violations,
+    )
+
+
+@router.get("/traffic/top")
+async def get_traffic_top(
+    limit: int = Query(20, ge=1, le=100),
+    admin: User = Depends(get_current_admin_user),
+) -> List[BanTrafficTopItem]:
+    """Get top users by traffic."""
+    api = _get_ban_api()
+    data = await _api_request(api, "get_traffic_top", limit=limit)
+
+    top_users = []
+    users_data = data if isinstance(data, list) else data.get("users", [])
+    for u in users_data:
+        top_users.append(BanTrafficTopItem(
+            username=u.get("username", ""),
+            bytes_total=u.get("bytes_total", u.get("total_bytes", 0)),
+            bytes_limit=u.get("bytes_limit"),
+            over_limit=u.get("over_limit", False),
+        ))
+
+    return top_users
+
+
+# === Settings ===
+
+@router.get("/settings", response_model=BanSettingsResponse)
+async def get_settings(
+    admin: User = Depends(get_current_admin_user),
+) -> BanSettingsResponse:
+    """Get all Ban System settings."""
+    api = _get_ban_api()
+    data = await _api_request(api, "get_settings")
+
+    settings_list = []
+    settings_data = data.get("settings", {}) if isinstance(data, dict) else {}
+
+    for key, info in settings_data.items():
+        settings_list.append(BanSettingDefinition(
+            key=key,
+            value=info.get("value"),
+            type=info.get("type", "str"),
+            min_value=info.get("min"),
+            max_value=info.get("max"),
+            editable=info.get("editable", True),
+            description=info.get("description"),
+            category=info.get("category"),
+        ))
+
+    return BanSettingsResponse(settings=settings_list)
+
+
+@router.get("/settings/{key}")
+async def get_setting(
+    key: str,
+    admin: User = Depends(get_current_admin_user),
+) -> BanSettingDefinition:
+    """Get a specific setting."""
+    api = _get_ban_api()
+    data = await _api_request(api, "get_setting", key=key)
+
+    return BanSettingDefinition(
+        key=key,
+        value=data.get("value"),
+        type=data.get("type", "str"),
+        min_value=data.get("min"),
+        max_value=data.get("max"),
+        editable=data.get("editable", True),
+        description=data.get("description"),
+        category=data.get("category"),
+    )
+
+
+@router.post("/settings/{key}")
+async def set_setting(
+    key: str,
+    value: str = Query(...),
+    admin: User = Depends(get_current_admin_user),
+) -> BanSettingDefinition:
+    """Set a setting value."""
+    api = _get_ban_api()
+    data = await _api_request(api, "set_setting", key=key, value=value)
+
+    logger.info(f"Admin {admin.id} changed Ban System setting {key} to {value}")
+
+    return BanSettingDefinition(
+        key=key,
+        value=data.get("value"),
+        type=data.get("type", "str"),
+        min_value=data.get("min"),
+        max_value=data.get("max"),
+        editable=data.get("editable", True),
+        description=data.get("description"),
+        category=data.get("category"),
+    )
+
+
+@router.post("/settings/{key}/toggle")
+async def toggle_setting(
+    key: str,
+    admin: User = Depends(get_current_admin_user),
+) -> BanSettingDefinition:
+    """Toggle a boolean setting."""
+    api = _get_ban_api()
+    data = await _api_request(api, "toggle_setting", key=key)
+
+    logger.info(f"Admin {admin.id} toggled Ban System setting {key}")
+
+    return BanSettingDefinition(
+        key=key,
+        value=data.get("value"),
+        type=data.get("type", "bool"),
+        min_value=data.get("min"),
+        max_value=data.get("max"),
+        editable=data.get("editable", True),
+        description=data.get("description"),
+        category=data.get("category"),
+    )
+
+
+# === Whitelist ===
+
+@router.post("/settings/whitelist/add", response_model=UnbanResponse)
+async def whitelist_add(
+    request: BanWhitelistRequest,
+    admin: User = Depends(get_current_admin_user),
+) -> UnbanResponse:
+    """Add user to whitelist."""
+    api = _get_ban_api()
+    try:
+        await _api_request(api, "whitelist_add", username=request.username)
+        logger.info(f"Admin {admin.id} added {request.username} to Ban System whitelist")
+        return UnbanResponse(success=True, message=f"User {request.username} added to whitelist")
+    except HTTPException:
+        raise
+    except Exception as e:
+        return UnbanResponse(success=False, message=str(e))
+
+
+@router.post("/settings/whitelist/remove", response_model=UnbanResponse)
+async def whitelist_remove(
+    request: BanWhitelistRequest,
+    admin: User = Depends(get_current_admin_user),
+) -> UnbanResponse:
+    """Remove user from whitelist."""
+    api = _get_ban_api()
+    try:
+        await _api_request(api, "whitelist_remove", username=request.username)
+        logger.info(f"Admin {admin.id} removed {request.username} from Ban System whitelist")
+        return UnbanResponse(success=True, message=f"User {request.username} removed from whitelist")
+    except HTTPException:
+        raise
+    except Exception as e:
+        return UnbanResponse(success=False, message=str(e))
+
+
+# === Reports ===
+
+@router.get("/report", response_model=BanReportResponse)
+async def get_report(
+    hours: int = Query(24, ge=1, le=168),
+    admin: User = Depends(get_current_admin_user),
+) -> BanReportResponse:
+    """Get period report."""
+    api = _get_ban_api()
+    data = await _api_request(api, "get_stats_period", hours=hours)
+
+    top_violators = []
+    punishment_stats = data.get("punishment_stats", {}) or {}
+    for v in punishment_stats.get("top_violators", []):
+        top_violators.append(BanReportTopViolator(
+            username=v.get("username", ""),
+            count=v.get("count", 0),
+        ))
+
+    return BanReportResponse(
+        period_hours=hours,
+        current_users=data.get("current_users", 0),
+        current_ips=data.get("current_ips", 0),
+        punishment_stats=punishment_stats,
+        top_violators=top_violators,
+    )
+
+
+# === Health ===
+
+@router.get("/health", response_model=BanHealthResponse)
+async def get_health(
+    admin: User = Depends(get_current_admin_user),
+) -> BanHealthResponse:
+    """Get Ban System health status."""
+    api = _get_ban_api()
+    data = await _api_request(api, "health_check")
+
+    components = []
+    for name, info in data.get("components", {}).items():
+        if isinstance(info, dict):
+            components.append(BanHealthComponent(
+                name=name,
+                status=info.get("status", "unknown"),
+                message=info.get("message"),
+                details=info.get("details"),
+            ))
+        else:
+            components.append(BanHealthComponent(
+                name=name,
+                status=str(info) if info else "unknown",
+            ))
+
+    return BanHealthResponse(
+        status=data.get("status", "unknown"),
+        uptime=data.get("uptime"),
+        components=components,
+    )
+
+
+@router.get("/health/detailed", response_model=BanHealthDetailedResponse)
+async def get_health_detailed(
+    admin: User = Depends(get_current_admin_user),
+) -> BanHealthDetailedResponse:
+    """Get detailed health information."""
+    api = _get_ban_api()
+    data = await _api_request(api, "health_detailed")
+
+    return BanHealthDetailedResponse(
+        status=data.get("status", "unknown"),
+        uptime=data.get("uptime"),
+        components=data.get("components", {}),
+    )
+
+
+# === Agent History ===
+
+@router.get("/agents/{node_name}/history", response_model=BanAgentHistoryResponse)
+async def get_agent_history(
+    node_name: str,
+    hours: int = Query(24, ge=1, le=168),
+    admin: User = Depends(get_current_admin_user),
+) -> BanAgentHistoryResponse:
+    """Get agent statistics history."""
+    api = _get_ban_api()
+    data = await _api_request(api, "get_agent_history", node_name=node_name, hours=hours)
+
+    history = []
+    for item in data.get("history", []):
+        history.append(BanAgentHistoryItem(
+            timestamp=item.get("timestamp"),
+            sent_total=item.get("sent_total", 0),
+            dropped_total=item.get("dropped_total", 0),
+            queue_size=item.get("queue_size", 0),
+            batches_total=item.get("batches_total", 0),
+        ))
+
+    return BanAgentHistoryResponse(
+        node=data.get("node", node_name),
+        hours=data.get("hours", hours),
+        records=data.get("records", len(history)),
+        delta=data.get("delta"),
+        first=data.get("first"),
+        last=data.get("last"),
+        history=history,
+    )
+
+
+# === User Punishment History ===
+
+@router.get("/users/{email}/history", response_model=BanHistoryResponse)
+async def get_user_punishment_history(
+    email: str,
+    limit: int = Query(20, ge=1, le=100),
+    admin: User = Depends(get_current_admin_user),
+) -> BanHistoryResponse:
+    """Get punishment history for a specific user."""
+    api = _get_ban_api()
+    data = await _api_request(api, "get_punishment_history", query=email, limit=limit)
+
+    items = []
+    history_data = data if isinstance(data, list) else data.get("items", [])
+    for p in history_data:
+        items.append(BanPunishmentItem(
+            id=p.get("id"),
+            user_id=p.get("user_id", ""),
+            uuid=p.get("uuid"),
+            username=p.get("username", ""),
+            reason=p.get("reason"),
+            punished_at=p.get("punished_at"),
+            enable_at=p.get("enable_at"),
+            ip_count=p.get("ip_count", 0),
+            limit=p.get("limit", 0),
+            enabled=p.get("enabled", False),
+            enabled_at=p.get("enabled_at"),
+            node_name=p.get("node_name"),
+        ))
+
+    return BanHistoryResponse(
+        items=items,
+        total=len(items),
     )
