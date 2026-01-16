@@ -399,15 +399,18 @@ async def get_nodes(
     nodes_data = data if isinstance(data, list) else data.get("nodes", [])
     online_count = 0
     for n in nodes_data:
-        is_connected = n.get("is_connected", False)
+        # API returns is_online, not is_connected
+        is_connected = n.get("is_online", n.get("is_connected", False))
         if is_connected:
             online_count += 1
         nodes.append(BanNodeItem(
             name=n.get("name", ""),
             address=n.get("address"),
             is_connected=is_connected,
-            last_seen=n.get("last_seen"),
-            users_count=n.get("users_count", 0),
+            # API returns last_heartbeat, not last_seen
+            last_seen=n.get("last_heartbeat", n.get("last_seen")),
+            # API returns unique_users, not users_count
+            users_count=n.get("unique_users", n.get("users_count", 0)),
             agent_stats=n.get("agent_stats"),
         ))
 
@@ -438,29 +441,63 @@ async def get_agents(
     )
 
     agents = []
-    agents_data = data.get("agents", []) if isinstance(data, dict) else data
+    agents_data = data.get("agents", {}) if isinstance(data, dict) else data
     online_count = 0
-    for a in agents_data:
-        is_online = a.get("is_online", False)
-        if is_online:
-            online_count += 1
-        agents.append(BanAgentItem(
-            node_name=a.get("node_name", ""),
-            sent_total=a.get("sent_total", 0),
-            dropped_total=a.get("dropped_total", 0),
-            batches_total=a.get("batches_total", 0),
-            reconnects=a.get("reconnects", 0),
-            failures=a.get("failures", 0),
-            queue_size=a.get("queue_size", 0),
-            queue_max=a.get("queue_max", 0),
-            dedup_checked=a.get("dedup_checked", 0),
-            dedup_skipped=a.get("dedup_skipped", 0),
-            filter_checked=a.get("filter_checked", 0),
-            filter_filtered=a.get("filter_filtered", 0),
-            health=a.get("health", "unknown"),
-            is_online=is_online,
-            last_report=a.get("last_report"),
-        ))
+
+    # API returns agents as dict: {"node_name": {stats...}, ...}
+    if isinstance(agents_data, dict):
+        for node_name, agent_info in agents_data.items():
+            # Extract metrics from nested structure
+            stats = agent_info.get("stats", {}) or {}
+            metrics = stats.get("metrics", {}) or {}
+            sent_info = metrics.get("sent", {}) or {}
+            queue_info = metrics.get("queue", {}) or {}
+            conn_info = metrics.get("connection", {}) or {}
+
+            is_online = agent_info.get("is_online", False)
+            if is_online:
+                online_count += 1
+
+            agents.append(BanAgentItem(
+                node_name=node_name,
+                sent_total=sent_info.get("total", 0),
+                dropped_total=sent_info.get("dropped", 0),
+                batches_total=sent_info.get("batches", 0),
+                reconnects=conn_info.get("reconnects", 0),
+                failures=conn_info.get("failures", sent_info.get("failed", 0)),
+                queue_size=queue_info.get("current", 0),
+                queue_max=queue_info.get("high_watermark", 0),
+                dedup_checked=0,
+                dedup_skipped=0,
+                filter_checked=0,
+                filter_filtered=0,
+                health=agent_info.get("health", "unknown"),
+                is_online=is_online,
+                last_report=agent_info.get("updated_at"),
+            ))
+    else:
+        # Fallback for list format
+        for a in agents_data:
+            is_online = a.get("is_online", False)
+            if is_online:
+                online_count += 1
+            agents.append(BanAgentItem(
+                node_name=a.get("node_name", ""),
+                sent_total=a.get("sent_total", 0),
+                dropped_total=a.get("dropped_total", 0),
+                batches_total=a.get("batches_total", 0),
+                reconnects=a.get("reconnects", 0),
+                failures=a.get("failures", 0),
+                queue_size=a.get("queue_size", 0),
+                queue_max=a.get("queue_max", 0),
+                dedup_checked=a.get("dedup_checked", 0),
+                dedup_skipped=a.get("dedup_skipped", 0),
+                filter_checked=a.get("filter_checked", 0),
+                filter_filtered=a.get("filter_filtered", 0),
+                health=a.get("health", "unknown"),
+                is_online=is_online,
+                last_report=a.get("last_report"),
+            ))
 
     summary = None
     if isinstance(data, dict) and "summary" in data:
