@@ -5611,6 +5611,13 @@ async def confirm_admin_tariff_change(
         subscription.connected_squads = tariff.allowed_squads or []
         subscription.updated_at = datetime.utcnow()
 
+        # Сбрасываем докупленный трафик при смене тарифа
+        from app.database.models import TrafficPurchase
+        from sqlalchemy import delete as sql_delete
+        await db.execute(sql_delete(TrafficPurchase).where(TrafficPurchase.subscription_id == subscription.id))
+        subscription.purchased_traffic_gb = 0
+        subscription.traffic_reset_at = None
+
         await db.commit()
 
         # Синхронизируем с RemnaWave
