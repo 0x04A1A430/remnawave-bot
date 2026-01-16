@@ -24,6 +24,8 @@ from sqlalchemy import select
 from app.config import settings, PERIOD_PRICES
 from app.utils.pricing_utils import format_period_description
 from app.services.subscription_service import SubscriptionService
+from app.services.system_settings_service import bot_configuration_service
+from app.services.remnawave_service import RemnaWaveService
 from app.services.subscription_purchase_service import (
     MiniAppSubscriptionPurchaseService,
     PurchaseValidationError,
@@ -1437,7 +1439,7 @@ async def get_device_price(
 
 # ============ App Config for Connection ============
 
-def _load_app_config() -> Dict[str, Any]:
+def _load_app_config_from_file() -> Dict[str, Any]:
     """Load app-config.json file."""
     try:
         config_path = settings.get_app_config_path()
@@ -1448,6 +1450,115 @@ def _load_app_config() -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Failed to load app-config.json: {e}")
     return {}
+
+
+def _get_remnawave_config_uuid() -> Optional[str]:
+    """Get RemnaWave config UUID from system settings or env."""
+    try:
+        return bot_configuration_service.get_current_value("CABINET_REMNA_SUB_CONFIG")
+    except Exception:
+        return settings.CABINET_REMNA_SUB_CONFIG
+
+
+def _convert_remnawave_block_to_step(block: Dict[str, Any]) -> Dict[str, Any]:
+    """Convert RemnaWave block format to cabinet step format."""
+    step = {
+        "description": block.get("description", {}),
+    }
+    if block.get("title"):
+        step["title"] = block["title"]
+    if block.get("buttons"):
+        step["buttons"] = [
+            {
+                "buttonLink": btn.get("url", ""),
+                "buttonText": btn.get("text", {}),
+            }
+            for btn in block["buttons"]
+        ]
+    return step
+
+
+def _convert_remnawave_app_to_cabinet(app: Dict[str, Any]) -> Dict[str, Any]:
+    """Convert RemnaWave app format to cabinet app format."""
+    blocks = app.get("blocks", [])
+
+    # Map blocks to steps based on position
+    installation_step = _convert_remnawave_block_to_step(blocks[0]) if len(blocks) > 0 else {"description": {}}
+    subscription_step = _convert_remnawave_block_to_step(blocks[1]) if len(blocks) > 1 else {"description": {}}
+    connect_step = _convert_remnawave_block_to_step(blocks[2]) if len(blocks) > 2 else {"description": {}}
+
+    return {
+        "id": app.get("name", "").lower().replace(" ", "-"),
+        "name": app.get("name", ""),
+        "isFeatured": app.get("featured", False),
+        "urlScheme": app.get("urlScheme", ""),
+        "isNeedBase64Encoding": app.get("isNeedBase64Encoding", False),
+        "installationStep": installation_step,
+        "addSubscriptionStep": subscription_step,
+        "connectAndUseStep": connect_step,
+    }
+
+
+def _convert_remnawave_config_to_cabinet(config: Dict[str, Any]) -> Dict[str, Any]:
+    """Convert RemnaWave config format to cabinet format."""
+    platforms = {}
+    remnawave_platforms = config.get("platforms", {})
+
+    for platform_key, platform_data in remnawave_platforms.items():
+        if not isinstance(platform_data, dict):
+            continue
+        apps = platform_data.get("apps", [])
+        if not isinstance(apps, list):
+            continue
+
+        cabinet_apps = []
+        for app in apps:
+            if isinstance(app, dict):
+                cabinet_apps.append(_convert_remnawave_app_to_cabinet(app))
+
+        if cabinet_apps:
+            platforms[platform_key] = cabinet_apps
+
+    # Convert branding
+    branding = {}
+    if config.get("brandingSettings"):
+        branding = {
+            "name": config["brandingSettings"].get("name", ""),
+            "logoUrl": config["brandingSettings"].get("logoUrl", ""),
+            "supportUrl": config["brandingSettings"].get("supportUrl", ""),
+        }
+
+    return {
+        "config": {
+            "additionalLocales": ["zh", "fa"],
+            "branding": branding,
+        },
+        "platforms": platforms,
+    }
+
+
+async def _load_app_config_async() -> Dict[str, Any]:
+    """Load app config from RemnaWave (if configured) or local file."""
+    remnawave_uuid = _get_remnawave_config_uuid()
+
+    if remnawave_uuid:
+        try:
+            service = RemnaWaveService()
+            async with service.get_api_client() as api:
+                config = await api.get_subscription_page_config(remnawave_uuid)
+                if config and config.config:
+                    logger.debug(f"Loaded app config from RemnaWave: {remnawave_uuid}")
+                    return _convert_remnawave_config_to_cabinet(config.config)
+        except Exception as e:
+            logger.warning(f"Failed to load RemnaWave config, falling back to file: {e}")
+
+    # Fallback to local file
+    return _load_app_config_from_file()
+
+
+def _load_app_config() -> Dict[str, Any]:
+    """Load app-config.json file (sync version for compatibility)."""
+    return _load_app_config_from_file()
 
 
 def _create_deep_link(app: Dict[str, Any], subscription_url: str) -> Optional[str]:
@@ -1772,7 +1883,8 @@ async def get_app_config(
     if user.subscription:
         subscription_url = user.subscription.subscription_url
 
-    config = _load_app_config()
+    # Load config from RemnaWave (if configured) or local file
+    config = await _load_app_config_async()
     platforms_raw = config.get("platforms", {})
 
     if not isinstance(platforms_raw, dict):
