@@ -1,6 +1,7 @@
 import logging
 from aiogram import Dispatcher, types, F, Bot
 from aiogram.fsm.context import FSMContext
+from aiogram.types import InaccessibleMessage
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.states import PromoCodeStates
@@ -22,12 +23,19 @@ async def show_promocode_menu(
     state: FSMContext
 ):
     texts = get_texts(db_user.language)
-    
-    await callback.message.edit_text(
-        texts.PROMOCODE_ENTER,
-        reply_markup=get_back_keyboard(db_user.language)
-    )
-    
+
+    # Если сообщение недоступно, отправляем новое
+    if isinstance(callback.message, InaccessibleMessage):
+        await callback.message.answer(
+            texts.PROMOCODE_ENTER,
+            reply_markup=get_back_keyboard(db_user.language)
+        )
+    else:
+        await callback.message.edit_text(
+            texts.PROMOCODE_ENTER,
+            reply_markup=get_back_keyboard(db_user.language)
+        )
+
     await state.set_state(PromoCodeStates.waiting_for_code)
     await callback.answer()
 

@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.types import FSInputFile, InputMediaPhoto, Message
+from aiogram.types import FSInputFile, InaccessibleMessage, InputMediaPhoto, Message
 
 from app.config import settings
 from app.localization.texts import get_texts
@@ -12,6 +12,8 @@ _PRIVACY_RESTRICTED_CODE = "BUTTON_USER_PRIVACY_RESTRICTED"
 
 
 def is_qr_message(message: Message) -> bool:
+    if isinstance(message, InaccessibleMessage):
+        return False
     return bool(message.caption and message.caption.startswith("\U0001F517 Ваша реферальная ссылка"))
 
 

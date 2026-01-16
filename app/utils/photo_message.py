@@ -3,7 +3,7 @@ import logging
 
 from aiogram import types
 from aiogram.exceptions import TelegramBadRequest, TelegramNetworkError
-from aiogram.types import FSInputFile, InputMediaPhoto
+from aiogram.types import FSInputFile, InaccessibleMessage, InputMediaPhoto
 
 from app.config import settings
 from .message_patch import (
@@ -21,6 +21,9 @@ RETRY_DELAY = 0.5
 
 
 def _resolve_media(message: types.Message):
+    # Если сообщение недоступно, возвращаем логотип по умолчанию
+    if isinstance(message, InaccessibleMessage):
+        return FSInputFile(LOGO_PATH)
     # Всегда используем логотип если включен режим логотипа,
     # кроме специальных случаев (QR сообщения)
     if settings.ENABLE_LOGO_MODE and not is_qr_message(message):
@@ -81,6 +84,35 @@ async def edit_or_answer_photo(
     force_text: bool = False,
 ) -> None:
     resolved_parse_mode = parse_mode or "HTML"
+
+    # Если сообщение недоступно, отправляем новое сообщение
+    if isinstance(callback.message, InaccessibleMessage):
+        try:
+            if settings.ENABLE_LOGO_MODE and LOGO_PATH.exists():
+                await callback.message.answer_photo(
+                    photo=FSInputFile(LOGO_PATH),
+                    caption=caption,
+                    reply_markup=keyboard,
+                    parse_mode=resolved_parse_mode,
+                )
+            else:
+                await callback.message.answer(
+                    caption,
+                    reply_markup=keyboard,
+                    parse_mode=resolved_parse_mode,
+                )
+        except Exception as e:
+            logger.warning("Не удалось отправить новое сообщение для InaccessibleMessage: %s", e)
+            try:
+                await callback.message.answer(
+                    caption,
+                    reply_markup=keyboard,
+                    parse_mode=resolved_parse_mode,
+                )
+            except Exception:
+                pass
+        return
+
     # Если режим логотипа выключен или требуется текстовое сообщение — работаем текстом
     if force_text or not settings.ENABLE_LOGO_MODE:
         try:
