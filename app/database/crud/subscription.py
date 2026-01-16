@@ -24,10 +24,13 @@ logger = logging.getLogger(__name__)
 async def get_subscription_by_user_id(db: AsyncSession, user_id: int) -> Optional[Subscription]:
     result = await db.execute(
         select(Subscription)
-        .options(selectinload(Subscription.user))
+        .options(
+            selectinload(Subscription.user),
+            selectinload(Subscription.tariff),
+        )
         .where(Subscription.user_id == user_id)
         .order_by(Subscription.created_at.desc())
-        .limit(1) 
+        .limit(1)
     )
     subscription = result.scalar_one_or_none()
     
