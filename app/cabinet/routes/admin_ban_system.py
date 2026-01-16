@@ -663,6 +663,44 @@ async def get_traffic_top(
 
 # === Settings ===
 
+def _parse_setting_response(key: str, data: Any, default_type: str = "str") -> BanSettingDefinition:
+    """Parse setting response from API."""
+    if isinstance(data, dict) and "value" in data:
+        return BanSettingDefinition(
+            key=key,
+            value=data.get("value"),
+            type=data.get("type", default_type),
+            min_value=data.get("min"),
+            max_value=data.get("max"),
+            editable=data.get("editable", True),
+            description=data.get("description"),
+            category=data.get("category"),
+        )
+    else:
+        # Простое значение или dict без "value"
+        value = data.get("value", data) if isinstance(data, dict) else data
+        value_type = default_type
+        if isinstance(value, bool):
+            value_type = "bool"
+        elif isinstance(value, int):
+            value_type = "int"
+        elif isinstance(value, float):
+            value_type = "float"
+        elif isinstance(value, list):
+            value_type = "list"
+
+        return BanSettingDefinition(
+            key=key,
+            value=value,
+            type=value_type,
+            min_value=None,
+            max_value=None,
+            editable=True,
+            description=None,
+            category=None,
+        )
+
+
 @router.get("/settings", response_model=BanSettingsResponse)
 async def get_settings(
     admin: User = Depends(get_current_admin_user),
@@ -675,16 +713,43 @@ async def get_settings(
     settings_data = data.get("settings", {}) if isinstance(data, dict) else {}
 
     for key, info in settings_data.items():
-        settings_list.append(BanSettingDefinition(
-            key=key,
-            value=info.get("value"),
-            type=info.get("type", "str"),
-            min_value=info.get("min"),
-            max_value=info.get("max"),
-            editable=info.get("editable", True),
-            description=info.get("description"),
-            category=info.get("category"),
-        ))
+        # API может возвращать настройки в двух форматах:
+        # 1. {"key": {"value": ..., "type": ...}} - с метаданными
+        # 2. {"key": value} - просто значение
+        if isinstance(info, dict) and "value" in info:
+            # Формат с метаданными
+            settings_list.append(BanSettingDefinition(
+                key=key,
+                value=info.get("value"),
+                type=info.get("type", "str"),
+                min_value=info.get("min"),
+                max_value=info.get("max"),
+                editable=info.get("editable", True),
+                description=info.get("description"),
+                category=info.get("category"),
+            ))
+        else:
+            # Простой формат - определяем тип по значению
+            value_type = "str"
+            if isinstance(info, bool):
+                value_type = "bool"
+            elif isinstance(info, int):
+                value_type = "int"
+            elif isinstance(info, float):
+                value_type = "float"
+            elif isinstance(info, list):
+                value_type = "list"
+
+            settings_list.append(BanSettingDefinition(
+                key=key,
+                value=info,
+                type=value_type,
+                min_value=None,
+                max_value=None,
+                editable=True,
+                description=None,
+                category=None,
+            ))
 
     return BanSettingsResponse(settings=settings_list)
 
@@ -698,16 +763,7 @@ async def get_setting(
     api = _get_ban_api()
     data = await _api_request(api, "get_setting", key=key)
 
-    return BanSettingDefinition(
-        key=key,
-        value=data.get("value"),
-        type=data.get("type", "str"),
-        min_value=data.get("min"),
-        max_value=data.get("max"),
-        editable=data.get("editable", True),
-        description=data.get("description"),
-        category=data.get("category"),
-    )
+    return _parse_setting_response(key, data)
 
 
 @router.post("/settings/{key}")
@@ -722,16 +778,7 @@ async def set_setting(
 
     logger.info(f"Admin {admin.id} changed Ban System setting {key} to {value}")
 
-    return BanSettingDefinition(
-        key=key,
-        value=data.get("value"),
-        type=data.get("type", "str"),
-        min_value=data.get("min"),
-        max_value=data.get("max"),
-        editable=data.get("editable", True),
-        description=data.get("description"),
-        category=data.get("category"),
-    )
+    return _parse_setting_response(key, data)
 
 
 @router.post("/settings/{key}/toggle")
@@ -745,16 +792,7 @@ async def toggle_setting(
 
     logger.info(f"Admin {admin.id} toggled Ban System setting {key}")
 
-    return BanSettingDefinition(
-        key=key,
-        value=data.get("value"),
-        type=data.get("type", "bool"),
-        min_value=data.get("min"),
-        max_value=data.get("max"),
-        editable=data.get("editable", True),
-        description=data.get("description"),
-        category=data.get("category"),
-    )
+    return _parse_setting_response(key, data, default_type="bool")
 
 
 # === Whitelist ===
