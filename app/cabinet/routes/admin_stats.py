@@ -8,6 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 
+from sqlalchemy import select, func, and_
+
 from app.database.crud.subscription import get_subscriptions_statistics
 from app.database.crud.transaction import get_transactions_statistics, get_revenue_by_period
 from app.database.crud.server_squad import get_server_statistics
@@ -15,7 +17,7 @@ from app.services.remnawave_service import RemnaWaveService
 from app.config import settings
 
 from ..dependencies import get_cabinet_db, get_current_admin_user
-from app.database.models import User
+from app.database.models import User, Subscription, Tariff, SubscriptionStatus
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +89,23 @@ class ServerStats(BaseModel):
     total_revenue_rubles: float
 
 
+class TariffStatItem(BaseModel):
+    """Statistics for a single tariff."""
+    tariff_id: int
+    tariff_name: str
+    active_subscriptions: int
+    trial_subscriptions: int
+    purchased_today: int
+    purchased_week: int
+    purchased_month: int
+
+
+class TariffStats(BaseModel):
+    """Tariff statistics."""
+    tariffs: List[TariffStatItem]
+    total_tariff_subscriptions: int
+
+
 class DashboardStats(BaseModel):
     """Complete dashboard statistics."""
     nodes: NodesOverview
@@ -94,6 +113,7 @@ class DashboardStats(BaseModel):
     financial: FinancialStats
     servers: ServerStats
     revenue_chart: List[RevenueData]
+    tariff_stats: Optional[TariffStats] = None
 
 
 # ============ Routes ============
@@ -122,6 +142,9 @@ async def get_dashboard_stats(
 
         # Get server statistics
         server_stats = await get_server_statistics(db)
+
+        # Get tariff statistics
+        tariff_stats = await _get_tariff_stats(db)
 
         # Build response
         return DashboardStats(
@@ -162,6 +185,7 @@ async def get_dashboard_stats(
                 )
                 for item in revenue_data
             ],
+            tariff_stats=tariff_stats,
         )
 
     except Exception as e:
@@ -299,3 +323,102 @@ async def _get_nodes_overview() -> NodesOverview:
             total_users_online=0,
             nodes=[],
         )
+
+
+async def _get_tariff_stats(db: AsyncSession) -> Optional[TariffStats]:
+    """Get statistics for all tariffs."""
+    try:
+        # Получаем все активные тарифы
+        tariffs_result = await db.execute(
+            select(Tariff)
+            .where(Tariff.is_active == True)
+            .order_by(Tariff.display_order)
+        )
+        tariffs = tariffs_result.scalars().all()
+
+        if not tariffs:
+            return None
+
+        now = datetime.utcnow()
+        today = now.date()
+        week_ago = now - timedelta(days=7)
+        month_ago = now - timedelta(days=30)
+
+        tariff_items = []
+        total_tariff_subscriptions = 0
+
+        for tariff in tariffs:
+            # Активные подписки на этом тарифе
+            active_result = await db.execute(
+                select(func.count(Subscription.id))
+                .where(
+                    Subscription.tariff_id == tariff.id,
+                    Subscription.status == SubscriptionStatus.ACTIVE.value
+                )
+            )
+            active_count = active_result.scalar() or 0
+
+            # Триальные подписки на этом тарифе
+            trial_result = await db.execute(
+                select(func.count(Subscription.id))
+                .where(
+                    Subscription.tariff_id == tariff.id,
+                    Subscription.status == SubscriptionStatus.ACTIVE.value,
+                    Subscription.is_trial == True
+                )
+            )
+            trial_count = trial_result.scalar() or 0
+
+            # Куплено сегодня (не триальные)
+            today_result = await db.execute(
+                select(func.count(Subscription.id))
+                .where(
+                    Subscription.tariff_id == tariff.id,
+                    Subscription.created_at >= today,
+                    Subscription.is_trial == False
+                )
+            )
+            purchased_today = today_result.scalar() or 0
+
+            # Куплено за неделю
+            week_result = await db.execute(
+                select(func.count(Subscription.id))
+                .where(
+                    Subscription.tariff_id == tariff.id,
+                    Subscription.created_at >= week_ago,
+                    Subscription.is_trial == False
+                )
+            )
+            purchased_week = week_result.scalar() or 0
+
+            # Куплено за месяц
+            month_result = await db.execute(
+                select(func.count(Subscription.id))
+                .where(
+                    Subscription.tariff_id == tariff.id,
+                    Subscription.created_at >= month_ago,
+                    Subscription.is_trial == False
+                )
+            )
+            purchased_month = month_result.scalar() or 0
+
+            tariff_items.append(TariffStatItem(
+                tariff_id=tariff.id,
+                tariff_name=tariff.name,
+                active_subscriptions=active_count,
+                trial_subscriptions=trial_count,
+                purchased_today=purchased_today,
+                purchased_week=purchased_week,
+                purchased_month=purchased_month,
+            ))
+
+            total_tariff_subscriptions += active_count
+
+        return TariffStats(
+            tariffs=tariff_items,
+            total_tariff_subscriptions=total_tariff_subscriptions,
+        )
+
+    except Exception as e:
+        logger.warning(f"Failed to get tariff stats: {e}")
+        return None
