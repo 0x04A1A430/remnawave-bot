@@ -765,6 +765,7 @@ class Tariff(Base):
     traffic_limit_gb = Column(Integer, nullable=False, default=100)  # 0 = безлимит
     device_limit = Column(Integer, nullable=False, default=1)
     device_price_kopeks = Column(Integer, nullable=True, default=None)  # Цена за доп. устройство (None = нельзя докупить)
+    max_device_limit = Column(Integer, nullable=True, default=None)  # Макс. устройств (None = без ограничений)
 
     # Сквады (серверы) доступные в тарифе
     allowed_squads = Column(JSON, default=list)  # список UUID сквадов

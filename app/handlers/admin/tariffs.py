@@ -196,6 +196,9 @@ def get_tariff_view_keyboard(
         ])
     buttons.append([
         InlineKeyboardButton(text="📱💰 Цена за устройство", callback_data=f"admin_tariff_edit_device_price:{tariff.id}"),
+        InlineKeyboardButton(text="📱🔒 Макс. устройств", callback_data=f"admin_tariff_edit_max_devices:{tariff.id}"),
+    ])
+    buttons.append([
         InlineKeyboardButton(text="⏰ Дни триала", callback_data=f"admin_tariff_edit_trial_days:{tariff.id}"),
     ])
     buttons.append([
@@ -299,6 +302,13 @@ def format_tariff_info(tariff: Tariff, language: str, subs_count: int = 0) -> st
     else:
         device_price_display = "Недоступно"
 
+    # Форматируем макс. устройств
+    max_devices = getattr(tariff, 'max_device_limit', None)
+    if max_devices is not None and max_devices > 0:
+        max_devices_display = str(max_devices)
+    else:
+        max_devices_display = "∞ (без лимита)"
+
     # Форматируем докупку трафика
     traffic_topup_display = _format_traffic_topup_packages(tariff)
 
@@ -323,6 +333,7 @@ def format_tariff_info(tariff: Tariff, language: str, subs_count: int = 0) -> st
 <b>Параметры:</b>
 • Трафик: {traffic}
 • Устройств: {tariff.device_limit}
+• Макс. устройств: {max_devices_display}
 • Цена за доп. устройство: {device_price_display}
 • Триал: {trial_status}
 • Дней триала: {trial_days_display}
@@ -1498,6 +1509,96 @@ async def process_edit_tariff_device_price(
     )
 
 
+# ============ РЕДАКТИРОВАНИЕ МАКС. УСТРОЙСТВ ============
+
+@admin_required
+@error_handler
+async def start_edit_tariff_max_devices(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    """Начинает редактирование макс. устройств."""
+    texts = get_texts(db_user.language)
+    tariff_id = int(callback.data.split(":")[1])
+    tariff = await get_tariff_by_id(db, tariff_id)
+
+    if not tariff:
+        await callback.answer("Тариф не найден", show_alert=True)
+        return
+
+    await state.set_state(AdminStates.editing_tariff_max_devices)
+    await state.update_data(tariff_id=tariff_id, language=db_user.language)
+
+    max_devices = getattr(tariff, 'max_device_limit', None)
+    if max_devices is not None and max_devices > 0:
+        current_max = str(max_devices)
+    else:
+        current_max = "∞ (без лимита)"
+
+    await callback.message.edit_text(
+        f"📱🔒 <b>Редактирование макс. устройств</b>\n\n"
+        f"Текущее значение: <b>{current_max}</b>\n"
+        f"Базовое кол-во устройств: <b>{tariff.device_limit}</b>\n\n"
+        "Введите максимальное количество устройств, которое пользователь может докупить.\n\n"
+        "• <code>0</code> или <code>-</code> — без ограничений\n"
+        "• Например: <code>5</code> = максимум 5 устройств на тарифе",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=texts.CANCEL, callback_data=f"admin_tariff_view:{tariff_id}")]
+        ]),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def process_edit_tariff_max_devices(
+    message: types.Message,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    """Обрабатывает новое макс. кол-во устройств."""
+    data = await state.get_data()
+    tariff_id = data.get("tariff_id")
+
+    tariff = await get_tariff_by_id(db, tariff_id)
+    if not tariff:
+        await message.answer("Тариф не найден")
+        await state.clear()
+        return
+
+    text = message.text.strip()
+
+    if text == "-" or text == "0":
+        max_devices = None
+    else:
+        try:
+            max_devices = int(text)
+            if max_devices < 1:
+                raise ValueError
+        except ValueError:
+            await message.answer(
+                "Введите корректное число (1 или больше).\n"
+                "Для снятия ограничения введите <code>0</code> или <code>-</code>",
+                parse_mode="HTML"
+            )
+            return
+
+    tariff = await update_tariff(db, tariff, max_device_limit=max_devices)
+    await state.clear()
+
+    subs_count = await get_tariff_subscriptions_count(db, tariff_id)
+
+    await message.answer(
+        f"✅ Макс. устройств изменено!\n\n" + format_tariff_info(tariff, db_user.language, subs_count),
+        reply_markup=get_tariff_view_keyboard(tariff, db_user.language),
+        parse_mode="HTML"
+    )
+
+
 # ============ РЕДАКТИРОВАНИЕ ДНЕЙ ТРИАЛА ============
 
 @admin_required
@@ -2542,6 +2643,10 @@ def register_handlers(dp: Dispatcher):
     # Редактирование цены за устройство
     dp.callback_query.register(start_edit_tariff_device_price, F.data.startswith("admin_tariff_edit_device_price:"))
     dp.message.register(process_edit_tariff_device_price, AdminStates.editing_tariff_device_price)
+
+    # Редактирование макс. устройств
+    dp.callback_query.register(start_edit_tariff_max_devices, F.data.startswith("admin_tariff_edit_max_devices:"))
+    dp.message.register(process_edit_tariff_max_devices, AdminStates.editing_tariff_max_devices)
 
     # Редактирование дней триала
     dp.callback_query.register(start_edit_tariff_trial_days, F.data.startswith("admin_tariff_edit_trial_days:"))

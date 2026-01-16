@@ -182,6 +182,7 @@ class AdminStates(StatesGroup):
     editing_tariff_tier = State()
     editing_tariff_prices = State()
     editing_tariff_device_price = State()
+    editing_tariff_max_devices = State()
     editing_tariff_trial_days = State()
     editing_tariff_squads = State()
     editing_tariff_promo_groups = State()

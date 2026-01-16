@@ -24,6 +24,8 @@ from sqlalchemy import select
 from app.config import settings, PERIOD_PRICES
 from app.utils.pricing_utils import format_period_description
 from app.services.subscription_service import SubscriptionService
+from app.services.system_settings_service import bot_configuration_service
+from app.services.remnawave_service import RemnaWaveService
 from app.services.subscription_purchase_service import (
     MiniAppSubscriptionPurchaseService,
     PurchaseValidationError,
@@ -866,8 +868,9 @@ async def _build_tariff_response(
     tariff: Tariff,
     current_tariff_id: Optional[int] = None,
     language: str = "ru",
+    user: Optional[User] = None,
 ) -> Dict[str, Any]:
-    """Build tariff model for API response."""
+    """Build tariff model for API response with promo group discounts applied."""
     servers = []
     servers_count = 0
 
@@ -881,28 +884,89 @@ async def _build_tariff_response(
                     "name": server.display_name or squad_uuid[:8],
                 })
 
+    # Get promo group for discount calculation
+    promo_group = user.get_primary_promo_group() if user and hasattr(user, 'get_primary_promo_group') else None
+    promo_group_name = promo_group.name if promo_group else None
+
     periods = []
     if tariff.period_prices:
         for period_str, price_kopeks in sorted(tariff.period_prices.items(), key=lambda x: int(x[0])):
             if int(price_kopeks) <= 0:
                 continue  # Skip disabled periods
             period_days = int(period_str)
-            months = max(1, period_days // 30)
-            per_month = price_kopeks // months if months > 0 else price_kopeks
 
-            periods.append({
+            # Apply promo group discount for this period
+            original_price = int(price_kopeks)
+            discount_percent = 0
+            discount_amount = 0
+            final_price = original_price
+
+            if promo_group:
+                discount_percent = promo_group.get_discount_percent("period", period_days)
+                if discount_percent > 0:
+                    discount_amount = original_price * discount_percent // 100
+                    final_price = original_price - discount_amount
+
+            months = max(1, period_days // 30)
+            per_month = final_price // months if months > 0 else final_price
+            original_per_month = original_price // months if months > 0 else original_price
+
+            period_data = {
                 "days": period_days,
                 "months": months,
                 "label": format_period_description(period_days, language),
-                "price_kopeks": price_kopeks,
-                "price_label": settings.format_price(price_kopeks),
+                "price_kopeks": final_price,
+                "price_label": settings.format_price(final_price),
                 "price_per_month_kopeks": per_month,
                 "price_per_month_label": settings.format_price(per_month),
-            })
+            }
+
+            # Add discount info if discount is applied
+            if discount_percent > 0:
+                period_data["original_price_kopeks"] = original_price
+                period_data["original_price_label"] = settings.format_price(original_price)
+                period_data["original_per_month_kopeks"] = original_per_month
+                period_data["original_per_month_label"] = settings.format_price(original_per_month)
+                period_data["discount_percent"] = discount_percent
+                period_data["discount_amount_kopeks"] = discount_amount
+                period_data["discount_label"] = f"-{discount_percent}%"
+
+            periods.append(period_data)
 
     traffic_label = "♾️ Безлимит" if tariff.traffic_limit_gb == 0 else f"{tariff.traffic_limit_gb} ГБ"
 
-    return {
+    # Apply discount to daily price if applicable
+    daily_price = getattr(tariff, 'daily_price_kopeks', 0)
+    original_daily_price = daily_price
+    daily_discount_percent = 0
+    if promo_group and daily_price > 0:
+        # For daily tariffs, use period discount with period_days=1
+        daily_discount_percent = promo_group.get_discount_percent("period", 1)
+        if daily_discount_percent > 0:
+            discount_amount = daily_price * daily_discount_percent // 100
+            daily_price = daily_price - discount_amount
+
+    # Apply discount to custom price_per_day if applicable
+    price_per_day = tariff.price_per_day_kopeks
+    original_price_per_day = price_per_day
+    custom_days_discount_percent = 0
+    if promo_group and price_per_day > 0:
+        custom_days_discount_percent = promo_group.get_discount_percent("period", 30)  # Use 30-day rate as base
+        if custom_days_discount_percent > 0:
+            discount_amount = price_per_day * custom_days_discount_percent // 100
+            price_per_day = price_per_day - discount_amount
+
+    # Apply discount to device price if applicable
+    device_price = tariff.device_price_kopeks or 0
+    original_device_price = device_price
+    device_discount_percent = 0
+    if promo_group and device_price > 0:
+        device_discount_percent = promo_group.get_discount_percent("devices")
+        if device_discount_percent > 0:
+            discount_amount = device_price * device_discount_percent // 100
+            device_price = device_price - discount_amount
+
+    response = {
         "id": tariff.id,
         "name": tariff.name,
         "description": tariff.description,
@@ -911,7 +975,7 @@ async def _build_tariff_response(
         "traffic_limit_label": traffic_label,
         "is_unlimited_traffic": tariff.traffic_limit_gb == 0,
         "device_limit": tariff.device_limit,
-        "device_price_kopeks": tariff.device_price_kopeks,
+        "device_price_kopeks": device_price,
         "servers_count": servers_count,
         "servers": servers,
         "periods": periods,
@@ -919,7 +983,7 @@ async def _build_tariff_response(
         "is_available": tariff.is_active,
         # Произвольное количество дней
         "custom_days_enabled": tariff.custom_days_enabled,
-        "price_per_day_kopeks": tariff.price_per_day_kopeks,
+        "price_per_day_kopeks": price_per_day,
         "min_days": tariff.min_days,
         "max_days": tariff.max_days,
         # Произвольный трафик при покупке
@@ -933,8 +997,27 @@ async def _build_tariff_response(
         "max_topup_traffic_gb": tariff.max_topup_traffic_gb,
         # Дневной тариф
         "is_daily": getattr(tariff, 'is_daily', False),
-        "daily_price_kopeks": getattr(tariff, 'daily_price_kopeks', 0),
+        "daily_price_kopeks": daily_price,
     }
+
+    # Add promo group info if user has discounts
+    if promo_group_name:
+        response["promo_group_name"] = promo_group_name
+
+    # Add original prices if discounts were applied
+    if device_discount_percent > 0:
+        response["original_device_price_kopeks"] = original_device_price
+        response["device_discount_percent"] = device_discount_percent
+
+    if daily_discount_percent > 0 and original_daily_price > 0:
+        response["original_daily_price_kopeks"] = original_daily_price
+        response["daily_discount_percent"] = daily_discount_percent
+
+    if custom_days_discount_percent > 0 and original_price_per_day > 0:
+        response["original_price_per_day_kopeks"] = original_price_per_day
+        response["custom_days_discount_percent"] = custom_days_discount_percent
+
+    return response
 
 
 @router.get("/purchase-options")
@@ -958,7 +1041,7 @@ async def get_purchase_options(
 
             tariff_responses = []
             for tariff in tariffs:
-                tariff_data = await _build_tariff_response(db, tariff, current_tariff_id, language)
+                tariff_data = await _build_tariff_response(db, tariff, current_tariff_id, language, user)
                 tariff_responses.append(tariff_data)
 
             return {
@@ -1101,8 +1184,8 @@ async def purchase_tariff(
                 detail="Tariff not found or inactive",
             )
 
-        # Check tariff availability for user's promo group
-        promo_group = getattr(user, "promo_group", None)
+        # Check tariff availability for user's promo group and get promo group for discounts
+        promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else None
         promo_group_id = promo_group.id if promo_group else None
         if not tariff.is_available_for_promo_group(promo_group_id):
             raise HTTPException(
@@ -1112,6 +1195,9 @@ async def purchase_tariff(
 
         # Handle daily tariffs specially
         is_daily_tariff = getattr(tariff, 'is_daily', False)
+        discount_percent = 0
+        original_price = 0
+
         if is_daily_tariff:
             daily_price = getattr(tariff, 'daily_price_kopeks', 0)
             if daily_price <= 0:
@@ -1119,6 +1205,13 @@ async def purchase_tariff(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Daily tariff has invalid price",
                 )
+            original_price = daily_price
+            # Apply promo group discount for daily tariff
+            if promo_group:
+                discount_percent = promo_group.get_discount_percent("period", 1)
+                if discount_percent > 0:
+                    discount_amount = daily_price * discount_percent // 100
+                    daily_price = daily_price - discount_amount
             # For daily tariffs, charge first day and set period to 1 day
             price_kopeks = daily_price
             period_days = 1
@@ -1141,6 +1234,14 @@ async def purchase_tariff(
                         detail="Invalid period for this tariff",
                     )
 
+            original_price = price_kopeks
+            # Apply promo group discount for period
+            if promo_group and price_kopeks > 0:
+                discount_percent = promo_group.get_discount_percent("period", period_days)
+                if discount_percent > 0:
+                    discount_amount = price_kopeks * discount_percent // 100
+                    price_kopeks = price_kopeks - discount_amount
+
         # Calculate traffic limit and price
         traffic_limit_gb = tariff.traffic_limit_gb
         traffic_price_kopeks = 0
@@ -1152,6 +1253,12 @@ async def purchase_tariff(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Traffic must be between {tariff.min_traffic_gb} and {tariff.max_traffic_gb} GB",
                 )
+            # Apply traffic discount if promo group has it
+            if promo_group and traffic_price_kopeks > 0:
+                traffic_discount_percent = promo_group.get_discount_percent("traffic", period_days)
+                if traffic_discount_percent > 0:
+                    traffic_discount = traffic_price_kopeks * traffic_discount_percent // 100
+                    traffic_price_kopeks = traffic_price_kopeks - traffic_discount
             traffic_limit_gb = request.traffic_gb
             price_kopeks += traffic_price_kopeks
 
@@ -1183,6 +1290,8 @@ async def purchase_tariff(
             description = f"Активация суточного тарифа '{tariff.name}'"
         else:
             description = f"Покупка тарифа '{tariff.name}' на {period_days} дней"
+        if discount_percent > 0:
+            description += f" (скидка {discount_percent}%)"
         success = await subtract_user_balance(db, user, price_kopeks, description)
         if not success:
             raise HTTPException(
@@ -1252,15 +1361,29 @@ async def purchase_tariff(
 
         await db.refresh(user)
 
-        return {
+        response = {
             "success": True,
             "message": f"Тариф '{tariff.name}' успешно активирован",
             "subscription": _subscription_to_response(subscription),
             "tariff_id": tariff.id,
             "tariff_name": tariff.name,
+            "charged_amount": price_kopeks,
+            "charged_label": settings.format_price(price_kopeks),
             "balance_kopeks": user.balance_kopeks,
             "balance_label": settings.format_price(user.balance_kopeks),
         }
+
+        # Add discount info if discount was applied
+        if discount_percent > 0:
+            response["discount_percent"] = discount_percent
+            response["original_price_kopeks"] = original_price
+            response["original_price_label"] = settings.format_price(original_price)
+            response["discount_amount_kopeks"] = original_price - price_kopeks
+            response["discount_label"] = settings.format_price(original_price - price_kopeks)
+            if promo_group:
+                response["promo_group_name"] = promo_group.name
+
+        return response
 
     except HTTPException:
         raise
@@ -1307,6 +1430,15 @@ async def purchase_devices(
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Докупка устройств недоступна для вашего тарифа",
+            )
+
+        # Check max device limit
+        current_devices = subscription.device_limit or 1
+        new_device_count = current_devices + request.devices
+        if tariff.max_device_limit and new_device_count > tariff.max_device_limit:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Максимальное количество устройств для вашего тарифа: {tariff.max_device_limit}",
             )
 
         # Calculate prorated price based on remaining days
@@ -1408,6 +1540,28 @@ async def get_device_price(
             "reason": "Докупка устройств недоступна для вашего тарифа",
         }
 
+    # Check max device limit
+    current_devices = subscription.device_limit or 1
+    max_device_limit = tariff.max_device_limit
+    can_add = max_device_limit - current_devices if max_device_limit else None
+
+    if max_device_limit and current_devices >= max_device_limit:
+        return {
+            "available": False,
+            "reason": f"Достигнут максимум устройств ({max_device_limit})",
+            "current_device_limit": current_devices,
+            "max_device_limit": max_device_limit,
+        }
+
+    if max_device_limit and current_devices + devices > max_device_limit:
+        return {
+            "available": False,
+            "reason": f"Можно добавить максимум {can_add} устройств",
+            "current_device_limit": current_devices,
+            "max_device_limit": max_device_limit,
+            "can_add": can_add,
+        }
+
     # Calculate prorated price
     from datetime import datetime, timezone
     now = datetime.now(timezone.utc)
@@ -1429,7 +1583,9 @@ async def get_device_price(
         "price_per_device_label": settings.format_price(price_per_device_kopeks),
         "total_price_kopeks": total_price_kopeks,
         "total_price_label": settings.format_price(total_price_kopeks),
-        "current_device_limit": subscription.device_limit,
+        "current_device_limit": current_devices,
+        "max_device_limit": max_device_limit,
+        "can_add": can_add,
         "days_left": days_left,
         "base_device_price_kopeks": tariff.device_price_kopeks,
     }
@@ -1437,7 +1593,7 @@ async def get_device_price(
 
 # ============ App Config for Connection ============
 
-def _load_app_config() -> Dict[str, Any]:
+def _load_app_config_from_file() -> Dict[str, Any]:
     """Load app-config.json file."""
     try:
         config_path = settings.get_app_config_path()
@@ -1450,13 +1606,215 @@ def _load_app_config() -> Dict[str, Any]:
     return {}
 
 
+def _get_remnawave_config_uuid() -> Optional[str]:
+    """Get RemnaWave config UUID from system settings or env."""
+    try:
+        return bot_configuration_service.get_current_value("CABINET_REMNA_SUB_CONFIG")
+    except Exception:
+        return settings.CABINET_REMNA_SUB_CONFIG
+
+
+def _is_subscription_link_template(url: str) -> bool:
+    """Check if URL is a RemnaWave subscription link template."""
+    if not url:
+        return False
+    # RemnaWave uses templates like {{HAPP_CRYPT4_LINK}}, {{V2RAY_LINK}}, etc.
+    if url.startswith("{{") and url.endswith("}}"):
+        return True
+    # Also check for button type "subscriptionLink" indicator
+    return False
+
+
+def _convert_remnawave_block_to_step(block: Dict[str, Any], url_scheme: str = "") -> Dict[str, Any]:
+    """Convert RemnaWave block format to cabinet step format."""
+    step = {
+        "description": block.get("description", {}),
+    }
+    if block.get("title"):
+        step["title"] = block["title"]
+    if block.get("buttons"):
+        buttons = []
+        for btn in block["buttons"]:
+            btn_url = btn.get("url", "") or btn.get("link", "")
+            btn_type = btn.get("type", "")
+
+            # Replace subscription link templates with {{deepLink}} placeholder
+            # RemnaWave uses templates like {{HAPP_CRYPT4_LINK}} or type="subscriptionLink"
+            if _is_subscription_link_template(btn_url) or btn_type == "subscriptionLink":
+                btn_url = "{{deepLink}}"
+            # Also check for urlScheme-based URLs
+            elif url_scheme and btn_url and (
+                btn_url.startswith(url_scheme) or
+                btn_url.endswith("://") or
+                btn_url.endswith("://add/") or
+                ("://" in btn_url and not btn_url.startswith("http"))
+            ):
+                btn_url = "{{deepLink}}"
+
+            buttons.append({
+                "buttonLink": btn_url,
+                "buttonText": btn.get("text", {}),
+            })
+        step["buttons"] = buttons
+    return step
+
+
+# Known app URL schemes (fallback if RemnaWave doesn't provide urlScheme)
+KNOWN_APP_URL_SCHEMES = {
+    "happ": "happ://add/",
+    "streisand": "streisand://import/",
+    "shadowrocket": "sub://",
+    "v2rayn": "v2rayng://install-config?url=",
+    "v2rayng": "v2rayng://install-config?url=",
+    "clash": "clash://install-config?url=",
+    "clash meta": "clash://install-config?url=",
+    "clash verge": "clash://install-config?url=",
+    "hiddify": "hiddify://import/",
+    "nekoray": "sn://subscription?url=",
+    "nekobox": "sn://subscription?url=",
+    "karing": "karing://add/",
+}
+
+
+def _convert_remnawave_app_to_cabinet(app: Dict[str, Any]) -> Dict[str, Any]:
+    """Convert RemnaWave app format to cabinet app format."""
+    blocks = app.get("blocks", [])
+    url_scheme = app.get("urlScheme", "")
+
+    # If urlScheme is missing, try to determine from app name
+    if not url_scheme:
+        app_name = app.get("name", "").lower().strip()
+        url_scheme = KNOWN_APP_URL_SCHEMES.get(app_name, "")
+
+    # Map blocks to steps based on position
+    installation_step = _convert_remnawave_block_to_step(blocks[0], url_scheme) if len(blocks) > 0 else {"description": {}}
+    subscription_step = _convert_remnawave_block_to_step(blocks[1], url_scheme) if len(blocks) > 1 else {"description": {}}
+    connect_step = _convert_remnawave_block_to_step(blocks[2], url_scheme) if len(blocks) > 2 else {"description": {}}
+
+    # Ensure subscription step has a deepLink button if urlScheme exists
+    if url_scheme:
+        has_deeplink_button = False
+        if "buttons" in subscription_step:
+            for btn in subscription_step["buttons"]:
+                if btn.get("buttonLink") == "{{deepLink}}":
+                    has_deeplink_button = True
+                    break
+
+        if not has_deeplink_button:
+            # Add deepLink button at the beginning
+            deeplink_button = {
+                "buttonLink": "{{deepLink}}",
+                "buttonText": {
+                    "en": "Open app",
+                    "ru": "Открыть приложение",
+                    "zh": "打开应用",
+                    "fa": "باز کردن برنامه",
+                },
+            }
+            if "buttons" not in subscription_step:
+                subscription_step["buttons"] = []
+            subscription_step["buttons"].insert(0, deeplink_button)
+
+    return {
+        "id": app.get("name", "").lower().replace(" ", "-"),
+        "name": app.get("name", ""),
+        "isFeatured": app.get("featured", False),
+        "urlScheme": app.get("urlScheme", ""),
+        "isNeedBase64Encoding": app.get("isNeedBase64Encoding", False),
+        "installationStep": installation_step,
+        "addSubscriptionStep": subscription_step,
+        "connectAndUseStep": connect_step,
+    }
+
+
+def _convert_remnawave_config_to_cabinet(config: Dict[str, Any]) -> Dict[str, Any]:
+    """Convert RemnaWave config format to cabinet format."""
+    platforms = {}
+    remnawave_platforms = config.get("platforms", {})
+
+    for platform_key, platform_data in remnawave_platforms.items():
+        if not isinstance(platform_data, dict):
+            continue
+        apps = platform_data.get("apps", [])
+        if not isinstance(apps, list):
+            continue
+
+        cabinet_apps = []
+        for app in apps:
+            if isinstance(app, dict):
+                cabinet_apps.append(_convert_remnawave_app_to_cabinet(app))
+
+        if cabinet_apps:
+            platforms[platform_key] = cabinet_apps
+
+    # Convert branding
+    branding = {}
+    if config.get("brandingSettings"):
+        branding = {
+            "name": config["brandingSettings"].get("name", ""),
+            "logoUrl": config["brandingSettings"].get("logoUrl", ""),
+            "supportUrl": config["brandingSettings"].get("supportUrl", ""),
+        }
+
+    return {
+        "config": {
+            "additionalLocales": ["zh", "fa"],
+            "branding": branding,
+        },
+        "platforms": platforms,
+    }
+
+
+async def _load_app_config_async() -> Dict[str, Any]:
+    """Load app config from RemnaWave (if configured) or local file."""
+    remnawave_uuid = _get_remnawave_config_uuid()
+
+    if remnawave_uuid:
+        try:
+            service = RemnaWaveService()
+            async with service.get_api_client() as api:
+                config = await api.get_subscription_page_config(remnawave_uuid)
+                if config and config.config:
+                    logger.info(f"Loaded app config from RemnaWave: {remnawave_uuid}")
+                    # Debug: log raw RemnaWave config structure
+                    import json
+                    logger.info(f"RemnaWave raw config: {json.dumps(config.config, ensure_ascii=False, indent=2)[:2000]}")
+                    converted = _convert_remnawave_config_to_cabinet(config.config)
+                    logger.info(f"Converted config platforms: {list(converted.get('platforms', {}).keys())}")
+                    # Log first app from each platform
+                    for platform, apps in converted.get('platforms', {}).items():
+                        if apps:
+                            first_app = apps[0]
+                            logger.info(f"Platform {platform} first app: name={first_app.get('name')}, urlScheme={first_app.get('urlScheme')}")
+                    return converted
+        except Exception as e:
+            logger.warning(f"Failed to load RemnaWave config, falling back to file: {e}")
+
+    # Fallback to local file
+    return _load_app_config_from_file()
+
+
+def _load_app_config() -> Dict[str, Any]:
+    """Load app-config.json file (sync version for compatibility)."""
+    return _load_app_config_from_file()
+
+
 def _create_deep_link(app: Dict[str, Any], subscription_url: str) -> Optional[str]:
     """Create deep link for app with subscription URL."""
     if not subscription_url or not isinstance(app, dict):
+        logger.debug(f"_create_deep_link: no subscription_url or invalid app")
         return None
 
     scheme = str(app.get("urlScheme", "")).strip()
     if not scheme:
+        # Try fallback from app name
+        app_name = app.get("name", "").lower().strip()
+        scheme = KNOWN_APP_URL_SCHEMES.get(app_name, "")
+        if scheme:
+            logger.info(f"_create_deep_link: used fallback urlScheme for '{app_name}': {scheme}")
+
+    if not scheme:
+        logger.warning(f"_create_deep_link: no urlScheme for app '{app.get('name', 'unknown')}'")
         return None
 
     payload = subscription_url
@@ -1772,7 +2130,8 @@ async def get_app_config(
     if user.subscription:
         subscription_url = user.subscription.subscription_url
 
-    config = _load_app_config()
+    # Load config from RemnaWave (if configured) or local file
+    config = await _load_app_config_async()
     platforms_raw = config.get("platforms", {})
 
     if not isinstance(platforms_raw, dict):
@@ -2294,8 +2653,13 @@ async def switch_tariff(
     user.subscription.traffic_limit_gb = new_tariff.traffic_limit_gb
     user.subscription.device_limit = new_tariff.device_limit
     user.subscription.connected_squads = new_tariff.allowed_squads or []
-    user.subscription.purchased_traffic_gb = 0  # Reset purchased traffic on tariff switch
-    user.subscription.traffic_reset_at = None  # Reset traffic reset date
+
+    # Reset purchased traffic and delete TrafficPurchase records on tariff switch
+    from app.database.models import TrafficPurchase
+    from sqlalchemy import delete as sql_delete
+    await db.execute(sql_delete(TrafficPurchase).where(TrafficPurchase.subscription_id == user.subscription.id))
+    user.subscription.purchased_traffic_gb = 0
+    user.subscription.traffic_reset_at = None
 
     if switching_to_daily:
         # Switching TO daily - reset end_date to 1 day, set last_daily_charge_at

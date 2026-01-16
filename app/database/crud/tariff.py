@@ -163,6 +163,7 @@ async def create_tariff(
     traffic_limit_gb: int = 100,
     device_limit: int = 1,
     device_price_kopeks: Optional[int] = None,
+    max_device_limit: Optional[int] = None,
     allowed_squads: Optional[List[str]] = None,
     server_traffic_limits: Optional[Dict[str, dict]] = None,
     period_prices: Optional[Dict[int, int]] = None,
@@ -197,6 +198,7 @@ async def create_tariff(
         traffic_limit_gb=max(0, traffic_limit_gb),
         device_limit=max(1, device_limit),
         device_price_kopeks=device_price_kopeks,
+        max_device_limit=max_device_limit,
         allowed_squads=allowed_squads or [],
         server_traffic_limits=server_traffic_limits or {},
         period_prices=normalized_prices,
@@ -258,6 +260,7 @@ async def update_tariff(
     traffic_limit_gb: Optional[int] = None,
     device_limit: Optional[int] = None,
     device_price_kopeks: Optional[int] = ...,  # ... = не передан, None = сбросить
+    max_device_limit: Optional[int] = ...,  # ... = не передан, None = сбросить (без лимита)
     allowed_squads: Optional[List[str]] = None,
     server_traffic_limits: Optional[Dict[str, dict]] = None,
     period_prices: Optional[Dict[int, int]] = None,
@@ -297,6 +300,9 @@ async def update_tariff(
     if device_price_kopeks is not ...:
         # Если передан device_price_kopeks (включая None) - обновляем
         tariff.device_price_kopeks = device_price_kopeks
+    if max_device_limit is not ...:
+        # Если передан max_device_limit (включая None) - обновляем
+        tariff.max_device_limit = max_device_limit
     if allowed_squads is not None:
         tariff.allowed_squads = allowed_squads
     if server_traffic_limits is not None:
