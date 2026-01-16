@@ -1377,6 +1377,12 @@ def get_broadcast_target_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
                 callback_data="broadcast_trial_zero"
             )
         ],
+        [
+            InlineKeyboardButton(
+                text=_t(texts, "ADMIN_BROADCAST_TARGET_BY_TARIFF", "📦 По тарифу"),
+                callback_data="broadcast_by_tariff"
+            )
+        ],
         [InlineKeyboardButton(text=texts.BACK, callback_data="admin_messages")]
     ])
 

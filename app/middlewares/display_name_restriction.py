@@ -131,22 +131,17 @@ class DisplayNameRestrictionMiddleware(BaseMiddleware):
         cleaned = ZERO_WIDTH_PATTERN.sub("", value)
         lower_value = cleaned.lower()
 
-        if "@" in cleaned or "＠" in cleaned:
-            return True
-
-        if any(pattern.search(lower_value) for pattern in LINK_PATTERNS):
-            return True
-
-        if DOMAIN_OBFUSCATION_PATTERN.search(lower_value):
-            return True
+        # Убраны жёсткие проверки на @ и паттерны ссылок - слишком много ложных срабатываний
+        # Теперь проверяем только по настраиваемым ключевым словам из DISPLAY_NAME_BANNED_KEYWORDS
 
         normalized = self._normalize_text(lower_value)
         collapsed = COLLAPSE_PATTERN.sub("", normalized)
 
-        if "tme" in collapsed:
-            return True
-
         banned_keywords = settings.get_display_name_banned_keywords()
+
+        # Если список пустой - не блокируем никого
+        if not banned_keywords:
+            return False
 
         return any(
             keyword in normalized or keyword in collapsed

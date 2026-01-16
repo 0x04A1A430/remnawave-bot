@@ -85,7 +85,7 @@ async def start_cryptobot_payment(
     # Если включен быстрый выбор суммы и не отключены кнопки, добавляем кнопки
     if settings.is_quick_amount_buttons_enabled():
         from .main import get_quick_amount_buttons
-        quick_amount_buttons = get_quick_amount_buttons(db_user.language, db_user)
+        quick_amount_buttons = await get_quick_amount_buttons(db_user.language, db_user)
         if quick_amount_buttons:
             # Вставляем кнопки быстрого выбора перед кнопкой "Назад"
             keyboard.inline_keyboard = quick_amount_buttons + keyboard.inline_keyboard

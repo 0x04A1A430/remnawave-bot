@@ -1063,12 +1063,16 @@ async def _render_user_subscription_overview(
                 )
             ])
 
-        # Кнопка смены тарифа в режиме тарифов
+        # Кнопки тарифов в режиме тарифов
         if settings.is_tariffs_mode():
             keyboard.append([
                 types.InlineKeyboardButton(
                     text="📦 Сменить тариф",
                     callback_data=f"admin_sub_change_tariff_{user_id}"
+                ),
+                types.InlineKeyboardButton(
+                    text="💳 Купить тариф",
+                    callback_data=f"admin_tariff_buy_{user_id}"
                 )
             ])
 
@@ -4983,6 +4987,366 @@ async def admin_buy_subscription_execute(
         await db.rollback()
 
 
+# ==================== Покупка тарифа администратором ====================
+
+@admin_required
+@error_handler
+async def admin_buy_tariff(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    """Показывает список тарифов для покупки админом."""
+    user_id = int(callback.data.split('_')[-1])
+
+    user_service = UserService()
+    profile = await user_service.get_user_profile(db, user_id)
+
+    if not profile:
+        await callback.answer("❌ Пользователь не найден", show_alert=True)
+        return
+
+    target_user = profile["user"]
+
+    # Получаем доступные тарифы
+    from app.database.crud.tariff import get_tariffs_for_user
+    tariffs = await get_tariffs_for_user(db, target_user)
+
+    if not tariffs:
+        await callback.message.edit_text(
+            "❌ <b>Нет доступных тарифов</b>\n\n"
+            "Создайте тарифы в разделе управления тарифами.",
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                [types.InlineKeyboardButton(text="⬅️ Назад", callback_data=f"admin_user_subscription_{user_id}")]
+            ])
+        )
+        await callback.answer()
+        return
+
+    target_user_link = f'<a href="tg://user?id={target_user.telegram_id}">{target_user.full_name}</a>'
+    text = f"💳 <b>Покупка тарифа для пользователя</b>\n\n"
+    text += f"👤 {target_user_link} (ID: {target_user.telegram_id})\n"
+    text += f"💰 Баланс: {settings.format_price(target_user.balance_kopeks)}\n\n"
+    text += "📦 <b>Выберите тариф:</b>\n\n"
+
+    for tariff in tariffs:
+        traffic = "♾️" if tariff.traffic_limit_gb == 0 else f"{tariff.traffic_limit_gb} ГБ"
+        prices = tariff.period_prices or {}
+        min_price = min(prices.values()) if prices else 0
+        text += f"<b>{tariff.name}</b> — {traffic}/{tariff.device_limit}📱 от {settings.format_price(min_price)}\n"
+
+    keyboard = []
+    for tariff in tariffs:
+        keyboard.append([
+            types.InlineKeyboardButton(
+                text=tariff.name,
+                callback_data=f"admin_tariff_buy_select_{user_id}_{tariff.id}"
+            )
+        ])
+
+    keyboard.append([
+        types.InlineKeyboardButton(text="⬅️ Назад", callback_data=f"admin_user_subscription_{user_id}")
+    ])
+
+    await callback.message.edit_text(
+        text,
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def admin_buy_tariff_period(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    """Показывает выбор периода для тарифа."""
+    parts = callback.data.split('_')
+    user_id = int(parts[4])
+    tariff_id = int(parts[5])
+
+    user_service = UserService()
+    profile = await user_service.get_user_profile(db, user_id)
+
+    if not profile:
+        await callback.answer("❌ Пользователь не найден", show_alert=True)
+        return
+
+    target_user = profile["user"]
+
+    from app.database.crud.tariff import get_tariff_by_id
+    tariff = await get_tariff_by_id(db, tariff_id)
+
+    if not tariff or not tariff.is_active:
+        await callback.answer("❌ Тариф недоступен", show_alert=True)
+        return
+
+    target_user_link = f'<a href="tg://user?id={target_user.telegram_id}">{target_user.full_name}</a>'
+    traffic = "♾️ Безлимит" if tariff.traffic_limit_gb == 0 else f"{tariff.traffic_limit_gb} ГБ"
+
+    text = f"💳 <b>Покупка тарифа для пользователя</b>\n\n"
+    text += f"👤 {target_user_link} (ID: {target_user.telegram_id})\n"
+    text += f"💰 Баланс: {settings.format_price(target_user.balance_kopeks)}\n\n"
+    text += f"📦 <b>Тариф: {tariff.name}</b>\n"
+    text += f"📊 Трафик: {traffic}\n"
+    text += f"📱 Устройств: {tariff.device_limit}\n"
+    text += f"🌐 Серверов: {len(tariff.allowed_squads) if tariff.allowed_squads else 0}\n\n"
+    text += "Выберите период:"
+
+    prices = tariff.period_prices or {}
+    keyboard = []
+
+    for period_str, price in sorted(prices.items(), key=lambda x: int(x[0])):
+        period = int(period_str)
+        keyboard.append([
+            types.InlineKeyboardButton(
+                text=f"{period} дней — {settings.format_price(price)}",
+                callback_data=f"admin_tariff_buy_confirm_{user_id}_{tariff_id}_{period}_{price}"
+            )
+        ])
+
+    keyboard.append([
+        types.InlineKeyboardButton(text="⬅️ К тарифам", callback_data=f"admin_tariff_buy_{user_id}")
+    ])
+
+    await callback.message.edit_text(
+        text,
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def admin_buy_tariff_confirm(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    """Подтверждение покупки тарифа."""
+    parts = callback.data.split('_')
+    user_id = int(parts[4])
+    tariff_id = int(parts[5])
+    period = int(parts[6])
+    price_kopeks = int(parts[7])
+
+    user_service = UserService()
+    profile = await user_service.get_user_profile(db, user_id)
+
+    if not profile:
+        await callback.answer("❌ Пользователь не найден", show_alert=True)
+        return
+
+    target_user = profile["user"]
+
+    from app.database.crud.tariff import get_tariff_by_id
+    tariff = await get_tariff_by_id(db, tariff_id)
+
+    if not tariff or not tariff.is_active:
+        await callback.answer("❌ Тариф недоступен", show_alert=True)
+        return
+
+    # Проверяем баланс
+    if target_user.balance_kopeks < price_kopeks:
+        missing = price_kopeks - target_user.balance_kopeks
+        await callback.message.edit_text(
+            f"❌ <b>Недостаточно средств</b>\n\n"
+            f"💰 Баланс: {settings.format_price(target_user.balance_kopeks)}\n"
+            f"💳 Стоимость: {settings.format_price(price_kopeks)}\n"
+            f"📉 Не хватает: {settings.format_price(missing)}\n\n"
+            f"Пополните баланс пользователя перед покупкой.",
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                [types.InlineKeyboardButton(text="⬅️ Назад", callback_data=f"admin_tariff_buy_select_{user_id}_{tariff_id}")]
+            ]),
+            parse_mode="HTML"
+        )
+        await callback.answer()
+        return
+
+    target_user_link = f'<a href="tg://user?id={target_user.telegram_id}">{target_user.full_name}</a>'
+    traffic = "♾️ Безлимит" if tariff.traffic_limit_gb == 0 else f"{tariff.traffic_limit_gb} ГБ"
+
+    text = f"💳 <b>Подтверждение покупки тарифа</b>\n\n"
+    text += f"👤 {target_user_link} (ID: {target_user.telegram_id})\n"
+    text += f"💰 Баланс: {settings.format_price(target_user.balance_kopeks)}\n\n"
+    text += f"📦 <b>Тариф: {tariff.name}</b>\n"
+    text += f"📊 Трафик: {traffic}\n"
+    text += f"📱 Устройств: {tariff.device_limit}\n"
+    text += f"📅 Период: {period} дней\n"
+    text += f"💰 Стоимость: {settings.format_price(price_kopeks)}\n\n"
+    text += "Подтвердить покупку?"
+
+    keyboard = [
+        [
+            types.InlineKeyboardButton(
+                text="✅ Подтвердить",
+                callback_data=f"admin_tariff_buy_exec_{user_id}_{tariff_id}_{period}_{price_kopeks}"
+            )
+        ],
+        [
+            types.InlineKeyboardButton(
+                text="❌ Отмена",
+                callback_data=f"admin_tariff_buy_select_{user_id}_{tariff_id}"
+            )
+        ]
+    ]
+
+    await callback.message.edit_text(
+        text,
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def admin_buy_tariff_execute(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    """Выполняет покупку тарифа для пользователя."""
+    parts = callback.data.split('_')
+    user_id = int(parts[4])
+    tariff_id = int(parts[5])
+    period = int(parts[6])
+    price_kopeks = int(parts[7])
+
+    user_service = UserService()
+    profile = await user_service.get_user_profile(db, user_id)
+
+    if not profile:
+        await callback.answer("❌ Пользователь не найден", show_alert=True)
+        return
+
+    target_user = profile["user"]
+
+    from app.database.crud.tariff import get_tariff_by_id
+    tariff = await get_tariff_by_id(db, tariff_id)
+
+    if not tariff or not tariff.is_active:
+        await callback.answer("❌ Тариф недоступен", show_alert=True)
+        return
+
+    # Проверяем баланс ещё раз
+    if target_user.balance_kopeks < price_kopeks:
+        await callback.answer("❌ Недостаточно средств на балансе", show_alert=True)
+        return
+
+    try:
+        from app.database.crud.user import subtract_user_balance
+        from app.database.crud.subscription import extend_subscription, create_paid_subscription, get_subscription_by_user_id
+        from app.database.crud.transaction import create_transaction
+        from app.services.subscription_service import SubscriptionService
+
+        # Списываем баланс
+        success = await subtract_user_balance(
+            db, target_user, price_kopeks,
+            f"Покупка тарифа {tariff.name} на {period} дней (администратор)"
+        )
+
+        if not success:
+            await callback.answer("❌ Ошибка списания средств", show_alert=True)
+            return
+
+        # Получаем серверы из тарифа
+        squads = tariff.allowed_squads or []
+
+        # Проверяем есть ли подписка
+        existing_subscription = await get_subscription_by_user_id(db, target_user.id)
+
+        if existing_subscription:
+            # Продлеваем существующую подписку
+            subscription = await extend_subscription(
+                db,
+                existing_subscription,
+                days=period,
+                tariff_id=tariff.id,
+                traffic_limit_gb=tariff.traffic_limit_gb,
+                device_limit=tariff.device_limit,
+                connected_squads=squads,
+            )
+        else:
+            # Создаем новую подписку
+            subscription = await create_paid_subscription(
+                db=db,
+                user_id=target_user.id,
+                duration_days=period,
+                traffic_limit_gb=tariff.traffic_limit_gb,
+                device_limit=tariff.device_limit,
+                connected_squads=squads,
+                tariff_id=tariff.id,
+            )
+
+        # Обновляем в Remnawave
+        try:
+            subscription_service = SubscriptionService()
+            await subscription_service.create_remnawave_user(
+                db,
+                subscription,
+                reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT,
+                reset_reason="покупка тарифа (администратор)",
+            )
+        except Exception as e:
+            logger.error(f"Ошибка обновления Remnawave: {e}")
+
+        # Создаем транзакцию
+        await create_transaction(
+            db,
+            user_id=target_user.id,
+            type=TransactionType.SUBSCRIPTION_PAYMENT,
+            amount_kopeks=-price_kopeks,
+            description=f"Покупка тарифа {tariff.name} на {period} дней (администратор)",
+        )
+
+        target_user_link = f'<a href="tg://user?id={target_user.telegram_id}">{target_user.full_name}</a>'
+        traffic = "♾️ Безлимит" if tariff.traffic_limit_gb == 0 else f"{tariff.traffic_limit_gb} ГБ"
+
+        await callback.message.edit_text(
+            f"✅ <b>Тариф успешно куплен!</b>\n\n"
+            f"👤 {target_user_link} (ID: {target_user.telegram_id})\n"
+            f"📦 Тариф: {tariff.name}\n"
+            f"📊 Трафик: {traffic}\n"
+            f"📱 Устройств: {tariff.device_limit}\n"
+            f"📅 Период: {period} дней\n"
+            f"💰 Списано: {settings.format_price(price_kopeks)}\n"
+            f"📅 Действует до: {format_datetime(subscription.end_date)}",
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                [types.InlineKeyboardButton(text="📱 К подписке", callback_data=f"admin_user_subscription_{user_id}")]
+            ]),
+            parse_mode="HTML"
+        )
+
+        # Уведомляем пользователя
+        try:
+            if callback.bot:
+                await callback.bot.send_message(
+                    chat_id=target_user.telegram_id,
+                    text=f"💳 <b>Администратор оформил вам тариф</b>\n\n"
+                         f"📦 Тариф: {tariff.name}\n"
+                         f"📊 Трафик: {traffic}\n"
+                         f"📱 Устройств: {tariff.device_limit}\n"
+                         f"📅 Период: {period} дней\n"
+                         f"💰 Списано с баланса: {settings.format_price(price_kopeks)}\n"
+                         f"📅 Действует до: {format_datetime(subscription.end_date)}",
+                    parse_mode="HTML"
+                )
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления пользователю: {e}")
+
+        await callback.answer("✅ Тариф куплен!", show_alert=True)
+
+    except Exception as e:
+        logger.error(f"Ошибка покупки тарифа администратором: {e}", exc_info=True)
+        await callback.answer("❌ Ошибка при покупке тарифа", show_alert=True)
+        await db.rollback()
+
+
 @admin_required
 @error_handler
 async def change_subscription_type_confirm(
@@ -5246,6 +5610,13 @@ async def confirm_admin_tariff_change(
         subscription.traffic_limit_gb = tariff.traffic_limit_gb
         subscription.connected_squads = tariff.allowed_squads or []
         subscription.updated_at = datetime.utcnow()
+
+        # Сбрасываем докупленный трафик при смене тарифа
+        from app.database.models import TrafficPurchase
+        from sqlalchemy import delete as sql_delete
+        await db.execute(sql_delete(TrafficPurchase).where(TrafficPurchase.subscription_id == subscription.id))
+        subscription.purchased_traffic_gb = 0
+        subscription.traffic_reset_at = None
 
         await db.commit()
 
@@ -5673,7 +6044,28 @@ def register_handlers(dp: Dispatcher):
         admin_buy_subscription_execute,
         F.data.startswith("admin_buy_sub_execute_")
     )
-    
+
+    # Регистрация обработчиков для покупки тарифа администратором
+    dp.callback_query.register(
+        admin_buy_tariff,
+        F.data.startswith("admin_tariff_buy_") & ~F.data.startswith("admin_tariff_buy_select_") & ~F.data.startswith("admin_tariff_buy_confirm_") & ~F.data.startswith("admin_tariff_buy_exec_")
+    )
+
+    dp.callback_query.register(
+        admin_buy_tariff_period,
+        F.data.startswith("admin_tariff_buy_select_")
+    )
+
+    dp.callback_query.register(
+        admin_buy_tariff_confirm,
+        F.data.startswith("admin_tariff_buy_confirm_")
+    )
+
+    dp.callback_query.register(
+        admin_buy_tariff_execute,
+        F.data.startswith("admin_tariff_buy_exec_")
+    )
+
     # Регистрация обработчиков для фильтрации пользователей
     dp.callback_query.register(
         show_users_filters,

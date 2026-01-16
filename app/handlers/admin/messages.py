@@ -18,6 +18,7 @@ from app.database.models import (
     Subscription,
     SubscriptionStatus,
     BroadcastHistory,
+    Tariff,
 )
 from app.database.database import AsyncSessionLocal
 from app.keyboards.admin import (
@@ -31,6 +32,7 @@ from app.keyboards.admin import (
 from app.localization.texts import get_texts
 from app.database.crud.user import get_users_list
 from app.database.crud.subscription import get_expiring_subscriptions
+from app.database.crud.tariff import get_all_tariffs
 from app.utils.decorators import admin_required, error_handler
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button
 from app.services.pinned_message_service import (
@@ -41,6 +43,41 @@ from app.services.pinned_message_service import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+async def safe_edit_or_send_text(
+    callback: types.CallbackQuery,
+    text: str,
+    reply_markup=None,
+    parse_mode: str = "HTML"
+):
+    """
+    Безопасно редактирует сообщение или удаляет и отправляет новое.
+    Нужно для случаев, когда текущее сообщение - медиа (фото/видео),
+    которое нельзя отредактировать через edit_text.
+    """
+    try:
+        await callback.message.edit_text(
+            text,
+            reply_markup=reply_markup,
+            parse_mode=parse_mode
+        )
+    except TelegramBadRequest as e:
+        if "there is no text in the message to edit" in str(e):
+            # Сообщение - медиа без текста, удаляем и отправляем новое
+            try:
+                await callback.message.delete()
+            except Exception:
+                pass
+            await callback.bot.send_message(
+                chat_id=callback.message.chat.id,
+                text=text,
+                reply_markup=reply_markup,
+                parse_mode=parse_mode
+            )
+        else:
+            raise
+
 
 BUTTON_ROWS = BROADCAST_BUTTON_ROWS
 DEFAULT_SELECTED_BUTTONS = DEFAULT_BROADCAST_BUTTONS
@@ -166,10 +203,11 @@ async def show_messages_menu(
 ⚠️ Будьте осторожны с массовыми рассылками!
 """
     
-    await callback.message.edit_text(
+    await safe_edit_or_send_text(
+        callback,
         text,
         reply_markup=get_admin_messages_keyboard(db_user.language),
-        parse_mode="HTML"  
+        parse_mode="HTML"
     )
     await callback.answer()
 
@@ -481,7 +519,63 @@ async def show_broadcast_targets(
         "🎯 <b>Выбор целевой аудитории</b>\n\n"
         "Выберите категорию пользователей для рассылки:",
         reply_markup=get_broadcast_target_keyboard(db_user.language),
-        parse_mode="HTML" 
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def show_tariff_filter(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    """Показывает список тарифов для фильтрации рассылки."""
+    tariffs = await get_all_tariffs(db, include_inactive=False)
+
+    if not tariffs:
+        await callback.message.edit_text(
+            "❌ <b>Нет доступных тарифов</b>\n\n"
+            "Создайте тарифы в разделе управления тарифами.",
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                [types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_msg_by_sub")]
+            ]),
+            parse_mode="HTML"
+        )
+        await callback.answer()
+        return
+
+    # Получаем количество подписчиков на каждом тарифе
+    tariff_counts = {}
+    for tariff in tariffs:
+        count_query = (
+            select(func.count(Subscription.id))
+            .where(
+                Subscription.tariff_id == tariff.id,
+                Subscription.status == SubscriptionStatus.ACTIVE.value,
+            )
+        )
+        result = await db.execute(count_query)
+        tariff_counts[tariff.id] = result.scalar() or 0
+
+    buttons = []
+    for tariff in tariffs:
+        count = tariff_counts.get(tariff.id, 0)
+        buttons.append([
+            types.InlineKeyboardButton(
+                text=f"{tariff.name} ({count} чел.)",
+                callback_data=f"broadcast_tariff_{tariff.id}"
+            )
+        ])
+
+    buttons.append([types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_msg_by_sub")])
+
+    await callback.message.edit_text(
+        "📦 <b>Рассылка по тарифу</b>\n\n"
+        "Выберите тариф для рассылки пользователям с активной подпиской на этот тариф:",
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=buttons),
+        parse_mode="HTML"
     )
     await callback.answer()
 
@@ -654,23 +748,34 @@ async def select_broadcast_target(
         "active_zero": "Активная подписка, трафик 0 ГБ",
         "trial_zero": "Триальная подписка, трафик 0 ГБ",
     }
-    
+
+    # Обработка фильтра по тарифу
+    target_name = target_names.get(target, target)
+    if target.startswith("tariff_"):
+        tariff_id = int(target.split("_")[1])
+        from app.database.crud.tariff import get_tariff_by_id
+        tariff = await get_tariff_by_id(db, tariff_id)
+        if tariff:
+            target_name = f"Тариф «{tariff.name}»"
+        else:
+            target_name = f"Тариф #{tariff_id}"
+
     user_count = await get_target_users_count(db, target)
-    
+
     await state.update_data(broadcast_target=target)
-    
+
     await callback.message.edit_text(
         f"📨 <b>Создание рассылки</b>\n\n"
-        f"🎯 <b>Аудитория:</b> {target_names.get(target, target)}\n"
+        f"🎯 <b>Аудитория:</b> {target_name}\n"
         f"👥 <b>Получателей:</b> {user_count}\n\n"
         f"Введите текст сообщения для рассылки:\n\n"
         f"<i>Поддерживается HTML разметка</i>",
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
             [types.InlineKeyboardButton(text="❌ Отмена", callback_data="admin_messages")]
         ]),
-        parse_mode="HTML" 
+        parse_mode="HTML"
     )
-    
+
     await state.set_state(AdminStates.waiting_for_broadcast_message)
     await callback.answer()
 
@@ -865,7 +970,8 @@ async def handle_change_media(
     db_user: User,
     state: FSMContext
 ):
-    await callback.message.edit_text(
+    await safe_edit_or_send_text(
+        callback,
         "🖼️ <b>Изменение медиафайла</b>\n\n"
         "Выберите новый тип медиа:",
         reply_markup=get_broadcast_media_keyboard(db_user.language),
@@ -1092,7 +1198,10 @@ async def confirm_button_selection(
         media_file_id = data.get('media_file_id')
         if media_file_id:
             # Удаляем текущее сообщение и отправляем новое с фото
-            await callback.message.delete()
+            try:
+                await callback.message.delete()
+            except Exception:
+                pass
             await callback.bot.send_photo(
                 chat_id=callback.message.chat.id,
                 photo=media_file_id,
@@ -1101,21 +1210,25 @@ async def confirm_button_selection(
                 parse_mode="HTML"
             )
         else:
-            # Если нет file_id, используем обычное редактирование
-            await callback.message.edit_text(
+            # Если нет file_id, используем safe редактирование
+            await safe_edit_or_send_text(
+                callback,
                 preview_text,
                 reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
                 parse_mode="HTML"
             )
     else:
-        # Для текстовых сообщений или других типов медиа используем обычное редактирование
-        await callback.message.edit_text(
+        # Для текстовых сообщений или других типов медиа используем safe редактирование
+        await safe_edit_or_send_text(
+            callback,
             preview_text,
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
             parse_mode="HTML"
         )
-    
+
     await callback.answer()
+
+
 @admin_required
 @error_handler
 async def confirm_broadcast(
@@ -1135,13 +1248,14 @@ async def confirm_broadcast(
     media_file_id = data.get('media_file_id')
     media_caption = data.get('media_caption')
     
-    await callback.message.edit_text(
+    await safe_edit_or_send_text(
+        callback,
         "📨 Начинаю рассылку...\n\n"
         "⏳ Это может занять несколько минут.",
         reply_markup=None,
-        parse_mode="HTML" 
+        parse_mode="HTML"
     )
-    
+
     if target.startswith('custom_'):
         users = await get_custom_users(db, target.replace('custom_', ''))
     else:
@@ -1284,19 +1398,221 @@ async def confirm_broadcast(
 <b>Администратор:</b> {db_user.full_name}
 """
     
-    await callback.message.edit_text(
-        result_text,
-        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
-            [types.InlineKeyboardButton(text="📨 К рассылкам", callback_data="admin_messages")]
-        ]),
-        parse_mode="HTML" 
-    )
-    
+    try:
+        await callback.message.edit_text(
+            result_text,
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                [types.InlineKeyboardButton(text="📨 К рассылкам", callback_data="admin_messages")]
+            ]),
+            parse_mode="HTML"
+        )
+    except TelegramBadRequest as e:
+        error_msg = str(e).lower()
+        if "message to edit not found" in error_msg or "there is no text" in error_msg or "message can't be edited" in error_msg:
+            # Сообщение удалено или это медиа - отправляем новое
+            await callback.bot.send_message(
+                chat_id=callback.message.chat.id,
+                text=result_text,
+                reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                    [types.InlineKeyboardButton(text="📨 К рассылкам", callback_data="admin_messages")]
+                ]),
+                parse_mode="HTML"
+            )
+        else:
+            raise
+
     await state.clear()
     logger.info(f"Рассылка выполнена админом {db_user.telegram_id}: {sent_count}/{len(users)} (медиа: {has_media})")
 
 
 async def get_target_users_count(db: AsyncSession, target: str) -> int:
+    """Быстрый подсчёт пользователей через SQL COUNT вместо загрузки всех в память."""
+    from sqlalchemy import func as sql_func, distinct
+    from datetime import datetime, timedelta
+
+    base_filter = User.status == UserStatus.ACTIVE.value
+
+    if target == "all":
+        query = select(sql_func.count(User.id)).where(base_filter)
+        result = await db.execute(query)
+        return result.scalar() or 0
+
+    if target == "active":
+        # Активные платные подписки (не триал)
+        query = (
+            select(sql_func.count(distinct(User.id)))
+            .join(Subscription, User.id == Subscription.user_id)
+            .where(
+                base_filter,
+                Subscription.status == SubscriptionStatus.ACTIVE.value,
+                Subscription.is_trial == False,
+            )
+        )
+        result = await db.execute(query)
+        return result.scalar() or 0
+
+    if target == "trial":
+        # Триальные подписки (без проверки is_active, как в оригинале)
+        query = (
+            select(sql_func.count(distinct(User.id)))
+            .join(Subscription, User.id == Subscription.user_id)
+            .where(
+                base_filter,
+                Subscription.is_trial == True,
+            )
+        )
+        result = await db.execute(query)
+        return result.scalar() or 0
+
+    if target == "no":
+        # Без активной подписки - используем NOT EXISTS для корректности
+        subquery = (
+            select(Subscription.id)
+            .where(
+                Subscription.user_id == User.id,
+                Subscription.status == SubscriptionStatus.ACTIVE.value,
+            )
+            .exists()
+        )
+        query = (
+            select(sql_func.count(User.id))
+            .where(base_filter, ~subquery)
+        )
+        result = await db.execute(query)
+        return result.scalar() or 0
+
+    if target == "expiring":
+        # Истекающие в ближайшие 3 дня
+        now = datetime.utcnow()
+        expiry_threshold = now + timedelta(days=3)
+        query = (
+            select(sql_func.count(distinct(User.id)))
+            .join(Subscription, User.id == Subscription.user_id)
+            .where(
+                base_filter,
+                Subscription.status == SubscriptionStatus.ACTIVE.value,
+                Subscription.end_date <= expiry_threshold,
+                Subscription.end_date > now,
+            )
+        )
+        result = await db.execute(query)
+        return result.scalar() or 0
+
+    if target == "expiring_subscribers":
+        # Истекающие в ближайшие 7 дней
+        now = datetime.utcnow()
+        expiry_threshold = now + timedelta(days=7)
+        query = (
+            select(sql_func.count(distinct(User.id)))
+            .join(Subscription, User.id == Subscription.user_id)
+            .where(
+                base_filter,
+                Subscription.status == SubscriptionStatus.ACTIVE.value,
+                Subscription.end_date <= expiry_threshold,
+                Subscription.end_date > now,
+            )
+        )
+        result = await db.execute(query)
+        return result.scalar() or 0
+
+    if target == "expired":
+        # Истекшие подписки
+        now = datetime.utcnow()
+        expired_statuses = [SubscriptionStatus.EXPIRED.value, SubscriptionStatus.DISABLED.value]
+        query = (
+            select(sql_func.count(distinct(User.id)))
+            .outerjoin(Subscription, User.id == Subscription.user_id)
+            .where(
+                base_filter,
+                or_(
+                    Subscription.status.in_(expired_statuses),
+                    and_(Subscription.end_date <= now, Subscription.status != SubscriptionStatus.ACTIVE.value),
+                    and_(Subscription.id == None, User.has_had_paid_subscription == True),
+                )
+            )
+        )
+        result = await db.execute(query)
+        return result.scalar() or 0
+
+    if target == "expired_subscribers":
+        # То же что и expired
+        now = datetime.utcnow()
+        expired_statuses = [SubscriptionStatus.EXPIRED.value, SubscriptionStatus.DISABLED.value]
+        query = (
+            select(sql_func.count(distinct(User.id)))
+            .outerjoin(Subscription, User.id == Subscription.user_id)
+            .where(
+                base_filter,
+                or_(
+                    Subscription.status.in_(expired_statuses),
+                    and_(Subscription.end_date <= now, Subscription.status != SubscriptionStatus.ACTIVE.value),
+                    and_(Subscription.id == None, User.has_had_paid_subscription == True),
+                )
+            )
+        )
+        result = await db.execute(query)
+        return result.scalar() or 0
+
+    if target == "active_zero":
+        # Активные платные с нулевым трафиком
+        query = (
+            select(sql_func.count(distinct(User.id)))
+            .join(Subscription, User.id == Subscription.user_id)
+            .where(
+                base_filter,
+                Subscription.status == SubscriptionStatus.ACTIVE.value,
+                Subscription.is_trial == False,
+                or_(Subscription.traffic_used_gb == None, Subscription.traffic_used_gb <= 0),
+            )
+        )
+        result = await db.execute(query)
+        return result.scalar() or 0
+
+    if target == "trial_zero":
+        # Триальные с нулевым трафиком
+        query = (
+            select(sql_func.count(distinct(User.id)))
+            .join(Subscription, User.id == Subscription.user_id)
+            .where(
+                base_filter,
+                Subscription.is_trial == True,
+                Subscription.status == SubscriptionStatus.ACTIVE.value,
+                or_(Subscription.traffic_used_gb == None, Subscription.traffic_used_gb <= 0),
+            )
+        )
+        result = await db.execute(query)
+        return result.scalar() or 0
+
+    if target == "zero":
+        # Все активные с нулевым трафиком
+        query = (
+            select(sql_func.count(distinct(User.id)))
+            .join(Subscription, User.id == Subscription.user_id)
+            .where(
+                base_filter,
+                Subscription.status == SubscriptionStatus.ACTIVE.value,
+                or_(Subscription.traffic_used_gb == None, Subscription.traffic_used_gb <= 0),
+            )
+        )
+        result = await db.execute(query)
+        return result.scalar() or 0
+
+    # Фильтр по тарифу
+    if target.startswith("tariff_"):
+        tariff_id = int(target.split("_")[1])
+        query = (
+            select(sql_func.count(distinct(User.id)))
+            .join(Subscription, User.id == Subscription.user_id)
+            .where(
+                base_filter,
+                Subscription.status == SubscriptionStatus.ACTIVE.value,
+                Subscription.tariff_id == tariff_id,
+            )
+        )
+        result = await db.execute(query)
+        return result.scalar() or 0
+
+    # Для остальных фильтров (custom_ и неизвестные) - fallback на старый метод
     users = await get_target_users(db, target)
     return len(users)
 
@@ -1500,6 +1816,17 @@ async def get_target_users(db: AsyncSession, target: str) -> list:
             if user.last_activity and user.last_activity < threshold
         ]
 
+    # Фильтр по тарифу
+    if target.startswith("tariff_"):
+        tariff_id = int(target.split("_")[1])
+        return [
+            user
+            for user in users
+            if user.subscription
+            and user.subscription.is_active
+            and user.subscription.tariff_id == tariff_id
+        ]
+
     return []
 
 
@@ -1639,6 +1966,10 @@ def get_target_name(target_type: str) -> str:
         "custom_referrals": "Через рефералов",
         "custom_direct": "Прямая регистрация"
     }
+    # Обработка фильтра по тарифу
+    if target_type.startswith("tariff_"):
+        tariff_id = target_type.split("_")[1]
+        return f"По тарифу #{tariff_id}"
     return names.get(target_type, target_type)
 
 
@@ -1656,6 +1987,7 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(handle_pinned_broadcast_now, F.data.startswith("admin_pinned_broadcast_now:"))
     dp.callback_query.register(handle_pinned_broadcast_skip, F.data.startswith("admin_pinned_broadcast_skip:"))
     dp.callback_query.register(show_broadcast_targets, F.data.in_(["admin_msg_all", "admin_msg_by_sub"]))
+    dp.callback_query.register(show_tariff_filter, F.data == "broadcast_by_tariff")
     dp.callback_query.register(select_broadcast_target, F.data.startswith("broadcast_"))
     dp.callback_query.register(confirm_broadcast, F.data == "admin_confirm_broadcast")
     

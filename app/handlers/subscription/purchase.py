@@ -2,6 +2,8 @@ import base64
 import json
 import logging
 from datetime import datetime, timedelta
+
+logger = logging.getLogger(__name__)
 from typing import Dict, List, Any, Tuple, Optional
 from urllib.parse import quote
 from aiogram import Dispatcher, types, F
@@ -134,7 +136,7 @@ from app.handlers.simple_subscription import (
     _get_simple_subscription_payment_keyboard,
 )
 
-from .common import _apply_promo_offer_discount, _get_promo_offer_discount_percent, logger, update_traffic_prices
+from .common import _apply_promo_offer_discount, _get_promo_offer_discount_percent, update_traffic_prices
 from .autopay import (
     handle_autopay_menu,
     handle_subscription_cancel,
@@ -333,31 +335,116 @@ async def show_subscription_info(
         else texts.t("SUBSCRIPTION_NO_SERVERS", "Нет серверов")
     )
 
-    # Получаем название тарифа для режима тарифов
-    tariff_line = ""
+    # Получаем информацию о тарифе для режима тарифов
+    tariff_info_block = ""
+    tariff = None
     if settings.is_tariffs_mode() and subscription.tariff_id:
         try:
             from app.database.crud.tariff import get_tariff_by_id
             tariff = await get_tariff_by_id(db, subscription.tariff_id)
             if tariff:
-                tariff_line = f"\n📦 Тариф: {tariff.name}"
-        except Exception as e:
-            logger.warning(f"Ошибка получения тарифа: {e}")
+                # Прикрепляем тариф к подписке для использования в клавиатуре
+                subscription.tariff = tariff
 
-    message_template = texts.t(
-        "SUBSCRIPTION_OVERVIEW_TEMPLATE",
-        """👤 {full_name}
+                # Формируем блок информации о тарифе
+                is_daily = getattr(tariff, 'is_daily', False)
+                tariff_type_str = "🔄 Суточный" if is_daily else "📅 Периодный"
+
+                tariff_info_lines = [
+                    f"<b>📦 {tariff.name}</b>",
+                    f"Тип: {tariff_type_str}",
+                    f"Трафик: {tariff.traffic_limit_gb} ГБ" if tariff.traffic_limit_gb > 0 else "Трафик: ∞ Безлимит",
+                    f"Устройства: {tariff.device_limit}",
+                ]
+
+                if is_daily:
+                    # Для суточного тарифа показываем цену и прогресс-бар
+                    daily_price = getattr(tariff, 'daily_price_kopeks', 0) / 100
+                    tariff_info_lines.append(f"Цена: {daily_price:.2f} ₽/день")
+
+                    # Прогресс-бар до следующего списания
+                    last_charge = getattr(subscription, 'last_daily_charge_at', None)
+                    is_paused = getattr(subscription, 'is_daily_paused', False)
+
+                    if is_paused:
+                        tariff_info_lines.append("")
+                        tariff_info_lines.append("⏸️ <b>Подписка приостановлена</b>")
+                        # Показываем оставшееся время даже при паузе
+                        if last_charge:
+                            from datetime import timedelta
+                            next_charge = last_charge + timedelta(hours=24)
+                            now = datetime.utcnow()
+                            if next_charge > now:
+                                time_until = next_charge - now
+                                hours_left = time_until.seconds // 3600
+                                minutes_left = (time_until.seconds % 3600) // 60
+                                tariff_info_lines.append(f"⏳ Осталось: {hours_left}ч {minutes_left}мин")
+                                tariff_info_lines.append("💤 Списание приостановлено")
+                    elif last_charge:
+                        from datetime import timedelta
+                        next_charge = last_charge + timedelta(hours=24)
+                        now = datetime.utcnow()
+
+                        if next_charge > now:
+                            time_until = next_charge - now
+                            hours_left = time_until.seconds // 3600
+                            minutes_left = (time_until.seconds % 3600) // 60
+
+                            # Процент оставшегося времени (24 часа = 100%)
+                            total_seconds = 24 * 3600
+                            remaining_seconds = time_until.total_seconds()
+                            percent = min(100, max(0, (remaining_seconds / total_seconds) * 100))
+
+                            # Генерируем прогресс-бар
+                            bar_length = 10
+                            filled = int(bar_length * percent / 100)
+                            empty = bar_length - filled
+                            progress_bar = "▓" * filled + "░" * empty
+
+                            tariff_info_lines.append("")
+                            tariff_info_lines.append(f"⏳ До списания: {hours_left}ч {minutes_left}мин")
+                            tariff_info_lines.append(f"[{progress_bar}] {percent:.0f}%")
+                    else:
+                        tariff_info_lines.append("")
+                        tariff_info_lines.append("⏳ Первое списание скоро")
+
+                tariff_info_block = "\n<blockquote expandable>" + "\n".join(tariff_info_lines) + "</blockquote>"
+
+        except Exception as e:
+            logger.warning(f"Ошибка получения тарифа: {e}", exc_info=True)
+
+    # Определяем, суточный ли тариф для выбора шаблона
+    is_daily_tariff = tariff and getattr(tariff, 'is_daily', False)
+
+    if is_daily_tariff:
+        # Для суточных тарифов другой шаблон без "Действует до" и "Осталось"
+        message_template = texts.t(
+            "SUBSCRIPTION_DAILY_OVERVIEW_TEMPLATE",
+            """👤 {full_name}
 💰 Баланс: {balance}
-📱 Подписка: {status_emoji} {status_display}{warning}
+📱 Подписка: {status_emoji} {status_display}{warning}{tariff_info_block}
 
 📱 Информация о подписке
-🎭 Тип: {subscription_type}{tariff_line}
+🎭 Тип: {subscription_type}
+📈 Трафик: {traffic}
+🌍 Серверы: {servers}
+📱 Устройства: {devices_used} / {device_limit}""",
+        )
+    else:
+        message_template = texts.t(
+            "SUBSCRIPTION_OVERVIEW_TEMPLATE",
+            """👤 {full_name}
+💰 Баланс: {balance}
+📱 Подписка: {status_emoji} {status_display}{warning}{tariff_info_block}
+
+📱 Информация о подписке
+🎭 Тип: {subscription_type}
 📅 Действует до: {end_date}
 ⏰ Осталось: {time_left}
 📈 Трафик: {traffic}
 🌍 Серверы: {servers}
 📱 Устройства: {devices_used} / {device_limit}""",
-    )
+        )
 
     if not show_devices:
         message_template = message_template.replace(
@@ -380,8 +467,8 @@ async def show_subscription_info(
         status_emoji=status_emoji,
         status_display=status_display,
         warning=warning_text,
+        tariff_info_block=tariff_info_block,
         subscription_type=subscription_type,
-        tariff_line=tariff_line,
         end_date=format_local_datetime(subscription.end_date, "%d.%m.%Y %H:%M"),
         time_left=time_left_text,
         traffic=traffic_used_display,
@@ -404,6 +491,58 @@ async def show_subscription_info(
                 device_info = device_info[:32] + "..."
             message += f"• {device_info}\n"
         message += texts.t("SUBSCRIPTION_CONNECTED_DEVICES_FOOTER", "</blockquote>")
+
+    # Отображаем докупленный трафик
+    if subscription.traffic_limit_gb > 0:  # Только для лимитированных тарифов
+        from app.database.models import TrafficPurchase
+        from sqlalchemy import select as sql_select
+
+        now = datetime.utcnow()
+        purchases_query = (
+            sql_select(TrafficPurchase)
+            .where(TrafficPurchase.subscription_id == subscription.id)
+            .where(TrafficPurchase.expires_at > now)
+            .order_by(TrafficPurchase.expires_at.asc())
+        )
+        purchases_result = await db.execute(purchases_query)
+        purchases = purchases_result.scalars().all()
+
+        if purchases:
+            message += "\n\n" + texts.t(
+                "SUBSCRIPTION_PURCHASED_TRAFFIC_TITLE",
+                "<blockquote>📦 <b>Докупленный трафик:</b>\n",
+            )
+
+            for purchase in purchases:
+                time_remaining = purchase.expires_at - now
+                days_remaining = max(0, int(time_remaining.total_seconds() / 86400))
+
+                # Генерируем прогресс-бар
+                total_duration_seconds = (purchase.expires_at - purchase.created_at).total_seconds()
+                elapsed_seconds = (now - purchase.created_at).total_seconds()
+                progress_percent = min(100.0, max(0.0, (elapsed_seconds / total_duration_seconds * 100) if total_duration_seconds > 0 else 0))
+
+                bar_length = 10
+                filled = int((progress_percent / 100) * bar_length)
+                bar = "▰" * filled + "▱" * (bar_length - filled)
+
+                # Форматируем дату истечения
+                expire_date = purchase.expires_at.strftime("%d.%m.%Y")
+
+                # Формируем текст о времени
+                if days_remaining == 0:
+                    time_text = "истекает сегодня"
+                elif days_remaining == 1:
+                    time_text = "остался 1 день"
+                elif days_remaining < 5:
+                    time_text = f"осталось {days_remaining} дня"
+                else:
+                    time_text = f"осталось {days_remaining} дней"
+
+                message += f"• {purchase.traffic_gb} ГБ — {time_text}\n"
+                message += f"  {bar} {progress_percent:.0f}% | до {expire_date}\n"
+
+            message += texts.t("SUBSCRIPTION_PURCHASED_TRAFFIC_FOOTER", "</blockquote>")
 
     subscription_link = get_display_subscription_link(subscription)
     hide_subscription_link = settings.should_hide_subscription_link()
@@ -1649,6 +1788,16 @@ async def confirm_extend_subscription(
 
     days = int(callback.data.split('_')[2])
     texts = get_texts(db_user.language)
+
+    # Валидация что период доступен для продления
+    available_renewal_periods = settings.get_available_renewal_periods()
+    if days not in available_renewal_periods:
+        await callback.answer(
+            texts.t("RENEWAL_PERIOD_NOT_AVAILABLE", "❌ Этот период больше недоступен для продления"),
+            show_alert=True
+        )
+        return
+
     subscription = db_user.subscription
 
     if not subscription:
@@ -1880,6 +2029,7 @@ async def confirm_extend_subscription(
                 traffic_was_reset = True
                 subscription.traffic_limit_gb = fixed_limit
                 subscription.purchased_traffic_gb = 0
+                subscription.traffic_reset_at = None  # Сбрасываем дату сброса трафика
                 logger.info(f"🔄 Сброс трафика при продлении: {old_traffic_limit} ГБ → {fixed_limit} ГБ")
 
         await db.commit()
@@ -1992,9 +2142,27 @@ async def select_period(
     period_days = int(callback.data.split('_')[1])
     texts = get_texts(db_user.language)
 
+    # Валидация что период доступен
+    available_periods = settings.get_available_subscription_periods()
+    if period_days not in available_periods:
+        await callback.answer(
+            texts.t("PERIOD_NOT_AVAILABLE", "❌ Этот период больше недоступен"),
+            show_alert=True
+        )
+        return
+
+    # Получаем цену с защитой от KeyError
+    period_price = PERIOD_PRICES.get(period_days, 0)
+    if period_price <= 0:
+        await callback.answer(
+            texts.t("PERIOD_PRICE_NOT_SET", "❌ Цена для этого периода не настроена"),
+            show_alert=True
+        )
+        return
+
     data = await state.get_data()
     data['period_days'] = period_days
-    data['total_price'] = PERIOD_PRICES[period_days]
+    data['total_price'] = period_price
 
     if settings.is_traffic_fixed():
         fixed_traffic_price = settings.get_traffic_price(settings.get_fixed_traffic_limit())
@@ -2080,9 +2248,18 @@ async def select_devices(
 
     data = await state.get_data()
 
+    # Получаем цену периода с защитой от KeyError
+    period_days = data.get('period_days')
+    if not period_days or period_days not in PERIOD_PRICES:
+        await callback.answer(
+            texts.t("PERIOD_NOT_AVAILABLE", "❌ Период больше недоступен, начните заново"),
+            show_alert=True
+        )
+        return
+
     base_price = (
-            PERIOD_PRICES[data['period_days']] +
-            settings.get_traffic_price(data['traffic_gb'])
+            PERIOD_PRICES.get(period_days, 0) +
+            settings.get_traffic_price(data.get('traffic_gb', 0))
     )
 
     countries = await _get_available_countries(db_user.promo_group_id)
@@ -2198,7 +2375,13 @@ async def confirm_purchase(
 
     # Всегда пересчитываем base_price из PERIOD_PRICES для безопасности
     # (не доверяем кэшированным значениям из FSM данных)
-    base_price_original = PERIOD_PRICES[period_days]
+    base_price_original = PERIOD_PRICES.get(period_days, 0)
+    if base_price_original <= 0:
+        await callback.answer(
+            texts.t("PERIOD_PRICE_NOT_SET", "❌ Цена для этого периода не настроена"),
+            show_alert=True
+        )
+        return
     base_discount_percent = db_user.get_promo_discount(
         "period",
         period_days,
@@ -3016,7 +3199,12 @@ async def handle_subscription_settings(
 
     await callback.message.edit_text(
         settings_text,
-        reply_markup=get_updated_subscription_settings_keyboard(db_user.language, show_countries, tariff=tariff),
+        reply_markup=get_updated_subscription_settings_keyboard(
+            db_user.language,
+            show_countries,
+            tariff=tariff,
+            subscription=subscription
+        ),
         parse_mode="HTML"
     )
     await callback.answer()
@@ -3035,6 +3223,95 @@ async def clear_saved_cart(
     await show_main_menu(callback, db_user, db)
 
     await callback.answer("🗑️ Корзина очищена")
+
+
+# ============== ХЕНДЛЕР ПАУЗЫ СУТОЧНОЙ ПОДПИСКИ ==============
+
+async def handle_toggle_daily_subscription_pause(
+        callback: types.CallbackQuery,
+        db_user: User,
+        db: AsyncSession
+):
+    """Переключает паузу суточной подписки."""
+    from app.database.crud.subscription import toggle_daily_subscription_pause
+    from app.database.crud.tariff import get_tariff_by_id
+
+    texts = get_texts(db_user.language)
+    subscription = db_user.subscription
+
+    if not subscription:
+        await callback.answer(
+            texts.t("NO_SUBSCRIPTION_ERROR", "❌ У вас нет активной подписки"),
+            show_alert=True
+        )
+        return
+
+    # Проверяем что это суточный тариф
+    tariff = None
+    if subscription.tariff_id:
+        tariff = await get_tariff_by_id(db, subscription.tariff_id)
+
+    if not tariff or not getattr(tariff, 'is_daily', False):
+        await callback.answer(
+            texts.t("NOT_DAILY_TARIFF_ERROR", "❌ Эта функция доступна только для суточных тарифов"),
+            show_alert=True
+        )
+        return
+
+    # Прикрепляем тариф к подписке для CRUD функций
+    subscription.tariff = tariff
+
+    # Переключаем статус паузы
+    was_paused = getattr(subscription, 'is_daily_paused', False)
+
+    # При возобновлении проверяем баланс
+    if was_paused:
+        daily_price = getattr(tariff, 'daily_price_kopeks', 0)
+        if daily_price > 0 and db_user.balance_kopeks < daily_price:
+            await callback.answer(
+                texts.t(
+                    "INSUFFICIENT_BALANCE_FOR_RESUME",
+                    f"❌ Недостаточно средств для возобновления. Требуется: {settings.format_price(daily_price)}"
+                ),
+                show_alert=True
+            )
+            return
+
+    subscription = await toggle_daily_subscription_pause(db, subscription)
+
+    if was_paused:
+        # Была пауза, теперь возобновили
+        message = texts.t(
+            "DAILY_SUBSCRIPTION_RESUMED",
+            "▶️ Подписка возобновлена!"
+        )
+        # Синхронизируем с Remnawave - активируем пользователя
+        try:
+            from app.services.subscription_service import SubscriptionService
+            subscription_service = SubscriptionService()
+            await subscription_service.create_remnawave_user(
+                db,
+                subscription,
+                reset_traffic=False,
+                reset_reason=None,
+            )
+            logger.info(f"✅ Синхронизировано с Remnawave после возобновления суточной подписки {subscription.id}")
+        except Exception as e:
+            logger.error(f"Ошибка синхронизации с Remnawave при возобновлении: {e}")
+    else:
+        # Была активна, теперь на паузе
+        message = texts.t(
+            "DAILY_SUBSCRIPTION_PAUSED",
+            "⏸️ Подписка приостановлена!"
+        )
+        # При паузе можно отключить пользователя в Remnawave (опционально)
+        # Пока оставляем активным, т.к. пауза - это только остановка списания
+
+    await callback.answer(message, show_alert=True)
+
+    # Возвращаемся в меню подписки - вызываем show_subscription_info
+    await db.refresh(db_user)
+    await show_subscription_info(callback, db_user, db)
 
 
 # ============== ХЕНДЛЕРЫ ПЛАТНОГО ТРИАЛА ==============
@@ -3991,6 +4268,11 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         handle_subscription_settings,
         F.data == "subscription_settings"
+    )
+
+    dp.callback_query.register(
+        handle_toggle_daily_subscription_pause,
+        F.data == "toggle_daily_subscription_pause"
     )
 
     dp.callback_query.register(

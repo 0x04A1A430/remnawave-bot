@@ -66,18 +66,36 @@ class MenuLayoutStatsService:
         callback_data: Optional[str] = None,
         button_type: Optional[str] = None,
         button_text: Optional[str] = None,
-    ) -> ButtonClickLog:
+    ) -> Optional[ButtonClickLog]:
         """Записать клик по кнопке."""
-        click_log = ButtonClickLog(
-            button_id=button_id,
-            user_id=user_id,
-            callback_data=callback_data,
-            button_type=button_type,
-            button_text=button_text,
-        )
-        db.add(click_log)
-        await db.commit()
-        return click_log
+        try:
+            click_log = ButtonClickLog(
+                button_id=button_id,
+                user_id=user_id,
+                callback_data=callback_data,
+                button_type=button_type,
+                button_text=button_text,
+            )
+            db.add(click_log)
+            await db.commit()
+            return click_log
+        except Exception:
+            # If user doesn't exist (foreign key violation), try without user_id
+            await db.rollback()
+            try:
+                click_log = ButtonClickLog(
+                    button_id=button_id,
+                    user_id=None,  # Log without user reference
+                    callback_data=callback_data,
+                    button_type=button_type,
+                    button_text=button_text,
+                )
+                db.add(click_log)
+                await db.commit()
+                return click_log
+            except Exception:
+                await db.rollback()
+                return None
 
     @classmethod
     async def get_button_stats(

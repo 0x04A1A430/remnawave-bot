@@ -46,6 +46,7 @@ from app.database.models import (
     MonitoringLog,
     SubscriptionStatus,
     Subscription,
+    Tariff,
     User,
     Ticket,
     TicketStatus,
@@ -530,7 +531,10 @@ class MonitoringService:
             )
             result = await db.execute(
                 select(Subscription)
-                .options(selectinload(Subscription.user))
+                .options(
+                    selectinload(Subscription.user),
+                    selectinload(Subscription.tariff),
+                )
                 .where(
                     and_(
                         Subscription.is_trial.is_(True),
@@ -694,7 +698,10 @@ class MonitoringService:
 
             result = await db.execute(
                 select(Subscription)
-                .options(selectinload(Subscription.user))
+                .options(
+                    selectinload(Subscription.user),
+                    selectinload(Subscription.tariff),
+                )
                 .where(
                     and_(
                         Subscription.is_trial == False,
@@ -703,7 +710,14 @@ class MonitoringService:
                 )
             )
 
-            subscriptions = result.scalars().all()
+            all_subscriptions = result.scalars().all()
+
+            # Исключаем суточные тарифы - для них отдельная логика
+            subscriptions = [
+                sub for sub in all_subscriptions
+                if not (sub.tariff and getattr(sub.tariff, 'is_daily', False))
+            ]
+
             sent_day1 = 0
             sent_wave2 = 0
             sent_wave3 = 0
@@ -811,27 +825,41 @@ class MonitoringService:
     async def _get_expiring_paid_subscriptions(self, db: AsyncSession, days_before: int) -> List[Subscription]:
         current_time = datetime.utcnow()
         threshold_date = current_time + timedelta(days=days_before)
-        
+
         result = await db.execute(
             select(Subscription)
-            .options(selectinload(Subscription.user))
+            .options(
+                selectinload(Subscription.user),
+                selectinload(Subscription.tariff),
+            )
             .where(
                 and_(
                     Subscription.status == SubscriptionStatus.ACTIVE.value,
-                    Subscription.is_trial == False, 
+                    Subscription.is_trial == False,
                     Subscription.end_date > current_time,
                     Subscription.end_date <= threshold_date
                 )
             )
         )
-        
+
         logger.debug(f"🔍 Поиск платных подписок, истекающих в ближайшие {days_before} дней")
         logger.debug(f"📅 Текущее время: {current_time}")
         logger.debug(f"📅 Пороговая дата: {threshold_date}")
-        
-        subscriptions = result.scalars().all()
+
+        all_subscriptions = result.scalars().all()
+
+        # Исключаем суточные тарифы - для них отдельная логика списания
+        subscriptions = [
+            sub for sub in all_subscriptions
+            if not (sub.tariff and getattr(sub.tariff, 'is_daily', False))
+        ]
+
+        excluded_count = len(all_subscriptions) - len(subscriptions)
+        if excluded_count > 0:
+            logger.debug(f"🔄 Исключено {excluded_count} суточных подписок из уведомлений")
+
         logger.info(f"📊 Найдено {len(subscriptions)} платных подписок для уведомлений")
-        
+
         return subscriptions
     
     @staticmethod

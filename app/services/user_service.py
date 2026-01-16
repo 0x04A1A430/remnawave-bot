@@ -23,7 +23,7 @@ from app.database.models import (
     ReferralEarning, SubscriptionServer, YooKassaPayment, BroadcastHistory,
     CryptoBotPayment, PlategaPayment, SubscriptionConversion, UserMessage, WelcomeText,
     SentNotification, PromoGroup, MulenPayPayment, Pal24Payment, HeleketPayment,
-    AdvertisingCampaign, AdvertisingCampaignRegistration, PaymentMethod,
+    FreekassaPayment, AdvertisingCampaign, AdvertisingCampaignRegistration, PaymentMethod,
     TransactionType
 )
 from app.config import settings
@@ -959,6 +959,28 @@ class UserService:
                     await db.flush()
             except Exception as e:
                 logger.error(f"❌ Ошибка удаления Heleket платежей: {e}")
+
+            # Удаляем Freekassa платежи
+            try:
+                freekassa_payments_result = await db.execute(
+                    select(FreekassaPayment).where(FreekassaPayment.user_id == user_id)
+                )
+                freekassa_payments = freekassa_payments_result.scalars().all()
+
+                if freekassa_payments:
+                    logger.info(f"🔄 Удаляем {len(freekassa_payments)} Freekassa платежей")
+                    await db.execute(
+                        update(FreekassaPayment)
+                        .where(FreekassaPayment.user_id == user_id)
+                        .values(transaction_id=None)
+                    )
+                    await db.flush()
+                    await db.execute(
+                        delete(FreekassaPayment).where(FreekassaPayment.user_id == user_id)
+                    )
+                    await db.flush()
+            except Exception as e:
+                logger.error(f"❌ Ошибка удаления Freekassa платежей: {e}")
 
             try:
                 transactions_result = await db.execute(

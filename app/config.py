@@ -15,9 +15,9 @@ from pydantic import field_validator, Field
 from pathlib import Path
 
 
-DEFAULT_DISPLAY_NAME_BANNED_KEYWORDS = [
-    "tme",
-    "joingroup",
+DEFAULT_DISPLAY_NAME_BANNED_KEYWORDS: list[str] = [
+    # Пустой по умолчанию - администратор может добавить ключевые слова через DISPLAY_NAME_BANNED_KEYWORDS
+    # Примеры: "tme", "joingroup", "support", "admin"
 ]
 
 USER_TAG_PATTERN = re.compile(r"^[A-Z0-9_]{1,16}$")
@@ -40,6 +40,11 @@ class Settings(BaseSettings):
     SUPPORT_TICKET_SLA_MINUTES: int = 5
     SUPPORT_TICKET_SLA_CHECK_INTERVAL_SECONDS: int = 60
     SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES: int = 15
+
+    # MiniApp tickets settings
+    MINIAPP_TICKETS_ENABLED: bool = True  # Enable/disable tickets section in miniapp
+    MINIAPP_SUPPORT_TYPE: str = "tickets"  # one of: tickets, profile, url
+    MINIAPP_SUPPORT_URL: str = ""  # Custom URL to redirect when tickets disabled (only for url type)
 
     ADMIN_NOTIFICATIONS_ENABLED: bool = False
     ADMIN_NOTIFICATIONS_CHAT_ID: Optional[str] = None
@@ -94,6 +99,7 @@ class Settings(BaseSettings):
     REMNAWAVE_USER_DELETE_MODE: str = "delete"  # "delete" или "disable"
     REMNAWAVE_AUTO_SYNC_ENABLED: bool = False
     REMNAWAVE_AUTO_SYNC_TIMES: str = "03:00"
+    CABINET_REMNA_SUB_CONFIG: Optional[str] = None  # UUID конфига страницы подписки из RemnaWave
     
     TRIAL_DURATION_DAYS: int = 3
     TRIAL_TRAFFIC_LIMIT_GB: int = 10
@@ -227,7 +233,7 @@ class Settings(BaseSettings):
     BLACKLIST_IGNORE_ADMINS: bool = True
 
     # Настройки простой покупки
-    SIMPLE_SUBSCRIPTION_ENABLED: bool = True
+    SIMPLE_SUBSCRIPTION_ENABLED: bool = False
     SIMPLE_SUBSCRIPTION_PERIOD_DAYS: int = 30
     SIMPLE_SUBSCRIPTION_DEVICE_LIMIT: int = 1
     SIMPLE_SUBSCRIPTION_TRAFFIC_GB: int = 0  # 0 означает безлимит
@@ -262,6 +268,9 @@ class Settings(BaseSettings):
     TRAFFIC_CHECK_CONCURRENCY: int = 10  # Параллельных запросов
     TRAFFIC_NOTIFICATION_COOLDOWN_MINUTES: int = 60  # Кулдаун уведомлений (минуты)
     TRAFFIC_SNAPSHOT_TTL_HOURS: int = 24  # TTL для snapshot трафика в Redis (часы)
+    # Настройки суточных подписок
+    DAILY_SUBSCRIPTIONS_ENABLED: bool = True  # Включить автоматическое списание для суточных тарифов
+    DAILY_SUBSCRIPTIONS_CHECK_INTERVAL_MINUTES: int = 30  # Интервал проверки в минутах
 
     AUTOPAY_WARNING_DAYS: str = "3,1"
 
@@ -468,6 +477,8 @@ class Settings(BaseSettings):
     FREEKASSA_PAYMENT_SYSTEM_ID: Optional[int] = None
     # Использовать API для создания заказов (нужно для NSPK СБП)
     FREEKASSA_USE_API: bool = False
+    # Публичный IP сервера для Freekassa API (если не задан - определяется автоматически)
+    SERVER_PUBLIC_IP: Optional[str] = None
 
     MAIN_MENU_MODE: str = "default"
     CONNECT_BUTTON_MODE: str = "guide"
@@ -516,6 +527,88 @@ class Settings(BaseSettings):
     LOG_WARNING_FILE: str = "warning.log"
     LOG_ERROR_FILE: str = "error.log"
     LOG_PAYMENTS_FILE: str = "payments.log"
+
+    # === Ban Notification Messages ===
+
+    # Сообщение о блокировке за превышение лимита устройств
+    # Переменные: {ip_count}, {limit}, {ban_minutes}, {node_info}
+    BAN_MSG_PUNISHMENT: str = (
+        "🚫 <b>АККАУНТ ЗАБЛОКИРОВАН</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "❌ <b>Причина:</b> Превышен лимит устройств\n"
+        "{node_info}\n"
+        "📊 <b>Детали нарушения:</b>\n"
+        "├ 📱 Устройств подключено: <b>{ip_count}</b>\n"
+        "├ 📋 Разрешено по тарифу: <b>{limit}</b>\n"
+        "└ ⏱ Время блокировки: <b>{ban_minutes} мин</b>\n\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        "💡 <b>Что делать:</b>\n"
+        "1. Отключите лишние устройства от VPN\n"
+        "2. Дождитесь окончания блокировки\n"
+        "3. Подключитесь заново\n\n"
+        "🔄 Доступ восстановится автоматически"
+    )
+
+    # Сообщение о разблокировке
+    BAN_MSG_ENABLED: str = (
+        "✅ <b>АККАУНТ РАЗБЛОКИРОВАН</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "🎉 Ваш аккаунт успешно разблокирован!\n\n"
+        "Теперь вы можете снова пользоваться VPN.\n\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        "⚠️ <b>Рекомендации:</b>\n"
+        "• Следите за количеством устройств\n"
+        "• Отключайте VPN когда не используете\n"
+        "• Не превышайте лимит по тарифу"
+    )
+
+    # Сообщение о блокировке за WiFi
+    # Переменные: {ban_minutes}, {network_info}, {node_info}
+    BAN_MSG_WIFI: str = (
+        "🚫 <b>АККАУНТ ЗАБЛОКИРОВАН</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "❌ <b>Причина:</b> Использование WiFi сети\n"
+        "{node_info}\n"
+        "📊 <b>Детали:</b>\n"
+        "├ 📶 Тип подключения: <b>WiFi</b>\n"
+        "{network_info}"
+        "└ ⏱ Время блокировки: <b>{ban_minutes} мин</b>\n\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        "💡 <b>Что делать:</b>\n"
+        "1. Отключитесь от WiFi\n"
+        "2. Используйте мобильный интернет\n"
+        "3. Дождитесь окончания блокировки\n\n"
+        "🔄 Доступ восстановится автоматически"
+    )
+
+    # Сообщение о блокировке за мобильную сеть
+    # Переменные: {ban_minutes}, {network_info}, {node_info}
+    BAN_MSG_MOBILE: str = (
+        "🚫 <b>АККАУНТ ЗАБЛОКИРОВАН</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "❌ <b>Причина:</b> Использование мобильной сети\n"
+        "{node_info}\n"
+        "📊 <b>Детали:</b>\n"
+        "├ 📱 Тип подключения: <b>Мобильная сеть</b>\n"
+        "{network_info}"
+        "└ ⏱ Время блокировки: <b>{ban_minutes} мин</b>\n\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        "💡 <b>Что делать:</b>\n"
+        "1. Подключитесь к WiFi\n"
+        "2. Дождитесь окончания блокировки\n"
+        "3. Используйте VPN только через WiFi\n\n"
+        "🔄 Доступ восстановится автоматически"
+    )
+
+    # Сообщение-предупреждение
+    # Переменные: {warning_message}
+    BAN_MSG_WARNING: str = (
+        "⚠️ <b>ПРЕДУПРЕЖДЕНИЕ</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "{warning_message}\n\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        "❗ При повторном нарушении аккаунт будет заблокирован"
+    )
 
     DEBUG: bool = False
     WEBHOOK_URL: Optional[str] = None
@@ -1696,42 +1789,110 @@ class Settings(BaseSettings):
         return self.MAINTENANCE_MONITORING_ENABLED
 
     def get_available_subscription_periods(self) -> List[int]:
+        """
+        Возвращает доступные периоды подписки.
+        Использует AVAILABLE_SUBSCRIPTION_PERIODS для фильтрации,
+        а PERIOD_PRICES (из БД или .env) для проверки что цена > 0.
+        """
+        from app.config import PERIOD_PRICES, get_db_period_prices
+
+        # Получаем разрешённые периоды из настройки
         try:
             periods_str = self.AVAILABLE_SUBSCRIPTION_PERIODS
-            if not periods_str.strip():
-                return [30, 90, 180] 
-            
-            periods = []
-            for period_str in periods_str.split(','):
-                period_str = period_str.strip()
-                if period_str:
-                    period = int(period_str)
-                    if hasattr(self, f'PRICE_{period}_DAYS'):
-                        periods.append(period)
-            
-            return periods if periods else [30, 90, 180]
-            
+            if not periods_str or not periods_str.strip():
+                allowed_periods = {14, 30, 60, 90, 180, 360}
+            else:
+                allowed_periods = set()
+                for period_str in periods_str.split(','):
+                    period_str = period_str.strip()
+                    if period_str:
+                        allowed_periods.add(int(period_str))
         except (ValueError, AttributeError):
-            return [30, 90, 180]
+            allowed_periods = {14, 30, 60, 90, 180, 360}
+
+        # Получаем цены из БД или .env
+        db_prices = get_db_period_prices()
+        prices = db_prices if db_prices else PERIOD_PRICES
+
+        # Возвращаем только разрешённые периоды с ценой > 0
+        periods = sorted([
+            days for days in allowed_periods
+            if days in prices and prices.get(days, 0) > 0
+        ])
+
+        return periods if periods else [30, 90, 180]
     
     def get_available_renewal_periods(self) -> List[int]:
+        """
+        Возвращает доступные периоды продления.
+        Использует AVAILABLE_RENEWAL_PERIODS для фильтрации,
+        а PERIOD_PRICES (из БД или .env) для проверки что цена > 0.
+        """
+        from app.config import PERIOD_PRICES, get_db_period_prices
+
+        # Получаем разрешённые периоды из настройки
         try:
             periods_str = self.AVAILABLE_RENEWAL_PERIODS
-            if not periods_str.strip():
-                return [30, 90, 180] 
-            
+            if not periods_str or not periods_str.strip():
+                allowed_periods = {30, 60, 90, 180, 360}
+            else:
+                allowed_periods = set()
+                for period_str in periods_str.split(','):
+                    period_str = period_str.strip()
+                    if period_str:
+                        allowed_periods.add(int(period_str))
+        except (ValueError, AttributeError):
+            allowed_periods = {30, 60, 90, 180, 360}
+
+        # Получаем цены из БД или .env
+        db_prices = get_db_period_prices()
+        prices = db_prices if db_prices else PERIOD_PRICES
+
+        # Возвращаем только разрешённые периоды с ценой > 0
+        periods = sorted([
+            days for days in allowed_periods
+            if days in prices and prices.get(days, 0) > 0
+        ])
+
+        return periods if periods else [30, 90, 180]
+
+    def get_configured_subscription_periods(self) -> List[int]:
+        """
+        Возвращает настроенные периоды подписки из AVAILABLE_SUBSCRIPTION_PERIODS.
+        БЕЗ фильтрации по ценам - используется для админки.
+        """
+        try:
+            periods_str = self.AVAILABLE_SUBSCRIPTION_PERIODS
+            if not periods_str or not periods_str.strip():
+                return [14, 30, 60, 90, 180, 360]
+
             periods = []
             for period_str in periods_str.split(','):
                 period_str = period_str.strip()
                 if period_str:
-                    period = int(period_str)
-                    if hasattr(self, f'PRICE_{period}_DAYS'):
-                        periods.append(period)
-            
-            return periods if periods else [30, 90, 180]
-            
+                    periods.append(int(period_str))
+            return sorted(periods) if periods else [14, 30, 60, 90, 180, 360]
         except (ValueError, AttributeError):
-            return [30, 90, 180]
+            return [14, 30, 60, 90, 180, 360]
+
+    def get_configured_renewal_periods(self) -> List[int]:
+        """
+        Возвращает настроенные периоды продления из AVAILABLE_RENEWAL_PERIODS.
+        БЕЗ фильтрации по ценам - используется для админки.
+        """
+        try:
+            periods_str = self.AVAILABLE_RENEWAL_PERIODS
+            if not periods_str or not periods_str.strip():
+                return [30, 60, 90, 180, 360]
+
+            periods = []
+            for period_str in periods_str.split(','):
+                period_str = period_str.strip()
+                if period_str:
+                    periods.append(int(period_str))
+            return sorted(periods) if periods else [30, 60, 90, 180, 360]
+        except (ValueError, AttributeError):
+            return [30, 60, 90, 180, 360]
 
     def get_balance_payment_description(self, amount_kopeks: int, telegram_user_id: Optional[int] = None) -> str:
         # Базовое описание
@@ -2097,12 +2258,26 @@ class Settings(BaseSettings):
     def get_support_system_mode(self) -> str:
         mode = (self.SUPPORT_SYSTEM_MODE or "both").strip().lower()
         return mode if mode in {"tickets", "contact", "both"} else "both"
-    
+
     def is_support_tickets_enabled(self) -> bool:
         return self.get_support_system_mode() in {"tickets", "both"}
-    
+
     def is_support_contact_enabled(self) -> bool:
         return self.get_support_system_mode() in {"contact", "both"}
+
+    # MiniApp tickets settings
+    def is_miniapp_tickets_enabled(self) -> bool:
+        """Check if tickets are enabled in miniapp."""
+        return bool(self.MINIAPP_TICKETS_ENABLED)
+
+    def get_miniapp_support_type(self) -> str:
+        """Get miniapp support type: tickets, profile, or url."""
+        support_type = (self.MINIAPP_SUPPORT_TYPE or "tickets").strip().lower()
+        return support_type if support_type in {"tickets", "profile", "url"} else "tickets"
+
+    def get_miniapp_support_url(self) -> str:
+        """Get custom support URL for miniapp (when type is 'url')."""
+        return (self.MINIAPP_SUPPORT_URL or "").strip()
 
     def get_bot_run_mode(self) -> str:
         mode = (self.BOT_RUN_MODE or "polling").strip().lower()
@@ -2226,17 +2401,43 @@ _PERIOD_PRICE_FIELDS: Dict[int, str] = {
     360: "PRICE_360_DAYS",
 }
 
+# Хранилище периодов/цен из БД (приоритет над .env)
+_DB_PERIOD_PRICES: Optional[Dict[int, int]] = None
+
+
+def set_period_prices_from_db(period_prices: Dict[int, int]) -> None:
+    """
+    Устанавливает периоды/цены из БД.
+    Вызывается после синхронизации тарифов при запуске бота.
+    """
+    global _DB_PERIOD_PRICES
+    _DB_PERIOD_PRICES = period_prices.copy() if period_prices else None
+    refresh_period_prices()
+
+
+def get_db_period_prices() -> Optional[Dict[int, int]]:
+    """Возвращает периоды/цены из БД если они загружены."""
+    return _DB_PERIOD_PRICES
+
 
 def refresh_period_prices() -> None:
-    """Rebuild cached period price mapping using the latest settings."""
-
+    """
+    Rebuild cached period price mapping.
+    Приоритет: БД > .env
+    """
     PERIOD_PRICES.clear()
-    PERIOD_PRICES.update(
-        {
-            days: getattr(settings, field_name, 0)
-            for days, field_name in _PERIOD_PRICE_FIELDS.items()
-        }
-    )
+
+    if _DB_PERIOD_PRICES:
+        # Используем цены из БД
+        PERIOD_PRICES.update(_DB_PERIOD_PRICES)
+    else:
+        # Fallback на .env
+        PERIOD_PRICES.update(
+            {
+                days: getattr(settings, field_name, 0)
+                for days, field_name in _PERIOD_PRICE_FIELDS.items()
+            }
+        )
 
 
 PERIOD_PRICES: Dict[int, int] = {}

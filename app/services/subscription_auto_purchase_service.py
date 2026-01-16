@@ -1160,6 +1160,8 @@ async def auto_activate_subscription_after_topup(
             exc_info=True,
         )
         return (False, False)
+        await db.rollback()
+        return False
 
 
 __all__ = ["auto_purchase_saved_cart_after_topup", "auto_activate_subscription_after_topup"]

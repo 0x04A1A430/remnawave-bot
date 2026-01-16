@@ -364,11 +364,12 @@ def _format_core_summary(lang_code: str) -> str:
 
 
 def _get_period_items(lang_code: str) -> List[PriceItem]:
+    from app.config import PERIOD_PRICES
     items: List[PriceItem] = []
     for days in settings.get_available_subscription_periods():
         key = f"PRICE_{days}_DAYS"
-        if hasattr(settings, key):
-            price = getattr(settings, key)
+        price = PERIOD_PRICES.get(days, 0)
+        if price > 0:
             items.append((key, _format_period_label(days, lang_code), price))
     return items
 
@@ -610,8 +611,9 @@ def _build_period_options_section(language: str) -> Tuple[str, types.InlineKeybo
     lang_code = _language_code(language)
     suffix = "д" if lang_code == "ru" else "d"
 
-    available_subscription = set(settings.get_available_subscription_periods())
-    available_renewal = set(settings.get_available_renewal_periods())
+    # Используем методы без фильтрации по ценам для админки
+    available_subscription = set(settings.get_configured_subscription_periods())
+    available_renewal = set(settings.get_configured_renewal_periods())
 
     subscription_options = (14, 30, 60, 90, 180, 360)
     renewal_options = (30, 60, 90, 180, 360)
@@ -1335,11 +1337,13 @@ async def toggle_period_option(
     texts = get_texts(db_user.language)
 
     if target == "subscription":
-        current = set(settings.get_available_subscription_periods())
+        # Используем метод без фильтрации по ценам для админки
+        current = set(settings.get_configured_subscription_periods())
         options = {14, 30, 60, 90, 180, 360}
         setting_key = "AVAILABLE_SUBSCRIPTION_PERIODS"
     elif target == "renewal":
-        current = set(settings.get_available_renewal_periods())
+        # Используем метод без фильтрации по ценам для админки
+        current = set(settings.get_configured_renewal_periods())
         options = {30, 60, 90, 180, 360}
         setting_key = "AVAILABLE_RENEWAL_PERIODS"
     else:

@@ -66,7 +66,7 @@ async def start_mulenpay_payment(
 
     if settings.is_quick_amount_buttons_enabled():
         from .main import get_quick_amount_buttons
-        quick_amount_buttons = get_quick_amount_buttons(db_user.language, db_user)
+        quick_amount_buttons = await get_quick_amount_buttons(db_user.language, db_user)
         if quick_amount_buttons:
             keyboard.inline_keyboard = quick_amount_buttons + keyboard.inline_keyboard
 
@@ -160,7 +160,7 @@ async def process_mulenpay_payment_amount(
             db=db,
             user_id=db_user.id,
             amount_kopeks=amount_kopeks,
-            description=settings.get_balance_payment_description(amount_kopeks),
+            description=settings.get_balance_payment_description(amount_kopeks, telegram_user_id=db_user.telegram_id),
             language=db_user.language,
         )
 

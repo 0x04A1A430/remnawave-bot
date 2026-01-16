@@ -151,6 +151,7 @@ async def get_all_server_squads(
 async def get_available_server_squads(
     db: AsyncSession,
     promo_group_id: Optional[int] = None,
+    exclude_trial_only: bool = False,
 ) -> List[ServerSquad]:
 
     query = (
@@ -159,6 +160,9 @@ async def get_available_server_squads(
         .where(ServerSquad.is_available.is_(True))
         .order_by(ServerSquad.sort_order, ServerSquad.display_name)
     )
+
+    if exclude_trial_only:
+        query = query.where(ServerSquad.is_trial_eligible.is_(False))
 
     if promo_group_id is not None:
         query = query.join(ServerSquad.allowed_promo_groups).where(
@@ -526,38 +530,158 @@ async def get_random_trial_squad_uuid(
 
 
 def _generate_display_name(original_name: str) -> str:
+    """Генерирует отображаемое название сервера на основе оригинального имени."""
 
     country_names = {
+        # Европа
         'NL': '🇳🇱 Нидерланды',
-        'DE': '🇩🇪 Германия', 
-        'US': '🇺🇸 США',
+        'DE': '🇩🇪 Германия',
         'FR': '🇫🇷 Франция',
         'GB': '🇬🇧 Великобритания',
+        'UK': '🇬🇧 Великобритания',
         'IT': '🇮🇹 Италия',
         'ES': '🇪🇸 Испания',
+        'PT': '🇵🇹 Португалия',
+        'PL': '🇵🇱 Польша',
+        'CZ': '🇨🇿 Чехия',
+        'AT': '🇦🇹 Австрия',
+        'CH': '🇨🇭 Швейцария',
+        'SE': '🇸🇪 Швеция',
+        'NO': '🇳🇴 Норвегия',
+        'FI': '🇫🇮 Финляндия',
+        'DK': '🇩🇰 Дания',
+        'BE': '🇧🇪 Бельгия',
+        'IE': '🇮🇪 Ирландия',
+        'RO': '🇷🇴 Румыния',
+        'BG': '🇧🇬 Болгария',
+        'HU': '🇭🇺 Венгрия',
+        'GR': '🇬🇷 Греция',
+        'LV': '🇱🇻 Латвия',
+        'LT': '🇱🇹 Литва',
+        'EE': '🇪🇪 Эстония',
+        'SK': '🇸🇰 Словакия',
+        'SI': '🇸🇮 Словения',
+        'HR': '🇭🇷 Хорватия',
+        'RS': '🇷🇸 Сербия',
+        'UA': '🇺🇦 Украина',
+        'MD': '🇲🇩 Молдова',
+        'BY': '🇧🇾 Беларусь',
+        'LU': '🇱🇺 Люксембург',
+
+        # СНГ и Азия
+        'RU': '🇷🇺 Россия',
+        'KZ': '🇰🇿 Казахстан',
+        'UZ': '🇺🇿 Узбекистан',
+        'GE': '🇬🇪 Грузия',
+        'AM': '🇦🇲 Армения',
+        'AZ': '🇦🇿 Азербайджан',
+
+        # Америка
+        'US': '🇺🇸 США',
         'CA': '🇨🇦 Канада',
+        'MX': '🇲🇽 Мексика',
+        'BR': '🇧🇷 Бразилия',
+        'AR': '🇦🇷 Аргентина',
+        'CL': '🇨🇱 Чили',
+        'CO': '🇨🇴 Колумбия',
+
+        # Азия
         'JP': '🇯🇵 Япония',
+        'KR': '🇰🇷 Южная Корея',
+        'CN': '🇨🇳 Китай',
+        'HK': '🇭🇰 Гонконг',
+        'TW': '🇹🇼 Тайвань',
         'SG': '🇸🇬 Сингапур',
+        'TH': '🇹🇭 Таиланд',
+        'VN': '🇻🇳 Вьетнам',
+        'MY': '🇲🇾 Малайзия',
+        'ID': '🇮🇩 Индонезия',
+        'PH': '🇵🇭 Филиппины',
+        'IN': '🇮🇳 Индия',
+        'PK': '🇵🇰 Пакистан',
+
+        # Ближний Восток
+        'IL': '🇮🇱 Израиль',
+        'TR': '🇹🇷 Турция',
+        'AE': '🇦🇪 ОАЭ',
+        'SA': '🇸🇦 Саудовская Аравия',
+        'QA': '🇶🇦 Катар',
+        'BH': '🇧🇭 Бахрейн',
+        'KW': '🇰🇼 Кувейт',
+
+        # Океания
         'AU': '🇦🇺 Австралия',
+        'NZ': '🇳🇿 Новая Зеландия',
+
+        # Африка
+        'ZA': '🇿🇦 ЮАР',
+        'EG': '🇪🇬 Египет',
+        'NG': '🇳🇬 Нигерия',
+        'KE': '🇰🇪 Кения',
     }
-    
+
     name_upper = original_name.upper()
+
+    # Сначала ищем код как отдельный элемент (через - или _)
+    for code, display_name in country_names.items():
+        if f'-{code}' in name_upper or f'_{code}' in name_upper:
+            return display_name
+        if name_upper.startswith(code + '-') or name_upper.startswith(code + '_'):
+            return display_name
+        if name_upper.endswith('-' + code) or name_upper.endswith('_' + code):
+            return display_name
+        if name_upper == code:
+            return display_name
+
+    # Потом ищем просто вхождение кода
     for code, display_name in country_names.items():
         if code in name_upper:
             return display_name
-    
+
     return f"🌍 {original_name}"
 
 
 def _extract_country_code(original_name: str) -> Optional[str]:
-    
-    codes = ['NL', 'DE', 'US', 'FR', 'GB', 'IT', 'ES', 'CA', 'JP', 'SG', 'AU']
+    """Извлекает код страны из оригинального названия."""
+
+    # Полный список кодов стран
+    codes = [
+        # Европа
+        'NL', 'DE', 'FR', 'GB', 'UK', 'IT', 'ES', 'PT', 'PL', 'CZ', 'AT', 'CH',
+        'SE', 'NO', 'FI', 'DK', 'BE', 'IE', 'RO', 'BG', 'HU', 'GR', 'LV', 'LT',
+        'EE', 'SK', 'SI', 'HR', 'RS', 'UA', 'MD', 'BY', 'LU',
+        # СНГ
+        'RU', 'KZ', 'UZ', 'GE', 'AM', 'AZ',
+        # Америка
+        'US', 'CA', 'MX', 'BR', 'AR', 'CL', 'CO',
+        # Азия
+        'JP', 'KR', 'CN', 'HK', 'TW', 'SG', 'TH', 'VN', 'MY', 'ID', 'PH', 'IN', 'PK',
+        # Ближний Восток
+        'IL', 'TR', 'AE', 'SA', 'QA', 'BH', 'KW',
+        # Океания
+        'AU', 'NZ',
+        # Африка
+        'ZA', 'EG', 'NG', 'KE',
+    ]
+
     name_upper = original_name.upper()
-    
+
+    # Сначала ищем код как отдельный элемент
+    for code in codes:
+        if f'-{code}' in name_upper or f'_{code}' in name_upper:
+            return code
+        if name_upper.startswith(code + '-') or name_upper.startswith(code + '_'):
+            return code
+        if name_upper.endswith('-' + code) or name_upper.endswith('_' + code):
+            return code
+        if name_upper == code:
+            return code
+
+    # Потом просто ищем вхождение
     for code in codes:
         if code in name_upper:
             return code
-    
+
     return None
 
 
@@ -679,6 +803,49 @@ async def get_server_ids_by_uuids(
         .where(ServerSquad.squad_uuid.in_(squad_uuids))
     )
     return [row[0] for row in result.fetchall()]
+
+
+async def ensure_servers_synced(db: AsyncSession) -> None:
+    """
+    Проверяет и синхронизирует серверы при запуске.
+    Если серверов нет в БД, загружает их из RemnaWave.
+    Вызывается при старте бота.
+    """
+    try:
+        # Проверяем есть ли серверы в БД
+        result = await db.execute(select(func.count(ServerSquad.id)))
+        server_count = result.scalar() or 0
+
+        if server_count > 0:
+            logger.info(f"✅ В базе уже есть {server_count} серверов, пропускаем синхронизацию")
+            return
+
+        logger.info("🔄 Серверов в БД нет, начинаем синхронизацию с RemnaWave...")
+
+        # Импортируем сервис здесь чтобы избежать циклических импортов
+        from app.services.subscription_service import SubscriptionService
+
+        subscription_service = SubscriptionService()
+        if not subscription_service.is_configured:
+            logger.warning("⚠️ RemnaWave не настроен, серверы не синхронизированы")
+            return
+
+        # Получаем скводы из RemnaWave
+        squads = await subscription_service.get_remnawave_squads()
+        if squads is None:
+            logger.error("❌ Не удалось получить список серверов из RemnaWave")
+            return
+
+        if not squads:
+            logger.warning("⚠️ RemnaWave вернул пустой список серверов")
+            return
+
+        # Синхронизируем
+        created, updated, removed = await sync_with_remnawave(db, squads)
+        logger.info(f"✅ Серверы синхронизированы: +{created} ~{updated} -{removed}")
+
+    except Exception as e:
+        logger.error(f"❌ Ошибка синхронизации серверов: {e}")
 
 
 async def sync_server_user_counts(db: AsyncSession) -> int:

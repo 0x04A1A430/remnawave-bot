@@ -31,7 +31,7 @@ from app.keyboards.inline import (
     get_countries_keyboard, get_devices_keyboard,
     get_subscription_confirm_keyboard, get_autopay_keyboard,
     get_autopay_days_keyboard, get_back_keyboard,
-    get_add_traffic_keyboard,
+    get_add_traffic_keyboard, get_add_traffic_keyboard_from_tariff,
     get_change_devices_keyboard, get_reset_traffic_confirm_keyboard,
     get_manage_countries_keyboard,
     get_device_selection_keyboard, get_connection_guide_keyboard,
@@ -93,41 +93,9 @@ async def handle_add_traffic(
         db: AsyncSession
 ):
     from app.config import settings
+    from app.database.crud.tariff import get_tariff_by_id
 
     texts = get_texts(db_user.language)
-
-    # Проверяем, включена ли функция докупки трафика
-    if not settings.is_traffic_topup_enabled():
-        await callback.answer(
-            texts.t(
-                "TRAFFIC_TOPUP_DISABLED",
-                "⚠️ Функция докупки трафика отключена",
-            ),
-            show_alert=True,
-        )
-        return
-
-    # В режиме тарифов докупка трафика недоступна
-    if settings.is_tariffs_mode():
-        await callback.answer(
-            texts.t(
-                "TARIFF_TRAFFIC_TOPUP_DISABLED",
-                "⚠️ В режиме тарифов докупка трафика недоступна",
-            ),
-            show_alert=True,
-        )
-        return
-
-    if settings.is_traffic_topup_blocked():
-        await callback.answer(
-            texts.t(
-                "TRAFFIC_FIXED_MODE",
-                "⚠️ В текущем режиме трафик фиксированный и не может быть изменен",
-            ),
-            show_alert=True,
-        )
-        return
-
     subscription = db_user.subscription
 
     if not subscription or subscription.is_trial:
@@ -140,6 +108,74 @@ async def handle_add_traffic(
     if subscription.traffic_limit_gb == 0:
         await callback.answer(
             texts.t("TRAFFIC_ALREADY_UNLIMITED", "⚠ У вас уже безлимитный трафик"),
+            show_alert=True,
+        )
+        return
+
+    # Режим тарифов - проверяем настройки тарифа
+    if settings.is_tariffs_mode() and subscription.tariff_id:
+        tariff = await get_tariff_by_id(db, subscription.tariff_id)
+        if not tariff or not tariff.can_topup_traffic():
+            await callback.answer(
+                texts.t(
+                    "TARIFF_TRAFFIC_TOPUP_DISABLED",
+                    "⚠️ На вашем тарифе докупка трафика недоступна",
+                ),
+                show_alert=True,
+            )
+            return
+
+        # Показываем пакеты из тарифа
+        current_traffic = subscription.traffic_limit_gb
+        packages = tariff.get_traffic_topup_packages()
+
+        period_hint_days = _get_period_hint_from_subscription(subscription)
+        traffic_discount_percent = _get_addon_discount_percent_for_user(
+            db_user,
+            "traffic",
+            period_hint_days,
+        )
+
+        prompt_text = texts.t(
+            "ADD_TRAFFIC_PROMPT",
+            (
+                "📈 <b>Добавить трафик к подписке</b>\n\n"
+                "Текущий лимит: {current_traffic}\n"
+                "Выберите дополнительный трафик:"
+            ),
+        ).format(current_traffic=texts.format_traffic(current_traffic))
+
+        await callback.message.edit_text(
+            prompt_text,
+            reply_markup=get_add_traffic_keyboard_from_tariff(
+                db_user.language,
+                packages,
+                subscription.end_date,
+                traffic_discount_percent,
+            ),
+            parse_mode="HTML"
+        )
+
+        await callback.answer()
+        return
+
+    # Стандартный режим - проверяем глобальные настройки
+    if not settings.is_traffic_topup_enabled():
+        await callback.answer(
+            texts.t(
+                "TRAFFIC_TOPUP_DISABLED",
+                "⚠️ Функция докупки трафика отключена",
+            ),
+            show_alert=True,
+        )
+        return
+
+    if settings.is_traffic_topup_blocked():
+        await callback.answer(
+            texts.t(
+                "TRAFFIC_FIXED_MODE",
+                "⚠️ В текущем режиме трафик фиксированный и не может быть изменен",
+            ),
             show_alert=True,
         )
         return
@@ -472,15 +508,30 @@ async def add_traffic(
         db_user: User,
         db: AsyncSession
 ):
-    if settings.is_traffic_topup_blocked():
-        await callback.answer("⚠️ В текущем режиме трафик фиксированный", show_alert=True)
-        return
+    from app.database.crud.tariff import get_tariff_by_id
 
     traffic_gb = int(callback.data.split('_')[2])
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
 
-    base_price = settings.get_traffic_topup_price(traffic_gb)
+    # Получаем цену: из тарифа или из глобальных настроек
+    base_price = 0
+    tariff = None
+
+    if settings.is_tariffs_mode() and subscription and subscription.tariff_id:
+        # Режим тарифов - берем цену из тарифа
+        tariff = await get_tariff_by_id(db, subscription.tariff_id)
+        if tariff and tariff.can_topup_traffic():
+            base_price = tariff.get_traffic_topup_price(traffic_gb) or 0
+        else:
+            await callback.answer("⚠️ На вашем тарифе докупка трафика недоступна", show_alert=True)
+            return
+    else:
+        # Стандартный режим
+        if settings.is_traffic_topup_blocked():
+            await callback.answer("⚠️ В текущем режиме трафик фиксированный", show_alert=True)
+            return
+        base_price = settings.get_traffic_topup_price(traffic_gb)
 
     if base_price == 0 and traffic_gb != 0:
         await callback.answer("⚠️ Цена для этого пакета не настроена", show_alert=True)
@@ -550,13 +601,15 @@ async def add_traffic(
 
         if traffic_gb == 0:
             subscription.traffic_limit_gb = 0
-            # При переходе на безлимит сбрасываем докупленный трафик
+            # При переходе на безлимит сбрасываем все докупки
+            from app.database.models import TrafficPurchase
+            from sqlalchemy import delete
+            await db.execute(delete(TrafficPurchase).where(TrafficPurchase.subscription_id == subscription.id))
             subscription.purchased_traffic_gb = 0
+            subscription.traffic_reset_at = None
         else:
+            # add_subscription_traffic уже создаёт TrafficPurchase и обновляет все необходимые поля
             await add_subscription_traffic(db, subscription, traffic_gb)
-            # Записываем докупленный трафик для корректного расчета цены сброса
-            current_purchased = getattr(subscription, 'purchased_traffic_gb', 0) or 0
-            subscription.purchased_traffic_gb = current_purchased + traffic_gb
 
         subscription_service = SubscriptionService()
         await subscription_service.update_remnawave_user(db, subscription)
@@ -630,6 +683,14 @@ async def handle_switch_traffic(
     if not subscription or subscription.is_trial:
         await callback.answer("⚠️ Эта функция доступна только для платных подписок", show_alert=True)
         return
+
+    # Проверяем настройку тарифа
+    if subscription.tariff_id:
+        from app.database.crud.tariff import get_tariff_by_id
+        tariff = await get_tariff_by_id(db, subscription.tariff_id)
+        if tariff and not tariff.allow_traffic_topup:
+            await callback.answer("⚠️ Для вашего тарифа переключение трафика недоступно", show_alert=True)
+            return
 
     current_traffic = subscription.traffic_limit_gb
     # Вычисляем базовый трафик (без докупленного) для корректного расчёта цен
@@ -805,8 +866,12 @@ async def execute_switch_traffic(
             )
 
         subscription.traffic_limit_gb = new_traffic_gb
-        # Сбрасываем докупленный трафик при переключении пакета
+        # Сбрасываем все докупки трафика при переключении пакета
+        from app.database.models import TrafficPurchase
+        from sqlalchemy import delete
+        await db.execute(delete(TrafficPurchase).where(TrafficPurchase.subscription_id == subscription.id))
         subscription.purchased_traffic_gb = 0
+        subscription.traffic_reset_at = None  # Сбрасываем дату сброса трафика
         subscription.updated_at = datetime.utcnow()
 
         await db.commit()

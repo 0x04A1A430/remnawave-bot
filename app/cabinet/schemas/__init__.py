@@ -15,6 +15,7 @@ from .auth import (
 )
 from .subscription import (
     SubscriptionResponse,
+    TrafficPurchaseInfo,
     RenewalOptionResponse,
     RenewalRequest,
     TrafficPackageResponse,
@@ -59,6 +60,7 @@ __all__ = [
     "AuthResponse",
     # Subscription
     "SubscriptionResponse",
+    "TrafficPurchaseInfo",
     "RenewalOptionResponse",
     "RenewalRequest",
     "TrafficPackageResponse",

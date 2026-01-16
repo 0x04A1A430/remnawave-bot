@@ -1893,7 +1893,60 @@ class RemnaWaveService:
         except Exception as e:
             logger.error(f"Ошибка получения статистики трафика для пользователя {telegram_id}: {e}")
             return None
-    
+
+    async def get_telegram_id_by_email(self, user_identifier: str) -> Optional[int]:
+        """
+        Получить telegram_id пользователя по email или username из панели RemnaWave.
+
+        Args:
+            user_identifier: Email или username пользователя
+
+        Returns:
+            telegram_id если найден, иначе None
+        """
+        if not self.is_configured:
+            logger.warning("RemnaWave API не настроен для поиска пользователя")
+            return None
+
+        try:
+            async with self.get_api_client() as api:
+                # Сначала пробуем найти по username (часто username == email)
+                try:
+                    user = await api.get_user_by_username(user_identifier)
+                    if user and user.telegram_id:
+                        logger.info(
+                            f"Найден пользователь по username '{user_identifier}': "
+                            f"telegram_id={user.telegram_id}"
+                        )
+                        return user.telegram_id
+                except Exception as e:
+                    logger.debug(f"Пользователь не найден по username '{user_identifier}': {e}")
+
+                # Если не нашли по username, ищем по email среди всех пользователей
+                try:
+                    all_users_response = await api.get_all_users(start=0, size=10000)
+                    users_list = all_users_response.get('users', [])
+
+                    for panel_user in users_list:
+                        panel_email = panel_user.email if hasattr(panel_user, 'email') else None
+                        if panel_email and panel_email.lower() == user_identifier.lower():
+                            panel_telegram_id = panel_user.telegram_id if hasattr(panel_user, 'telegram_id') else None
+                            if panel_telegram_id:
+                                logger.info(
+                                    f"Найден пользователь по email '{user_identifier}': "
+                                    f"telegram_id={panel_telegram_id}"
+                                )
+                                return panel_telegram_id
+                except Exception as e:
+                    logger.warning(f"Ошибка поиска пользователя по email '{user_identifier}': {e}")
+
+                logger.warning(f"Пользователь с идентификатором '{user_identifier}' не найден в панели")
+                return None
+
+        except Exception as e:
+            logger.error(f"Ошибка получения telegram_id для '{user_identifier}': {e}")
+            return None
+
     async def test_api_connection(self) -> Dict[str, Any]:
         if not self.is_configured:
             return {
@@ -2689,3 +2742,7 @@ class RemnaWaveService:
             "api_url": settings.REMNAWAVE_API_URL,
             "attempts_used": attempts,
         }
+
+
+# Singleton instance for backward compatibility
+remnawave_service = RemnaWaveService()

@@ -5136,6 +5136,68 @@ async def create_withdrawal_requests_table() -> bool:
 
 
 # =============================================================================
+# МИГРАЦИЯ ДЛЯ ИНДИВИДУАЛЬНЫХ ДОКУПОК ТРАФИКА
+# =============================================================================
+
+async def create_traffic_purchases_table() -> bool:
+    """Создаёт таблицу для индивидуальных докупок трафика с отдельными датами истечения."""
+    try:
+        if await check_table_exists('traffic_purchases'):
+            logger.info("ℹ️ Таблица traffic_purchases уже существует")
+            return True
+
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'sqlite':
+                create_sql = """
+                CREATE TABLE traffic_purchases (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    subscription_id INTEGER NOT NULL,
+                    traffic_gb INTEGER NOT NULL,
+                    expires_at DATETIME NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE
+                );
+                CREATE INDEX idx_traffic_purchases_subscription_id ON traffic_purchases(subscription_id);
+                CREATE INDEX idx_traffic_purchases_expires_at ON traffic_purchases(expires_at);
+                """
+            elif db_type == 'postgresql':
+                create_sql = """
+                CREATE TABLE traffic_purchases (
+                    id SERIAL PRIMARY KEY,
+                    subscription_id INTEGER NOT NULL REFERENCES subscriptions(id) ON DELETE CASCADE,
+                    traffic_gb INTEGER NOT NULL,
+                    expires_at TIMESTAMP NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE INDEX idx_traffic_purchases_subscription_id ON traffic_purchases(subscription_id);
+                CREATE INDEX idx_traffic_purchases_expires_at ON traffic_purchases(expires_at);
+                """
+            else:  # mysql
+                create_sql = """
+                CREATE TABLE traffic_purchases (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    subscription_id INT NOT NULL,
+                    traffic_gb INT NOT NULL,
+                    expires_at DATETIME NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE,
+                    INDEX idx_traffic_purchases_subscription_id (subscription_id),
+                    INDEX idx_traffic_purchases_expires_at (expires_at)
+                );
+                """
+
+            await conn.execute(text(create_sql))
+            logger.info("✅ Таблица traffic_purchases создана")
+
+        return True
+    except Exception as error:
+        logger.error(f"❌ Ошибка создания таблицы traffic_purchases: {error}")
+        return False
+
+
+# =============================================================================
 # МИГРАЦИИ ДЛЯ РЕЖИМА ТАРИФОВ
 # =============================================================================
 
@@ -5259,6 +5321,38 @@ async def create_tariff_promo_groups_table() -> bool:
         return False
 
 
+async def ensure_tariff_max_device_limit_column() -> bool:
+    """Добавляет колонку max_device_limit в таблицу tariffs."""
+    try:
+        column_exists = await check_column_exists('tariffs', 'max_device_limit')
+        if column_exists:
+            logger.info("ℹ️ Колонка max_device_limit в tariffs уже существует")
+            return True
+
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'sqlite':
+                await conn.execute(text(
+                    "ALTER TABLE tariffs ADD COLUMN max_device_limit INTEGER NULL"
+                ))
+            elif db_type == 'postgresql':
+                await conn.execute(text(
+                    "ALTER TABLE tariffs ADD COLUMN max_device_limit INTEGER NULL"
+                ))
+            else:  # MySQL
+                await conn.execute(text(
+                    "ALTER TABLE tariffs ADD COLUMN max_device_limit INT NULL"
+                ))
+
+            logger.info("✅ Колонка max_device_limit добавлена в tariffs")
+            return True
+
+    except Exception as error:
+        logger.error(f"❌ Ошибка добавления колонки max_device_limit: {error}")
+        return False
+
+
 async def add_subscription_tariff_id_column() -> bool:
     """Добавляет колонку tariff_id в таблицу subscriptions."""
     try:
@@ -5332,9 +5426,682 @@ async def add_tariff_device_price_column() -> bool:
         return False
 
 
+async def add_tariff_server_traffic_limits_column() -> bool:
+    """Добавляет колонку server_traffic_limits в таблицу tariffs."""
+    try:
+        if await check_column_exists('tariffs', 'server_traffic_limits'):
+            logger.info("ℹ️ Колонка server_traffic_limits уже существует в tariffs")
+            return True
+
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'sqlite':
+                await conn.execute(text(
+                    "ALTER TABLE tariffs ADD COLUMN server_traffic_limits TEXT DEFAULT '{}'"
+                ))
+            elif db_type == 'postgresql':
+                await conn.execute(text(
+                    "ALTER TABLE tariffs ADD COLUMN server_traffic_limits JSONB DEFAULT '{}'"
+                ))
+            else:  # MySQL
+                await conn.execute(text(
+                    "ALTER TABLE tariffs ADD COLUMN server_traffic_limits JSON DEFAULT NULL"
+                ))
+
+            logger.info("✅ Колонка server_traffic_limits добавлена в tariffs")
+            return True
+
+    except Exception as error:
+        logger.error(f"❌ Ошибка добавления колонки server_traffic_limits: {error}")
+        return False
+
+
+async def add_tariff_allow_traffic_topup_column() -> bool:
+    """Добавляет колонку allow_traffic_topup в таблицу tariffs."""
+    try:
+        if await check_column_exists('tariffs', 'allow_traffic_topup'):
+            logger.info("ℹ️ Колонка allow_traffic_topup уже существует в tariffs")
+            return True
+
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'sqlite':
+                await conn.execute(text(
+                    "ALTER TABLE tariffs ADD COLUMN allow_traffic_topup INTEGER NOT NULL DEFAULT 1"
+                ))
+            elif db_type == 'postgresql':
+                await conn.execute(text(
+                    "ALTER TABLE tariffs ADD COLUMN allow_traffic_topup BOOLEAN NOT NULL DEFAULT TRUE"
+                ))
+            else:  # MySQL
+                await conn.execute(text(
+                    "ALTER TABLE tariffs ADD COLUMN allow_traffic_topup BOOLEAN NOT NULL DEFAULT TRUE"
+                ))
+
+            logger.info("✅ Колонка allow_traffic_topup добавлена в tariffs")
+            return True
+
+    except Exception as error:
+        logger.error(f"❌ Ошибка добавления колонки allow_traffic_topup: {error}")
+        return False
+
+
+async def create_wheel_tables() -> bool:
+    """Создаёт таблицы для колеса удачи: wheel_config, wheel_prizes, wheel_spins."""
+    try:
+        db_type = await get_database_type()
+
+        # Создание wheel_config
+        if not await check_table_exists('wheel_config'):
+            async with engine.begin() as conn:
+                if db_type == 'sqlite':
+                    create_config_sql = """
+                    CREATE TABLE wheel_config (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        is_enabled BOOLEAN NOT NULL DEFAULT 0,
+                        name VARCHAR(255) NOT NULL DEFAULT 'Колесо удачи',
+                        spin_cost_stars INTEGER NOT NULL DEFAULT 50,
+                        spin_cost_days INTEGER NOT NULL DEFAULT 3,
+                        spin_cost_stars_enabled BOOLEAN NOT NULL DEFAULT 1,
+                        spin_cost_days_enabled BOOLEAN NOT NULL DEFAULT 1,
+                        rtp_percent REAL NOT NULL DEFAULT 85.0,
+                        daily_spin_limit INTEGER NOT NULL DEFAULT 5,
+                        min_subscription_days_for_day_payment INTEGER NOT NULL DEFAULT 7,
+                        promo_prefix VARCHAR(50) NOT NULL DEFAULT 'WHEEL',
+                        promo_validity_days INTEGER NOT NULL DEFAULT 30,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    )
+                    """
+                elif db_type == 'postgresql':
+                    create_config_sql = """
+                    CREATE TABLE wheel_config (
+                        id SERIAL PRIMARY KEY,
+                        is_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+                        name VARCHAR(255) NOT NULL DEFAULT 'Колесо удачи',
+                        spin_cost_stars INTEGER NOT NULL DEFAULT 50,
+                        spin_cost_days INTEGER NOT NULL DEFAULT 3,
+                        spin_cost_stars_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                        spin_cost_days_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                        rtp_percent REAL NOT NULL DEFAULT 85.0,
+                        daily_spin_limit INTEGER NOT NULL DEFAULT 5,
+                        min_subscription_days_for_day_payment INTEGER NOT NULL DEFAULT 7,
+                        promo_prefix VARCHAR(50) NOT NULL DEFAULT 'WHEEL',
+                        promo_validity_days INTEGER NOT NULL DEFAULT 30,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                    """
+                else:  # mysql
+                    create_config_sql = """
+                    CREATE TABLE wheel_config (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        is_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+                        name VARCHAR(255) NOT NULL DEFAULT 'Колесо удачи',
+                        spin_cost_stars INT NOT NULL DEFAULT 50,
+                        spin_cost_days INT NOT NULL DEFAULT 3,
+                        spin_cost_stars_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                        spin_cost_days_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                        rtp_percent FLOAT NOT NULL DEFAULT 85.0,
+                        daily_spin_limit INT NOT NULL DEFAULT 5,
+                        min_subscription_days_for_day_payment INT NOT NULL DEFAULT 7,
+                        promo_prefix VARCHAR(50) NOT NULL DEFAULT 'WHEEL',
+                        promo_validity_days INT NOT NULL DEFAULT 30,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                    )
+                    """
+                await conn.execute(text(create_config_sql))
+                logger.info("✅ Таблица wheel_config создана")
+        else:
+            logger.debug("ℹ️ Таблица wheel_config уже существует")
+
+        # Создание wheel_prizes
+        if not await check_table_exists('wheel_prizes'):
+            async with engine.begin() as conn:
+                if db_type == 'sqlite':
+                    create_prizes_sql = """
+                    CREATE TABLE wheel_prizes (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        config_id INTEGER NOT NULL,
+                        prize_type VARCHAR(50) NOT NULL,
+                        prize_value INTEGER NOT NULL DEFAULT 0,
+                        display_name VARCHAR(255) NOT NULL,
+                        emoji VARCHAR(10) NOT NULL DEFAULT '🎁',
+                        color VARCHAR(20) NOT NULL DEFAULT '#3B82F6',
+                        prize_value_kopeks INTEGER NOT NULL DEFAULT 0,
+                        sort_order INTEGER NOT NULL DEFAULT 0,
+                        manual_probability REAL,
+                        is_active BOOLEAN NOT NULL DEFAULT 1,
+                        promo_balance_bonus_kopeks INTEGER NOT NULL DEFAULT 0,
+                        promo_subscription_days INTEGER NOT NULL DEFAULT 0,
+                        promo_traffic_gb INTEGER NOT NULL DEFAULT 0,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (config_id) REFERENCES wheel_config(id) ON DELETE CASCADE
+                    )
+                    """
+                elif db_type == 'postgresql':
+                    create_prizes_sql = """
+                    CREATE TABLE wheel_prizes (
+                        id SERIAL PRIMARY KEY,
+                        config_id INTEGER NOT NULL REFERENCES wheel_config(id) ON DELETE CASCADE,
+                        prize_type VARCHAR(50) NOT NULL,
+                        prize_value INTEGER NOT NULL DEFAULT 0,
+                        display_name VARCHAR(255) NOT NULL,
+                        emoji VARCHAR(10) NOT NULL DEFAULT '🎁',
+                        color VARCHAR(20) NOT NULL DEFAULT '#3B82F6',
+                        prize_value_kopeks INTEGER NOT NULL DEFAULT 0,
+                        sort_order INTEGER NOT NULL DEFAULT 0,
+                        manual_probability REAL,
+                        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                        promo_balance_bonus_kopeks INTEGER NOT NULL DEFAULT 0,
+                        promo_subscription_days INTEGER NOT NULL DEFAULT 0,
+                        promo_traffic_gb INTEGER NOT NULL DEFAULT 0,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                    """
+                else:  # mysql
+                    create_prizes_sql = """
+                    CREATE TABLE wheel_prizes (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        config_id INT NOT NULL,
+                        prize_type VARCHAR(50) NOT NULL,
+                        prize_value INT NOT NULL DEFAULT 0,
+                        display_name VARCHAR(255) NOT NULL,
+                        emoji VARCHAR(10) NOT NULL DEFAULT '🎁',
+                        color VARCHAR(20) NOT NULL DEFAULT '#3B82F6',
+                        prize_value_kopeks INT NOT NULL DEFAULT 0,
+                        sort_order INT NOT NULL DEFAULT 0,
+                        manual_probability FLOAT,
+                        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                        promo_balance_bonus_kopeks INT NOT NULL DEFAULT 0,
+                        promo_subscription_days INT NOT NULL DEFAULT 0,
+                        promo_traffic_gb INT NOT NULL DEFAULT 0,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                        FOREIGN KEY (config_id) REFERENCES wheel_config(id) ON DELETE CASCADE
+                    )
+                    """
+                await conn.execute(text(create_prizes_sql))
+                # Индексы
+                try:
+                    await conn.execute(text(
+                        "CREATE INDEX idx_wheel_prizes_config_id ON wheel_prizes(config_id)"
+                    ))
+                except Exception:
+                    pass
+                logger.info("✅ Таблица wheel_prizes создана")
+        else:
+            logger.debug("ℹ️ Таблица wheel_prizes уже существует")
+
+        # Создание wheel_spins
+        if not await check_table_exists('wheel_spins'):
+            async with engine.begin() as conn:
+                if db_type == 'sqlite':
+                    create_spins_sql = """
+                    CREATE TABLE wheel_spins (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL,
+                        config_id INTEGER NOT NULL,
+                        prize_id INTEGER,
+                        payment_type VARCHAR(50) NOT NULL,
+                        payment_amount INTEGER NOT NULL,
+                        payment_value_kopeks INTEGER NOT NULL DEFAULT 0,
+                        prize_type VARCHAR(50) NOT NULL,
+                        prize_value INTEGER NOT NULL DEFAULT 0,
+                        prize_value_kopeks INTEGER NOT NULL DEFAULT 0,
+                        promocode_id INTEGER,
+                        is_applied BOOLEAN NOT NULL DEFAULT 1,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                        FOREIGN KEY (config_id) REFERENCES wheel_config(id) ON DELETE CASCADE,
+                        FOREIGN KEY (prize_id) REFERENCES wheel_prizes(id) ON DELETE SET NULL,
+                        FOREIGN KEY (promocode_id) REFERENCES promocodes(id) ON DELETE SET NULL
+                    )
+                    """
+                elif db_type == 'postgresql':
+                    create_spins_sql = """
+                    CREATE TABLE wheel_spins (
+                        id SERIAL PRIMARY KEY,
+                        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                        config_id INTEGER NOT NULL REFERENCES wheel_config(id) ON DELETE CASCADE,
+                        prize_id INTEGER REFERENCES wheel_prizes(id) ON DELETE SET NULL,
+                        payment_type VARCHAR(50) NOT NULL,
+                        payment_amount INTEGER NOT NULL,
+                        payment_value_kopeks INTEGER NOT NULL DEFAULT 0,
+                        prize_type VARCHAR(50) NOT NULL,
+                        prize_value INTEGER NOT NULL DEFAULT 0,
+                        prize_value_kopeks INTEGER NOT NULL DEFAULT 0,
+                        promocode_id INTEGER REFERENCES promocodes(id) ON DELETE SET NULL,
+                        is_applied BOOLEAN NOT NULL DEFAULT TRUE,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                    """
+                else:  # mysql
+                    create_spins_sql = """
+                    CREATE TABLE wheel_spins (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        user_id INT NOT NULL,
+                        config_id INT NOT NULL,
+                        prize_id INT,
+                        payment_type VARCHAR(50) NOT NULL,
+                        payment_amount INT NOT NULL,
+                        payment_value_kopeks INT NOT NULL DEFAULT 0,
+                        prize_type VARCHAR(50) NOT NULL,
+                        prize_value INT NOT NULL DEFAULT 0,
+                        prize_value_kopeks INT NOT NULL DEFAULT 0,
+                        promocode_id INT,
+                        is_applied BOOLEAN NOT NULL DEFAULT TRUE,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                        FOREIGN KEY (config_id) REFERENCES wheel_config(id) ON DELETE CASCADE,
+                        FOREIGN KEY (prize_id) REFERENCES wheel_prizes(id) ON DELETE SET NULL,
+                        FOREIGN KEY (promocode_id) REFERENCES promocodes(id) ON DELETE SET NULL
+                    )
+                    """
+                await conn.execute(text(create_spins_sql))
+                # Индексы
+                try:
+                    await conn.execute(text(
+                        "CREATE INDEX idx_wheel_spins_user_id ON wheel_spins(user_id)"
+                    ))
+                    await conn.execute(text(
+                        "CREATE INDEX idx_wheel_spins_created_at ON wheel_spins(created_at)"
+                    ))
+                except Exception:
+                    pass
+                logger.info("✅ Таблица wheel_spins создана")
+        else:
+            logger.debug("ℹ️ Таблица wheel_spins уже существует")
+
+        return True
+
+    except Exception as error:
+        logger.error(f"❌ Ошибка создания таблиц для колеса удачи: {error}")
+        return False
+
+
+async def add_tariff_traffic_topup_columns() -> bool:
+    """Добавляет колонки для докупки трафика в тарифах."""
+    try:
+        columns_added = 0
+
+        # Колонка traffic_topup_enabled
+        if not await check_column_exists('tariffs', 'traffic_topup_enabled'):
+            async with engine.begin() as conn:
+                db_type = await get_database_type()
+
+                if db_type == 'sqlite':
+                    await conn.execute(text(
+                        "ALTER TABLE tariffs ADD COLUMN traffic_topup_enabled INTEGER DEFAULT 0 NOT NULL"
+                    ))
+                elif db_type == 'postgresql':
+                    await conn.execute(text(
+                        "ALTER TABLE tariffs ADD COLUMN traffic_topup_enabled BOOLEAN DEFAULT FALSE NOT NULL"
+                    ))
+                else:  # MySQL
+                    await conn.execute(text(
+                        "ALTER TABLE tariffs ADD COLUMN traffic_topup_enabled TINYINT(1) DEFAULT 0 NOT NULL"
+                    ))
+
+                logger.info("✅ Колонка traffic_topup_enabled добавлена в tariffs")
+                columns_added += 1
+        else:
+            logger.info("ℹ️ Колонка traffic_topup_enabled уже существует в tariffs")
+
+        # Колонка traffic_topup_packages (JSON)
+        if not await check_column_exists('tariffs', 'traffic_topup_packages'):
+            async with engine.begin() as conn:
+                db_type = await get_database_type()
+
+                if db_type == 'sqlite':
+                    await conn.execute(text(
+                        "ALTER TABLE tariffs ADD COLUMN traffic_topup_packages TEXT DEFAULT '{}'"
+                    ))
+                elif db_type == 'postgresql':
+                    await conn.execute(text(
+                        "ALTER TABLE tariffs ADD COLUMN traffic_topup_packages JSONB DEFAULT '{}'"
+                    ))
+                else:  # MySQL
+                    await conn.execute(text(
+                        "ALTER TABLE tariffs ADD COLUMN traffic_topup_packages JSON DEFAULT NULL"
+                    ))
+
+                logger.info("✅ Колонка traffic_topup_packages добавлена в tariffs")
+                columns_added += 1
+        else:
+            logger.info("ℹ️ Колонка traffic_topup_packages уже существует в tariffs")
+
+        # Колонка max_topup_traffic_gb (максимальный лимит трафика после докупок)
+        if not await check_column_exists('tariffs', 'max_topup_traffic_gb'):
+            async with engine.begin() as conn:
+                db_type = await get_database_type()
+
+                if db_type == 'sqlite':
+                    await conn.execute(text(
+                        "ALTER TABLE tariffs ADD COLUMN max_topup_traffic_gb INTEGER DEFAULT 0 NOT NULL"
+                    ))
+                elif db_type == 'postgresql':
+                    await conn.execute(text(
+                        "ALTER TABLE tariffs ADD COLUMN max_topup_traffic_gb INTEGER DEFAULT 0 NOT NULL"
+                    ))
+                else:  # MySQL
+                    await conn.execute(text(
+                        "ALTER TABLE tariffs ADD COLUMN max_topup_traffic_gb INT DEFAULT 0 NOT NULL"
+                    ))
+
+                logger.info("✅ Колонка max_topup_traffic_gb добавлена в tariffs")
+                columns_added += 1
+        else:
+            logger.info("ℹ️ Колонка max_topup_traffic_gb уже существует в tariffs")
+
+        return True
+
+    except Exception as error:
+        logger.error(f"❌ Ошибка добавления колонок для докупки трафика: {error}")
+        return False
+
+
+async def add_tariff_daily_columns() -> bool:
+    """Добавляет колонки для суточных тарифов."""
+    try:
+        columns_added = 0
+
+        # Колонка is_daily
+        if not await check_column_exists('tariffs', 'is_daily'):
+            async with engine.begin() as conn:
+                db_type = await get_database_type()
+
+                if db_type == 'sqlite':
+                    await conn.execute(text(
+                        "ALTER TABLE tariffs ADD COLUMN is_daily INTEGER DEFAULT 0 NOT NULL"
+                    ))
+                elif db_type == 'postgresql':
+                    await conn.execute(text(
+                        "ALTER TABLE tariffs ADD COLUMN is_daily BOOLEAN DEFAULT FALSE NOT NULL"
+                    ))
+                else:  # MySQL
+                    await conn.execute(text(
+                        "ALTER TABLE tariffs ADD COLUMN is_daily TINYINT(1) DEFAULT 0 NOT NULL"
+                    ))
+
+                logger.info("✅ Колонка is_daily добавлена в tariffs")
+                columns_added += 1
+        else:
+            logger.info("ℹ️ Колонка is_daily уже существует в tariffs")
+
+        # Колонка daily_price_kopeks
+        if not await check_column_exists('tariffs', 'daily_price_kopeks'):
+            async with engine.begin() as conn:
+                db_type = await get_database_type()
+
+                if db_type == 'sqlite':
+                    await conn.execute(text(
+                        "ALTER TABLE tariffs ADD COLUMN daily_price_kopeks INTEGER DEFAULT 0 NOT NULL"
+                    ))
+                elif db_type == 'postgresql':
+                    await conn.execute(text(
+                        "ALTER TABLE tariffs ADD COLUMN daily_price_kopeks INTEGER DEFAULT 0 NOT NULL"
+                    ))
+                else:  # MySQL
+                    await conn.execute(text(
+                        "ALTER TABLE tariffs ADD COLUMN daily_price_kopeks INT DEFAULT 0 NOT NULL"
+                    ))
+
+                logger.info("✅ Колонка daily_price_kopeks добавлена в tariffs")
+                columns_added += 1
+        else:
+            logger.info("ℹ️ Колонка daily_price_kopeks уже существует в tariffs")
+
+        return True
+
+    except Exception as error:
+        logger.error(f"❌ Ошибка добавления колонок суточного тарифа: {error}")
+        return False
+
+
+async def add_tariff_custom_days_traffic_columns() -> bool:
+    """Добавляет колонки для произвольных дней и трафика в тарифы."""
+    try:
+        columns_added = 0
+        db_type = await get_database_type()
+
+        # === ПРОИЗВОЛЬНОЕ КОЛИЧЕСТВО ДНЕЙ ===
+        # custom_days_enabled
+        if not await check_column_exists('tariffs', 'custom_days_enabled'):
+            async with engine.begin() as conn:
+                if db_type == 'sqlite':
+                    await conn.execute(text(
+                        "ALTER TABLE tariffs ADD COLUMN custom_days_enabled INTEGER DEFAULT 0 NOT NULL"
+                    ))
+                elif db_type == 'postgresql':
+                    await conn.execute(text(
+                        "ALTER TABLE tariffs ADD COLUMN custom_days_enabled BOOLEAN DEFAULT FALSE NOT NULL"
+                    ))
+                else:  # MySQL
+                    await conn.execute(text(
+                        "ALTER TABLE tariffs ADD COLUMN custom_days_enabled TINYINT(1) DEFAULT 0 NOT NULL"
+                    ))
+                logger.info("✅ Колонка custom_days_enabled добавлена в tariffs")
+                columns_added += 1
+        else:
+            logger.info("ℹ️ Колонка custom_days_enabled уже существует в tariffs")
+
+        # price_per_day_kopeks
+        if not await check_column_exists('tariffs', 'price_per_day_kopeks'):
+            async with engine.begin() as conn:
+                await conn.execute(text(
+                    "ALTER TABLE tariffs ADD COLUMN price_per_day_kopeks INTEGER DEFAULT 0 NOT NULL"
+                ))
+                logger.info("✅ Колонка price_per_day_kopeks добавлена в tariffs")
+                columns_added += 1
+        else:
+            logger.info("ℹ️ Колонка price_per_day_kopeks уже существует в tariffs")
+
+        # min_days
+        if not await check_column_exists('tariffs', 'min_days'):
+            async with engine.begin() as conn:
+                await conn.execute(text(
+                    "ALTER TABLE tariffs ADD COLUMN min_days INTEGER DEFAULT 1 NOT NULL"
+                ))
+                logger.info("✅ Колонка min_days добавлена в tariffs")
+                columns_added += 1
+        else:
+            logger.info("ℹ️ Колонка min_days уже существует в tariffs")
+
+        # max_days
+        if not await check_column_exists('tariffs', 'max_days'):
+            async with engine.begin() as conn:
+                await conn.execute(text(
+                    "ALTER TABLE tariffs ADD COLUMN max_days INTEGER DEFAULT 365 NOT NULL"
+                ))
+                logger.info("✅ Колонка max_days добавлена в tariffs")
+                columns_added += 1
+        else:
+            logger.info("ℹ️ Колонка max_days уже существует в tariffs")
+
+        # === ПРОИЗВОЛЬНЫЙ ТРАФИК ПРИ ПОКУПКЕ ===
+        # custom_traffic_enabled
+        if not await check_column_exists('tariffs', 'custom_traffic_enabled'):
+            async with engine.begin() as conn:
+                if db_type == 'sqlite':
+                    await conn.execute(text(
+                        "ALTER TABLE tariffs ADD COLUMN custom_traffic_enabled INTEGER DEFAULT 0 NOT NULL"
+                    ))
+                elif db_type == 'postgresql':
+                    await conn.execute(text(
+                        "ALTER TABLE tariffs ADD COLUMN custom_traffic_enabled BOOLEAN DEFAULT FALSE NOT NULL"
+                    ))
+                else:  # MySQL
+                    await conn.execute(text(
+                        "ALTER TABLE tariffs ADD COLUMN custom_traffic_enabled TINYINT(1) DEFAULT 0 NOT NULL"
+                    ))
+                logger.info("✅ Колонка custom_traffic_enabled добавлена в tariffs")
+                columns_added += 1
+        else:
+            logger.info("ℹ️ Колонка custom_traffic_enabled уже существует в tariffs")
+
+        # traffic_price_per_gb_kopeks
+        if not await check_column_exists('tariffs', 'traffic_price_per_gb_kopeks'):
+            async with engine.begin() as conn:
+                await conn.execute(text(
+                    "ALTER TABLE tariffs ADD COLUMN traffic_price_per_gb_kopeks INTEGER DEFAULT 0 NOT NULL"
+                ))
+                logger.info("✅ Колонка traffic_price_per_gb_kopeks добавлена в tariffs")
+                columns_added += 1
+        else:
+            logger.info("ℹ️ Колонка traffic_price_per_gb_kopeks уже существует в tariffs")
+
+        # min_traffic_gb
+        if not await check_column_exists('tariffs', 'min_traffic_gb'):
+            async with engine.begin() as conn:
+                await conn.execute(text(
+                    "ALTER TABLE tariffs ADD COLUMN min_traffic_gb INTEGER DEFAULT 1 NOT NULL"
+                ))
+                logger.info("✅ Колонка min_traffic_gb добавлена в tariffs")
+                columns_added += 1
+        else:
+            logger.info("ℹ️ Колонка min_traffic_gb уже существует в tariffs")
+
+        # max_traffic_gb
+        if not await check_column_exists('tariffs', 'max_traffic_gb'):
+            async with engine.begin() as conn:
+                await conn.execute(text(
+                    "ALTER TABLE tariffs ADD COLUMN max_traffic_gb INTEGER DEFAULT 1000 NOT NULL"
+                ))
+                logger.info("✅ Колонка max_traffic_gb добавлена в tariffs")
+                columns_added += 1
+        else:
+            logger.info("ℹ️ Колонка max_traffic_gb уже существует в tariffs")
+
+        if columns_added > 0:
+            logger.info(f"✅ Добавлено {columns_added} колонок для произвольных дней/трафика")
+
+        return True
+
+    except Exception as error:
+        logger.error(f"❌ Ошибка добавления колонок произвольных дней/трафика: {error}")
+        return False
+
+
+async def add_tariff_traffic_reset_mode_column() -> bool:
+    """Добавляет колонку traffic_reset_mode в tariffs для настройки режима сброса трафика.
+
+    Значения: DAY, WEEK, MONTH, NO_RESET (NULL = использовать глобальную настройку)
+    """
+    try:
+        if not await check_column_exists('tariffs', 'traffic_reset_mode'):
+            async with engine.begin() as conn:
+                await conn.execute(text(
+                    "ALTER TABLE tariffs ADD COLUMN traffic_reset_mode VARCHAR(20) NULL"
+                ))
+                logger.info("✅ Колонка traffic_reset_mode добавлена в tariffs")
+                return True
+        else:
+            logger.info("ℹ️ Колонка traffic_reset_mode уже существует в tariffs")
+            return True
+
+    except Exception as error:
+        logger.error(f"❌ Ошибка добавления колонки traffic_reset_mode: {error}")
+        return False
+
+
+async def add_subscription_daily_columns() -> bool:
+    """Добавляет колонки для суточных подписок."""
+    try:
+        columns_added = 0
+
+        # Колонка is_daily_paused
+        if not await check_column_exists('subscriptions', 'is_daily_paused'):
+            async with engine.begin() as conn:
+                db_type = await get_database_type()
+
+                if db_type == 'sqlite':
+                    await conn.execute(text(
+                        "ALTER TABLE subscriptions ADD COLUMN is_daily_paused INTEGER DEFAULT 0 NOT NULL"
+                    ))
+                elif db_type == 'postgresql':
+                    await conn.execute(text(
+                        "ALTER TABLE subscriptions ADD COLUMN is_daily_paused BOOLEAN DEFAULT FALSE NOT NULL"
+                    ))
+                else:  # MySQL
+                    await conn.execute(text(
+                        "ALTER TABLE subscriptions ADD COLUMN is_daily_paused TINYINT(1) DEFAULT 0 NOT NULL"
+                    ))
+
+                logger.info("✅ Колонка is_daily_paused добавлена в subscriptions")
+                columns_added += 1
+        else:
+            logger.info("ℹ️ Колонка is_daily_paused уже существует в subscriptions")
+
+        # Колонка last_daily_charge_at
+        if not await check_column_exists('subscriptions', 'last_daily_charge_at'):
+            async with engine.begin() as conn:
+                db_type = await get_database_type()
+
+                if db_type == 'sqlite':
+                    await conn.execute(text(
+                        "ALTER TABLE subscriptions ADD COLUMN last_daily_charge_at DATETIME NULL"
+                    ))
+                elif db_type == 'postgresql':
+                    await conn.execute(text(
+                        "ALTER TABLE subscriptions ADD COLUMN last_daily_charge_at TIMESTAMP NULL"
+                    ))
+                else:  # MySQL
+                    await conn.execute(text(
+                        "ALTER TABLE subscriptions ADD COLUMN last_daily_charge_at DATETIME NULL"
+                    ))
+
+                logger.info("✅ Колонка last_daily_charge_at добавлена в subscriptions")
+                columns_added += 1
+        else:
+            logger.info("ℹ️ Колонка last_daily_charge_at уже существует в subscriptions")
+
+        return True
+
+    except Exception as error:
+        logger.error(f"❌ Ошибка добавления колонок суточной подписки: {error}")
+        return False
+
+
+async def add_subscription_traffic_reset_at_column() -> bool:
+    """Добавляет колонку traffic_reset_at в subscriptions для сброса докупленного трафика через 30 дней."""
+    try:
+        if not await check_column_exists('subscriptions', 'traffic_reset_at'):
+            async with engine.begin() as conn:
+                db_type = await get_database_type()
+
+                if db_type == 'sqlite':
+                    await conn.execute(text(
+                        "ALTER TABLE subscriptions ADD COLUMN traffic_reset_at DATETIME NULL"
+                    ))
+                elif db_type == 'postgresql':
+                    await conn.execute(text(
+                        "ALTER TABLE subscriptions ADD COLUMN traffic_reset_at TIMESTAMP NULL"
+                    ))
+                else:  # MySQL
+                    await conn.execute(text(
+                        "ALTER TABLE subscriptions ADD COLUMN traffic_reset_at DATETIME NULL"
+                    ))
+
+                logger.info("✅ Колонка traffic_reset_at добавлена в subscriptions")
+                return True
+        else:
+            logger.info("ℹ️ Колонка traffic_reset_at уже существует в subscriptions")
+            return True
+
+    except Exception as error:
+        logger.error(f"❌ Ошибка добавления колонки traffic_reset_at: {error}")
+        return False
+
+
 async def run_universal_migration():
     logger.info("=== НАЧАЛО УНИВЕРСАЛЬНОЙ МИГРАЦИИ ===")
-    
+
     try:
         db_type = await get_database_type()
         logger.info(f"Тип базы данных: {db_type}")
@@ -5809,6 +6576,13 @@ async def run_universal_migration():
         else:
             logger.warning("⚠️ Проблемы с настройкой доступа серверов к промогруппам")
 
+        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ ДОКУПОК ТРАФИКА ===")
+        traffic_purchases_ready = await create_traffic_purchases_table()
+        if traffic_purchases_ready:
+            logger.info("✅ Таблица traffic_purchases готова")
+        else:
+            logger.warning("⚠️ Проблемы с таблицей traffic_purchases")
+
         logger.info("=== СОЗДАНИЕ ТАБЛИЦ ДЛЯ РЕЖИМА ТАРИФОВ ===")
         tariffs_table_ready = await create_tariffs_table()
         if tariffs_table_ready:
@@ -5833,6 +6607,65 @@ async def run_universal_migration():
             logger.info("✅ Колонка device_price_kopeks в tariffs готова")
         else:
             logger.warning("⚠️ Проблемы с колонкой device_price_kopeks в tariffs")
+
+        max_device_limit_ready = await ensure_tariff_max_device_limit_column()
+        if max_device_limit_ready:
+            logger.info("✅ Колонка max_device_limit в tariffs готова")
+        else:
+            logger.warning("⚠️ Проблемы с колонкой max_device_limit в tariffs")
+
+        server_traffic_limits_ready = await add_tariff_server_traffic_limits_column()
+        if server_traffic_limits_ready:
+            logger.info("✅ Колонка server_traffic_limits в tariffs готова")
+        else:
+            logger.warning("⚠️ Проблемы с колонкой server_traffic_limits в tariffs")
+
+        allow_traffic_topup_ready = await add_tariff_allow_traffic_topup_column()
+        if allow_traffic_topup_ready:
+            logger.info("✅ Колонка allow_traffic_topup в tariffs готова")
+        else:
+            logger.warning("⚠️ Проблемы с колонкой allow_traffic_topup в tariffs")
+
+        traffic_topup_columns_ready = await add_tariff_traffic_topup_columns()
+        if traffic_topup_columns_ready:
+            logger.info("✅ Колонки докупки трафика в tariffs готовы")
+        else:
+            logger.warning("⚠️ Проблемы с колонками докупки трафика в tariffs")
+
+        logger.info("=== ДОБАВЛЕНИЕ КОЛОНОК СУТОЧНЫХ ТАРИФОВ ===")
+        daily_tariff_columns_ready = await add_tariff_daily_columns()
+        if daily_tariff_columns_ready:
+            logger.info("✅ Колонки суточных тарифов в tariffs готовы")
+        else:
+            logger.warning("⚠️ Проблемы с колонками суточных тарифов в tariffs")
+
+        logger.info("=== ДОБАВЛЕНИЕ КОЛОНОК ПРОИЗВОЛЬНЫХ ДНЕЙ/ТРАФИКА ===")
+        custom_days_traffic_ready = await add_tariff_custom_days_traffic_columns()
+        if custom_days_traffic_ready:
+            logger.info("✅ Колонки произвольных дней/трафика в tariffs готовы")
+        else:
+            logger.warning("⚠️ Проблемы с колонками произвольных дней/трафика в tariffs")
+
+        logger.info("=== ДОБАВЛЕНИЕ КОЛОНКИ РЕЖИМА СБРОСА ТРАФИКА В ТАРИФАХ ===")
+        traffic_reset_mode_ready = await add_tariff_traffic_reset_mode_column()
+        if traffic_reset_mode_ready:
+            logger.info("✅ Колонка traffic_reset_mode в tariffs готова")
+        else:
+            logger.warning("⚠️ Проблемы с колонкой traffic_reset_mode в tariffs")
+
+        logger.info("=== ДОБАВЛЕНИЕ КОЛОНОК СУТОЧНЫХ ПОДПИСОК ===")
+        daily_subscription_columns_ready = await add_subscription_daily_columns()
+        if daily_subscription_columns_ready:
+            logger.info("✅ Колонки суточных подписок в subscriptions готовы")
+        else:
+            logger.warning("⚠️ Проблемы с колонками суточных подписок в subscriptions")
+
+        logger.info("=== ДОБАВЛЕНИЕ КОЛОНКИ СБРОСА ТРАФИКА ===")
+        traffic_reset_column_ready = await add_subscription_traffic_reset_at_column()
+        if traffic_reset_column_ready:
+            logger.info("✅ Колонка traffic_reset_at в subscriptions готова")
+        else:
+            logger.warning("⚠️ Проблемы с колонкой traffic_reset_at в subscriptions")
 
         logger.info("=== ОБНОВЛЕНИЕ ВНЕШНИХ КЛЮЧЕЙ ===")
         fk_updated = await fix_foreign_keys_for_user_deletion()
@@ -5868,6 +6701,13 @@ async def run_universal_migration():
             logger.info("✅ Таблица withdrawal_requests готова")
         else:
             logger.warning("⚠️ Проблемы с таблицей withdrawal_requests")
+
+        logger.info("=== СОЗДАНИЕ ТАБЛИЦ КОЛЕСА УДАЧИ ===")
+        wheel_tables_ready = await create_wheel_tables()
+        if wheel_tables_ready:
+            logger.info("✅ Таблицы колеса удачи готовы")
+        else:
+            logger.warning("⚠️ Проблемы с таблицами колеса удачи")
 
         async with engine.begin() as conn:
             total_subs = await conn.execute(text("SELECT COUNT(*) FROM subscriptions"))

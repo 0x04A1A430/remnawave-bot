@@ -108,6 +108,7 @@ class PaymentMethod(Enum):
     CLOUDPAYMENTS = "cloudpayments"
     FREEKASSA = "freekassa"
     MANUAL = "manual"
+    BALANCE = "balance"
 
 
 class MainMenuButtonActionType(Enum):
@@ -119,6 +120,21 @@ class MainMenuButtonVisibility(Enum):
     ALL = "all"
     ADMINS = "admins"
     SUBSCRIBERS = "subscribers"
+
+
+class WheelPrizeType(Enum):
+    """Типы призов на колесе удачи."""
+    SUBSCRIPTION_DAYS = "subscription_days"
+    BALANCE_BONUS = "balance_bonus"
+    TRAFFIC_GB = "traffic_gb"
+    PROMOCODE = "promocode"
+    NOTHING = "nothing"
+
+
+class WheelSpinPaymentType(Enum):
+    """Способы оплаты спина колеса."""
+    TELEGRAM_STARS = "telegram_stars"
+    SUBSCRIPTION_DAYS = "subscription_days"
 
 class YooKassaPayment(Base):
     __tablename__ = "yookassa_payments"
@@ -749,9 +765,14 @@ class Tariff(Base):
     traffic_limit_gb = Column(Integer, nullable=False, default=100)  # 0 = безлимит
     device_limit = Column(Integer, nullable=False, default=1)
     device_price_kopeks = Column(Integer, nullable=True, default=None)  # Цена за доп. устройство (None = нельзя докупить)
+    max_device_limit = Column(Integer, nullable=True, default=None)  # Макс. устройств (None = без ограничений)
 
     # Сквады (серверы) доступные в тарифе
     allowed_squads = Column(JSON, default=list)  # список UUID сквадов
+
+    # Лимиты трафика по серверам (JSON: {"uuid": {"traffic_limit_gb": 100}, ...})
+    # Если сервер не указан - используется общий traffic_limit_gb
+    server_traffic_limits = Column(JSON, default=dict)
 
     # Цены на периоды в копейках (JSON: {"14": 30000, "30": 50000, "90": 120000, ...})
     period_prices = Column(JSON, nullable=False, default=dict)
@@ -761,6 +782,33 @@ class Tariff(Base):
 
     # Дополнительные настройки
     is_trial_available = Column(Boolean, default=False, nullable=False)  # Можно ли взять триал на этом тарифе
+    allow_traffic_topup = Column(Boolean, default=True, nullable=False)  # Разрешена ли докупка трафика для этого тарифа
+
+    # Докупка трафика
+    traffic_topup_enabled = Column(Boolean, default=False, nullable=False)  # Разрешена ли докупка трафика
+    # Пакеты трафика: JSON {"5": 5000, "10": 9000, "20": 15000} (ГБ: цена в копейках)
+    traffic_topup_packages = Column(JSON, default=dict)
+    # Максимальный лимит трафика после докупки (0 = без ограничений)
+    max_topup_traffic_gb = Column(Integer, default=0, nullable=False)
+
+    # Суточный тариф - ежедневное списание
+    is_daily = Column(Boolean, default=False, nullable=False)  # Является ли тариф суточным
+    daily_price_kopeks = Column(Integer, default=0, nullable=False)  # Цена за день в копейках
+
+    # Произвольное количество дней
+    custom_days_enabled = Column(Boolean, default=False, nullable=False)  # Разрешить произвольное кол-во дней
+    price_per_day_kopeks = Column(Integer, default=0, nullable=False)  # Цена за 1 день в копейках
+    min_days = Column(Integer, default=1, nullable=False)  # Минимальное количество дней
+    max_days = Column(Integer, default=365, nullable=False)  # Максимальное количество дней
+
+    # Произвольный трафик при покупке
+    custom_traffic_enabled = Column(Boolean, default=False, nullable=False)  # Разрешить произвольный трафик
+    traffic_price_per_gb_kopeks = Column(Integer, default=0, nullable=False)  # Цена за 1 ГБ в копейках
+    min_traffic_gb = Column(Integer, default=1, nullable=False)  # Минимальный трафик в ГБ
+    max_traffic_gb = Column(Integer, default=1000, nullable=False)  # Максимальный трафик в ГБ
+
+    # Режим сброса трафика: DAY, WEEK, MONTH, NO_RESET (по умолчанию берётся из конфига)
+    traffic_reset_mode = Column(String(20), nullable=True, default=None)  # None = использовать глобальную настройку
 
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
@@ -797,6 +845,21 @@ class Tariff(Base):
             return price_kopeks / 100
         return None
 
+    def get_traffic_limit_for_server(self, squad_uuid: str) -> int:
+        """Возвращает лимит трафика для конкретного сервера.
+
+        Если для сервера настроен отдельный лимит - возвращает его,
+        иначе возвращает общий traffic_limit_gb тарифа.
+        """
+        limits = self.server_traffic_limits or {}
+        if squad_uuid in limits:
+            server_limit = limits[squad_uuid]
+            if isinstance(server_limit, dict) and 'traffic_limit_gb' in server_limit:
+                return server_limit['traffic_limit_gb']
+            elif isinstance(server_limit, int):
+                return server_limit
+        return self.traffic_limit_gb
+
     def is_available_for_promo_group(self, promo_group_id: Optional[int]) -> bool:
         """Проверяет, доступен ли тариф для указанной промогруппы."""
         if not self.allowed_promo_groups:
@@ -804,6 +867,57 @@ class Tariff(Base):
         if promo_group_id is None:
             return True  # Если у пользователя нет группы - доступен
         return any(pg.id == promo_group_id for pg in self.allowed_promo_groups)
+
+    def get_traffic_topup_packages(self) -> Dict[int, int]:
+        """Возвращает пакеты трафика для докупки: {ГБ: цена в копейках}."""
+        packages = self.traffic_topup_packages or {}
+        return {int(gb): int(price) for gb, price in packages.items()}
+
+    def get_traffic_topup_price(self, gb: int) -> Optional[int]:
+        """Возвращает цену в копейках для указанного пакета трафика."""
+        packages = self.get_traffic_topup_packages()
+        return packages.get(gb)
+
+    def get_available_traffic_packages(self) -> List[int]:
+        """Возвращает список доступных пакетов трафика в ГБ."""
+        packages = self.get_traffic_topup_packages()
+        return sorted(packages.keys())
+
+    def can_topup_traffic(self) -> bool:
+        """Проверяет, можно ли докупить трафик на этом тарифе."""
+        return (
+            self.traffic_topup_enabled
+            and bool(self.traffic_topup_packages)
+            and not self.is_unlimited_traffic
+        )
+
+    def get_daily_price_rubles(self) -> float:
+        """Возвращает суточную цену в рублях."""
+        return self.daily_price_kopeks / 100 if self.daily_price_kopeks else 0
+
+    def get_price_for_custom_days(self, days: int) -> Optional[int]:
+        """Возвращает цену для произвольного количества дней."""
+        if not self.custom_days_enabled or not self.price_per_day_kopeks:
+            return None
+        if days < self.min_days or days > self.max_days:
+            return None
+        return self.price_per_day_kopeks * days
+
+    def get_price_for_custom_traffic(self, gb: int) -> Optional[int]:
+        """Возвращает цену для произвольного количества трафика."""
+        if not self.custom_traffic_enabled or not self.traffic_price_per_gb_kopeks:
+            return None
+        if gb < self.min_traffic_gb or gb > self.max_traffic_gb:
+            return None
+        return self.traffic_price_per_gb_kopeks * gb
+
+    def can_purchase_custom_days(self) -> bool:
+        """Проверяет, можно ли купить произвольное количество дней."""
+        return self.custom_days_enabled and self.price_per_day_kopeks > 0
+
+    def can_purchase_custom_traffic(self) -> bool:
+        """Проверяет, можно ли купить произвольный трафик."""
+        return self.custom_traffic_enabled and self.traffic_price_per_gb_kopeks > 0
 
     def __repr__(self):
         return f"<Tariff(id={self.id}, name='{self.name}', tier={self.tier_level}, active={self.is_active})>"
@@ -940,7 +1054,8 @@ class Subscription(Base):
     
     traffic_limit_gb = Column(Integer, default=0)
     traffic_used_gb = Column(Float, default=0.0)
-    purchased_traffic_gb = Column(Integer, default=0)  # Докупленный трафик (для расчета цены сброса)
+    purchased_traffic_gb = Column(Integer, default=0)  # Докупленный трафик
+    traffic_reset_at = Column(DateTime, nullable=True)  # Дата сброса докупленного трафика (30 дней после первой докупки)
 
     subscription_url = Column(String, nullable=True)
     subscription_crypto_link = Column(String, nullable=True)
@@ -961,10 +1076,15 @@ class Subscription(Base):
     # Тариф (для режима продаж "Тарифы")
     tariff_id = Column(Integer, ForeignKey("tariffs.id", ondelete="SET NULL"), nullable=True, index=True)
 
+    # Суточная подписка
+    is_daily_paused = Column(Boolean, default=False, nullable=False)  # Приостановлена ли суточная подписка пользователем
+    last_daily_charge_at = Column(DateTime, nullable=True)  # Время последнего суточного списания
+
     user = relationship("User", back_populates="subscription")
     tariff = relationship("Tariff", back_populates="subscriptions")
     discount_offers = relationship("DiscountOffer", back_populates="subscription")
     temporary_accesses = relationship("SubscriptionTemporaryAccess", back_populates="subscription")
+    traffic_purchases = relationship("TrafficPurchase", back_populates="subscription", cascade="all, delete-orphan")
     
     @property
     def is_active(self) -> bool:
@@ -1093,9 +1213,54 @@ class Subscription(Base):
             self.status = SubscriptionStatus.ACTIVE.value
     
     def add_traffic(self, gb: int):
-        if self.traffic_limit_gb == 0:  
+        if self.traffic_limit_gb == 0:
             return
         self.traffic_limit_gb += gb
+
+    @property
+    def is_daily_tariff(self) -> bool:
+        """Проверяет, является ли тариф подписки суточным."""
+        if self.tariff:
+            return getattr(self.tariff, 'is_daily', False)
+        return False
+
+    @property
+    def daily_price_kopeks(self) -> int:
+        """Возвращает суточную цену тарифа в копейках."""
+        if self.tariff:
+            return getattr(self.tariff, 'daily_price_kopeks', 0)
+        return 0
+
+    @property
+    def can_charge_daily(self) -> bool:
+        """Проверяет, можно ли списать суточную оплату."""
+        if not self.is_daily_tariff:
+            return False
+        if self.is_daily_paused:
+            return False
+        if self.status != SubscriptionStatus.ACTIVE.value:
+            return False
+        return True
+
+
+class TrafficPurchase(Base):
+    """Докупка трафика с индивидуальной датой истечения."""
+    __tablename__ = "traffic_purchases"
+
+    id = Column(Integer, primary_key=True, index=True)
+    subscription_id = Column(Integer, ForeignKey("subscriptions.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    traffic_gb = Column(Integer, nullable=False)  # Количество ГБ в покупке
+    expires_at = Column(DateTime, nullable=False, index=True)  # Дата истечения (покупка + 30 дней)
+
+    created_at = Column(DateTime, default=func.now())
+
+    subscription = relationship("Subscription", back_populates="traffic_purchases")
+
+    @property
+    def is_expired(self) -> bool:
+        """Проверяет, истекла ли докупка."""
+        return datetime.utcnow() >= self.expires_at
 
 
 class Transaction(Base):
@@ -2250,3 +2415,130 @@ class CabinetRefreshToken(Base):
     def __repr__(self) -> str:
         status = "valid" if self.is_valid else ("revoked" if self.is_revoked else "expired")
         return f"<CabinetRefreshToken id={self.id} user_id={self.user_id} status={status}>"
+
+
+# ==================== FORTUNE WHEEL ====================
+
+
+class WheelConfig(Base):
+    """Глобальная конфигурация колеса удачи."""
+    __tablename__ = "wheel_configs"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Основные настройки
+    is_enabled = Column(Boolean, default=False, nullable=False)
+    name = Column(String(255), default="Колесо удачи", nullable=False)
+
+    # Стоимость спина
+    spin_cost_stars = Column(Integer, default=10, nullable=False)  # Стоимость в Stars
+    spin_cost_days = Column(Integer, default=1, nullable=False)    # Стоимость в днях подписки
+    spin_cost_stars_enabled = Column(Boolean, default=True, nullable=False)
+    spin_cost_days_enabled = Column(Boolean, default=True, nullable=False)
+
+    # RTP настройки (Return to Player) - процент возврата 0-100
+    rtp_percent = Column(Integer, default=80, nullable=False)
+
+    # Лимиты
+    daily_spin_limit = Column(Integer, default=5, nullable=False)  # 0 = без лимита
+    min_subscription_days_for_day_payment = Column(Integer, default=3, nullable=False)
+
+    # Генерация промокодов
+    promo_prefix = Column(String(20), default="WHEEL", nullable=False)
+    promo_validity_days = Column(Integer, default=7, nullable=False)
+
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    prizes = relationship("WheelPrize", back_populates="config", cascade="all, delete-orphan")
+
+    def __repr__(self) -> str:
+        return f"<WheelConfig id={self.id} enabled={self.is_enabled} rtp={self.rtp_percent}%>"
+
+
+class WheelPrize(Base):
+    """Приз на колесе удачи."""
+    __tablename__ = "wheel_prizes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    config_id = Column(Integer, ForeignKey("wheel_configs.id", ondelete="CASCADE"), nullable=False)
+
+    # Тип и значение приза
+    prize_type = Column(String(50), nullable=False)  # WheelPrizeType
+    prize_value = Column(Integer, default=0, nullable=False)  # Дни/копейки/GB в зависимости от типа
+
+    # Отображение
+    display_name = Column(String(100), nullable=False)
+    emoji = Column(String(10), default="🎁", nullable=False)
+    color = Column(String(20), default="#3B82F6", nullable=False)  # HEX цвет сектора
+
+    # Стоимость приза для расчета RTP (в копейках)
+    prize_value_kopeks = Column(Integer, default=0, nullable=False)
+
+    # Порядок и вероятность
+    sort_order = Column(Integer, default=0, nullable=False)
+    manual_probability = Column(Float, nullable=True)  # Если задано - игнорирует RTP расчет (0.0-1.0)
+    is_active = Column(Boolean, default=True, nullable=False)
+
+    # Настройки генерируемого промокода (только для prize_type=promocode)
+    promo_balance_bonus_kopeks = Column(Integer, default=0)
+    promo_subscription_days = Column(Integer, default=0)
+    promo_traffic_gb = Column(Integer, default=0)
+
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    config = relationship("WheelConfig", back_populates="prizes")
+    spins = relationship("WheelSpin", back_populates="prize")
+
+    def __repr__(self) -> str:
+        return f"<WheelPrize id={self.id} type={self.prize_type} name='{self.display_name}'>"
+
+
+class WheelSpin(Base):
+    """История спинов колеса удачи."""
+    __tablename__ = "wheel_spins"
+    __table_args__ = (
+        Index("ix_wheel_spins_user_created", "user_id", "created_at"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    prize_id = Column(Integer, ForeignKey("wheel_prizes.id", ondelete="SET NULL"), nullable=True)
+
+    # Способ оплаты
+    payment_type = Column(String(50), nullable=False)  # WheelSpinPaymentType
+    payment_amount = Column(Integer, nullable=False)  # Stars или дни
+    payment_value_kopeks = Column(Integer, nullable=False)  # Эквивалент в копейках для статистики
+
+    # Результат
+    prize_type = Column(String(50), nullable=False)  # Копируем из WheelPrize на момент спина
+    prize_value = Column(Integer, nullable=False)
+    prize_display_name = Column(String(100), nullable=False)
+    prize_value_kopeks = Column(Integer, nullable=False)  # Стоимость приза в копейках
+
+    # Сгенерированный промокод (если приз - промокод)
+    generated_promocode_id = Column(Integer, ForeignKey("promocodes.id"), nullable=True)
+
+    # Флаг успешного начисления
+    is_applied = Column(Boolean, default=False, nullable=False)
+    applied_at = Column(DateTime, nullable=True)
+
+    created_at = Column(DateTime, default=func.now())
+
+    user = relationship("User", backref="wheel_spins")
+    prize = relationship("WheelPrize", back_populates="spins")
+    generated_promocode = relationship("PromoCode")
+
+    @property
+    def prize_value_rubles(self) -> float:
+        """Стоимость приза в рублях."""
+        return self.prize_value_kopeks / 100
+
+    @property
+    def payment_value_rubles(self) -> float:
+        """Стоимость оплаты в рублях."""
+        return self.payment_value_kopeks / 100
+
+    def __repr__(self) -> str:
+        return f"<WheelSpin id={self.id} user_id={self.user_id} prize='{self.prize_display_name}'>"
