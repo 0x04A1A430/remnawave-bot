@@ -174,7 +174,7 @@ async def get_payment_methods():
             is_available=True,
         ))
 
-    # PAL24
+    # PAL24 - add options for card/sbp
     if settings.is_pal24_enabled():
         methods.append(PaymentMethodResponse(
             id="pal24",
@@ -183,17 +183,33 @@ async def get_payment_methods():
             min_amount_kopeks=settings.PAL24_MIN_AMOUNT_KOPEKS,
             max_amount_kopeks=settings.PAL24_MAX_AMOUNT_KOPEKS,
             is_available=True,
+            options=[
+                {"id": "sbp", "name": "🏦 СБП", "description": "Система быстрых платежей"},
+                {"id": "card", "name": "💳 Карта", "description": "Банковская карта"},
+            ],
         ))
 
-    # Platega
+    # Platega - add options for different payment methods
     if settings.is_platega_enabled():
+        platega_methods = settings.get_platega_active_methods()
+        definitions = settings.get_platega_method_definitions()
+        platega_options = []
+        for method_code in platega_methods:
+            info = definitions.get(method_code, {})
+            platega_options.append({
+                "id": str(method_code),
+                "name": info.get("title") or info.get("name") or f"Platega {method_code}",
+                "description": info.get("description") or info.get("name") or "",
+            })
+
         methods.append(PaymentMethodResponse(
             id="platega",
-            name="Platega",
+            name=settings.get_platega_display_name(),
             description="Pay via Platega",
             min_amount_kopeks=settings.PLATEGA_MIN_AMOUNT_KOPEKS,
             max_amount_kopeks=settings.PLATEGA_MAX_AMOUNT_KOPEKS,
             is_available=True,
+            options=platega_options if platega_options else None,
         ))
 
     # Wata
