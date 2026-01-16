@@ -1460,6 +1460,17 @@ def _get_remnawave_config_uuid() -> Optional[str]:
         return settings.CABINET_REMNA_SUB_CONFIG
 
 
+def _is_subscription_link_template(url: str) -> bool:
+    """Check if URL is a RemnaWave subscription link template."""
+    if not url:
+        return False
+    # RemnaWave uses templates like {{HAPP_CRYPT4_LINK}}, {{V2RAY_LINK}}, etc.
+    if url.startswith("{{") and url.endswith("}}"):
+        return True
+    # Also check for button type "subscriptionLink" indicator
+    return False
+
+
 def _convert_remnawave_block_to_step(block: Dict[str, Any], url_scheme: str = "") -> Dict[str, Any]:
     """Convert RemnaWave block format to cabinet step format."""
     step = {
@@ -1470,16 +1481,22 @@ def _convert_remnawave_block_to_step(block: Dict[str, Any], url_scheme: str = ""
     if block.get("buttons"):
         buttons = []
         for btn in block["buttons"]:
-            btn_url = btn.get("url", "")
-            # Replace urlScheme-based URLs with {{deepLink}} placeholder
-            # This is needed for the frontend to show the Connect button
-            if url_scheme and btn_url and (
+            btn_url = btn.get("url", "") or btn.get("link", "")
+            btn_type = btn.get("type", "")
+
+            # Replace subscription link templates with {{deepLink}} placeholder
+            # RemnaWave uses templates like {{HAPP_CRYPT4_LINK}} or type="subscriptionLink"
+            if _is_subscription_link_template(btn_url) or btn_type == "subscriptionLink":
+                btn_url = "{{deepLink}}"
+            # Also check for urlScheme-based URLs
+            elif url_scheme and btn_url and (
                 btn_url.startswith(url_scheme) or
                 btn_url.endswith("://") or
                 btn_url.endswith("://add/") or
-                "://" in btn_url and not btn_url.startswith("http")
+                ("://" in btn_url and not btn_url.startswith("http"))
             ):
                 btn_url = "{{deepLink}}"
+
             buttons.append({
                 "buttonLink": btn_url,
                 "buttonText": btn.get("text", {}),
