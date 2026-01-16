@@ -101,19 +101,28 @@ async def get_stats(
     api = _get_ban_api()
     data = await _api_request(api, "get_stats")
 
+    # Extract punishment stats
+    punishment_stats = data.get("punishment_stats") or {}
+
+    # Extract connected nodes info
+    connected_nodes = data.get("connected_nodes", [])
+
+    # Extract panel status
+    panel_status = data.get("panel_status") or {}
+
     return BanSystemStatsResponse(
         total_users=data.get("total_users", 0),
-        active_users=data.get("active_users", 0),
+        active_users=data.get("users_with_limit", 0),
         users_over_limit=data.get("users_over_limit", 0),
         total_requests=data.get("total_requests", 0),
-        total_punishments=data.get("total_punishments", 0),
-        active_punishments=data.get("active_punishments", 0),
-        nodes_online=data.get("nodes_online", 0),
-        nodes_total=data.get("nodes_total", 0),
-        agents_online=data.get("agents_online", 0),
-        agents_total=data.get("agents_total", 0),
-        panel_connected=data.get("panel_connected", False),
-        uptime_seconds=data.get("uptime_seconds"),
+        total_punishments=punishment_stats.get("total_punishments", 0),
+        active_punishments=punishment_stats.get("active_punishments", 0),
+        nodes_online=len(connected_nodes),
+        nodes_total=len(connected_nodes),
+        agents_online=0,  # Will be fetched from agents endpoint if needed
+        agents_total=0,
+        panel_connected=data.get("panel_loaded", False),
+        uptime_seconds=panel_status.get("uptime_seconds"),
     )
 
 
