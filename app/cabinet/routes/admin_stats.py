@@ -145,6 +145,7 @@ async def get_dashboard_stats(
 
         # Get tariff statistics
         tariff_stats = await _get_tariff_stats(db)
+        logger.info(f"📊 Tariff stats result: {tariff_stats}")
 
         # Build response
         return DashboardStats(
@@ -328,19 +329,21 @@ async def _get_nodes_overview() -> NodesOverview:
 async def _get_tariff_stats(db: AsyncSession) -> Optional[TariffStats]:
     """Get statistics for all tariffs."""
     try:
-        # Получаем все активные тарифы
+        # Получаем ВСЕ тарифы (включая неактивные) для статистики
         tariffs_result = await db.execute(
             select(Tariff)
-            .where(Tariff.is_active == True)
             .order_by(Tariff.display_order)
         )
         tariffs = tariffs_result.scalars().all()
 
+        logger.info(f"📊 Получение статистики по тарифам. Найдено тарифов: {len(tariffs)}")
+
         if not tariffs:
+            logger.info("📊 Нет тарифов в системе, пропускаем статистику")
             return None
 
         now = datetime.utcnow()
-        today = now.date()
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         week_ago = now - timedelta(days=7)
         month_ago = now - timedelta(days=30)
 
@@ -374,7 +377,7 @@ async def _get_tariff_stats(db: AsyncSession) -> Optional[TariffStats]:
                 select(func.count(Subscription.id))
                 .where(
                     Subscription.tariff_id == tariff.id,
-                    Subscription.created_at >= today,
+                    Subscription.created_at >= today_start,
                     Subscription.is_trial == False
                 )
             )
@@ -402,6 +405,8 @@ async def _get_tariff_stats(db: AsyncSession) -> Optional[TariffStats]:
             )
             purchased_month = month_result.scalar() or 0
 
+            logger.info(f"📊 Тариф '{tariff.name}': активных={active_count}, триал={trial_count}")
+
             tariff_items.append(TariffStatItem(
                 tariff_id=tariff.id,
                 tariff_name=tariff.name,
@@ -414,11 +419,13 @@ async def _get_tariff_stats(db: AsyncSession) -> Optional[TariffStats]:
 
             total_tariff_subscriptions += active_count
 
+        logger.info(f"📊 Всего подписок по тарифам: {total_tariff_subscriptions}")
+
         return TariffStats(
             tariffs=tariff_items,
             total_tariff_subscriptions=total_tariff_subscriptions,
         )
 
     except Exception as e:
-        logger.warning(f"Failed to get tariff stats: {e}")
+        logger.error(f"Failed to get tariff stats: {e}", exc_info=True)
         return None
