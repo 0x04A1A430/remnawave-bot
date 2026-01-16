@@ -5321,6 +5321,38 @@ async def create_tariff_promo_groups_table() -> bool:
         return False
 
 
+async def ensure_tariff_max_device_limit_column() -> bool:
+    """Добавляет колонку max_device_limit в таблицу tariffs."""
+    try:
+        column_exists = await check_column_exists('tariffs', 'max_device_limit')
+        if column_exists:
+            logger.info("ℹ️ Колонка max_device_limit в tariffs уже существует")
+            return True
+
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'sqlite':
+                await conn.execute(text(
+                    "ALTER TABLE tariffs ADD COLUMN max_device_limit INTEGER NULL"
+                ))
+            elif db_type == 'postgresql':
+                await conn.execute(text(
+                    "ALTER TABLE tariffs ADD COLUMN max_device_limit INTEGER NULL"
+                ))
+            else:  # MySQL
+                await conn.execute(text(
+                    "ALTER TABLE tariffs ADD COLUMN max_device_limit INT NULL"
+                ))
+
+            logger.info("✅ Колонка max_device_limit добавлена в tariffs")
+            return True
+
+    except Exception as error:
+        logger.error(f"❌ Ошибка добавления колонки max_device_limit: {error}")
+        return False
+
+
 async def add_subscription_tariff_id_column() -> bool:
     """Добавляет колонку tariff_id в таблицу subscriptions."""
     try:
@@ -6553,6 +6585,12 @@ async def run_universal_migration():
             logger.info("✅ Колонка device_price_kopeks в tariffs готова")
         else:
             logger.warning("⚠️ Проблемы с колонкой device_price_kopeks в tariffs")
+
+        max_device_limit_ready = await ensure_tariff_max_device_limit_column()
+        if max_device_limit_ready:
+            logger.info("✅ Колонка max_device_limit в tariffs готова")
+        else:
+            logger.warning("⚠️ Проблемы с колонкой max_device_limit в tariffs")
 
         server_traffic_limits_ready = await add_tariff_server_traffic_limits_column()
         if server_traffic_limits_ready:
