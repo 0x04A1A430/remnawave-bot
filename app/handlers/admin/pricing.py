@@ -369,8 +369,7 @@ def _get_period_items(lang_code: str) -> List[PriceItem]:
     for days in settings.get_available_subscription_periods():
         key = f"PRICE_{days}_DAYS"
         price = PERIOD_PRICES.get(days, 0)
-        if price > 0:
-            items.append((key, _format_period_label(days, lang_code), price))
+        items.append((key, _format_period_label(days, lang_code), price))
     return items
 
 
