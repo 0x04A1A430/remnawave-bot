@@ -9,7 +9,7 @@ from aiogram.enums import ChatMemberStatus
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database.database import get_db
+from app.database.database import AsyncSessionLocal
 from app.database.crud.campaign import get_campaign_by_start_parameter
 from app.database.crud.subscription import deactivate_subscription, reactivate_subscription
 from app.database.crud.user import get_user_by_telegram_id
@@ -228,7 +228,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
         if state_data.get("campaign_notification_sent"):
             return
 
-        async for db in get_db():
+        async with AsyncSessionLocal() as db:
             try:
                 campaign = await get_campaign_by_start_parameter(
                     db,
@@ -236,7 +236,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                     only_active=True,
                 )
                 if not campaign:
-                    break
+                    return
 
                 user = await get_user_by_telegram_id(db, telegram_user.id)
 
@@ -249,14 +249,14 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                 )
                 if sent:
                     await state.update_data(campaign_notification_sent=True)
+                await db.commit()
             except Exception as error:
                 logger.error(
                     "❌ Ошибка отправки уведомления о переходе по кампании %s: %s",
                     payload,
                     error,
                 )
-            finally:
-                break
+                await db.rollback()
 
     async def _deactivate_subscription_on_unsubscribe(
         self, telegram_id: int, bot: Bot, channel_link: Optional[str]
@@ -265,21 +265,21 @@ class ChannelCheckerMiddleware(BaseMiddleware):
         if not settings.CHANNEL_DISABLE_TRIAL_ON_UNSUBSCRIBE and not settings.CHANNEL_REQUIRED_FOR_ALL:
             return
 
-        async for db in get_db():
+        async with AsyncSessionLocal() as db:
             try:
                 user = await get_user_by_telegram_id(db, telegram_id)
                 if not user or not user.subscription:
-                    break
+                    return
 
                 subscription = user.subscription
 
                 if subscription.status != SubscriptionStatus.ACTIVE.value:
-                    break
+                    return
 
                 if settings.CHANNEL_REQUIRED_FOR_ALL:
                     pass
                 elif not subscription.is_trial:
-                    break
+                    return
 
                 await deactivate_subscription(db, subscription)
                 sub_type = "Триальная" if subscription.is_trial else "Платная"
@@ -316,35 +316,35 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                         telegram_id,
                         notify_error,
                     )
+                await db.commit()
             except Exception as db_error:
                 logger.error(
                     "❌ Ошибка деактивации подписки пользователя %s после отписки: %s",
                     telegram_id,
                     db_error,
                 )
-            finally:
-                break
+                await db.rollback()
 
     async def _reactivate_subscription_on_subscribe(self, telegram_id: int, bot: Bot) -> None:
         """Реактивация подписки после повторной подписки на канал."""
         if not settings.CHANNEL_DISABLE_TRIAL_ON_UNSUBSCRIBE and not settings.CHANNEL_REQUIRED_FOR_ALL:
             return
 
-        async for db in get_db():
+        async with AsyncSessionLocal() as db:
             try:
                 user = await get_user_by_telegram_id(db, telegram_id)
                 if not user or not user.subscription:
-                    break
+                    return
 
                 subscription = user.subscription
 
                 # Реактивируем только DISABLED подписки
                 if subscription.status != SubscriptionStatus.DISABLED.value:
-                    break
+                    return
 
                 # Проверяем что подписка ещё не истекла
                 if subscription.end_date and subscription.end_date <= datetime.utcnow():
-                    break
+                    return
 
                 # Реактивируем в БД
                 await reactivate_subscription(db, subscription)
@@ -382,14 +382,14 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                         telegram_id,
                         notify_error,
                     )
+                await db.commit()
             except Exception as db_error:
                 logger.error(
                     "❌ Ошибка реактивации подписки пользователя %s: %s",
                     telegram_id,
                     db_error,
                 )
-            finally:
-                break
+                await db.rollback()
 
     @staticmethod
     async def _deny_message(

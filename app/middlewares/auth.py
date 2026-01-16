@@ -7,7 +7,7 @@ from aiogram.types import Message, CallbackQuery, TelegramObject, User as TgUser
 from aiogram.fsm.context import FSMContext
 
 from app.config import settings
-from app.database.database import get_db
+from app.database.database import AsyncSessionLocal
 from app.database.crud.user import get_user_by_telegram_id, create_user
 from app.services.remnawave_service import RemnaWaveService
 from app.states import RegistrationStates
@@ -54,26 +54,26 @@ class AuthMiddleware(BaseMiddleware):
         if user.is_bot:
             return await handler(event, data)
         
-        async for db in get_db():
+        async with AsyncSessionLocal() as db:
             try:
                 db_user = await get_user_by_telegram_id(db, user.id)
-                
+
                 if not db_user:
                     state: FSMContext = data.get('state')
                     current_state = None
-                    
+
                     if state:
                         current_state = await state.get_state()
 
                     is_reg_process = is_registration_process(event, current_state)
-                    
-                    is_channel_check = (isinstance(event, CallbackQuery) 
+
+                    is_channel_check = (isinstance(event, CallbackQuery)
                                        and event.data == "sub_channel_check")
-                    
-                    is_start_command = (isinstance(event, Message) 
-                                       and event.text 
+
+                    is_start_command = (isinstance(event, Message)
+                                       and event.text
                                        and event.text.startswith('/start'))
-                    
+
                     if is_reg_process or is_channel_check or is_start_command:
                         if is_start_command:
                             logger.info(f"🚀 Пропускаем команду /start от пользователя {user.id}")
@@ -84,7 +84,9 @@ class AuthMiddleware(BaseMiddleware):
                         data['db'] = db
                         data['db_user'] = None
                         data['is_admin'] = False
-                        return await handler(event, data)
+                        result = await handler(event, data)
+                        await db.commit()
+                        return result
                     else:
                         if isinstance(event, Message):
                             await event.answer(
@@ -99,7 +101,7 @@ class AuthMiddleware(BaseMiddleware):
                         return
                 else:
                     from app.database.models import UserStatus
-                    
+
                     if db_user.status == UserStatus.BLOCKED.value:
                         if isinstance(event, Message):
                             await event.answer("🚫 Ваш аккаунт заблокирован администратором.")
@@ -107,14 +109,14 @@ class AuthMiddleware(BaseMiddleware):
                             await event.answer("🚫 Ваш аккаунт заблокирован администратором.", show_alert=True)
                         logger.info(f"🚫 Заблокированный пользователь {user.id} попытался использовать бота")
                         return
-                    
+
                     if db_user.status == UserStatus.DELETED.value:
                         state: FSMContext = data.get('state')
                         current_state = None
-                        
+
                         if state:
                             current_state = await state.get_state()
-                        
+
                         registration_states = [
                             RegistrationStates.waiting_for_language.state,
                             RegistrationStates.waiting_for_rules_accept.state,
@@ -134,13 +136,15 @@ class AuthMiddleware(BaseMiddleware):
                                 )
                             )
                         )
-                        
+
                         if is_start_or_registration:
                             logger.info(f"🔄 Удаленный пользователь {user.id} начинает повторную регистрацию")
                             data['db'] = db
-                            data['db_user'] = None 
+                            data['db_user'] = None
                             data['is_admin'] = False
-                            return await handler(event, data)
+                            result = await handler(event, data)
+                            await db.commit()
+                            return result
                         else:
                             if isinstance(event, Message):
                                 await event.answer(
@@ -154,16 +158,16 @@ class AuthMiddleware(BaseMiddleware):
                                 )
                             logger.info(f"❌ Удаленный пользователь {user.id} попытался использовать бота без /start")
                             return
-                    
-                    
+
+
                     profile_updated = False
-                    
+
                     if db_user.username != user.username:
                         old_username = db_user.username
                         db_user.username = user.username
                         logger.info(f"🔄 [Middleware] Username обновлен для {user.id}: '{old_username}' → '{db_user.username}'")
                         profile_updated = True
-                    
+
                     safe_first = sanitize_telegram_name(user.first_name)
                     safe_last = sanitize_telegram_name(user.last_name)
                     if db_user.first_name != safe_first:
@@ -171,13 +175,13 @@ class AuthMiddleware(BaseMiddleware):
                         db_user.first_name = safe_first
                         logger.info(f"🔄 [Middleware] Имя обновлено для {user.id}: '{old_first_name}' → '{db_user.first_name}'")
                         profile_updated = True
-                    
+
                     if db_user.last_name != safe_last:
                         old_last_name = db_user.last_name
                         db_user.last_name = safe_last
                         logger.info(f"🔄 [Middleware] Фамилия обновлена для {user.id}: '{old_last_name}' → '{db_user.last_name}'")
                         profile_updated = True
-                    
+
                     db_user.last_activity = datetime.utcnow()
 
                     if profile_updated:
@@ -198,14 +202,14 @@ class AuthMiddleware(BaseMiddleware):
                                 )
                             )
 
-                    await db.commit()
-
                 data['db'] = db
                 data['db_user'] = db_user
                 data['is_admin'] = settings.is_admin(user.id)
 
-                return await handler(event, data)
-                
+                result = await handler(event, data)
+                await db.commit()
+                return result
+
             except Exception as e:
                 logger.error(f"Ошибка в AuthMiddleware: {e}")
                 logger.error(f"Event type: {type(event)}")
