@@ -1805,17 +1805,17 @@ async def _load_app_config_async() -> Dict[str, Any]:
             async with service.get_api_client() as api:
                 config = await api.get_subscription_page_config(remnawave_uuid)
                 if config and config.config:
-                    logger.info(f"Loaded app config from RemnaWave: {remnawave_uuid}")
+                    logger.debug(f"Loaded app config from RemnaWave: {remnawave_uuid}")
                     # Debug: log raw RemnaWave config structure
                     import json
-                    logger.info(f"RemnaWave raw config: {json.dumps(config.config, ensure_ascii=False, indent=2)[:2000]}")
+                    logger.debug(f"RemnaWave raw config: {json.dumps(config.config, ensure_ascii=False, indent=2)[:2000]}")
                     converted = _convert_remnawave_config_to_cabinet(config.config)
-                    logger.info(f"Converted config platforms: {list(converted.get('platforms', {}).keys())}")
+                    logger.debug(f"Converted config platforms: {list(converted.get('platforms', {}).keys())}")
                     # Log first app from each platform
                     for platform, apps in converted.get('platforms', {}).items():
                         if apps:
                             first_app = apps[0]
-                            logger.info(f"Platform {platform} first app: name={first_app.get('name')}, urlScheme={first_app.get('urlScheme')}")
+                            logger.debug(f"Platform {platform} first app: name={first_app.get('name')}, urlScheme={first_app.get('urlScheme')}")
                     return converted
         except Exception as e:
             logger.warning(f"Failed to load RemnaWave config, falling back to file: {e}")
