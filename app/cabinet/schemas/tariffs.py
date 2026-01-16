@@ -103,6 +103,8 @@ class TariffDetailResponse(BaseModel):
     # Дневной тариф
     is_daily: bool = False
     daily_price_kopeks: int = 0
+    # Режим сброса трафика
+    traffic_reset_mode: Optional[str] = None  # DAY, WEEK, MONTH, NO_RESET, None = глобальная настройка
     created_at: datetime
     updated_at: Optional[datetime] = None
 
@@ -141,6 +143,8 @@ class TariffCreateRequest(BaseModel):
     # Дневной тариф
     is_daily: bool = False
     daily_price_kopeks: int = Field(0, ge=0)
+    # Режим сброса трафика
+    traffic_reset_mode: Optional[str] = None  # DAY, WEEK, MONTH, NO_RESET, None = глобальная настройка
 
 
 class TariffUpdateRequest(BaseModel):
@@ -175,6 +179,8 @@ class TariffUpdateRequest(BaseModel):
     # Дневной тариф
     is_daily: Optional[bool] = None
     daily_price_kopeks: Optional[int] = Field(None, ge=0)
+    # Режим сброса трафика
+    traffic_reset_mode: Optional[str] = None  # DAY, WEEK, MONTH, NO_RESET, None = глобальная настройка
 
 
 class TariffToggleResponse(BaseModel):

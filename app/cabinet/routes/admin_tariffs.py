@@ -218,6 +218,8 @@ async def get_tariff(
         # Дневной тариф
         is_daily=tariff.is_daily,
         daily_price_kopeks=tariff.daily_price_kopeks,
+        # Режим сброса трафика
+        traffic_reset_mode=tariff.traffic_reset_mode,
         created_at=tariff.created_at,
         updated_at=tariff.updated_at,
     )
@@ -268,6 +270,8 @@ async def create_new_tariff(
         # Дневной тариф
         is_daily=request.is_daily,
         daily_price_kopeks=request.daily_price_kopeks,
+        # Режим сброса трафика
+        traffic_reset_mode=request.traffic_reset_mode,
     )
 
     logger.info(f"Admin {admin.id} created tariff {tariff.id}: {tariff.name}")
@@ -354,6 +358,9 @@ async def update_existing_tariff(
         updates["is_daily"] = request.is_daily
     if request.daily_price_kopeks is not None:
         updates["daily_price_kopeks"] = request.daily_price_kopeks
+    # Режим сброса трафика (None допускается как значение для сброса к глобальной настройке)
+    if 'traffic_reset_mode' in request.model_fields_set:
+        updates["traffic_reset_mode"] = request.traffic_reset_mode
 
     if updates:
         await update_tariff(db, tariff, **updates)
