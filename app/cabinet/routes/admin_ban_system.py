@@ -39,6 +39,9 @@ router = APIRouter(prefix="/admin/ban-system", tags=["Cabinet Admin Ban System"]
 
 def _get_ban_api() -> BanSystemAPI:
     """Get Ban System API instance."""
+    logger.info(f"Ban System check - enabled: {settings.is_ban_system_enabled()}, configured: {settings.is_ban_system_configured()}")
+    logger.info(f"Ban System URL: {settings.get_ban_system_api_url()}")
+
     if not settings.is_ban_system_enabled():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -93,6 +96,16 @@ async def get_ban_system_status(
 
 # === Stats ===
 
+@router.get("/stats/raw")
+async def get_stats_raw(
+    admin: User = Depends(get_current_admin_user),
+) -> dict:
+    """Get raw stats from Ban System API for debugging."""
+    api = _get_ban_api()
+    data = await _api_request(api, "get_stats")
+    return {"raw_response": data}
+
+
 @router.get("/stats", response_model=BanSystemStatsResponse)
 async def get_stats(
     admin: User = Depends(get_current_admin_user),
@@ -100,6 +113,8 @@ async def get_stats(
     """Get overall Ban System statistics."""
     api = _get_ban_api()
     data = await _api_request(api, "get_stats")
+
+    logger.info(f"Ban System raw stats: {data}")
 
     # Extract punishment stats
     punishment_stats = data.get("punishment_stats") or {}
