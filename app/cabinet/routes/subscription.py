@@ -2071,6 +2071,25 @@ async def preview_tariff_switch(
     switching_to_daily = not current_is_daily and new_is_daily
     switching_from_daily = current_is_daily and not new_is_daily
 
+    def get_monthly_price(tariff) -> int:
+        """Get 30-day price from tariff, or calculate from closest period."""
+        if not tariff or not tariff.period_prices:
+            return 0
+        # Try to get 30-day price directly
+        if '30' in tariff.period_prices:
+            return tariff.period_prices['30']
+        # Find closest period and calculate monthly equivalent
+        min_period = None
+        min_price = 0
+        for period_str, price in tariff.period_prices.items():
+            period_days = int(period_str)
+            if min_period is None or period_days < min_period:
+                min_period = period_days
+                min_price = price
+        if min_period and min_period > 0:
+            return int(min_price * 30 / min_period)
+        return 0
+
     if switching_to_daily:
         # Switching TO daily - pay first day price
         daily_price = getattr(new_tariff, 'daily_price_kopeks', 0)
@@ -2084,31 +2103,18 @@ async def preview_tariff_switch(
         upgrade_cost = min_period_price
         is_upgrade = min_period_price > 0
     else:
-        # Calculate proportional cost difference
-        current_daily_price = 0
-        new_daily_price = 0
+        # Calculate proportional cost difference using monthly prices
+        current_monthly = get_monthly_price(current_tariff)
+        new_monthly = get_monthly_price(new_tariff)
 
-        if current_tariff and current_tariff.period_prices:
-            # Get price per day from current tariff
-            for period_str, price in current_tariff.period_prices.items():
-                period_days = int(period_str)
-                if period_days > 0:
-                    current_daily_price = price / period_days
-                    break
+        price_diff = new_monthly - current_monthly
 
-        if new_tariff.period_prices:
-            # Get price per day from new tariff
-            for period_str, price in new_tariff.period_prices.items():
-                period_days = int(period_str)
-                if period_days > 0:
-                    new_daily_price = price / period_days
-                    break
-
-        price_diff_per_day = new_daily_price - current_daily_price
-        if price_diff_per_day > 0:
-            upgrade_cost = int(price_diff_per_day * remaining_days)
+        if price_diff > 0:
+            # Upgrade - pay proportional difference
+            upgrade_cost = int(price_diff * remaining_days / 30)
             is_upgrade = True
         else:
+            # Downgrade or same - free
             upgrade_cost = 0
             is_upgrade = False
 
@@ -2219,27 +2225,29 @@ async def switch_tariff(
         upgrade_cost = min_period_price
         new_period_days = min_period_days
     else:
-        # Regular tariff switch - calculate proportional cost difference
-        current_daily_price = 0
-        new_daily_price = 0
-
-        if current_tariff and current_tariff.period_prices:
-            for period_str, price in current_tariff.period_prices.items():
+        # Regular tariff switch - calculate proportional cost difference using monthly prices
+        def get_monthly_price(tariff) -> int:
+            if not tariff or not tariff.period_prices:
+                return 0
+            if '30' in tariff.period_prices:
+                return tariff.period_prices['30']
+            min_period = None
+            min_price = 0
+            for period_str, price in tariff.period_prices.items():
                 period_days = int(period_str)
-                if period_days > 0:
-                    current_daily_price = price / period_days
-                    break
+                if min_period is None or period_days < min_period:
+                    min_period = period_days
+                    min_price = price
+            if min_period and min_period > 0:
+                return int(min_price * 30 / min_period)
+            return 0
 
-        if new_tariff.period_prices:
-            for period_str, price in new_tariff.period_prices.items():
-                period_days = int(period_str)
-                if period_days > 0:
-                    new_daily_price = price / period_days
-                    break
+        current_monthly = get_monthly_price(current_tariff)
+        new_monthly = get_monthly_price(new_tariff)
+        price_diff = new_monthly - current_monthly
 
-        price_diff_per_day = new_daily_price - current_daily_price
-        if price_diff_per_day > 0:
-            upgrade_cost = int(price_diff_per_day * remaining_days)
+        if price_diff > 0:
+            upgrade_cost = int(price_diff * remaining_days / 30)
         else:
             upgrade_cost = 0
         new_period_days = 0
