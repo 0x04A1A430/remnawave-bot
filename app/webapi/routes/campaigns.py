@@ -34,6 +34,11 @@ def _serialize_campaign(campaign) -> CampaignResponse:
     registrations = registrations_attr or []
     squads = list(campaign.subscription_squads or [])
 
+    # Получаем название тарифа если есть
+    tariff_name = None
+    if campaign.tariff_id and hasattr(campaign, 'tariff') and campaign.tariff:
+        tariff_name = campaign.tariff.name
+
     return CampaignResponse(
         id=campaign.id,
         name=campaign.name,
@@ -45,6 +50,9 @@ def _serialize_campaign(campaign) -> CampaignResponse:
         subscription_traffic_gb=campaign.subscription_traffic_gb,
         subscription_device_limit=campaign.subscription_device_limit,
         subscription_squads=squads,
+        tariff_id=campaign.tariff_id,
+        tariff_duration_days=campaign.tariff_duration_days,
+        tariff_name=tariff_name,
         is_active=campaign.is_active,
         created_by=campaign.created_by,
         created_at=campaign.created_at,
@@ -78,6 +86,8 @@ async def create_campaign_endpoint(
             subscription_traffic_gb=payload.subscription_traffic_gb,
             subscription_device_limit=payload.subscription_device_limit,
             subscription_squads=payload.subscription_squads,
+            tariff_id=payload.tariff_id,
+            tariff_duration_days=payload.tariff_duration_days,
             is_active=payload.is_active,
         )
     except IntegrityError as exc:  # duplicate start_parameter
