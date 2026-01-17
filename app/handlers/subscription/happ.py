@@ -6,7 +6,7 @@ from typing import Dict, List, Any, Tuple, Optional
 from urllib.parse import quote
 from aiogram import Dispatcher, types, F
 from aiogram.fsm.context import FSMContext
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, InaccessibleMessage
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings, PERIOD_PRICES, get_traffic_prices
 from app.database.crud.discount_offer import (
@@ -99,6 +99,11 @@ async def handle_happ_download_platform_choice(
         db_user: User,
         db: AsyncSession
 ):
+    # Проверяем, доступно ли сообщение для редактирования
+    if isinstance(callback.message, InaccessibleMessage):
+        await callback.answer()
+        return
+
     platform = callback.data.split('_')[-1]
     if platform == "pc":
         platform = "windows"
