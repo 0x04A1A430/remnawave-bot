@@ -6,7 +6,7 @@ from typing import Dict, List, Any, Tuple, Optional
 from urllib.parse import quote
 from aiogram import Dispatcher, types, F
 from aiogram.fsm.context import FSMContext
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, InaccessibleMessage
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings, PERIOD_PRICES, get_traffic_prices
 from app.database.crud.discount_offer import (
@@ -83,6 +83,11 @@ async def handle_connect_subscription(
         db_user: User,
         db: AsyncSession
 ):
+    # Проверяем, доступно ли сообщение для редактирования
+    if isinstance(callback.message, InaccessibleMessage):
+        await callback.answer()
+        return
+
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
     subscription_link = get_display_subscription_link(subscription)
