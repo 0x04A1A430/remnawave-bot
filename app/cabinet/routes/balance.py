@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc
 
-from app.database.models import User, Transaction
+from app.database.models import User, Transaction, PaymentMethod
 from app.config import settings
 from app.services.yookassa_service import YooKassaService
 from app.external.cryptobot import CryptoBotService
@@ -27,6 +27,17 @@ from ..schemas.balance import (
     TopUpResponse,
     StarsInvoiceRequest,
     StarsInvoiceResponse,
+    PendingPaymentResponse,
+    PendingPaymentListResponse,
+    ManualCheckResponse,
+)
+from app.services.payment_verification_service import (
+    list_recent_pending_payments,
+    get_payment_record,
+    run_manual_check,
+    SUPPORTED_MANUAL_CHECK_METHODS,
+    method_display_name,
+    PendingPayment,
 )
 
 logger = logging.getLogger(__name__)
@@ -700,4 +711,323 @@ async def create_topup(
         amount_rubles=amount_rubles,
         status="pending",
         expires_at=None,
+    )
+
+
+def _get_status_info(record: PendingPayment) -> tuple[str, str]:
+    """Get status emoji and text for a pending payment."""
+    status = (record.status or "").lower()
+
+    if record.is_paid:
+        return "✅", "Оплачено"
+
+    if record.method == PaymentMethod.PAL24:
+        mapping = {
+            "new": ("⏳", "Ожидает оплаты"),
+            "process": ("⌛", "Обрабатывается"),
+            "success": ("✅", "Оплачено"),
+            "fail": ("❌", "Ошибка"),
+            "canceled": ("❌", "Отменено"),
+        }
+        return mapping.get(status, ("❓", "Неизвестно"))
+
+    if record.method == PaymentMethod.MULENPAY:
+        mapping = {
+            "created": ("⏳", "Ожидает оплаты"),
+            "processing": ("⌛", "Обрабатывается"),
+            "hold": ("🔒", "На удержании"),
+            "success": ("✅", "Оплачено"),
+            "canceled": ("❌", "Отменено"),
+            "error": ("❌", "Ошибка"),
+        }
+        return mapping.get(status, ("❓", "Неизвестно"))
+
+    if record.method == PaymentMethod.WATA:
+        mapping = {
+            "opened": ("⏳", "Ожидает оплаты"),
+            "pending": ("⏳", "Ожидает оплаты"),
+            "processing": ("⌛", "Обрабатывается"),
+            "paid": ("✅", "Оплачено"),
+            "closed": ("✅", "Оплачено"),
+            "declined": ("❌", "Отклонено"),
+            "canceled": ("❌", "Отменено"),
+            "expired": ("⌛", "Истёк"),
+        }
+        return mapping.get(status, ("❓", "Неизвестно"))
+
+    if record.method == PaymentMethod.PLATEGA:
+        mapping = {
+            "pending": ("⏳", "Ожидает оплаты"),
+            "inprogress": ("⌛", "Обрабатывается"),
+            "confirmed": ("✅", "Оплачено"),
+            "failed": ("❌", "Ошибка"),
+            "canceled": ("❌", "Отменено"),
+            "expired": ("⌛", "Истёк"),
+        }
+        return mapping.get(status, ("❓", "Неизвестно"))
+
+    if record.method == PaymentMethod.HELEKET:
+        if status in {"pending", "created", "waiting", "check", "processing"}:
+            return "⏳", "Ожидает оплаты"
+        if status in {"paid", "paid_over"}:
+            return "✅", "Оплачено"
+        if status in {"cancel", "canceled", "fail", "failed", "expired"}:
+            return "❌", "Отменено"
+        return "❓", "Неизвестно"
+
+    if record.method == PaymentMethod.YOOKASSA:
+        mapping = {
+            "pending": ("⏳", "Ожидает оплаты"),
+            "waiting_for_capture": ("⌛", "Обрабатывается"),
+            "succeeded": ("✅", "Оплачено"),
+            "canceled": ("❌", "Отменено"),
+        }
+        return mapping.get(status, ("❓", "Неизвестно"))
+
+    if record.method == PaymentMethod.CRYPTOBOT:
+        mapping = {
+            "active": ("⏳", "Ожидает оплаты"),
+            "paid": ("✅", "Оплачено"),
+            "expired": ("⌛", "Истёк"),
+        }
+        return mapping.get(status, ("❓", "Неизвестно"))
+
+    if record.method == PaymentMethod.CLOUDPAYMENTS:
+        mapping = {
+            "pending": ("⏳", "Ожидает оплаты"),
+            "authorized": ("⌛", "Авторизовано"),
+            "completed": ("✅", "Оплачено"),
+            "failed": ("❌", "Ошибка"),
+        }
+        return mapping.get(status, ("❓", "Неизвестно"))
+
+    if record.method == PaymentMethod.FREEKASSA:
+        mapping = {
+            "pending": ("⏳", "Ожидает оплаты"),
+            "success": ("✅", "Оплачено"),
+            "paid": ("✅", "Оплачено"),
+            "canceled": ("❌", "Отменено"),
+            "error": ("❌", "Ошибка"),
+        }
+        return mapping.get(status, ("❓", "Неизвестно"))
+
+    return "❓", "Неизвестно"
+
+
+def _is_checkable(record: PendingPayment) -> bool:
+    """Check if payment can be manually checked."""
+    if record.method not in SUPPORTED_MANUAL_CHECK_METHODS:
+        return False
+    if not record.is_recent():
+        return False
+    status = (record.status or "").lower()
+    if record.method == PaymentMethod.PAL24:
+        return status in {"new", "process"}
+    if record.method == PaymentMethod.MULENPAY:
+        return status in {"created", "processing", "hold"}
+    if record.method == PaymentMethod.WATA:
+        return status in {"opened", "pending", "processing", "inprogress", "in_progress"}
+    if record.method == PaymentMethod.PLATEGA:
+        return status in {"pending", "inprogress", "in_progress"}
+    if record.method == PaymentMethod.HELEKET:
+        return status not in {"paid", "paid_over", "cancel", "canceled", "fail", "failed", "expired"}
+    if record.method == PaymentMethod.YOOKASSA:
+        return status in {"pending", "waiting_for_capture"}
+    if record.method == PaymentMethod.CRYPTOBOT:
+        return status in {"active"}
+    if record.method == PaymentMethod.CLOUDPAYMENTS:
+        return status in {"pending", "authorized"}
+    if record.method == PaymentMethod.FREEKASSA:
+        return status in {"pending", "created", "processing"}
+    return False
+
+
+def _get_payment_url(record: PendingPayment) -> Optional[str]:
+    """Extract payment URL from record."""
+    payment = record.payment
+    payment_url = getattr(payment, "payment_url", None)
+
+    if record.method == PaymentMethod.PAL24:
+        payment_url = getattr(payment, "link_url", None) or getattr(payment, "link_page_url", None) or payment_url
+    elif record.method == PaymentMethod.WATA:
+        payment_url = getattr(payment, "url", None) or payment_url
+    elif record.method == PaymentMethod.YOOKASSA:
+        payment_url = getattr(payment, "confirmation_url", None) or payment_url
+    elif record.method == PaymentMethod.CRYPTOBOT:
+        payment_url = (
+            getattr(payment, "bot_invoice_url", None)
+            or getattr(payment, "mini_app_invoice_url", None)
+            or getattr(payment, "web_app_invoice_url", None)
+            or payment_url
+        )
+    elif record.method == PaymentMethod.PLATEGA:
+        payment_url = getattr(payment, "redirect_url", None) or payment_url
+    elif record.method == PaymentMethod.CLOUDPAYMENTS:
+        payment_url = getattr(payment, "payment_url", None) or payment_url
+    elif record.method == PaymentMethod.FREEKASSA:
+        payment_url = getattr(payment, "payment_url", None) or payment_url
+
+    return payment_url
+
+
+def _record_to_response(record: PendingPayment) -> PendingPaymentResponse:
+    """Convert PendingPayment to API response."""
+    status_emoji, status_text = _get_status_info(record)
+    return PendingPaymentResponse(
+        id=record.local_id,
+        method=record.method.value,
+        method_display=method_display_name(record.method),
+        identifier=record.identifier,
+        amount_kopeks=record.amount_kopeks,
+        amount_rubles=record.amount_kopeks / 100,
+        status=record.status or "",
+        status_emoji=status_emoji,
+        status_text=status_text,
+        is_paid=record.is_paid,
+        is_checkable=_is_checkable(record),
+        created_at=record.created_at,
+        expires_at=record.expires_at,
+        payment_url=_get_payment_url(record),
+        user_id=record.user.id if record.user else None,
+        user_telegram_id=record.user.telegram_id if record.user else None,
+        user_username=record.user.username if record.user else None,
+    )
+
+
+@router.get("/pending-payments", response_model=PendingPaymentListResponse)
+async def get_pending_payments(
+    page: int = Query(1, ge=1, description="Page number"),
+    per_page: int = Query(10, ge=1, le=50, description="Items per page"),
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Get user's pending payments for manual verification."""
+    all_pending = await list_recent_pending_payments(db)
+
+    # Filter only current user's payments
+    user_payments = [p for p in all_pending if p.user and p.user.id == user.id]
+
+    total = len(user_payments)
+    pages = math.ceil(total / per_page) if total > 0 else 1
+
+    # Paginate
+    start_idx = (page - 1) * per_page
+    page_payments = user_payments[start_idx:start_idx + per_page]
+
+    items = [_record_to_response(p) for p in page_payments]
+
+    return PendingPaymentListResponse(
+        items=items,
+        total=total,
+        page=page,
+        per_page=per_page,
+        pages=pages,
+    )
+
+
+@router.get("/pending-payments/{method}/{payment_id}", response_model=PendingPaymentResponse)
+async def get_pending_payment_details(
+    method: str,
+    payment_id: int,
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Get details of a specific pending payment."""
+    try:
+        payment_method = PaymentMethod(method)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid payment method: {method}",
+        )
+
+    record = await get_payment_record(db, payment_method, payment_id)
+
+    if not record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Payment not found",
+        )
+
+    # Check that payment belongs to the current user
+    if not record.user or record.user.id != user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied",
+        )
+
+    return _record_to_response(record)
+
+
+@router.post("/pending-payments/{method}/{payment_id}/check", response_model=ManualCheckResponse)
+async def check_payment_status(
+    method: str,
+    payment_id: int,
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Manually check and update payment status."""
+    try:
+        payment_method = PaymentMethod(method)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid payment method: {method}",
+        )
+
+    # Get current record
+    record = await get_payment_record(db, payment_method, payment_id)
+
+    if not record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Payment not found",
+        )
+
+    # Check that payment belongs to the current user
+    if not record.user or record.user.id != user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied",
+        )
+
+    # Check if manual check is available
+    if not _is_checkable(record):
+        return ManualCheckResponse(
+            success=False,
+            message="Ручная проверка недоступна для этого платежа",
+            payment=_record_to_response(record),
+            status_changed=False,
+        )
+
+    old_status = record.status
+    old_is_paid = record.is_paid
+
+    # Run manual check
+    payment_service = PaymentService()
+    updated = await run_manual_check(db, payment_method, payment_id, payment_service)
+
+    if not updated:
+        return ManualCheckResponse(
+            success=False,
+            message="Не удалось проверить статус платежа",
+            payment=_record_to_response(record),
+            status_changed=False,
+        )
+
+    status_changed = updated.status != old_status or updated.is_paid != old_is_paid
+
+    if status_changed:
+        _, new_status_text = _get_status_info(updated)
+        message = f"Статус обновлён: {new_status_text}"
+    else:
+        message = "Статус не изменился"
+
+    return ManualCheckResponse(
+        success=True,
+        message=message,
+        payment=_record_to_response(updated),
+        status_changed=status_changed,
+        old_status=old_status,
+        new_status=updated.status,
     )
