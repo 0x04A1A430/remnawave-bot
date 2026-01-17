@@ -2021,6 +2021,14 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         toggle_edit_campaign_server, F.data.startswith("campaign_edit_toggle_")
     )
+    # Tariff handlers ДОЛЖНЫ быть ПЕРЕД общим admin_campaign_edit_
+    dp.callback_query.register(
+        start_edit_campaign_tariff_days, F.data.startswith("admin_campaign_edit_tariff_days_")
+    )
+    dp.callback_query.register(
+        start_edit_campaign_tariff, F.data.startswith("admin_campaign_edit_tariff_")
+    )
+    # Общий паттерн ПОСЛЕДНИМ
     dp.callback_query.register(
         show_campaign_edit_menu, F.data.startswith("admin_campaign_edit_")
     )
@@ -2046,13 +2054,7 @@ def register_handlers(dp: Dispatcher):
         select_campaign_tariff, F.data.startswith("campaign_select_tariff_")
     )
     dp.callback_query.register(
-        start_edit_campaign_tariff, F.data.startswith("admin_campaign_edit_tariff_")
-    )
-    dp.callback_query.register(
         set_campaign_tariff, F.data.startswith("campaign_edit_set_tariff_")
-    )
-    dp.callback_query.register(
-        start_edit_campaign_tariff_days, F.data.startswith("admin_campaign_edit_tariff_days_")
     )
 
     dp.message.register(process_campaign_name, AdminStates.creating_campaign_name)
