@@ -366,8 +366,12 @@ async def get_user_detail(
 
     # Get referrer info
     referred_by_username = None
-    if user.referrer:
-        referred_by_username = user.referrer.username or user.referrer.full_name
+    if user.referred_by_id:
+        referrer_q = select(User).where(User.id == user.referred_by_id)
+        referrer_result = await db.execute(referrer_q)
+        referrer = referrer_result.scalar_one_or_none()
+        if referrer:
+            referred_by_username = referrer.username or referrer.full_name
 
     referral_info = UserReferralInfo(
         referral_code=user.referral_code or "",
