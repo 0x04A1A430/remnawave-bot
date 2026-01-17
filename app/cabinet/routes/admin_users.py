@@ -159,6 +159,120 @@ async def _build_subscription_info_async(db: AsyncSession, subscription: Subscri
     return _build_subscription_info(subscription, tariff_name=tariff_name)
 
 
+async def _sync_subscription_to_panel(db: AsyncSession, user: User, subscription: Subscription) -> dict:
+    """
+    Sync user subscription to Remnawave panel.
+    Creates user if not exists, updates if exists.
+    Returns dict with changes/errors.
+    """
+    try:
+        from app.services.remnawave_service import RemnaWaveService
+        from app.external.remnawave_api import UserStatus as PanelUserStatus, TrafficLimitStrategy
+        from app.config import settings
+        from app.utils.subscription_utils import resolve_hwid_device_limit_for_payload
+
+        service = RemnaWaveService()
+        if not service.is_configured:
+            logger.warning(f"Remnawave not configured, skipping panel sync for user {user.id}")
+            return {"skipped": True, "reason": "Remnawave not configured"}
+
+        is_active = (
+            subscription.status in (SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value)
+            and subscription.end_date
+            and subscription.end_date > datetime.utcnow()
+        )
+        panel_status = PanelUserStatus.ACTIVE if is_active else PanelUserStatus.DISABLED
+
+        expire_at = subscription.end_date
+        if expire_at and expire_at <= datetime.utcnow():
+            expire_at = datetime.utcnow() + timedelta(minutes=1)
+
+        username = settings.format_remnawave_username(
+            full_name=user.full_name,
+            username=user.username,
+            telegram_id=user.telegram_id,
+        )
+
+        description = settings.format_remnawave_user_description(
+            full_name=user.full_name,
+            username=user.username,
+            telegram_id=user.telegram_id,
+        )
+
+        hwid_limit = resolve_hwid_device_limit_for_payload(subscription)
+        traffic_limit_bytes = subscription.traffic_limit_gb * (1024**3) if subscription.traffic_limit_gb > 0 else 0
+
+        changes = {}
+        async with service.get_api_client() as api:
+            panel_uuid = user.remnawave_uuid
+
+            # Try to find existing user
+            if not panel_uuid:
+                existing_users = await api.get_user_by_telegram_id(user.telegram_id)
+                if existing_users:
+                    panel_uuid = existing_users[0].uuid
+                    user.remnawave_uuid = panel_uuid
+                    changes["remnawave_uuid_discovered"] = panel_uuid
+
+            if panel_uuid:
+                # Update existing user
+                update_kwargs = {
+                    "uuid": panel_uuid,
+                    "status": panel_status,
+                    "traffic_limit_bytes": traffic_limit_bytes,
+                    "traffic_limit_strategy": TrafficLimitStrategy.MONTH,
+                    "description": description,
+                }
+                if expire_at:
+                    update_kwargs["expire_at"] = expire_at
+                if subscription.connected_squads:
+                    update_kwargs["active_internal_squads"] = subscription.connected_squads
+                if hwid_limit is not None:
+                    update_kwargs["hwid_device_limit"] = hwid_limit
+
+                try:
+                    await api.update_user(**update_kwargs)
+                    changes["action"] = "updated"
+                    logger.info(f"Updated user {user.id} in Remnawave panel")
+                except Exception as update_error:
+                    if hasattr(update_error, 'status_code') and update_error.status_code == 404:
+                        panel_uuid = None  # Will create new
+                    else:
+                        raise
+
+            if not panel_uuid:
+                # Create new user
+                create_kwargs = {
+                    "username": username,
+                    "expire_at": expire_at or (datetime.utcnow() + timedelta(days=30)),
+                    "status": panel_status,
+                    "traffic_limit_bytes": traffic_limit_bytes,
+                    "traffic_limit_strategy": TrafficLimitStrategy.MONTH,
+                    "telegram_id": user.telegram_id,
+                    "description": description,
+                    "active_internal_squads": subscription.connected_squads or [],
+                }
+                if hwid_limit is not None:
+                    create_kwargs["hwid_device_limit"] = hwid_limit
+
+                new_panel_user = await api.create_user(**create_kwargs)
+                user.remnawave_uuid = new_panel_user.uuid
+                subscription.remnawave_short_uuid = new_panel_user.short_uuid
+                subscription.subscription_url = new_panel_user.subscription_url
+                changes["action"] = "created"
+                changes["panel_uuid"] = new_panel_user.uuid
+                logger.info(f"Created user {user.id} in Remnawave panel: {new_panel_user.uuid}")
+
+            user.last_remnawave_sync = datetime.utcnow()
+            await db.commit()
+
+        return changes
+
+    except Exception as e:
+        logger.error(f"Error syncing user {user.id} to panel: {e}")
+        return {"error": str(e)}
+
+
 # === List & Search ===
 
 @router.get("", response_model=UsersListResponse)
@@ -575,6 +689,18 @@ async def update_user_subscription(
         is_trial = request.is_trial or False
         traffic_limit = request.traffic_limit_gb or 100
         device_limit = request.device_limit or 1
+        connected_squads = []
+
+        # Get tariff for settings if provided
+        if request.tariff_id:
+            tariff = await get_tariff_by_id(db, request.tariff_id)
+            if tariff:
+                if not request.traffic_limit_gb:
+                    traffic_limit = tariff.traffic_limit_gb
+                if not request.device_limit:
+                    device_limit = tariff.device_limit
+                if tariff.allowed_squads:
+                    connected_squads = tariff.allowed_squads
 
         new_sub = await create_paid_subscription(
             db=db,
@@ -584,7 +710,11 @@ async def update_user_subscription(
             device_limit=device_limit,
             is_trial=is_trial,
             tariff_id=request.tariff_id,
+            connected_squads=connected_squads,
         )
+
+        # Sync to Remnawave panel
+        await _sync_subscription_to_panel(db, user, new_sub)
 
         logger.info(f"Admin {admin.id} created subscription for user {user_id}")
 
@@ -610,6 +740,9 @@ async def update_user_subscription(
         old_end = subscription.end_date
         await extend_subscription(db, subscription, request.days)
         await db.refresh(subscription)
+
+        # Sync to Remnawave panel
+        await _sync_subscription_to_panel(db, user, subscription)
 
         logger.info(
             f"Admin {admin.id} extended subscription for user {user_id} by {request.days} days"
@@ -637,6 +770,9 @@ async def update_user_subscription(
         await db.commit()
         await db.refresh(subscription)
 
+        # Sync to Remnawave panel
+        await _sync_subscription_to_panel(db, user, subscription)
+
         logger.info(f"Admin {admin.id} set end_date for user {user_id} subscription")
 
         return UpdateSubscriptionResponse(
@@ -662,8 +798,14 @@ async def update_user_subscription(
         subscription.tariff_id = request.tariff_id
         subscription.traffic_limit_gb = tariff.traffic_limit_gb
         subscription.device_limit = tariff.device_limit
+        # Set squads from tariff
+        if tariff.allowed_squads:
+            subscription.connected_squads = tariff.allowed_squads
         await db.commit()
         await db.refresh(subscription)
+
+        # Sync to Remnawave panel
+        await _sync_subscription_to_panel(db, user, subscription)
 
         logger.info(
             f"Admin {admin.id} changed tariff for user {user_id} to {tariff.name}"
@@ -684,6 +826,9 @@ async def update_user_subscription(
 
         await db.commit()
         await db.refresh(subscription)
+
+        # Sync to Remnawave panel
+        await _sync_subscription_to_panel(db, user, subscription)
 
         logger.info(f"Admin {admin.id} updated traffic for user {user_id}")
 
@@ -719,6 +864,9 @@ async def update_user_subscription(
         await db.commit()
         await db.refresh(subscription)
 
+        # Sync to Remnawave panel
+        await _sync_subscription_to_panel(db, user, subscription)
+
         logger.info(f"Admin {admin.id} cancelled subscription for user {user_id}")
 
         return UpdateSubscriptionResponse(
@@ -734,6 +882,9 @@ async def update_user_subscription(
             subscription.end_date = datetime.utcnow() + timedelta(days=30)
         await db.commit()
         await db.refresh(subscription)
+
+        # Sync to Remnawave panel
+        await _sync_subscription_to_panel(db, user, subscription)
 
         logger.info(f"Admin {admin.id} activated subscription for user {user_id}")
 
@@ -1357,18 +1508,28 @@ async def sync_user_from_panel(
             if request.update_subscription and user.subscription:
                 sub = user.subscription
 
-                # Update end date
+                # Update end date (normalize timezone)
                 if panel_user.expire_at:
-                    if sub.end_date != panel_user.expire_at:
-                        changes["end_date"] = {"old": sub.end_date.isoformat() if sub.end_date else None, "new": panel_user.expire_at.isoformat()}
-                        sub.end_date = panel_user.expire_at
+                    # Convert panel expire_at to naive UTC for storage
+                    if panel_user.expire_at.tzinfo:
+                        from datetime import timezone
+                        panel_expire_utc = panel_user.expire_at.astimezone(timezone.utc).replace(tzinfo=None)
+                    else:
+                        panel_expire_utc = panel_user.expire_at
+
+                    sub_end_naive = sub.end_date.replace(tzinfo=None) if sub.end_date and sub.end_date.tzinfo else sub.end_date
+                    if sub_end_naive != panel_expire_utc:
+                        changes["end_date"] = {"old": sub.end_date.isoformat() if sub.end_date else None, "new": panel_expire_utc.isoformat()}
+                        sub.end_date = panel_expire_utc
 
                 # Update status
                 panel_status_str = panel_user.status.value if panel_user.status else "DISABLED"
                 now = datetime.utcnow()
-                if panel_status_str == "ACTIVE" and panel_user.expire_at and panel_user.expire_at > now:
+                # Compare with normalized panel expire date
+                panel_expire_for_check = panel_expire_utc if panel_user.expire_at else None
+                if panel_status_str == "ACTIVE" and panel_expire_for_check and panel_expire_for_check > now:
                     new_status = SubscriptionStatus.ACTIVE.value
-                elif panel_user.expire_at and panel_user.expire_at <= now:
+                elif panel_expire_for_check and panel_expire_for_check <= now:
                     new_status = SubscriptionStatus.EXPIRED.value
                 else:
                     new_status = SubscriptionStatus.DISABLED.value
@@ -1416,7 +1577,13 @@ async def sync_user_from_panel(
                 from app.database.crud.subscription import create_paid_subscription
 
                 panel_traffic_limit = int(panel_user.traffic_limit_bytes / (1024**3)) if panel_user.traffic_limit_bytes else 100
-                days_remaining = max(1, (panel_user.expire_at - datetime.utcnow()).days)
+                # Normalize panel expire date for calculation
+                if panel_user.expire_at.tzinfo:
+                    from datetime import timezone
+                    panel_expire_naive = panel_user.expire_at.astimezone(timezone.utc).replace(tzinfo=None)
+                else:
+                    panel_expire_naive = panel_user.expire_at
+                days_remaining = max(1, (panel_expire_naive - datetime.utcnow()).days)
 
                 new_sub = await create_paid_subscription(
                     db=db,
