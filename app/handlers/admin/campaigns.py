@@ -1770,6 +1770,9 @@ async def process_campaign_tariff_days(
         created_by=db_user.id,
     )
 
+    # Перезагружаем кампанию с загруженным tariff relationship
+    campaign = await get_campaign_by_id(db, campaign.id)
+
     await state.clear()
 
     deep_link = await _get_bot_deep_link_from_message(message, campaign.start_parameter)
