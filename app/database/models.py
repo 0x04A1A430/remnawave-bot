@@ -2067,6 +2067,10 @@ class AdvertisingCampaign(Base):
     subscription_device_limit = Column(Integer, nullable=True)
     subscription_squads = Column(JSON, default=list)
 
+    # Поля для типа "tariff" - выдача тарифа
+    tariff_id = Column(Integer, ForeignKey("tariffs.id", ondelete="SET NULL"), nullable=True)
+    tariff_duration_days = Column(Integer, nullable=True)
+
     is_active = Column(Boolean, default=True)
 
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
@@ -2074,6 +2078,7 @@ class AdvertisingCampaign(Base):
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
     registrations = relationship("AdvertisingCampaignRegistration", back_populates="campaign")
+    tariff = relationship("Tariff", foreign_keys=[tariff_id])
 
     @property
     def is_balance_bonus(self) -> bool:
@@ -2082,6 +2087,16 @@ class AdvertisingCampaign(Base):
     @property
     def is_subscription_bonus(self) -> bool:
         return self.bonus_type == "subscription"
+
+    @property
+    def is_none_bonus(self) -> bool:
+        """Ссылка без награды - только для отслеживания."""
+        return self.bonus_type == "none"
+
+    @property
+    def is_tariff_bonus(self) -> bool:
+        """Выдача тарифа на определённое время."""
+        return self.bonus_type == "tariff"
 
 
 class AdvertisingCampaignRegistration(Base):
@@ -2098,10 +2113,15 @@ class AdvertisingCampaignRegistration(Base):
     balance_bonus_kopeks = Column(Integer, default=0)
     subscription_duration_days = Column(Integer, nullable=True)
 
+    # Поля для типа "tariff"
+    tariff_id = Column(Integer, ForeignKey("tariffs.id", ondelete="SET NULL"), nullable=True)
+    tariff_duration_days = Column(Integer, nullable=True)
+
     created_at = Column(DateTime, default=func.now())
 
     campaign = relationship("AdvertisingCampaign", back_populates="registrations")
     user = relationship("User")
+    tariff = relationship("Tariff")
 
     @property
     def balance_bonus_rubles(self) -> float:
