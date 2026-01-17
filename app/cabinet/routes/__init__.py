@@ -30,6 +30,7 @@ from .admin_campaigns import router as admin_campaigns_router
 from .admin_users import router as admin_users_router
 from .admin_payments import router as admin_payments_router
 from .admin_promo_offers import router as admin_promo_offers_router
+from .admin_remnawave import router as admin_remnawave_router
 from .media import router as media_router
 
 # Main cabinet router
@@ -69,5 +70,6 @@ router.include_router(admin_campaigns_router)
 router.include_router(admin_users_router)
 router.include_router(admin_payments_router)
 router.include_router(admin_promo_offers_router)
+router.include_router(admin_remnawave_router)
 
 __all__ = ["router"]
