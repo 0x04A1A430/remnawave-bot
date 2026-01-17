@@ -119,7 +119,7 @@ def _build_user_list_item(user: User, spending_stats: dict = None) -> UserListIt
     )
 
 
-def _build_subscription_info(subscription: Subscription) -> UserSubscriptionInfo:
+def _build_subscription_info(subscription: Subscription, tariff_name: Optional[str] = None) -> UserSubscriptionInfo:
     """Build UserSubscriptionInfo from Subscription model."""
     days_remaining = 0
     is_active = False
@@ -131,12 +131,6 @@ def _build_subscription_info(subscription: Subscription) -> UserSubscriptionInfo
             subscription.status == SubscriptionStatus.ACTIVE.value
             and subscription.end_date > datetime.utcnow()
         )
-
-    tariff_name = None
-    if subscription.tariff_id:
-        tariff = getattr(subscription, "tariff", None)
-        if tariff:
-            tariff_name = tariff.name
 
     return UserSubscriptionInfo(
         id=subscription.id,
@@ -153,6 +147,16 @@ def _build_subscription_info(subscription: Subscription) -> UserSubscriptionInfo
         is_active=is_active,
         days_remaining=days_remaining,
     )
+
+
+async def _build_subscription_info_async(db: AsyncSession, subscription: Subscription) -> UserSubscriptionInfo:
+    """Build UserSubscriptionInfo from Subscription model, fetching tariff name asynchronously."""
+    tariff_name = None
+    if subscription.tariff_id:
+        tariff = await get_tariff_by_id(db, subscription.tariff_id)
+        if tariff:
+            tariff_name = tariff.name
+    return _build_subscription_info(subscription, tariff_name=tariff_name)
 
 
 # === List & Search ===
@@ -337,7 +341,7 @@ async def get_user_detail(
     # Build subscription info
     subscription_info = None
     if user.subscription:
-        subscription_info = _build_subscription_info(user.subscription)
+        subscription_info = await _build_subscription_info_async(db, user.subscription)
 
     # Build promo group info
     promo_group_info = None
@@ -582,7 +586,7 @@ async def update_user_subscription(
         return UpdateSubscriptionResponse(
             success=True,
             message=f"Subscription created for {days} days",
-            subscription=_build_subscription_info(new_sub),
+            subscription=await _build_subscription_info_async(db, new_sub),
         )
 
     if not subscription:
@@ -609,7 +613,7 @@ async def update_user_subscription(
         return UpdateSubscriptionResponse(
             success=True,
             message=f"Subscription extended by {request.days} days",
-            subscription=_build_subscription_info(subscription),
+            subscription=await _build_subscription_info_async(db, subscription),
         )
 
     elif request.action == "set_end_date":
@@ -633,7 +637,7 @@ async def update_user_subscription(
         return UpdateSubscriptionResponse(
             success=True,
             message=f"Subscription end date set to {request.end_date.isoformat()}",
-            subscription=_build_subscription_info(subscription),
+            subscription=await _build_subscription_info_async(db, subscription),
         )
 
     elif request.action == "change_tariff":
@@ -663,7 +667,7 @@ async def update_user_subscription(
         return UpdateSubscriptionResponse(
             success=True,
             message=f"Tariff changed to {tariff.name}",
-            subscription=_build_subscription_info(subscription),
+            subscription=await _build_subscription_info_async(db, subscription),
         )
 
     elif request.action == "set_traffic":
@@ -681,7 +685,7 @@ async def update_user_subscription(
         return UpdateSubscriptionResponse(
             success=True,
             message="Traffic settings updated",
-            subscription=_build_subscription_info(subscription),
+            subscription=await _build_subscription_info_async(db, subscription),
         )
 
     elif request.action == "toggle_autopay":
@@ -701,7 +705,7 @@ async def update_user_subscription(
         return UpdateSubscriptionResponse(
             success=True,
             message=f"Autopay {state}",
-            subscription=_build_subscription_info(subscription),
+            subscription=await _build_subscription_info_async(db, subscription),
         )
 
     elif request.action == "cancel":
@@ -715,7 +719,7 @@ async def update_user_subscription(
         return UpdateSubscriptionResponse(
             success=True,
             message="Subscription cancelled",
-            subscription=_build_subscription_info(subscription),
+            subscription=await _build_subscription_info_async(db, subscription),
         )
 
     elif request.action == "activate":
@@ -731,7 +735,7 @@ async def update_user_subscription(
         return UpdateSubscriptionResponse(
             success=True,
             message="Subscription activated",
-            subscription=_build_subscription_info(subscription),
+            subscription=await _build_subscription_info_async(db, subscription),
         )
 
     else:
@@ -1194,7 +1198,10 @@ async def get_user_sync_status(
                             differences.append(f"Status: bot={bot_sub_status}, panel={panel_status}")
 
                     if bot_sub_end_date and panel_expire_at:
-                        diff_seconds = abs((bot_sub_end_date - panel_expire_at).total_seconds())
+                        # Convert both to naive UTC for comparison
+                        bot_end_naive = bot_sub_end_date.replace(tzinfo=None) if bot_sub_end_date.tzinfo else bot_sub_end_date
+                        panel_end_naive = panel_expire_at.replace(tzinfo=None) if panel_expire_at.tzinfo else panel_expire_at
+                        diff_seconds = abs((bot_end_naive - panel_end_naive).total_seconds())
                         if diff_seconds > 3600:  # More than 1 hour difference
                             differences.append(f"End date differs by {diff_seconds/3600:.1f} hours")
 
