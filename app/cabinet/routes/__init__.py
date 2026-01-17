@@ -28,6 +28,7 @@ from .admin_promocodes import router as admin_promocodes_router
 from .admin_promocodes import promo_groups_router as admin_promo_groups_router
 from .admin_campaigns import router as admin_campaigns_router
 from .admin_users import router as admin_users_router
+from .admin_payments import router as admin_payments_router
 from .media import router as media_router
 
 # Main cabinet router
@@ -65,5 +66,6 @@ router.include_router(admin_promocodes_router)
 router.include_router(admin_promo_groups_router)
 router.include_router(admin_campaigns_router)
 router.include_router(admin_users_router)
+router.include_router(admin_payments_router)
 
 __all__ = ["router"]
