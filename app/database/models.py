@@ -93,6 +93,7 @@ class PromoCodeType(Enum):
     SUBSCRIPTION_DAYS = "subscription_days"
     TRIAL_SUBSCRIPTION = "trial_subscription"
     PROMO_GROUP = "promo_group"
+    DISCOUNT = "discount"  # Одноразовая процентная скидка (balance_bonus_kopeks = процент, subscription_days = часы)
 
 
 class PaymentMethod(Enum):
