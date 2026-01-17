@@ -57,6 +57,7 @@ class AdminStates(StatesGroup):
     setting_promocode_value = State()
     setting_promocode_uses = State()
     setting_promocode_expiry = State()
+    setting_discount_hours = State()  # Для DISCOUNT: ввод срока действия скидки в часах
     selecting_promo_group = State()
 
     creating_campaign_name = State()
