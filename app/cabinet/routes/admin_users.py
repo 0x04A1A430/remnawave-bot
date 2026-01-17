@@ -1220,9 +1220,14 @@ async def get_user_sync_status(
                             from datetime import timezone
                             panel_end_utc = panel_expire_at.astimezone(timezone.utc).replace(tzinfo=None)
                         else:
+                            # Panel might return naive datetime in MSK (UTC+3), try both interpretations
                             panel_end_utc = panel_expire_at
+
                         diff_seconds = abs((bot_end_utc - panel_end_utc).total_seconds())
-                        if diff_seconds > 3600:  # More than 1 hour difference
+                        # Allow for timezone offset (3 hours = MSK) and small sync delays
+                        # If diff is ~3 hours (10800 sec) +/- 5 min, assume it's timezone issue
+                        is_timezone_diff = abs(diff_seconds - 10800) < 300  # 3 hours +/- 5 min
+                        if diff_seconds > 3600 and not is_timezone_diff:  # More than 1 hour and not timezone
                             differences.append(f"End date differs by {diff_seconds/3600:.1f} hours")
 
                     if abs(bot_traffic_limit - panel_traffic_limit) > 1:
