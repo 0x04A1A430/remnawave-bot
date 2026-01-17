@@ -137,6 +137,10 @@ async def process_promocode(
                 "PROMOCODE_NOT_FIRST_PURCHASE",
                 "❌ Этот промокод доступен только для первой покупки"
             ),
+            "active_discount_exists": texts.t(
+                "PROMOCODE_ACTIVE_DISCOUNT_EXISTS",
+                "❌ У вас уже есть активная скидка. Используйте её перед активацией новой."
+            ),
             "server_error": texts.ERROR
         }
 
