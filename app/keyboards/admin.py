@@ -715,10 +715,15 @@ def get_campaign_management_keyboard(
 def get_campaign_edit_keyboard(
     campaign_id: int,
     *,
-    is_balance_bonus: bool,
+    bonus_type: str = None,
+    is_balance_bonus: bool = None,  # deprecated, for backwards compatibility
     language: str = "ru",
 ) -> InlineKeyboardMarkup:
     texts = get_texts(language)
+
+    # Поддержка старого API
+    if bonus_type is None and is_balance_bonus is not None:
+        bonus_type = "balance" if is_balance_bonus else "subscription"
 
     keyboard: List[List[InlineKeyboardButton]] = [
         [
@@ -733,7 +738,7 @@ def get_campaign_edit_keyboard(
         ]
     ]
 
-    if is_balance_bonus:
+    if bonus_type == "balance":
         keyboard.append(
             [
                 InlineKeyboardButton(
@@ -742,7 +747,7 @@ def get_campaign_edit_keyboard(
                 )
             ]
         )
-    else:
+    elif bonus_type == "subscription":
         keyboard.extend(
             [
                 [
@@ -767,6 +772,22 @@ def get_campaign_edit_keyboard(
                 ],
             ]
         )
+    elif bonus_type == "tariff":
+        keyboard.extend(
+            [
+                [
+                    InlineKeyboardButton(
+                        text=_t(texts, "ADMIN_CAMPAIGN_TARIFF", "🎁 Тариф"),
+                        callback_data=f"admin_campaign_edit_tariff_{campaign_id}",
+                    ),
+                    InlineKeyboardButton(
+                        text=_t(texts, "ADMIN_CAMPAIGN_DURATION", "📅 Длительность"),
+                        callback_data=f"admin_campaign_edit_tariff_days_{campaign_id}",
+                    ),
+                ],
+            ]
+        )
+    # bonus_type == "none" - только базовые кнопки (название и параметр)
 
     keyboard.append(
         [
@@ -789,8 +810,18 @@ def get_campaign_bonus_type_keyboard(language: str = "ru") -> InlineKeyboardMark
                 callback_data="campaign_bonus_balance"
             ),
             InlineKeyboardButton(
-                text=_t(texts, "ADMIN_CAMPAIGN_BONUS_SUBSCRIPTION", "📱 Подписка"),
+                text=_t(texts, "ADMIN_CAMPAIGN_BONUS_SUBSCRIPTION", "📱 Пробная подписка"),
                 callback_data="campaign_bonus_subscription"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=_t(texts, "ADMIN_CAMPAIGN_BONUS_TARIFF", "🎁 Тариф"),
+                callback_data="campaign_bonus_tariff"
+            ),
+            InlineKeyboardButton(
+                text=_t(texts, "ADMIN_CAMPAIGN_BONUS_NONE", "🔗 Только ссылка"),
+                callback_data="campaign_bonus_none"
             )
         ],
         [
