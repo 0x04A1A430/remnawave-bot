@@ -19,6 +19,7 @@ from app.database.crud.campaign import (
     update_campaign,
 )
 from app.database.crud.server_squad import get_all_server_squads, get_server_squad_by_id
+from app.database.crud.tariff import get_all_tariffs, get_tariff_by_id
 from app.database.models import User
 from app.keyboards.admin import (
     get_admin_campaigns_keyboard,
@@ -44,13 +45,13 @@ def _format_campaign_summary(campaign, texts) -> str:
     if campaign.is_balance_bonus:
         bonus_text = texts.format_price(campaign.balance_bonus_kopeks)
         bonus_info = f"💰 Бонус на баланс: <b>{bonus_text}</b>"
-    else:
+    elif campaign.is_subscription_bonus:
         traffic_text = texts.format_traffic(campaign.subscription_traffic_gb or 0)
         device_limit = campaign.subscription_device_limit
         if device_limit is None:
             device_limit = settings.DEFAULT_DEVICE_LIMIT
         bonus_info = (
-            "📱 Подписка: <b>{days} д.</b>\n"
+            "📱 Пробная подписка: <b>{days} д.</b>\n"
             "🌐 Трафик: <b>{traffic}</b>\n"
             "📱 Устройства: <b>{devices}</b>"
         ).format(
@@ -58,6 +59,21 @@ def _format_campaign_summary(campaign, texts) -> str:
             traffic=traffic_text,
             devices=device_limit,
         )
+    elif campaign.is_tariff_bonus:
+        tariff_name = "Не выбран"
+        if hasattr(campaign, 'tariff') and campaign.tariff:
+            tariff_name = campaign.tariff.name
+        bonus_info = (
+            "🎁 Тариф: <b>{tariff_name}</b>\n"
+            "📅 Длительность: <b>{days} д.</b>"
+        ).format(
+            tariff_name=tariff_name,
+            days=campaign.tariff_duration_days or 0,
+        )
+    elif campaign.is_none_bonus:
+        bonus_info = "🔗 Только ссылка (без награды)"
+    else:
+        bonus_info = "❓ Неизвестный тип бонуса"
 
     return (
         f"<b>{campaign.name}</b>\n"
@@ -138,7 +154,7 @@ async def _render_campaign_edit_menu(
         message_id=message_id,
         reply_markup=get_campaign_edit_keyboard(
             campaign.id,
-            is_balance_bonus=campaign.is_balance_bonus,
+            bonus_type=campaign.bonus_type,
             language=language,
         ),
         parse_mode="HTML",
@@ -1367,7 +1383,18 @@ async def select_campaign_bonus_type(
     state: FSMContext,
     db: AsyncSession,
 ):
-    bonus_type = "balance" if callback.data.endswith("balance") else "subscription"
+    # Определяем тип бонуса из callback_data
+    if callback.data.endswith("balance"):
+        bonus_type = "balance"
+    elif callback.data.endswith("subscription"):
+        bonus_type = "subscription"
+    elif callback.data.endswith("tariff"):
+        bonus_type = "tariff"
+    elif callback.data.endswith("none"):
+        bonus_type = "none"
+    else:
+        bonus_type = "balance"
+
     await state.update_data(campaign_bonus_type=bonus_type)
 
     if bonus_type == "balance":
@@ -1384,10 +1411,10 @@ async def select_campaign_bonus_type(
                 ]
             ),
         )
-    else:
+    elif bonus_type == "subscription":
         await state.set_state(AdminStates.creating_campaign_subscription_days)
         await callback.message.edit_text(
-            "📅 Введите длительность подписки в днях (1-730):",
+            "📅 Введите длительность пробной подписки в днях (1-730):",
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
@@ -1398,6 +1425,63 @@ async def select_campaign_bonus_type(
                 ]
             ),
         )
+    elif bonus_type == "tariff":
+        # Показываем выбор тарифа
+        tariffs = await get_all_tariffs(db, include_inactive=False)
+        if not tariffs:
+            await callback.answer(
+                "❌ Нет доступных тарифов. Сначала создайте тариф.",
+                show_alert=True,
+            )
+            return
+
+        keyboard = []
+        for tariff in tariffs[:15]:  # Максимум 15 тарифов
+            keyboard.append([
+                types.InlineKeyboardButton(
+                    text=f"🎁 {tariff.name}",
+                    callback_data=f"campaign_select_tariff_{tariff.id}",
+                )
+            ])
+        keyboard.append([
+            types.InlineKeyboardButton(
+                text="⬅️ Назад", callback_data="admin_campaigns"
+            )
+        ])
+
+        await state.set_state(AdminStates.creating_campaign_tariff_select)
+        await callback.message.edit_text(
+            "🎁 Выберите тариф для выдачи:",
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        )
+    elif bonus_type == "none":
+        # Сразу создаём кампанию без бонуса
+        data = await state.get_data()
+        campaign = await create_campaign(
+            db,
+            name=data["campaign_name"],
+            start_parameter=data["campaign_start_parameter"],
+            bonus_type="none",
+            created_by=db_user.id,
+        )
+        await state.clear()
+
+        deep_link = await _get_bot_deep_link(callback, campaign.start_parameter)
+        texts = get_texts(db_user.language)
+        summary = _format_campaign_summary(campaign, texts)
+        text = (
+            "✅ <b>Кампания создана!</b>\n\n"
+            f"{summary}\n"
+            f"🔗 Ссылка: <code>{deep_link}</code>"
+        )
+
+        await callback.message.edit_text(
+            text,
+            reply_markup=get_campaign_management_keyboard(
+                campaign.id, campaign.is_active, db_user.language
+            ),
+        )
+
     await callback.answer()
 
 
@@ -1615,6 +1699,279 @@ async def finalize_campaign_subscription(
     await callback.answer()
 
 
+@admin_required
+@error_handler
+async def select_campaign_tariff(
+    callback: types.CallbackQuery,
+    db_user: User,
+    state: FSMContext,
+    db: AsyncSession,
+):
+    """Обработка выбора тарифа для кампании."""
+    tariff_id = int(callback.data.split("_")[-1])
+    tariff = await get_tariff_by_id(db, tariff_id)
+
+    if not tariff:
+        await callback.answer("❌ Тариф не найден", show_alert=True)
+        return
+
+    await state.update_data(campaign_tariff_id=tariff_id, campaign_tariff_name=tariff.name)
+    await state.set_state(AdminStates.creating_campaign_tariff_days)
+    await callback.message.edit_text(
+        f"🎁 Выбран тариф: <b>{tariff.name}</b>\n\n"
+        "📅 Введите длительность тарифа в днях (1-730):",
+        reply_markup=types.InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    types.InlineKeyboardButton(
+                        text="⬅️ Назад", callback_data="admin_campaigns"
+                    )
+                ]
+            ]
+        ),
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def process_campaign_tariff_days(
+    message: types.Message,
+    db_user: User,
+    state: FSMContext,
+    db: AsyncSession,
+):
+    """Обработка ввода длительности тарифа для кампании."""
+    try:
+        days = int(message.text.strip())
+    except ValueError:
+        await message.answer("❌ Введите число дней (1-730)")
+        return
+
+    if days <= 0 or days > 730:
+        await message.answer("❌ Длительность должна быть от 1 до 730 дней")
+        return
+
+    data = await state.get_data()
+    tariff_id = data.get("campaign_tariff_id")
+
+    if not tariff_id:
+        await message.answer("❌ Тариф не выбран. Начните создание кампании заново.")
+        await state.clear()
+        return
+
+    campaign = await create_campaign(
+        db,
+        name=data["campaign_name"],
+        start_parameter=data["campaign_start_parameter"],
+        bonus_type="tariff",
+        tariff_id=tariff_id,
+        tariff_duration_days=days,
+        created_by=db_user.id,
+    )
+
+    # Перезагружаем кампанию с загруженным tariff relationship
+    campaign = await get_campaign_by_id(db, campaign.id)
+
+    await state.clear()
+
+    deep_link = await _get_bot_deep_link_from_message(message, campaign.start_parameter)
+    texts = get_texts(db_user.language)
+    summary = _format_campaign_summary(campaign, texts)
+    text = (
+        "✅ <b>Кампания создана!</b>\n\n"
+        f"{summary}\n"
+        f"🔗 Ссылка: <code>{deep_link}</code>"
+    )
+
+    await message.answer(
+        text,
+        reply_markup=get_campaign_management_keyboard(
+            campaign.id, campaign.is_active, db_user.language
+        ),
+    )
+
+
+@admin_required
+@error_handler
+async def start_edit_campaign_tariff(
+    callback: types.CallbackQuery,
+    db_user: User,
+    state: FSMContext,
+    db: AsyncSession,
+):
+    """Начало редактирования тарифа кампании."""
+    campaign_id = int(callback.data.split("_")[-1])
+    campaign = await get_campaign_by_id(db, campaign_id)
+    if not campaign:
+        await callback.answer("❌ Кампания не найдена", show_alert=True)
+        return
+
+    if not campaign.is_tariff_bonus:
+        await callback.answer("❌ Эта кампания не использует тип 'Тариф'", show_alert=True)
+        return
+
+    tariffs = await get_all_tariffs(db, include_inactive=False)
+    if not tariffs:
+        await callback.answer("❌ Нет доступных тарифов", show_alert=True)
+        return
+
+    keyboard = []
+    for tariff in tariffs[:15]:
+        is_current = campaign.tariff_id == tariff.id
+        emoji = "✅" if is_current else "🎁"
+        keyboard.append([
+            types.InlineKeyboardButton(
+                text=f"{emoji} {tariff.name}",
+                callback_data=f"campaign_edit_set_tariff_{campaign_id}_{tariff.id}",
+            )
+        ])
+    keyboard.append([
+        types.InlineKeyboardButton(
+            text="⬅️ Назад", callback_data=f"admin_campaign_edit_{campaign_id}"
+        )
+    ])
+
+    current_tariff_name = "Не выбран"
+    if campaign.tariff:
+        current_tariff_name = campaign.tariff.name
+
+    await callback.message.edit_text(
+        f"🎁 <b>Изменение тарифа кампании</b>\n\n"
+        f"Текущий тариф: <b>{current_tariff_name}</b>\n"
+        "Выберите новый тариф:",
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def set_campaign_tariff(
+    callback: types.CallbackQuery,
+    db_user: User,
+    state: FSMContext,
+    db: AsyncSession,
+):
+    """Установка тарифа для кампании."""
+    parts = callback.data.split("_")
+    campaign_id = int(parts[-2])
+    tariff_id = int(parts[-1])
+
+    campaign = await get_campaign_by_id(db, campaign_id)
+    if not campaign:
+        await callback.answer("❌ Кампания не найдена", show_alert=True)
+        return
+
+    tariff = await get_tariff_by_id(db, tariff_id)
+    if not tariff:
+        await callback.answer("❌ Тариф не найден", show_alert=True)
+        return
+
+    await update_campaign(db, campaign, tariff_id=tariff_id)
+    await callback.answer(f"✅ Тариф изменён на '{tariff.name}'")
+
+    await _render_campaign_edit_menu(
+        callback.bot,
+        callback.message.chat.id,
+        callback.message.message_id,
+        campaign,
+        db_user.language,
+    )
+
+
+@admin_required
+@error_handler
+async def start_edit_campaign_tariff_days(
+    callback: types.CallbackQuery,
+    db_user: User,
+    state: FSMContext,
+    db: AsyncSession,
+):
+    """Начало редактирования длительности тарифа."""
+    campaign_id = int(callback.data.split("_")[-1])
+    campaign = await get_campaign_by_id(db, campaign_id)
+    if not campaign:
+        await callback.answer("❌ Кампания не найдена", show_alert=True)
+        return
+
+    if not campaign.is_tariff_bonus:
+        await callback.answer("❌ Эта кампания не использует тип 'Тариф'", show_alert=True)
+        return
+
+    await state.clear()
+    await state.set_state(AdminStates.editing_campaign_tariff_days)
+    await state.update_data(
+        editing_campaign_id=campaign_id,
+        campaign_edit_message_id=callback.message.message_id,
+    )
+
+    await callback.message.edit_text(
+        f"📅 <b>Изменение длительности тарифа</b>\n\n"
+        f"Текущее значение: <b>{campaign.tariff_duration_days or 0} д.</b>\n"
+        "Введите новое количество дней (1-730):",
+        reply_markup=types.InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    types.InlineKeyboardButton(
+                        text="❌ Отмена",
+                        callback_data=f"admin_campaign_edit_{campaign_id}",
+                    )
+                ]
+            ]
+        ),
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def process_edit_campaign_tariff_days(
+    message: types.Message,
+    db_user: User,
+    state: FSMContext,
+    db: AsyncSession,
+):
+    """Обработка ввода новой длительности тарифа."""
+    data = await state.get_data()
+    campaign_id = data.get("editing_campaign_id")
+    if not campaign_id:
+        await message.answer("❌ Сессия редактирования устарела. Попробуйте снова.")
+        await state.clear()
+        return
+
+    try:
+        days = int(message.text.strip())
+    except ValueError:
+        await message.answer("❌ Введите число дней (1-730)")
+        return
+
+    if days <= 0 or days > 730:
+        await message.answer("❌ Длительность должна быть от 1 до 730 дней")
+        return
+
+    campaign = await get_campaign_by_id(db, campaign_id)
+    if not campaign:
+        await message.answer("❌ Кампания не найдена")
+        await state.clear()
+        return
+
+    await update_campaign(db, campaign, tariff_duration_days=days)
+    await state.clear()
+
+    await message.answer("✅ Длительность тарифа обновлена.")
+
+    edit_message_id = data.get("campaign_edit_message_id")
+    if edit_message_id:
+        await _render_campaign_edit_menu(
+            message.bot,
+            message.chat.id,
+            edit_message_id,
+            campaign,
+            db_user.language,
+        )
+
+
 def register_handlers(dp: Dispatcher):
     dp.callback_query.register(show_campaigns_menu, F.data == "admin_campaigns")
     dp.callback_query.register(
@@ -1667,6 +2024,14 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         toggle_edit_campaign_server, F.data.startswith("campaign_edit_toggle_")
     )
+    # Tariff handlers ДОЛЖНЫ быть ПЕРЕД общим admin_campaign_edit_
+    dp.callback_query.register(
+        start_edit_campaign_tariff_days, F.data.startswith("admin_campaign_edit_tariff_days_")
+    )
+    dp.callback_query.register(
+        start_edit_campaign_tariff, F.data.startswith("admin_campaign_edit_tariff_")
+    )
+    # Общий паттерн ПОСЛЕДНИМ
     dp.callback_query.register(
         show_campaign_edit_menu, F.data.startswith("admin_campaign_edit_")
     )
@@ -1687,6 +2052,12 @@ def register_handlers(dp: Dispatcher):
     )
     dp.callback_query.register(
         select_campaign_bonus_type, F.data.startswith("campaign_bonus_")
+    )
+    dp.callback_query.register(
+        select_campaign_tariff, F.data.startswith("campaign_select_tariff_")
+    )
+    dp.callback_query.register(
+        set_campaign_tariff, F.data.startswith("campaign_edit_set_tariff_")
     )
 
     dp.message.register(process_campaign_name, AdminStates.creating_campaign_name)
@@ -1730,4 +2101,12 @@ def register_handlers(dp: Dispatcher):
     dp.message.register(
         process_edit_campaign_subscription_devices,
         AdminStates.editing_campaign_subscription_devices,
+    )
+    dp.message.register(
+        process_campaign_tariff_days,
+        AdminStates.creating_campaign_tariff_days,
+    )
+    dp.message.register(
+        process_edit_campaign_tariff_days,
+        AdminStates.editing_campaign_tariff_days,
     )

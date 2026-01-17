@@ -67,6 +67,9 @@ class AdminStates(StatesGroup):
     creating_campaign_subscription_traffic = State()
     creating_campaign_subscription_devices = State()
     creating_campaign_subscription_servers = State()
+    # Состояния для создания кампании с тарифом
+    creating_campaign_tariff_select = State()
+    creating_campaign_tariff_days = State()
 
     editing_campaign_name = State()
     editing_campaign_start = State()
@@ -75,6 +78,9 @@ class AdminStates(StatesGroup):
     editing_campaign_subscription_traffic = State()
     editing_campaign_subscription_devices = State()
     editing_campaign_subscription_servers = State()
+    # Состояния для редактирования кампании с тарифом
+    editing_campaign_tariff_select = State()
+    editing_campaign_tariff_days = State()
 
     waiting_for_broadcast_message = State()
     waiting_for_broadcast_media = State()

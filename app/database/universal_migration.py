@@ -5395,6 +5395,90 @@ async def add_subscription_tariff_id_column() -> bool:
         return False
 
 
+async def add_campaign_tariff_columns() -> bool:
+    """Добавляет колонки tariff_id и tariff_duration_days в таблицы рекламных кампаний."""
+    try:
+        campaigns_tariff_id_exists = await check_column_exists('advertising_campaigns', 'tariff_id')
+        campaigns_duration_exists = await check_column_exists('advertising_campaigns', 'tariff_duration_days')
+        registrations_tariff_id_exists = await check_column_exists('advertising_campaign_registrations', 'tariff_id')
+        registrations_duration_exists = await check_column_exists('advertising_campaign_registrations', 'tariff_duration_days')
+
+        if campaigns_tariff_id_exists and campaigns_duration_exists and registrations_tariff_id_exists and registrations_duration_exists:
+            logger.info("ℹ️ Колонки tariff в рекламных кампаниях уже существуют")
+            return True
+
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            # Добавляем колонки в advertising_campaigns
+            if not campaigns_tariff_id_exists:
+                if db_type == 'sqlite':
+                    await conn.execute(text(
+                        "ALTER TABLE advertising_campaigns ADD COLUMN tariff_id INTEGER REFERENCES tariffs(id)"
+                    ))
+                elif db_type == 'postgresql':
+                    await conn.execute(text(
+                        "ALTER TABLE advertising_campaigns ADD COLUMN tariff_id INTEGER REFERENCES tariffs(id) ON DELETE SET NULL"
+                    ))
+                else:  # MySQL
+                    await conn.execute(text(
+                        "ALTER TABLE advertising_campaigns ADD COLUMN tariff_id INT NULL"
+                    ))
+                logger.info("✅ Колонка tariff_id добавлена в advertising_campaigns")
+
+            if not campaigns_duration_exists:
+                if db_type == 'sqlite':
+                    await conn.execute(text(
+                        "ALTER TABLE advertising_campaigns ADD COLUMN tariff_duration_days INTEGER NULL"
+                    ))
+                elif db_type == 'postgresql':
+                    await conn.execute(text(
+                        "ALTER TABLE advertising_campaigns ADD COLUMN tariff_duration_days INTEGER NULL"
+                    ))
+                else:  # MySQL
+                    await conn.execute(text(
+                        "ALTER TABLE advertising_campaigns ADD COLUMN tariff_duration_days INT NULL"
+                    ))
+                logger.info("✅ Колонка tariff_duration_days добавлена в advertising_campaigns")
+
+            # Добавляем колонки в advertising_campaign_registrations
+            if not registrations_tariff_id_exists:
+                if db_type == 'sqlite':
+                    await conn.execute(text(
+                        "ALTER TABLE advertising_campaign_registrations ADD COLUMN tariff_id INTEGER REFERENCES tariffs(id)"
+                    ))
+                elif db_type == 'postgresql':
+                    await conn.execute(text(
+                        "ALTER TABLE advertising_campaign_registrations ADD COLUMN tariff_id INTEGER REFERENCES tariffs(id) ON DELETE SET NULL"
+                    ))
+                else:  # MySQL
+                    await conn.execute(text(
+                        "ALTER TABLE advertising_campaign_registrations ADD COLUMN tariff_id INT NULL"
+                    ))
+                logger.info("✅ Колонка tariff_id добавлена в advertising_campaign_registrations")
+
+            if not registrations_duration_exists:
+                if db_type == 'sqlite':
+                    await conn.execute(text(
+                        "ALTER TABLE advertising_campaign_registrations ADD COLUMN tariff_duration_days INTEGER NULL"
+                    ))
+                elif db_type == 'postgresql':
+                    await conn.execute(text(
+                        "ALTER TABLE advertising_campaign_registrations ADD COLUMN tariff_duration_days INTEGER NULL"
+                    ))
+                else:  # MySQL
+                    await conn.execute(text(
+                        "ALTER TABLE advertising_campaign_registrations ADD COLUMN tariff_duration_days INT NULL"
+                    ))
+                logger.info("✅ Колонка tariff_duration_days добавлена в advertising_campaign_registrations")
+
+            return True
+
+    except Exception as error:
+        logger.error(f"❌ Ошибка добавления колонок tariff в рекламные кампании: {error}")
+        return False
+
+
 async def add_tariff_device_price_column() -> bool:
     """Добавляет колонку device_price_kopeks в таблицу tariffs."""
     try:
@@ -6602,6 +6686,13 @@ async def run_universal_migration():
         else:
             logger.warning("⚠️ Проблемы с колонкой tariff_id в subscriptions")
 
+        logger.info("=== ДОБАВЛЕНИЕ КОЛОНОК ТАРИФОВ В РЕКЛАМНЫЕ КАМПАНИИ ===")
+        campaign_tariff_columns_ready = await add_campaign_tariff_columns()
+        if campaign_tariff_columns_ready:
+            logger.info("✅ Колонки tariff в рекламных кампаниях готовы")
+        else:
+            logger.warning("⚠️ Проблемы с колонками tariff в рекламных кампаниях")
+
         device_price_column_ready = await add_tariff_device_price_column()
         if device_price_column_ready:
             logger.info("✅ Колонка device_price_kopeks в tariffs готова")
@@ -6814,6 +6905,10 @@ async def check_migration_status():
             "promo_offer_templates_active_discount_column": False,
             "promo_offer_logs_table": False,
             "subscription_temporary_access_table": False,
+            "campaign_tariff_id_column": False,
+            "campaign_tariff_duration_days_column": False,
+            "campaign_registration_tariff_id_column": False,
+            "campaign_registration_tariff_duration_days_column": False,
         }
         
         status["has_made_first_topup_column"] = await check_column_exists('users', 'has_made_first_topup')
@@ -6846,6 +6941,12 @@ async def check_migration_status():
         status["promo_offer_templates_active_discount_column"] = await check_column_exists('promo_offer_templates', 'active_discount_hours')
         status["promo_offer_logs_table"] = await check_table_exists('promo_offer_logs')
         status["subscription_temporary_access_table"] = await check_table_exists('subscription_temporary_access')
+
+        # Проверяем колонки tariff в рекламных кампаниях
+        status["campaign_tariff_id_column"] = await check_column_exists('advertising_campaigns', 'tariff_id')
+        status["campaign_tariff_duration_days_column"] = await check_column_exists('advertising_campaigns', 'tariff_duration_days')
+        status["campaign_registration_tariff_id_column"] = await check_column_exists('advertising_campaign_registrations', 'tariff_id')
+        status["campaign_registration_tariff_duration_days_column"] = await check_column_exists('advertising_campaign_registrations', 'tariff_duration_days')
 
         status["welcome_texts_is_enabled_column"] = await check_column_exists('welcome_texts', 'is_enabled')
         status["users_promo_group_column"] = await check_column_exists('users', 'promo_group_id')
