@@ -156,7 +156,14 @@ async def _edit_with_photo(self: Message, text: str, **kwargs):
             except Exception:
                 pass
             return await _original_answer(self, text, **kwargs)
-    return await _original_edit_text(self, text, **kwargs)
+    # Обработка ошибок MESSAGE_ID_INVALID для сообщений без фото
+    try:
+        return await _original_edit_text(self, text, **kwargs)
+    except TelegramBadRequest as error:
+        if "MESSAGE_ID_INVALID" in str(error) or "message to edit not found" in str(error).lower():
+            # Сообщение удалено или недоступно — просто игнорируем
+            return None
+        raise
 
 
 def patch_message_methods():
