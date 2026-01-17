@@ -26,6 +26,7 @@ from .admin_ban_system import router as admin_ban_system_router
 from .admin_broadcasts import router as admin_broadcasts_router
 from .admin_promocodes import router as admin_promocodes_router
 from .admin_promocodes import promo_groups_router as admin_promo_groups_router
+from .admin_campaigns import router as admin_campaigns_router
 from .media import router as media_router
 
 # Main cabinet router
@@ -61,5 +62,6 @@ router.include_router(admin_ban_system_router)
 router.include_router(admin_broadcasts_router)
 router.include_router(admin_promocodes_router)
 router.include_router(admin_promo_groups_router)
+router.include_router(admin_campaigns_router)
 
 __all__ = ["router"]
