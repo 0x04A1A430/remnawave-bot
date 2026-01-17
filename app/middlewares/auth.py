@@ -3,7 +3,7 @@ import logging
 from datetime import datetime
 from typing import Callable, Dict, Any, Awaitable
 from aiogram import BaseMiddleware
-from aiogram.types import Message, CallbackQuery, TelegramObject, User as TgUser
+from aiogram.types import Message, CallbackQuery, TelegramObject, User as TgUser, InaccessibleMessage
 from aiogram.fsm.context import FSMContext
 
 from app.config import settings
@@ -44,10 +44,18 @@ class AuthMiddleware(BaseMiddleware):
         data: Dict[str, Any]
     ) -> Any:
 
+        # Глобальная проверка: если callback с недоступным сообщением — игнорируем
+        if isinstance(event, CallbackQuery) and isinstance(event.message, InaccessibleMessage):
+            try:
+                await event.answer()
+            except Exception:
+                pass
+            return None
+
         user: TgUser = None
         if isinstance(event, (Message, CallbackQuery)):
             user = event.from_user
-        
+
         if not user:
             return await handler(event, data)
         

@@ -209,6 +209,11 @@ async def show_balance_menu(
     db_user: User,
     db: AsyncSession
 ):
+    # Проверяем, доступно ли сообщение
+    if isinstance(callback.message, InaccessibleMessage):
+        await callback.answer()
+        return
+
     texts = get_texts(db_user.language)
 
     balance_text = texts.BALANCE_INFO.format(
