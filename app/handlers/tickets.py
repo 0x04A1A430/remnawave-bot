@@ -5,6 +5,7 @@ import time
 from aiogram import Dispatcher, types, F, Bot
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
+from aiogram.types import InaccessibleMessage
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.utils.timezone import format_local_datetime
  
@@ -965,7 +966,12 @@ async def close_ticket_notification(
 ):
     """Закрыть уведомление о тикете"""
     texts = get_texts(db_user.language)
-    
+
+    # Проверяем, доступно ли сообщение для удаления
+    if isinstance(callback.message, InaccessibleMessage):
+        await callback.answer()
+        return
+
     await callback.message.delete()
     await callback.answer(texts.t("NOTIFICATION_CLOSED", "Уведомление закрыто."))
 

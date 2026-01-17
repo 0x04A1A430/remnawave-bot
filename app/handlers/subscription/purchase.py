@@ -3147,6 +3147,11 @@ async def handle_subscription_settings(
         db_user: User,
         db: AsyncSession
 ):
+    # Проверяем, доступно ли сообщение для редактирования
+    if isinstance(callback.message, InaccessibleMessage):
+        await callback.answer()
+        return
+
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
 
