@@ -438,6 +438,8 @@ class PanelSyncStatusResponse(BaseModel):
     bot_subscription_end_date: Optional[datetime] = None
     bot_traffic_limit_gb: int = 0
     bot_traffic_used_gb: float = 0
+    bot_device_limit: int = 0
+    bot_squads: List[str] = []
 
     # Panel data (if available)
     panel_found: bool = False
@@ -445,6 +447,8 @@ class PanelSyncStatusResponse(BaseModel):
     panel_expire_at: Optional[datetime] = None
     panel_traffic_limit_gb: float = 0
     panel_traffic_used_gb: float = 0
+    panel_device_limit: int = 0
+    panel_squads: List[str] = []
 
     # Differences
     has_differences: bool = False
