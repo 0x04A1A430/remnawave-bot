@@ -117,6 +117,24 @@ async def _apply_campaign_bonus_if_needed(
             devices=result.subscription_device_limit,
         )
 
+    if result.bonus_type == "none":
+        # Ссылка без награды - не показываем сообщение
+        return None
+
+    if result.bonus_type == "tariff":
+        traffic_text = texts.format_traffic(result.subscription_traffic_gb or 0)
+        return texts.t(
+            "CAMPAIGN_BONUS_TARIFF",
+            "🎁 Вам выдан тариф '{tariff_name}' на {days} дней!\n"
+            "📊 Трафик: {traffic}\n"
+            "📱 Устройств: {devices}",
+        ).format(
+            tariff_name=result.tariff_name or "Подарочный",
+            days=result.tariff_duration_days,
+            traffic=traffic_text,
+            devices=result.subscription_device_limit,
+        )
+
     return None
 
 
