@@ -434,6 +434,7 @@ async def get_user_detail(
         promo_offer_discount_source=user.promo_offer_discount_source,
         promo_offer_discount_expires_at=user.promo_offer_discount_expires_at,
         recent_transactions=recent_transactions,
+        remnawave_uuid=user.remnawave_uuid,
     )
 
 
@@ -1160,12 +1161,16 @@ async def get_user_sync_status(
     bot_sub_end_date = None
     bot_traffic_limit = 0
     bot_traffic_used = 0.0
+    bot_device_limit = 0
+    bot_squads: List[str] = []
 
     if user.subscription:
         bot_sub_status = user.subscription.status
         bot_sub_end_date = user.subscription.end_date
         bot_traffic_limit = user.subscription.traffic_limit_gb
         bot_traffic_used = user.subscription.traffic_used_gb or 0.0
+        bot_device_limit = user.subscription.device_limit or 0
+        bot_squads = user.subscription.connected_squads or []
 
     # Panel data
     panel_found = False
@@ -1173,6 +1178,8 @@ async def get_user_sync_status(
     panel_expire_at = None
     panel_traffic_limit = 0.0
     panel_traffic_used = 0.0
+    panel_device_limit = 0
+    panel_squads: List[str] = []
     differences = []
 
     try:
@@ -1189,6 +1196,9 @@ async def get_user_sync_status(
                     panel_expire_at = panel_user.expire_at
                     panel_traffic_limit = panel_user.traffic_limit_bytes / (1024**3) if panel_user.traffic_limit_bytes else 0
                     panel_traffic_used = panel_user.used_traffic_bytes / (1024**3) if panel_user.used_traffic_bytes else 0
+                    panel_device_limit = panel_user.hwid_device_limit or 0
+                    # Extract squad UUIDs from active_internal_squads
+                    panel_squads = [s.get('uuid', '') for s in (panel_user.active_internal_squads or []) if s.get('uuid')]
 
                     # Check differences
                     if bot_sub_status and panel_status:
@@ -1199,9 +1209,15 @@ async def get_user_sync_status(
 
                     if bot_sub_end_date and panel_expire_at:
                         # Convert both to naive UTC for comparison
-                        bot_end_naive = bot_sub_end_date.replace(tzinfo=None) if bot_sub_end_date.tzinfo else bot_sub_end_date
-                        panel_end_naive = panel_expire_at.replace(tzinfo=None) if panel_expire_at.tzinfo else panel_expire_at
-                        diff_seconds = abs((bot_end_naive - panel_end_naive).total_seconds())
+                        # Bot dates are stored as naive UTC
+                        bot_end_utc = bot_sub_end_date.replace(tzinfo=None) if bot_sub_end_date.tzinfo else bot_sub_end_date
+                        # Panel dates might be timezone-aware, convert to UTC first
+                        if panel_expire_at.tzinfo:
+                            from datetime import timezone
+                            panel_end_utc = panel_expire_at.astimezone(timezone.utc).replace(tzinfo=None)
+                        else:
+                            panel_end_utc = panel_expire_at
+                        diff_seconds = abs((bot_end_utc - panel_end_utc).total_seconds())
                         if diff_seconds > 3600:  # More than 1 hour difference
                             differences.append(f"End date differs by {diff_seconds/3600:.1f} hours")
 
@@ -1210,6 +1226,23 @@ async def get_user_sync_status(
 
                     if abs(bot_traffic_used - panel_traffic_used) > 0.5:
                         differences.append(f"Traffic used: bot={bot_traffic_used:.2f}GB, panel={panel_traffic_used:.2f}GB")
+
+                    # Compare device limits
+                    if bot_device_limit != panel_device_limit:
+                        differences.append(f"Device limit: bot={bot_device_limit}, panel={panel_device_limit}")
+
+                    # Compare squads
+                    bot_squads_set = set(bot_squads) if bot_squads else set()
+                    panel_squads_set = set(panel_squads) if panel_squads else set()
+                    if bot_squads_set != panel_squads_set:
+                        only_in_bot = bot_squads_set - panel_squads_set
+                        only_in_panel = panel_squads_set - bot_squads_set
+                        squad_diff_parts = []
+                        if only_in_bot:
+                            squad_diff_parts.append(f"only in bot: {len(only_in_bot)}")
+                        if only_in_panel:
+                            squad_diff_parts.append(f"only in panel: {len(only_in_panel)}")
+                        differences.append(f"Squads mismatch ({', '.join(squad_diff_parts)})")
 
     except Exception as e:
         logger.warning(f"Failed to get panel data for user {user_id}: {e}")
@@ -1224,11 +1257,15 @@ async def get_user_sync_status(
         bot_subscription_end_date=bot_sub_end_date,
         bot_traffic_limit_gb=bot_traffic_limit,
         bot_traffic_used_gb=bot_traffic_used,
+        bot_device_limit=bot_device_limit,
+        bot_squads=bot_squads,
         panel_found=panel_found,
         panel_status=panel_status,
         panel_expire_at=panel_expire_at,
         panel_traffic_limit_gb=panel_traffic_limit,
         panel_traffic_used_gb=panel_traffic_used,
+        panel_device_limit=panel_device_limit,
+        panel_squads=panel_squads,
         has_differences=len(differences) > 0,
         differences=differences,
     )
