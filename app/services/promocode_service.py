@@ -59,7 +59,12 @@ class PromoCodeService:
 
             balance_before_kopeks = user.balance_kopeks
 
-            result_description = await self._apply_promocode_effects(db, user, promocode)
+            try:
+                result_description = await self._apply_promocode_effects(db, user, promocode)
+            except ValueError as e:
+                if str(e) == "active_discount_exists":
+                    return {"success": False, "error": "active_discount_exists"}
+                raise
             balance_after_kopeks = user.balance_kopeks
 
             if promocode.type == PromoCodeType.SUBSCRIPTION_DAYS.value and promocode.subscription_days > 0:
@@ -141,9 +146,65 @@ class PromoCodeService:
             return {"success": False, "error": "server_error"}
 
     async def _apply_promocode_effects(self, db: AsyncSession, user: User, promocode: PromoCode) -> str:
+        """
+        Применяет эффекты промокода к пользователю.
+
+        Args:
+            db: Сессия базы данных
+            user: Пользователь
+            promocode: Промокод
+
+        Returns:
+            Описание примененных эффектов
+
+        Raises:
+            ValueError: Если у пользователя уже есть активная скидка (для DISCOUNT типа)
+        """
         effects = []
-        
-        if promocode.balance_bonus_kopeks > 0:
+
+        # Обработка DISCOUNT типа (одноразовая скидка)
+        if promocode.type == PromoCodeType.DISCOUNT.value:
+            from datetime import datetime, timedelta
+
+            # Проверка на наличие активной скидки
+            current_discount = getattr(user, 'promo_offer_discount_percent', 0) or 0
+            expires_at = getattr(user, 'promo_offer_discount_expires_at', None)
+
+            # Если есть активная скидка (процент > 0 и срок не истек)
+            if current_discount > 0:
+                if expires_at is None or expires_at > datetime.utcnow():
+                    logger.warning(
+                        f"⚠️ Пользователь {user.telegram_id} попытался активировать промокод {promocode.code}, "
+                        f"но у него уже есть активная скидка {current_discount}% до {expires_at}"
+                    )
+                    raise ValueError("active_discount_exists")
+
+            # balance_bonus_kopeks хранит процент скидки (1-100)
+            discount_percent = promocode.balance_bonus_kopeks
+            # subscription_days хранит срок действия скидки в часах (0 = бессрочно до первой покупки)
+            discount_hours = promocode.subscription_days
+
+            # Устанавливаем процент скидки
+            user.promo_offer_discount_percent = discount_percent
+            user.promo_offer_discount_source = f"promocode:{promocode.code}"
+
+            # Устанавливаем срок действия скидки
+            if discount_hours > 0:
+                user.promo_offer_discount_expires_at = datetime.utcnow() + timedelta(hours=discount_hours)
+                effects.append(f"💸 Получена скидка {discount_percent}% (действует {discount_hours} ч.)")
+            else:
+                # 0 часов = бессрочно до первой покупки
+                user.promo_offer_discount_expires_at = None
+                effects.append(f"💸 Получена скидка {discount_percent}% до первой покупки")
+
+            await db.flush()
+
+            logger.info(
+                f"✅ Пользователю {user.telegram_id} назначена скидка {discount_percent}% "
+                f"(срок: {discount_hours} ч.) по промокоду {promocode.code}"
+            )
+
+        if promocode.type == PromoCodeType.BALANCE.value and promocode.balance_bonus_kopeks > 0:
             await add_user_balance(
                 db, user, promocode.balance_bonus_kopeks,
                 f"Бонус по промокоду {promocode.code}"
@@ -151,8 +212,8 @@ class PromoCodeService:
             
             balance_bonus_rubles = promocode.balance_bonus_kopeks / 100
             effects.append(f"💰 Баланс пополнен на {balance_bonus_rubles}₽")
-        
-        if promocode.subscription_days > 0:
+
+        if promocode.type == PromoCodeType.SUBSCRIPTION_DAYS.value and promocode.subscription_days > 0:
             from app.config import settings
             
             subscription = await get_subscription_by_user_id(db, user.id)
