@@ -151,6 +151,11 @@ async def handle_happ_download_back(
         db_user: User,
         db: AsyncSession
 ):
+    # Проверяем, доступно ли сообщение для редактирования
+    if isinstance(callback.message, InaccessibleMessage):
+        await callback.answer()
+        return
+
     texts = get_texts(db_user.language)
     prompt_text = texts.t(
         "HAPP_DOWNLOAD_PROMPT",
