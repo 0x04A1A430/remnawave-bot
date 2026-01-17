@@ -32,6 +32,9 @@ async def create_campaign(
     subscription_traffic_gb: Optional[int] = None,
     subscription_device_limit: Optional[int] = None,
     subscription_squads: Optional[List[str]] = None,
+    # Поля для типа "tariff"
+    tariff_id: Optional[int] = None,
+    tariff_duration_days: Optional[int] = None,
     is_active: bool = True,
 ) -> AdvertisingCampaign:
     campaign = AdvertisingCampaign(
@@ -43,6 +46,8 @@ async def create_campaign(
         subscription_traffic_gb=subscription_traffic_gb,
         subscription_device_limit=subscription_device_limit,
         subscription_squads=subscription_squads or [],
+        tariff_id=tariff_id,
+        tariff_duration_days=tariff_duration_days,
         created_by=created_by,
         is_active=is_active,
     )
@@ -65,7 +70,10 @@ async def get_campaign_by_id(
 ) -> Optional[AdvertisingCampaign]:
     result = await db.execute(
         select(AdvertisingCampaign)
-        .options(selectinload(AdvertisingCampaign.registrations))
+        .options(
+            selectinload(AdvertisingCampaign.registrations),
+            selectinload(AdvertisingCampaign.tariff),
+        )
         .where(AdvertisingCampaign.id == campaign_id)
     )
     return result.scalar_one_or_none()
@@ -96,7 +104,10 @@ async def get_campaigns_list(
 ) -> List[AdvertisingCampaign]:
     stmt = (
         select(AdvertisingCampaign)
-        .options(selectinload(AdvertisingCampaign.registrations))
+        .options(
+            selectinload(AdvertisingCampaign.registrations),
+            selectinload(AdvertisingCampaign.tariff),
+        )
         .order_by(AdvertisingCampaign.created_at.desc())
         .offset(offset)
         .limit(limit)
@@ -133,6 +144,8 @@ async def update_campaign(
         "subscription_traffic_gb",
         "subscription_device_limit",
         "subscription_squads",
+        "tariff_id",
+        "tariff_duration_days",
         "is_active",
     }
 
@@ -188,6 +201,8 @@ async def record_campaign_registration(
     bonus_type: str,
     balance_bonus_kopeks: int = 0,
     subscription_duration_days: Optional[int] = None,
+    tariff_id: Optional[int] = None,
+    tariff_duration_days: Optional[int] = None,
 ) -> AdvertisingCampaignRegistration:
     existing = await db.execute(
         select(AdvertisingCampaignRegistration).where(
@@ -207,6 +222,8 @@ async def record_campaign_registration(
         bonus_type=bonus_type,
         balance_bonus_kopeks=balance_bonus_kopeks or 0,
         subscription_duration_days=subscription_duration_days,
+        tariff_id=tariff_id,
+        tariff_duration_days=tariff_duration_days,
     )
     db.add(registration)
     await db.commit()
