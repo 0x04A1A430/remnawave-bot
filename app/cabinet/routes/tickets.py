@@ -170,10 +170,11 @@ async def create_ticket(
     except Exception as e:
         logger.error(f"Error notifying admins about new ticket from cabinet: {e}")
 
-    # Уведомить админов в кабинете (WebSocket)
+    # Уведомить админов в кабинете
     try:
         notification = await TicketNotificationCRUD.create_admin_notification_for_new_ticket(db, ticket)
         if notification:
+            # Отправить WebSocket уведомление
             await notify_admins_new_ticket(ticket.id, ticket.title, user.id)
     except Exception as e:
         logger.error(f"Error creating cabinet notification for new ticket: {e}")
@@ -291,12 +292,13 @@ async def add_ticket_message(
     except Exception as e:
         logger.error(f"Error notifying admins about ticket reply from cabinet: {e}")
 
-    # Уведомить админов в кабинете (WebSocket)
+    # Уведомить админов в кабинете
     try:
         notification = await TicketNotificationCRUD.create_admin_notification_for_user_reply(
             db, ticket, request.message
         )
         if notification:
+            # Отправить WebSocket уведомление
             await notify_admins_ticket_reply(ticket.id, (request.message or "")[:100], user.id)
     except Exception as e:
         logger.error(f"Error creating cabinet notification for user reply: {e}")

@@ -2563,3 +2563,37 @@ class WheelSpin(Base):
 
     def __repr__(self) -> str:
         return f"<WheelSpin id={self.id} user_id={self.user_id} prize='{self.prize_display_name}'>"
+
+
+class TicketNotification(Base):
+    """Уведомления о тикетах для кабинета (веб-интерфейс)."""
+    __tablename__ = "ticket_notifications"
+    __table_args__ = (
+        Index("ix_ticket_notifications_user_read", "user_id", "is_read"),
+        Index("ix_ticket_notifications_admin_read", "is_for_admin", "is_read"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    ticket_id = Column(Integer, ForeignKey("tickets.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Тип уведомления: new_ticket, admin_reply, user_reply
+    notification_type = Column(String(50), nullable=False)
+
+    # Текст уведомления
+    message = Column(Text, nullable=True)
+
+    # Для админа или для пользователя
+    is_for_admin = Column(Boolean, default=False, nullable=False)
+
+    # Прочитано ли уведомление
+    is_read = Column(Boolean, default=False, nullable=False)
+
+    created_at = Column(DateTime, default=func.now())
+    read_at = Column(DateTime, nullable=True)
+
+    ticket = relationship("Ticket", backref="notifications")
+    user = relationship("User", backref="ticket_notifications")
+
+    def __repr__(self) -> str:
+        return f"<TicketNotification id={self.id} type={self.notification_type} for_admin={self.is_for_admin}>"
