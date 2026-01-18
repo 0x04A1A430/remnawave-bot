@@ -13,7 +13,9 @@ from pydantic import BaseModel, Field
 
 from app.database.models import User, Ticket, TicketMessage
 from app.database.crud.ticket import TicketCRUD, TicketMessageCRUD
+from app.database.crud.ticket_notification import TicketNotificationCRUD
 from app.config import settings
+from app.cabinet.routes.websocket import notify_user_ticket_reply
 
 from ..dependencies import get_cabinet_db, get_current_admin_user
 from ..schemas.tickets import TicketMessageResponse
@@ -110,6 +112,9 @@ class TicketSettingsResponse(BaseModel):
     sla_check_interval_seconds: int
     sla_reminder_cooldown_minutes: int
     support_system_mode: str  # tickets, contact, both
+    # Cabinet notifications settings
+    cabinet_user_notifications_enabled: bool = True
+    cabinet_admin_notifications_enabled: bool = True
 
 
 class TicketSettingsUpdateRequest(BaseModel):
@@ -119,6 +124,9 @@ class TicketSettingsUpdateRequest(BaseModel):
     sla_check_interval_seconds: Optional[int] = Field(None, ge=30, le=600, description="Check interval (30-600 seconds)")
     sla_reminder_cooldown_minutes: Optional[int] = Field(None, ge=1, le=120, description="Reminder cooldown (1-120 minutes)")
     support_system_mode: Optional[str] = Field(None, description="Support mode: tickets, contact, both")
+    # Cabinet notifications settings
+    cabinet_user_notifications_enabled: Optional[bool] = Field(None, description="Enable user notifications in cabinet")
+    cabinet_admin_notifications_enabled: Optional[bool] = Field(None, description="Enable admin notifications in cabinet")
 
 
 def _message_to_response(message: TicketMessage) -> TicketMessageResponse:
@@ -348,6 +356,17 @@ async def reply_to_ticket(
     except Exception as e:
         logger.warning(f"Failed to send Telegram notification: {e}")
 
+    # Уведомить пользователя в кабинете
+    try:
+        notification = await TicketNotificationCRUD.create_user_notification_for_admin_reply(
+            db, ticket, request.message
+        )
+        if notification:
+            # Отправить WebSocket уведомление
+            await notify_user_ticket_reply(ticket.user_id, ticket.id, (request.message or "")[:100])
+    except Exception as e:
+        logger.warning(f"Failed to create cabinet notification for admin reply: {e}")
+
     return _message_to_response(message)
 
 
@@ -475,12 +494,16 @@ async def get_ticket_settings(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get ticket system settings."""
+    from app.services.support_settings_service import SupportSettingsService
+
     return TicketSettingsResponse(
         sla_enabled=settings.SUPPORT_TICKET_SLA_ENABLED,
         sla_minutes=settings.SUPPORT_TICKET_SLA_MINUTES,
         sla_check_interval_seconds=settings.SUPPORT_TICKET_SLA_CHECK_INTERVAL_SECONDS,
         sla_reminder_cooldown_minutes=settings.SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES,
         support_system_mode=settings.get_support_system_mode(),
+        cabinet_user_notifications_enabled=SupportSettingsService.get_cabinet_user_notifications_enabled(),
+        cabinet_admin_notifications_enabled=SupportSettingsService.get_cabinet_admin_notifications_enabled(),
     )
 
 
@@ -493,6 +516,7 @@ async def update_ticket_settings(
     """Update ticket system settings."""
     import os
     from pathlib import Path
+    from app.services.support_settings_service import SupportSettingsService
 
     # Validate support_system_mode
     if request.support_system_mode is not None:
@@ -514,6 +538,12 @@ async def update_ticket_settings(
         settings.SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES = request.sla_reminder_cooldown_minutes
     if request.support_system_mode is not None:
         settings.SUPPORT_SYSTEM_MODE = request.support_system_mode.strip().lower()
+
+    # Update cabinet notification settings
+    if request.cabinet_user_notifications_enabled is not None:
+        SupportSettingsService.set_cabinet_user_notifications_enabled(request.cabinet_user_notifications_enabled)
+    if request.cabinet_admin_notifications_enabled is not None:
+        SupportSettingsService.set_cabinet_admin_notifications_enabled(request.cabinet_admin_notifications_enabled)
 
     # Try to persist to .env file
     try:
@@ -563,4 +593,6 @@ async def update_ticket_settings(
         sla_check_interval_seconds=settings.SUPPORT_TICKET_SLA_CHECK_INTERVAL_SECONDS,
         sla_reminder_cooldown_minutes=settings.SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES,
         support_system_mode=settings.get_support_system_mode(),
+        cabinet_user_notifications_enabled=SupportSettingsService.get_cabinet_user_notifications_enabled(),
+        cabinet_admin_notifications_enabled=SupportSettingsService.get_cabinet_admin_notifications_enabled(),
     )
