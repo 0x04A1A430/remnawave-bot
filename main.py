@@ -578,7 +578,7 @@ async def main():
                     await bot.set_webhook(
                         url=webhook_url,
                         secret_token=settings.WEBHOOK_SECRET_TOKEN,
-                        drop_pending_updates=settings.WEBHOOK_DROP_PENDING_UPDATES,
+                        drop_pending_updates=False,  # Обрабатываем накопившиеся обновления
                         allowed_updates=allowed_updates,
                     )
                     stage.log(f"Webhook установлен: {webhook_url}")
@@ -664,8 +664,8 @@ async def main():
             success_message="Aiogram polling запущен",
         ) as stage:
             if polling_enabled:
-                polling_task = asyncio.create_task(dp.start_polling(bot, skip_updates=True))
-                stage.log("skip_updates=True")
+                polling_task = asyncio.create_task(dp.start_polling(bot, skip_updates=False))
+                stage.log("skip_updates=False — накопившиеся обновления будут обработаны")
             else:
                 polling_task = None
                 stage.skip("Polling отключен режимом работы")
