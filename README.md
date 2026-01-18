@@ -1,8 +1,26 @@
 # 🚀 Remnawave Bedolaga Bot
 
+> **🆕 Новый веб-кабинет (Cabinet WebApp)**
+>
+> Вышла новая версия личного кабинета пользователя — веб-интерфейс для управления подписками!
+>
+> **Переменные окружения для Cabinet:**
+> | Переменная | Описание | По умолчанию |
+> |------------|----------|--------------|
+> | `CABINET_ENABLED` | Включить личный кабинет | `false` |
+> | `CABINET_JWT_SECRET` | Секретный ключ для JWT токенов | `BOT_TOKEN` |
+> | `CABINET_ACCESS_TOKEN_EXPIRE_MINUTES` | Время жизни access token (минуты) | `15` |
+> | `CABINET_REFRESH_TOKEN_EXPIRE_DAYS` | Время жизни refresh token (дни) | `7` |
+> | `CABINET_ALLOWED_ORIGINS` | Разрешённые origins для CORS | — |
+> | `CABINET_EMAIL_VERIFICATION_ENABLED` | Включить верификацию email | `false` |
+> | `CABINET_EMAIL_VERIFICATION_EXPIRE_HOURS` | Время жизни токена верификации email (часы) | `24` |
+> | `CABINET_PASSWORD_RESET_EXPIRE_HOURS` | Время жизни токена сброса пароля (часы) | `1` |
+>
+> Для работы email-уведомлений настройте SMTP-переменные: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`, `SMTP_FROM_NAME`, `SMTP_USE_TLS`.
+
 <div align="center">
 
-<img width="1024" height="1024" alt="ChatGPT Image 23 окт 2025 г , 13_18_33" src="https://github.com/user-attachments/assets/17ad0128-231d-4553-9f4b-ce0644da796c" />
+<img width="1024" height="1024" alt="Image" src="https://github.com/user-attachments/assets/17ad0128-231d-4553-9f4b-ce0644da796c" />
 
 **🤖 Современный Telegram-бот для управления VPN подписками через Remnawave API**
 
