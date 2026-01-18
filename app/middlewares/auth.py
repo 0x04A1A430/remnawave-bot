@@ -44,13 +44,10 @@ class AuthMiddleware(BaseMiddleware):
         data: Dict[str, Any]
     ) -> Any:
 
-        # Глобальная проверка: если callback с недоступным сообщением — игнорируем
-        if isinstance(event, CallbackQuery) and isinstance(event.message, InaccessibleMessage):
-            try:
-                await event.answer()
-            except Exception:
-                pass
-            return None
+        # Callback с недоступным сообщением (>48ч) — пропускаем к хендлерам,
+        # они сами отправят новое сообщение через edit_or_answer_photo
+        # if isinstance(event, CallbackQuery) and isinstance(event.message, InaccessibleMessage):
+        #     pass  # Раньше здесь был return None, теперь пропускаем дальше
 
         user: TgUser = None
         if isinstance(event, (Message, CallbackQuery)):
