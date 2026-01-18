@@ -12,6 +12,7 @@ from sqlalchemy.orm import selectinload
 
 from app.database.models import User, Ticket, TicketMessage
 from app.config import settings
+from app.handlers.tickets import notify_admins_about_new_ticket, notify_admins_about_ticket_reply
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 from ..schemas.tickets import (
@@ -161,6 +162,12 @@ async def create_ticket(
     # Refresh to get relationships
     await db.refresh(ticket, ["messages"])
 
+    # Уведомить админов о новом тикете
+    try:
+        await notify_admins_about_new_ticket(ticket, db)
+    except Exception as e:
+        logger.error(f"Error notifying admins about new ticket from cabinet: {e}")
+
     messages = [_message_to_response(m) for m in ticket.messages]
 
     return TicketDetailResponse(
@@ -267,5 +274,11 @@ async def add_ticket_message(
 
     await db.commit()
     await db.refresh(message)
+
+    # Уведомить админов об ответе пользователя
+    try:
+        await notify_admins_about_ticket_reply(ticket, request.message, db)
+    except Exception as e:
+        logger.error(f"Error notifying admins about ticket reply from cabinet: {e}")
 
     return _message_to_response(message)
