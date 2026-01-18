@@ -44,8 +44,9 @@ router.include_router(auth_router)
 router.include_router(subscription_router)
 router.include_router(balance_router)
 router.include_router(referral_router)
-router.include_router(tickets_router)
+# Notifications router MUST be before tickets router to avoid route conflict
 router.include_router(ticket_notifications_router)
+router.include_router(tickets_router)
 router.include_router(promocode_router)
 router.include_router(contests_router)
 router.include_router(polls_router)
@@ -58,9 +59,9 @@ router.include_router(media_router)
 # Wheel routes
 router.include_router(wheel_router)
 
-# Admin routes
-router.include_router(admin_tickets_router)
+# Admin routes (notifications router MUST be before tickets router to avoid route conflict)
 router.include_router(admin_ticket_notifications_router)
+router.include_router(admin_tickets_router)
 router.include_router(admin_settings_router)
 router.include_router(admin_apps_router)
 router.include_router(admin_wheel_router)
@@ -76,11 +77,6 @@ router.include_router(admin_users_router)
 router.include_router(admin_payments_router)
 router.include_router(admin_promo_offers_router)
 router.include_router(admin_remnawave_router)
-router.include_router(ticket_notifications_router)
-router.include_router(admin_ticket_notifications_router)
-
-# WebSocket route
-router.include_router(websocket_router)
 
 # WebSocket route
 router.include_router(websocket_router)
