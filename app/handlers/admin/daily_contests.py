@@ -194,8 +194,8 @@ async def manual_start_round(
         return
 
     # Проверяем, есть ли уже активный раунд для этого шаблона
-    from app.database.crud.contest import get_active_rounds
-    exists = await get_active_rounds(db, tpl.id)
+    from app.database.crud.contest import get_active_round_by_template
+    exists = await get_active_round_by_template(db, tpl.id)
     if exists:
         await callback.answer(texts.t("ADMIN_ROUND_ALREADY_ACTIVE", "Раунд уже активен."), show_alert=True)
         await show_daily_contest(callback, db_user, db)
