@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
-from app.database.models import User, Tariff, Subscription, ServerSquad, PromoGroup
+from app.database.models import User, Tariff, Subscription, ServerSquad, PromoGroup, Transaction, TransactionType
 from app.database.crud.tariff import (
     get_all_tariffs,
     get_tariff_by_id,
@@ -444,7 +444,11 @@ async def toggle_trial_tariff(
     admin: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
-    """Toggle tariff trial availability."""
+    """Toggle tariff trial availability.
+
+    When enabling trial on a tariff, removes trial flag from all other tariffs
+    (only one tariff can be the trial tariff at a time).
+    """
     tariff = await get_tariff_by_id(db, tariff_id)
     if not tariff:
         raise HTTPException(
@@ -453,6 +457,17 @@ async def toggle_trial_tariff(
         )
 
     new_status = not tariff.is_trial_available
+
+    if new_status:
+        # При включении триала - снимаем флаг со ВСЕХ тарифов, затем ставим на текущий
+        # Это гарантирует, что триальным будет только один тариф
+        await db.execute(
+            Tariff.__table__.update().values(is_trial_available=False)
+        )
+        await db.commit()
+        # Обновляем объект тарифа после массового обновления
+        await db.refresh(tariff)
+
     await update_tariff(db, tariff, is_trial_available=new_status)
 
     status_text = "set as trial" if new_status else "removed from trial"
@@ -506,8 +521,17 @@ async def get_tariff_stats(
     )
     trial_count = trial_result.scalar() or 0
 
-    # TODO: Calculate revenue from transactions
-    revenue_kopeks = 0
+    # Calculate revenue from subscription payments for users on this tariff
+    revenue_result = await db.execute(
+        select(func.coalesce(func.sum(Transaction.amount_kopeks), 0))
+        .join(Subscription, Transaction.user_id == Subscription.user_id)
+        .where(
+            Subscription.tariff_id == tariff_id,
+            Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
+            Transaction.is_completed == True,
+        )
+    )
+    revenue_kopeks = revenue_result.scalar() or 0
 
     return TariffStatsResponse(
         id=tariff_id,
