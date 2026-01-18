@@ -42,7 +42,8 @@ class ContestInfo(BaseModel):
     slug: str
     name: str
     description: Optional[str] = None
-    prize_days: int
+    prize_type: str
+    prize_value: str
     is_available: bool
     already_played: bool = False
 
@@ -65,7 +66,8 @@ class ContestResult(BaseModel):
     """Result of contest attempt."""
     is_winner: bool
     message: str
-    prize_days: Optional[int] = None
+    prize_type: Optional[str] = None
+    prize_value: Optional[str] = None
 
 
 # ============ Helpers ============
@@ -80,19 +82,47 @@ def _user_allowed(subscription) -> bool:
     }
 
 
-async def _award_prize(db: AsyncSession, user_id: int, prize_days: int) -> str:
+async def _award_prize(db: AsyncSession, user_id: int, prize_type: str, prize_value: str) -> str:
     """Award prize to winner."""
-    subscription = await get_subscription_by_user_id(db, user_id)
-    if not subscription:
-        return "Error: subscription not found"
+    if prize_type == "days":
+        try:
+            days = int(prize_value)
+        except ValueError:
+            return "Error: invalid prize value"
 
-    subscription.end_date = subscription.end_date + timedelta(days=prize_days)
-    subscription.updated_at = datetime.utcnow()
-    await db.commit()
-    await db.refresh(subscription)
+        subscription = await get_subscription_by_user_id(db, user_id)
+        if not subscription:
+            return "Error: subscription not found"
 
-    logger.info(f"🎁 Extended subscription for user {user_id} by {prize_days} days (contest prize)")
-    return f"Subscription extended by {prize_days} days"
+        subscription.end_date = subscription.end_date + timedelta(days=days)
+        subscription.updated_at = datetime.utcnow()
+        await db.commit()
+        await db.refresh(subscription)
+
+        logger.info(f"🎁 Extended subscription for user {user_id} by {days} days (contest prize)")
+        return f"Subscription extended by {days} days"
+
+    elif prize_type == "balance":
+        from app.database.crud.user import get_user_by_id
+        try:
+            amount = float(prize_value)
+        except ValueError:
+            return "Error: invalid prize value"
+
+        user = await get_user_by_id(db, user_id)
+        if not user:
+            return "Error: user not found"
+
+        user.balance += amount
+        await db.commit()
+        await db.refresh(user)
+
+        logger.info(f"🎁 Added {amount} to balance for user {user_id} (contest prize)")
+        return f"Balance increased by {amount}"
+
+    else:
+        logger.warning(f"Unknown prize type: {prize_type}")
+        return f"Prize type '{prize_type}' not supported"
 
 
 # ============ Routes ============
@@ -169,7 +199,8 @@ async def get_contests(
             slug=tpl_slug,
             name=rnd.template.name if rnd.template else tpl_slug,
             description=rnd.template.description if rnd.template else None,
-            prize_days=rnd.template.prize_days if rnd.template else 0,
+            prize_type=rnd.template.prize_type if rnd.template else "days",
+            prize_value=rnd.template.prize_value if rnd.template else "1",
             is_available=True,
             already_played=attempt is not None,
         ))
@@ -368,11 +399,12 @@ async def submit_contest_answer(
 
     if is_winner:
         await increment_winner_count(db, round_obj)
-        prize_text = await _award_prize(db, user.id, tpl.prize_days)
+        prize_text = await _award_prize(db, user.id, tpl.prize_type, tpl.prize_value)
         return ContestResult(
             is_winner=True,
             message=f"🎉 Congratulations! You won! {prize_text}",
-            prize_days=tpl.prize_days,
+            prize_type=tpl.prize_type,
+            prize_value=tpl.prize_value,
         )
     else:
         lose_messages = {
