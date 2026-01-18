@@ -6,7 +6,7 @@
 
 - `GET /contests/daily/templates?enabled_only=false` — список шаблонов игр.
 - `GET /contests/daily/templates/{id}` — получить шаблон.
-- `PATCH /contests/daily/templates/{id}` — обновить поля: `name`, `description`, `prize_days`, `max_winners`, `attempts_per_user`, `times_per_day`, `schedule_times`, `cooldown_hours`, `payload` (dict), `is_enabled`.
+- `PATCH /contests/daily/templates/{id}` — обновить поля: `name`, `description`, `prize_type`, `prize_value`, `max_winners`, `attempts_per_user`, `times_per_day`, `schedule_times`, `cooldown_hours`, `payload` (dict), `is_enabled`.
 - `POST /contests/daily/templates/{id}/start-round` — запустить раунд вручную. Тело:
   ```json
   {
