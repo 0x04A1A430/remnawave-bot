@@ -13,7 +13,9 @@ from pydantic import BaseModel, Field
 
 from app.database.models import User, Ticket, TicketMessage
 from app.database.crud.ticket import TicketCRUD, TicketMessageCRUD
+from app.database.crud.ticket_notification import TicketNotificationCRUD
 from app.config import settings
+from app.cabinet.routes.websocket import notify_user_ticket_reply
 
 from ..dependencies import get_cabinet_db, get_current_admin_user
 from ..schemas.tickets import TicketMessageResponse
@@ -347,6 +349,16 @@ async def reply_to_ticket(
             await bot.session.close()
     except Exception as e:
         logger.warning(f"Failed to send Telegram notification: {e}")
+
+    # Уведомить пользователя в кабинете (WebSocket)
+    try:
+        notification = await TicketNotificationCRUD.create_user_notification_for_admin_reply(
+            db, ticket, request.message
+        )
+        if notification:
+            await notify_user_ticket_reply(ticket.user_id, ticket.id, (request.message or "")[:100])
+    except Exception as e:
+        logger.warning(f"Failed to create cabinet notification for admin reply: {e}")
 
     return _message_to_response(message)
 
