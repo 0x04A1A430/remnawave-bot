@@ -18,6 +18,13 @@ class TicketNotificationCRUD:
     """CRUD operations for ticket notifications in cabinet."""
 
     @staticmethod
+    async def get_by_id(db: AsyncSession, notification_id: int) -> Optional[TicketNotification]:
+        """Get notification by ID."""
+        query = select(TicketNotification).where(TicketNotification.id == notification_id)
+        result = await db.execute(query)
+        return result.scalar_one_or_none()
+
+    @staticmethod
     async def create(
         db: AsyncSession,
         ticket_id: int,

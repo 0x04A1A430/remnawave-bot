@@ -63,7 +63,10 @@ class CabinetConnectionManager:
 
     async def send_to_user(self, user_id: int, message: dict) -> None:
         """Отправить сообщение конкретному пользователю."""
-        connections = self._user_connections.get(user_id, set())
+        # Snapshot connections under the lock to avoid mutation during iteration
+        async with self._lock:
+            connections = list(self._user_connections.get(user_id, set()))
+
         if not connections:
             return
 
@@ -78,19 +81,27 @@ class CabinetConnectionManager:
                 disconnected.add(ws)
 
         # Cleanup disconnected
-        async with self._lock:
-            for ws in disconnected:
-                self._user_connections.get(user_id, set()).discard(ws)
+        if disconnected:
+            async with self._lock:
+                for ws in disconnected:
+                    self._user_connections.get(user_id, set()).discard(ws)
 
     async def send_to_admins(self, message: dict) -> None:
         """Отправить сообщение всем админам."""
-        if not self._admin_connections:
-            return
+        # Snapshot connections under the lock to avoid mutation during iteration
+        async with self._lock:
+            if not self._admin_connections:
+                return
+            # Create a snapshot: list of (user_id, list of websockets)
+            admin_snapshot = [
+                (user_id, list(connections))
+                for user_id, connections in self._admin_connections.items()
+            ]
 
         data = json.dumps(message, default=str, ensure_ascii=False)
         disconnected_by_user: Dict[int, Set[WebSocket]] = {}
 
-        for user_id, connections in self._admin_connections.items():
+        for user_id, connections in admin_snapshot:
             for ws in connections:
                 try:
                     await ws.send_text(data)
@@ -101,10 +112,11 @@ class CabinetConnectionManager:
                     disconnected_by_user[user_id].add(ws)
 
         # Cleanup disconnected
-        async with self._lock:
-            for user_id, ws_set in disconnected_by_user.items():
-                for ws in ws_set:
-                    self._admin_connections.get(user_id, set()).discard(ws)
+        if disconnected_by_user:
+            async with self._lock:
+                for user_id, ws_set in disconnected_by_user.items():
+                    for ws in ws_set:
+                        self._admin_connections.get(user_id, set()).discard(ws)
 
 
 # Глобальный менеджер подключений

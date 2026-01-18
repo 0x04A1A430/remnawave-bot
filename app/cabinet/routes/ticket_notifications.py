@@ -84,12 +84,22 @@ async def mark_notification_as_read(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Mark a notification as read."""
-    success = await TicketNotificationCRUD.mark_as_read(db, notification_id)
-    if not success:
+    # Security: Verify notification belongs to current user and is not an admin notification
+    notification = await TicketNotificationCRUD.get_by_id(db, notification_id)
+    if not notification:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Notification not found",
         )
+
+    # Check ownership: notification must belong to user and not be an admin notification
+    if notification.user_id != user.id or notification.is_for_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have permission to mark this notification as read",
+        )
+
+    await TicketNotificationCRUD.mark_as_read(db, notification_id)
     return {"success": True}
 
 
@@ -154,12 +164,22 @@ async def mark_admin_notification_as_read(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Mark an admin notification as read."""
-    success = await TicketNotificationCRUD.mark_as_read(db, notification_id)
-    if not success:
+    # Security: Verify notification exists and is an admin notification
+    notification = await TicketNotificationCRUD.get_by_id(db, notification_id)
+    if not notification:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Notification not found",
         )
+
+    # Check that this is actually an admin notification
+    if not notification.is_for_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This is not an admin notification",
+        )
+
+    await TicketNotificationCRUD.mark_as_read(db, notification_id)
     return {"success": True}
 
 
