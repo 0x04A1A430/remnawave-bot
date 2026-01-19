@@ -148,6 +148,10 @@ async def main():
     logging.getLogger("aiogram").setLevel(logging.WARNING)
     logging.getLogger("uvicorn.access").setLevel(logging.ERROR)
     logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
+    # Скрываем спам от WebSocket подключений (connection open/closed)
+    logging.getLogger("uvicorn.protocols.websockets.websockets_impl").setLevel(logging.WARNING)
+    logging.getLogger("websockets.server").setLevel(logging.WARNING)
+    logging.getLogger("websockets").setLevel(logging.WARNING)
 
     logger = logging.getLogger(__name__)
     timeline = StartupTimeline(logger, "Bedolaga Remnawave Bot")
