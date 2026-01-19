@@ -131,6 +131,10 @@ def _subscription_to_response(
         if last_charge:
             next_daily_charge_at = last_charge + timedelta(days=1)
 
+    # Проверяем настройку скрытия ссылки
+    hide_link = settings.should_hide_subscription_link()
+    display_url = None if hide_link else subscription.subscription_url
+
     return SubscriptionResponse(
         id=subscription.id,
         status=actual_status,  # Use actual_status instead of raw status
@@ -149,7 +153,7 @@ def _subscription_to_response(
         servers=servers or [],
         autopay_enabled=subscription.autopay_enabled or False,
         autopay_days_before=subscription.autopay_days_before or 3,
-        subscription_url=subscription.subscription_url,
+        subscription_url=display_url,
         is_active=is_active,
         is_expired=is_expired,
         traffic_purchases=traffic_purchases or [],
