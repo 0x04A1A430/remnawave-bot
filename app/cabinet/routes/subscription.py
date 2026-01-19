@@ -1477,8 +1477,14 @@ async def purchase_tariff(
             await db.refresh(subscription)
 
         # Sync with RemnaWave
+        # При покупке тарифа ВСЕГДА сбрасываем трафик в панели
         service = SubscriptionService()
-        await service.update_remnawave_user(db, subscription)
+        await service.update_remnawave_user(
+            db,
+            subscription,
+            reset_traffic=True,
+            reset_reason="покупка тарифа (cabinet)",
+        )
 
         # Save cart for auto-renewal (not for daily tariffs - they have their own charging)
         if not is_daily_tariff:
@@ -1558,25 +1564,34 @@ async def purchase_devices(
                 detail="Ваша подписка неактивна",
             )
 
-        # Get tariff for device price
+        # Get tariff for device price (if exists)
         tariff = None
         if subscription.tariff_id:
             from app.database.crud.tariff import get_tariff_by_id
             tariff = await get_tariff_by_id(db, subscription.tariff_id)
 
-        if not tariff or not tariff.device_price_kopeks:
+        # Determine device price and max limit from tariff or settings
+        if tariff and tariff.device_price_kopeks:
+            device_price = tariff.device_price_kopeks
+            max_device_limit = tariff.max_device_limit
+        else:
+            # Classic mode - use settings
+            device_price = settings.PRICE_PER_DEVICE
+            max_device_limit = settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else None
+
+        if not device_price or device_price <= 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Докупка устройств недоступна для вашего тарифа",
+                detail="Докупка устройств недоступна",
             )
 
         # Check max device limit
         current_devices = subscription.device_limit or 1
         new_device_count = current_devices + request.devices
-        if tariff.max_device_limit and new_device_count > tariff.max_device_limit:
+        if max_device_limit and new_device_count > max_device_limit:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Максимальное количество устройств для вашего тарифа: {tariff.max_device_limit}",
+                detail=f"Максимальное количество устройств: {max_device_limit}",
             )
 
         # Calculate prorated price based on remaining days
@@ -1590,7 +1605,7 @@ async def purchase_devices(
         total_days = 30  # Base period for device price calculation
 
         # Price = device_price * devices * (days_left / 30)
-        price_kopeks = int(tariff.device_price_kopeks * request.devices * days_left / total_days)
+        price_kopeks = int(device_price * request.devices * days_left / total_days)
         price_kopeks = max(100, price_kopeks)  # Minimum 1 ruble
 
         # Check balance
@@ -1672,15 +1687,23 @@ async def get_device_price(
         from app.database.crud.tariff import get_tariff_by_id
         tariff = await get_tariff_by_id(db, subscription.tariff_id)
 
-    if not tariff or not tariff.device_price_kopeks:
+    # Determine device price and max limit from tariff or settings
+    if tariff and tariff.device_price_kopeks:
+        device_price = tariff.device_price_kopeks
+        max_device_limit = tariff.max_device_limit
+    else:
+        # Classic mode - use settings
+        device_price = settings.PRICE_PER_DEVICE
+        max_device_limit = settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else None
+
+    if not device_price or device_price <= 0:
         return {
             "available": False,
-            "reason": "Докупка устройств недоступна для вашего тарифа",
+            "reason": "Докупка устройств недоступна",
         }
 
     # Check max device limit
     current_devices = subscription.device_limit or 1
-    max_device_limit = tariff.max_device_limit
     can_add = max_device_limit - current_devices if max_device_limit else None
 
     if max_device_limit and current_devices >= max_device_limit:
@@ -1710,7 +1733,7 @@ async def get_device_price(
     days_left = max(1, (end_date - now).days)
     total_days = 30
 
-    price_per_device_kopeks = int(tariff.device_price_kopeks * days_left / total_days)
+    price_per_device_kopeks = int(device_price * days_left / total_days)
     price_per_device_kopeks = max(100, price_per_device_kopeks)
     total_price_kopeks = price_per_device_kopeks * devices
 
@@ -1725,7 +1748,7 @@ async def get_device_price(
         "max_device_limit": max_device_limit,
         "can_add": can_add,
         "days_left": days_left,
-        "base_device_price_kopeks": tariff.device_price_kopeks,
+        "base_device_price_kopeks": device_price,
     }
 
 

@@ -431,7 +431,7 @@ class RemnaWaveAPI:
             data['telegramId'] = telegram_id
         if email:
             data['email'] = email
-        if hwid_device_limit:
+        if hwid_device_limit is not None:
             data['hwidDeviceLimit'] = hwid_device_limit
         if description:
             data['description'] = description

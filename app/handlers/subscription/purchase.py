@@ -2871,19 +2871,19 @@ async def confirm_purchase(
         await db.refresh(db_user)
 
         subscription_service = SubscriptionService()
-
+        # При покупке подписки ВСЕГДА сбрасываем трафик в панели
         if db_user.remnawave_uuid:
             remnawave_user = await subscription_service.update_remnawave_user(
                 db,
                 subscription,
-                reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT,
+                reset_traffic=True,
                 reset_reason="покупка подписки",
             )
         else:
             remnawave_user = await subscription_service.create_remnawave_user(
                 db,
                 subscription,
-                reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT,
+                reset_traffic=True,
                 reset_reason="покупка подписки",
             )
 
@@ -2892,7 +2892,7 @@ async def confirm_purchase(
             remnawave_user = await subscription_service.create_remnawave_user(
                 db,
                 subscription,
-                reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT,
+                reset_traffic=True,
                 reset_reason="покупка подписки (повторная попытка)",
             )
 
