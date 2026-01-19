@@ -587,8 +587,9 @@ class MonitoringService:
                     )
                     continue
                 except TelegramBadRequest as error:
-                    logger.error(
-                        "❌ Ошибка Telegram при проверке подписки пользователя %s: %s",
+                    # PARTICIPANT_ID_INVALID - пользователь никогда не был в канале, это нормально
+                    logger.warning(
+                        "⚠️ Ошибка Telegram при проверке подписки пользователя %s: %s",
                         user.telegram_id,
                         error,
                     )

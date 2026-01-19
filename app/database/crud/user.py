@@ -564,7 +564,7 @@ async def subtract_user_balance(
                         rollback_error,
                     )
 
-        logger.error(f"   ✅ Средства списаны: {old_balance} → {user.balance_kopeks}")
+        logger.info(f"   ✅ Средства списаны: {old_balance} → {user.balance_kopeks}")
         return True
         
     except Exception as e:
