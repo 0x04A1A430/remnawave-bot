@@ -621,13 +621,33 @@ async def select_tariff(
             )
         else:
             missing = daily_price - user_balance
+
+            # Сохраняем данные корзины для автопокупки суточного тарифа
+            cart_data = {
+                'cart_mode': 'daily_tariff_purchase',
+                'tariff_id': tariff_id,
+                'is_daily': True,
+                'daily_price_kopeks': daily_price,
+                'total_price': daily_price,
+                'user_id': db_user.id,
+                'saved_cart': True,
+                'missing_amount': missing,
+                'return_to_cart': True,
+                'description': f"Покупка суточного тарифа {tariff.name}",
+                'traffic_limit_gb': tariff.traffic_limit_gb,
+                'device_limit': tariff.device_limit,
+                'allowed_squads': tariff.allowed_squads or [],
+            }
+            await user_cart_service.save_user_cart(db_user.id, cart_data)
+
             await callback.message.edit_text(
                 f"❌ <b>Недостаточно средств</b>\n\n"
                 f"📦 Тариф: <b>{tariff.name}</b>\n"
                 f"🔄 Тип: Суточный\n"
                 f"💰 Цена: {_format_price_kopeks(daily_price)}/день\n\n"
                 f"💳 Ваш баланс: {_format_price_kopeks(user_balance)}\n"
-                f"⚠️ Не хватает: <b>{_format_price_kopeks(missing)}</b>",
+                f"⚠️ Не хватает: <b>{_format_price_kopeks(missing)}</b>\n\n"
+                f"🛒 <i>Корзина сохранена! После пополнения баланса подписка будет оформлена автоматически.</i>",
                 reply_markup=get_daily_tariff_insufficient_balance_keyboard(tariff_id, db_user.language),
                 parse_mode="HTML"
             )
@@ -1087,15 +1107,35 @@ async def select_tariff_period(
             parse_mode="HTML"
         )
     else:
-        # Недостаточно средств
+        # Недостаточно средств - сохраняем корзину для автопокупки
         missing = final_price - user_balance
+
+        # Сохраняем данные корзины для автопокупки после пополнения
+        cart_data = {
+            'cart_mode': 'tariff_purchase',
+            'tariff_id': tariff_id,
+            'period_days': period,
+            'total_price': final_price,
+            'user_id': db_user.id,
+            'saved_cart': True,
+            'missing_amount': missing,
+            'return_to_cart': True,
+            'description': f"Покупка тарифа {tariff.name} на {period} дней",
+            'traffic_limit_gb': tariff.traffic_limit_gb,
+            'device_limit': tariff.device_limit,
+            'allowed_squads': tariff.allowed_squads or [],
+            'discount_percent': discount_percent,
+        }
+        await user_cart_service.save_user_cart(db_user.id, cart_data)
+
         await callback.message.edit_text(
             f"❌ <b>Недостаточно средств</b>\n\n"
             f"📦 Тариф: <b>{tariff.name}</b>\n"
             f"📅 Период: {_format_period(period)}\n"
             f"💰 Стоимость: {_format_price_kopeks(final_price)}\n\n"
             f"💳 Ваш баланс: {_format_price_kopeks(user_balance)}\n"
-            f"⚠️ Не хватает: <b>{_format_price_kopeks(missing)}</b>",
+            f"⚠️ Не хватает: <b>{_format_price_kopeks(missing)}</b>\n\n"
+            f"🛒 <i>Корзина сохранена! После пополнения баланса подписка будет оформлена автоматически.</i>",
             reply_markup=get_tariff_insufficient_balance_keyboard(tariff_id, period, db_user.language),
             parse_mode="HTML"
         )
@@ -1584,13 +1624,37 @@ async def select_tariff_extend_period(
         )
     else:
         missing = final_price - user_balance
+
+        # Получаем текущую подписку для сохранения в корзину
+        subscription = await get_subscription_by_user_id(db, db_user.id)
+
+        # Сохраняем данные корзины для автопокупки после пополнения
+        cart_data = {
+            'cart_mode': 'extend',
+            'tariff_id': tariff_id,
+            'subscription_id': subscription.id if subscription else None,
+            'period_days': period,
+            'total_price': final_price,
+            'user_id': db_user.id,
+            'saved_cart': True,
+            'missing_amount': missing,
+            'return_to_cart': True,
+            'description': f"Продление тарифа {tariff.name} на {period} дней",
+            'traffic_limit_gb': tariff.traffic_limit_gb,
+            'device_limit': tariff.device_limit,
+            'allowed_squads': tariff.allowed_squads or [],
+            'discount_percent': discount_percent,
+        }
+        await user_cart_service.save_user_cart(db_user.id, cart_data)
+
         await callback.message.edit_text(
             f"❌ <b>Недостаточно средств</b>\n\n"
             f"📦 Тариф: <b>{tariff.name}</b>\n"
             f"📅 Период: {_format_period(period)}\n"
             f"💰 К оплате: {_format_price_kopeks(final_price)}\n\n"
             f"💳 Ваш баланс: {_format_price_kopeks(user_balance)}\n"
-            f"⚠️ Не хватает: <b>{_format_price_kopeks(missing)}</b>",
+            f"⚠️ Не хватает: <b>{_format_price_kopeks(missing)}</b>\n\n"
+            f"🛒 <i>Корзина сохранена! После пополнения баланса подписка будет продлена автоматически.</i>",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="💳 Пополнить баланс", callback_data="balance_topup")],
                 [InlineKeyboardButton(text=texts.BACK, callback_data="subscription_extend")]
