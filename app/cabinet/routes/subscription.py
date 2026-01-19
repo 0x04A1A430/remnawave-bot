@@ -3,6 +3,7 @@
 import base64
 import json
 import logging
+import re
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
 
@@ -1796,40 +1797,30 @@ def _convert_remnawave_block_to_step(block: Dict[str, Any], url_scheme: str = ""
     return step
 
 
-# Fallback URL schemes for apps that don't have urlScheme in RemnaWave config
-APP_URL_SCHEMES_FALLBACK = {
-    # iOS
-    "happ": "happ://add/",
-    "streisand": "streisand://import/",
-    "shadowrocket": "sub://",
-    "karing": "karing://install-config?url=",
-    "foxray": "foxray://yiguo.dev/sub/add/?url=",
-    "v2box": "v2box://install-sub?url=",
-    "sing-box": "sing-box://import-remote-profile?url=",
-    "singbox": "sing-box://import-remote-profile?url=",
-    "quantumult x": "quantumult-x://add-resource?remote-resource=",
-    "quantumult": "quantumult-x://add-resource?remote-resource=",
-    "surge": "surge3://install-config?url=",
-    "loon": "loon://import?sub=",
-    "stash": "stash://install-config?url=",
-    # Android
-    "v2rayng": "v2rayng://install-sub?url=",
-    "nekoray": "sn://subscription?url=",
-    "nekobox": "sn://subscription?url=",
-    "surfboard": "surfboard://install-config?url=",
-    # PC (Windows/macOS/Linux)
-    "clash": "clash://install-config?url=",
-    "clash verge": "clash://install-config?url=",
-    "clashx": "clashx://install-config?url=",
-    "flclash": "clash://install-config?url=",
-    "hiddify": "hiddify://install-config/?url=",
-    "mihomo": "clash://install-config?url=",
-    # Other
-    "prizrak-box": "prizrak-box://install-config?url=",
-    "prizrak box": "prizrak-box://install-config?url=",
-    "prizrakbox": "prizrak-box://install-config?url=",
-    "vpn4tv": "vpn4tv://install-config?url=",
-}
+
+def _extract_scheme_from_buttons(buttons: List[Dict[str, Any]]) -> str:
+    """Extract URL scheme from buttons list."""
+    for btn in buttons:
+        if not isinstance(btn, dict):
+            continue
+        link = btn.get("link", "") or btn.get("url", "") or btn.get("buttonLink", "")
+        if not link:
+            continue
+        # Check for subscription link placeholder (case-insensitive)
+        link_upper = link.upper()
+        if "{{SUBSCRIPTION_LINK}}" in link_upper or "SUBSCRIPTION_LINK" in link_upper:
+            # Extract scheme: "prizrak-box://install-config?url={{SUBSCRIPTION_LINK}}" -> "prizrak-box://install-config?url="
+            scheme = re.sub(r'\{\{SUBSCRIPTION_LINK\}\}', '', link, flags=re.IGNORECASE)
+            if scheme and "://" in scheme:
+                return scheme
+        # Also check for type="subscriptionLink" buttons with custom schemes
+        btn_type = btn.get("type", "")
+        if btn_type == "subscriptionLink" and "://" in link and not link.startswith("http"):
+            # Extract base scheme from link like "prizrak-box://install-config?url="
+            scheme = link.split("{{")[0] if "{{" in link else link
+            if scheme and "://" in scheme:
+                return scheme
+    return ""
 
 
 def _get_url_scheme_for_app(app: Dict[str, Any]) -> str:
@@ -1839,8 +1830,42 @@ def _get_url_scheme_for_app(app: Dict[str, Any]) -> str:
     if scheme:
         return scheme
 
-    # 2. Extract from buttons with {{SUBSCRIPTION_LINK}} placeholder
+    # 2. Extract from buttons in blocks (RemnaWave format)
     blocks = app.get("blocks", [])
+    for block in blocks:
+        if not isinstance(block, dict):
+            continue
+        buttons = block.get("buttons", [])
+        scheme = _extract_scheme_from_buttons(buttons)
+        if scheme:
+            return scheme
+
+    # 3. Check buttons directly in app (alternative structure)
+    direct_buttons = app.get("buttons", [])
+    if direct_buttons:
+        scheme = _extract_scheme_from_buttons(direct_buttons)
+        if scheme:
+            return scheme
+
+    # 4. Check in step structures (cabinet format)
+    for step_key in ["installationStep", "addSubscriptionStep", "connectAndUseStep"]:
+        step = app.get(step_key, {})
+        if isinstance(step, dict):
+            step_buttons = step.get("buttons", [])
+            scheme = _extract_scheme_from_buttons(step_buttons)
+            if scheme:
+                return scheme
+
+    # No scheme found
+    logger.debug(f"_get_url_scheme_for_app: No scheme found for app '{app.get('name')}', "
+                f"has blocks: {bool(app.get('blocks'))}, "
+                f"has buttons: {bool(app.get('buttons'))}, "
+                f"has urlScheme: {bool(app.get('urlScheme'))}")
+    return ""
+
+
+def _find_subscription_block(blocks: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Find block that contains subscriptionLink button."""
     for block in blocks:
         if not isinstance(block, dict):
             continue
@@ -1848,16 +1873,27 @@ def _get_url_scheme_for_app(app: Dict[str, Any]) -> str:
         for btn in buttons:
             if not isinstance(btn, dict):
                 continue
+            # Check for subscriptionLink type or {{SUBSCRIPTION_LINK}} in link
+            btn_type = btn.get("type", "")
             link = btn.get("link", "") or btn.get("url", "")
-            if "{{SUBSCRIPTION_LINK}}" in link:
-                # Extract scheme: "prizrak-box://install-config?url={{SUBSCRIPTION_LINK}}" -> "prizrak-box://install-config?url="
-                scheme = link.replace("{{SUBSCRIPTION_LINK}}", "")
-                if scheme and "://" in scheme:
-                    return scheme
+            if btn_type == "subscriptionLink" or (link and "SUBSCRIPTION_LINK" in link.upper()):
+                return block
+    return None
 
-    # 3. Fallback by app name
-    app_name = app.get("name", "").lower().strip()
-    return APP_URL_SCHEMES_FALLBACK.get(app_name, "")
+
+def _find_connect_block(blocks: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Find block that is about connection/usage (usually last or has specific keywords)."""
+    # Look for block with "connect" or "use" in title
+    for block in blocks:
+        if not isinstance(block, dict):
+            continue
+        title = block.get("title", {})
+        title_en = title.get("en", "") if isinstance(title, dict) else ""
+        title_lower = title_en.lower()
+        if "connect" in title_lower or "use" in title_lower:
+            return block
+    # Fallback to last block if no match
+    return blocks[-1] if blocks else None
 
 
 def _convert_remnawave_app_to_cabinet(app: Dict[str, Any]) -> Dict[str, Any]:
@@ -1865,10 +1901,26 @@ def _convert_remnawave_app_to_cabinet(app: Dict[str, Any]) -> Dict[str, Any]:
     blocks = app.get("blocks", [])
     url_scheme = _get_url_scheme_for_app(app)
 
-    # Map blocks to steps based on position
-    installation_step = _convert_remnawave_block_to_step(blocks[0], url_scheme) if len(blocks) > 0 else {"description": {}}
-    subscription_step = _convert_remnawave_block_to_step(blocks[1], url_scheme) if len(blocks) > 1 else {"description": {}}
-    connect_step = _convert_remnawave_block_to_step(blocks[2], url_scheme) if len(blocks) > 2 else {"description": {}}
+    # Debug log for conversion
+    app_name = app.get("name", "unknown")
+    if url_scheme:
+        logger.debug(f"_convert_remnawave_app_to_cabinet: app '{app_name}' -> urlScheme='{url_scheme}'")
+    else:
+        logger.warning(f"_convert_remnawave_app_to_cabinet: app '{app_name}' has no urlScheme, "
+                      f"blocks count: {len(blocks)}")
+
+    # Smart block mapping: find blocks by their content, not just position
+    # 1. First block is usually installation
+    installation_block = blocks[0] if len(blocks) > 0 else None
+    # 2. Find subscription block (with subscriptionLink button)
+    subscription_block = _find_subscription_block(blocks)
+    # 3. Find connect/use block (usually last or has "connect" in title)
+    connect_block = _find_connect_block(blocks)
+
+    # Convert blocks to steps
+    installation_step = _convert_remnawave_block_to_step(installation_block, url_scheme) if installation_block else {"description": {}}
+    subscription_step = _convert_remnawave_block_to_step(subscription_block, url_scheme) if subscription_block else {"description": {}}
+    connect_step = _convert_remnawave_block_to_step(connect_block, url_scheme) if connect_block else {"description": {}}
 
     # Ensure subscription step has a deepLink button if urlScheme exists
     if url_scheme:
