@@ -42,6 +42,7 @@ class SubscriptionResponse(BaseModel):
     autopay_enabled: bool
     autopay_days_before: int
     subscription_url: Optional[str] = None
+    hide_subscription_link: bool = False  # Скрывать ли отображение ссылки (но кнопки работают)
     is_active: bool
     is_expired: bool
     traffic_purchases: List[TrafficPurchaseInfo] = []
