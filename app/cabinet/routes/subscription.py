@@ -131,9 +131,8 @@ def _subscription_to_response(
         if last_charge:
             next_daily_charge_at = last_charge + timedelta(days=1)
 
-    # Проверяем настройку скрытия ссылки
+    # Проверяем настройку скрытия ссылки (скрывается только текст, кнопки работают)
     hide_link = settings.should_hide_subscription_link()
-    display_url = None if hide_link else subscription.subscription_url
 
     return SubscriptionResponse(
         id=subscription.id,
@@ -153,7 +152,8 @@ def _subscription_to_response(
         servers=servers or [],
         autopay_enabled=subscription.autopay_enabled or False,
         autopay_days_before=subscription.autopay_days_before or 3,
-        subscription_url=display_url,
+        subscription_url=subscription.subscription_url,
+        hide_subscription_link=hide_link,
         is_active=is_active,
         is_expired=is_expired,
         traffic_purchases=traffic_purchases or [],
@@ -2057,12 +2057,31 @@ def _load_app_config() -> Dict[str, Any]:
     return _load_app_config_from_file()
 
 
-def _create_deep_link(app: Dict[str, Any], subscription_url: str) -> Optional[str]:
+def _is_happ_app(app: Dict[str, Any]) -> bool:
+    """Check if app is Happ (uses happ_cryptolink scheme)."""
+    name = str(app.get("name", "")).lower()
+    svg_icon_key = str(app.get("svgIconKey", "")).lower()
+    return name == "happ" or svg_icon_key == "happ"
+
+
+def _create_deep_link(
+    app: Dict[str, Any],
+    subscription_url: str,
+    subscription_crypto_link: Optional[str] = None
+) -> Optional[str]:
     """Create deep link for app with subscription URL.
 
     Uses urlScheme from RemnaWave config or fallback by app name.
+    For Happ apps, uses subscription_crypto_link directly (contains happ:// scheme).
     """
-    if not subscription_url or not isinstance(app, dict):
+    if not isinstance(app, dict):
+        return None
+
+    # For Happ, use crypto_link directly if available (already has happ:// scheme)
+    if _is_happ_app(app) and subscription_crypto_link:
+        return subscription_crypto_link
+
+    if not subscription_url:
         return None
 
     scheme = _get_url_scheme_for_app(app)
@@ -2380,8 +2399,10 @@ async def get_app_config(
     await db.refresh(user, ["subscription"])
 
     subscription_url = None
+    subscription_crypto_link = None
     if user.subscription:
         subscription_url = user.subscription.subscription_url
+        subscription_crypto_link = user.subscription.subscription_crypto_link
 
     # Load config from RemnaWave (if configured) or local file
     config = await _load_app_config_async()
@@ -2413,8 +2434,8 @@ async def get_app_config(
             }
 
             # Add deep link if subscription exists
-            if subscription_url:
-                app_data["deepLink"] = _create_deep_link(app, subscription_url)
+            if subscription_url or subscription_crypto_link:
+                app_data["deepLink"] = _create_deep_link(app, subscription_url, subscription_crypto_link)
 
             platform_apps.append(app_data)
 
@@ -2435,8 +2456,9 @@ async def get_app_config(
     return {
         "platforms": platforms,
         "platformNames": platform_names,
-        "hasSubscription": bool(subscription_url),
+        "hasSubscription": bool(subscription_url or subscription_crypto_link),
         "subscriptionUrl": subscription_url,
+        "subscriptionCryptoLink": subscription_crypto_link,
         "branding": config.get("config", {}).get("branding", {}),
     }
 
