@@ -9,6 +9,12 @@ from app.localization.texts import get_texts
 
 LOGO_PATH = Path(settings.LOGO_FILE)
 _PRIVACY_RESTRICTED_CODE = "BUTTON_USER_PRIVACY_RESTRICTED"
+_TOPIC_REQUIRED_ERRORS = (
+    "topic must be specified",
+    "TOPIC_CLOSED",
+    "TOPIC_DELETED",
+    "FORUM_CLOSED",
+)
 
 
 def is_qr_message(message: Message) -> bool:
@@ -80,6 +86,15 @@ def is_privacy_restricted_error(error: Exception) -> bool:
     return _PRIVACY_RESTRICTED_CODE in message or _PRIVACY_RESTRICTED_CODE in description
 
 
+def is_topic_required_error(error: Exception) -> bool:
+    """Проверяет, является ли ошибка связанной с топиками/форумами."""
+    if not isinstance(error, TelegramBadRequest):
+        return False
+
+    description = str(error).lower()
+    return any(err.lower() in description for err in _TOPIC_REQUIRED_ERRORS)
+
+
 async def _answer_with_photo(self: Message, text: str = None, **kwargs):
     # Уважаем флаг в рантайме: если логотип выключен — не подменяем ответ
     if not settings.ENABLE_LOGO_MODE:
@@ -97,15 +112,38 @@ async def _answer_with_photo(self: Message, text: str = None, **kwargs):
             # Отправляем caption как есть; при ошибке парсинга ниже сработает фоллбек
             return await self.answer_photo(FSInputFile(LOGO_PATH), caption=text, **kwargs)
         except TelegramBadRequest as error:
+            if is_topic_required_error(error):
+                # Канал с топиками — просто игнорируем, нельзя ответить без message_thread_id
+                return None
             if is_privacy_restricted_error(error):
                 fallback_text = append_privacy_hint(text, language)
                 safe_kwargs = prepare_privacy_safe_kwargs(kwargs)
-                return await _original_answer(self, fallback_text, **safe_kwargs)
+                try:
+                    return await _original_answer(self, fallback_text, **safe_kwargs)
+                except TelegramBadRequest as inner_error:
+                    if is_topic_required_error(inner_error):
+                        return None
+                    raise
             # Фоллбек, если Telegram ругается на caption или другое ограничение: отправим как текст
-            return await _original_answer(self, text, **kwargs)
+            try:
+                return await _original_answer(self, text, **kwargs)
+            except TelegramBadRequest as inner_error:
+                if is_topic_required_error(inner_error):
+                    return None
+                raise
         except Exception:
-            return await _original_answer(self, text, **kwargs)
-    return await _original_answer(self, text, **kwargs)
+            try:
+                return await _original_answer(self, text, **kwargs)
+            except TelegramBadRequest as inner_error:
+                if is_topic_required_error(inner_error):
+                    return None
+                raise
+    try:
+        return await _original_answer(self, text, **kwargs)
+    except TelegramBadRequest as error:
+        if is_topic_required_error(error):
+            return None
+        raise
 
 
 async def _edit_with_photo(self: Message, text: str, **kwargs):
@@ -142,6 +180,8 @@ async def _edit_with_photo(self: Message, text: str, **kwargs):
         try:
             return await self.edit_media(InputMediaPhoto(**media_kwargs), **edit_kwargs)
         except TelegramBadRequest as error:
+            if is_topic_required_error(error):
+                return None
             if is_privacy_restricted_error(error):
                 fallback_text = append_privacy_hint(text, language)
                 safe_kwargs = prepare_privacy_safe_kwargs(kwargs)
@@ -149,17 +189,29 @@ async def _edit_with_photo(self: Message, text: str, **kwargs):
                     await self.delete()
                 except Exception:
                     pass
-                return await _original_answer(self, fallback_text, **safe_kwargs)
+                try:
+                    return await _original_answer(self, fallback_text, **safe_kwargs)
+                except TelegramBadRequest as inner_error:
+                    if is_topic_required_error(inner_error):
+                        return None
+                    raise
             # Фоллбек: удалим и отправим обычный текст без фото
             try:
                 await self.delete()
             except Exception:
                 pass
-            return await _original_answer(self, text, **kwargs)
+            try:
+                return await _original_answer(self, text, **kwargs)
+            except TelegramBadRequest as inner_error:
+                if is_topic_required_error(inner_error):
+                    return None
+                raise
     # Обработка ошибок MESSAGE_ID_INVALID для сообщений без фото
     try:
         return await _original_edit_text(self, text, **kwargs)
     except TelegramBadRequest as error:
+        if is_topic_required_error(error):
+            return None
         if "MESSAGE_ID_INVALID" in str(error) or "message to edit not found" in str(error).lower():
             # Сообщение удалено или недоступно — просто игнорируем
             return None
