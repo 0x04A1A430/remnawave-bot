@@ -2941,13 +2941,10 @@ async def _load_subscription_links(
     if not info:
         return {}
 
-    # Проверяем настройку скрытия ссылки
-    hide_link = settings.should_hide_subscription_link()
-
     payload: Dict[str, Any] = {
         "links": list(info.links or []),
         "ss_conf_links": dict(info.ss_conf_links or {}),
-        "subscription_url": None if hide_link else info.subscription_url,
+        "subscription_url": info.subscription_url,
         "happ": info.happ,
         "happ_link": getattr(info, "happ_link", None),
         "happ_crypto_link": getattr(info, "happ_crypto_link", None),
@@ -3370,6 +3367,7 @@ async def get_subscription_details(
     subscription_url: Optional[str] = None
     subscription_crypto_link: Optional[str] = None
     happ_redirect_link: Optional[str] = None
+    hide_subscription_link: bool = False
     remnawave_short_uuid: Optional[str] = None
     status_actual = "missing"
     subscription_status_value = "none"
@@ -3384,9 +3382,9 @@ async def get_subscription_details(
         status_actual = subscription.actual_status
         subscription_status_value = subscription.status
         links_payload = await _load_subscription_links(subscription)
-        # Проверяем настройку скрытия ссылки
-        hide_link = settings.should_hide_subscription_link()
-        subscription_url = None if hide_link else (
+        # Флаг скрытия ссылки (скрывается только текст, кнопки работают)
+        hide_subscription_link = settings.should_hide_subscription_link()
+        subscription_url = (
             links_payload.get("subscription_url") or subscription.subscription_url
         )
         subscription_crypto_link = (
@@ -3538,6 +3536,7 @@ async def get_subscription_details(
         remnawave_short_uuid=remnawave_short_uuid,
         user=response_user,
         subscription_url=subscription_url,
+        hide_subscription_link=hide_subscription_link,
         subscription_crypto_link=subscription_crypto_link,
         subscription_purchase_url=purchase_url or None,
         links=links,
@@ -3548,7 +3547,7 @@ async def get_subscription_details(
         connected_devices=devices,
         happ=links_payload.get("happ") if subscription else None,
         happ_link=links_payload.get("happ_link") if subscription else None,
-        happ_crypto_link=links_payload.get("happ_crypto_link") if subscription else None,
+        happ_crypto_link=subscription_crypto_link,  # Используем уже вычисленное значение с fallback
         happ_cryptolink_redirect_link=happ_redirect_link,
         happ_cryptolink_redirect_template=settings.get_happ_cryptolink_redirect_template(),
         balance_kopeks=user.balance_kopeks,
