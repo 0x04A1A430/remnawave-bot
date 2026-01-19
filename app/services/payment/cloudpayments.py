@@ -260,7 +260,9 @@ class CloudPaymentsPaymentMixin:
         # Auto-purchase if enabled
         auto_purchase_success = False
         try:
-            auto_purchase_success = await auto_purchase_saved_cart_after_topup(db, user)
+            auto_purchase_success = await auto_purchase_saved_cart_after_topup(
+                db, user, bot=getattr(self, "bot", None)
+            )
         except Exception as error:
             logger.exception("Ошибка автопокупки после CloudPayments: %s", error)
 
