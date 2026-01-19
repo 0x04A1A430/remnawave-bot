@@ -51,25 +51,29 @@ async def verify_websocket_token(
 async def websocket_endpoint(websocket: WebSocket):
     """WebSocket endpoint для real-time обновлений."""
     client_host = websocket.client.host if websocket.client else "unknown"
-    logger.info("WebSocket connection attempt from %s", client_host)
+    logger.debug("WebSocket connection attempt from %s", client_host)
     
     # Сначала проверяем авторизацию ДО принятия соединения
     token = websocket.query_params.get("token") or websocket.query_params.get("api_key")
     
     if not token:
-        logger.warning("WebSocket: No token provided from %s", client_host)
+        logger.debug("WebSocket: No token provided from %s", client_host)
+        # Принимаем и сразу закрываем с кодом ошибки
+        await websocket.accept()
         await websocket.close(code=1008, reason="Unauthorized: No token provided")
         return
-    
+
     if not await verify_websocket_token(websocket, token):
-        logger.warning("WebSocket: Invalid token from %s", client_host)
+        logger.debug("WebSocket: Invalid token from %s", client_host)
+        # Принимаем и сразу закрываем с кодом ошибки
+        await websocket.accept()
         await websocket.close(code=1008, reason="Unauthorized: Invalid token")
         return
     
     # Только после успешной проверки принимаем соединение
     try:
         await websocket.accept()
-        logger.info("WebSocket connection accepted from %s", client_host)
+        logger.debug("WebSocket connection accepted from %s", client_host)
     except Exception as e:
         logger.error("WebSocket: Failed to accept connection from %s: %s", client_host, e)
         return
@@ -104,7 +108,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 logger.exception("Error processing WebSocket message: %s", error)
 
     except WebSocketDisconnect:
-        logger.info("WebSocket client disconnected")
+        logger.debug("WebSocket client disconnected")
     except Exception as error:
         logger.exception("WebSocket error: %s", error)
     finally:
