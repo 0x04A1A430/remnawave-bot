@@ -12,7 +12,7 @@ from aiogram import Bot
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database.crud.server_squad import get_server_ids_by_uuids
+from app.database.crud.server_squad import get_server_ids_by_uuids, get_server_squads_by_uuids
 from app.database.crud.subscription import (
     add_subscription_servers,
     calculate_subscription_total_cost,
@@ -319,6 +319,9 @@ class SubscriptionRenewalService:
         if connected_uuids:
             server_ids = await get_server_ids_by_uuids(db, connected_uuids)
 
+            # Валидация: проверяем доступность серверов для промогруппы пользователя
+            await self._validate_servers_for_user_promo_group(db, user, connected_uuids)
+
         # В режиме fixed_with_topup при продлении используем фиксированный лимит
         if settings.is_traffic_fixed():
             traffic_limit = settings.get_fixed_traffic_limit()
@@ -529,6 +532,45 @@ class SubscriptionRenewalService:
             charged_from_balance_kopeks=charge_from_balance,
             old_end_date=old_end_date,
         )
+
+    async def _validate_servers_for_user_promo_group(
+        self,
+        db: AsyncSession,
+        user: User,
+        server_uuids: List[str],
+    ) -> None:
+        """
+        Проверяет, что все серверы подписки доступны для промогруппы пользователя.
+        Логирует предупреждения если серверы недоступны.
+        """
+        if not server_uuids:
+            return
+
+        try:
+            await db.refresh(user, ["user_promo_groups", "promo_group"])
+        except Exception:
+            pass
+
+        user_promo_group = user.get_primary_promo_group() if user else None
+        if not user_promo_group:
+            return
+
+        servers = await get_server_squads_by_uuids(db, server_uuids)
+        unavailable_servers = []
+
+        for server in servers:
+            if server.allowed_promo_groups:
+                allowed_ids = {pg.id for pg in server.allowed_promo_groups}
+                if user_promo_group.id not in allowed_ids:
+                    unavailable_servers.append(server.display_name or server.squad_uuid)
+
+        if unavailable_servers:
+            logger.warning(
+                f"⚠️ Пользователь {user.telegram_id} (promo_group={user_promo_group.name}) "
+                f"продлевает подписку с серверами, недоступными для его промогруппы: "
+                f"{', '.join(unavailable_servers)}. "
+                f"Это может привести к неправильному расчёту цены!"
+            )
 
     def build_option_payload(
         self,
