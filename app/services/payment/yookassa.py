@@ -664,7 +664,6 @@ class YooKassaPaymentMixin:
                                 # Уведомление пользователю
                                 if getattr(self, "bot", None):
                                     try:
-                                        from app.config import settings
                                         await self.bot.send_message(
                                             chat_id=user.telegram_id,
                                             text=(
