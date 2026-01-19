@@ -184,7 +184,10 @@ def resolve_hwid_device_limit(subscription: Optional[Subscription]) -> Optional[
 
     if not settings.is_devices_selection_enabled():
         forced_limit = settings.get_disabled_mode_device_limit()
-        return forced_limit
+        if forced_limit is not None:
+            return forced_limit
+        # Если forced_limit не задан, используем device_limit из подписки
+        # чтобы при смене тарифа лимит устройств обновлялся в панели
 
     limit = getattr(subscription, "device_limit", None)
     if limit is None or limit <= 0:
