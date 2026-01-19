@@ -76,6 +76,11 @@ router.include_router(admin_users_router)
 router.include_router(admin_payments_router)
 router.include_router(admin_promo_offers_router)
 router.include_router(admin_remnawave_router)
+router.include_router(ticket_notifications_router)
+router.include_router(admin_ticket_notifications_router)
+
+# WebSocket route
+router.include_router(websocket_router)
 
 # WebSocket route
 router.include_router(websocket_router)
