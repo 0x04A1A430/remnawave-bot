@@ -1081,12 +1081,61 @@ async def get_server_monthly_price(
 
 async def get_servers_monthly_prices(
     db: AsyncSession,
-    server_squad_ids: List[int]
+    server_squad_ids: List[int],
+    *,
+    user: Optional["User"] = None,
 ) -> List[int]:
+    """Получает месячные цены серверов с проверкой доступности для промогруппы пользователя."""
+    from app.database.models import ServerSquad
+    from sqlalchemy.orm import selectinload
+
     prices = []
+
+    # Загружаем промогруппы пользователя если нужно
+    user_promo_group = None
+    user_promo_group_id = None
+    if user:
+        try:
+            # Пробуем загрузить промогруппы если ещё не загружены
+            await db.refresh(user, ["user_promo_groups", "promo_group"])
+        except Exception:
+            pass
+        try:
+            user_promo_group = user.get_primary_promo_group()
+            user_promo_group_id = user_promo_group.id if user_promo_group else None
+        except Exception as e:
+            logger.warning(f"Не удалось получить промогруппу пользователя: {e}")
+
     for server_id in server_squad_ids:
-        price = await get_server_monthly_price(db, server_id)
-        prices.append(price)
+        # Загружаем сервер с промогруппами
+        result = await db.execute(
+            select(ServerSquad)
+            .options(selectinload(ServerSquad.allowed_promo_groups))
+            .where(ServerSquad.id == server_id)
+        )
+        server = result.scalar_one_or_none()
+
+        if not server:
+            prices.append(0)
+            continue
+
+        # Проверяем доступность сервера для промогруппы пользователя
+        is_allowed = True
+        if user_promo_group_id is not None and server.allowed_promo_groups:
+            allowed_ids = {pg.id for pg in server.allowed_promo_groups}
+            is_allowed = user_promo_group_id in allowed_ids
+
+        if server.is_available and is_allowed:
+            prices.append(server.price_kopeks)
+        else:
+            # Сервер недоступен для промогруппы пользователя
+            logger.warning(
+                f"⚠️ Сервер {server.display_name} (id={server_id}) недоступен для "
+                f"промогруппы пользователя (promo_group_id={user_promo_group_id}), "
+                f"allowed_promo_groups={[pg.id for pg in server.allowed_promo_groups] if server.allowed_promo_groups else []}"
+            )
+            prices.append(server.price_kopeks)  # Всё равно берём реальную цену
+
     return prices
 
 def _get_discount_percent(
@@ -1146,7 +1195,7 @@ async def calculate_subscription_total_cost(
     total_traffic_price = discounted_traffic_per_month * months_in_period
     total_traffic_discount = traffic_discount_per_month * months_in_period
 
-    servers_prices = await get_servers_monthly_prices(db, server_squad_ids)
+    servers_prices = await get_servers_monthly_prices(db, server_squad_ids, user=user)
     servers_price_per_month = sum(servers_prices)
     servers_discount_percent = _get_discount_percent(
         user,
