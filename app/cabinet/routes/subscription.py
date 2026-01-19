@@ -1796,12 +1796,74 @@ def _convert_remnawave_block_to_step(block: Dict[str, Any], url_scheme: str = ""
     return step
 
 
+# Fallback URL schemes for apps that don't have urlScheme in RemnaWave config
+APP_URL_SCHEMES_FALLBACK = {
+    # iOS
+    "happ": "happ://add/",
+    "streisand": "streisand://import/",
+    "shadowrocket": "sub://",
+    "karing": "karing://install-config?url=",
+    "foxray": "foxray://yiguo.dev/sub/add/?url=",
+    "v2box": "v2box://install-sub?url=",
+    "sing-box": "sing-box://import-remote-profile?url=",
+    "singbox": "sing-box://import-remote-profile?url=",
+    "quantumult x": "quantumult-x://add-resource?remote-resource=",
+    "quantumult": "quantumult-x://add-resource?remote-resource=",
+    "surge": "surge3://install-config?url=",
+    "loon": "loon://import?sub=",
+    "stash": "stash://install-config?url=",
+    # Android
+    "v2rayng": "v2rayng://install-sub?url=",
+    "nekoray": "sn://subscription?url=",
+    "nekobox": "sn://subscription?url=",
+    "surfboard": "surfboard://install-config?url=",
+    # PC (Windows/macOS/Linux)
+    "clash": "clash://install-config?url=",
+    "clash verge": "clash://install-config?url=",
+    "clashx": "clashx://install-config?url=",
+    "flclash": "clash://install-config?url=",
+    "hiddify": "hiddify://install-config/?url=",
+    "mihomo": "clash://install-config?url=",
+    # Other
+    "prizrak-box": "prizrak-box://install-config?url=",
+    "prizrak box": "prizrak-box://install-config?url=",
+    "prizrakbox": "prizrak-box://install-config?url=",
+    "vpn4tv": "vpn4tv://install-config?url=",
+}
+
+
+def _get_url_scheme_for_app(app: Dict[str, Any]) -> str:
+    """Get URL scheme for app - from config, buttons, or fallback by name."""
+    # 1. Check urlScheme field
+    scheme = str(app.get("urlScheme", "")).strip()
+    if scheme:
+        return scheme
+
+    # 2. Extract from buttons with {{SUBSCRIPTION_LINK}} placeholder
+    blocks = app.get("blocks", [])
+    for block in blocks:
+        if not isinstance(block, dict):
+            continue
+        buttons = block.get("buttons", [])
+        for btn in buttons:
+            if not isinstance(btn, dict):
+                continue
+            link = btn.get("link", "") or btn.get("url", "")
+            if "{{SUBSCRIPTION_LINK}}" in link:
+                # Extract scheme: "prizrak-box://install-config?url={{SUBSCRIPTION_LINK}}" -> "prizrak-box://install-config?url="
+                scheme = link.replace("{{SUBSCRIPTION_LINK}}", "")
+                if scheme and "://" in scheme:
+                    return scheme
+
+    # 3. Fallback by app name
+    app_name = app.get("name", "").lower().strip()
+    return APP_URL_SCHEMES_FALLBACK.get(app_name, "")
 
 
 def _convert_remnawave_app_to_cabinet(app: Dict[str, Any]) -> Dict[str, Any]:
     """Convert RemnaWave app format to cabinet app format."""
     blocks = app.get("blocks", [])
-    url_scheme = app.get("urlScheme", "")
+    url_scheme = _get_url_scheme_for_app(app)
 
     # Map blocks to steps based on position
     installation_step = _convert_remnawave_block_to_step(blocks[0], url_scheme) if len(blocks) > 0 else {"description": {}}
@@ -1919,12 +1981,12 @@ def _load_app_config() -> Dict[str, Any]:
 def _create_deep_link(app: Dict[str, Any], subscription_url: str) -> Optional[str]:
     """Create deep link for app with subscription URL.
 
-    Uses urlScheme from RemnaWave config directly without any fallbacks.
+    Uses urlScheme from RemnaWave config or fallback by app name.
     """
     if not subscription_url or not isinstance(app, dict):
         return None
 
-    scheme = str(app.get("urlScheme", "")).strip()
+    scheme = _get_url_scheme_for_app(app)
     if not scheme:
         logger.debug(f"_create_deep_link: no urlScheme for app '{app.get('name', 'unknown')}'")
         return None
