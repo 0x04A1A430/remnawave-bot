@@ -25,14 +25,45 @@ class WebAPIServer:
             logger.warning("WEB_API_WORKERS > 1 не поддерживается в embed-режиме, используем 1")
             workers = 1
 
+        # Кастомный конфиг логирования - скрываем спам от WebSocket
+        log_config = {
+            "version": 1,
+            "disable_existing_loggers": False,
+            "formatters": {
+                "default": {
+                    "()": "uvicorn.logging.DefaultFormatter",
+                    "fmt": "%(levelprefix)s %(message)s",
+                    "use_colors": None,
+                },
+            },
+            "handlers": {
+                "default": {
+                    "formatter": "default",
+                    "class": "logging.StreamHandler",
+                    "stream": "ext://sys.stderr",
+                },
+            },
+            "loggers": {
+                "uvicorn": {"handlers": ["default"], "level": "WARNING", "propagate": False},
+                "uvicorn.error": {"level": "WARNING", "propagate": False},
+                "uvicorn.access": {"level": "ERROR", "propagate": False},
+                "uvicorn.protocols": {"level": "WARNING", "propagate": False},
+                "uvicorn.protocols.websockets": {"level": "WARNING", "propagate": False},
+                "uvicorn.protocols.websockets.websockets_impl": {"level": "WARNING", "propagate": False},
+                "websockets": {"level": "WARNING", "propagate": False},
+                "websockets.server": {"level": "WARNING", "propagate": False},
+            },
+        }
+
         self._config = uvicorn.Config(
             app=self._app,
             host=settings.WEB_API_HOST,
             port=int(settings.WEB_API_PORT or 8080),
-            log_level=settings.LOG_LEVEL.lower(),
+            log_level="warning",
             workers=workers,
             lifespan="on",
             access_log=False,
+            log_config=log_config,
         )
         self._server = uvicorn.Server(self._config)
         self._task: Optional[asyncio.Task[None]] = None
