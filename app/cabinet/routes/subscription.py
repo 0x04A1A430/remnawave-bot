@@ -1477,8 +1477,14 @@ async def purchase_tariff(
             await db.refresh(subscription)
 
         # Sync with RemnaWave
+        # При покупке тарифа ВСЕГДА сбрасываем трафик в панели
         service = SubscriptionService()
-        await service.update_remnawave_user(db, subscription)
+        await service.update_remnawave_user(
+            db,
+            subscription,
+            reset_traffic=True,
+            reset_reason="покупка тарифа (cabinet)",
+        )
 
         # Save cart for auto-renewal (not for daily tariffs - they have their own charging)
         if not is_daily_tariff:
