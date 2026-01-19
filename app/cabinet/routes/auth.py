@@ -94,6 +94,16 @@ async def _store_refresh_token(
     token_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
     expires_at = get_refresh_token_expires_at()
 
+    # Check if token already exists (handles race conditions)
+    existing = await db.execute(
+        select(CabinetRefreshToken).where(
+            CabinetRefreshToken.token_hash == token_hash
+        )
+    )
+    if existing.scalar_one_or_none():
+        # Token already stored, skip
+        return
+
     token_record = CabinetRefreshToken(
         user_id=user_id,
         token_hash=token_hash,
@@ -101,7 +111,11 @@ async def _store_refresh_token(
         expires_at=expires_at,
     )
     db.add(token_record)
-    await db.commit()
+    try:
+        await db.commit()
+    except Exception:
+        # Handle race condition if token was inserted between check and insert
+        await db.rollback()
 
 
 @router.post("/telegram", response_model=AuthResponse)
