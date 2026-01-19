@@ -1928,13 +1928,10 @@ def _convert_remnawave_app_to_cabinet(app: Dict[str, Any]) -> Dict[str, Any]:
     blocks = app.get("blocks", [])
     url_scheme = _get_url_scheme_for_app(app)
 
-    # Debug log for conversion
+    # Debug log for conversion (не логируем отсутствие urlScheme - для Happ это нормально)
     app_name = app.get("name", "unknown")
     if url_scheme:
         logger.debug(f"_convert_remnawave_app_to_cabinet: app '{app_name}' -> urlScheme='{url_scheme}'")
-    else:
-        logger.warning(f"_convert_remnawave_app_to_cabinet: app '{app_name}' has no urlScheme, "
-                      f"blocks count: {len(blocks)}")
 
     # Smart block mapping: find blocks by their content, not just position
     # 1. First block is usually installation
