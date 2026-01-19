@@ -12,6 +12,9 @@ from sqlalchemy.orm import selectinload
 
 from app.database.models import User, Ticket, TicketMessage
 from app.config import settings
+from app.handlers.tickets import notify_admins_about_new_ticket, notify_admins_about_ticket_reply
+from app.database.crud.ticket_notification import TicketNotificationCRUD
+from app.cabinet.routes.websocket import notify_admins_new_ticket, notify_admins_ticket_reply
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 from ..schemas.tickets import (
@@ -161,6 +164,21 @@ async def create_ticket(
     # Refresh to get relationships
     await db.refresh(ticket, ["messages"])
 
+    # Уведомить админов о новом тикете (Telegram)
+    try:
+        await notify_admins_about_new_ticket(ticket, db)
+    except Exception as e:
+        logger.error(f"Error notifying admins about new ticket from cabinet: {e}")
+
+    # Уведомить админов в кабинете
+    try:
+        notification = await TicketNotificationCRUD.create_admin_notification_for_new_ticket(db, ticket)
+        if notification:
+            # Отправить WebSocket уведомление
+            await notify_admins_new_ticket(ticket.id, ticket.title, user.id)
+    except Exception as e:
+        logger.error(f"Error creating cabinet notification for new ticket: {e}")
+
     messages = [_message_to_response(m) for m in ticket.messages]
 
     return TicketDetailResponse(
@@ -267,5 +285,22 @@ async def add_ticket_message(
 
     await db.commit()
     await db.refresh(message)
+
+    # Уведомить админов об ответе пользователя (Telegram)
+    try:
+        await notify_admins_about_ticket_reply(ticket, request.message, db)
+    except Exception as e:
+        logger.error(f"Error notifying admins about ticket reply from cabinet: {e}")
+
+    # Уведомить админов в кабинете
+    try:
+        notification = await TicketNotificationCRUD.create_admin_notification_for_user_reply(
+            db, ticket, request.message
+        )
+        if notification:
+            # Отправить WebSocket уведомление
+            await notify_admins_ticket_reply(ticket.id, (request.message or "")[:100], user.id)
+    except Exception as e:
+        logger.error(f"Error creating cabinet notification for user reply: {e}")
 
     return _message_to_response(message)

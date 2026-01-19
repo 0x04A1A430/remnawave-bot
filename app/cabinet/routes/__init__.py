@@ -7,6 +7,8 @@ from .subscription import router as subscription_router
 from .balance import router as balance_router
 from .referral import router as referral_router
 from .tickets import router as tickets_router
+from .ticket_notifications import router as ticket_notifications_router
+from .ticket_notifications import admin_router as admin_ticket_notifications_router
 from .admin_tickets import router as admin_tickets_router
 from .admin_settings import router as admin_settings_router
 from .admin_apps import router as admin_apps_router
@@ -32,6 +34,7 @@ from .admin_payments import router as admin_payments_router
 from .admin_promo_offers import router as admin_promo_offers_router
 from .admin_remnawave import router as admin_remnawave_router
 from .media import router as media_router
+from .websocket import router as websocket_router
 
 # Main cabinet router
 router = APIRouter(prefix="/cabinet", tags=["Cabinet"])
@@ -41,6 +44,8 @@ router.include_router(auth_router)
 router.include_router(subscription_router)
 router.include_router(balance_router)
 router.include_router(referral_router)
+# Notifications router MUST be before tickets router to avoid route conflict
+router.include_router(ticket_notifications_router)
 router.include_router(tickets_router)
 router.include_router(promocode_router)
 router.include_router(contests_router)
@@ -54,7 +59,8 @@ router.include_router(media_router)
 # Wheel routes
 router.include_router(wheel_router)
 
-# Admin routes
+# Admin routes (notifications router MUST be before tickets router to avoid route conflict)
+router.include_router(admin_ticket_notifications_router)
 router.include_router(admin_tickets_router)
 router.include_router(admin_settings_router)
 router.include_router(admin_apps_router)
@@ -71,5 +77,8 @@ router.include_router(admin_users_router)
 router.include_router(admin_payments_router)
 router.include_router(admin_promo_offers_router)
 router.include_router(admin_remnawave_router)
+
+# WebSocket route
+router.include_router(websocket_router)
 
 __all__ = ["router"]

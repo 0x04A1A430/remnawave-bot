@@ -219,3 +219,32 @@ class SupportSettingsService:
             return cls._save()
         return True
 
+    # Cabinet notifications (веб-кабинет)
+    @classmethod
+    def get_cabinet_user_notifications_enabled(cls) -> bool:
+        """Уведомления юзерам в кабинет о ответе админа на тикет."""
+        cls._load()
+        if "cabinet_user_notifications_enabled" in cls._data:
+            return bool(cls._data["cabinet_user_notifications_enabled"])
+        return True  # По умолчанию включено
+
+    @classmethod
+    def set_cabinet_user_notifications_enabled(cls, enabled: bool) -> bool:
+        cls._load()
+        cls._data["cabinet_user_notifications_enabled"] = bool(enabled)
+        return cls._save()
+
+    @classmethod
+    def get_cabinet_admin_notifications_enabled(cls) -> bool:
+        """Уведомления админам в кабинет о новых тикетах."""
+        cls._load()
+        if "cabinet_admin_notifications_enabled" in cls._data:
+            return bool(cls._data["cabinet_admin_notifications_enabled"])
+        return True  # По умолчанию включено
+
+    @classmethod
+    def set_cabinet_admin_notifications_enabled(cls, enabled: bool) -> bool:
+        cls._load()
+        cls._data["cabinet_admin_notifications_enabled"] = bool(enabled)
+        return cls._save()
+
