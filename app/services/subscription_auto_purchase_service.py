@@ -56,6 +56,8 @@ class AutoExtendContext:
     traffic_limit_gb: Optional[int] = None
     squad_uuid: Optional[str] = None
     consume_promo_offer: bool = False
+    tariff_id: Optional[int] = None
+    allowed_squads: Optional[list] = None
 
 
 async def _prepare_auto_purchase(
@@ -273,6 +275,7 @@ async def _prepare_auto_extend_context(
 
     squad_uuid = cart_data.get("squad_uuid")
     consume_promo_offer = bool(cart_data.get("consume_promo_offer"))
+    allowed_squads = cart_data.get("allowed_squads")
 
     return AutoExtendContext(
         subscription=subscription,
@@ -283,15 +286,25 @@ async def _prepare_auto_extend_context(
         traffic_limit_gb=traffic_limit_gb,
         squad_uuid=squad_uuid,
         consume_promo_offer=consume_promo_offer,
+        tariff_id=tariff_id,
+        allowed_squads=allowed_squads,
     )
 
 
 def _apply_extension_updates(context: AutoExtendContext) -> None:
     """
-    Применяет обновления лимитов подписки (трафик, устройства, серверы).
+    Применяет обновления лимитов подписки (трафик, устройства, серверы, тариф).
     НЕ изменяет is_trial - это делается позже после успешного коммита продления.
     """
     subscription = context.subscription
+
+    # Обновляем tariff_id если указан в контексте
+    if context.tariff_id is not None:
+        subscription.tariff_id = context.tariff_id
+
+    # Обновляем allowed_squads если указаны (заменяем полностью)
+    if context.allowed_squads is not None:
+        subscription.connected_squads = context.allowed_squads
 
     # Обновляем лимиты для триальной подписки
     if subscription.is_trial:
@@ -528,6 +541,464 @@ async def _auto_extend_subscription(
     return True
 
 
+async def _auto_purchase_tariff(
+    db: AsyncSession,
+    user: User,
+    cart_data: dict,
+    *,
+    bot: Optional[Bot] = None,
+) -> bool:
+    """Автоматическая покупка периодного тарифа из сохранённой корзины."""
+    from datetime import datetime
+    from app.database.crud.tariff import get_tariff_by_id
+    from app.database.crud.subscription import create_paid_subscription, get_subscription_by_user_id, extend_subscription
+    from app.database.crud.transaction import create_transaction
+    from app.database.crud.user import subtract_user_balance
+    from app.database.crud.server_squad import get_all_server_squads
+    from app.database.models import TransactionType
+
+    tariff_id = _safe_int(cart_data.get("tariff_id"))
+    period_days = _safe_int(cart_data.get("period_days"))
+    discount_percent = _safe_int(cart_data.get("discount_percent"))
+
+    if not tariff_id or period_days <= 0:
+        logger.warning(
+            "🔁 Автопокупка тарифа: некорректные данные корзины для пользователя %s (tariff_id=%s, period=%s)",
+            user.telegram_id,
+            tariff_id,
+            period_days,
+        )
+        return False
+
+    tariff = await get_tariff_by_id(db, tariff_id)
+    if not tariff or not tariff.is_active:
+        logger.warning(
+            "🔁 Автопокупка тарифа: тариф %s недоступен для пользователя %s",
+            tariff_id,
+            user.telegram_id,
+        )
+        return False
+
+    # Получаем актуальную цену тарифа
+    prices = tariff.period_prices or {}
+    base_price = prices.get(str(period_days))
+    if base_price is None:
+        logger.warning(
+            "🔁 Автопокупка тарифа: период %s дней недоступен для тарифа %s",
+            period_days,
+            tariff_id,
+        )
+        return False
+
+    final_price = _apply_promo_discount_for_tariff(base_price, discount_percent)
+
+    if user.balance_kopeks < final_price:
+        logger.info(
+            "🔁 Автопокупка тарифа: у пользователя %s недостаточно средств (%s < %s)",
+            user.telegram_id,
+            user.balance_kopeks,
+            final_price,
+        )
+        return False
+
+    # Списываем баланс
+    try:
+        description = f"Покупка тарифа {tariff.name} на {period_days} дней"
+        success = await subtract_user_balance(db, user, final_price, description)
+        if not success:
+            logger.warning(
+                "❌ Автопокупка тарифа: не удалось списать баланс пользователя %s",
+                user.telegram_id,
+            )
+            return False
+    except Exception as error:
+        logger.error(
+            "❌ Автопокупка тарифа: ошибка списания баланса пользователя %s: %s",
+            user.telegram_id,
+            error,
+            exc_info=True,
+        )
+        return False
+
+    # Получаем список серверов из тарифа
+    squads = tariff.allowed_squads or []
+    if not squads:
+        all_servers, _ = await get_all_server_squads(db, available_only=True)
+        squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
+
+    # Проверяем есть ли уже подписка
+    existing_subscription = await get_subscription_by_user_id(db, user.id)
+
+    try:
+        if existing_subscription:
+            # Продлеваем существующую подписку
+            subscription = await extend_subscription(
+                db,
+                existing_subscription,
+                days=period_days,
+                tariff_id=tariff.id,
+                traffic_limit_gb=tariff.traffic_limit_gb,
+                device_limit=tariff.device_limit,
+                connected_squads=squads,
+            )
+            was_trial_conversion = existing_subscription.is_trial
+            if was_trial_conversion:
+                subscription.is_trial = False
+                subscription.status = "active"
+                user.has_had_paid_subscription = True
+                await db.commit()
+        else:
+            # Создаём новую подписку
+            subscription = await create_paid_subscription(
+                db=db,
+                user_id=user.id,
+                duration_days=period_days,
+                traffic_limit_gb=tariff.traffic_limit_gb,
+                device_limit=tariff.device_limit,
+                connected_squads=squads,
+                tariff_id=tariff.id,
+            )
+            was_trial_conversion = False
+    except Exception as error:
+        logger.error(
+            "❌ Автопокупка тарифа: ошибка создания подписки для пользователя %s: %s",
+            user.telegram_id,
+            error,
+            exc_info=True,
+        )
+        await db.rollback()
+        return False
+
+    # Создаём транзакцию
+    try:
+        transaction = await create_transaction(
+            db=db,
+            user_id=user.id,
+            type=TransactionType.SUBSCRIPTION_PAYMENT,
+            amount_kopeks=final_price,
+            description=description,
+        )
+    except Exception as error:
+        logger.warning(
+            "⚠️ Автопокупка тарифа: не удалось создать транзакцию для пользователя %s: %s",
+            user.telegram_id,
+            error,
+        )
+        transaction = None
+
+    # Обновляем Remnawave
+    try:
+        subscription_service = SubscriptionService()
+        await subscription_service.create_remnawave_user(
+            db,
+            subscription,
+            reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT,
+            reset_reason="покупка тарифа",
+        )
+    except Exception as error:
+        logger.warning(
+            "⚠️ Автопокупка тарифа: не удалось обновить Remnawave для пользователя %s: %s",
+            user.telegram_id,
+            error,
+        )
+
+    # Очищаем корзину
+    await user_cart_service.delete_user_cart(user.id)
+    await clear_subscription_checkout_draft(user.id)
+
+    # Уведомления
+    if bot:
+        texts = get_texts(getattr(user, "language", "ru"))
+        period_label = format_period_description(period_days, getattr(user, "language", "ru"))
+
+        try:
+            notification_service = AdminNotificationService(bot)
+            await notification_service.send_subscription_purchase_notification(
+                db, user, subscription, transaction, period_days, was_trial_conversion
+            )
+        except Exception as error:
+            logger.warning(
+                "⚠️ Автопокупка тарифа: не удалось уведомить админов о покупке пользователя %s: %s",
+                user.telegram_id,
+                error,
+            )
+
+        try:
+            message = texts.t(
+                "AUTO_PURCHASE_SUBSCRIPTION_SUCCESS",
+                "✅ Подписка на {period} автоматически оформлена после пополнения баланса.",
+            ).format(period=period_label)
+
+            hint = texts.t(
+                "AUTO_PURCHASE_SUBSCRIPTION_HINT",
+                "Перейдите в раздел «Моя подписка», чтобы получить ссылку.",
+            )
+
+            keyboard = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(
+                        text=texts.t("MY_SUBSCRIPTION_BUTTON", "📱 Моя подписка"),
+                        callback_data="menu_subscription",
+                    )],
+                    [InlineKeyboardButton(
+                        text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "🏠 Главное меню"),
+                        callback_data="back_to_menu",
+                    )],
+                ]
+            )
+
+            await bot.send_message(
+                chat_id=user.telegram_id,
+                text=f"{message}\n\n{hint}",
+                reply_markup=keyboard,
+                parse_mode="HTML",
+            )
+        except Exception as error:
+            logger.warning(
+                "⚠️ Автопокупка тарифа: не удалось уведомить пользователя %s: %s",
+                user.telegram_id,
+                error,
+            )
+
+    logger.info(
+        "✅ Автопокупка тарифа: подписка на тариф %s (%s дней) оформлена для пользователя %s",
+        tariff.name,
+        period_days,
+        user.telegram_id,
+    )
+
+    return True
+
+
+async def _auto_purchase_daily_tariff(
+    db: AsyncSession,
+    user: User,
+    cart_data: dict,
+    *,
+    bot: Optional[Bot] = None,
+) -> bool:
+    """Автоматическая покупка суточного тарифа из сохранённой корзины."""
+    from datetime import datetime, timedelta
+    from app.database.crud.tariff import get_tariff_by_id
+    from app.database.crud.subscription import create_paid_subscription, get_subscription_by_user_id
+    from app.database.crud.transaction import create_transaction
+    from app.database.crud.user import subtract_user_balance
+    from app.database.crud.server_squad import get_all_server_squads
+    from app.database.models import TransactionType
+
+    tariff_id = _safe_int(cart_data.get("tariff_id"))
+    if not tariff_id:
+        logger.warning(
+            "🔁 Автопокупка суточного тарифа: нет tariff_id в корзине пользователя %s",
+            user.telegram_id,
+        )
+        return False
+
+    tariff = await get_tariff_by_id(db, tariff_id)
+    if not tariff or not tariff.is_active:
+        logger.warning(
+            "🔁 Автопокупка суточного тарифа: тариф %s недоступен для пользователя %s",
+            tariff_id,
+            user.telegram_id,
+        )
+        return False
+
+    if not getattr(tariff, 'is_daily', False):
+        logger.warning(
+            "🔁 Автопокупка суточного тарифа: тариф %s не является суточным для пользователя %s",
+            tariff_id,
+            user.telegram_id,
+        )
+        return False
+
+    daily_price = getattr(tariff, 'daily_price_kopeks', 0)
+    if daily_price <= 0:
+        logger.warning(
+            "🔁 Автопокупка суточного тарифа: некорректная цена тарифа %s для пользователя %s",
+            tariff_id,
+            user.telegram_id,
+        )
+        return False
+
+    if user.balance_kopeks < daily_price:
+        logger.info(
+            "🔁 Автопокупка суточного тарифа: у пользователя %s недостаточно средств (%s < %s)",
+            user.telegram_id,
+            user.balance_kopeks,
+            daily_price,
+        )
+        return False
+
+    # Списываем баланс за первый день
+    try:
+        description = f"Активация суточного тарифа {tariff.name}"
+        success = await subtract_user_balance(db, user, daily_price, description)
+        if not success:
+            logger.warning(
+                "❌ Автопокупка суточного тарифа: не удалось списать баланс пользователя %s",
+                user.telegram_id,
+            )
+            return False
+    except Exception as error:
+        logger.error(
+            "❌ Автопокупка суточного тарифа: ошибка списания баланса пользователя %s: %s",
+            user.telegram_id,
+            error,
+            exc_info=True,
+        )
+        return False
+
+    # Получаем список серверов из тарифа
+    squads = tariff.allowed_squads or []
+    if not squads:
+        all_servers, _ = await get_all_server_squads(db, available_only=True)
+        squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
+
+    # Проверяем есть ли уже подписка
+    existing_subscription = await get_subscription_by_user_id(db, user.id)
+
+    try:
+        if existing_subscription:
+            # Обновляем существующую подписку на суточный тариф
+            # Суточность определяется через tariff.is_daily, поэтому достаточно установить tariff_id
+            was_trial_conversion = existing_subscription.is_trial  # Сохраняем до изменения
+            existing_subscription.tariff_id = tariff.id
+            existing_subscription.traffic_limit_gb = tariff.traffic_limit_gb
+            existing_subscription.device_limit = tariff.device_limit
+            existing_subscription.connected_squads = squads
+            existing_subscription.status = "active"
+            existing_subscription.is_trial = False
+            existing_subscription.last_daily_charge_at = datetime.utcnow()
+            existing_subscription.is_daily_paused = False
+            existing_subscription.end_date = datetime.utcnow() + timedelta(days=1)
+            if was_trial_conversion:
+                user.has_had_paid_subscription = True
+            await db.commit()
+            await db.refresh(existing_subscription)
+            subscription = existing_subscription
+        else:
+            # Создаём новую суточную подписку
+            # Суточность определяется через tariff.is_daily
+            subscription = await create_paid_subscription(
+                db=db,
+                user_id=user.id,
+                duration_days=1,
+                traffic_limit_gb=tariff.traffic_limit_gb,
+                device_limit=tariff.device_limit,
+                connected_squads=squads,
+                tariff_id=tariff.id,
+            )
+            # Устанавливаем параметры для суточного списания
+            subscription.last_daily_charge_at = datetime.utcnow()
+            subscription.is_daily_paused = False
+            await db.commit()
+            was_trial_conversion = False
+    except Exception as error:
+        logger.error(
+            "❌ Автопокупка суточного тарифа: ошибка создания подписки для пользователя %s: %s",
+            user.telegram_id,
+            error,
+            exc_info=True,
+        )
+        await db.rollback()
+        return False
+
+    # Создаём транзакцию
+    try:
+        transaction = await create_transaction(
+            db=db,
+            user_id=user.id,
+            type=TransactionType.SUBSCRIPTION_PAYMENT,
+            amount_kopeks=daily_price,
+            description=description,
+        )
+    except Exception as error:
+        logger.warning(
+            "⚠️ Автопокупка суточного тарифа: не удалось создать транзакцию для пользователя %s: %s",
+            user.telegram_id,
+            error,
+        )
+        transaction = None
+
+    # Обновляем Remnawave
+    try:
+        subscription_service = SubscriptionService()
+        await subscription_service.create_remnawave_user(
+            db,
+            subscription,
+            reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT,
+            reset_reason="активация суточного тарифа",
+        )
+    except Exception as error:
+        logger.warning(
+            "⚠️ Автопокупка суточного тарифа: не удалось обновить Remnawave для пользователя %s: %s",
+            user.telegram_id,
+            error,
+        )
+
+    # Очищаем корзину
+    await user_cart_service.delete_user_cart(user.id)
+    await clear_subscription_checkout_draft(user.id)
+
+    # Уведомления
+    if bot:
+        texts = get_texts(getattr(user, "language", "ru"))
+
+        try:
+            notification_service = AdminNotificationService(bot)
+            await notification_service.send_subscription_purchase_notification(
+                db, user, subscription, transaction, 1, was_trial_conversion
+            )
+        except Exception as error:
+            logger.warning(
+                "⚠️ Автопокупка суточного тарифа: не удалось уведомить админов о покупке пользователя %s: %s",
+                user.telegram_id,
+                error,
+            )
+
+        try:
+            message = (
+                f"✅ <b>Суточный тариф «{tariff.name}» активирован!</b>\n\n"
+                f"💰 Списано: {daily_price / 100:.0f} ₽ за первый день\n"
+                f"🔄 Средства будут списываться автоматически раз в сутки.\n\n"
+                f"ℹ️ Вы можете приостановить подписку в любой момент."
+            )
+
+            keyboard = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(
+                        text=texts.t("MY_SUBSCRIPTION_BUTTON", "📱 Моя подписка"),
+                        callback_data="menu_subscription",
+                    )],
+                    [InlineKeyboardButton(
+                        text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "🏠 Главное меню"),
+                        callback_data="back_to_menu",
+                    )],
+                ]
+            )
+
+            await bot.send_message(
+                chat_id=user.telegram_id,
+                text=message,
+                reply_markup=keyboard,
+                parse_mode="HTML",
+            )
+        except Exception as error:
+            logger.warning(
+                "⚠️ Автопокупка суточного тарифа: не удалось уведомить пользователя %s: %s",
+                user.telegram_id,
+                error,
+            )
+
+    logger.info(
+        "✅ Автопокупка суточного тарифа: тариф %s активирован для пользователя %s",
+        tariff.name,
+        user.telegram_id,
+    )
+
+    return True
+
+
 async def auto_purchase_saved_cart_after_topup(
     db: AsyncSession,
     user: User,
@@ -551,8 +1022,18 @@ async def auto_purchase_saved_cart_after_topup(
     )
 
     cart_mode = cart_data.get("cart_mode") or cart_data.get("mode")
+
+    # Обработка продления подписки
     if cart_mode == "extend":
         return await _auto_extend_subscription(db, user, cart_data, bot=bot)
+
+    # Обработка покупки периодного тарифа
+    if cart_mode == "tariff_purchase":
+        return await _auto_purchase_tariff(db, user, cart_data, bot=bot)
+
+    # Обработка покупки суточного тарифа
+    if cart_mode == "daily_tariff_purchase":
+        return await _auto_purchase_daily_tariff(db, user, cart_data, bot=bot)
 
     try:
         prepared = await _prepare_auto_purchase(db, user, cart_data)

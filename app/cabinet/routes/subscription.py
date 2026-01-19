@@ -31,6 +31,7 @@ from app.services.subscription_purchase_service import (
     PurchaseValidationError,
     PurchaseBalanceError,
 )
+from app.services.user_cart_service import user_cart_service
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 from ..schemas.subscription import (
@@ -334,9 +335,60 @@ async def renew_subscription(
 
     # Check balance
     if user.balance_kopeks < price_kopeks:
+        missing = price_kopeks - user.balance_kopeks
+
+        # Get tariff info for cart
+        tariff_id = user.subscription.tariff_id
+        tariff_name = None
+        tariff_traffic_limit_gb = None
+        tariff_device_limit = None
+        tariff_allowed_squads = None
+
+        if tariff_id:
+            tariff = await get_tariff_by_id(db, tariff_id)
+            if tariff:
+                tariff_name = tariff.name
+                tariff_traffic_limit_gb = tariff.traffic_limit_gb
+                tariff_device_limit = tariff.device_limit
+                tariff_allowed_squads = tariff.allowed_squads or []
+
+        # Save cart for auto-purchase after balance top-up
+        cart_data = {
+            'cart_mode': 'extend',
+            'subscription_id': user.subscription.id,
+            'tariff_id': tariff_id,
+            'period_days': request.period_days,
+            'total_price': price_kopeks,
+            'user_id': user.id,
+            'saved_cart': True,
+            'missing_amount': missing,
+            'return_to_cart': True,
+            'description': f"Продление подписки на {request.period_days} дней" + (f" ({tariff_name})" if tariff_name else ""),
+            'discount_percent': discount_percent,
+            'source': 'cabinet',
+        }
+
+        # Add tariff parameters for tariffs mode
+        if tariff_id:
+            cart_data['traffic_limit_gb'] = tariff_traffic_limit_gb
+            cart_data['device_limit'] = tariff_device_limit
+            cart_data['allowed_squads'] = tariff_allowed_squads
+
+        try:
+            await user_cart_service.save_user_cart(user.id, cart_data)
+            logger.info(f"Cart saved for auto-renewal (cabinet) user {user.id}")
+        except Exception as e:
+            logger.error(f"Error saving cart for auto-renewal (cabinet): {e}")
+
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Insufficient balance. Need {price_kopeks / 100:.2f} RUB, have {user.balance_kopeks / 100:.2f} RUB",
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail={
+                "code": "insufficient_funds",
+                "message": f"Недостаточно средств. Не хватает {settings.format_price(missing)}",
+                "missing_amount": missing,
+                "cart_saved": True,
+                "cart_mode": "extend",
+            },
         )
 
     # Deduct balance and extend subscription
@@ -1077,7 +1129,14 @@ async def preview_purchase(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> Dict[str, Any]:
-    """Calculate and preview the total price for selected options."""
+    """Calculate and preview the total price for selected options (classic mode only)."""
+    # This endpoint is for classic mode only, tariffs mode uses /purchase-tariff
+    if settings.is_tariffs_mode():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This endpoint is not available in tariffs mode. Use /purchase-tariff instead.",
+        )
+
     try:
         context = await purchase_service.build_options(db, user)
 
@@ -1115,7 +1174,14 @@ async def submit_purchase(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> Dict[str, Any]:
-    """Submit subscription purchase (deduct from balance)."""
+    """Submit subscription purchase (deduct from balance, classic mode only)."""
+    # This endpoint is for classic mode only, tariffs mode uses /purchase-tariff
+    if settings.is_tariffs_mode():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This endpoint is not available in tariffs mode. Use /purchase-tariff instead.",
+        )
+
     try:
         context = await purchase_service.build_options(db, user)
 
@@ -1147,9 +1213,35 @@ async def submit_purchase(
             detail=str(e),
         )
     except PurchaseBalanceError as e:
+        # Save cart for auto-purchase after balance top-up
+        try:
+            total_price = pricing.final_total if 'pricing' in locals() else 0
+            cart_data = {
+                'cart_mode': 'subscription_purchase',
+                'period_id': request.selection.period_id,
+                'period_days': request.selection.period_days,
+                'traffic_gb': request.selection.traffic_value,  # _prepare_auto_purchase expects traffic_gb
+                'countries': request.selection.servers,  # _prepare_auto_purchase expects countries
+                'devices': request.selection.devices,
+                'total_price': total_price,
+                'user_id': user.id,
+                'saved_cart': True,
+                'return_to_cart': True,
+                'source': 'cabinet',
+            }
+            await user_cart_service.save_user_cart(user.id, cart_data)
+            logger.info(f"Cart saved for auto-purchase (cabinet /purchase) user {user.id}")
+        except Exception as cart_error:
+            logger.error(f"Error saving cart for auto-purchase (cabinet /purchase): {cart_error}")
+
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail=str(e),
+            detail={
+                "code": "insufficient_funds",
+                "message": str(e),
+                "cart_saved": True,
+                "cart_mode": "subscription_purchase",
+            },
         )
     except Exception as e:
         logger.error(f"Failed to submit purchase for user {user.id}: {e}")
@@ -1265,12 +1357,57 @@ async def purchase_tariff(
         # Check balance
         if user.balance_kopeks < price_kopeks:
             missing = price_kopeks - user.balance_kopeks
+
+            # Save cart for auto-purchase after balance top-up
+            if is_daily_tariff:
+                cart_data = {
+                    'cart_mode': 'daily_tariff_purchase',
+                    'tariff_id': tariff.id,
+                    'is_daily': True,
+                    'daily_price_kopeks': price_kopeks,
+                    'total_price': price_kopeks,
+                    'user_id': user.id,
+                    'saved_cart': True,
+                    'missing_amount': missing,
+                    'return_to_cart': True,
+                    'description': f"Покупка суточного тарифа {tariff.name}",
+                    'traffic_limit_gb': tariff.traffic_limit_gb,
+                    'device_limit': tariff.device_limit,
+                    'allowed_squads': tariff.allowed_squads or [],
+                    'source': 'cabinet',
+                }
+            else:
+                cart_data = {
+                    'cart_mode': 'tariff_purchase',
+                    'tariff_id': tariff.id,
+                    'period_days': period_days,
+                    'total_price': price_kopeks,
+                    'user_id': user.id,
+                    'saved_cart': True,
+                    'missing_amount': missing,
+                    'return_to_cart': True,
+                    'description': f"Покупка тарифа {tariff.name} на {period_days} дней",
+                    'traffic_limit_gb': traffic_limit_gb,
+                    'device_limit': tariff.device_limit,
+                    'allowed_squads': tariff.allowed_squads or [],
+                    'discount_percent': discount_percent,
+                    'source': 'cabinet',
+                }
+
+            try:
+                await user_cart_service.save_user_cart(user.id, cart_data)
+                logger.info(f"Cart saved for auto-purchase (cabinet) user {user.id}, tariff {tariff.id}")
+            except Exception as e:
+                logger.error(f"Error saving cart for auto-purchase (cabinet): {e}")
+
             raise HTTPException(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
                 detail={
                     "code": "insufficient_funds",
                     "message": f"Недостаточно средств. Не хватает {settings.format_price(missing)}",
                     "missing_amount": missing,
+                    "cart_saved": True,
+                    "cart_mode": cart_data['cart_mode'],
                 },
             )
 
