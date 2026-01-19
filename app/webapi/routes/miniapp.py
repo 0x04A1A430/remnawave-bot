@@ -2941,10 +2941,13 @@ async def _load_subscription_links(
     if not info:
         return {}
 
+    # Проверяем настройку скрытия ссылки
+    hide_link = settings.should_hide_subscription_link()
+
     payload: Dict[str, Any] = {
         "links": list(info.links or []),
         "ss_conf_links": dict(info.ss_conf_links or {}),
-        "subscription_url": info.subscription_url,
+        "subscription_url": None if hide_link else info.subscription_url,
         "happ": info.happ,
         "happ_link": getattr(info, "happ_link", None),
         "happ_crypto_link": getattr(info, "happ_crypto_link", None),
@@ -3381,7 +3384,9 @@ async def get_subscription_details(
         status_actual = subscription.actual_status
         subscription_status_value = subscription.status
         links_payload = await _load_subscription_links(subscription)
-        subscription_url = (
+        # Проверяем настройку скрытия ссылки
+        hide_link = settings.should_hide_subscription_link()
+        subscription_url = None if hide_link else (
             links_payload.get("subscription_url") or subscription.subscription_url
         )
         subscription_crypto_link = (
