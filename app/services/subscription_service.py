@@ -320,11 +320,17 @@ class SubscriptionService:
             if not user or not user.remnawave_uuid:
                 logger.error(f"RemnaWave UUID не найден для пользователя {subscription.user_id}")
                 return None
-            
+
+            # Загружаем tariff заранее, чтобы избежать lazy loading в async контексте
+            try:
+                await db.refresh(subscription, ["tariff"])
+            except Exception:
+                pass  # tariff может быть None или уже загружен
+
             current_time = datetime.utcnow()
-            is_actually_active = (subscription.status == SubscriptionStatus.ACTIVE.value and 
+            is_actually_active = (subscription.status == SubscriptionStatus.ACTIVE.value and
                                  subscription.end_date > current_time)
-            
+
             if (subscription.status == SubscriptionStatus.ACTIVE.value and
                 subscription.end_date <= current_time):
 
