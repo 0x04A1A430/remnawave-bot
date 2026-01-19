@@ -249,6 +249,18 @@ def _validate_create_payload(payload: PromoCodeCreateRequest) -> None:
                 "Subscription days must be positive for this promo code type"
             )
 
+    if payload.type == PromoCodeType.DISCOUNT:
+        if payload.balance_bonus_kopeks <= 0 or payload.balance_bonus_kopeks > 100:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Discount percent must be between 1 and 100"
+            )
+        if payload.subscription_days <= 0:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Discount validity hours must be positive"
+            )
+
     if normalized_valid_from and normalized_valid_until and normalized_valid_from > normalized_valid_until:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
@@ -287,6 +299,18 @@ def _validate_update_payload(payload: PromoCodeUpdateRequest, promocode: PromoCo
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
                 "Subscription days must be positive for this promo code type"
+            )
+
+    if new_type == PromoCodeType.DISCOUNT:
+        if balance_bonus <= 0 or balance_bonus > 100:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Discount percent must be between 1 and 100"
+            )
+        if subscription_days <= 0:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Discount validity hours must be positive"
             )
 
     valid_from = (
