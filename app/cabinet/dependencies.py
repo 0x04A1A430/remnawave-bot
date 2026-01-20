@@ -18,6 +18,17 @@ logger = logging.getLogger(__name__)
 
 security = HTTPBearer(auto_error=False)
 
+# Кешированный Bot для проверки подписки на канал
+_channel_check_bot: Optional[Bot] = None
+
+
+def _get_channel_check_bot() -> Bot:
+    """Получить или создать Bot для проверки подписки на канал."""
+    global _channel_check_bot
+    if _channel_check_bot is None:
+        _channel_check_bot = Bot(token=settings.BOT_TOKEN)
+    return _channel_check_bot
+
 
 async def get_cabinet_db() -> AsyncSession:
     """Get database session for cabinet operations."""
@@ -108,12 +119,12 @@ async def get_current_cabinet_user(
         # Skip check for admins
         if not settings.is_admin(user.telegram_id):
             try:
-                bot = Bot(token=settings.BOT_TOKEN)
+                bot = _get_channel_check_bot()
                 chat_member = await bot.get_chat_member(
                     chat_id=settings.CHANNEL_SUB_ID,
                     user_id=user.telegram_id
                 )
-                await bot.session.close()
+                # Не закрываем сессию - бот переиспользуется
 
                 if chat_member.status not in ["member", "administrator", "creator"]:
                     raise HTTPException(
