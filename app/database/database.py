@@ -40,10 +40,10 @@ if IS_SQLITE:
 else:
     poolclass = AsyncAdaptedQueuePool
     pool_kwargs = {
-        "pool_size": 20,
-        "max_overflow": 30,
+        "pool_size": 30,  # Увеличен с 20
+        "max_overflow": 50,  # Увеличен с 30
         "pool_timeout": 30,
-        "pool_recycle": 3600,
+        "pool_recycle": 1800,  # Уменьшен с 3600 до 30 мин для более быстрого recycling
         "pool_pre_ping": True,
         # Агрессивная очистка мертвых соединений
         "pool_reset_on_return": "rollback",
@@ -62,7 +62,7 @@ _pg_connect_args = {
         "idle_in_transaction_session_timeout": "300000",  # 5 минут
     },
     "command_timeout": 60,
-    "timeout": 10,
+    "timeout": 30,  # Увеличен с 10 до 30 сек для высокой нагрузки
 }
 
 engine = create_async_engine(
