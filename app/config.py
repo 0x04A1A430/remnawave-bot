@@ -481,6 +481,21 @@ class Settings(BaseSettings):
     # Публичный IP сервера для Freekassa API (если не задан - определяется автоматически)
     SERVER_PUBLIC_IP: Optional[str] = None
 
+    # KassaAI (api.fk.life) - отдельная платёжка
+    KASSA_AI_ENABLED: bool = False
+    KASSA_AI_SHOP_ID: Optional[int] = None
+    KASSA_AI_API_KEY: Optional[str] = None
+    KASSA_AI_SECRET_WORD_2: Optional[str] = None  # Для webhook
+    KASSA_AI_DISPLAY_NAME: str = "KassaAI"
+    KASSA_AI_CURRENCY: str = "RUB"
+    KASSA_AI_MIN_AMOUNT_KOPEKS: int = 10000  # 100 руб
+    KASSA_AI_MAX_AMOUNT_KOPEKS: int = 100000000  # 1 000 000 руб
+    KASSA_AI_WEBHOOK_PATH: str = "/kassa-ai-webhook"
+    KASSA_AI_WEBHOOK_HOST: str = "0.0.0.0"
+    KASSA_AI_WEBHOOK_PORT: int = 8089
+    # Способ оплаты: 44 = СБП (QR код), 36 = Карты РФ, 43 = SberPay
+    KASSA_AI_PAYMENT_SYSTEM_ID: int = 44
+
     MAIN_MENU_MODE: str = "default"
     CONNECT_BUTTON_MODE: str = "guide"
     MINIAPP_CUSTOM_URL: str = ""
@@ -1651,6 +1666,21 @@ class Settings(BaseSettings):
 
     def get_freekassa_display_name_html(self) -> str:
         return html.escape(self.get_freekassa_display_name())
+
+    def is_kassa_ai_enabled(self) -> bool:
+        return (
+            self.KASSA_AI_ENABLED
+            and self.KASSA_AI_SHOP_ID is not None
+            and self.KASSA_AI_API_KEY is not None
+            and self.KASSA_AI_SECRET_WORD_2 is not None
+        )
+
+    def get_kassa_ai_display_name(self) -> str:
+        name = (self.KASSA_AI_DISPLAY_NAME or "").strip()
+        return name if name else "KassaAI"
+
+    def get_kassa_ai_display_name_html(self) -> str:
+        return html.escape(self.get_kassa_ai_display_name())
 
     def is_payment_verification_auto_check_enabled(self) -> bool:
         return self.PAYMENT_VERIFICATION_AUTO_CHECK_ENABLED

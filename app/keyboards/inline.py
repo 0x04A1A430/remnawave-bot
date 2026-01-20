@@ -1471,6 +1471,16 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         ])
         has_direct_payment_methods = True
 
+    if settings.is_kassa_ai_enabled():
+        kassa_ai_name = settings.get_kassa_ai_display_name()
+        keyboard.append([
+            InlineKeyboardButton(
+                text=texts.t("PAYMENT_KASSA_AI", f"💳 {kassa_ai_name}"),
+                callback_data=_build_callback("kassa_ai")
+            )
+        ])
+        has_direct_payment_methods = True
+
     if settings.is_support_topup_enabled():
         keyboard.append([
             InlineKeyboardButton(
