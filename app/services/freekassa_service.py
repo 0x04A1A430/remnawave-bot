@@ -266,7 +266,7 @@ class FreekassaService:
             params["i"] = ps_id
 
         query = "&".join(f"{k}={v}" for k, v in params.items())
-        return f"https://pay.freekassa.ru/?{query}"
+        return f"https://pay.fk.money/?{query}"
 
     async def create_order(
         self,
