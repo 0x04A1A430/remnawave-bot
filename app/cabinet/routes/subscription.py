@@ -33,6 +33,7 @@ from app.services.subscription_purchase_service import (
     PurchaseBalanceError,
 )
 from app.services.user_cart_service import user_cart_service
+from app.utils.cache import cache, cache_key, RateLimitCache
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 from ..schemas.subscription import (
@@ -3175,3 +3176,125 @@ async def switch_traffic_package(
         "balance_kopeks": user.balance_kopeks,
         "balance_label": settings.format_price(user.balance_kopeks),
     }
+
+
+# ============ Traffic Refresh ============
+
+# Rate limit: 1 request per 60 seconds per user
+TRAFFIC_REFRESH_RATE_LIMIT = 1
+TRAFFIC_REFRESH_RATE_WINDOW = 60  # seconds
+TRAFFIC_CACHE_TTL = 60  # Cache traffic data for 60 seconds
+
+
+@router.post("/refresh-traffic")
+async def refresh_traffic(
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """
+    Refresh traffic usage from RemnaWave panel.
+    Rate limited to 1 request per 60 seconds.
+    """
+    if not user.subscription:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No active subscription",
+        )
+
+    # Check rate limit
+    is_limited = await RateLimitCache.is_rate_limited(
+        user.telegram_id,
+        "traffic_refresh",
+        TRAFFIC_REFRESH_RATE_LIMIT,
+        TRAFFIC_REFRESH_RATE_WINDOW,
+    )
+
+    if is_limited:
+        # Check if we have cached data
+        traffic_cache_key = cache_key("traffic", user.telegram_id)
+        cached_data = await cache.get(traffic_cache_key)
+
+        if cached_data:
+            return {
+                "success": True,
+                "cached": True,
+                "rate_limited": True,
+                "retry_after_seconds": TRAFFIC_REFRESH_RATE_WINDOW,
+                **cached_data,
+            }
+
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Rate limited. Try again in {TRAFFIC_REFRESH_RATE_WINDOW} seconds.",
+            headers={"Retry-After": str(TRAFFIC_REFRESH_RATE_WINDOW)},
+        )
+
+    # Fetch traffic from RemnaWave
+    try:
+        remnawave_service = RemnaWaveService()
+        traffic_stats = await remnawave_service.get_user_traffic_stats(user.telegram_id)
+
+        if not traffic_stats:
+            # Return current database values if RemnaWave unavailable
+            traffic_data = {
+                "traffic_used_bytes": int((user.subscription.traffic_used_gb or 0) * (1024**3)),
+                "traffic_used_gb": round(user.subscription.traffic_used_gb or 0, 2),
+                "traffic_limit_bytes": int((user.subscription.traffic_limit_gb or 0) * (1024**3)),
+                "traffic_limit_gb": user.subscription.traffic_limit_gb or 0,
+                "traffic_used_percent": round(
+                    ((user.subscription.traffic_used_gb or 0) / (user.subscription.traffic_limit_gb or 1)) * 100
+                    if user.subscription.traffic_limit_gb
+                    else 0,
+                    1,
+                ),
+                "is_unlimited": (user.subscription.traffic_limit_gb or 0) == 0,
+            }
+            return {
+                "success": True,
+                "cached": False,
+                "source": "database",
+                **traffic_data,
+            }
+
+        # Update subscription with fresh data
+        used_gb = traffic_stats.get("used_traffic_gb", 0)
+        if abs((user.subscription.traffic_used_gb or 0) - used_gb) > 0.01:
+            user.subscription.traffic_used_gb = used_gb
+            user.subscription.updated_at = datetime.utcnow()
+            await db.commit()
+
+        # Calculate percentage
+        limit_gb = user.subscription.traffic_limit_gb or 0
+        if limit_gb > 0:
+            percent = min(100, (used_gb / limit_gb) * 100)
+        else:
+            percent = 0
+
+        traffic_data = {
+            "traffic_used_bytes": traffic_stats.get("used_traffic_bytes", 0),
+            "traffic_used_gb": round(used_gb, 2),
+            "traffic_limit_bytes": traffic_stats.get("traffic_limit_bytes", 0),
+            "traffic_limit_gb": limit_gb,
+            "traffic_used_percent": round(percent, 1),
+            "is_unlimited": limit_gb == 0,
+            "lifetime_used_bytes": traffic_stats.get("lifetime_used_traffic_bytes", 0),
+            "lifetime_used_gb": round(traffic_stats.get("lifetime_used_traffic_gb", 0), 2),
+        }
+
+        # Cache the result
+        traffic_cache_key = cache_key("traffic", user.telegram_id)
+        await cache.set(traffic_cache_key, traffic_data, TRAFFIC_CACHE_TTL)
+
+        return {
+            "success": True,
+            "cached": False,
+            "source": "remnawave",
+            **traffic_data,
+        }
+
+    except Exception as e:
+        logger.error(f"Error refreshing traffic for user {user.telegram_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to refresh traffic data",
+        )
