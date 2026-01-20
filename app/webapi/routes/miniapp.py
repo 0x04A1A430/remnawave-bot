@@ -209,6 +209,17 @@ router = APIRouter()
 promo_code_service = PromoCodeService()
 renewal_service = SubscriptionRenewalService()
 
+# Кешированный Bot для проверки подписки на канал (снижает нагрузку)
+_channel_check_bot: Optional[Bot] = None
+
+
+def _get_channel_check_bot() -> Bot:
+    """Получить или создать Bot для проверки подписки на канал."""
+    global _channel_check_bot
+    if _channel_check_bot is None:
+        _channel_check_bot = Bot(token=settings.BOT_TOKEN)
+    return _channel_check_bot
+
 
 _CRYPTOBOT_MIN_USD = 1.0
 _CRYPTOBOT_MAX_USD = 1000.0
@@ -3127,12 +3138,12 @@ async def get_subscription_details(
     # Check required channel subscription
     if settings.CHANNEL_IS_REQUIRED_SUB and settings.CHANNEL_SUB_ID:
         try:
-            bot = Bot(token=settings.BOT_TOKEN)
+            bot = _get_channel_check_bot()
             chat_member = await bot.get_chat_member(
                 chat_id=settings.CHANNEL_SUB_ID,
                 user_id=telegram_id
             )
-            await bot.session.close()
+            # Не закрываем сессию - бот переиспользуется
 
             if chat_member.status not in ["member", "administrator", "creator"]:
                 raise HTTPException(
