@@ -2108,6 +2108,7 @@ async def get_available_countries(
 ) -> Dict[str, Any]:
     """Get available countries/servers for the user."""
     from app.database.crud.server_squad import get_available_server_squads
+    from app.utils.pricing_utils import calculate_prorated_price, apply_percentage_discount
 
     await db.refresh(user, ["subscription"])
 
@@ -2118,25 +2119,59 @@ async def get_available_countries(
     )
 
     connected_squads = []
+    days_left = 0
     if user.subscription:
         connected_squads = user.subscription.connected_squads or []
+        # Calculate days left for prorated pricing
+        if user.subscription.end_date:
+            from datetime import datetime
+            delta = user.subscription.end_date - datetime.utcnow()
+            days_left = max(0, delta.days)
+
+    # Get discount from promo group
+    servers_discount_percent = 0
+    promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else None
+    if promo_group:
+        servers_discount_percent = promo_group.get_discount_percent("servers", None)
 
     countries = []
     for server in available_servers:
+        base_price = server.price_kopeks
+
+        # Apply discount
+        if servers_discount_percent > 0:
+            discounted_price, _ = apply_percentage_discount(base_price, servers_discount_percent)
+        else:
+            discounted_price = base_price
+
+        # Calculate prorated price if subscription exists
+        prorated_price = discounted_price
+        if user.subscription and user.subscription.end_date:
+            prorated_price, _ = calculate_prorated_price(
+                discounted_price,
+                user.subscription.end_date,
+            )
+
         countries.append({
             "uuid": server.squad_uuid,
             "name": server.display_name,
             "country_code": server.country_code,
-            "price_kopeks": server.price_kopeks,
-            "price_rubles": server.price_kopeks / 100,
+            "base_price_kopeks": base_price,
+            "price_kopeks": prorated_price,  # Prorated price with discount
+            "price_per_month_kopeks": discounted_price,  # Monthly price with discount
+            "price_rubles": prorated_price / 100,
             "is_available": server.is_available and not server.is_full,
             "is_connected": server.squad_uuid in connected_squads,
+            "has_discount": servers_discount_percent > 0,
+            "discount_percent": servers_discount_percent,
         })
 
     return {
         "countries": countries,
         "connected_count": len(connected_squads),
         "has_subscription": user.subscription is not None,
+        "days_left": days_left,
+        "discount_percent": servers_discount_percent,
     }
 
 
