@@ -3758,6 +3758,7 @@ async def handle_trial_payment_method(
         elif payment_method == "yookassa_sbp":
             # Оплата через YooKassa СБП
             payment_result = await payment_service.create_yookassa_sbp_payment(
+                db=db,
                 amount_kopeks=trial_price_kopeks,
                 description=texts.t("PAID_TRIAL_PAYMENT_DESC", "Пробная подписка на {days} дней").format(
                     days=settings.TRIAL_DURATION_DAYS
