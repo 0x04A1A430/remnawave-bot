@@ -209,6 +209,17 @@ router = APIRouter()
 promo_code_service = PromoCodeService()
 renewal_service = SubscriptionRenewalService()
 
+# Кешированный Bot для проверки подписки на канал (снижает нагрузку)
+_channel_check_bot: Optional[Bot] = None
+
+
+def _get_channel_check_bot() -> Bot:
+    """Получить или создать Bot для проверки подписки на канал."""
+    global _channel_check_bot
+    if _channel_check_bot is None:
+        _channel_check_bot = Bot(token=settings.BOT_TOKEN)
+    return _channel_check_bot
+
 
 _CRYPTOBOT_MIN_USD = 1.0
 _CRYPTOBOT_MAX_USD = 1000.0
@@ -3089,6 +3100,18 @@ async def get_subscription_details(
     payload: MiniAppSubscriptionRequest,
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppSubscriptionResponse:
+    # Check maintenance mode first
+    if maintenance_service.is_maintenance_active():
+        status_info = maintenance_service.get_status_info()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "maintenance",
+                "message": maintenance_service.get_maintenance_message() or "Service is under maintenance",
+                "reason": status_info.get("reason"),
+            },
+        )
+
     try:
         webapp_data = parse_webapp_init_data(payload.init_data, settings.BOT_TOKEN)
     except TelegramWebAppAuthError as error:
@@ -3111,6 +3134,31 @@ async def get_subscription_details(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid Telegram user identifier",
         ) from None
+
+    # Check required channel subscription
+    if settings.CHANNEL_IS_REQUIRED_SUB and settings.CHANNEL_SUB_ID:
+        try:
+            bot = _get_channel_check_bot()
+            chat_member = await bot.get_chat_member(
+                chat_id=settings.CHANNEL_SUB_ID,
+                user_id=telegram_id
+            )
+            # Не закрываем сессию - бот переиспользуется
+
+            if chat_member.status not in ["member", "administrator", "creator"]:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail={
+                        "code": "channel_subscription_required",
+                        "message": "Please subscribe to our channel to continue",
+                        "channel_link": settings.CHANNEL_LINK,
+                    },
+                )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning(f"Failed to check channel subscription for user {telegram_id}: {e}")
+            # Don't block user if check fails
 
     user = await get_user_by_telegram_id(db, telegram_id)
     purchase_url = (settings.MINIAPP_PURCHASE_URL or "").strip()
@@ -3367,6 +3415,7 @@ async def get_subscription_details(
     subscription_url: Optional[str] = None
     subscription_crypto_link: Optional[str] = None
     happ_redirect_link: Optional[str] = None
+    hide_subscription_link: bool = False
     remnawave_short_uuid: Optional[str] = None
     status_actual = "missing"
     subscription_status_value = "none"
@@ -3381,6 +3430,8 @@ async def get_subscription_details(
         status_actual = subscription.actual_status
         subscription_status_value = subscription.status
         links_payload = await _load_subscription_links(subscription)
+        # Флаг скрытия ссылки (скрывается только текст, кнопки работают)
+        hide_subscription_link = settings.should_hide_subscription_link()
         subscription_url = (
             links_payload.get("subscription_url") or subscription.subscription_url
         )
@@ -3533,6 +3584,7 @@ async def get_subscription_details(
         remnawave_short_uuid=remnawave_short_uuid,
         user=response_user,
         subscription_url=subscription_url,
+        hide_subscription_link=hide_subscription_link,
         subscription_crypto_link=subscription_crypto_link,
         subscription_purchase_url=purchase_url or None,
         links=links,
@@ -3543,7 +3595,7 @@ async def get_subscription_details(
         connected_devices=devices,
         happ=links_payload.get("happ") if subscription else None,
         happ_link=links_payload.get("happ_link") if subscription else None,
-        happ_crypto_link=links_payload.get("happ_crypto_link") if subscription else None,
+        happ_crypto_link=subscription_crypto_link,  # Используем уже вычисленное значение с fallback
         happ_cryptolink_redirect_link=happ_redirect_link,
         happ_cryptolink_redirect_template=settings.get_happ_cryptolink_redirect_template(),
         balance_kopeks=user.balance_kopeks,
@@ -6738,8 +6790,14 @@ async def purchase_tariff_endpoint(
         await db.refresh(subscription)
 
     # Синхронизируем с RemnaWave
+    # При покупке тарифа ВСЕГДА сбрасываем трафик в панели
     service = SubscriptionService()
-    await service.update_remnawave_user(db, subscription)
+    await service.update_remnawave_user(
+        db,
+        subscription,
+        reset_traffic=True,
+        reset_reason="покупка тарифа (miniapp)",
+    )
 
     # Сохраняем корзину для автопродления
     try:

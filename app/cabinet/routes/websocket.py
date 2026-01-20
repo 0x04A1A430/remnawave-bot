@@ -41,7 +41,7 @@ class CabinetConnectionManager:
                     self._admin_connections[user_id] = set()
                 self._admin_connections[user_id].add(websocket)
 
-        logger.info(
+        logger.debug(
             "Cabinet WS connected: user_id=%d, is_admin=%s, total_users=%d",
             user_id, is_admin, len(self._user_connections)
         )
@@ -59,7 +59,7 @@ class CabinetConnectionManager:
                 if not self._admin_connections[user_id]:
                     del self._admin_connections[user_id]
 
-        logger.info("Cabinet WS disconnected: user_id=%d", user_id)
+        logger.debug("Cabinet WS disconnected: user_id=%d", user_id)
 
     async def send_to_user(self, user_id: int, message: dict) -> None:
         """Отправить сообщение конкретному пользователю."""
@@ -160,7 +160,9 @@ async def cabinet_websocket_endpoint(websocket: WebSocket):
     token = websocket.query_params.get("token")
 
     if not token:
-        logger.warning("Cabinet WS: No token from %s", client_host)
+        logger.debug("Cabinet WS: No token from %s", client_host)
+        # Принимаем и сразу закрываем с кодом ошибки
+        await websocket.accept()
         await websocket.close(code=1008, reason="Unauthorized: No token")
         return
 
@@ -168,14 +170,16 @@ async def cabinet_websocket_endpoint(websocket: WebSocket):
     user_id, is_admin = await verify_cabinet_ws_token(token)
 
     if not user_id:
-        logger.warning("Cabinet WS: Invalid token from %s", client_host)
+        logger.debug("Cabinet WS: Invalid token from %s", client_host)
+        # Принимаем и сразу закрываем с кодом ошибки
+        await websocket.accept()
         await websocket.close(code=1008, reason="Unauthorized: Invalid token")
         return
 
     # Принимаем соединение
     try:
         await websocket.accept()
-        logger.info("Cabinet WS accepted: user_id=%d, is_admin=%s", user_id, is_admin)
+        logger.debug("Cabinet WS accepted: user_id=%d, is_admin=%s", user_id, is_admin)
     except Exception as e:
         logger.error("Cabinet WS: Failed to accept from %s: %s", client_host, e)
         return
@@ -210,7 +214,7 @@ async def cabinet_websocket_endpoint(websocket: WebSocket):
                 break
 
     except WebSocketDisconnect:
-        logger.info("Cabinet WS disconnected: user_id=%d", user_id)
+        logger.debug("Cabinet WS disconnected: user_id=%d", user_id)
     except Exception as e:
         logger.exception("Cabinet WS error: %s", e)
     finally:

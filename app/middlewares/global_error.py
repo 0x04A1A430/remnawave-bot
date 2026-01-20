@@ -25,11 +25,15 @@ class GlobalErrorMiddleware(BaseMiddleware):
     
     async def _handle_telegram_error(self, event: TelegramObject, error: TelegramBadRequest):
         error_message = str(error).lower()
-        
+
         if self._is_old_query_error(error_message):
             return await self._handle_old_query(event, error)
         elif self._is_message_not_modified_error(error_message):
             return await self._handle_message_not_modified(event, error)
+        elif self._is_topic_required_error(error_message):
+            # Канал с топиками — просто игнорируем
+            logger.debug(f"📋 [GlobalErrorMiddleware] Игнорируем ошибку топика: {error}")
+            return None
         elif self._is_bad_request_error(error_message):
             return await self._handle_bad_request(event, error)
         else:
@@ -52,6 +56,14 @@ class GlobalErrorMiddleware(BaseMiddleware):
             "chat not found",
             "bot was blocked by the user",
             "user is deactivated"
+        ])
+
+    def _is_topic_required_error(self, error_message: str) -> bool:
+        return any(phrase in error_message for phrase in [
+            "topic must be specified",
+            "topic_closed",
+            "topic_deleted",
+            "forum_closed"
         ])
     
     async def _handle_old_query(self, event: TelegramObject, error: TelegramBadRequest):

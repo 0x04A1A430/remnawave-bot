@@ -3,6 +3,7 @@
 import base64
 import json
 import logging
+import re
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
 
@@ -32,6 +33,7 @@ from app.services.subscription_purchase_service import (
     PurchaseBalanceError,
 )
 from app.services.user_cart_service import user_cart_service
+from app.utils.cache import cache, cache_key, RateLimitCache
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 from ..schemas.subscription import (
@@ -130,6 +132,9 @@ def _subscription_to_response(
         if last_charge:
             next_daily_charge_at = last_charge + timedelta(days=1)
 
+    # Проверяем настройку скрытия ссылки (скрывается только текст, кнопки работают)
+    hide_link = settings.should_hide_subscription_link()
+
     return SubscriptionResponse(
         id=subscription.id,
         status=actual_status,  # Use actual_status instead of raw status
@@ -149,6 +154,7 @@ def _subscription_to_response(
         autopay_enabled=subscription.autopay_enabled or False,
         autopay_days_before=subscription.autopay_days_before or 3,
         subscription_url=subscription.subscription_url,
+        hide_subscription_link=hide_link,
         is_active=is_active,
         is_expired=is_expired,
         traffic_purchases=traffic_purchases or [],
@@ -638,7 +644,10 @@ async def purchase_traffic(
     # Синхронизируем с RemnaWave
     try:
         subscription_service = SubscriptionService()
-        await subscription_service.update_remnawave_user(db, subscription)
+        if getattr(user, "remnawave_uuid", None):
+            await subscription_service.update_remnawave_user(db, subscription)
+        else:
+            await subscription_service.create_remnawave_user(db, subscription)
     except Exception as e:
         logger.error(f"Failed to sync traffic with RemnaWave: {e}")
 
@@ -1476,8 +1485,25 @@ async def purchase_tariff(
             await db.refresh(subscription)
 
         # Sync with RemnaWave
+        # При покупке тарифа ВСЕГДА сбрасываем трафик в панели
         service = SubscriptionService()
-        await service.update_remnawave_user(db, subscription)
+        try:
+            if getattr(user, "remnawave_uuid", None):
+                await service.update_remnawave_user(
+                    db,
+                    subscription,
+                    reset_traffic=True,
+                    reset_reason="покупка тарифа (cabinet)",
+                )
+            else:
+                await service.create_remnawave_user(
+                    db,
+                    subscription,
+                    reset_traffic=True,
+                    reset_reason="покупка тарифа (cabinet)",
+                )
+        except Exception as remnawave_error:
+            logger.error(f"Failed to sync subscription with RemnaWave: {remnawave_error}")
 
         # Save cart for auto-renewal (not for daily tariffs - they have their own charging)
         if not is_daily_tariff:
@@ -1557,25 +1583,34 @@ async def purchase_devices(
                 detail="Ваша подписка неактивна",
             )
 
-        # Get tariff for device price
+        # Get tariff for device price (if exists)
         tariff = None
         if subscription.tariff_id:
             from app.database.crud.tariff import get_tariff_by_id
             tariff = await get_tariff_by_id(db, subscription.tariff_id)
 
-        if not tariff or not tariff.device_price_kopeks:
+        # Determine device price and max limit from tariff or settings
+        if tariff and tariff.device_price_kopeks:
+            device_price = tariff.device_price_kopeks
+            max_device_limit = tariff.max_device_limit
+        else:
+            # Classic mode - use settings
+            device_price = settings.PRICE_PER_DEVICE
+            max_device_limit = settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else None
+
+        if not device_price or device_price <= 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Докупка устройств недоступна для вашего тарифа",
+                detail="Докупка устройств недоступна",
             )
 
         # Check max device limit
         current_devices = subscription.device_limit or 1
         new_device_count = current_devices + request.devices
-        if tariff.max_device_limit and new_device_count > tariff.max_device_limit:
+        if max_device_limit and new_device_count > max_device_limit:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Максимальное количество устройств для вашего тарифа: {tariff.max_device_limit}",
+                detail=f"Максимальное количество устройств: {max_device_limit}",
             )
 
         # Calculate prorated price based on remaining days
@@ -1589,7 +1624,7 @@ async def purchase_devices(
         total_days = 30  # Base period for device price calculation
 
         # Price = device_price * devices * (days_left / 30)
-        price_kopeks = int(tariff.device_price_kopeks * request.devices * days_left / total_days)
+        price_kopeks = int(device_price * request.devices * days_left / total_days)
         price_kopeks = max(100, price_kopeks)  # Minimum 1 ruble
 
         # Check balance
@@ -1621,7 +1656,13 @@ async def purchase_devices(
 
         # Sync with RemnaWave
         service = SubscriptionService()
-        await service.update_remnawave_user(db, subscription)
+        try:
+            if getattr(user, "remnawave_uuid", None):
+                await service.update_remnawave_user(db, subscription)
+            else:
+                await service.create_remnawave_user(db, subscription)
+        except Exception as e:
+            logger.error(f"Failed to sync devices with RemnaWave: {e}")
 
         await db.refresh(user)
 
@@ -1671,15 +1712,23 @@ async def get_device_price(
         from app.database.crud.tariff import get_tariff_by_id
         tariff = await get_tariff_by_id(db, subscription.tariff_id)
 
-    if not tariff or not tariff.device_price_kopeks:
+    # Determine device price and max limit from tariff or settings
+    if tariff and tariff.device_price_kopeks:
+        device_price = tariff.device_price_kopeks
+        max_device_limit = tariff.max_device_limit
+    else:
+        # Classic mode - use settings
+        device_price = settings.PRICE_PER_DEVICE
+        max_device_limit = settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else None
+
+    if not device_price or device_price <= 0:
         return {
             "available": False,
-            "reason": "Докупка устройств недоступна для вашего тарифа",
+            "reason": "Докупка устройств недоступна",
         }
 
     # Check max device limit
     current_devices = subscription.device_limit or 1
-    max_device_limit = tariff.max_device_limit
     can_add = max_device_limit - current_devices if max_device_limit else None
 
     if max_device_limit and current_devices >= max_device_limit:
@@ -1709,7 +1758,7 @@ async def get_device_price(
     days_left = max(1, (end_date - now).days)
     total_days = 30
 
-    price_per_device_kopeks = int(tariff.device_price_kopeks * days_left / total_days)
+    price_per_device_kopeks = int(device_price * days_left / total_days)
     price_per_device_kopeks = max(100, price_per_device_kopeks)
     total_price_kopeks = price_per_device_kopeks * devices
 
@@ -1724,7 +1773,7 @@ async def get_device_price(
         "max_device_limit": max_device_limit,
         "can_add": can_add,
         "days_left": days_left,
-        "base_device_price_kopeks": tariff.device_price_kopeks,
+        "base_device_price_kopeks": device_price,
     }
 
 
@@ -1796,67 +1845,127 @@ def _convert_remnawave_block_to_step(block: Dict[str, Any], url_scheme: str = ""
     return step
 
 
-# Known app URL schemes (fallback if RemnaWave doesn't provide urlScheme)
-KNOWN_APP_URL_SCHEMES = {
-    # iOS
-    "happ": "happ://add/",
-    "streisand": "streisand://import/",
-    "shadowrocket": "sub://",
-    "shadow rocket": "sub://",
-    "karing": "karing://install-config?url=",
-    "foxray": "foxray://yiguo.dev/sub/add/?url=",
-    "fox ray": "foxray://yiguo.dev/sub/add/?url=",
-    "v2box": "v2box://install-sub?url=",
-    "sing-box": "sing-box://import-remote-profile?url=",
-    "singbox": "sing-box://import-remote-profile?url=",
-    "quantumult x": "quantumult-x://add-resource?remote-resource=",
-    "quantumultx": "quantumult-x://add-resource?remote-resource=",
-    "quantumult": "quantumult-x://add-resource?remote-resource=",
-    "surge": "surge3://install-config?url=",
-    "loon": "loon://import?sub=",
-    "stash": "stash://install-config?url=",
-    # Android
-    "v2rayn": "v2rayng://install-sub?url=",
-    "v2rayng": "v2rayng://install-sub?url=",
-    "v2ray ng": "v2rayng://install-sub?url=",
-    "nekoray": "sn://subscription?url=",
-    "nekobox": "sn://subscription?url=",
-    "neko ray": "sn://subscription?url=",
-    "neko box": "sn://subscription?url=",
-    "surfboard": "surfboard://install-config?url=",
-    # PC (Windows/macOS/Linux)
-    "clash": "clash://install-config?url=",
-    "clash meta": "clash://install-config?url=",
-    "clash verge": "clash://install-config?url=",
-    "clash verge rev": "clash://install-config?url=",
-    "clashx": "clashx://install-config?url=",
-    "clashx meta": "clash://install-config?url=",
-    "clashx pro": "clash://install-config?url=",
-    "flclash": "clash://install-config?url=",
-    "flclashx": "clash://install-config?url=",
-    "koala clash": "clash://install-config?url=",
-    "koalaclash": "clash://install-config?url=",
-    "hiddify": "hiddify://install-config/?url=",
-    "hiddify next": "hiddify://install-config/?url=",
-    "mihomo party": "clash://install-config?url=",
-    "mihomo": "clash://install-config?url=",
-}
+
+def _extract_scheme_from_buttons(buttons: List[Dict[str, Any]]) -> str:
+    """Extract URL scheme from buttons list."""
+    for btn in buttons:
+        if not isinstance(btn, dict):
+            continue
+        link = btn.get("link", "") or btn.get("url", "") or btn.get("buttonLink", "")
+        if not link:
+            continue
+        # Check for subscription link placeholder (case-insensitive)
+        link_upper = link.upper()
+        if "{{SUBSCRIPTION_LINK}}" in link_upper or "SUBSCRIPTION_LINK" in link_upper:
+            # Extract scheme: "prizrak-box://install-config?url={{SUBSCRIPTION_LINK}}" -> "prizrak-box://install-config?url="
+            scheme = re.sub(r'\{\{SUBSCRIPTION_LINK\}\}', '', link, flags=re.IGNORECASE)
+            if scheme and "://" in scheme:
+                return scheme
+        # Also check for type="subscriptionLink" buttons with custom schemes
+        btn_type = btn.get("type", "")
+        if btn_type == "subscriptionLink" and "://" in link and not link.startswith("http"):
+            # Extract base scheme from link like "prizrak-box://install-config?url="
+            scheme = link.split("{{")[0] if "{{" in link else link
+            if scheme and "://" in scheme:
+                return scheme
+    return ""
+
+
+def _get_url_scheme_for_app(app: Dict[str, Any]) -> str:
+    """Get URL scheme for app - from config, buttons, or fallback by name."""
+    # 1. Check urlScheme field
+    scheme = str(app.get("urlScheme", "")).strip()
+    if scheme:
+        return scheme
+
+    # 2. Extract from buttons in blocks (RemnaWave format)
+    blocks = app.get("blocks", [])
+    for block in blocks:
+        if not isinstance(block, dict):
+            continue
+        buttons = block.get("buttons", [])
+        scheme = _extract_scheme_from_buttons(buttons)
+        if scheme:
+            return scheme
+
+    # 3. Check buttons directly in app (alternative structure)
+    direct_buttons = app.get("buttons", [])
+    if direct_buttons:
+        scheme = _extract_scheme_from_buttons(direct_buttons)
+        if scheme:
+            return scheme
+
+    # 4. Check in step structures (cabinet format)
+    for step_key in ["installationStep", "addSubscriptionStep", "connectAndUseStep"]:
+        step = app.get(step_key, {})
+        if isinstance(step, dict):
+            step_buttons = step.get("buttons", [])
+            scheme = _extract_scheme_from_buttons(step_buttons)
+            if scheme:
+                return scheme
+
+    # No scheme found
+    logger.debug(f"_get_url_scheme_for_app: No scheme found for app '{app.get('name')}', "
+                f"has blocks: {bool(app.get('blocks'))}, "
+                f"has buttons: {bool(app.get('buttons'))}, "
+                f"has urlScheme: {bool(app.get('urlScheme'))}")
+    return ""
+
+
+def _find_subscription_block(blocks: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Find block that contains subscriptionLink button."""
+    for block in blocks:
+        if not isinstance(block, dict):
+            continue
+        buttons = block.get("buttons", [])
+        for btn in buttons:
+            if not isinstance(btn, dict):
+                continue
+            # Check for subscriptionLink type or {{SUBSCRIPTION_LINK}} in link
+            btn_type = btn.get("type", "")
+            link = btn.get("link", "") or btn.get("url", "")
+            if btn_type == "subscriptionLink" or (link and "SUBSCRIPTION_LINK" in link.upper()):
+                return block
+    return None
+
+
+def _find_connect_block(blocks: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Find block that is about connection/usage (usually last or has specific keywords)."""
+    # Look for block with "connect" or "use" in title
+    for block in blocks:
+        if not isinstance(block, dict):
+            continue
+        title = block.get("title", {})
+        title_en = title.get("en", "") if isinstance(title, dict) else ""
+        title_lower = title_en.lower()
+        if "connect" in title_lower or "use" in title_lower:
+            return block
+    # Fallback to last block if no match
+    return blocks[-1] if blocks else None
 
 
 def _convert_remnawave_app_to_cabinet(app: Dict[str, Any]) -> Dict[str, Any]:
     """Convert RemnaWave app format to cabinet app format."""
     blocks = app.get("blocks", [])
-    url_scheme = app.get("urlScheme", "")
+    url_scheme = _get_url_scheme_for_app(app)
 
-    # If urlScheme is missing, try to determine from app name
-    if not url_scheme:
-        app_name = app.get("name", "").lower().strip()
-        url_scheme = KNOWN_APP_URL_SCHEMES.get(app_name, "")
+    # Debug log for conversion (не логируем отсутствие urlScheme - для Happ это нормально)
+    app_name = app.get("name", "unknown")
+    if url_scheme:
+        logger.debug(f"_convert_remnawave_app_to_cabinet: app '{app_name}' -> urlScheme='{url_scheme}'")
 
-    # Map blocks to steps based on position
-    installation_step = _convert_remnawave_block_to_step(blocks[0], url_scheme) if len(blocks) > 0 else {"description": {}}
-    subscription_step = _convert_remnawave_block_to_step(blocks[1], url_scheme) if len(blocks) > 1 else {"description": {}}
-    connect_step = _convert_remnawave_block_to_step(blocks[2], url_scheme) if len(blocks) > 2 else {"description": {}}
+    # Smart block mapping: find blocks by their content, not just position
+    # 1. First block is usually installation
+    installation_block = blocks[0] if len(blocks) > 0 else None
+    # 2. Find subscription block (with subscriptionLink button)
+    subscription_block = _find_subscription_block(blocks)
+    # 3. Find connect/use block (usually last or has "connect" in title)
+    connect_block = _find_connect_block(blocks)
+
+    # Convert blocks to steps
+    installation_step = _convert_remnawave_block_to_step(installation_block, url_scheme) if installation_block else {"description": {}}
+    subscription_step = _convert_remnawave_block_to_step(subscription_block, url_scheme) if subscription_block else {"description": {}}
+    connect_step = _convert_remnawave_block_to_step(connect_block, url_scheme) if connect_block else {"description": {}}
 
     # Ensure subscription step has a deepLink button if urlScheme exists
     if url_scheme:
@@ -1886,7 +1995,7 @@ def _convert_remnawave_app_to_cabinet(app: Dict[str, Any]) -> Dict[str, Any]:
         "id": app.get("name", "").lower().replace(" ", "-"),
         "name": app.get("name", ""),
         "isFeatured": app.get("featured", False),
-        "urlScheme": url_scheme,  # Use resolved url_scheme (with fallback from app name)
+        "urlScheme": url_scheme,
         "isNeedBase64Encoding": app.get("isNeedBase64Encoding", False),
         "installationStep": installation_step,
         "addSubscriptionStep": subscription_step,
@@ -1966,22 +2075,36 @@ def _load_app_config() -> Dict[str, Any]:
     return _load_app_config_from_file()
 
 
-def _create_deep_link(app: Dict[str, Any], subscription_url: str) -> Optional[str]:
-    """Create deep link for app with subscription URL."""
-    if not subscription_url or not isinstance(app, dict):
-        logger.debug(f"_create_deep_link: no subscription_url or invalid app")
+def _is_happ_app(app: Dict[str, Any]) -> bool:
+    """Check if app is Happ (uses happ_cryptolink scheme)."""
+    name = str(app.get("name", "")).lower()
+    svg_icon_key = str(app.get("svgIconKey", "")).lower()
+    return name == "happ" or svg_icon_key == "happ"
+
+
+def _create_deep_link(
+    app: Dict[str, Any],
+    subscription_url: str,
+    subscription_crypto_link: Optional[str] = None
+) -> Optional[str]:
+    """Create deep link for app with subscription URL.
+
+    Uses urlScheme from RemnaWave config or fallback by app name.
+    For Happ apps, uses subscription_crypto_link directly (contains happ:// scheme).
+    """
+    if not isinstance(app, dict):
         return None
 
-    scheme = str(app.get("urlScheme", "")).strip()
-    if not scheme:
-        # Try fallback from app name
-        app_name = app.get("name", "").lower().strip()
-        scheme = KNOWN_APP_URL_SCHEMES.get(app_name, "")
-        if scheme:
-            logger.info(f"_create_deep_link: used fallback urlScheme for '{app_name}': {scheme}")
+    # For Happ, use crypto_link directly if available (already has happ:// scheme)
+    if _is_happ_app(app) and subscription_crypto_link:
+        return subscription_crypto_link
 
+    if not subscription_url:
+        return None
+
+    scheme = _get_url_scheme_for_app(app)
     if not scheme:
-        logger.warning(f"_create_deep_link: no urlScheme for app '{app.get('name', 'unknown')}'")
+        logger.debug(f"_create_deep_link: no urlScheme for app '{app.get('name', 'unknown')}'")
         return None
 
     payload = subscription_url
@@ -2005,6 +2128,7 @@ async def get_available_countries(
 ) -> Dict[str, Any]:
     """Get available countries/servers for the user."""
     from app.database.crud.server_squad import get_available_server_squads
+    from app.utils.pricing_utils import calculate_prorated_price, apply_percentage_discount
 
     await db.refresh(user, ["subscription"])
 
@@ -2015,25 +2139,59 @@ async def get_available_countries(
     )
 
     connected_squads = []
+    days_left = 0
     if user.subscription:
         connected_squads = user.subscription.connected_squads or []
+        # Calculate days left for prorated pricing
+        if user.subscription.end_date:
+            from datetime import datetime
+            delta = user.subscription.end_date - datetime.utcnow()
+            days_left = max(0, delta.days)
+
+    # Get discount from promo group
+    servers_discount_percent = 0
+    promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else None
+    if promo_group:
+        servers_discount_percent = promo_group.get_discount_percent("servers", None)
 
     countries = []
     for server in available_servers:
+        base_price = server.price_kopeks
+
+        # Apply discount
+        if servers_discount_percent > 0:
+            discounted_price, _ = apply_percentage_discount(base_price, servers_discount_percent)
+        else:
+            discounted_price = base_price
+
+        # Calculate prorated price if subscription exists
+        prorated_price = discounted_price
+        if user.subscription and user.subscription.end_date:
+            prorated_price, _ = calculate_prorated_price(
+                discounted_price,
+                user.subscription.end_date,
+            )
+
         countries.append({
             "uuid": server.squad_uuid,
             "name": server.display_name,
             "country_code": server.country_code,
-            "price_kopeks": server.price_kopeks,
-            "price_rubles": server.price_kopeks / 100,
+            "base_price_kopeks": base_price,
+            "price_kopeks": prorated_price,  # Prorated price with discount
+            "price_per_month_kopeks": discounted_price,  # Monthly price with discount
+            "price_rubles": prorated_price / 100,
             "is_available": server.is_available and not server.is_full,
             "is_connected": server.squad_uuid in connected_squads,
+            "has_discount": servers_discount_percent > 0,
+            "discount_percent": servers_discount_percent,
         })
 
     return {
         "countries": countries,
         "connected_count": len(connected_squads),
         "has_subscription": user.subscription is not None,
+        "days_left": days_left,
+        "discount_percent": servers_discount_percent,
     }
 
 
@@ -2175,7 +2333,10 @@ async def update_countries(
     # Sync with RemnaWave
     try:
         subscription_service = SubscriptionService()
-        await subscription_service.update_remnawave_user(db, user.subscription)
+        if getattr(user, "remnawave_uuid", None):
+            await subscription_service.update_remnawave_user(db, user.subscription)
+        else:
+            await subscription_service.create_remnawave_user(db, user.subscription)
     except Exception as e:
         logger.error(f"Failed to sync countries with RemnaWave: {e}")
 
@@ -2294,8 +2455,10 @@ async def get_app_config(
     await db.refresh(user, ["subscription"])
 
     subscription_url = None
+    subscription_crypto_link = None
     if user.subscription:
         subscription_url = user.subscription.subscription_url
+        subscription_crypto_link = user.subscription.subscription_crypto_link
 
     # Load config from RemnaWave (if configured) or local file
     config = await _load_app_config_async()
@@ -2327,8 +2490,8 @@ async def get_app_config(
             }
 
             # Add deep link if subscription exists
-            if subscription_url:
-                app_data["deepLink"] = _create_deep_link(app, subscription_url)
+            if subscription_url or subscription_crypto_link:
+                app_data["deepLink"] = _create_deep_link(app, subscription_url, subscription_crypto_link)
 
             platform_apps.append(app_data)
 
@@ -2349,8 +2512,9 @@ async def get_app_config(
     return {
         "platforms": platforms,
         "platformNames": platform_names,
-        "hasSubscription": bool(subscription_url),
+        "hasSubscription": bool(subscription_url or subscription_crypto_link),
         "subscriptionUrl": subscription_url,
+        "subscriptionCryptoLink": subscription_crypto_link,
         "branding": config.get("config", {}).get("branding", {}),
     }
 
@@ -2843,7 +3007,10 @@ async def switch_tariff(
     # Sync with RemnaWave
     try:
         subscription_service = SubscriptionService()
-        await subscription_service.update_remnawave_user(db, user.subscription)
+        if getattr(user, "remnawave_uuid", None):
+            await subscription_service.update_remnawave_user(db, user.subscription)
+        else:
+            await subscription_service.create_remnawave_user(db, user.subscription)
     except Exception as e:
         logger.error(f"Failed to sync tariff switch with RemnaWave: {e}")
 
@@ -3054,7 +3221,10 @@ async def switch_traffic_package(
     # Sync with RemnaWave
     try:
         subscription_service = SubscriptionService()
-        await subscription_service.update_remnawave_user(db, user.subscription)
+        if getattr(user, "remnawave_uuid", None):
+            await subscription_service.update_remnawave_user(db, user.subscription)
+        else:
+            await subscription_service.create_remnawave_user(db, user.subscription)
     except Exception as e:
         logger.error(f"Failed to sync traffic switch with RemnaWave: {e}")
 
@@ -3070,3 +3240,125 @@ async def switch_traffic_package(
         "balance_kopeks": user.balance_kopeks,
         "balance_label": settings.format_price(user.balance_kopeks),
     }
+
+
+# ============ Traffic Refresh ============
+
+# Rate limit: 1 request per 60 seconds per user
+TRAFFIC_REFRESH_RATE_LIMIT = 1
+TRAFFIC_REFRESH_RATE_WINDOW = 60  # seconds
+TRAFFIC_CACHE_TTL = 60  # Cache traffic data for 60 seconds
+
+
+@router.post("/refresh-traffic")
+async def refresh_traffic(
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """
+    Refresh traffic usage from RemnaWave panel.
+    Rate limited to 1 request per 60 seconds.
+    """
+    if not user.subscription:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No active subscription",
+        )
+
+    # Check rate limit
+    is_limited = await RateLimitCache.is_rate_limited(
+        user.telegram_id,
+        "traffic_refresh",
+        TRAFFIC_REFRESH_RATE_LIMIT,
+        TRAFFIC_REFRESH_RATE_WINDOW,
+    )
+
+    if is_limited:
+        # Check if we have cached data
+        traffic_cache_key = cache_key("traffic", user.telegram_id)
+        cached_data = await cache.get(traffic_cache_key)
+
+        if cached_data:
+            return {
+                "success": True,
+                "cached": True,
+                "rate_limited": True,
+                "retry_after_seconds": TRAFFIC_REFRESH_RATE_WINDOW,
+                **cached_data,
+            }
+
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Rate limited. Try again in {TRAFFIC_REFRESH_RATE_WINDOW} seconds.",
+            headers={"Retry-After": str(TRAFFIC_REFRESH_RATE_WINDOW)},
+        )
+
+    # Fetch traffic from RemnaWave
+    try:
+        remnawave_service = RemnaWaveService()
+        traffic_stats = await remnawave_service.get_user_traffic_stats(user.telegram_id)
+
+        if not traffic_stats:
+            # Return current database values if RemnaWave unavailable
+            traffic_data = {
+                "traffic_used_bytes": int((user.subscription.traffic_used_gb or 0) * (1024**3)),
+                "traffic_used_gb": round(user.subscription.traffic_used_gb or 0, 2),
+                "traffic_limit_bytes": int((user.subscription.traffic_limit_gb or 0) * (1024**3)),
+                "traffic_limit_gb": user.subscription.traffic_limit_gb or 0,
+                "traffic_used_percent": round(
+                    ((user.subscription.traffic_used_gb or 0) / (user.subscription.traffic_limit_gb or 1)) * 100
+                    if user.subscription.traffic_limit_gb
+                    else 0,
+                    1,
+                ),
+                "is_unlimited": (user.subscription.traffic_limit_gb or 0) == 0,
+            }
+            return {
+                "success": True,
+                "cached": False,
+                "source": "database",
+                **traffic_data,
+            }
+
+        # Update subscription with fresh data
+        used_gb = traffic_stats.get("used_traffic_gb", 0)
+        if abs((user.subscription.traffic_used_gb or 0) - used_gb) > 0.01:
+            user.subscription.traffic_used_gb = used_gb
+            user.subscription.updated_at = datetime.utcnow()
+            await db.commit()
+
+        # Calculate percentage
+        limit_gb = user.subscription.traffic_limit_gb or 0
+        if limit_gb > 0:
+            percent = min(100, (used_gb / limit_gb) * 100)
+        else:
+            percent = 0
+
+        traffic_data = {
+            "traffic_used_bytes": traffic_stats.get("used_traffic_bytes", 0),
+            "traffic_used_gb": round(used_gb, 2),
+            "traffic_limit_bytes": traffic_stats.get("traffic_limit_bytes", 0),
+            "traffic_limit_gb": limit_gb,
+            "traffic_used_percent": round(percent, 1),
+            "is_unlimited": limit_gb == 0,
+            "lifetime_used_bytes": traffic_stats.get("lifetime_used_traffic_bytes", 0),
+            "lifetime_used_gb": round(traffic_stats.get("lifetime_used_traffic_gb", 0), 2),
+        }
+
+        # Cache the result
+        traffic_cache_key = cache_key("traffic", user.telegram_id)
+        await cache.set(traffic_cache_key, traffic_data, TRAFFIC_CACHE_TTL)
+
+        return {
+            "success": True,
+            "cached": False,
+            "source": "remnawave",
+            **traffic_data,
+        }
+
+    except Exception as e:
+        logger.error(f"Error refreshing traffic for user {user.telegram_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to refresh traffic data",
+        )

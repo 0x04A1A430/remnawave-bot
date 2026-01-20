@@ -929,12 +929,13 @@ async def handle_custom_confirm(
             )
 
         # Обновляем пользователя в Remnawave
+        # При покупке тарифа ВСЕГДА сбрасываем трафик в панели
         try:
             subscription_service = SubscriptionService()
             await subscription_service.create_remnawave_user(
                 db,
                 subscription,
-                reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT,
+                reset_traffic=True,
                 reset_reason="покупка тарифа",
             )
         except Exception as e:
@@ -1228,12 +1229,13 @@ async def confirm_tariff_purchase(
             )
 
         # Обновляем пользователя в Remnawave
+        # При покупке тарифа ВСЕГДА сбрасываем трафик в панели
         try:
             subscription_service = SubscriptionService()
             await subscription_service.create_remnawave_user(
                 db,
                 subscription,
-                reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT,
+                reset_traffic=True,
                 reset_reason="покупка тарифа",
             )
         except Exception as e:
@@ -1395,12 +1397,13 @@ async def confirm_daily_tariff_purchase(
             await db.refresh(subscription)
 
         # Обновляем пользователя в Remnawave
+        # При покупке тарифа ВСЕГДА сбрасываем трафик в панели
         try:
             subscription_service = SubscriptionService()
             await subscription_service.create_remnawave_user(
                 db,
                 subscription,
-                reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT,
+                reset_traffic=True,
                 reset_reason="покупка суточного тарифа",
             )
         except Exception as e:

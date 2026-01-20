@@ -696,6 +696,7 @@ class MiniAppSubscriptionResponse(BaseModel):
     user: MiniAppSubscriptionUser
     traffic_purchases: List[MiniAppTrafficPurchase] = Field(default_factory=list)
     subscription_url: Optional[str] = None
+    hide_subscription_link: bool = False  # Скрывать ли отображение ссылки (но кнопки работают)
     subscription_crypto_link: Optional[str] = None
     subscription_purchase_url: Optional[str] = None
     links: List[str] = Field(default_factory=list)

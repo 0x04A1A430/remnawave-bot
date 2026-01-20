@@ -797,12 +797,28 @@ async def get_server_ids_by_uuids(
     db: AsyncSession,
     squad_uuids: List[str]
 ) -> List[int]:
-    
+
     result = await db.execute(
         select(ServerSquad.id)
         .where(ServerSquad.squad_uuid.in_(squad_uuids))
     )
     return [row[0] for row in result.fetchall()]
+
+
+async def get_server_squads_by_uuids(
+    db: AsyncSession,
+    squad_uuids: List[str]
+) -> List[ServerSquad]:
+    """Получает список ServerSquad объектов по их UUID с загрузкой allowed_promo_groups."""
+    if not squad_uuids:
+        return []
+
+    result = await db.execute(
+        select(ServerSquad)
+        .options(selectinload(ServerSquad.allowed_promo_groups))
+        .where(ServerSquad.squad_uuid.in_(squad_uuids))
+    )
+    return list(result.scalars().all())
 
 
 async def ensure_servers_synced(db: AsyncSession) -> None:

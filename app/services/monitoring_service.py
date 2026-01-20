@@ -284,12 +284,18 @@ class MonitoringService:
             if not user or not user.remnawave_uuid:
                 logger.error(f"RemnaWave UUID не найден для пользователя {subscription.user_id}")
                 return None
-            
+
+            # Обновляем subscription в сессии, чтобы избежать detached instance
+            try:
+                await db.refresh(subscription)
+            except Exception:
+                pass
+
             current_time = datetime.utcnow()
-            is_active = (subscription.status == SubscriptionStatus.ACTIVE.value and 
+            is_active = (subscription.status == SubscriptionStatus.ACTIVE.value and
                         subscription.end_date > current_time)
-            
-            if (subscription.status == SubscriptionStatus.ACTIVE.value and 
+
+            if (subscription.status == SubscriptionStatus.ACTIVE.value and
                 subscription.end_date <= current_time):
                 subscription.status = SubscriptionStatus.EXPIRED.value
                 await db.commit()
@@ -581,8 +587,9 @@ class MonitoringService:
                     )
                     continue
                 except TelegramBadRequest as error:
-                    logger.error(
-                        "❌ Ошибка Telegram при проверке подписки пользователя %s: %s",
+                    # PARTICIPANT_ID_INVALID - пользователь никогда не был в канале, это нормально
+                    logger.warning(
+                        "⚠️ Ошибка Telegram при проверке подписки пользователя %s: %s",
                         user.telegram_id,
                         error,
                     )

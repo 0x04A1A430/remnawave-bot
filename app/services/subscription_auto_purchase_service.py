@@ -386,14 +386,25 @@ async def _auto_extend_subscription(
     subscription = prepared.subscription
     old_end_date = subscription.end_date
     was_trial = subscription.is_trial  # Запоминаем, была ли подписка триальной
+    old_tariff_id = subscription.tariff_id  # Запоминаем старый тариф для определения смены
 
     _apply_extension_updates(prepared)
 
+    # Определяем, произошла ли смена тарифа
+    is_tariff_change = (
+        prepared.tariff_id is not None
+        and old_tariff_id != prepared.tariff_id
+    )
+
     try:
+        # При смене тарифа передаём traffic_limit_gb для сброса трафика в БД
         updated_subscription = await extend_subscription(
             db,
             subscription,
             prepared.period_days,
+            tariff_id=prepared.tariff_id if is_tariff_change else None,
+            traffic_limit_gb=prepared.traffic_limit_gb if is_tariff_change else None,
+            device_limit=prepared.device_limit if is_tariff_change else None,
         )
 
         # НОВОЕ: Конвертируем триал в платную подписку ТОЛЬКО после успешного продления
@@ -437,12 +448,14 @@ async def _auto_extend_subscription(
         )
 
     subscription_service = SubscriptionService()
+    # При смене тарифа ВСЕГДА сбрасываем трафик, иначе по настройке
+    should_reset_traffic = is_tariff_change or settings.RESET_TRAFFIC_ON_PAYMENT
     try:
         await subscription_service.update_remnawave_user(
             db,
             updated_subscription,
-            reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT,
-            reset_reason="продление подписки",
+            reset_traffic=should_reset_traffic,
+            reset_reason="смена тарифа" if is_tariff_change else "продление подписки",
         )
     except Exception as error:  # pragma: no cover - defensive logging
         logger.error(
@@ -687,12 +700,13 @@ async def _auto_purchase_tariff(
         transaction = None
 
     # Обновляем Remnawave
+    # При покупке тарифа ВСЕГДА сбрасываем трафик в панели
     try:
         subscription_service = SubscriptionService()
         await subscription_service.create_remnawave_user(
             db,
             subscription,
-            reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT,
+            reset_traffic=True,
             reset_reason="покупка тарифа",
         )
     except Exception as error:
@@ -921,12 +935,13 @@ async def _auto_purchase_daily_tariff(
         transaction = None
 
     # Обновляем Remnawave
+    # При покупке тарифа ВСЕГДА сбрасываем трафик в панели
     try:
         subscription_service = SubscriptionService()
         await subscription_service.create_remnawave_user(
             db,
             subscription,
-            reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT,
+            reset_traffic=True,
             reset_reason="активация суточного тарифа",
         )
     except Exception as error:
