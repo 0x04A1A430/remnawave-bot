@@ -3089,6 +3089,18 @@ async def get_subscription_details(
     payload: MiniAppSubscriptionRequest,
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppSubscriptionResponse:
+    # Check maintenance mode first
+    if maintenance_service.is_maintenance_active():
+        status_info = maintenance_service.get_status_info()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "maintenance",
+                "message": maintenance_service.get_maintenance_message() or "Service is under maintenance",
+                "reason": status_info.get("reason"),
+            },
+        )
+
     try:
         webapp_data = parse_webapp_init_data(payload.init_data, settings.BOT_TOKEN)
     except TelegramWebAppAuthError as error:
@@ -3111,6 +3123,31 @@ async def get_subscription_details(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid Telegram user identifier",
         ) from None
+
+    # Check required channel subscription
+    if settings.CHANNEL_IS_REQUIRED_SUB and settings.CHANNEL_SUB_ID:
+        try:
+            bot = Bot(token=settings.BOT_TOKEN)
+            chat_member = await bot.get_chat_member(
+                chat_id=settings.CHANNEL_SUB_ID,
+                user_id=telegram_id
+            )
+            await bot.session.close()
+
+            if chat_member.status not in ["member", "administrator", "creator"]:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail={
+                        "code": "channel_subscription_required",
+                        "message": "Please subscribe to our channel to continue",
+                        "channel_link": settings.CHANNEL_LINK,
+                    },
+                )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning(f"Failed to check channel subscription for user {telegram_id}: {e}")
+            # Don't block user if check fails
 
     user = await get_user_by_telegram_id(db, telegram_id)
     purchase_url = (settings.MINIAPP_PURCHASE_URL or "").strip()
