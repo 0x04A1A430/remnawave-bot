@@ -644,7 +644,10 @@ async def purchase_traffic(
     # Синхронизируем с RemnaWave
     try:
         subscription_service = SubscriptionService()
-        await subscription_service.update_remnawave_user(db, subscription)
+        if getattr(user, "remnawave_uuid", None):
+            await subscription_service.update_remnawave_user(db, subscription)
+        else:
+            await subscription_service.create_remnawave_user(db, subscription)
     except Exception as e:
         logger.error(f"Failed to sync traffic with RemnaWave: {e}")
 
@@ -1484,12 +1487,23 @@ async def purchase_tariff(
         # Sync with RemnaWave
         # При покупке тарифа ВСЕГДА сбрасываем трафик в панели
         service = SubscriptionService()
-        await service.update_remnawave_user(
-            db,
-            subscription,
-            reset_traffic=True,
-            reset_reason="покупка тарифа (cabinet)",
-        )
+        try:
+            if getattr(user, "remnawave_uuid", None):
+                await service.update_remnawave_user(
+                    db,
+                    subscription,
+                    reset_traffic=True,
+                    reset_reason="покупка тарифа (cabinet)",
+                )
+            else:
+                await service.create_remnawave_user(
+                    db,
+                    subscription,
+                    reset_traffic=True,
+                    reset_reason="покупка тарифа (cabinet)",
+                )
+        except Exception as remnawave_error:
+            logger.error(f"Failed to sync subscription with RemnaWave: {remnawave_error}")
 
         # Save cart for auto-renewal (not for daily tariffs - they have their own charging)
         if not is_daily_tariff:
@@ -1642,7 +1656,13 @@ async def purchase_devices(
 
         # Sync with RemnaWave
         service = SubscriptionService()
-        await service.update_remnawave_user(db, subscription)
+        try:
+            if getattr(user, "remnawave_uuid", None):
+                await service.update_remnawave_user(db, subscription)
+            else:
+                await service.create_remnawave_user(db, subscription)
+        except Exception as e:
+            logger.error(f"Failed to sync devices with RemnaWave: {e}")
 
         await db.refresh(user)
 
@@ -2313,7 +2333,10 @@ async def update_countries(
     # Sync with RemnaWave
     try:
         subscription_service = SubscriptionService()
-        await subscription_service.update_remnawave_user(db, user.subscription)
+        if getattr(user, "remnawave_uuid", None):
+            await subscription_service.update_remnawave_user(db, user.subscription)
+        else:
+            await subscription_service.create_remnawave_user(db, user.subscription)
     except Exception as e:
         logger.error(f"Failed to sync countries with RemnaWave: {e}")
 
@@ -2984,7 +3007,10 @@ async def switch_tariff(
     # Sync with RemnaWave
     try:
         subscription_service = SubscriptionService()
-        await subscription_service.update_remnawave_user(db, user.subscription)
+        if getattr(user, "remnawave_uuid", None):
+            await subscription_service.update_remnawave_user(db, user.subscription)
+        else:
+            await subscription_service.create_remnawave_user(db, user.subscription)
     except Exception as e:
         logger.error(f"Failed to sync tariff switch with RemnaWave: {e}")
 
@@ -3195,7 +3221,10 @@ async def switch_traffic_package(
     # Sync with RemnaWave
     try:
         subscription_service = SubscriptionService()
-        await subscription_service.update_remnawave_user(db, user.subscription)
+        if getattr(user, "remnawave_uuid", None):
+            await subscription_service.update_remnawave_user(db, user.subscription)
+        else:
+            await subscription_service.create_remnawave_user(db, user.subscription)
     except Exception as e:
         logger.error(f"Failed to sync traffic switch with RemnaWave: {e}")
 
