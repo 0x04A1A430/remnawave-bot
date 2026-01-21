@@ -33,6 +33,7 @@ from app.database.crud.wheel import (
 )
 from app.database.crud.user import add_user_balance
 from app.database.crud.subscription import get_subscription_by_user_id
+from app.services.subscription_service import SubscriptionService
 
 logger = logging.getLogger(__name__)
 
@@ -339,6 +340,14 @@ class FortuneWheelService:
 
         logger.info(f"📅 Списано {config.spin_cost_days} дней подписки у user_id={user.id}")
 
+        # Синхронизируем с RemnaWave
+        try:
+            subscription_service = SubscriptionService()
+            await subscription_service.update_remnawave_user(db, subscription)
+            logger.info(f"✅ Списание дней синхронизировано с RemnaWave для user_id={user.id}")
+        except Exception as e:
+            logger.error(f"⚠️ Ошибка синхронизации списания дней с RemnaWave: {e}")
+
         return kopeks
 
     async def _apply_prize(
@@ -372,9 +381,46 @@ class FortuneWheelService:
             # Дни подписки
             subscription = await get_subscription_by_user_id(db, user.id)
             if subscription:
-                subscription.end_date += timedelta(days=prize.prize_value)
-                subscription.updated_at = datetime.utcnow()
-                logger.info(f"📅 Начислено {prize.prize_value} дней подписки user_id={user.id}")
+                # Проверяем суточный тариф - для него конвертируем дни в баланс
+                is_daily = getattr(subscription, 'is_daily', False) or (
+                    subscription.tariff and getattr(subscription.tariff, 'is_daily', False)
+                )
+
+                if is_daily:
+                    # Для суточных тарифов: дни * суточная_цена = баланс
+                    daily_price = 0
+                    if subscription.tariff and hasattr(subscription.tariff, 'daily_price_kopeks'):
+                        daily_price = subscription.tariff.daily_price_kopeks or 0
+
+                    if daily_price > 0:
+                        balance_bonus = prize.prize_value * daily_price
+                        await add_user_balance(
+                            db, user, balance_bonus,
+                            description=f"Выигрыш в колесе удачи: {prize.prize_value} дней → {balance_bonus/100:.2f}₽",
+                            create_transaction=True,
+                        )
+                        logger.info(f"💰 Суточный тариф: {prize.prize_value} дней конвертированы в {balance_bonus/100:.2f}₽ для user_id={user.id}")
+                    else:
+                        # Если нет цены - используем prize_value_kopeks
+                        await add_user_balance(
+                            db, user, prize.prize_value_kopeks,
+                            description=f"Выигрыш в колесе удачи: {prize.prize_value} дней (на баланс)",
+                            create_transaction=True,
+                        )
+                        logger.info(f"💰 Дни конвертированы в баланс для user_id={user.id}")
+                else:
+                    # Обычная подписка - добавляем дни и синхронизируем с RemnaWave
+                    subscription.end_date += timedelta(days=prize.prize_value)
+                    subscription.updated_at = datetime.utcnow()
+                    logger.info(f"📅 Начислено {prize.prize_value} дней подписки user_id={user.id}")
+
+                    # Синхронизируем с RemnaWave
+                    try:
+                        subscription_service = SubscriptionService()
+                        await subscription_service.update_remnawave_user(db, subscription)
+                        logger.info(f"✅ Синхронизировано с RemnaWave для user_id={user.id}")
+                    except Exception as e:
+                        logger.error(f"⚠️ Ошибка синхронизации с RemnaWave: {e}")
             else:
                 # Если нет подписки - начисляем на баланс эквивалент
                 await add_user_balance(
@@ -392,6 +438,14 @@ class FortuneWheelService:
                 subscription.traffic_limit_gb += prize.prize_value
                 subscription.updated_at = datetime.utcnow()
                 logger.info(f"📊 Начислено {prize.prize_value}GB трафика user_id={user.id}")
+
+                # Синхронизируем с RemnaWave
+                try:
+                    subscription_service = SubscriptionService()
+                    await subscription_service.update_remnawave_user(db, subscription)
+                    logger.info(f"✅ Трафик синхронизирован с RemnaWave для user_id={user.id}")
+                except Exception as e:
+                    logger.error(f"⚠️ Ошибка синхронизации трафика с RemnaWave: {e}")
             else:
                 # Если безлимит или нет подписки - на баланс
                 await add_user_balance(
