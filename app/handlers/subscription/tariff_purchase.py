@@ -3140,6 +3140,148 @@ async def confirm_instant_switch(
         await callback.answer("Произошла ошибка при переключении тарифа", show_alert=True)
 
 
+async def return_to_saved_tariff_cart(
+    callback: types.CallbackQuery,
+    state: FSMContext,
+    db_user: User,
+    db: AsyncSession,
+    cart_data: dict,
+):
+    """Восстанавливает сохраненную корзину тарифа после пополнения баланса."""
+    texts = get_texts(db_user.language)
+    cart_mode = cart_data.get('cart_mode')
+    tariff_id = cart_data.get('tariff_id')
+
+    if not tariff_id:
+        await callback.answer("❌ Данные корзины повреждены", show_alert=True)
+        return
+
+    tariff = await get_tariff_by_id(db, tariff_id)
+    if not tariff or not tariff.is_active:
+        await callback.answer("❌ Тариф больше недоступен", show_alert=True)
+        # Очищаем корзину
+        await user_cart_service.delete_user_cart(db_user.id)
+        return
+
+    total_price = cart_data.get('total_price', 0)
+    user_balance = db_user.balance_kopeks or 0
+    traffic = _format_traffic(tariff.traffic_limit_gb)
+
+    # Проверяем баланс
+    if user_balance < total_price:
+        missing = total_price - user_balance
+
+        if cart_mode == 'daily_tariff_purchase':
+            await callback.message.edit_text(
+                f"❌ <b>Все еще недостаточно средств</b>\n\n"
+                f"📦 Тариф: <b>{tariff.name}</b>\n"
+                f"🔄 Тип: Суточный\n"
+                f"💰 Стоимость: {_format_price_kopeks(total_price)}\n\n"
+                f"💳 Ваш баланс: {_format_price_kopeks(user_balance)}\n"
+                f"⚠️ Не хватает: <b>{_format_price_kopeks(missing)}</b>",
+                reply_markup=get_daily_tariff_insufficient_balance_keyboard(tariff_id, db_user.language),
+                parse_mode="HTML"
+            )
+        elif cart_mode == 'extend':
+            period = cart_data.get('period_days', 30)
+            await callback.message.edit_text(
+                f"❌ <b>Все еще недостаточно средств</b>\n\n"
+                f"📦 Тариф: <b>{tariff.name}</b>\n"
+                f"📅 Период: {_format_period(period)}\n"
+                f"💰 Стоимость: {_format_price_kopeks(total_price)}\n\n"
+                f"💳 Ваш баланс: {_format_price_kopeks(user_balance)}\n"
+                f"⚠️ Не хватает: <b>{_format_price_kopeks(missing)}</b>",
+                reply_markup=get_tariff_insufficient_balance_keyboard(tariff_id, period, db_user.language),
+                parse_mode="HTML"
+            )
+        else:  # tariff_purchase
+            period = cart_data.get('period_days', 30)
+            await callback.message.edit_text(
+                f"❌ <b>Все еще недостаточно средств</b>\n\n"
+                f"📦 Тариф: <b>{tariff.name}</b>\n"
+                f"📅 Период: {_format_period(period)}\n"
+                f"💰 Стоимость: {_format_price_kopeks(total_price)}\n\n"
+                f"💳 Ваш баланс: {_format_price_kopeks(user_balance)}\n"
+                f"⚠️ Не хватает: <b>{_format_price_kopeks(missing)}</b>",
+                reply_markup=get_tariff_insufficient_balance_keyboard(tariff_id, period, db_user.language),
+                parse_mode="HTML"
+            )
+        await callback.answer()
+        return
+
+    # Баланс достаточен - показываем подтверждение
+    discount_percent = cart_data.get('discount_percent', 0)
+
+    if cart_mode == 'daily_tariff_purchase':
+        daily_price = cart_data.get('daily_price_kopeks', total_price)
+
+        await callback.message.edit_text(
+            f"✅ <b>Подтверждение покупки</b>\n\n"
+            f"📦 Тариф: <b>{tariff.name}</b>\n"
+            f"📊 Трафик: {traffic}\n"
+            f"📱 Устройств: {tariff.device_limit}\n"
+            f"🔄 Тип: Суточный\n"
+            f"💰 <b>Стоимость в день: {_format_price_kopeks(daily_price)}</b>\n\n"
+            f"💳 Ваш баланс: {_format_price_kopeks(user_balance)}\n"
+            f"После оплаты: {_format_price_kopeks(user_balance - daily_price)}",
+            reply_markup=get_daily_tariff_confirm_keyboard(tariff_id, db_user.language),
+            parse_mode="HTML"
+        )
+    elif cart_mode == 'extend':
+        period = cart_data.get('period_days', 30)
+
+        discount_text = ""
+        if discount_percent > 0:
+            original_price = int(total_price / (1 - discount_percent / 100))
+            discount_text = f"\n🎁 Скидка: {discount_percent}% (-{_format_price_kopeks(original_price - total_price)})"
+
+        await callback.message.edit_text(
+            f"✅ <b>Подтверждение продления</b>\n\n"
+            f"📦 Тариф: <b>{tariff.name}</b>\n"
+            f"📊 Трафик: {traffic}\n"
+            f"📱 Устройств: {tariff.device_limit}\n"
+            f"📅 Период: {_format_period(period)}\n"
+            f"{discount_text}\n"
+            f"💰 <b>Итого: {_format_price_kopeks(total_price)}</b>\n\n"
+            f"💳 Ваш баланс: {_format_price_kopeks(user_balance)}\n"
+            f"После оплаты: {_format_price_kopeks(user_balance - total_price)}",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(
+                    text="✅ Подтвердить продление",
+                    callback_data=f"tariff_ext_confirm:{tariff_id}:{period}"
+                )],
+                [InlineKeyboardButton(
+                    text=texts.BACK,
+                    callback_data=f"tariff_extend:{tariff_id}"
+                )]
+            ]),
+            parse_mode="HTML"
+        )
+    else:  # tariff_purchase
+        period = cart_data.get('period_days', 30)
+
+        discount_text = ""
+        if discount_percent > 0:
+            original_price = int(total_price / (1 - discount_percent / 100))
+            discount_text = f"\n🎁 Скидка: {discount_percent}% (-{_format_price_kopeks(original_price - total_price)})"
+
+        await callback.message.edit_text(
+            f"✅ <b>Подтверждение покупки</b>\n\n"
+            f"📦 Тариф: <b>{tariff.name}</b>\n"
+            f"📊 Трафик: {traffic}\n"
+            f"📱 Устройств: {tariff.device_limit}\n"
+            f"📅 Период: {_format_period(period)}\n"
+            f"{discount_text}\n"
+            f"💰 <b>Итого: {_format_price_kopeks(total_price)}</b>\n\n"
+            f"💳 Ваш баланс: {_format_price_kopeks(user_balance)}\n"
+            f"После оплаты: {_format_price_kopeks(user_balance - total_price)}",
+            reply_markup=get_tariff_confirm_keyboard(tariff_id, period, db_user.language),
+            parse_mode="HTML"
+        )
+
+    await callback.answer("✅ Корзина восстановлена!")
+
+
 def register_tariff_purchase_handlers(dp: Dispatcher):
     """Регистрирует обработчики покупки по тарифам."""
     # Список тарифов (для режима tariffs)

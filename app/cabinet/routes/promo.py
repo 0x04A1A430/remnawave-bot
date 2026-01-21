@@ -15,6 +15,8 @@ from app.database.crud.discount_offer import (
     mark_offer_claimed,
 )
 from app.database.crud.promo_offer_template import get_promo_offer_template_by_id
+from app.database.crud.promo_group import get_auto_assign_promo_groups
+from app.database.crud.transaction import get_user_total_spent_kopeks
 from app.services.promo_offer_service import promo_offer_service
 from app.config import settings
 
@@ -68,6 +70,29 @@ class PromoGroupDiscounts(BaseModel):
     traffic_discount_percent: int = 0
     device_discount_percent: int = 0
     period_discounts: Dict[str, int] = {}
+
+
+class LoyaltyTierInfo(BaseModel):
+    """Info about a single loyalty tier (promo group)."""
+    id: int
+    name: str
+    threshold_rubles: float
+    server_discount_percent: int = 0
+    traffic_discount_percent: int = 0
+    device_discount_percent: int = 0
+    period_discounts: Dict[str, int] = {}
+    is_current: bool = False
+    is_achieved: bool = False
+
+
+class LoyaltyTiersResponse(BaseModel):
+    """Response with all loyalty tiers and user progress."""
+    tiers: List[LoyaltyTierInfo]
+    current_spent_rubles: float
+    current_tier_name: Optional[str] = None
+    next_tier_name: Optional[str] = None
+    next_tier_threshold_rubles: Optional[float] = None
+    progress_percent: float = 0
 
 
 # ============ Routes ============
@@ -134,7 +159,7 @@ async def get_promo_group_discounts(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get user's promo group discounts."""
-    await db.refresh(user, ["promo_groups"])
+    await db.refresh(user, ["promo_group", "user_promo_groups"])
 
     promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else None
 
@@ -157,6 +182,81 @@ async def get_promo_group_discounts(
         traffic_discount_percent=promo_group.traffic_discount_percent or 0,
         device_discount_percent=promo_group.device_discount_percent or 0,
         period_discounts=period_discounts,
+    )
+
+
+@router.get("/loyalty-tiers", response_model=LoyaltyTiersResponse)
+async def get_loyalty_tiers(
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Get all loyalty tiers (promo groups with auto-assign thresholds) and user's progress."""
+    # Get user's total spent
+    total_spent_kopeks = await get_user_total_spent_kopeks(db, user.id)
+    total_spent_rubles = total_spent_kopeks / 100
+
+    # Get user's current promo group
+    await db.refresh(user, ["promo_group", "user_promo_groups"])
+    current_promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else None
+    current_tier_name = current_promo_group.name if current_promo_group else None
+
+    # Get all auto-assign promo groups (sorted by threshold ascending)
+    auto_groups = await get_auto_assign_promo_groups(db)
+
+    tiers: List[LoyaltyTierInfo] = []
+    next_tier_name: Optional[str] = None
+    next_tier_threshold: Optional[float] = None
+
+    for group in auto_groups:
+        threshold_kopeks = group.auto_assign_total_spent_kopeks or 0
+        threshold_rubles = threshold_kopeks / 100
+        is_achieved = total_spent_kopeks >= threshold_kopeks
+        is_current = current_promo_group and current_promo_group.id == group.id
+
+        # Get period discounts
+        period_discounts = {}
+        raw_period_discounts = getattr(group, "period_discounts", None)
+        if isinstance(raw_period_discounts, dict):
+            for key, value in raw_period_discounts.items():
+                try:
+                    period_discounts[str(key)] = int(value)
+                except (TypeError, ValueError):
+                    continue
+
+        tiers.append(
+            LoyaltyTierInfo(
+                id=group.id,
+                name=group.name,
+                threshold_rubles=threshold_rubles,
+                server_discount_percent=group.server_discount_percent or 0,
+                traffic_discount_percent=group.traffic_discount_percent or 0,
+                device_discount_percent=group.device_discount_percent or 0,
+                period_discounts=period_discounts,
+                is_current=is_current,
+                is_achieved=is_achieved,
+            )
+        )
+
+        # Find next tier (first not achieved)
+        if not is_achieved and next_tier_name is None:
+            next_tier_name = group.name
+            next_tier_threshold = threshold_rubles
+
+    # Calculate progress to next tier
+    progress_percent = 0.0
+    if next_tier_threshold and next_tier_threshold > 0:
+        progress_percent = min(100.0, (total_spent_rubles / next_tier_threshold) * 100)
+    elif tiers and all(t.is_achieved for t in tiers):
+        # All tiers achieved
+        progress_percent = 100.0
+
+    return LoyaltyTiersResponse(
+        tiers=tiers,
+        current_spent_rubles=total_spent_rubles,
+        current_tier_name=current_tier_name,
+        next_tier_name=next_tier_name,
+        next_tier_threshold_rubles=next_tier_threshold,
+        progress_percent=progress_percent,
     )
 
 

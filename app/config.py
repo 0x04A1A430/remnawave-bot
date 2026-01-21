@@ -294,6 +294,7 @@ class Settings(BaseSettings):
     
     TELEGRAM_STARS_ENABLED: bool = True
     TELEGRAM_STARS_RATE_RUB: float = 1.3
+    TELEGRAM_STARS_DISPLAY_NAME: str = "Telegram Stars"
     
     TRIBUTE_ENABLED: bool = False
     TRIBUTE_API_KEY: Optional[str] = None
@@ -303,6 +304,7 @@ class Settings(BaseSettings):
     TRIBUTE_WEBHOOK_PORT: int = 8081
 
     YOOKASSA_ENABLED: bool = False
+    YOOKASSA_DISPLAY_NAME: str = "YooKassa"
     YOOKASSA_SHOP_ID: Optional[str] = None
     YOOKASSA_SECRET_KEY: Optional[str] = None
     YOOKASSA_RETURN_URL: Optional[str] = None
@@ -348,6 +350,7 @@ class Settings(BaseSettings):
     PAYMENT_SUBSCRIPTION_TEMPLATE: str = "{service_name} - {description}"
 
     CRYPTOBOT_ENABLED: bool = False
+    CRYPTOBOT_DISPLAY_NAME: str = "CryptoBot"
     CRYPTOBOT_API_TOKEN: Optional[str] = None
     CRYPTOBOT_WEBHOOK_SECRET: Optional[str] = None
     CRYPTOBOT_BASE_URL: str = "https://pay.crypt.bot"
@@ -359,6 +362,7 @@ class Settings(BaseSettings):
     CRYPTOBOT_INVOICE_EXPIRES_HOURS: int = 24
 
     HELEKET_ENABLED: bool = False
+    HELEKET_DISPLAY_NAME: str = "Heleket Crypto"
     HELEKET_MERCHANT_ID: Optional[str] = None
     HELEKET_API_KEY: Optional[str] = None
     HELEKET_BASE_URL: str = "https://api.heleket.com/v1"
@@ -394,6 +398,7 @@ class Settings(BaseSettings):
     MULENPAY_IFRAME_EXPECTED_ORIGIN: Optional[str] = None
 
     PAL24_ENABLED: bool = False
+    PAL24_DISPLAY_NAME: str = "PAL24"
     PAL24_API_TOKEN: Optional[str] = None
     PAL24_SHOP_ID: Optional[str] = None
     PAL24_SIGNATURE_TOKEN: Optional[str] = None
@@ -425,6 +430,7 @@ class Settings(BaseSettings):
     PLATEGA_WEBHOOK_PORT: int = 8086
 
     WATA_ENABLED: bool = False
+    WATA_DISPLAY_NAME: str = "Wata"
     WATA_BASE_URL: str = "https://api.wata.pro/api/h2h"
     WATA_ACCESS_TOKEN: Optional[str] = None
     WATA_TERMINAL_PUBLIC_ID: Optional[str] = None
@@ -444,6 +450,7 @@ class Settings(BaseSettings):
 
     # CloudPayments
     CLOUDPAYMENTS_ENABLED: bool = False
+    CLOUDPAYMENTS_DISPLAY_NAME: str = "CloudPayments"
     CLOUDPAYMENTS_PUBLIC_ID: Optional[str] = None
     CLOUDPAYMENTS_API_SECRET: Optional[str] = None
     CLOUDPAYMENTS_API_URL: str = "https://api.cloudpayments.ru"
@@ -1496,6 +1503,10 @@ class Settings(BaseSettings):
                 self.YOOKASSA_SHOP_ID is not None and
                 self.YOOKASSA_SECRET_KEY is not None)
 
+    def get_yookassa_display_name(self) -> str:
+        name = (self.YOOKASSA_DISPLAY_NAME or "").strip()
+        return name if name else "YooKassa"
+
     def is_nalogo_enabled(self) -> bool:
         return (self.NALOGO_ENABLED and
                 self.NALOGO_INN is not None and
@@ -1515,12 +1526,20 @@ class Settings(BaseSettings):
         return (self.CRYPTOBOT_ENABLED and
                 self.CRYPTOBOT_API_TOKEN is not None)
 
+    def get_cryptobot_display_name(self) -> str:
+        name = (self.CRYPTOBOT_DISPLAY_NAME or "").strip()
+        return name if name else "CryptoBot"
+
     def is_heleket_enabled(self) -> bool:
         return (
             self.HELEKET_ENABLED
             and self.HELEKET_MERCHANT_ID is not None
             and self.HELEKET_API_KEY is not None
         )
+
+    def get_heleket_display_name(self) -> str:
+        name = (self.HELEKET_DISPLAY_NAME or "").strip()
+        return name if name else "Heleket Crypto"
 
     def is_mulenpay_enabled(self) -> bool:
         return (
@@ -1559,6 +1578,10 @@ class Settings(BaseSettings):
             and self.PAL24_API_TOKEN is not None
             and self.PAL24_SHOP_ID is not None
         )
+
+    def get_pal24_display_name(self) -> str:
+        name = (self.PAL24_DISPLAY_NAME or "").strip()
+        return name if name else "PAL24"
 
     def is_platega_enabled(self) -> bool:
         return (
@@ -1644,12 +1667,20 @@ class Settings(BaseSettings):
             and self.WATA_TERMINAL_PUBLIC_ID is not None
         )
 
+    def get_wata_display_name(self) -> str:
+        name = (self.WATA_DISPLAY_NAME or "").strip()
+        return name if name else "Wata"
+
     def is_cloudpayments_enabled(self) -> bool:
         return (
             self.CLOUDPAYMENTS_ENABLED
             and self.CLOUDPAYMENTS_PUBLIC_ID is not None
             and self.CLOUDPAYMENTS_API_SECRET is not None
         )
+
+    def get_cloudpayments_display_name(self) -> str:
+        name = (self.CLOUDPAYMENTS_DISPLAY_NAME or "").strip()
+        return name if name else "CloudPayments"
 
     def is_freekassa_enabled(self) -> bool:
         return (
@@ -1961,7 +1992,11 @@ class Settings(BaseSettings):
 
     def get_stars_rate(self) -> float:
         return self.TELEGRAM_STARS_RATE_RUB
-    
+
+    def get_telegram_stars_display_name(self) -> str:
+        name = (self.TELEGRAM_STARS_DISPLAY_NAME or "").strip()
+        return name if name else "Telegram Stars"
+
     def stars_to_rubles(self, stars: int) -> float:
         return stars * self.get_stars_rate()
     

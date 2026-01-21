@@ -134,7 +134,7 @@ async def get_payment_methods():
     if settings.is_yookassa_enabled():
         methods.append(PaymentMethodResponse(
             id="yookassa",
-            name="YooKassa",
+            name=settings.get_yookassa_display_name(),
             description="Pay via YooKassa",
             min_amount_kopeks=settings.YOOKASSA_MIN_AMOUNT_KOPEKS,
             max_amount_kopeks=settings.YOOKASSA_MAX_AMOUNT_KOPEKS,
@@ -149,7 +149,7 @@ async def get_payment_methods():
     if settings.is_cryptobot_enabled():
         methods.append(PaymentMethodResponse(
             id="cryptobot",
-            name="CryptoBot",
+            name=settings.get_cryptobot_display_name(),
             description="Pay with cryptocurrency via CryptoBot",
             min_amount_kopeks=1000,
             max_amount_kopeks=10000000,
@@ -160,7 +160,7 @@ async def get_payment_methods():
     if settings.TELEGRAM_STARS_ENABLED:
         methods.append(PaymentMethodResponse(
             id="telegram_stars",
-            name="Telegram Stars",
+            name=settings.get_telegram_stars_display_name(),
             description="Pay with Telegram Stars",
             min_amount_kopeks=100,
             max_amount_kopeks=1000000,
@@ -171,7 +171,7 @@ async def get_payment_methods():
     if settings.is_heleket_enabled():
         methods.append(PaymentMethodResponse(
             id="heleket",
-            name="Heleket Crypto",
+            name=settings.get_heleket_display_name(),
             description="Pay with cryptocurrency via Heleket",
             min_amount_kopeks=1000,
             max_amount_kopeks=10000000,
@@ -193,7 +193,7 @@ async def get_payment_methods():
     if settings.is_pal24_enabled():
         methods.append(PaymentMethodResponse(
             id="pal24",
-            name="PAL24",
+            name=settings.get_pal24_display_name(),
             description="Pay via PAL24",
             min_amount_kopeks=settings.PAL24_MIN_AMOUNT_KOPEKS,
             max_amount_kopeks=settings.PAL24_MAX_AMOUNT_KOPEKS,
@@ -231,7 +231,7 @@ async def get_payment_methods():
     if settings.is_wata_enabled():
         methods.append(PaymentMethodResponse(
             id="wata",
-            name="Wata",
+            name=settings.get_wata_display_name(),
             description="Pay via Wata",
             min_amount_kopeks=settings.WATA_MIN_AMOUNT_KOPEKS,
             max_amount_kopeks=settings.WATA_MAX_AMOUNT_KOPEKS,
@@ -242,7 +242,7 @@ async def get_payment_methods():
     if settings.is_cloudpayments_enabled():
         methods.append(PaymentMethodResponse(
             id="cloudpayments",
-            name="CloudPayments",
+            name=settings.get_cloudpayments_display_name(),
             description="Pay with bank card via CloudPayments",
             min_amount_kopeks=settings.CLOUDPAYMENTS_MIN_AMOUNT_KOPEKS,
             max_amount_kopeks=settings.CLOUDPAYMENTS_MAX_AMOUNT_KOPEKS,
@@ -404,12 +404,17 @@ async def create_topup(
 
             # Use payment_option to select card or sbp (default: card)
             option = (request.payment_option or "").strip().lower()
+            # Use description with telegram_id for tax receipts
+            description = settings.get_balance_payment_description(
+                request.amount_kopeks,
+                telegram_user_id=user.telegram_id
+            )
             if option == "sbp":
                 # Create SBP payment with QR code
                 result = await yookassa_service.create_sbp_payment(
                     amount=amount_rubles,
                     currency="RUB",
-                    description=f"Пополнение баланса на {amount_rubles:.2f} ₽",
+                    description=description,
                     metadata=yookassa_metadata,
                 )
             else:
@@ -417,7 +422,7 @@ async def create_topup(
                 result = await yookassa_service.create_payment(
                     amount=amount_rubles,
                     currency="RUB",
-                    description=f"Пополнение баланса на {amount_rubles:.2f} ₽",
+                    description=description,
                     metadata=yookassa_metadata,
                 )
 

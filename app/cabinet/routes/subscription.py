@@ -2509,12 +2509,15 @@ async def get_app_config(
         "appleTV": {"ru": "Apple TV", "en": "Apple TV"},
     }
 
+    hide_link = settings.should_hide_subscription_link()
+
     return {
         "platforms": platforms,
         "platformNames": platform_names,
         "hasSubscription": bool(subscription_url or subscription_crypto_link),
-        "subscriptionUrl": subscription_url,
-        "subscriptionCryptoLink": subscription_crypto_link,
+        "subscriptionUrl": subscription_url if not hide_link else None,
+        "subscriptionCryptoLink": subscription_crypto_link if not hide_link else None,
+        "hideLink": hide_link,
         "branding": config.get("config", {}).get("branding", {}),
     }
 

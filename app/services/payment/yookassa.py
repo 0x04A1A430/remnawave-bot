@@ -122,11 +122,13 @@ class YooKassaPaymentMixin:
                 except Exception as e:
                     logger.warning(f"Не удалось получить telegram_id для user_id={user_id}: {e}")
 
+            # Preserve existing type from metadata if passed (e.g., "trial")
+            existing_type = payment_metadata.get("type")
             payment_metadata.update(
                 {
                     "user_id": str(user_id),
                     "amount_kopeks": str(amount_kopeks),
-                    "type": "balance_topup",
+                    "type": existing_type or "balance_topup",
                 }
             )
 
@@ -225,11 +227,13 @@ class YooKassaPaymentMixin:
                 except Exception as e:
                     logger.warning(f"Не удалось получить telegram_id для user_id={user_id}: {e}")
 
+            # Preserve existing type from metadata if passed (e.g., "trial")
+            existing_type = payment_metadata.get("type")
             payment_metadata.update(
                 {
                     "user_id": str(user_id),
                     "amount_kopeks": str(amount_kopeks),
-                    "type": "balance_topup_sbp",
+                    "type": existing_type or "balance_topup_sbp",
                 }
             )
 
