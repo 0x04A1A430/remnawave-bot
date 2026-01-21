@@ -1,5 +1,6 @@
 """Authentication routes for cabinet."""
 
+import asyncio
 import hashlib
 import logging
 from datetime import datetime
@@ -296,11 +297,12 @@ async def register_email(
 
     await db.commit()
 
-    # Send verification email
-    if email_service.is_configured():
+    # Send verification email asynchronously (smtplib is blocking)
+    if settings.is_cabinet_email_verification_enabled() and email_service.is_configured():
         # TODO: Get actual verification URL from settings
         verification_url = "https://example.com/cabinet/verify-email"
-        email_service.send_verification_email(
+        await asyncio.to_thread(
+            email_service.send_verification_email,
             to_email=request.email,
             verification_token=verification_token,
             verification_url=verification_url,
@@ -375,14 +377,25 @@ async def resend_verification(
 
     await db.commit()
 
-    # Send verification email
-    if email_service.is_configured():
+    # Send verification email asynchronously (smtplib is blocking)
+    if settings.is_cabinet_email_verification_enabled() and email_service.is_configured():
         verification_url = "https://example.com/cabinet/verify-email"
-        email_service.send_verification_email(
+        await asyncio.to_thread(
+            email_service.send_verification_email,
             to_email=user.email,
             verification_token=verification_token,
             verification_url=verification_url,
             username=user.first_name,
+        )
+    elif not settings.is_cabinet_email_verification_enabled():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email verification is disabled",
+        )
+    elif not email_service.is_configured():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Email service is not configured",
         )
 
     return {"message": "Verification email sent"}
@@ -548,10 +561,11 @@ async def forgot_password(
 
     await db.commit()
 
-    # Send reset email
+    # Send reset email asynchronously (smtplib is blocking)
     if email_service.is_configured():
         reset_url = "https://example.com/cabinet/reset-password"
-        email_service.send_password_reset_email(
+        await asyncio.to_thread(
+            email_service.send_password_reset_email,
             to_email=user.email,
             reset_token=reset_token,
             reset_url=reset_url,
