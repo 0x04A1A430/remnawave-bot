@@ -771,6 +771,13 @@ def _get_trial_payment_keyboard(language: str, can_pay_from_balance: bool = Fals
             callback_data="trial_payment_wata"
         )])
 
+    if settings.is_platega_enabled():
+        platega_name = settings.get_platega_display_name()
+        keyboard.append([types.InlineKeyboardButton(
+            text=f"💳 {platega_name}",
+            callback_data="trial_payment_platega"
+        )])
+
     # Кнопка назад
     keyboard.append([types.InlineKeyboardButton(
         text=texts.BACK,
@@ -4011,6 +4018,50 @@ async def handle_trial_payment_method(
                     [InlineKeyboardButton(
                         text=texts.t("CHECK_PAYMENT", "🔄 Проверить оплату"),
                         callback_data=f"check_trial_wata_{pending_subscription.id}"
+                    )],
+                    [InlineKeyboardButton(text=texts.BACK, callback_data="trial_activate")],
+                ]),
+                parse_mode="HTML",
+            )
+
+        elif payment_method == "platega":
+            # Оплата через Platega
+            active_methods = settings.get_platega_active_methods()
+            if not active_methods:
+                await callback.answer("❌ Platega не настроена", show_alert=True)
+                return
+
+            # Используем первый активный метод
+            method_code = active_methods[0]
+
+            payment_result = await payment_service.create_platega_payment(
+                db=db,
+                user_id=db_user.id,
+                amount_kopeks=trial_price_kopeks,
+                description=texts.t("PAID_TRIAL_PAYMENT_DESC", "Пробная подписка на {days} дней").format(
+                    days=settings.TRIAL_DURATION_DAYS
+                ),
+                language=db_user.language,
+                payment_method_code=method_code,
+            )
+
+            if not payment_result or not payment_result.get("redirect_url"):
+                await callback.answer("❌ Не удалось создать платеж. Попробуйте позже.", show_alert=True)
+                return
+
+            platega_name = settings.get_platega_display_name()
+            await callback.message.edit_text(
+                texts.t(
+                    "PAID_TRIAL_PLATEGA",
+                    "💳 <b>Оплата через {provider}</b>\n\n"
+                    "Нажмите кнопку ниже для перехода к оплате.\n\n"
+                    "💰 Сумма: {amount}"
+                ).format(provider=platega_name, amount=settings.format_price(trial_price_kopeks)),
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="💳 Оплатить", url=payment_result["redirect_url"])],
+                    [InlineKeyboardButton(
+                        text=texts.t("CHECK_PAYMENT", "🔄 Проверить оплату"),
+                        callback_data=f"check_trial_platega_{pending_subscription.id}"
                     )],
                     [InlineKeyboardButton(text=texts.BACK, callback_data="trial_activate")],
                 ]),
