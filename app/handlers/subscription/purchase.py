@@ -1430,6 +1430,13 @@ async def return_to_saved_cart(
 
     texts = get_texts(db_user.language)
 
+    # Проверяем режим корзины - если это тарифная корзина, перенаправляем на соответствующий обработчик
+    cart_mode = cart_data.get('cart_mode')
+    if cart_mode in ('tariff_purchase', 'daily_tariff_purchase', 'extend') and cart_data.get('tariff_id'):
+        from .tariff_purchase import return_to_saved_tariff_cart
+        await return_to_saved_tariff_cart(callback, state, db_user, db, cart_data)
+        return
+
     preserved_metadata_keys = {
         'saved_cart',
         'missing_amount',
