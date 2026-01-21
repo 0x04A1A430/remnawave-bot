@@ -16,6 +16,7 @@ from .platega import PlategaPaymentMixin
 from .wata import WataPaymentMixin
 from .cloudpayments import CloudPaymentsPaymentMixin
 from .freekassa import FreekassaPaymentMixin
+from .kassa_ai import KassaAiPaymentMixin
 
 __all__ = [
     "PaymentCommonMixin",
@@ -30,4 +31,5 @@ __all__ = [
     "WataPaymentMixin",
     "CloudPaymentsPaymentMixin",
     "FreekassaPaymentMixin",
+    "KassaAiPaymentMixin",
 ]
