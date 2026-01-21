@@ -1779,6 +1779,10 @@ def get_monitoring_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
             InlineKeyboardButton(
                 text=_t(texts, "ADMIN_MONITORING_TEST_NOTIFICATIONS", "🧪 Тест уведомлений"),
                 callback_data="admin_mon_test_notifications"
+            ),
+            InlineKeyboardButton(
+                text="⚙️ Настройки трафика",
+                callback_data="admin_mon_traffic_settings"
             )
         ],
         [

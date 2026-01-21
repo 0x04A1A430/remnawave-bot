@@ -1794,5 +1794,318 @@ async def process_notification_value_input(message: Message, state: FSMContext):
     await state.clear()
 
 
+# ============== Настройки мониторинга трафика ==============
+
+def _format_traffic_toggle(enabled: bool) -> str:
+    return "🟢 Вкл" if enabled else "🔴 Выкл"
+
+
+def _build_traffic_settings_keyboard() -> InlineKeyboardMarkup:
+    """Строит клавиатуру настроек мониторинга трафика."""
+    fast_enabled = settings.TRAFFIC_FAST_CHECK_ENABLED
+    daily_enabled = settings.TRAFFIC_DAILY_CHECK_ENABLED
+
+    fast_interval = settings.TRAFFIC_FAST_CHECK_INTERVAL_MINUTES
+    fast_threshold = settings.TRAFFIC_FAST_CHECK_THRESHOLD_GB
+    daily_time = settings.TRAFFIC_DAILY_CHECK_TIME
+    daily_threshold = settings.TRAFFIC_DAILY_THRESHOLD_GB
+    cooldown = settings.TRAFFIC_NOTIFICATION_COOLDOWN_MINUTES
+
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(
+            text=f"{_format_traffic_toggle(fast_enabled)} Быстрая проверка",
+            callback_data="admin_traffic_toggle_fast"
+        )],
+        [InlineKeyboardButton(
+            text=f"⏱ Интервал: {fast_interval} мин",
+            callback_data="admin_traffic_edit_fast_interval"
+        )],
+        [InlineKeyboardButton(
+            text=f"📊 Порог дельты: {fast_threshold} ГБ",
+            callback_data="admin_traffic_edit_fast_threshold"
+        )],
+        [InlineKeyboardButton(
+            text=f"{_format_traffic_toggle(daily_enabled)} Суточная проверка",
+            callback_data="admin_traffic_toggle_daily"
+        )],
+        [InlineKeyboardButton(
+            text=f"🕐 Время проверки: {daily_time}",
+            callback_data="admin_traffic_edit_daily_time"
+        )],
+        [InlineKeyboardButton(
+            text=f"📈 Суточный порог: {daily_threshold} ГБ",
+            callback_data="admin_traffic_edit_daily_threshold"
+        )],
+        [InlineKeyboardButton(
+            text=f"⏳ Кулдаун: {cooldown} мин",
+            callback_data="admin_traffic_edit_cooldown"
+        )],
+        [InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_monitoring")],
+    ])
+
+
+def _build_traffic_settings_text() -> str:
+    """Строит текст настроек мониторинга трафика."""
+    fast_enabled = settings.TRAFFIC_FAST_CHECK_ENABLED
+    daily_enabled = settings.TRAFFIC_DAILY_CHECK_ENABLED
+
+    fast_status = _format_traffic_toggle(fast_enabled)
+    daily_status = _format_traffic_toggle(daily_enabled)
+
+    text = (
+        "⚙️ <b>Настройки мониторинга трафика</b>\n\n"
+        f"<b>Быстрая проверка:</b> {fast_status}\n"
+        f"• Интервал: {settings.TRAFFIC_FAST_CHECK_INTERVAL_MINUTES} мин\n"
+        f"• Порог дельты: {settings.TRAFFIC_FAST_CHECK_THRESHOLD_GB} ГБ\n\n"
+        f"<b>Суточная проверка:</b> {daily_status}\n"
+        f"• Время: {settings.TRAFFIC_DAILY_CHECK_TIME} UTC\n"
+        f"• Порог: {settings.TRAFFIC_DAILY_THRESHOLD_GB} ГБ\n\n"
+        f"<b>Общие:</b>\n"
+        f"• Кулдаун уведомлений: {settings.TRAFFIC_NOTIFICATION_COOLDOWN_MINUTES} мин\n"
+    )
+
+    # Информация о фильтрах
+    monitored_nodes = settings.get_traffic_monitored_nodes()
+    ignored_nodes = settings.get_traffic_ignored_nodes()
+    excluded_uuids = settings.get_traffic_excluded_user_uuids()
+
+    if monitored_nodes:
+        text += f"• Мониторим только: {len(monitored_nodes)} нод(ы)\n"
+    if ignored_nodes:
+        text += f"• Игнорируем: {len(ignored_nodes)} нод(ы)\n"
+    if excluded_uuids:
+        text += f"• Исключено юзеров: {len(excluded_uuids)}\n"
+
+    return text
+
+
+@router.callback_query(F.data == "admin_mon_traffic_settings")
+@admin_required
+async def admin_traffic_settings(callback: CallbackQuery):
+    """Показывает настройки мониторинга трафика."""
+    try:
+        text = _build_traffic_settings_text()
+        keyboard = _build_traffic_settings_keyboard()
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
+    except Exception as e:
+        logger.error(f"Ошибка отображения настроек трафика: {e}")
+        await callback.answer("❌ Ошибка загрузки настроек", show_alert=True)
+
+
+@router.callback_query(F.data == "admin_traffic_toggle_fast")
+@admin_required
+async def toggle_fast_check(callback: CallbackQuery):
+    """Переключает быструю проверку трафика."""
+    try:
+        from app.services.system_settings_service import BotConfigurationService
+
+        current = settings.TRAFFIC_FAST_CHECK_ENABLED
+        new_value = not current
+
+        async with AsyncSessionLocal() as db:
+            await BotConfigurationService.set_value(db, "TRAFFIC_FAST_CHECK_ENABLED", new_value)
+            await db.commit()
+
+        await callback.answer("✅ Включено" if new_value else "⏸️ Отключено")
+
+        # Обновляем отображение
+        text = _build_traffic_settings_text()
+        keyboard = _build_traffic_settings_keyboard()
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
+
+    except Exception as e:
+        logger.error(f"Ошибка переключения быстрой проверки: {e}")
+        await callback.answer("❌ Ошибка", show_alert=True)
+
+
+@router.callback_query(F.data == "admin_traffic_toggle_daily")
+@admin_required
+async def toggle_daily_check(callback: CallbackQuery):
+    """Переключает суточную проверку трафика."""
+    try:
+        from app.services.system_settings_service import BotConfigurationService
+
+        current = settings.TRAFFIC_DAILY_CHECK_ENABLED
+        new_value = not current
+
+        async with AsyncSessionLocal() as db:
+            await BotConfigurationService.set_value(db, "TRAFFIC_DAILY_CHECK_ENABLED", new_value)
+            await db.commit()
+
+        await callback.answer("✅ Включено" if new_value else "⏸️ Отключено")
+
+        text = _build_traffic_settings_text()
+        keyboard = _build_traffic_settings_keyboard()
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
+
+    except Exception as e:
+        logger.error(f"Ошибка переключения суточной проверки: {e}")
+        await callback.answer("❌ Ошибка", show_alert=True)
+
+
+@router.callback_query(F.data == "admin_traffic_edit_fast_interval")
+@admin_required
+async def edit_fast_interval(callback: CallbackQuery, state: FSMContext):
+    """Начинает редактирование интервала быстрой проверки."""
+    await state.set_state(AdminStates.editing_traffic_setting)
+    await state.update_data(
+        traffic_setting_key="TRAFFIC_FAST_CHECK_INTERVAL_MINUTES",
+        traffic_setting_type="int",
+        settings_message_chat=callback.message.chat.id,
+        settings_message_id=callback.message.message_id,
+    )
+    await callback.answer()
+    await callback.message.answer(
+        "⏱ Введите интервал быстрой проверки в минутах (минимум 1):"
+    )
+
+
+@router.callback_query(F.data == "admin_traffic_edit_fast_threshold")
+@admin_required
+async def edit_fast_threshold(callback: CallbackQuery, state: FSMContext):
+    """Начинает редактирование порога быстрой проверки."""
+    await state.set_state(AdminStates.editing_traffic_setting)
+    await state.update_data(
+        traffic_setting_key="TRAFFIC_FAST_CHECK_THRESHOLD_GB",
+        traffic_setting_type="float",
+        settings_message_chat=callback.message.chat.id,
+        settings_message_id=callback.message.message_id,
+    )
+    await callback.answer()
+    await callback.message.answer(
+        "📊 Введите порог дельты трафика в ГБ (например: 5.0):"
+    )
+
+
+@router.callback_query(F.data == "admin_traffic_edit_daily_time")
+@admin_required
+async def edit_daily_time(callback: CallbackQuery, state: FSMContext):
+    """Начинает редактирование времени суточной проверки."""
+    await state.set_state(AdminStates.editing_traffic_setting)
+    await state.update_data(
+        traffic_setting_key="TRAFFIC_DAILY_CHECK_TIME",
+        traffic_setting_type="time",
+        settings_message_chat=callback.message.chat.id,
+        settings_message_id=callback.message.message_id,
+    )
+    await callback.answer()
+    await callback.message.answer(
+        "🕐 Введите время суточной проверки в формате HH:MM (UTC):\n"
+        "Например: 00:00, 03:00, 12:30"
+    )
+
+
+@router.callback_query(F.data == "admin_traffic_edit_daily_threshold")
+@admin_required
+async def edit_daily_threshold(callback: CallbackQuery, state: FSMContext):
+    """Начинает редактирование суточного порога."""
+    await state.set_state(AdminStates.editing_traffic_setting)
+    await state.update_data(
+        traffic_setting_key="TRAFFIC_DAILY_THRESHOLD_GB",
+        traffic_setting_type="float",
+        settings_message_chat=callback.message.chat.id,
+        settings_message_id=callback.message.message_id,
+    )
+    await callback.answer()
+    await callback.message.answer(
+        "📈 Введите суточный порог трафика в ГБ (например: 50.0):"
+    )
+
+
+@router.callback_query(F.data == "admin_traffic_edit_cooldown")
+@admin_required
+async def edit_cooldown(callback: CallbackQuery, state: FSMContext):
+    """Начинает редактирование кулдауна уведомлений."""
+    await state.set_state(AdminStates.editing_traffic_setting)
+    await state.update_data(
+        traffic_setting_key="TRAFFIC_NOTIFICATION_COOLDOWN_MINUTES",
+        traffic_setting_type="int",
+        settings_message_chat=callback.message.chat.id,
+        settings_message_id=callback.message.message_id,
+    )
+    await callback.answer()
+    await callback.message.answer(
+        "⏳ Введите кулдаун уведомлений в минутах (минимум 1):"
+    )
+
+
+@router.message(AdminStates.editing_traffic_setting)
+async def process_traffic_setting_input(message: Message, state: FSMContext):
+    """Обрабатывает ввод настройки мониторинга трафика."""
+    from app.services.system_settings_service import BotConfigurationService
+
+    data = await state.get_data()
+    if not data:
+        await state.clear()
+        await message.answer("ℹ️ Контекст утерян, попробуйте снова из меню настроек.")
+        return
+
+    raw_value = (message.text or "").strip()
+    setting_key = data.get("traffic_setting_key")
+    setting_type = data.get("traffic_setting_type")
+
+    # Валидация и парсинг значения
+    try:
+        if setting_type == "int":
+            value = int(raw_value)
+            if value < 1:
+                raise ValueError("Значение должно быть >= 1")
+        elif setting_type == "float":
+            value = float(raw_value.replace(",", "."))
+            if value <= 0:
+                raise ValueError("Значение должно быть > 0")
+        elif setting_type == "time":
+            # Валидация формата HH:MM
+            import re
+            if not re.match(r"^\d{1,2}:\d{2}$", raw_value):
+                raise ValueError("Неверный формат времени. Используйте HH:MM")
+            parts = raw_value.split(":")
+            hours, minutes = int(parts[0]), int(parts[1])
+            if hours < 0 or hours > 23 or minutes < 0 or minutes > 59:
+                raise ValueError("Неверное время")
+            value = f"{hours:02d}:{minutes:02d}"
+        else:
+            value = raw_value
+    except ValueError as e:
+        await message.answer(f"❌ {str(e)}")
+        return
+
+    # Сохраняем значение
+    try:
+        async with AsyncSessionLocal() as db:
+            await BotConfigurationService.set_value(db, setting_key, value)
+            await db.commit()
+
+        back_keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="⬅️ К настройкам трафика", callback_data="admin_mon_traffic_settings")]
+            ]
+        )
+        await message.answer("✅ Настройка сохранена!", reply_markup=back_keyboard)
+
+        # Обновляем исходное сообщение с настройками
+        chat_id = data.get("settings_message_chat")
+        message_id = data.get("settings_message_id")
+        if chat_id and message_id:
+            try:
+                text = _build_traffic_settings_text()
+                keyboard = _build_traffic_settings_keyboard()
+                await message.bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    text=text,
+                    parse_mode="HTML",
+                    reply_markup=keyboard
+                )
+            except Exception:
+                pass  # Игнорируем если сообщение уже удалено
+
+    except Exception as e:
+        logger.error(f"Ошибка сохранения настройки трафика: {e}")
+        await message.answer(f"❌ Ошибка сохранения: {str(e)}")
+
+    await state.clear()
+
+
 def register_handlers(dp):
     dp.include_router(router)
