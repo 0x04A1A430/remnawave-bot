@@ -404,12 +404,17 @@ async def create_topup(
 
             # Use payment_option to select card or sbp (default: card)
             option = (request.payment_option or "").strip().lower()
+            # Use description with telegram_id for tax receipts
+            description = settings.get_balance_payment_description(
+                request.amount_kopeks,
+                telegram_user_id=user.telegram_id
+            )
             if option == "sbp":
                 # Create SBP payment with QR code
                 result = await yookassa_service.create_sbp_payment(
                     amount=amount_rubles,
                     currency="RUB",
-                    description=f"Пополнение баланса на {amount_rubles:.2f} ₽",
+                    description=description,
                     metadata=yookassa_metadata,
                 )
             else:
@@ -417,7 +422,7 @@ async def create_topup(
                 result = await yookassa_service.create_payment(
                     amount=amount_rubles,
                     currency="RUB",
-                    description=f"Пополнение баланса на {amount_rubles:.2f} ₽",
+                    description=description,
                     metadata=yookassa_metadata,
                 )
 
