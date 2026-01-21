@@ -159,7 +159,7 @@ async def get_promo_group_discounts(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get user's promo group discounts."""
-    await db.refresh(user, ["promo_groups"])
+    await db.refresh(user, ["promo_group", "user_promo_groups"])
 
     promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else None
 
@@ -196,7 +196,7 @@ async def get_loyalty_tiers(
     total_spent_rubles = total_spent_kopeks / 100
 
     # Get user's current promo group
-    await db.refresh(user, ["promo_groups"])
+    await db.refresh(user, ["promo_group", "user_promo_groups"])
     current_promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else None
     current_tier_name = current_promo_group.name if current_promo_group else None
 
