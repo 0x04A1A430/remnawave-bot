@@ -1606,6 +1606,15 @@ async def check_and_update_subscription_status(
     if (subscription.status == SubscriptionStatus.ACTIVE.value and
         subscription.end_date <= current_time):
 
+        # Детальное логирование для отладки проблемы с деактивацией
+        time_diff = current_time - subscription.end_date
+        logger.warning(
+            f"⏰ DEACTIVATION: подписка {subscription.id} (user_id={subscription.user_id}) "
+            f"деактивируется в check_and_update_subscription_status. "
+            f"end_date={subscription.end_date}, current_time={current_time}, "
+            f"просрочена на {time_diff}"
+        )
+
         subscription.status = SubscriptionStatus.EXPIRED.value
         subscription.updated_at = current_time
 
