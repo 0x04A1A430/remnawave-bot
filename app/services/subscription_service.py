@@ -328,17 +328,19 @@ class SubscriptionService:
                 pass  # tariff может быть None или уже загружен
 
             current_time = datetime.utcnow()
+            # Определяем актуальный статус для отправки в RemnaWave
+            # НЕ меняем статус подписки здесь - это задача scheduled job
             is_actually_active = (subscription.status == SubscriptionStatus.ACTIVE.value and
                                  subscription.end_date > current_time)
 
+            # Логируем если статус и end_date не согласованы (для отладки)
             if (subscription.status == SubscriptionStatus.ACTIVE.value and
                 subscription.end_date <= current_time):
-
-                subscription.status = SubscriptionStatus.EXPIRED.value
-                subscription.updated_at = current_time
-                await db.commit()
-                is_actually_active = False
-                logger.info(f"🔔 Статус подписки {subscription.id} автоматически изменен на 'expired'")
+                logger.warning(
+                    f"⚠️ update_remnawave_user: подписка {subscription.id} имеет статус ACTIVE, "
+                    f"но end_date ({subscription.end_date}) <= now ({current_time}). "
+                    f"Отправляем в RemnaWave как EXPIRED, но НЕ меняем статус в БД."
+                )
 
             user_tag = self._resolve_user_tag(subscription)
 
