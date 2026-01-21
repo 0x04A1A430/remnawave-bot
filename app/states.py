@@ -134,6 +134,7 @@ class AdminStates(StatesGroup):
     editing_faq_title = State()
     editing_faq_content = State()
     editing_notification_value = State()
+    editing_traffic_setting = State()
 
     confirming_sync = State()
 

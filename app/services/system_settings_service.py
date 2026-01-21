@@ -276,6 +276,18 @@ class BotConfigurationService:
         "TRAFFIC_MONITORING_INTERVAL_HOURS": "MONITORING",
         "TRAFFIC_MONITORED_NODES": "MONITORING",
         "TRAFFIC_SNAPSHOT_TTL_HOURS": "MONITORING",
+        "TRAFFIC_FAST_CHECK_ENABLED": "MONITORING",
+        "TRAFFIC_FAST_CHECK_INTERVAL_MINUTES": "MONITORING",
+        "TRAFFIC_FAST_CHECK_THRESHOLD_GB": "MONITORING",
+        "TRAFFIC_DAILY_CHECK_ENABLED": "MONITORING",
+        "TRAFFIC_DAILY_CHECK_TIME": "MONITORING",
+        "TRAFFIC_DAILY_THRESHOLD_GB": "MONITORING",
+        "TRAFFIC_IGNORED_NODES": "MONITORING",
+        "TRAFFIC_EXCLUDED_USER_UUIDS": "MONITORING",
+        "TRAFFIC_NOTIFICATION_COOLDOWN_MINUTES": "MONITORING",
+        "SUSPICIOUS_NOTIFICATIONS_TOPIC_ID": "MONITORING",
+        "TRAFFIC_CHECK_BATCH_SIZE": "MONITORING",
+        "TRAFFIC_CHECK_CONCURRENCY": "MONITORING",
         "ENABLE_LOGO_MODE": "INTERFACE_BRANDING",
         "LOGO_FILE": "INTERFACE_BRANDING",
         "HIDE_SUBSCRIPTION_LINK": "INTERFACE_SUBSCRIPTION",
@@ -779,6 +791,57 @@ class BotConfigurationService:
                 "Если TTL меньше интервала, snapshot будет удален до следующей проверки."
             ),
             "dependencies": "TRAFFIC_MONITORING_ENABLED, Redis",
+        },
+        "TRAFFIC_FAST_CHECK_ENABLED": {
+            "description": (
+                "Включает быструю проверку трафика. "
+                "Система сравнивает текущий трафик со snapshot и уведомляет о превышениях дельты."
+            ),
+            "format": "Булево значение.",
+            "example": "true",
+            "warning": "Требует Redis для хранения snapshot. При отключении проверки не выполняются.",
+            "dependencies": "Redis, TRAFFIC_FAST_CHECK_INTERVAL_MINUTES, TRAFFIC_FAST_CHECK_THRESHOLD_GB",
+        },
+        "TRAFFIC_FAST_CHECK_INTERVAL_MINUTES": {
+            "description": "Интервал быстрой проверки трафика в минутах.",
+            "format": "Целое число минут (минимум 1).",
+            "example": "10",
+            "warning": "Слишком малый интервал создаёт нагрузку на Remnawave API.",
+            "dependencies": "TRAFFIC_FAST_CHECK_ENABLED",
+        },
+        "TRAFFIC_FAST_CHECK_THRESHOLD_GB": {
+            "description": "Порог дельты трафика в ГБ для быстрой проверки. При превышении отправляется уведомление.",
+            "format": "Число с плавающей точкой.",
+            "example": "5.0",
+            "warning": "Слишком низкий порог приведёт к частым уведомлениям.",
+            "dependencies": "TRAFFIC_FAST_CHECK_ENABLED",
+        },
+        "TRAFFIC_DAILY_CHECK_ENABLED": {
+            "description": "Включает суточную проверку трафика через bandwidth-stats API.",
+            "format": "Булево значение.",
+            "example": "true",
+            "warning": "Проверка выполняется в указанное время (TRAFFIC_DAILY_CHECK_TIME).",
+            "dependencies": "TRAFFIC_DAILY_CHECK_TIME, TRAFFIC_DAILY_THRESHOLD_GB",
+        },
+        "TRAFFIC_DAILY_CHECK_TIME": {
+            "description": "Время суточной проверки трафика в формате HH:MM (UTC).",
+            "format": "Строка времени HH:MM.",
+            "example": "00:00",
+            "warning": "Время указывается в UTC.",
+            "dependencies": "TRAFFIC_DAILY_CHECK_ENABLED",
+        },
+        "TRAFFIC_DAILY_THRESHOLD_GB": {
+            "description": "Порог суточного трафика в ГБ. При превышении за 24 часа отправляется уведомление.",
+            "format": "Число с плавающей точкой.",
+            "example": "50.0",
+            "warning": "Учитывается весь трафик за последние 24 часа.",
+            "dependencies": "TRAFFIC_DAILY_CHECK_ENABLED",
+        },
+        "TRAFFIC_NOTIFICATION_COOLDOWN_MINUTES": {
+            "description": "Кулдаун уведомлений по одному пользователю в минутах.",
+            "format": "Целое число минут.",
+            "example": "60",
+            "warning": "Защита от спама уведомлениями по одному и тому же пользователю.",
         },
     }
 
