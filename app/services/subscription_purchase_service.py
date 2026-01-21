@@ -653,13 +653,13 @@ class MiniAppSubscriptionPurchaseService:
 
         period = context.period_map[period_id]
 
-        traffic_value = (
-            selection_payload.get("traffic_value")
-            or selection_payload.get("trafficValue")
-            or selection_payload.get("traffic")
-            or selection_payload.get("traffic_gb")
-            or selection_payload.get("trafficGb")
-        )
+        # Don't use `or` chaining - 0 is valid for unlimited traffic
+        traffic_value = None
+        for key in ("traffic_value", "trafficValue", "traffic", "traffic_gb", "trafficGb"):
+            value = selection_payload.get(key)
+            if value is not None:
+                traffic_value = value
+                break
 
         if period.traffic.selectable:
             available_values = {option.value for option in period.traffic.options}
