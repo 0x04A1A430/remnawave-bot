@@ -9,6 +9,23 @@ from app.database.models import Transaction, TransactionType, PaymentMethod, Use
 
 logger = logging.getLogger(__name__)
 
+# Реальные платёжные методы для подсчёта дохода
+# Исключены: MANUAL (админские), BALANCE (оплата с баланса), NULL (колесо, промокоды, бонусы)
+REAL_PAYMENT_METHODS = [
+    PaymentMethod.TELEGRAM_STARS.value,
+    PaymentMethod.TRIBUTE.value,
+    PaymentMethod.YOOKASSA.value,
+    PaymentMethod.CRYPTOBOT.value,
+    PaymentMethod.HELEKET.value,
+    PaymentMethod.MULENPAY.value,
+    PaymentMethod.PAL24.value,
+    PaymentMethod.WATA.value,
+    PaymentMethod.PLATEGA.value,
+    PaymentMethod.CLOUDPAYMENTS.value,
+    PaymentMethod.FREEKASSA.value,
+    PaymentMethod.KASSA_AI.value,
+]
+
 
 async def create_transaction(
     db: AsyncSession,
@@ -209,6 +226,7 @@ async def get_transactions_statistics(
     if not end_date:
         end_date = datetime.utcnow()
     
+    # Доход считаем только по реальным платежам (исключаем колесо, промокоды, админские пополнения)
     income_result = await db.execute(
         select(func.coalesce(func.sum(Transaction.amount_kopeks), 0))
         .where(
@@ -216,7 +234,8 @@ async def get_transactions_statistics(
                 Transaction.type == TransactionType.DEPOSIT.value,
                 Transaction.is_completed == True,
                 Transaction.created_at >= start_date,
-                Transaction.created_at <= end_date
+                Transaction.created_at <= end_date,
+                Transaction.payment_method.in_(REAL_PAYMENT_METHODS)
             )
         )
     )
@@ -297,13 +316,15 @@ async def get_transactions_statistics(
     )
     transactions_today = today_result.scalar()
     
+    # Доход за сегодня - только реальные платежи
     today_income_result = await db.execute(
         select(func.coalesce(func.sum(Transaction.amount_kopeks), 0))
         .where(
             and_(
                 Transaction.type == TransactionType.DEPOSIT.value,
                 Transaction.is_completed == True,
-                Transaction.created_at >= today
+                Transaction.created_at >= today,
+                Transaction.payment_method.in_(REAL_PAYMENT_METHODS)
             )
         )
     )
@@ -333,9 +354,9 @@ async def get_revenue_by_period(
     db: AsyncSession,
     days: int = 30
 ) -> List[dict]:
-    
+    """Доход по дням - только реальные платежи."""
     start_date = datetime.utcnow() - timedelta(days=days)
-    
+
     result = await db.execute(
         select(
             func.date(Transaction.created_at).label('date'),
@@ -345,13 +366,14 @@ async def get_revenue_by_period(
             and_(
                 Transaction.type == TransactionType.DEPOSIT.value,
                 Transaction.is_completed == True,
-                Transaction.created_at >= start_date
+                Transaction.created_at >= start_date,
+                Transaction.payment_method.in_(REAL_PAYMENT_METHODS)
             )
         )
         .group_by(func.date(Transaction.created_at))
         .order_by(func.date(Transaction.created_at))
     )
-    
+
     return [{"date": row.date, "amount_kopeks": row.amount} for row in result]
 
 
