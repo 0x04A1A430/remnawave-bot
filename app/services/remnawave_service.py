@@ -1430,13 +1430,30 @@ class RemnaWaveService:
                                 logger.warning(f"⚠️ Не удалось удалить серверы подписки: {servers_error}")
                             
                             from app.database.models import SubscriptionStatus
-                            
+
+                            # Проверяем, была ли это платная подписка
+                            was_paid = (
+                                not subscription.is_trial
+                                or getattr(db_user, 'has_had_paid_subscription', False)
+                            )
+
                             subscription.status = SubscriptionStatus.DISABLED.value
-                            subscription.is_trial = True 
-                            subscription.end_date = datetime.utcnow()
-                            subscription.traffic_limit_gb = 0
-                            subscription.traffic_used_gb = 0.0
-                            subscription.device_limit = 1
+
+                            if was_paid:
+                                # Для платных подписок - НЕ сбрасываем is_trial и end_date!
+                                # Сохраняем оригинальные значения чтобы можно было восстановить
+                                logger.warning(
+                                    f"⚠️ ПЛАТНАЯ подписка пользователя {telegram_id} отключена (нет в панели), "
+                                    f"но is_trial={subscription.is_trial} и end_date={subscription.end_date} СОХРАНЕНЫ"
+                                )
+                            else:
+                                # Для триальных подписок - сбрасываем как раньше
+                                subscription.is_trial = True
+                                subscription.end_date = datetime.utcnow()
+                                subscription.traffic_limit_gb = 0
+                                subscription.traffic_used_gb = 0.0
+                                subscription.device_limit = 1
+
                             subscription.connected_squads = []
                             subscription.autopay_enabled = False
                             subscription.remnawave_short_uuid = None
@@ -2165,7 +2182,25 @@ class RemnaWaveService:
             return False
 
     async def force_cleanup_user_data(self, db: AsyncSession, user: User) -> bool:
+        """
+        ОПАСНАЯ ФУНКЦИЯ: Полностью сбрасывает все данные пользователя включая баланс!
+        Используйте только для полной очистки пользователя.
+        """
         try:
+            # Предупреждение для платных пользователей
+            was_paid = (
+                user.has_had_paid_subscription
+                or (user.subscription and not user.subscription.is_trial)
+                or user.balance_kopeks > 0
+            )
+            if was_paid:
+                logger.warning(
+                    f"⚠️ ВНИМАНИЕ: force_cleanup_user_data вызвана для ПЛАТНОГО пользователя {user.telegram_id}! "
+                    f"has_had_paid_subscription={user.has_had_paid_subscription}, "
+                    f"balance={user.balance_kopeks}, "
+                    f"is_trial={user.subscription.is_trial if user.subscription else 'N/A'}"
+                )
+
             logger.info(f"🗑️ ПРИНУДИТЕЛЬНАЯ полная очистка данных пользователя {user.telegram_id}")
             
             if user.remnawave_uuid:
