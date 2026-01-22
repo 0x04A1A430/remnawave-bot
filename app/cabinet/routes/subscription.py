@@ -34,6 +34,7 @@ from app.services.subscription_purchase_service import (
 )
 from app.services.user_cart_service import user_cart_service
 from app.utils.cache import cache, cache_key, RateLimitCache
+from app.utils.promo_offer import get_user_active_promo_discount_percent
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 from ..schemas.subscription import (
@@ -331,13 +332,27 @@ async def renew_subscription(
             detail="Invalid renewal period",
         )
 
-    # Apply discount
-    discount_percent = 0
+    # Apply promo group discount
+    original_price_kopeks = price_kopeks
+    promo_group_discount_percent = 0
     if hasattr(user, "get_promo_discount"):
-        discount_percent = user.get_promo_discount("period", request.period_days)
+        promo_group_discount_percent = user.get_promo_discount("period", request.period_days)
 
-    if discount_percent > 0:
-        price_kopeks = int(price_kopeks * (100 - discount_percent) / 100)
+    if promo_group_discount_percent > 0:
+        price_kopeks = int(price_kopeks * (100 - promo_group_discount_percent) / 100)
+
+    # Apply promo offer discount (temporary discount from promo offers)
+    promo_offer_discount_percent = get_user_active_promo_discount_percent(user)
+    promo_offer_discount_value = 0
+    if promo_offer_discount_percent > 0:
+        promo_offer_discount_value = price_kopeks * promo_offer_discount_percent // 100
+        price_kopeks = price_kopeks - promo_offer_discount_value
+
+    # Combined discount percent for display
+    discount_percent = promo_group_discount_percent
+    if promo_offer_discount_percent > 0 and original_price_kopeks > 0:
+        total_discount = original_price_kopeks - price_kopeks
+        discount_percent = int(total_discount * 100 / original_price_kopeks)
 
     # Check balance
     if user.balance_kopeks < price_kopeks:
@@ -400,13 +415,17 @@ async def renew_subscription(
     # Deduct balance and extend subscription
     user.balance_kopeks -= price_kopeks
 
+    # Consume promo offer discount if it was used
+    if promo_offer_discount_value > 0:
+        user.promo_offer_discount_percent = 0
+        user.promo_offer_discount_source = None
+        user.promo_offer_discount_expires_at = None
+
     # Extend from end_date or now if expired
     now = datetime.utcnow()
     if user.subscription.end_date and user.subscription.end_date > now:
-        from datetime import timedelta
         user.subscription.end_date = user.subscription.end_date + timedelta(days=request.period_days)
     else:
-        from datetime import timedelta
         user.subscription.end_date = now + timedelta(days=request.period_days)
         user.subscription.start_date = now
 
@@ -415,11 +434,19 @@ async def renew_subscription(
 
     await db.commit()
 
-    return {
+    response = {
         "message": "Subscription renewed successfully",
         "new_end_date": user.subscription.end_date.isoformat(),
         "amount_paid_kopeks": price_kopeks,
     }
+
+    # Add discount info to response
+    if promo_offer_discount_value > 0:
+        response["promo_discount_percent"] = promo_offer_discount_percent
+        response["promo_discount_amount_kopeks"] = promo_offer_discount_value
+        response["original_price_kopeks"] = original_price_kopeks
+
+    return response
 
 
 @router.get("/traffic-packages", response_model=List[TrafficPackageResponse])
@@ -1363,6 +1390,14 @@ async def purchase_tariff(
             traffic_limit_gb = request.traffic_gb
             price_kopeks += traffic_price_kopeks
 
+        # Apply promo offer discount (temporary discount from promo offers)
+        price_before_promo_offer = price_kopeks
+        promo_offer_discount_percent = get_user_active_promo_discount_percent(user)
+        promo_offer_discount_value = 0
+        if promo_offer_discount_percent > 0:
+            promo_offer_discount_value = price_kopeks * promo_offer_discount_percent // 100
+            price_kopeks = price_kopeks - promo_offer_discount_value
+
         # Check balance
         if user.balance_kopeks < price_kopeks:
             missing = price_kopeks - user.balance_kopeks
@@ -1438,12 +1473,20 @@ async def purchase_tariff(
             description = f"Покупка тарифа '{tariff.name}' на {period_days} дней"
         if discount_percent > 0:
             description += f" (скидка {discount_percent}%)"
+        if promo_offer_discount_value > 0:
+            description += f" (промо -{promo_offer_discount_percent}%)"
         success = await subtract_user_balance(db, user, price_kopeks, description)
         if not success:
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail="Failed to charge balance",
             )
+
+        # Consume promo offer discount if it was used
+        if promo_offer_discount_value > 0:
+            user.promo_offer_discount_percent = 0
+            user.promo_offer_discount_source = None
+            user.promo_offer_discount_expires_at = None
 
         # Create transaction
         await create_transaction(
@@ -1541,10 +1584,17 @@ async def purchase_tariff(
             response["discount_percent"] = discount_percent
             response["original_price_kopeks"] = original_price
             response["original_price_label"] = settings.format_price(original_price)
-            response["discount_amount_kopeks"] = original_price - price_kopeks
-            response["discount_label"] = settings.format_price(original_price - price_kopeks)
+            response["discount_amount_kopeks"] = original_price - price_before_promo_offer
+            response["discount_label"] = settings.format_price(original_price - price_before_promo_offer)
             if promo_group:
                 response["promo_group_name"] = promo_group.name
+
+        # Add promo offer discount info if it was applied
+        if promo_offer_discount_value > 0:
+            response["promo_offer_discount_percent"] = promo_offer_discount_percent
+            response["promo_offer_discount_amount_kopeks"] = promo_offer_discount_value
+            response["promo_offer_discount_label"] = settings.format_price(promo_offer_discount_value)
+            response["price_before_promo_offer_kopeks"] = price_before_promo_offer
 
         return response
 
