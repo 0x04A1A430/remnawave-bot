@@ -2,13 +2,21 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from aiogram import Bot
+from aiogram.client.default import DefaultBotProperties
+from aiogram.enums import ParseMode
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database.crud.discount_offer import (
     count_discount_offers,
     list_discount_offers,
@@ -24,8 +32,11 @@ from app.database.crud.promo_offer_template import (
 from app.database.crud.user import get_user_by_telegram_id
 from app.database.models import DiscountOffer, PromoOfferLog, PromoOfferTemplate, User
 from app.handlers.admin.messages import get_custom_users, get_target_users
+from app.utils.miniapp_buttons import build_miniapp_or_callback_button
 
 from ..dependencies import get_cabinet_db, get_current_admin_user
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin/promo-offers", tags=["Admin Promo Offers"])
 
@@ -110,12 +121,18 @@ class PromoOfferBroadcastRequest(BaseModel):
     target: Optional[str] = None
     user_id: Optional[int] = None
     telegram_id: Optional[int] = None
+    # Telegram notification options
+    send_notification: bool = Field(False, description="Send Telegram notification to users")
+    message_text: Optional[str] = Field(None, description="Custom message text (HTML)")
+    button_text: Optional[str] = Field(None, description="Button text")
 
 
 class PromoOfferBroadcastResponse(BaseModel):
     created_offers: int
     user_ids: List[int]
     target: Optional[str] = None
+    notifications_sent: int = 0
+    notifications_failed: int = 0
 
 
 class PromoOfferLogOfferInfo(BaseModel):
@@ -344,13 +361,137 @@ async def list_offers(
     )
 
 
+def _get_bot() -> Bot:
+    """Create bot instance for sending notifications."""
+    return Bot(
+        token=settings.BOT_TOKEN,
+        default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+    )
+
+
+def _build_default_promo_message(
+    discount_percent: int,
+    bonus_amount_kopeks: int,
+    valid_hours: int,
+) -> str:
+    """Build default promo notification message."""
+    lines = ["🎁 <b>Специальное предложение для вас!</b>\n"]
+
+    if discount_percent > 0:
+        lines.append(f"🔥 Скидка <b>{discount_percent}%</b> на подписку")
+    if bonus_amount_kopeks > 0:
+        bonus_rub = bonus_amount_kopeks / 100
+        lines.append(f"💰 Бонус <b>{bonus_rub:.0f}₽</b> на баланс")
+
+    lines.append(f"\n⏰ Предложение действует <b>{valid_hours} ч.</b>")
+    lines.append("\nНажмите кнопку ниже, чтобы активировать!")
+
+    return "\n".join(lines)
+
+
+async def _send_promo_notifications(
+    offers_to_notify: List[tuple[User, DiscountOffer]],
+    message_text: Optional[str],
+    button_text: Optional[str],
+    discount_percent: int,
+    bonus_amount_kopeks: int,
+    valid_hours: int,
+) -> tuple[int, int]:
+    """Send Telegram notifications for promo offers.
+
+    Returns:
+        Tuple of (sent_count, failed_count)
+    """
+    if not offers_to_notify:
+        return 0, 0
+
+    bot = _get_bot()
+    sent = 0
+    failed = 0
+
+    # Build message text
+    text = message_text or _build_default_promo_message(
+        discount_percent=discount_percent,
+        bonus_amount_kopeks=bonus_amount_kopeks,
+        valid_hours=valid_hours,
+    )
+
+    # Default button text
+    btn_text = button_text or "🎁 Получить"
+
+    semaphore = asyncio.Semaphore(20)
+
+    async def send_single(user: User, offer: DiscountOffer) -> bool:
+        async with semaphore:
+            try:
+                keyboard = InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            build_miniapp_or_callback_button(
+                                text=btn_text,
+                                callback_data=f"claim_discount_{offer.id}",
+                            )
+                        ],
+                        [
+                            InlineKeyboardButton(
+                                text="❌ Закрыть",
+                                callback_data="promo_offer_close",
+                            )
+                        ],
+                    ]
+                )
+
+                await bot.send_message(
+                    chat_id=user.telegram_id,
+                    text=text,
+                    reply_markup=keyboard,
+                )
+                return True
+            except (TelegramForbiddenError, TelegramBadRequest) as exc:
+                logger.warning(
+                    "Failed to send promo notification to user %s: %s",
+                    user.telegram_id,
+                    exc,
+                )
+                return False
+            except Exception as exc:
+                logger.error(
+                    "Error sending promo notification to user %s: %s",
+                    user.telegram_id,
+                    exc,
+                )
+                return False
+
+    # Send in batches
+    batch_size = 50
+    for i in range(0, len(offers_to_notify), batch_size):
+        batch = offers_to_notify[i : i + batch_size]
+        tasks = [send_single(user, offer) for user, offer in batch]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        for result in results:
+            if isinstance(result, bool) and result:
+                sent += 1
+            else:
+                failed += 1
+
+        # Small delay between batches
+        if i + batch_size < len(offers_to_notify):
+            await asyncio.sleep(0.1)
+
+    # Close bot session
+    await bot.session.close()
+
+    return sent, failed
+
+
 @router.post("/broadcast", response_model=PromoOfferBroadcastResponse, status_code=status.HTTP_201_CREATED)
 async def broadcast_offer(
     payload: PromoOfferBroadcastRequest,
     admin: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> PromoOfferBroadcastResponse:
-    """Broadcast promo offer to users."""
+    """Broadcast promo offer to users with optional Telegram notification."""
     recipients: dict[int, User] = {}
 
     # Resolve target segment
@@ -386,8 +527,10 @@ async def broadcast_offer(
             "No recipients: specify target or user",
         )
 
-    # Create offers for all recipients
+    # Create offers for all recipients and collect (user, offer) pairs
     created_offers = 0
+    offers_to_notify: List[tuple[User, DiscountOffer]] = []
+
     for recipient in recipients.values():
         offer = await upsert_discount_offer(
             db,
@@ -402,11 +545,28 @@ async def broadcast_offer(
         )
         if offer:
             created_offers += 1
+            offers_to_notify.append((recipient, offer))
+
+    # Send Telegram notifications if requested
+    notifications_sent = 0
+    notifications_failed = 0
+
+    if payload.send_notification and offers_to_notify:
+        notifications_sent, notifications_failed = await _send_promo_notifications(
+            offers_to_notify=offers_to_notify,
+            message_text=payload.message_text,
+            button_text=payload.button_text,
+            discount_percent=payload.discount_percent,
+            bonus_amount_kopeks=payload.bonus_amount_kopeks,
+            valid_hours=payload.valid_hours,
+        )
 
     return PromoOfferBroadcastResponse(
         created_offers=created_offers,
         user_ids=list(recipients.keys()),
         target=payload.target,
+        notifications_sent=notifications_sent,
+        notifications_failed=notifications_failed,
     )
 
 
