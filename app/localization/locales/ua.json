@@ -1125,6 +1125,8 @@
 "PAYMENT_METHOD_YOOKASSA_NAME": "💳 <b>Банківська картка</b>",
  "PAYMENT_METHOD_YOOKASSA_SBP_DESCRIPTION": "через систему швидких платежів YooKassa",
  "PAYMENT_METHOD_YOOKASSA_SBP_NAME": "🏦 <b>СБП (YooKassa)</b>",
+ "PAYMENT_METHOD_WATA_DESCRIPTION": "через WATA",
+ "PAYMENT_METHOD_WATA_NAME": "💳 <b>Банківська картка (WATA)</b>",
  "PAYMENT_HELEKET_MARKUP_LABEL": "Націнка провайдера",
  "PAYMENT_HELEKET_DISCOUNT_LABEL": "Знижка провайдера",
  "PAYMENT_RETURN_HOME_BUTTON": "🏠 На головну",
