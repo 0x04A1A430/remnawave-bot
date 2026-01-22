@@ -48,6 +48,10 @@ from app.utils.promo_offer import (
 )
 from app.utils.timezone import format_local_datetime
 from app.database.crud.user_message import get_random_active_message
+from app.middlewares.channel_checker import (
+    get_pending_payload_from_redis,
+    delete_pending_payload_from_redis,
+)
 from app.database.crud.subscription import decrement_subscription_server_counts
 from app.services.blacklist_service import blacklist_service
 
@@ -326,6 +330,19 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
     had_campaign_notification_flag = "campaign_notification_sent" in data
     campaign_notification_sent = data.pop("campaign_notification_sent", False)
     state_needs_update = had_pending_payload or had_campaign_notification_flag
+
+    # Если в FSM state нет payload, пробуем получить из Redis (резервный механизм)
+    if not pending_start_payload:
+        redis_payload = await get_pending_payload_from_redis(message.from_user.id)
+        if redis_payload:
+            pending_start_payload = redis_payload
+            state_needs_update = True
+            logger.info(
+                "📦 START: Payload '%s' восстановлен из Redis (fallback)",
+                pending_start_payload,
+            )
+            # Очищаем Redis после получения
+            await delete_pending_payload_from_redis(message.from_user.id)
 
     referral_code = None
     campaign = None
@@ -1832,6 +1849,17 @@ async def required_sub_channel_check(
         state_data = await state.get_data() or {}
 
         pending_start_payload = state_data.pop("pending_start_payload", None)
+
+        # Если в FSM state нет payload, пробуем получить из Redis (резервный механизм)
+        if not pending_start_payload:
+            redis_payload = await get_pending_payload_from_redis(query.from_user.id)
+            if redis_payload:
+                pending_start_payload = redis_payload
+                logger.info(
+                    "📦 CHANNEL CHECK: Payload '%s' восстановлен из Redis (fallback)",
+                    pending_start_payload,
+                )
+
         state_updated = pending_start_payload is not None
 
         if pending_start_payload:
@@ -1840,27 +1868,27 @@ async def required_sub_channel_check(
                 pending_start_payload,
             )
 
-            if "campaign_id" not in state_data and "referral_code" not in state_data:
-                campaign = await get_campaign_by_start_parameter(
-                    db,
-                    pending_start_payload,
-                    only_active=True,
-                )
+            # Очищаем Redis после получения payload
+            await delete_pending_payload_from_redis(query.from_user.id)
 
-                if campaign:
-                    state_data["campaign_id"] = campaign.id
-                    logger.info(
-                        "📣 CHANNEL CHECK: Кампания %s восстановлена из payload",
-                        campaign.id,
-                    )
-                else:
-                    state_data["referral_code"] = pending_start_payload
-                    logger.info(
-                        "🎯 CHANNEL CHECK: Payload интерпретирован как реферальный код",
-                    )
+            # Всегда обновляем referral_code если есть новый payload
+            # (исправление бага с устаревшими данными в state)
+            campaign = await get_campaign_by_start_parameter(
+                db,
+                pending_start_payload,
+                only_active=True,
+            )
+
+            if campaign:
+                state_data["campaign_id"] = campaign.id
+                logger.info(
+                    "📣 CHANNEL CHECK: Кампания %s восстановлена из payload",
+                    campaign.id,
+                )
             else:
-                logger.debug(
-                    "ℹ️ CHANNEL CHECK: Payload уже обработан ранее, пропускаем восстановление",
+                state_data["referral_code"] = pending_start_payload
+                logger.info(
+                    "🎯 CHANNEL CHECK: Payload интерпретирован как реферальный код",
                 )
 
         if state_updated:
