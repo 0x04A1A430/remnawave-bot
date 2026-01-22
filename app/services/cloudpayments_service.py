@@ -8,6 +8,7 @@ import hmac
 import logging
 import time
 from typing import Any, Dict, Optional
+from urllib.parse import unquote_plus
 
 import httpx
 
@@ -278,9 +279,15 @@ class CloudPaymentsService:
         """
         Verify CloudPayments webhook signature.
 
+        CloudPayments uses two different HMAC headers:
+        - Content-HMAC: calculated from URL-encoded body (raw)
+        - X-Content-HMAC: calculated from URL-decoded body
+
+        This method tries both variants to ensure compatibility.
+
         Args:
             body: Raw request body bytes
-            signature: Signature from X-Content-HMAC header
+            signature: Signature from X-Content-HMAC or Content-HMAC header
             api_secret: CloudPayments API secret
 
         Returns:
@@ -289,15 +296,37 @@ class CloudPaymentsService:
         if not signature or not api_secret:
             return False
 
-        calculated = base64.b64encode(
-            hmac.new(
-                api_secret.encode(),
-                body,
-                hashlib.sha256,
-            ).digest()
-        ).decode()
+        def calc_hmac(data: bytes) -> str:
+            return base64.b64encode(
+                hmac.new(
+                    api_secret.encode(),
+                    data,
+                    hashlib.sha256,
+                ).digest()
+            ).decode()
 
-        return hmac.compare_digest(calculated, signature)
+        # Try with raw (URL-encoded) body first (for Content-HMAC)
+        calculated_raw = calc_hmac(body)
+        if hmac.compare_digest(calculated_raw, signature):
+            return True
+
+        # Try with URL-decoded body (for X-Content-HMAC)
+        calculated_decoded = None
+        try:
+            decoded_body = unquote_plus(body.decode("utf-8")).encode("utf-8")
+            calculated_decoded = calc_hmac(decoded_body)
+            if hmac.compare_digest(calculated_decoded, signature):
+                return True
+        except Exception:
+            pass
+
+        logger.warning(
+            "CloudPayments signature mismatch: expected_raw=%s..., expected_decoded=%s..., got=%s...",
+            calculated_raw[:20],
+            calculated_decoded[:20] if calculated_decoded else "N/A",
+            signature[:20],
+        )
+        return False
 
     @staticmethod
     def parse_webhook_data(form_data: Dict[str, Any]) -> Dict[str, Any]:

@@ -7,6 +7,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import TelegramObject, Update, Message, CallbackQuery
 from aiogram.enums import ChatMemberStatus
 from sqlalchemy.ext.asyncio import AsyncSession
+import redis.asyncio as aioredis
 
 from app.config import settings
 from app.database.database import AsyncSessionLocal
@@ -22,6 +23,58 @@ from app.services.subscription_service import SubscriptionService
 from app.services.admin_notification_service import AdminNotificationService
 
 logger = logging.getLogger(__name__)
+
+# Ключ для хранения pending_start_payload в Redis (резервный механизм)
+REDIS_PAYLOAD_KEY_PREFIX = "pending_start_payload:"
+REDIS_PAYLOAD_TTL = 3600  # 1 час
+
+
+async def save_pending_payload_to_redis(telegram_id: int, payload: str) -> bool:
+    """Сохраняет pending_start_payload в Redis напрямую (резервный механизм)."""
+    try:
+        redis_client = aioredis.from_url(settings.REDIS_URL)
+        key = f"{REDIS_PAYLOAD_KEY_PREFIX}{telegram_id}"
+        await redis_client.set(key, payload, ex=REDIS_PAYLOAD_TTL)
+        await redis_client.aclose()
+        logger.info(
+            "💾 [Redis fallback] Сохранен payload '%s' для пользователя %s",
+            payload,
+            telegram_id,
+        )
+        return True
+    except Exception as e:
+        logger.error(
+            "❌ [Redis fallback] Ошибка сохранения payload для %s: %s",
+            telegram_id,
+            e,
+        )
+        return False
+
+
+async def get_pending_payload_from_redis(telegram_id: int) -> Optional[str]:
+    """Получает pending_start_payload из Redis (резервный механизм)."""
+    try:
+        redis_client = aioredis.from_url(settings.REDIS_URL)
+        key = f"{REDIS_PAYLOAD_KEY_PREFIX}{telegram_id}"
+        payload = await redis_client.get(key)
+        await redis_client.aclose()
+        if payload:
+            return payload.decode("utf-8") if isinstance(payload, bytes) else payload
+        return None
+    except Exception as e:
+        logger.debug("❌ [Redis fallback] Ошибка получения payload для %s: %s", telegram_id, e)
+        return None
+
+
+async def delete_pending_payload_from_redis(telegram_id: int) -> None:
+    """Удаляет pending_start_payload из Redis."""
+    try:
+        redis_client = aioredis.from_url(settings.REDIS_URL)
+        key = f"{REDIS_PAYLOAD_KEY_PREFIX}{telegram_id}"
+        await redis_client.delete(key)
+        await redis_client.aclose()
+    except Exception:
+        pass
 
 
 class ChannelCheckerMiddleware(BaseMiddleware):
@@ -170,8 +223,11 @@ class ChannelCheckerMiddleware(BaseMiddleware):
         event: TelegramObject,
         bot: Optional[Bot] = None,
     ) -> None:
-        if not state:
-            return
+        telegram_id = None
+        if isinstance(event, Message):
+            telegram_id = event.from_user.id if event.from_user else None
+        elif isinstance(event, CallbackQuery):
+            telegram_id = event.from_user.id if event.from_user else None
 
         message: Optional[Message] = None
         if isinstance(event, Message):
@@ -194,11 +250,26 @@ class ChannelCheckerMiddleware(BaseMiddleware):
 
         payload = parts[1]
 
-        state_data = await state.get_data() or {}
-        if state_data.get("pending_start_payload") != payload:
-            state_data["pending_start_payload"] = payload
-            await state.set_data(state_data)
-            logger.debug("💾 Сохранен start payload %s для последующей обработки", payload)
+        # Сохраняем в FSM state
+        if state:
+            state_data = await state.get_data() or {}
+            if state_data.get("pending_start_payload") != payload:
+                state_data["pending_start_payload"] = payload
+                await state.set_data(state_data)
+                logger.info(
+                    "💾 Сохранен start payload '%s' для пользователя %s (FSM)",
+                    payload,
+                    telegram_id,
+                )
+        else:
+            logger.warning(
+                "⚠️ _capture_start_payload: state=None для пользователя %s",
+                telegram_id,
+            )
+
+        # Также сохраняем в Redis как резерв (на случай потери FSM state)
+        if telegram_id:
+            await save_pending_payload_to_redis(telegram_id, payload)
 
         if bot and message.from_user:
             await self._try_send_campaign_visit_notification(
