@@ -599,7 +599,18 @@ async def show_trial_offer(
 
     texts = get_texts(db_user.language)
 
-    if db_user.subscription or db_user.has_had_paid_subscription:
+    # Проверяем, использовал ли пользователь триал
+    # PENDING триальные подписки не считаются - пользователь может повторить оплату
+    trial_blocked = False
+    if db_user.has_had_paid_subscription:
+        trial_blocked = True
+    elif db_user.subscription:
+        sub = db_user.subscription
+        # Разрешаем если это PENDING триальная подписка (повторная попытка оплаты)
+        if not (sub.status == SubscriptionStatus.PENDING.value and sub.is_trial):
+            trial_blocked = True
+
+    if trial_blocked:
         await callback.message.edit_text(
             texts.TRIAL_ALREADY_USED,
             reply_markup=get_back_keyboard(db_user.language)
@@ -814,7 +825,18 @@ async def activate_trial(
         await callback.answer()
         return
 
-    if db_user.subscription or db_user.has_had_paid_subscription:
+    # Проверяем, использовал ли пользователь триал
+    # PENDING триальные подписки не считаются - пользователь может повторить оплату
+    trial_blocked = False
+    if db_user.has_had_paid_subscription:
+        trial_blocked = True
+    elif db_user.subscription:
+        sub = db_user.subscription
+        # Разрешаем если это PENDING триальная подписка (повторная попытка оплаты)
+        if not (sub.status == SubscriptionStatus.PENDING.value and sub.is_trial):
+            trial_blocked = True
+
+    if trial_blocked:
         await callback.message.edit_text(
             texts.TRIAL_ALREADY_USED,
             reply_markup=get_back_keyboard(db_user.language)
@@ -3360,7 +3382,17 @@ async def handle_trial_pay_with_balance(
     texts = get_texts(db_user.language)
 
     # Проверяем права на триал
-    if db_user.subscription or db_user.has_had_paid_subscription:
+    # PENDING триальные подписки не считаются - пользователь может повторить оплату
+    trial_blocked = False
+    if db_user.has_had_paid_subscription:
+        trial_blocked = True
+    elif db_user.subscription:
+        sub = db_user.subscription
+        # Разрешаем если это PENDING триальная подписка (повторная попытка оплаты)
+        if not (sub.status == SubscriptionStatus.PENDING.value and sub.is_trial):
+            trial_blocked = True
+
+    if trial_blocked:
         await callback.message.edit_text(
             texts.TRIAL_ALREADY_USED,
             reply_markup=get_back_keyboard(db_user.language)
@@ -3695,7 +3727,17 @@ async def handle_trial_payment_method(
     texts = get_texts(db_user.language)
 
     # Проверяем права на триал
-    if db_user.subscription or db_user.has_had_paid_subscription:
+    # PENDING триальные подписки не считаются - пользователь может повторить оплату
+    trial_blocked = False
+    if db_user.has_had_paid_subscription:
+        trial_blocked = True
+    elif db_user.subscription:
+        sub = db_user.subscription
+        # Разрешаем если это PENDING триальная подписка (повторная попытка оплаты)
+        if not (sub.status == SubscriptionStatus.PENDING.value and sub.is_trial):
+            trial_blocked = True
+
+    if trial_blocked:
         await callback.message.edit_text(
             texts.TRIAL_ALREADY_USED,
             reply_markup=get_back_keyboard(db_user.language)
@@ -3808,11 +3850,12 @@ async def handle_trial_payment_method(
         elif payment_method == "yookassa":
             # Оплата через YooKassa карта
             payment_result = await payment_service.create_yookassa_payment(
+                db=db,
+                user_id=db_user.id,
                 amount_kopeks=trial_price_kopeks,
                 description=texts.t("PAID_TRIAL_PAYMENT_DESC", "Пробная подписка на {days} дней").format(
                     days=settings.TRIAL_DURATION_DAYS
                 ),
-                user_id=db_user.id,
                 metadata={
                     "type": "trial",
                     "subscription_id": pending_subscription.id,
@@ -3840,20 +3883,37 @@ async def handle_trial_payment_method(
 
         elif payment_method == "cryptobot":
             # Оплата через CryptoBot
+            # Конвертируем копейки в USD
+            from app.utils.currency_converter import currency_converter
+            try:
+                usd_rate = await currency_converter.get_usd_to_rub_rate()
+            except Exception as rate_error:
+                logger.warning("Не удалось получить курс USD: %s", rate_error)
+                usd_rate = 95.0
+
+            amount_rubles = trial_price_kopeks / 100
+            amount_usd = round(amount_rubles / usd_rate, 2)
+            if amount_usd < 1:
+                amount_usd = 1.0
+
             payment_result = await payment_service.create_cryptobot_payment(
-                amount_kopeks=trial_price_kopeks,
+                db=db,
+                user_id=db_user.id,
+                amount_usd=amount_usd,
+                asset=settings.CRYPTOBOT_DEFAULT_ASSET,
                 description=texts.t("PAID_TRIAL_PAYMENT_DESC", "Пробная подписка на {days} дней").format(
                     days=settings.TRIAL_DURATION_DAYS
                 ),
-                user_id=db_user.id,
-                metadata={
-                    "type": "trial",
-                    "subscription_id": pending_subscription.id,
-                    "user_id": db_user.id,
-                },
+                payload=f"trial_{pending_subscription.id}_{db_user.id}",
             )
 
-            if not payment_result or not payment_result.get("pay_url"):
+            payment_url = (
+                payment_result.get("mini_app_invoice_url")
+                or payment_result.get("bot_invoice_url")
+                or payment_result.get("web_app_invoice_url")
+            ) if payment_result else None
+
+            if not payment_result or not payment_url:
                 await callback.answer("❌ Не удалось создать платеж. Попробуйте позже.", show_alert=True)
                 return
 
@@ -3865,7 +3925,7 @@ async def handle_trial_payment_method(
                     "💰 Сумма: {amount}"
                 ).format(amount=settings.format_price(trial_price_kopeks)),
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="🪙 Оплатить", url=payment_result["pay_url"])],
+                    [InlineKeyboardButton(text="🪙 Оплатить", url=payment_url)],
                     [InlineKeyboardButton(
                         text=texts.t("CHECK_PAYMENT", "🔄 Проверить оплату"),
                         callback_data=f"check_trial_cryptobot_{pending_subscription.id}"
@@ -3878,19 +3938,16 @@ async def handle_trial_payment_method(
         elif payment_method == "heleket":
             # Оплата через Heleket
             payment_result = await payment_service.create_heleket_payment(
+                db=db,
+                user_id=db_user.id,
                 amount_kopeks=trial_price_kopeks,
                 description=texts.t("PAID_TRIAL_PAYMENT_DESC", "Пробная подписка на {days} дней").format(
                     days=settings.TRIAL_DURATION_DAYS
                 ),
-                user_id=db_user.id,
-                metadata={
-                    "type": "trial",
-                    "subscription_id": pending_subscription.id,
-                    "user_id": db_user.id,
-                },
+                language=db_user.language,
             )
 
-            if not payment_result or not payment_result.get("pay_url"):
+            if not payment_result or not payment_result.get("payment_url"):
                 await callback.answer("❌ Не удалось создать платеж. Попробуйте позже.", show_alert=True)
                 return
 
@@ -3902,7 +3959,7 @@ async def handle_trial_payment_method(
                     "💰 Сумма: {amount}"
                 ).format(amount=settings.format_price(trial_price_kopeks)),
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="🪙 Оплатить", url=payment_result["pay_url"])],
+                    [InlineKeyboardButton(text="🪙 Оплатить", url=payment_result["payment_url"])],
                     [InlineKeyboardButton(
                         text=texts.t("CHECK_PAYMENT", "🔄 Проверить оплату"),
                         callback_data=f"check_trial_heleket_{pending_subscription.id}"
@@ -3915,19 +3972,16 @@ async def handle_trial_payment_method(
         elif payment_method == "mulenpay":
             # Оплата через MulenPay
             payment_result = await payment_service.create_mulenpay_payment(
+                db=db,
+                user_id=db_user.id,
                 amount_kopeks=trial_price_kopeks,
                 description=texts.t("PAID_TRIAL_PAYMENT_DESC", "Пробная подписка на {days} дней").format(
                     days=settings.TRIAL_DURATION_DAYS
                 ),
-                user_id=db_user.id,
-                metadata={
-                    "type": "trial",
-                    "subscription_id": pending_subscription.id,
-                    "user_id": db_user.id,
-                },
+                language=db_user.language,
             )
 
-            if not payment_result or not payment_result.get("pay_url"):
+            if not payment_result or not payment_result.get("payment_url"):
                 await callback.answer("❌ Не удалось создать платеж. Попробуйте позже.", show_alert=True)
                 return
 
@@ -3940,7 +3994,7 @@ async def handle_trial_payment_method(
                     "💰 Сумма: {amount}"
                 ).format(name=mulenpay_name, amount=settings.format_price(trial_price_kopeks)),
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="💳 Оплатить", url=payment_result["pay_url"])],
+                    [InlineKeyboardButton(text="💳 Оплатить", url=payment_result["payment_url"])],
                     [InlineKeyboardButton(
                         text=texts.t("CHECK_PAYMENT", "🔄 Проверить оплату"),
                         callback_data=f"check_trial_mulenpay_{pending_subscription.id}"
@@ -3953,19 +4007,16 @@ async def handle_trial_payment_method(
         elif payment_method == "pal24":
             # Оплата через PAL24
             payment_result = await payment_service.create_pal24_payment(
+                db=db,
+                user_id=db_user.id,
                 amount_kopeks=trial_price_kopeks,
                 description=texts.t("PAID_TRIAL_PAYMENT_DESC", "Пробная подписка на {days} дней").format(
                     days=settings.TRIAL_DURATION_DAYS
                 ),
-                user_id=db_user.id,
-                metadata={
-                    "type": "trial",
-                    "subscription_id": pending_subscription.id,
-                    "user_id": db_user.id,
-                },
+                language=db_user.language,
             )
 
-            if not payment_result or not payment_result.get("pay_url"):
+            if not payment_result or not payment_result.get("payment_url"):
                 await callback.answer("❌ Не удалось создать платеж. Попробуйте позже.", show_alert=True)
                 return
 
@@ -3977,7 +4028,7 @@ async def handle_trial_payment_method(
                     "💰 Сумма: {amount}"
                 ).format(amount=settings.format_price(trial_price_kopeks)),
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="💳 Оплатить", url=payment_result["pay_url"])],
+                    [InlineKeyboardButton(text="💳 Оплатить", url=payment_result["payment_url"])],
                     [InlineKeyboardButton(
                         text=texts.t("CHECK_PAYMENT", "🔄 Проверить оплату"),
                         callback_data=f"check_trial_pal24_{pending_subscription.id}"
@@ -3990,19 +4041,16 @@ async def handle_trial_payment_method(
         elif payment_method == "wata":
             # Оплата через WATA
             payment_result = await payment_service.create_wata_payment(
+                db=db,
+                user_id=db_user.id,
                 amount_kopeks=trial_price_kopeks,
                 description=texts.t("PAID_TRIAL_PAYMENT_DESC", "Пробная подписка на {days} дней").format(
                     days=settings.TRIAL_DURATION_DAYS
                 ),
-                user_id=db_user.id,
-                metadata={
-                    "type": "trial",
-                    "subscription_id": pending_subscription.id,
-                    "user_id": db_user.id,
-                },
+                language=db_user.language,
             )
 
-            if not payment_result or not payment_result.get("pay_url"):
+            if not payment_result or not payment_result.get("payment_url"):
                 await callback.answer("❌ Не удалось создать платеж. Попробуйте позже.", show_alert=True)
                 return
 
@@ -4014,7 +4062,7 @@ async def handle_trial_payment_method(
                     "💰 Сумма: {amount}"
                 ).format(amount=settings.format_price(trial_price_kopeks)),
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="💳 Оплатить", url=payment_result["pay_url"])],
+                    [InlineKeyboardButton(text="💳 Оплатить", url=payment_result["payment_url"])],
                     [InlineKeyboardButton(
                         text=texts.t("CHECK_PAYMENT", "🔄 Проверить оплату"),
                         callback_data=f"check_trial_wata_{pending_subscription.id}"
