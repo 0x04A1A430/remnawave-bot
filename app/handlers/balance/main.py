@@ -118,6 +118,12 @@ async def route_payment_by_method(
             await process_freekassa_payment_amount(message, db_user, db, amount_kopeks, state)
         return True
 
+    if payment_method == "kassa_ai":
+        from .kassa_ai import process_kassa_ai_payment_amount
+        async with AsyncSessionLocal() as db:
+            await process_kassa_ai_payment_amount(message, db_user, db, amount_kopeks, state)
+        return True
+
     return False
 
 
@@ -988,6 +994,16 @@ def register_balance_handlers(dp: Dispatcher):
     dp.callback_query.register(
         process_freekassa_quick_amount,
         F.data.startswith("topup_amount|freekassa|")
+    )
+
+    from .kassa_ai import start_kassa_ai_topup, process_kassa_ai_quick_amount
+    dp.callback_query.register(
+        start_kassa_ai_topup,
+        F.data == "topup_kassa_ai"
+    )
+    dp.callback_query.register(
+        process_kassa_ai_quick_amount,
+        F.data.startswith("topup_amount|kassa_ai|")
     )
 
     from .mulenpay import check_mulenpay_payment_status
