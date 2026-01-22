@@ -1187,6 +1187,8 @@
   "PAYMENT_METHOD_YOOKASSA_NAME": "💳 <b>Bank card</b>",
   "PAYMENT_METHOD_YOOKASSA_SBP_DESCRIPTION": "via YooKassa Fast Payment System",
   "PAYMENT_METHOD_YOOKASSA_SBP_NAME": "🏦 <b>SBP (YooKassa)</b>",
+  "PAYMENT_METHOD_WATA_DESCRIPTION": "via WATA",
+  "PAYMENT_METHOD_WATA_NAME": "💳 <b>Bank card (WATA)</b>",
   "PAYMENT_HELEKET_MARKUP_LABEL": "Provider markup",
   "PAYMENT_HELEKET_DISCOUNT_LABEL": "Provider discount",
   "PAYMENT_RETURN_HOME_BUTTON": "🏠 Main menu",
