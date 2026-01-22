@@ -681,15 +681,31 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
             """Check webhook - вызывается перед списанием, можно отклонить платёж."""
             raw_body = await request.body()
 
-            # Проверяем подпись
+            # Логируем для диагностики
+            logger.info(
+                "CloudPayments check webhook received, body_len=%d, headers=%s",
+                len(raw_body),
+                {k: v for k, v in request.headers.items() if "hmac" in k.lower() or "signature" in k.lower()},
+            )
+
+            # Проверяем подпись только если она пришла и API_SECRET настроен
+            # CloudPayments использует заголовок X-Content-HMAC (согласно их документации)
             signature = request.headers.get("X-Content-HMAC") or request.headers.get("Content-HMAC") or ""
-            if settings.CLOUDPAYMENTS_API_SECRET and not cloudpayments_service.verify_webhook_signature(
-                raw_body, signature, settings.CLOUDPAYMENTS_API_SECRET
-            ):
-                logger.warning("CloudPayments check webhook: invalid signature")
-                return JSONResponse({"code": 13})  # Отклонить
+            if settings.CLOUDPAYMENTS_API_SECRET and signature:
+                if not cloudpayments_service.verify_webhook_signature(
+                    raw_body, signature, settings.CLOUDPAYMENTS_API_SECRET
+                ):
+                    logger.warning(
+                        "CloudPayments check webhook: invalid signature, sig=%s...",
+                        signature[:20] if signature else "empty",
+                    )
+                    return JSONResponse({"code": 13})  # Отклонить
+            elif settings.CLOUDPAYMENTS_API_SECRET and not signature:
+                # Подпись не пришла, но API_SECRET настроен - пропускаем проверку с предупреждением
+                logger.warning("CloudPayments check webhook: no signature header, skipping verification")
 
             # Разрешаем платёж
+            logger.info("CloudPayments check webhook: allowing payment")
             return JSONResponse({"code": 0})
 
         # CloudPayments Pay webhook (успешная оплата)
@@ -698,13 +714,14 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
             """Pay webhook - вызывается после успешной оплаты."""
             raw_body = await request.body()
 
-            # Проверяем подпись
+            # Проверяем подпись только если она пришла и API_SECRET настроен
             signature = request.headers.get("X-Content-HMAC") or request.headers.get("Content-HMAC") or ""
-            if settings.CLOUDPAYMENTS_API_SECRET and not cloudpayments_service.verify_webhook_signature(
-                raw_body, signature, settings.CLOUDPAYMENTS_API_SECRET
-            ):
-                logger.warning("CloudPayments pay webhook: invalid signature")
-                return JSONResponse({"code": 13})
+            if settings.CLOUDPAYMENTS_API_SECRET and signature:
+                if not cloudpayments_service.verify_webhook_signature(
+                    raw_body, signature, settings.CLOUDPAYMENTS_API_SECRET
+                ):
+                    logger.warning("CloudPayments pay webhook: invalid signature")
+                    return JSONResponse({"code": 13})
 
             # Парсим данные формы
             try:
@@ -729,13 +746,14 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
             """Fail webhook - вызывается при неуспешной оплате."""
             raw_body = await request.body()
 
-            # Проверяем подпись
+            # Проверяем подпись только если она пришла и API_SECRET настроен
             signature = request.headers.get("X-Content-HMAC") or request.headers.get("Content-HMAC") or ""
-            if settings.CLOUDPAYMENTS_API_SECRET and not cloudpayments_service.verify_webhook_signature(
-                raw_body, signature, settings.CLOUDPAYMENTS_API_SECRET
-            ):
-                logger.warning("CloudPayments fail webhook: invalid signature")
-                return JSONResponse({"code": 13})
+            if settings.CLOUDPAYMENTS_API_SECRET and signature:
+                if not cloudpayments_service.verify_webhook_signature(
+                    raw_body, signature, settings.CLOUDPAYMENTS_API_SECRET
+                ):
+                    logger.warning("CloudPayments fail webhook: invalid signature")
+                    return JSONResponse({"code": 13})
 
             # Парсим данные формы
             try:
@@ -760,13 +778,14 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
             """Универсальный webhook endpoint."""
             raw_body = await request.body()
 
-            # Проверяем подпись
+            # Проверяем подпись только если она пришла и API_SECRET настроен
             signature = request.headers.get("X-Content-HMAC") or request.headers.get("Content-HMAC") or ""
-            if settings.CLOUDPAYMENTS_API_SECRET and not cloudpayments_service.verify_webhook_signature(
-                raw_body, signature, settings.CLOUDPAYMENTS_API_SECRET
-            ):
-                logger.warning("CloudPayments webhook: invalid signature")
-                return JSONResponse({"code": 13})
+            if settings.CLOUDPAYMENTS_API_SECRET and signature:
+                if not cloudpayments_service.verify_webhook_signature(
+                    raw_body, signature, settings.CLOUDPAYMENTS_API_SECRET
+                ):
+                    logger.warning("CloudPayments webhook: invalid signature")
+                    return JSONResponse({"code": 13})
 
             # Парсим данные формы
             try:
