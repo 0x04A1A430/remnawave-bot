@@ -16,6 +16,7 @@ from sqlalchemy.sql import false, true
 
 from app.config import settings
 from app.database.crud.subscription import get_subscriptions_statistics
+from app.database.crud.transaction import REAL_PAYMENT_METHODS
 from app.database.database import AsyncSessionLocal
 from app.database.models import (
     PaymentMethod,
@@ -491,6 +492,10 @@ class ReportingService:
         )
 
     def _deposit_query_excluding_referrals(self, start_utc: datetime, end_utc: datetime):
+        """Запрос депозитов только по реальным платежам.
+
+        Исключаются: колесо удачи, промокоды, админские пополнения, оплата с баланса.
+        """
         return select(
             func.count(Transaction.id),
             func.coalesce(func.sum(Transaction.amount_kopeks), 0),
@@ -500,11 +505,8 @@ class ReportingService:
             Transaction.created_at >= start_utc,
             Transaction.created_at < end_utc,
             self._exclude_referral_deposits_condition(),
-            # Исключаем ручные (админские) пополнения из статистики
-            or_(
-                Transaction.payment_method.is_(None),
-                Transaction.payment_method != PaymentMethod.MANUAL.value,
-            ),
+            # Только реальные платежи (исключаем колесо, промокоды, админские, баланс)
+            Transaction.payment_method.in_(REAL_PAYMENT_METHODS),
         )
 
     async def _get_top_referrers(
