@@ -172,6 +172,11 @@ async def get_wata_payment_by_id(*args, **kwargs):
     return await wata_crud.get_wata_payment_by_id(*args, **kwargs)
 
 
+# Алиас для совместимости с хендлерами
+async def get_wata_payment_by_local_id(*args, **kwargs):
+    return await get_wata_payment_by_id(*args, **kwargs)
+
+
 async def get_wata_payment_by_order_id(*args, **kwargs):
     wata_crud = import_module("app.database.crud.wata")
     return await wata_crud.get_wata_payment_by_order_id(*args, **kwargs)
