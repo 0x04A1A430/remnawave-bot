@@ -21,10 +21,19 @@ logger = logging.getLogger(__name__)
 
 
 class PromoCodeService:
-    
+
     def __init__(self):
         self.remnawave_service = RemnaWaveService()
         self.subscription_service = SubscriptionService()
+
+    @staticmethod
+    def _format_user_log(user: User) -> str:
+        """Форматирует идентификатор пользователя для логов (поддержка email-only users)."""
+        if user.telegram_id:
+            return str(user.telegram_id)
+        if user.email:
+            return f"{user.id} ({user.email})"
+        return f"#{user.id}"
     
     async def activate_promocode(
         self,
@@ -71,7 +80,7 @@ class PromoCodeService:
                 from app.utils.user_utils import mark_user_as_had_paid_subscription
                 await mark_user_as_had_paid_subscription(db, user)
 
-                logger.info(f"🎯 Пользователь {user.telegram_id} получил платную подписку через промокод {code}")
+                logger.info(f"🎯 Пользователь {self._format_user_log(user)} получил платную подписку через промокод {code}")
 
             # Assign promo group if promocode has one
             if promocode.promo_group_id:
@@ -93,7 +102,7 @@ class PromoCodeService:
                             )
 
                             logger.info(
-                                f"🎯 Пользователю {user.telegram_id} назначена промогруппа '{promo_group.name}' "
+                                f"🎯 Пользователю {self._format_user_log(user)} назначена промогруппа '{promo_group.name}' "
                                 f"(приоритет: {promo_group.priority}) через промокод {code}"
                             )
 
@@ -105,11 +114,11 @@ class PromoCodeService:
                             )
                     else:
                         logger.info(
-                            f"ℹ️ Пользователь {user.telegram_id} уже имеет промогруппу ID {promocode.promo_group_id}"
+                            f"ℹ️ Пользователь {self._format_user_log(user)} уже имеет промогруппу ID {promocode.promo_group_id}"
                         )
                 except Exception as pg_error:
                     logger.error(
-                        f"❌ Ошибка назначения промогруппы для пользователя {user.telegram_id} "
+                        f"❌ Ошибка назначения промогруппы для пользователя {self._format_user_log(user)} "
                         f"при активации промокода {code}: {pg_error}"
                     )
                     # Don't fail the whole promocode activation if promo group assignment fails
@@ -119,7 +128,7 @@ class PromoCodeService:
             promocode.current_uses += 1
             await db.commit()
 
-            logger.info(f"✅ Пользователь {user.telegram_id} активировал промокод {code}")
+            logger.info(f"✅ Пользователь {self._format_user_log(user)} активировал промокод {code}")
 
             promocode_data = {
                 "code": promocode.code,
@@ -174,7 +183,7 @@ class PromoCodeService:
             if current_discount > 0:
                 if expires_at is None or expires_at > datetime.utcnow():
                     logger.warning(
-                        f"⚠️ Пользователь {user.telegram_id} попытался активировать промокод {promocode.code}, "
+                        f"⚠️ Пользователь {self._format_user_log(user)} попытался активировать промокод {promocode.code}, "
                         f"но у него уже есть активная скидка {current_discount}% до {expires_at}"
                     )
                     raise ValueError("active_discount_exists")
@@ -200,7 +209,7 @@ class PromoCodeService:
             await db.flush()
 
             logger.info(
-                f"✅ Пользователю {user.telegram_id} назначена скидка {discount_percent}% "
+                f"✅ Пользователю {self._format_user_log(user)} назначена скидка {discount_percent}% "
                 f"(срок: {discount_hours} ч.) по промокоду {promocode.code}"
             )
 
@@ -224,7 +233,7 @@ class PromoCodeService:
                 await self.subscription_service.update_remnawave_user(db, subscription)
                 
                 effects.append(f"⏰ Подписка продлена на {promocode.subscription_days} дней")
-                logger.info(f"✅ Подписка пользователя {user.telegram_id} продлена на {promocode.subscription_days} дней в RemnaWave с текущими сквадами")
+                logger.info(f"✅ Подписка пользователя {self._format_user_log(user)} продлена на {promocode.subscription_days} дней в RemnaWave с текущими сквадами")
                 
             else:
                 from app.database.crud.subscription import create_paid_subscription
@@ -264,7 +273,7 @@ class PromoCodeService:
                 await self.subscription_service.create_remnawave_user(db, new_subscription)
                 
                 effects.append(f"🎉 Получена подписка на {promocode.subscription_days} дней")
-                logger.info(f"✅ Создана новая подписка для пользователя {user.telegram_id} на {promocode.subscription_days} дней с триал сквадом {trial_squads}")
+                logger.info(f"✅ Создана новая подписка для пользователя {self._format_user_log(user)} на {promocode.subscription_days} дней с триал сквадом {trial_squads}")
         
         if promocode.type == PromoCodeType.TRIAL_SUBSCRIPTION.value:
             from app.database.crud.subscription import create_trial_subscription
@@ -289,7 +298,7 @@ class PromoCodeService:
                 await self.subscription_service.create_remnawave_user(db, trial_subscription)
                 
                 effects.append(f"🎁 Активирована тестовая подписка на {trial_days} дней")
-                logger.info(f"✅ Создана триал подписка для пользователя {user.telegram_id} на {trial_days} дней")
+                logger.info(f"✅ Создана триал подписка для пользователя {self._format_user_log(user)} на {trial_days} дней")
             else:
                 effects.append("ℹ️ У вас уже есть активная подписка")
         

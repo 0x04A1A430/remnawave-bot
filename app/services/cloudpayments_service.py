@@ -113,7 +113,8 @@ class CloudPaymentsService:
 
     async def generate_payment_link(
         self,
-        telegram_id: int,
+        telegram_id: Optional[int],
+        user_id: int,
         amount_kopeks: int,
         invoice_id: str,
         description: Optional[str] = None,
@@ -125,7 +126,8 @@ class CloudPaymentsService:
         Create a payment order via CloudPayments API and return payment URL.
 
         Args:
-            telegram_id: User's Telegram ID (will be used as AccountId)
+            telegram_id: User's Telegram ID (optional, used in JsonData)
+            user_id: Internal user ID (used as AccountId for tracking)
             amount_kopeks: Amount in kopeks
             invoice_id: Unique invoice ID for this payment
             description: Payment description
@@ -142,13 +144,15 @@ class CloudPaymentsService:
         amount = self._amount_from_kopeks(amount_kopeks)
 
         # Формируем данные для создания заказа через API /orders/create
+        # AccountId uses user_id for consistency (works for both Telegram and email users)
         payload: Dict[str, Any] = {
             "Amount": amount,
             "Currency": settings.CLOUDPAYMENTS_CURRENCY,
             "Description": description or settings.CLOUDPAYMENTS_DESCRIPTION,
-            "AccountId": str(telegram_id),
+            "AccountId": str(user_id),
             "InvoiceId": invoice_id,
             "JsonData": {
+                "user_id": user_id,
                 "telegram_id": telegram_id,
                 "invoice_id": invoice_id,
             },
@@ -190,9 +194,9 @@ class CloudPaymentsService:
 
         return payment_url
 
-    def generate_invoice_id(self, telegram_id: int) -> str:
-        """Generate unique invoice ID for a payment."""
-        return f"cp_{telegram_id}_{int(time.time())}"
+    def generate_invoice_id(self, user_id: int) -> str:
+        """Generate unique invoice ID for a payment using internal user ID."""
+        return f"cp_{user_id}_{int(time.time())}"
 
     async def charge_by_token(
         self,

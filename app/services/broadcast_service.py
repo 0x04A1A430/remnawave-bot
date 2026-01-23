@@ -226,7 +226,8 @@ class BroadcastService:
 
                 telegram_id = getattr(user, "telegram_id", None)
                 if telegram_id is None:
-                    return False
+                    # Email-пользователи без telegram_id - пропускаем (не считаем ошибкой)
+                    return None
 
                 try:
                     await self._deliver_message(telegram_id, config, keyboard)
@@ -242,6 +243,7 @@ class BroadcastService:
 
         # Отправляем сообщения пакетами для эффективности
         batch_size = 100
+        skipped_count = 0
         for i in range(0, len(recipients), batch_size):
             if cancel_event.is_set():
                 await self._mark_cancelled(broadcast_id, sent_count, failed_count)
@@ -254,6 +256,9 @@ class BroadcastService:
             for result in results:
                 if result is True:
                     sent_count += 1
+                elif result is None:
+                    # Email-пользователи - пропускаем без ошибки
+                    skipped_count += 1
                 else:
                     failed_count += 1
 
@@ -285,7 +290,8 @@ class BroadcastService:
 
                 telegram_id = getattr(user, "telegram_id", None)
                 if telegram_id is None:
-                    return False
+                    # Email-пользователи без telegram_id - пропускаем (не считаем ошибкой)
+                    return None
 
                 try:
                     await self._deliver_message(telegram_id, config, keyboard)
@@ -312,6 +318,9 @@ class BroadcastService:
             for result in results:
                 if result is True:
                     sent_count += 1
+                elif result is None:
+                    # Email-пользователи - пропускаем без ошибки
+                    pass
                 else:
                     failed_count += 1
 

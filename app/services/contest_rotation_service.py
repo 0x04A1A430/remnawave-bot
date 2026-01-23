@@ -344,6 +344,9 @@ class ContestRotationService:
 
                 async def _send(u: User):
                     nonlocal sent, failed
+                    # Skip email-only users (no telegram_id)
+                    if not u.telegram_id:
+                        return
                     async with semaphore:
                         try:
                             await self.bot.send_message(

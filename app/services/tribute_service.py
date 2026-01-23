@@ -262,6 +262,10 @@ class TributeService:
     
 
     async def _send_success_notification(self, user_id: int, amount_kopeks: int):
+        # Skip if no telegram_id (email-only user)
+        if not user_id:
+            logger.debug("Пропуск уведомления Tribute для пользователя без telegram_id")
+            return
 
         try:
             amount_rubles = amount_kopeks / 100
@@ -330,8 +334,8 @@ class TributeService:
                         exc_info=True,
                     )
 
-            # Отправляем уведомление только если его ещё не отправили
-            if has_saved_cart and self.bot and not activation_notification_sent:
+            # Отправляем уведомление только если его ещё не отправили и есть telegram_id
+            if has_saved_cart and self.bot and not activation_notification_sent and user_id:
                 # Если у пользователя есть сохраненная корзина,
                 # отправляем ему уведомление с кнопкой вернуться к оформлению
                 from app.localization.texts import get_texts
@@ -373,7 +377,11 @@ class TributeService:
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления об успешном платеже: {e}")
     async def _send_failure_notification(self, user_id: int):
-        
+        # Skip if no telegram_id (email-only user)
+        if not user_id:
+            logger.debug("Пропуск уведомления об ошибке Tribute для пользователя без telegram_id")
+            return
+
         try:
             text = (
                 "⌘ **Платеж не прошел**\n\n"
@@ -401,10 +409,14 @@ class TributeService:
             logger.error(f"Ошибка отправки уведомления о неудачном платеже: {e}")
     
     async def _send_refund_notification(self, user_id: int, amount_kopeks: int):
-        
+        # Skip if no telegram_id (email-only user)
+        if not user_id:
+            logger.debug("Пропуск уведомления о возврате Tribute для пользователя без telegram_id")
+            return
+
         try:
             amount_rubles = amount_kopeks / 100
-            
+
             text = (
                 f"🔄 **Возврат средств**\n\n"
                 f"💰 Сумма возврата: {int(amount_rubles)} ₽\n"

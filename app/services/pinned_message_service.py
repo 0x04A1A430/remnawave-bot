@@ -114,6 +114,10 @@ async def deliver_pinned_message_to_user(
         if last_pinned_id == pinned_message.id:
             return False
 
+    # Skip email-only users (no telegram_id)
+    if not user.telegram_id:
+        return False
+
     success = await _send_and_pin_message(bot, user.telegram_id, pinned_message)
     if success:
         await _mark_pinned_delivery(user_id=getattr(user, "id", None), pinned_message_id=pinned_message.id)
@@ -149,6 +153,12 @@ async def broadcast_pinned_message(
 
     async def send_to_user(user: User) -> None:
         nonlocal sent_count, failed_count
+
+        # Skip email-only users (no telegram_id)
+        if not user.telegram_id:
+            failed_count += 1
+            return
+
         async with semaphore:
             for attempt in range(3):
                 try:
@@ -220,6 +230,12 @@ async def unpin_active_pinned_message(
 
     async def unpin_for_user(user: User) -> None:
         nonlocal unpinned_count, failed_count
+
+        # Skip email-only users (no telegram_id)
+        if not user.telegram_id:
+            failed_count += 1
+            return
+
         async with semaphore:
             try:
                 success = await _unpin_message_for_user(bot, user.telegram_id)

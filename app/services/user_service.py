@@ -28,6 +28,10 @@ from app.database.models import (
 )
 from app.config import settings
 from app.localization.texts import get_texts
+from app.services.notification_delivery_service import (
+    notification_delivery_service,
+    NotificationType,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -44,73 +48,63 @@ class UserService:
         """
         Отправляет пользователю уведомление об успешном пополнении баланса.
         Если подписки нет - показывает БОЛЬШОЕ предупреждение что нужно активировать.
+        Поддерживает как Telegram, так и email-only пользователей.
         """
-        try:
-            texts = get_texts(user.language)
+        texts = get_texts(user.language)
 
-            has_active_subscription = (
-                subscription is not None
-                and subscription.status in {"active", "trial"}
+        has_active_subscription = (
+            subscription is not None
+            and subscription.status in {"active", "trial"}
+        )
+
+        if has_active_subscription:
+            # У пользователя есть активная подписка - обычное сообщение
+            message = (
+                f"✅ <b>Баланс пополнен на {settings.format_price(amount_kopeks)}!</b>\n\n"
+                f"💳 Текущий баланс: {settings.format_price(user.balance_kopeks)}\n\n"
+                f"Спасибо за использование нашего сервиса! 🎉"
             )
-
-            if has_active_subscription:
-                # У пользователя есть активная подписка - обычное сообщение
-                message = (
-                    f"✅ <b>Баланс пополнен на {settings.format_price(amount_kopeks)}!</b>\n\n"
-                    f"💳 Текущий баланс: {settings.format_price(user.balance_kopeks)}\n\n"
-                    f"Спасибо за использование нашего сервиса! 🎉"
-                )
-                keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
-                    [types.InlineKeyboardButton(
-                        text=texts.t("SUBSCRIPTION_EXTEND", "💎 Продлить подписку"),
-                        callback_data="subscription_extend"
-                    )]
-                ])
-            else:
-                # НЕТ активной подписки - БОЛЬШОЕ ПРЕДУПРЕЖДЕНИЕ
-                message = (
-                    f"✅ <b>Баланс пополнен на {settings.format_price(amount_kopeks)}!</b>\n\n"
-                    f"💳 Текущий баланс: {settings.format_price(user.balance_kopeks)}\n\n"
-                    f"{'─' * 25}\n\n"
-                    f"⚠️ <b>ВАЖНО!</b> ⚠️\n\n"
-                    f"🔴 <b>ПОДПИСКА НЕ АКТИВНА!</b>\n\n"
-                    f"Пополнение баланса НЕ активирует подписку автоматически!\n\n"
-                    f"👇 <b>Выберите действие:</b>"
-                )
-                keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
-                    [types.InlineKeyboardButton(
-                        text="🚀 АКТИВИРОВАТЬ ПОДПИСКУ",
-                        callback_data="subscription_buy"
-                    )],
-                    [types.InlineKeyboardButton(
-                        text="💎 ПРОДЛИТЬ ПОДПИСКУ",
-                        callback_data="subscription_extend"
-                    )],
-                    [types.InlineKeyboardButton(
-                        text="📱 ДОБАВИТЬ УСТРОЙСТВА",
-                        callback_data="subscription_add_devices"
-                    )]
-                ])
-
-            await bot.send_message(
-                chat_id=user.telegram_id,
-                text=message,
-                parse_mode="HTML",
-                reply_markup=keyboard
+            keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+                [types.InlineKeyboardButton(
+                    text=texts.t("SUBSCRIPTION_EXTEND", "💎 Продлить подписку"),
+                    callback_data="subscription_extend"
+                )]
+            ])
+        else:
+            # НЕТ активной подписки - БОЛЬШОЕ ПРЕДУПРЕЖДЕНИЕ
+            message = (
+                f"✅ <b>Баланс пополнен на {settings.format_price(amount_kopeks)}!</b>\n\n"
+                f"💳 Текущий баланс: {settings.format_price(user.balance_kopeks)}\n\n"
+                f"{'─' * 25}\n\n"
+                f"⚠️ <b>ВАЖНО!</b> ⚠️\n\n"
+                f"🔴 <b>ПОДПИСКА НЕ АКТИВНА!</b>\n\n"
+                f"Пополнение баланса НЕ активирует подписку автоматически!\n\n"
+                f"👇 <b>Выберите действие:</b>"
             )
+            keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+                [types.InlineKeyboardButton(
+                    text="🚀 АКТИВИРОВАТЬ ПОДПИСКУ",
+                    callback_data="subscription_buy"
+                )],
+                [types.InlineKeyboardButton(
+                    text="💎 ПРОДЛИТЬ ПОДПИСКУ",
+                    callback_data="subscription_extend"
+                )],
+                [types.InlineKeyboardButton(
+                    text="📱 ДОБАВИТЬ УСТРОЙСТВА",
+                    callback_data="subscription_add_devices"
+                )]
+            ])
 
-            logger.info(f"✅ Уведомление о пополнении отправлено пользователю {user.telegram_id}")
-            return True
-
-        except TelegramForbiddenError:
-            logger.warning(f"⚠️ Пользователь {user.telegram_id} заблокировал бота")
-            return False
-        except TelegramBadRequest as e:
-            logger.error(f"❌ Ошибка Telegram API: {e}")
-            return False
-        except Exception as e:
-            logger.error(f"❌ Ошибка отправки уведомления: {e}")
-            return False
+        # Use unified notification delivery service
+        return await notification_delivery_service.notify_balance_topup(
+            user=user,
+            amount_kopeks=amount_kopeks,
+            new_balance_kopeks=user.balance_kopeks,
+            bot=bot,
+            telegram_message=message,
+            telegram_markup=keyboard,
+        )
 
     async def _send_balance_notification(
         self,
@@ -119,71 +113,67 @@ class UserService:
         amount_kopeks: int,
         admin_name: str
     ) -> bool:
-        """Отправляет уведомление пользователю о пополнении/списании баланса"""
-        try:
-            if amount_kopeks > 0:
-                # Пополнение
-                emoji = "💰"
-                action = "пополнен"
-                amount_text = f"+{settings.format_price(amount_kopeks)}"
-                message = (
-                    f"{emoji} <b>Баланс пополнен!</b>\n\n"
-                    f"💵 <b>Сумма:</b> {amount_text}\n"
-                    f"👤 <b>Администратор:</b> {admin_name}\n"
-                    f"💳 <b>Текущий баланс:</b> {settings.format_price(user.balance_kopeks)}\n\n"
-                    f"Спасибо за использование нашего сервиса! 🎉"
-                )
-            else:
-                # Списание
-                emoji = "💸"
-                action = "списан"
-                amount_text = f"-{settings.format_price(abs(amount_kopeks))}"
-                message = (
-                    f"{emoji} <b>Средства списаны с баланса</b>\n\n"
-                    f"💵 <b>Сумма:</b> {amount_text}\n"
-                    f"👤 <b>Администратор:</b> {admin_name}\n"
-                    f"💳 <b>Текущий баланс:</b> {settings.format_price(user.balance_kopeks)}\n\n"
-                    f"Если у вас есть вопросы, обратитесь в поддержку."
-                )
-
-            keyboard_rows = []
-            if getattr(user, "subscription", None) and user.subscription.status in {
-                "active",
-                "expired",
-                "trial",
-            }:
-                keyboard_rows.append([
-                    types.InlineKeyboardButton(
-                        text=get_texts(user.language).t("SUBSCRIPTION_EXTEND", "💎 Продлить подписку"),
-                        callback_data="subscription_extend",
-                    )
-                ])
-
-            reply_markup = (
-                types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
-                if keyboard_rows
-                else None
+        """
+        Отправляет уведомление пользователю о пополнении/списании баланса.
+        Поддерживает как Telegram, так и email-only пользователей.
+        """
+        if amount_kopeks > 0:
+            # Пополнение
+            emoji = "💰"
+            amount_text = f"+{settings.format_price(amount_kopeks)}"
+            message = (
+                f"{emoji} <b>Баланс пополнен!</b>\n\n"
+                f"💵 <b>Сумма:</b> {amount_text}\n"
+                f"👤 <b>Администратор:</b> {admin_name}\n"
+                f"💳 <b>Текущий баланс:</b> {settings.format_price(user.balance_kopeks)}\n\n"
+                f"Спасибо за использование нашего сервиса! 🎉"
+            )
+        else:
+            # Списание
+            emoji = "💸"
+            amount_text = f"-{settings.format_price(abs(amount_kopeks))}"
+            message = (
+                f"{emoji} <b>Средства списаны с баланса</b>\n\n"
+                f"💵 <b>Сумма:</b> {amount_text}\n"
+                f"👤 <b>Администратор:</b> {admin_name}\n"
+                f"💳 <b>Текущий баланс:</b> {settings.format_price(user.balance_kopeks)}\n\n"
+                f"Если у вас есть вопросы, обратитесь в поддержку."
             )
 
-            await bot.send_message(
-                chat_id=user.telegram_id,
-                text=message,
-                parse_mode="HTML",
-                reply_markup=reply_markup,
-            )
-            
-            logger.info(f"✅ Уведомление о изменении баланса отправлено пользователю {user.telegram_id}")
-            return True
-            
-        except TelegramForbiddenError:
-            logger.warning(f"⚠️ Пользователь {user.telegram_id} заблокировал бота")
-            return False
-        except TelegramBadRequest as e:
-            logger.error(f"❌ Ошибка Telegram API при отправке уведомления пользователю {user.telegram_id}: {e}")
-            return False
-        except Exception as e:
-            logger.error(f"❌ Неожиданная ошибка при отправке уведомления пользователю {user.telegram_id}: {e}")
-            return False
+        keyboard_rows = []
+        if getattr(user, "subscription", None) and user.subscription.status in {
+            "active",
+            "expired",
+            "trial",
+        }:
+            keyboard_rows.append([
+                types.InlineKeyboardButton(
+                    text=get_texts(user.language).t("SUBSCRIPTION_EXTEND", "💎 Продлить подписку"),
+                    callback_data="subscription_extend",
+                )
+            ])
+
+        reply_markup = (
+            types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
+            if keyboard_rows
+            else None
+        )
+
+        # Use unified notification delivery service
+        context = {
+            "amount_kopeks": amount_kopeks,
+            "new_balance_kopeks": user.balance_kopeks,
+            "description": f"Администратор: {admin_name}",
+        }
+
+        return await notification_delivery_service.send_notification(
+            user=user,
+            notification_type=NotificationType.BALANCE_CHANGE,
+            context=context,
+            bot=bot,
+            telegram_message=message,
+            telegram_markup=reply_markup,
+        )
     
     async def get_user_profile(
         self, 
@@ -202,7 +192,7 @@ class UserService:
                 "user": user,
                 "subscription": subscription,
                 "transactions_count": transactions_count,
-                "is_admin": settings.is_admin(user.telegram_id),
+                "is_admin": settings.is_admin(user.telegram_id, user.email),
                 "registration_days": (datetime.utcnow() - user.created_at).days
             }
             
@@ -701,7 +691,8 @@ class UserService:
                 logger.warning(f"Пользователь {user_id} не найден для удаления")
                 return False
             
-            logger.info(f"🗑️ Начинаем полное удаление пользователя {user_id} (Telegram ID: {user.telegram_id})")
+            user_id_display = user.telegram_id or user.email or f"#{user.id}"
+            logger.info(f"🗑️ Начинаем полное удаление пользователя {user_id} (ID: {user_id_display})")
             
             if user.remnawave_uuid:
                 from app.config import settings
@@ -1110,7 +1101,7 @@ class UserService:
                 await db.rollback()
                 return False
             
-            logger.info(f"✅ Пользователь {user.telegram_id} (ID: {user_id}) полностью удален администратором {admin_id}")
+            logger.info(f"✅ Пользователь {user_id_display} (ID: {user_id}) полностью удален администратором {admin_id}")
             return True
             
         except Exception as e:

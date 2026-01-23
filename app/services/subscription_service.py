@@ -200,24 +200,37 @@ class SubscriptionService:
             
             validation_success = await self.validate_and_clean_subscription(db, subscription, user)
             if not validation_success:
-                logger.error(f"Ошибка валидации подписки для пользователя {user.telegram_id}")
+                logger.error(f"Ошибка валидации подписки для пользователя {self._format_user_log(user)}")
                 return None
 
             user_tag = self._resolve_user_tag(subscription)
 
             async with self.get_api_client() as api:
                 hwid_limit = resolve_hwid_device_limit_for_payload(subscription)
-                existing_users = await api.get_user_by_telegram_id(user.telegram_id)
+
+                # Ищем существующего пользователя в панели
+                existing_users = []
+                if user.telegram_id:
+                    existing_users = await api.get_user_by_telegram_id(user.telegram_id)
+                elif user.remnawave_uuid:
+                    # Для email-пользователей ищем по uuid если есть
+                    try:
+                        existing_user = await api.get_user(user.remnawave_uuid)
+                        if existing_user:
+                            existing_users = [existing_user]
+                    except Exception:
+                        pass
+
                 if existing_users:
-                    logger.info(f"🔄 Найден существующий пользователь в панели для {user.telegram_id}")
+                    logger.info(f"🔄 Найден существующий пользователь в панели для {self._format_user_log(user)}")
                     remnawave_user = existing_users[0]
-                    
+
                     try:
                         await api.reset_user_devices(remnawave_user.uuid)
-                        logger.info(f"🔧 Сброшены HWID устройства для пользователя {user.telegram_id}")
+                        logger.info(f"🔧 Сброшены HWID устройства для {self._format_user_log(user)}")
                     except Exception as hwid_error:
                         logger.warning(f"⚠️ Не удалось сбросить HWID: {hwid_error}")
-                    
+
                     update_kwargs = dict(
                         uuid=remnawave_user.uuid,
                         status=UserStatus.ACTIVE,
@@ -227,7 +240,9 @@ class SubscriptionService:
                         description=settings.format_remnawave_user_description(
                             full_name=user.full_name,
                             username=user.username,
-                            telegram_id=user.telegram_id
+                            telegram_id=user.telegram_id,
+                            email=user.email,
+                            user_id=user.id
                         ),
                         active_internal_squads=subscription.connected_squads,
                     )
@@ -239,21 +254,23 @@ class SubscriptionService:
                         update_kwargs['hwid_device_limit'] = hwid_limit
 
                     updated_user = await api.update_user(**update_kwargs)
-                    
+
                     if reset_traffic:
                         await self._reset_user_traffic(
                             api,
                             updated_user.uuid,
-                            user.telegram_id,
+                            user,
                             reset_reason,
                         )
 
                 else:
-                    logger.info(f"🆕 Создаем нового пользователя в панели для {user.telegram_id}")
+                    logger.info(f"🆕 Создаем нового пользователя в панели для {self._format_user_log(user)}")
                     username = settings.format_remnawave_username(
                         full_name=user.full_name,
                         username=user.username,
                         telegram_id=user.telegram_id,
+                        email=user.email,
+                        user_id=user.id,
                     )
                     create_kwargs = dict(
                         username=username,
@@ -261,11 +278,13 @@ class SubscriptionService:
                         status=UserStatus.ACTIVE,
                         traffic_limit_bytes=self._gb_to_bytes(subscription.traffic_limit_gb),
                         traffic_limit_strategy=get_traffic_reset_strategy(subscription.tariff),
-                        telegram_id=user.telegram_id,
+                        telegram_id=user.telegram_id,  # Может быть None для email-пользователей
                         description=settings.format_remnawave_user_description(
                             full_name=user.full_name,
                             username=user.username,
-                            telegram_id=user.telegram_id
+                            telegram_id=user.telegram_id,
+                            email=user.email,
+                            user_id=user.id
                         ),
                         active_internal_squads=subscription.connected_squads,
                     )
@@ -282,7 +301,7 @@ class SubscriptionService:
                         await self._reset_user_traffic(
                             api,
                             updated_user.uuid,
-                            user.telegram_id,
+                            user,
                             reset_reason,
                         )
 
@@ -290,9 +309,9 @@ class SubscriptionService:
                 subscription.subscription_url = updated_user.subscription_url
                 subscription.subscription_crypto_link = updated_user.happ_crypto_link
                 user.remnawave_uuid = updated_user.uuid
-                
+
                 await db.commit()
-                
+
                 logger.info(f"✅ Создан/обновлен RemnaWave пользователь для подписки {subscription.id}")
                 logger.info(f"🔗 Ссылка на подписку: {updated_user.subscription_url}")
                 strategy_name = settings.DEFAULT_TRAFFIC_RESET_STRATEGY
@@ -356,7 +375,9 @@ class SubscriptionService:
                     description=settings.format_remnawave_user_description(
                         full_name=user.full_name,
                         username=user.username,
-                        telegram_id=user.telegram_id
+                        telegram_id=user.telegram_id,
+                        email=user.email,
+                        user_id=user.id
                     ),
                     active_internal_squads=subscription.connected_squads,
                 )
@@ -373,7 +394,7 @@ class SubscriptionService:
                     await self._reset_user_traffic(
                         api,
                         user.remnawave_uuid,
-                        user.telegram_id,
+                        user,
                         reset_reason,
                     )
 
@@ -394,11 +415,20 @@ class SubscriptionService:
             logger.error(f"Ошибка обновления RemnaWave пользователя: {e}")
             return None
 
+    @staticmethod
+    def _format_user_log(user) -> str:
+        """Форматирует идентификатор пользователя для логов."""
+        if user.telegram_id:
+            return f"user {user.telegram_id}"
+        if user.email:
+            return f"user {user.id} ({user.email})"
+        return f"user {user.id}"
+
     async def _reset_user_traffic(
         self,
         api: RemnaWaveAPI,
         user_uuid: str,
-        telegram_id: int,
+        user,  # User object вместо telegram_id
         reset_reason: Optional[str] = None,
     ) -> None:
         if not user_uuid:
@@ -408,11 +438,11 @@ class SubscriptionService:
             await api.reset_user_traffic(user_uuid)
             reason_text = f" ({reset_reason})" if reset_reason else ""
             logger.info(
-                f"🔄 Сброшен трафик RemnaWave для пользователя {telegram_id}{reason_text}"
+                f"🔄 Сброшен трафик RemnaWave для {self._format_user_log(user)}{reason_text}"
             )
         except Exception as exc:
             logger.warning(
-                f"⚠️ Не удалось сбросить трафик RemnaWave для пользователя {telegram_id}: {exc}"
+                f"⚠️ Не удалось сбросить трафик RemnaWave для {self._format_user_log(user)}: {exc}"
             )
 
     async def disable_remnawave_user(self, user_uuid: str) -> bool:
@@ -477,7 +507,7 @@ class SubscriptionService:
                 subscription.subscription_crypto_link = updated_user.happ_crypto_link
                 await db.commit()
                 
-                logger.info(f"✅ Обновлена ссылка подписки для пользователя {user.telegram_id}")
+                logger.info(f"✅ Обновлена ссылка подписки для {self._format_user_log(user)}")
                 return updated_user.subscription_url
                 
         except Exception as e:
@@ -869,44 +899,46 @@ class SubscriptionService:
     ) -> bool:
         try:
             needs_cleanup = False
-            
+            user_log = self._format_user_log(user)
+
             if user.remnawave_uuid:
                 try:
                     async with self.get_api_client() as api:
                         remnawave_user = await api.get_user_by_uuid(user.remnawave_uuid)
-                        
+
                         if not remnawave_user:
-                            logger.warning(f"⚠️ Пользователь {user.telegram_id} имеет UUID {user.remnawave_uuid}, но не найден в панели")
+                            logger.warning(f"⚠️ Пользователь {user_log} имеет UUID {user.remnawave_uuid}, но не найден в панели")
                             needs_cleanup = True
                         else:
-                            if remnawave_user.telegram_id != user.telegram_id:
-                                logger.warning(f"⚠️ Несоответствие telegram_id для пользователя {user.telegram_id}")
+                            # Проверяем telegram_id только если он задан у обоих
+                            if user.telegram_id and remnawave_user.telegram_id and remnawave_user.telegram_id != user.telegram_id:
+                                logger.warning(f"⚠️ Несоответствие telegram_id для {user_log}: panel={remnawave_user.telegram_id}")
                                 needs_cleanup = True
                 except Exception as api_error:
                     logger.error(f"❌ Ошибка проверки пользователя в панели: {api_error}")
                     needs_cleanup = True
-            
+
             if subscription.remnawave_short_uuid and not user.remnawave_uuid:
                 logger.warning(f"⚠️ У подписки есть short_uuid, но у пользователя нет remnawave_uuid")
                 needs_cleanup = True
-                
+
             if needs_cleanup:
-                logger.info(f"🧹 Очищаем мусорные данные подписки для пользователя {user.telegram_id}")
-                
+                logger.info(f"🧹 Очищаем мусорные данные подписки для {user_log}")
+
                 subscription.remnawave_short_uuid = None
                 subscription.subscription_url = ""
                 subscription.subscription_crypto_link = ""
                 subscription.connected_squads = []
-                
+
                 user.remnawave_uuid = None
-                
+
                 await db.commit()
-                logger.info(f"✅ Мусорные данные очищены для пользователя {user.telegram_id}")
-                
+                logger.info(f"✅ Мусорные данные очищены для {user_log}")
+
             return True
-            
+
         except Exception as e:
-            logger.error(f"❌ Ошибка валидации подписки для пользователя {user.telegram_id}: {e}")
+            logger.error(f"❌ Ошибка валидации подписки для {self._format_user_log(user)}: {e}")
             await db.rollback()
             return False
     

@@ -1198,12 +1198,21 @@ class RemnaWaveService:
                 .options(selectinload(User.subscription))
             )
             bot_users = bot_users_result.scalars().all()
-            bot_users_by_telegram_id = {user.telegram_id: user for user in bot_users}
+            # Filter out email-only users (telegram_id=None) to avoid None key issues
+            bot_users_by_telegram_id = {
+                user.telegram_id: user
+                for user in bot_users
+                if user.telegram_id is not None
+            }
             bot_users_by_uuid = {
                 user.remnawave_uuid: user
                 for user in bot_users
                 if getattr(user, "remnawave_uuid", None)
             }
+            # Also index email-only users by their remnawave_uuid for sync
+            email_users_count = sum(1 for u in bot_users if u.telegram_id is None)
+            if email_users_count > 0:
+                logger.info(f"📧 Email-only пользователей (без telegram_id): {email_users_count}")
 
             logger.info(f"📊 Пользователей в боте: {len(bot_users)}")
             
@@ -1819,7 +1828,7 @@ class RemnaWaveService:
                                 panel_uuid = user.remnawave_uuid
 
                                 # Если нет UUID в базе, ищем пользователя по telegram_id в панели
-                                if not panel_uuid:
+                                if not panel_uuid and user.telegram_id:
                                     existing_users = await api.get_user_by_telegram_id(user.telegram_id)
                                     if existing_users:
                                         panel_uuid = existing_users[0].uuid
@@ -1913,12 +1922,12 @@ class RemnaWaveService:
         try:
             async with self.get_api_client() as api:
                 users = await api.get_user_by_telegram_id(telegram_id)
-                
+
                 if not users:
                     return None
-                
+
                 user = users[0]
-                
+
                 return {
                     "used_traffic_bytes": user.used_traffic_bytes,
                     "used_traffic_gb": user.used_traffic_bytes / (1024**3),
@@ -1928,9 +1937,36 @@ class RemnaWaveService:
                     "traffic_limit_gb": user.traffic_limit_bytes / (1024**3) if user.traffic_limit_bytes > 0 else 0,
                     "subscription_url": user.subscription_url
                 }
-                
+
         except Exception as e:
             logger.error(f"Ошибка получения статистики трафика для пользователя {telegram_id}: {e}")
+            return None
+
+    async def get_user_traffic_stats_by_uuid(self, remnawave_uuid: str) -> Optional[Dict[str, Any]]:
+        """
+        Получить статистику трафика по RemnaWave UUID.
+
+        Используется для email-пользователей у которых нет telegram_id.
+        """
+        try:
+            async with self.get_api_client() as api:
+                user = await api.get_user_by_uuid(remnawave_uuid)
+
+                if not user:
+                    return None
+
+                return {
+                    "used_traffic_bytes": user.used_traffic_bytes,
+                    "used_traffic_gb": user.used_traffic_bytes / (1024**3),
+                    "lifetime_used_traffic_bytes": user.lifetime_used_traffic_bytes,
+                    "lifetime_used_traffic_gb": user.lifetime_used_traffic_bytes / (1024**3),
+                    "traffic_limit_bytes": user.traffic_limit_bytes,
+                    "traffic_limit_gb": user.traffic_limit_bytes / (1024**3) if user.traffic_limit_bytes > 0 else 0,
+                    "subscription_url": user.subscription_url
+                }
+
+        except Exception as e:
+            logger.error(f"Ошибка получения статистики трафика по UUID {remnawave_uuid}: {e}")
             return None
 
     async def get_telegram_id_by_email(self, user_identifier: str) -> Optional[int]:
@@ -2193,22 +2229,23 @@ class RemnaWaveService:
                 or (user.subscription and not user.subscription.is_trial)
                 or user.balance_kopeks > 0
             )
+            user_id_display = user.telegram_id or user.email or f"#{user.id}"
             if was_paid:
                 logger.warning(
-                    f"⚠️ ВНИМАНИЕ: force_cleanup_user_data вызвана для ПЛАТНОГО пользователя {user.telegram_id}! "
+                    f"⚠️ ВНИМАНИЕ: force_cleanup_user_data вызвана для ПЛАТНОГО пользователя {user_id_display}! "
                     f"has_had_paid_subscription={user.has_had_paid_subscription}, "
                     f"balance={user.balance_kopeks}, "
                     f"is_trial={user.subscription.is_trial if user.subscription else 'N/A'}"
                 )
 
-            logger.info(f"🗑️ ПРИНУДИТЕЛЬНАЯ полная очистка данных пользователя {user.telegram_id}")
+            logger.info(f"🗑️ ПРИНУДИТЕЛЬНАЯ полная очистка данных пользователя {user_id_display}")
             
             if user.remnawave_uuid:
                 try:
                     async with self.get_api_client() as api:
                         devices_reset = await api.reset_user_devices(user.remnawave_uuid)
                         if devices_reset:
-                            logger.info(f"🔧 Сброшены HWID устройства для {user.telegram_id}")
+                            logger.info(f"🔧 Сброшены HWID устройства для {user_id_display}")
                 except Exception as hwid_error:
                     logger.warning(f"⚠️ Ошибка сброса HWID устройств: {hwid_error}")
             
@@ -2227,25 +2264,25 @@ class RemnaWaveService:
                             SubscriptionServer.subscription_id == user.subscription.id
                         )
                     )
-                    logger.info(f"🗑️ Удалены серверы подписки для {user.telegram_id}")
-                
+                    logger.info(f"🗑️ Удалены серверы подписки для {user_id_display}")
+
                 await db.execute(
                     delete(Transaction).where(Transaction.user_id == user.id)
                 )
-                logger.info(f"🗑️ Удалены транзакции для {user.telegram_id}")
-                
+                logger.info(f"🗑️ Удалены транзакции для {user_id_display}")
+
                 await db.execute(
                     delete(ReferralEarning).where(ReferralEarning.user_id == user.id)
                 )
                 await db.execute(
                     delete(ReferralEarning).where(ReferralEarning.referral_id == user.id)
                 )
-                logger.info(f"🗑️ Удалены реферальные доходы для {user.telegram_id}")
-                
+                logger.info(f"🗑️ Удалены реферальные доходы для {user_id_display}")
+
                 await db.execute(
                     delete(PromoCodeUse).where(PromoCodeUse.user_id == user.id)
                 )
-                logger.info(f"🗑️ Удалены использования промокодов для {user.telegram_id}")
+                logger.info(f"🗑️ Удалены использования промокодов для {user_id_display}")
                 
             except Exception as records_error:
                 logger.error(f"❌ Ошибка удаления связанных записей: {records_error}")
@@ -2275,7 +2312,7 @@ class RemnaWaveService:
                 
                 await db.commit()
                 
-                logger.info(f"✅ ПРИНУДИТЕЛЬНО очищены ВСЕ данные пользователя {user.telegram_id}")
+                logger.info(f"✅ ПРИНУДИТЕЛЬНО очищены ВСЕ данные пользователя {user_id_display}")
                 return True
                 
             except Exception as cleanup_error:
@@ -2386,9 +2423,14 @@ class RemnaWaveService:
                     try:
                         stats["checked"] += 1
                         user = subscription.user
-                    
+
+                        # Skip email-only users (no telegram_id for panel lookup)
+                        if not user.telegram_id:
+                            logger.debug(f"Пропускаем email-пользователя {user.id} при синхронизации с панелью")
+                            continue
+
                         panel_user = panel_users_dict.get(user.telegram_id)
-                    
+
                         if panel_user:
                             await self._update_subscription_from_panel_data(db, user, panel_user)
                             stats["updated"] += 1

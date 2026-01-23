@@ -23,6 +23,10 @@ from app.database.crud.user import subtract_user_balance, get_user_by_id
 from app.database.crud.transaction import create_transaction
 from app.database.models import TransactionType, PaymentMethod, Subscription, User
 from app.localization.texts import get_texts
+from app.services.notification_delivery_service import (
+    notification_delivery_service,
+    NotificationType,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -163,9 +167,10 @@ class DailySubscriptionService:
             # Обновляем время последнего списания и продлеваем подписку
             subscription = await update_daily_charge_time(db, subscription)
 
+            user_id_display = user.telegram_id or user.email or f"#{user.id}"
             logger.info(
                 f"✅ Суточное списание: подписка {subscription.id}, "
-                f"сумма {daily_price} коп., пользователь {user.telegram_id}"
+                f"сумма {daily_price} коп., пользователь {user_id_display}"
             )
 
             # Синхронизируем с Remnawave (обновляем срок подписки)
@@ -196,67 +201,72 @@ class DailySubscriptionService:
 
     async def _notify_daily_charge(self, user, subscription, amount_kopeks: int):
         """Уведомляет пользователя о суточном списании."""
-        if not self._bot:
-            return
+        texts = get_texts(getattr(user, "language", "ru"))
+        amount_rubles = amount_kopeks / 100
+        balance_rubles = user.balance_kopeks / 100
 
+        message = (
+            f"💳 <b>Суточное списание</b>\n\n"
+            f"Списано: {amount_rubles:.2f} ₽\n"
+            f"Остаток баланса: {balance_rubles:.2f} ₽\n\n"
+            f"Следующее списание через 24 часа."
+        )
+
+        # Use unified notification delivery service
         try:
-            texts = get_texts(getattr(user, "language", "ru"))
-            amount_rubles = amount_kopeks / 100
-            balance_rubles = user.balance_kopeks / 100
-
-            message = (
-                f"💳 <b>Суточное списание</b>\n\n"
-                f"Списано: {amount_rubles:.2f} ₽\n"
-                f"Остаток баланса: {balance_rubles:.2f} ₽\n\n"
-                f"Следующее списание через 24 часа."
-            )
-
-            await self._bot.send_message(
-                chat_id=user.telegram_id,
-                text=message,
-                parse_mode="HTML",
+            await notification_delivery_service.notify_daily_debit(
+                user=user,
+                amount_kopeks=amount_kopeks,
+                new_balance_kopeks=user.balance_kopeks,
+                bot=self._bot,
+                telegram_message=message,
             )
         except Exception as e:
             logger.warning(f"Не удалось отправить уведомление о списании: {e}")
 
     async def _notify_insufficient_balance(self, user, subscription, required_amount: int):
         """Уведомляет пользователя о недостатке средств."""
-        if not self._bot:
-            return
+        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+
+        texts = get_texts(getattr(user, "language", "ru"))
+        required_rubles = required_amount / 100
+        balance_rubles = user.balance_kopeks / 100
+
+        message = (
+            f"⚠️ <b>Подписка приостановлена</b>\n\n"
+            f"Недостаточно средств для суточной оплаты.\n\n"
+            f"Требуется: {required_rubles:.2f} ₽\n"
+            f"Баланс: {balance_rubles:.2f} ₽\n\n"
+            f"Пополните баланс, чтобы возобновить подписку."
+        )
+
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(
+                    text="💳 Пополнить баланс",
+                    callback_data="menu_balance"
+                )],
+                [InlineKeyboardButton(
+                    text="📱 Моя подписка",
+                    callback_data="menu_subscription"
+                )],
+            ]
+        )
+
+        # Use unified notification delivery service
+        context = {
+            "required_amount": f"{required_rubles:.2f} ₽",
+            "current_balance": f"{balance_rubles:.2f} ₽",
+        }
 
         try:
-            from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-
-            texts = get_texts(getattr(user, "language", "ru"))
-            required_rubles = required_amount / 100
-            balance_rubles = user.balance_kopeks / 100
-
-            message = (
-                f"⚠️ <b>Подписка приостановлена</b>\n\n"
-                f"Недостаточно средств для суточной оплаты.\n\n"
-                f"Требуется: {required_rubles:.2f} ₽\n"
-                f"Баланс: {balance_rubles:.2f} ₽\n\n"
-                f"Пополните баланс, чтобы возобновить подписку."
-            )
-
-            keyboard = InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [InlineKeyboardButton(
-                        text="💳 Пополнить баланс",
-                        callback_data="menu_balance"
-                    )],
-                    [InlineKeyboardButton(
-                        text="📱 Моя подписка",
-                        callback_data="menu_subscription"
-                    )],
-                ]
-            )
-
-            await self._bot.send_message(
-                chat_id=user.telegram_id,
-                text=message,
-                reply_markup=keyboard,
-                parse_mode="HTML",
+            await notification_delivery_service.send_notification(
+                user=user,
+                notification_type=NotificationType.DAILY_INSUFFICIENT_FUNDS,
+                context=context,
+                bot=self._bot,
+                telegram_message=message,
+                telegram_markup=keyboard,
             )
         except Exception as e:
             logger.warning(f"Не удалось отправить уведомление о недостатке средств: {e}")
@@ -429,22 +439,27 @@ class DailySubscriptionService:
 
     async def _notify_traffic_reset(self, user: User, subscription: Subscription, reset_gb: int):
         """Уведомляет пользователя о сбросе докупленного трафика."""
-        if not self._bot:
-            return
+        message = (
+            f"ℹ️ <b>Сброс докупленного трафика</b>\n\n"
+            f"Ваш докупленный трафик ({reset_gb} ГБ) был сброшен, "
+            f"так как прошло 30 дней с момента первой докупки.\n\n"
+            f"Текущий лимит трафика: {subscription.traffic_limit_gb} ГБ\n\n"
+            f"Вы можете докупить трафик снова в любое время."
+        )
 
+        context = {
+            "reset_gb": reset_gb,
+            "current_limit_gb": subscription.traffic_limit_gb,
+        }
+
+        # Use unified notification delivery service
         try:
-            message = (
-                f"ℹ️ <b>Сброс докупленного трафика</b>\n\n"
-                f"Ваш докупленный трафик ({reset_gb} ГБ) был сброшен, "
-                f"так как прошло 30 дней с момента первой докупки.\n\n"
-                f"Текущий лимит трафика: {subscription.traffic_limit_gb} ГБ\n\n"
-                f"Вы можете докупить трафик снова в любое время."
-            )
-
-            await self._bot.send_message(
-                chat_id=user.telegram_id,
-                text=message,
-                parse_mode="HTML",
+            await notification_delivery_service.send_notification(
+                user=user,
+                notification_type=NotificationType.TRAFFIC_RESET,
+                context=context,
+                bot=self._bot,
+                telegram_message=message,
             )
         except Exception as e:
             logger.warning(f"Не удалось отправить уведомление о сбросе трафика: {e}")

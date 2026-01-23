@@ -57,6 +57,10 @@ from app.services.notification_settings_service import NotificationSettingsServi
 from app.services.payment_service import PaymentService
 from app.services.subscription_service import SubscriptionService
 from app.services.promo_offer_service import promo_offer_service
+from app.services.notification_delivery_service import (
+    notification_delivery_service,
+    NotificationType,
+)
 from app.utils.pricing_utils import apply_percentage_discount
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button
 
@@ -86,7 +90,7 @@ class MonitoringService:
 
     async def _send_message_with_logo(
         self,
-        chat_id: int,
+        chat_id: Optional[int],
         text: str,
         reply_markup=None,
         parse_mode: Optional[str] = "HTML",
@@ -94,6 +98,11 @@ class MonitoringService:
         """Отправляет сообщение, добавляя логотип при необходимости."""
         if not self.bot:
             raise RuntimeError("Bot instance is not available")
+
+        # Skip email-only users (no telegram_id)
+        if not chat_id:
+            logger.debug("Пропуск уведомления: chat_id не указан (email-пользователь)")
+            return None
 
         if (
             settings.ENABLE_LOGO_MODE
@@ -360,11 +369,13 @@ class MonitoringService:
                     if not user:
                         continue
 
-                    user_key = f"user_{user.telegram_id}_today"
+                    # Use user.id for key to support both Telegram and email users
+                    user_key = f"user_{user.id}_today"
+                    user_identifier = user.telegram_id or f"email:{user.id}"
 
                     if (await notification_sent(db, user.id, subscription.id, "expiring", days) or
                         user_key in all_processed_users):
-                        logger.debug(f"🔄 Пропускаем дублирование для пользователя {user.telegram_id} на {days} дней")
+                        logger.debug(f"🔄 Пропускаем дублирование для пользователя {user_identifier} на {days} дней")
                         continue
 
                     should_send = True
@@ -373,10 +384,24 @@ class MonitoringService:
                             other_subs = await self._get_expiring_paid_subscriptions(db, other_days)
                             if any(s.user_id == user.id for s in other_subs):
                                 should_send = False
-                                logger.debug(f"🎯 Пропускаем уведомление на {days} дней для пользователя {user.telegram_id}, есть более срочное на {other_days} дней")
+                                logger.debug(f"🎯 Пропускаем уведомление на {days} дней для пользователя {user_identifier}, есть более срочное на {other_days} дней")
                                 break
 
                     if not should_send:
+                        continue
+
+                    # Handle email-only users via notification delivery service
+                    if not user.telegram_id:
+                        success = await notification_delivery_service.notify_subscription_expiring(
+                            user=user,
+                            days_left=days,
+                            expires_at=subscription.end_date,
+                        )
+                        if success:
+                            await record_notification(db, user.id, subscription.id, "expiring", days)
+                            all_processed_users.add(user_key)
+                            sent_count += 1
+                            logger.info(f"✅ Email-пользователю {user.id} отправлено уведомление об истечении подписки через {days} дней")
                         continue
 
                     if self.bot:
@@ -986,7 +1011,9 @@ class MonitoringService:
                 user = subscription.user
                 if not user:
                     continue
-                
+
+                user_identifier = user.telegram_id or f"email:{user.id}"
+
                 # Правильный расчет стоимости продления с учетом всех параметров подписки
                 renewal_cost = await self.subscription_service.calculate_renewal_price(
                     subscription, 30, db, user=user
@@ -1001,7 +1028,7 @@ class MonitoringService:
                         promo_discount_percent,
                     )
 
-                autopay_key = f"autopay_{user.telegram_id}_{subscription.id}"
+                autopay_key = f"autopay_{user.id}_{subscription.id}"
                 if autopay_key in self._notified_users:
                     continue
 
@@ -1023,27 +1050,45 @@ class MonitoringService:
                         if promo_discount_value > 0:
                             await self._consume_user_promo_offer_discount(db, user)
 
-                        if self.bot:
+                        # Send notification via appropriate channel
+                        if user.telegram_id and self.bot:
                             await self._send_autopay_success_notification(user, charge_amount, 30)
+                        elif not user.telegram_id:
+                            # Email-only user - use notification delivery service
+                            await notification_delivery_service.notify_autopay_success(
+                                user=user,
+                                amount_kopeks=charge_amount,
+                                new_expires_at=subscription.end_date,
+                            )
 
                         processed_count += 1
                         self._notified_users.add(autopay_key)
                         logger.info(
                             "💳 Автопродление подписки пользователя %s успешно (списано %s, скидка %s%%)",
-                            user.telegram_id,
+                            user_identifier,
                             charge_amount,
                             promo_discount_percent,
                         )
                     else:
                         failed_count += 1
-                        if self.bot:
+                        if user.telegram_id and self.bot:
                             await self._send_autopay_failed_notification(user, user.balance_kopeks, charge_amount)
-                        logger.warning(f"💳 Ошибка списания средств для автопродления пользователя {user.telegram_id}")
+                        elif not user.telegram_id:
+                            await notification_delivery_service.notify_autopay_failed(
+                                user=user,
+                                reason="Ошибка списания средств",
+                            )
+                        logger.warning(f"💳 Ошибка списания средств для автопродления пользователя {user_identifier}")
                 else:
                     failed_count += 1
-                    if self.bot:
+                    if user.telegram_id and self.bot:
                         await self._send_autopay_failed_notification(user, user.balance_kopeks, charge_amount)
-                    logger.warning(f"💳 Недостаточно средств для автопродления у пользователя {user.telegram_id}")
+                    elif not user.telegram_id:
+                        await notification_delivery_service.notify_autopay_failed(
+                            user=user,
+                            reason="Недостаточно средств на балансе",
+                        )
+                    logger.warning(f"💳 Недостаточно средств для автопродления у пользователя {user_identifier}")
             
             if processed_count > 0 or failed_count > 0:
                 await self._log_monitoring_event(

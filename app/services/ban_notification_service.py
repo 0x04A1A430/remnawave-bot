@@ -13,6 +13,10 @@ from sqlalchemy import select
 
 from app.database.models import User
 from app.services.remnawave_service import remnawave_service
+from app.services.notification_delivery_service import (
+    notification_delivery_service,
+    NotificationType,
+)
 from app.config import settings
 
 
@@ -134,6 +138,20 @@ class BanNotificationService:
             if node_info:
                 message_text = message_text.rstrip() + f"\n\n{node_info.rstrip()}"
 
+        # Handle email-only users via notification delivery service
+        if not user.telegram_id:
+            reason = f"IP лимит превышен: {ip_count}/{limit}. Бан на {ban_minutes} минут."
+            if node_name:
+                reason += f" Нода: {node_name}"
+            success = await notification_delivery_service.notify_ban(
+                user=user,
+                reason=reason,
+            )
+            if success:
+                logger.info(f"Email уведомление о бане отправлено пользователю {user.id}")
+                return True, "Email уведомление отправлено", None
+            return False, "Не удалось отправить email уведомление", None
+
         # Отправляем сообщение с кнопкой удаления
         try:
             await self._bot.send_message(
@@ -178,6 +196,14 @@ class BanNotificationService:
 
         # Формируем сообщение из настроек
         message_text = settings.BAN_MSG_ENABLED
+
+        # Handle email-only users via notification delivery service
+        if not user.telegram_id:
+            success = await notification_delivery_service.notify_unban(user=user)
+            if success:
+                logger.info(f"Email уведомление о разбане отправлено пользователю {user.id}")
+                return True, "Email уведомление отправлено", None
+            return False, "Не удалось отправить email уведомление", None
 
         # Отправляем сообщение с кнопкой удаления
         try:
@@ -226,6 +252,19 @@ class BanNotificationService:
         message_text = settings.BAN_MSG_WARNING.format(
             warning_message=warning_message
         )
+
+        # Handle email-only users via notification delivery service
+        if not user.telegram_id:
+            context = {"message": warning_message}
+            success = await notification_delivery_service.send_notification(
+                user=user,
+                notification_type=NotificationType.WARNING_NOTIFICATION,
+                context=context,
+            )
+            if success:
+                logger.info(f"Email предупреждение отправлено пользователю {user.id}")
+                return True, "Email предупреждение отправлено", None
+            return False, "Не удалось отправить email предупреждение", None
 
         # Отправляем сообщение с кнопкой удаления
         try:
@@ -293,6 +332,22 @@ class BanNotificationService:
             if extra_info:
                 message_text = message_text.rstrip() + f"\n\n{extra_info}"
 
+        # Handle email-only users via notification delivery service
+        if not user.telegram_id:
+            reason = f"Использование WiFi сети запрещено. Бан на {ban_minutes} минут."
+            if network_type:
+                reason += f" Сеть: {network_type}"
+            if node_name:
+                reason += f" Нода: {node_name}"
+            success = await notification_delivery_service.notify_ban(
+                user=user,
+                reason=reason,
+            )
+            if success:
+                logger.info(f"Email WiFi уведомление отправлено пользователю {user.id}")
+                return True, "Email уведомление отправлено", None
+            return False, "Не удалось отправить email уведомление", None
+
         # Отправляем сообщение с кнопкой удаления
         try:
             await self._bot.send_message(
@@ -355,6 +410,22 @@ class BanNotificationService:
             extra_info = (network_info + node_info).strip()
             if extra_info:
                 message_text = message_text.rstrip() + f"\n\n{extra_info}"
+
+        # Handle email-only users via notification delivery service
+        if not user.telegram_id:
+            reason = f"Использование мобильной сети запрещено. Бан на {ban_minutes} минут."
+            if network_type:
+                reason += f" Сеть: {network_type}"
+            if node_name:
+                reason += f" Нода: {node_name}"
+            success = await notification_delivery_service.notify_ban(
+                user=user,
+                reason=reason,
+            )
+            if success:
+                logger.info(f"Email Mobile уведомление отправлено пользователю {user.id}")
+                return True, "Email уведомление отправлено", None
+            return False, "Не удалось отправить email уведомление", None
 
         # Отправляем сообщение с кнопкой удаления
         try:

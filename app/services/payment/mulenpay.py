@@ -348,7 +348,7 @@ class MulenPayPaymentMixin:
                             error,
                         )
 
-                if getattr(self, "bot", None):
+                if getattr(self, "bot", None) and user.telegram_id:
                     try:
                         keyboard = await self.build_topup_success_keyboard(user)
                         await self.bot.send_message(
@@ -410,8 +410,8 @@ class MulenPayPaymentMixin:
                                 exc_info=True,
                             )
 
-                    # Отправляем уведомление только если его ещё не отправили
-                    if has_saved_cart and getattr(self, "bot", None) and not activation_notification_sent:
+                    # Отправляем уведомление только если его ещё не отправили и есть telegram_id
+                    if has_saved_cart and getattr(self, "bot", None) and not activation_notification_sent and user.telegram_id:
                         # Если у пользователя есть сохраненная корзина,
                         # отправляем ему уведомление с кнопкой вернуться к оформлению
                         from app.localization.texts import get_texts

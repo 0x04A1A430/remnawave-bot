@@ -30,7 +30,7 @@ class CloudPaymentsPaymentMixin:
         amount_kopeks: int,
         description: str,
         *,
-        telegram_id: int,
+        telegram_id: Optional[int] = None,
         language: Optional[str] = None,
         email: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
@@ -71,13 +71,14 @@ class CloudPaymentsPaymentMixin:
 
         payment_module = import_module("app.services.payment_service")
 
-        # Generate unique invoice ID
-        invoice_id = self.cloudpayments_service.generate_invoice_id(telegram_id)
+        # Generate unique invoice ID (use user_id for uniqueness, works for email-only users too)
+        invoice_id = self.cloudpayments_service.generate_invoice_id(user_id)
 
         try:
             # Create payment order via CloudPayments API
             payment_url = await self.cloudpayments_service.generate_payment_link(
                 telegram_id=telegram_id,
+                user_id=user_id,
                 amount_kopeks=amount_kopeks,
                 invoice_id=invoice_id,
                 description=description,
@@ -161,21 +162,21 @@ class CloudPaymentsPaymentMixin:
                 "CloudPayments платёж не найден: invoice=%s, создаём новый",
                 invoice_id,
             )
-            # Try to extract telegram_id from account_id
+            # Try to extract user_id from account_id (we now use user_id as AccountId)
             try:
-                telegram_id = int(account_id) if account_id else None
+                user_id = int(account_id) if account_id else None
             except ValueError:
-                telegram_id = None
+                user_id = None
 
-            if not telegram_id:
-                logger.error("Не удалось определить telegram_id из account_id: %s", account_id)
+            if not user_id:
+                logger.error("Не удалось определить user_id из account_id: %s", account_id)
                 return False
 
-            # Get user by telegram_id
-            from app.database.crud.user import get_user_by_telegram_id
-            user = await get_user_by_telegram_id(db, telegram_id)
+            # Get user by ID
+            from app.database.crud.user import get_user_by_id
+            user = await get_user_by_id(db, user_id)
             if not user:
-                logger.error("Пользователь не найден: telegram_id=%s", telegram_id)
+                logger.error("Пользователь не найден: id=%s", user_id)
                 return False
 
             # Create payment record
@@ -240,11 +241,12 @@ class CloudPaymentsPaymentMixin:
         payment.transaction_id = transaction.id
         await db.commit()
 
+        user_id_display = user.telegram_id or user.email or f"#{user.id}"
         logger.info(
             "CloudPayments платёж успешно обработан: invoice=%s, amount=%s₽, user=%s",
             invoice_id,
             amount_kopeks / 100,
-            user.telegram_id,
+            user_id_display,
         )
 
         # Send notification to user
@@ -320,14 +322,20 @@ class CloudPaymentsPaymentMixin:
             reason_code,
         )
 
-        # Notify user about failed payment
+        # Notify user about failed payment (account_id now contains user_id, not telegram_id)
         try:
-            telegram_id = int(account_id) if account_id else None
-            if telegram_id:
-                await self._send_cloudpayments_fail_notification(
-                    telegram_id=telegram_id,
-                    message=card_holder_message,
-                )
+            user_id = int(account_id) if account_id else None
+            if user_id:
+                from app.database.crud.user import get_user_by_id
+                # Need a new session for this query since we're outside the main flow
+                from app.database.session import async_session_factory
+                async with async_session_factory() as session:
+                    user = await get_user_by_id(session, user_id)
+                    if user and user.telegram_id:
+                        await self._send_cloudpayments_fail_notification(
+                            telegram_id=user.telegram_id,
+                            message=card_holder_message,
+                        )
         except Exception as error:
             logger.exception("Ошибка отправки уведомления о неуспешном платеже: %s", error)
 
@@ -344,6 +352,11 @@ class CloudPaymentsPaymentMixin:
         from app.localization.texts import get_texts
 
         if not bot:
+            return
+
+        # Skip email-only users (no telegram_id)
+        if not user.telegram_id:
+            logger.debug("Skipping CloudPayments notification for email-only user %s", user.id)
             return
 
         texts = get_texts(user.language)

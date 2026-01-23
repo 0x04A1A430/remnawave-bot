@@ -122,7 +122,7 @@ class PaymentCommonMixin:
 
     async def _send_payment_success_notification(
         self,
-        telegram_id: int,
+        telegram_id: int | None,
         amount_kopeks: int,
         user: Any | None = None,
         *,
@@ -132,6 +132,10 @@ class PaymentCommonMixin:
         """Отправляет пользователю уведомление об успешном платеже."""
         if not getattr(self, "bot", None):
             # Если бот не передан (например, внутри фоновых задач), уведомление пропускаем.
+            return
+
+        # Skip email-only users (no telegram_id)
+        if not telegram_id:
             return
 
         user_snapshot = await self._ensure_user_snapshot(
@@ -226,7 +230,7 @@ class PaymentCommonMixin:
 
     async def _ensure_user_snapshot(
         self,
-        telegram_id: int,
+        telegram_id: int | None,
         user: Any | None,
         *,
         db: AsyncSession | None = None,

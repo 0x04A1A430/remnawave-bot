@@ -104,6 +104,10 @@ async def send_poll_to_users(
     async def send_poll_invitation(user_snapshot):
         """Отправляет приглашение к опросу одному пользователю"""
         async with semaphore:
+            # Skip email-only users (no telegram_id)
+            if not user_snapshot.telegram_id:
+                return "skipped"
+
             # Пропускаем пользователей, которые уже прошли опрос
             if user_snapshot.id in existing_user_ids:
                 return "skipped"

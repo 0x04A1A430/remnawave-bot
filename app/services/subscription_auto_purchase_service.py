@@ -34,6 +34,11 @@ from app.utils.timezone import format_local_datetime
 logger = logging.getLogger(__name__)
 
 
+def _format_user_id(user: User) -> str:
+    """Format user identifier for logging (supports email-only users)."""
+    return str(user.telegram_id) if user.telegram_id else f"email:{user.id}"
+
+
 @dataclass(slots=True)
 class AutoPurchaseContext:
     """Aggregated data prepared for automatic checkout processing."""
@@ -71,7 +76,7 @@ async def _prepare_auto_purchase(
     if period_days <= 0:
         logger.info(
             "🔁 Автопокупка: у пользователя %s нет корректного периода в сохранённой корзине",
-            user.telegram_id,
+            _format_user_id(user),
         )
         return None
 
@@ -81,7 +86,7 @@ async def _prepare_auto_purchase(
     if not fresh_user:
         logger.warning(
             "🔁 Автопокупка: не удалось перезагрузить пользователя %s",
-            user.telegram_id,
+            _format_user_id(user),
         )
         return None
     user = fresh_user
@@ -94,7 +99,7 @@ async def _prepare_auto_purchase(
         logger.warning(
             "🔁 Автопокупка: период %s дней недоступен для пользователя %s",
             period_days,
-            user.telegram_id,
+            _format_user_id(user),
         )
         return None
 
@@ -159,7 +164,7 @@ async def _get_tariff_price_for_period(
         logger.warning(
             "🔁 Автопокупка: тариф %s недоступен для пользователя %s",
             tariff_id,
-            user.telegram_id,
+            _format_user_id(user),
         )
         return None
 
@@ -198,7 +203,7 @@ async def _prepare_auto_extend_context(
     if subscription is None:
         logger.info(
             "🔁 Автопокупка: у пользователя %s нет активной подписки для продления",
-            user.telegram_id,
+            _format_user_id(user),
         )
         return None
 
@@ -210,7 +215,7 @@ async def _prepare_auto_extend_context(
                 "🔁 Автопокупка: сохранённая подписка %s не совпадает с текущей %s у пользователя %s",
                 saved_subscription_id,
                 subscription.id,
-                user.telegram_id,
+                _format_user_id(user),
             )
             return None
 
@@ -220,7 +225,7 @@ async def _prepare_auto_extend_context(
         logger.warning(
             "🔁 Автопокупка: некорректное количество дней продления (%s) у пользователя %s",
             period_days,
-            user.telegram_id,
+            _format_user_id(user),
         )
         return None
 
@@ -252,7 +257,7 @@ async def _prepare_auto_extend_context(
         logger.warning(
             "🔁 Автопокупка: некорректная цена продления (%s) у пользователя %s",
             price_kopeks,
-            user.telegram_id,
+            _format_user_id(user),
         )
         return None
 
@@ -341,7 +346,7 @@ async def _auto_extend_subscription(
     except Exception as error:  # pragma: no cover - defensive logging
         logger.error(
             "❌ Автопокупка: ошибка подготовки данных продления для пользователя %s: %s",
-            user.telegram_id,
+            _format_user_id(user),
             error,
             exc_info=True,
         )
@@ -353,7 +358,7 @@ async def _auto_extend_subscription(
     if user.balance_kopeks < prepared.price_kopeks:
         logger.info(
             "🔁 Автопокупка: у пользователя %s недостаточно средств для продления (%s < %s)",
-            user.telegram_id,
+            _format_user_id(user),
             user.balance_kopeks,
             prepared.price_kopeks,
         )
@@ -370,7 +375,7 @@ async def _auto_extend_subscription(
     except Exception as error:  # pragma: no cover - defensive logging
         logger.error(
             "❌ Автопокупка: ошибка списания средств при продлении пользователя %s: %s",
-            user.telegram_id,
+            _format_user_id(user),
             error,
             exc_info=True,
         )
@@ -379,7 +384,7 @@ async def _auto_extend_subscription(
     if not deducted:
         logger.warning(
             "❌ Автопокупка: списание средств для продления подписки пользователя %s не выполнено",
-            user.telegram_id,
+            _format_user_id(user),
         )
         return False
 
@@ -416,13 +421,13 @@ async def _auto_extend_subscription(
             logger.info(
                 "✅ Триал конвертирован в платную подписку %s для пользователя %s",
                 subscription.id,
-                user.telegram_id,
+                _format_user_id(user),
             )
 
     except Exception as error:  # pragma: no cover - defensive logging
         logger.error(
             "❌ Автопокупка: не удалось продлить подписку пользователя %s: %s",
-            user.telegram_id,
+            _format_user_id(user),
             error,
             exc_info=True,
         )
@@ -442,7 +447,7 @@ async def _auto_extend_subscription(
     except Exception as error:  # pragma: no cover - defensive logging
         logger.error(
             "⚠️ Автопокупка: не удалось зафиксировать транзакцию продления для пользователя %s: %s",
-            user.telegram_id,
+            _format_user_id(user),
             error,
             exc_info=True,
         )
@@ -460,7 +465,7 @@ async def _auto_extend_subscription(
     except Exception as error:  # pragma: no cover - defensive logging
         logger.error(
             "⚠️ Автопокупка: не удалось обновить RemnaWave пользователя %s после продления: %s",
-            user.telegram_id,
+            _format_user_id(user),
             error,
         )
 
@@ -491,64 +496,66 @@ async def _auto_extend_subscription(
         except Exception as error:  # pragma: no cover - defensive logging
             logger.error(
                 "⚠️ Автопокупка: не удалось уведомить администраторов о продлении пользователя %s: %s",
-                user.telegram_id,
+                _format_user_id(user),
                 error,
             )
 
-        try:
-            auto_message = texts.t(
-                "AUTO_PURCHASE_SUBSCRIPTION_EXTENDED",
-                "✅ Subscription automatically extended for {period}.",
-            ).format(period=period_label)
-            details_message = texts.t(
-                "AUTO_PURCHASE_SUBSCRIPTION_EXTENDED_DETAILS",
-                "New expiration date: {date}.",
-            ).format(date=end_date_label)
-            hint_message = texts.t(
-                "AUTO_PURCHASE_SUBSCRIPTION_HINT",
-                "Open the ‘My subscription’ section to access your link.",
-            )
+        # Send user notification only for Telegram users
+        if user.telegram_id:
+            try:
+                auto_message = texts.t(
+                    "AUTO_PURCHASE_SUBSCRIPTION_EXTENDED",
+                    "✅ Subscription automatically extended for {period}.",
+                ).format(period=period_label)
+                details_message = texts.t(
+                    "AUTO_PURCHASE_SUBSCRIPTION_EXTENDED_DETAILS",
+                    "New expiration date: {date}.",
+                ).format(date=end_date_label)
+                hint_message = texts.t(
+                    "AUTO_PURCHASE_SUBSCRIPTION_HINT",
+                    "Open the 'My subscription' section to access your link.",
+                )
 
-            full_message = "\n\n".join(
-                part.strip()
-                for part in [auto_message, details_message, hint_message]
-                if part and part.strip()
-            )
+                full_message = "\n\n".join(
+                    part.strip()
+                    for part in [auto_message, details_message, hint_message]
+                    if part and part.strip()
+                )
 
-            keyboard = InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text=texts.t("MY_SUBSCRIPTION_BUTTON", "📱 My subscription"),
-                            callback_data="menu_subscription",
-                        )
-                    ],
-                    [
-                        InlineKeyboardButton(
-                            text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "🏠 Main menu"),
-                            callback_data="back_to_menu",
-                        )
-                    ],
-                ]
-            )
+                keyboard = InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            InlineKeyboardButton(
+                                text=texts.t("MY_SUBSCRIPTION_BUTTON", "📱 My subscription"),
+                                callback_data="menu_subscription",
+                            )
+                        ],
+                        [
+                            InlineKeyboardButton(
+                                text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "🏠 Main menu"),
+                                callback_data="back_to_menu",
+                            )
+                        ],
+                    ]
+                )
 
-            await bot.send_message(
-                chat_id=user.telegram_id,
-                text=full_message,
-                reply_markup=keyboard,
-                parse_mode="HTML",
-            )
-        except Exception as error:  # pragma: no cover - defensive logging
-            logger.error(
-                "⚠️ Автопокупка: не удалось уведомить пользователя %s о продлении: %s",
-                user.telegram_id,
-                error,
-            )
+                await bot.send_message(
+                    chat_id=user.telegram_id,
+                    text=full_message,
+                    reply_markup=keyboard,
+                    parse_mode="HTML",
+                )
+            except Exception as error:  # pragma: no cover - defensive logging
+                logger.error(
+                    "⚠️ Автопокупка: не удалось уведомить пользователя %s о продлении: %s",
+                    user.telegram_id or user.id,
+                    error,
+                )
 
     logger.info(
         "✅ Автопокупка: подписка продлена на %s дней для пользователя %s",
         prepared.period_days,
-        user.telegram_id,
+        _format_user_id(user),
     )
 
     return True
@@ -577,7 +584,7 @@ async def _auto_purchase_tariff(
     if not tariff_id or period_days <= 0:
         logger.warning(
             "🔁 Автопокупка тарифа: некорректные данные корзины для пользователя %s (tariff_id=%s, period=%s)",
-            user.telegram_id,
+            _format_user_id(user),
             tariff_id,
             period_days,
         )
@@ -588,7 +595,7 @@ async def _auto_purchase_tariff(
         logger.warning(
             "🔁 Автопокупка тарифа: тариф %s недоступен для пользователя %s",
             tariff_id,
-            user.telegram_id,
+            _format_user_id(user),
         )
         return False
 
@@ -608,7 +615,7 @@ async def _auto_purchase_tariff(
     if user.balance_kopeks < final_price:
         logger.info(
             "🔁 Автопокупка тарифа: у пользователя %s недостаточно средств (%s < %s)",
-            user.telegram_id,
+            _format_user_id(user),
             user.balance_kopeks,
             final_price,
         )
@@ -621,13 +628,13 @@ async def _auto_purchase_tariff(
         if not success:
             logger.warning(
                 "❌ Автопокупка тарифа: не удалось списать баланс пользователя %s",
-                user.telegram_id,
+                _format_user_id(user),
             )
             return False
     except Exception as error:
         logger.error(
             "❌ Автопокупка тарифа: ошибка списания баланса пользователя %s: %s",
-            user.telegram_id,
+            _format_user_id(user),
             error,
             exc_info=True,
         )
@@ -675,7 +682,7 @@ async def _auto_purchase_tariff(
     except Exception as error:
         logger.error(
             "❌ Автопокупка тарифа: ошибка создания подписки для пользователя %s: %s",
-            user.telegram_id,
+            _format_user_id(user),
             error,
             exc_info=True,
         )
@@ -694,7 +701,7 @@ async def _auto_purchase_tariff(
     except Exception as error:
         logger.warning(
             "⚠️ Автопокупка тарифа: не удалось создать транзакцию для пользователя %s: %s",
-            user.telegram_id,
+            _format_user_id(user),
             error,
         )
         transaction = None
@@ -712,7 +719,7 @@ async def _auto_purchase_tariff(
     except Exception as error:
         logger.warning(
             "⚠️ Автопокупка тарифа: не удалось обновить Remnawave для пользователя %s: %s",
-            user.telegram_id,
+            _format_user_id(user),
             error,
         )
 
@@ -733,52 +740,54 @@ async def _auto_purchase_tariff(
         except Exception as error:
             logger.warning(
                 "⚠️ Автопокупка тарифа: не удалось уведомить админов о покупке пользователя %s: %s",
-                user.telegram_id,
+                _format_user_id(user),
                 error,
             )
 
-        try:
-            message = texts.t(
-                "AUTO_PURCHASE_SUBSCRIPTION_SUCCESS",
-                "✅ Подписка на {period} автоматически оформлена после пополнения баланса.",
-            ).format(period=period_label)
+        # Send user notification only for Telegram users
+        if user.telegram_id:
+            try:
+                message = texts.t(
+                    "AUTO_PURCHASE_SUBSCRIPTION_SUCCESS",
+                    "✅ Подписка на {period} автоматически оформлена после пополнения баланса.",
+                ).format(period=period_label)
 
-            hint = texts.t(
-                "AUTO_PURCHASE_SUBSCRIPTION_HINT",
-                "Перейдите в раздел «Моя подписка», чтобы получить ссылку.",
-            )
+                hint = texts.t(
+                    "AUTO_PURCHASE_SUBSCRIPTION_HINT",
+                    "Перейдите в раздел «Моя подписка», чтобы получить ссылку.",
+                )
 
-            keyboard = InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [InlineKeyboardButton(
-                        text=texts.t("MY_SUBSCRIPTION_BUTTON", "📱 Моя подписка"),
-                        callback_data="menu_subscription",
-                    )],
-                    [InlineKeyboardButton(
-                        text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "🏠 Главное меню"),
-                        callback_data="back_to_menu",
-                    )],
-                ]
-            )
+                keyboard = InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [InlineKeyboardButton(
+                            text=texts.t("MY_SUBSCRIPTION_BUTTON", "📱 Моя подписка"),
+                            callback_data="menu_subscription",
+                        )],
+                        [InlineKeyboardButton(
+                            text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "🏠 Главное меню"),
+                            callback_data="back_to_menu",
+                        )],
+                    ]
+                )
 
-            await bot.send_message(
-                chat_id=user.telegram_id,
-                text=f"{message}\n\n{hint}",
-                reply_markup=keyboard,
-                parse_mode="HTML",
-            )
-        except Exception as error:
-            logger.warning(
-                "⚠️ Автопокупка тарифа: не удалось уведомить пользователя %s: %s",
-                user.telegram_id,
-                error,
-            )
+                await bot.send_message(
+                    chat_id=user.telegram_id,
+                    text=f"{message}\n\n{hint}",
+                    reply_markup=keyboard,
+                    parse_mode="HTML",
+                )
+            except Exception as error:
+                logger.warning(
+                    "⚠️ Автопокупка тарифа: не удалось уведомить пользователя %s: %s",
+                    user.telegram_id or user.id,
+                    error,
+                )
 
     logger.info(
         "✅ Автопокупка тарифа: подписка на тариф %s (%s дней) оформлена для пользователя %s",
         tariff.name,
         period_days,
-        user.telegram_id,
+        _format_user_id(user),
     )
 
     return True
@@ -804,7 +813,7 @@ async def _auto_purchase_daily_tariff(
     if not tariff_id:
         logger.warning(
             "🔁 Автопокупка суточного тарифа: нет tariff_id в корзине пользователя %s",
-            user.telegram_id,
+            _format_user_id(user),
         )
         return False
 
@@ -813,7 +822,7 @@ async def _auto_purchase_daily_tariff(
         logger.warning(
             "🔁 Автопокупка суточного тарифа: тариф %s недоступен для пользователя %s",
             tariff_id,
-            user.telegram_id,
+            _format_user_id(user),
         )
         return False
 
@@ -821,7 +830,7 @@ async def _auto_purchase_daily_tariff(
         logger.warning(
             "🔁 Автопокупка суточного тарифа: тариф %s не является суточным для пользователя %s",
             tariff_id,
-            user.telegram_id,
+            _format_user_id(user),
         )
         return False
 
@@ -830,14 +839,14 @@ async def _auto_purchase_daily_tariff(
         logger.warning(
             "🔁 Автопокупка суточного тарифа: некорректная цена тарифа %s для пользователя %s",
             tariff_id,
-            user.telegram_id,
+            _format_user_id(user),
         )
         return False
 
     if user.balance_kopeks < daily_price:
         logger.info(
             "🔁 Автопокупка суточного тарифа: у пользователя %s недостаточно средств (%s < %s)",
-            user.telegram_id,
+            _format_user_id(user),
             user.balance_kopeks,
             daily_price,
         )
@@ -850,13 +859,13 @@ async def _auto_purchase_daily_tariff(
         if not success:
             logger.warning(
                 "❌ Автопокупка суточного тарифа: не удалось списать баланс пользователя %s",
-                user.telegram_id,
+                _format_user_id(user),
             )
             return False
     except Exception as error:
         logger.error(
             "❌ Автопокупка суточного тарифа: ошибка списания баланса пользователя %s: %s",
-            user.telegram_id,
+            _format_user_id(user),
             error,
             exc_info=True,
         )
@@ -910,7 +919,7 @@ async def _auto_purchase_daily_tariff(
     except Exception as error:
         logger.error(
             "❌ Автопокупка суточного тарифа: ошибка создания подписки для пользователя %s: %s",
-            user.telegram_id,
+            _format_user_id(user),
             error,
             exc_info=True,
         )
@@ -929,7 +938,7 @@ async def _auto_purchase_daily_tariff(
     except Exception as error:
         logger.warning(
             "⚠️ Автопокупка суточного тарифа: не удалось создать транзакцию для пользователя %s: %s",
-            user.telegram_id,
+            _format_user_id(user),
             error,
         )
         transaction = None
@@ -947,7 +956,7 @@ async def _auto_purchase_daily_tariff(
     except Exception as error:
         logger.warning(
             "⚠️ Автопокупка суточного тарифа: не удалось обновить Remnawave для пользователя %s: %s",
-            user.telegram_id,
+            _format_user_id(user),
             error,
         )
 
@@ -967,48 +976,50 @@ async def _auto_purchase_daily_tariff(
         except Exception as error:
             logger.warning(
                 "⚠️ Автопокупка суточного тарифа: не удалось уведомить админов о покупке пользователя %s: %s",
-                user.telegram_id,
+                _format_user_id(user),
                 error,
             )
 
-        try:
-            message = (
-                f"✅ <b>Суточный тариф «{tariff.name}» активирован!</b>\n\n"
-                f"💰 Списано: {daily_price / 100:.0f} ₽ за первый день\n"
-                f"🔄 Средства будут списываться автоматически раз в сутки.\n\n"
-                f"ℹ️ Вы можете приостановить подписку в любой момент."
-            )
+        # Send user notification only for Telegram users
+        if user.telegram_id:
+            try:
+                message = (
+                    f"✅ <b>Суточный тариф «{tariff.name}» активирован!</b>\n\n"
+                    f"💰 Списано: {daily_price / 100:.0f} ₽ за первый день\n"
+                    f"🔄 Средства будут списываться автоматически раз в сутки.\n\n"
+                    f"ℹ️ Вы можете приостановить подписку в любой момент."
+                )
 
-            keyboard = InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [InlineKeyboardButton(
-                        text=texts.t("MY_SUBSCRIPTION_BUTTON", "📱 Моя подписка"),
-                        callback_data="menu_subscription",
-                    )],
-                    [InlineKeyboardButton(
-                        text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "🏠 Главное меню"),
-                        callback_data="back_to_menu",
-                    )],
-                ]
-            )
+                keyboard = InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [InlineKeyboardButton(
+                            text=texts.t("MY_SUBSCRIPTION_BUTTON", "📱 Моя подписка"),
+                            callback_data="menu_subscription",
+                        )],
+                        [InlineKeyboardButton(
+                            text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "🏠 Главное меню"),
+                            callback_data="back_to_menu",
+                        )],
+                    ]
+                )
 
-            await bot.send_message(
-                chat_id=user.telegram_id,
-                text=message,
-                reply_markup=keyboard,
-                parse_mode="HTML",
-            )
-        except Exception as error:
-            logger.warning(
-                "⚠️ Автопокупка суточного тарифа: не удалось уведомить пользователя %s: %s",
-                user.telegram_id,
-                error,
-            )
+                await bot.send_message(
+                    chat_id=user.telegram_id,
+                    text=message,
+                    reply_markup=keyboard,
+                    parse_mode="HTML",
+                )
+            except Exception as error:
+                logger.warning(
+                    "⚠️ Автопокупка суточного тарифа: не удалось уведомить пользователя %s: %s",
+                    user.telegram_id or user.id,
+                    error,
+                )
 
     logger.info(
         "✅ Автопокупка суточного тарифа: тариф %s активирован для пользователя %s",
         tariff.name,
-        user.telegram_id,
+        _format_user_id(user),
     )
 
     return True
@@ -1033,7 +1044,7 @@ async def auto_purchase_saved_cart_after_topup(
         return False
 
     logger.info(
-        "🔁 Автопокупка: обнаружена сохранённая корзина у пользователя %s", user.telegram_id
+        "🔁 Автопокупка: обнаружена сохранённая корзина у пользователя %s", _format_user_id(user)
     )
 
     cart_mode = cart_data.get("cart_mode") or cart_data.get("mode")
@@ -1055,14 +1066,14 @@ async def auto_purchase_saved_cart_after_topup(
     except PurchaseValidationError as error:
         logger.error(
             "❌ Автопокупка: ошибка валидации корзины пользователя %s: %s",
-            user.telegram_id,
+            _format_user_id(user),
             error,
         )
         return False
     except Exception as error:  # pragma: no cover - defensive logging
         logger.error(
             "❌ Автопокупка: непредвиденная ошибка при подготовке корзины %s: %s",
-            user.telegram_id,
+            _format_user_id(user),
             error,
             exc_info=True,
         )
@@ -1077,7 +1088,7 @@ async def auto_purchase_saved_cart_after_topup(
     if pricing.final_total <= 0:
         logger.warning(
             "❌ Автопокупка: итоговая сумма для пользователя %s некорректна (%s)",
-            user.telegram_id,
+            _format_user_id(user),
             pricing.final_total,
         )
         return False
@@ -1085,7 +1096,7 @@ async def auto_purchase_saved_cart_after_topup(
     if user.balance_kopeks < pricing.final_total:
         logger.info(
             "🔁 Автопокупка: у пользователя %s недостаточно средств (%s < %s)",
-            user.telegram_id,
+            _format_user_id(user),
             user.balance_kopeks,
             pricing.final_total,
         )
@@ -1102,20 +1113,20 @@ async def auto_purchase_saved_cart_after_topup(
     except PurchaseBalanceError:
         logger.info(
             "🔁 Автопокупка: баланс пользователя %s изменился и стал недостаточным",
-            user.telegram_id,
+            _format_user_id(user),
         )
         return False
     except PurchaseValidationError as error:
         logger.error(
             "❌ Автопокупка: не удалось подтвердить корзину пользователя %s: %s",
-            user.telegram_id,
+            _format_user_id(user),
             error,
         )
         return False
     except Exception as error:  # pragma: no cover - defensive logging
         logger.error(
             "❌ Автопокупка: ошибка оформления подписки для пользователя %s: %s",
-            user.telegram_id,
+            _format_user_id(user),
             error,
             exc_info=True,
         )
@@ -1143,66 +1154,68 @@ async def auto_purchase_saved_cart_after_topup(
         except Exception as error:  # pragma: no cover - defensive logging
             logger.error(
                 "⚠️ Автопокупка: не удалось отправить уведомление админам (%s): %s",
-                user.telegram_id,
+                _format_user_id(user),
                 error,
             )
 
-        try:
-            period_label = format_period_description(
-                selection.period.days,
-                getattr(user, "language", "ru"),
-            )
-            auto_message = texts.t(
-                "AUTO_PURCHASE_SUBSCRIPTION_SUCCESS",
-                "✅ Subscription purchased automatically after balance top-up ({period}).",
-            ).format(period=period_label)
+        # Send user notification only for Telegram users
+        if user.telegram_id:
+            try:
+                period_label = format_period_description(
+                    selection.period.days,
+                    getattr(user, "language", "ru"),
+                )
+                auto_message = texts.t(
+                    "AUTO_PURCHASE_SUBSCRIPTION_SUCCESS",
+                    "✅ Subscription purchased automatically after balance top-up ({period}).",
+                ).format(period=period_label)
 
-            hint_message = texts.t(
-                "AUTO_PURCHASE_SUBSCRIPTION_HINT",
-                "Open the ‘My subscription’ section to access your link.",
-            )
+                hint_message = texts.t(
+                    "AUTO_PURCHASE_SUBSCRIPTION_HINT",
+                    "Open the 'My subscription' section to access your link.",
+                )
 
-            purchase_message = purchase_result.get("message", "")
-            full_message = "\n\n".join(
-                part.strip()
-                for part in [auto_message, purchase_message, hint_message]
-                if part and part.strip()
-            )
+                purchase_message = purchase_result.get("message", "")
+                full_message = "\n\n".join(
+                    part.strip()
+                    for part in [auto_message, purchase_message, hint_message]
+                    if part and part.strip()
+                )
 
-            keyboard = InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text=texts.t("MY_SUBSCRIPTION_BUTTON", "📱 My subscription"),
-                            callback_data="menu_subscription",
-                        )
-                    ],
-                    [
-                        InlineKeyboardButton(
-                            text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "🏠 Main menu"),
-                            callback_data="back_to_menu",
-                        )
-                    ],
-                ]
-            )
+                keyboard = InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            InlineKeyboardButton(
+                                text=texts.t("MY_SUBSCRIPTION_BUTTON", "📱 My subscription"),
+                                callback_data="menu_subscription",
+                            )
+                        ],
+                        [
+                            InlineKeyboardButton(
+                                text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "🏠 Main menu"),
+                                callback_data="back_to_menu",
+                            )
+                        ],
+                    ]
+                )
 
-            await bot.send_message(
-                chat_id=user.telegram_id,
-                text=full_message,
-                reply_markup=keyboard,
-                parse_mode="HTML",
-            )
-        except Exception as error:  # pragma: no cover - defensive logging
-            logger.error(
-                "⚠️ Автопокупка: не удалось уведомить пользователя %s: %s",
-                user.telegram_id,
-                error,
-            )
+                await bot.send_message(
+                    chat_id=user.telegram_id,
+                    text=full_message,
+                    reply_markup=keyboard,
+                    parse_mode="HTML",
+                )
+            except Exception as error:  # pragma: no cover - defensive logging
+                logger.error(
+                    "⚠️ Автопокупка: не удалось уведомить пользователя %s: %s",
+                    user.telegram_id or user.id,
+                    error,
+                )
 
     logger.info(
         "✅ Автопокупка: подписка на %s дней оформлена для пользователя %s",
         selection.period.days,
-        user.telegram_id,
+        _format_user_id(user),
     )
 
     return True
@@ -1252,7 +1265,7 @@ async def auto_activate_subscription_after_topup(
     if not settings.is_auto_activate_after_topup_enabled():
         logger.info(
             "⚠️ Автоактивация отключена для пользователя %s, уведомление будет отправлено из payment service",
-            user.telegram_id,
+            _format_user_id(user),
         )
         return (False, False)
 
@@ -1260,7 +1273,7 @@ async def auto_activate_subscription_after_topup(
     if subscription and subscription.status == "ACTIVE" and subscription.end_date > datetime.utcnow():
         logger.info(
             "🔁 Автоактивация: у пользователя %s уже активная подписка, пропускаем",
-            user.telegram_id,
+            _format_user_id(user),
         )
         return (False, False)
 
@@ -1332,13 +1345,13 @@ async def auto_activate_subscription_after_topup(
     if not best_period:
         logger.info(
             "🔁 Автоактивация: у пользователя %s недостаточно средств (%s) для любого периода",
-            user.telegram_id,
+            _format_user_id(user),
             balance,
         )
         # Уведомление отправится из _send_payment_success_notification
         logger.info(
             "⚠️ Недостаточно средств для автоактивации пользователя %s, уведомление будет отправлено из payment service",
-            user.telegram_id,
+            _format_user_id(user),
         )
         return (False, False)
 
@@ -1362,13 +1375,13 @@ async def auto_activate_subscription_after_topup(
 
             logger.info(
                 "✅ Автоактивация: подписка пользователя %s продлена на %s дней за %s коп.",
-                user.telegram_id,
+                _format_user_id(user),
                 best_period,
                 best_price,
             )
 
-            # Уведомление пользователю
-            if bot:
+            # Уведомление пользователю (только для Telegram-пользователей)
+            if bot and user.telegram_id:
                 try:
                     period_label = format_period_description(best_period, getattr(user, "language", "ru"))
                     new_end_date = result.subscription.end_date
@@ -1407,7 +1420,7 @@ async def auto_activate_subscription_after_topup(
                 except Exception as notify_error:
                     logger.warning(
                         "⚠️ Автоактивация: не удалось уведомить пользователя %s: %s",
-                        user.telegram_id,
+                        user.telegram_id or user.id,
                         notify_error,
                     )
 
@@ -1442,12 +1455,12 @@ async def auto_activate_subscription_after_topup(
             logger.info(
                 "✅ Автоактивация: новая подписка на %s дней создана для пользователя %s за %s коп.",
                 best_period,
-                user.telegram_id,
+                _format_user_id(user),
                 best_price,
             )
 
-            # Уведомление пользователю
-            if bot:
+            # Уведомление пользователю (только для Telegram-пользователей)
+            if bot and user.telegram_id:
                 try:
                     period_label = format_period_description(best_period, getattr(user, "language", "ru"))
 
@@ -1477,28 +1490,29 @@ async def auto_activate_subscription_after_topup(
                         parse_mode="HTML",
                     )
 
-                    # Уведомление админам
-                    try:
-                        notification_service = AdminNotificationService(bot)
-                        await notification_service.send_subscription_purchase_notification(
-                            db,
-                            user,
-                            new_subscription,
-                            None,  # transaction
-                            best_period,
-                            False,  # was_trial_conversion
-                        )
-                    except Exception as admin_error:
-                        logger.warning(
-                            "⚠️ Автоактивация: не удалось уведомить админов: %s",
-                            admin_error,
-                        )
-
                 except Exception as notify_error:
                     logger.warning(
                         "⚠️ Автоактивация: не удалось уведомить пользователя %s: %s",
-                        user.telegram_id,
+                        user.telegram_id or user.id,
                         notify_error,
+                    )
+
+            # Уведомление админам (независимо от telegram_id)
+            if bot:
+                try:
+                    notification_service = AdminNotificationService(bot)
+                    await notification_service.send_subscription_purchase_notification(
+                        db,
+                        user,
+                        new_subscription,
+                        None,  # transaction
+                        best_period,
+                        False,  # was_trial_conversion
+                    )
+                except Exception as admin_error:
+                    logger.warning(
+                        "⚠️ Автоактивация: не удалось уведомить админов: %s",
+                        admin_error,
                     )
 
         return (True, True)  # success=True, notification_sent=True (об активации)
@@ -1506,7 +1520,7 @@ async def auto_activate_subscription_after_topup(
     except Exception as e:
         logger.error(
             "❌ Автоактивация: ошибка для пользователя %s: %s",
-            user.telegram_id,
+            _format_user_id(user),
             e,
             exc_info=True,
         )

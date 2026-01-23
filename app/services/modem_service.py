@@ -295,8 +295,9 @@ class ModemService:
             await db.refresh(user)
             await db.refresh(subscription)
 
+            user_id_display = user.telegram_id or user.email or f"#{user.id}"
             logger.info(
-                f"Пользователь {user.telegram_id} подключил модем, списано: {price / 100}₽"
+                f"Пользователь {user_id_display} подключил модем, списано: {price / 100}₽"
             )
 
             return ModemEnableResult(
@@ -306,7 +307,8 @@ class ModemService:
             )
 
         except Exception as e:
-            logger.error(f"Ошибка подключения модема для пользователя {user.telegram_id}: {e}")
+            user_id_display = user.telegram_id or user.email or f"#{user.id}"
+            logger.error(f"Ошибка подключения модема для пользователя {user_id_display}: {e}")
             await db.rollback()
             return ModemEnableResult(
                 success=False,
@@ -345,7 +347,8 @@ class ModemService:
             await db.refresh(user)
             await db.refresh(subscription)
 
-            logger.info(f"Пользователь {user.telegram_id} отключил модем")
+            user_id_display = user.telegram_id or user.email or f"#{user.id}"
+            logger.info(f"Пользователь {user_id_display} отключил модем")
 
             return ModemDisableResult(
                 success=True,
@@ -353,7 +356,8 @@ class ModemService:
             )
 
         except Exception as e:
-            logger.error(f"Ошибка отключения модема для пользователя {user.telegram_id}: {e}")
+            user_id_display = user.telegram_id or user.email or f"#{user.id}"
+            logger.error(f"Ошибка отключения модема для пользователя {user_id_display}: {e}")
             await db.rollback()
             return ModemDisableResult(
                 success=False,

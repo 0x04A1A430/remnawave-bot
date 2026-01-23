@@ -665,8 +665,8 @@ class YooKassaPaymentMixin:
                                     except Exception as admin_error:
                                         logger.warning(f"Ошибка уведомления админов о триале: {admin_error}")
 
-                                # Уведомление пользователю
-                                if getattr(self, "bot", None):
+                                # Уведомление пользователю (только для Telegram-пользователей)
+                                if getattr(self, "bot", None) and user.telegram_id:
                                     try:
                                         await self.bot.send_message(
                                             chat_id=user.telegram_id,
@@ -681,6 +681,8 @@ class YooKassaPaymentMixin:
                                         )
                                     except Exception as notify_error:
                                         logger.warning(f"Ошибка уведомления пользователя о триале: {notify_error}")
+                                elif not user.telegram_id:
+                                    logger.info(f"Пропуск Telegram-уведомления о триале для email-пользователя {user.id}")
                             else:
                                 logger.error(f"Не удалось активировать триал {subscription_id} для {user.id}")
                         else:
@@ -785,8 +787,8 @@ class YooKassaPaymentMixin:
                                 exc_info=True,  # Добавляем полный стек вызовов для отладки
                             )
 
-                    # Отправляем уведомление пользователю
-                    if getattr(self, "bot", None):
+                    # Отправляем уведомление пользователю (только Telegram-пользователям)
+                    if getattr(self, "bot", None) and user.telegram_id:
                         try:
                             # Передаем только простые данные, чтобы избежать проблем с ленивой загрузкой
                             await self._send_payment_success_notification(
@@ -854,7 +856,7 @@ class YooKassaPaymentMixin:
                         # Если включен яркий промпт активации, пропускаем старое уведомление
                         # т.к. оно будет отправлено через _send_payment_success_notification
                         if not settings.SHOW_ACTIVATION_PROMPT_AFTER_TOPUP:
-                            if has_saved_cart and getattr(self, "bot", None):
+                            if has_saved_cart and getattr(self, "bot", None) and user.telegram_id:
                                 # Если у пользователя есть сохраненная корзина,
                                 # отправляем ему уведомление с кнопкой вернуться к оформлению
                                 from app.localization.texts import get_texts
@@ -949,13 +951,13 @@ class YooKassaPaymentMixin:
                                     exc_info=True,
                                 )
                             
-                            # Отправляем уведомление пользователю об активации подписки
-                            if getattr(self, "bot", None):
+                            # Отправляем уведомление пользователю об активации подписки (только Telegram)
+                            if getattr(self, "bot", None) and user.telegram_id:
                                 from app.localization.texts import get_texts
                                 from aiogram import types
-                                
+
                                 texts = get_texts(user.language)
-                                
+
                                 success_message = (
                                     f"✅ <b>Подписка успешно активирована!</b>\n\n"
                                     f"📅 Период: {subscription_period} дней\n"
@@ -964,18 +966,20 @@ class YooKassaPaymentMixin:
                                     f"💳 Оплата: {settings.format_price(payment.amount_kopeks)} (YooKassa)\n\n"
                                     f"🔗 Для подключения перейдите в раздел 'Моя подписка'"
                                 )
-                                
+
                                 keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
                                     [types.InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")],
                                     [types.InlineKeyboardButton(text="🏠 Главное меню", callback_data="back_to_menu")]
                                 ])
-                                
+
                                 await self.bot.send_message(
                                     chat_id=user.telegram_id,
                                     text=success_message,
                                     reply_markup=keyboard,
                                     parse_mode="HTML"
                                 )
+                            elif not user.telegram_id:
+                                logger.info(f"Пропуск Telegram-уведомления о подписке для email-пользователя {user.id}")
 
                             if getattr(self, "bot", None):
                                 try:

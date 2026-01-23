@@ -453,7 +453,7 @@ class Pal24PaymentMixin:
                     error,
                 )
 
-        if getattr(self, "bot", None):
+        if getattr(self, "bot", None) and user.telegram_id:
             try:
                 keyboard = await self.build_topup_success_keyboard(user)
                 await self.bot.send_message(
@@ -514,7 +514,7 @@ class Pal24PaymentMixin:
                     )
 
             # Отправляем уведомление только если его ещё не отправили
-            if has_saved_cart and getattr(self, "bot", None) and not activation_notification_sent:
+            if has_saved_cart and getattr(self, "bot", None) and not activation_notification_sent and user.telegram_id:
                 from app.localization.texts import get_texts
 
                 texts = get_texts(user.language)

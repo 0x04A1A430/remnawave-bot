@@ -321,7 +321,8 @@ class TelegramStarsMixin:
         if not period_display:
             period_display = settings.SIMPLE_SUBSCRIPTION_PERIOD_DAYS
 
-        if getattr(self, "bot", None):
+        # Отправляем уведомление только Telegram-пользователям (Stars требует Telegram)
+        if getattr(self, "bot", None) and user.telegram_id:
             try:
                 from aiogram import types
                 from app.localization.texts import get_texts
@@ -552,7 +553,7 @@ class TelegramStarsMixin:
                     )
 
             # Отправляем уведомление только если его ещё не отправили
-            if has_saved_cart and getattr(self, "bot", None) and not activation_notification_sent:
+            if has_saved_cart and getattr(self, "bot", None) and not activation_notification_sent and user.telegram_id:
                 texts = get_texts(user.language)
                 cart_message = texts.t(
                     "BALANCE_TOPUP_CART_REMINDER_DETAILED",

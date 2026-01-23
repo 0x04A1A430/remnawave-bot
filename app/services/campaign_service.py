@@ -18,6 +18,15 @@ from app.services.subscription_service import SubscriptionService
 logger = logging.getLogger(__name__)
 
 
+def _format_user_log(user: User) -> str:
+    """Format user identifier for logging (supports email-only users)."""
+    if user.telegram_id:
+        return str(user.telegram_id)
+    if user.email:
+        return f"{user.id} ({user.email})"
+    return f"#{user.id}"
+
+
 @dataclass
 class CampaignBonusResult:
     success: bool
@@ -96,7 +105,7 @@ class AdvertisingCampaignService:
 
         logger.info(
             "💰 Пользователю %s начислен бонус %s₽ по кампании %s",
-            user.telegram_id,
+            _format_user_log(user),
             amount / 100,
             campaign.id,
         )
@@ -117,7 +126,7 @@ class AdvertisingCampaignService:
         if existing_subscription:
             logger.warning(
                 "⚠️ У пользователя %s уже есть подписка, бонус кампании %s пропущен",
-                user.telegram_id,
+                _format_user_log(user),
                 campaign.id,
             )
             return CampaignBonusResult(success=False)
@@ -182,7 +191,7 @@ class AdvertisingCampaignService:
 
         logger.info(
             "🎁 Пользователю %s выдана подписка по кампании %s на %s дней",
-            user.telegram_id,
+            _format_user_log(user),
             campaign.id,
             duration_days,
         )
@@ -212,7 +221,7 @@ class AdvertisingCampaignService:
 
         logger.info(
             "📊 Пользователь %s зарегистрирован по ссылке кампании %s (без награды)",
-            user.telegram_id,
+            _format_user_log(user),
             campaign.id,
         )
 
@@ -232,7 +241,7 @@ class AdvertisingCampaignService:
         if existing_subscription:
             logger.warning(
                 "⚠️ У пользователя %s уже есть подписка, бонус тарифа кампании %s пропущен",
-                user.telegram_id,
+                _format_user_log(user),
                 campaign.id,
             )
             return CampaignBonusResult(success=False)
@@ -321,7 +330,7 @@ class AdvertisingCampaignService:
 
         logger.info(
             "🎁 Пользователю %s выдан тариф '%s' по кампании %s на %s дней",
-            user.telegram_id,
+            _format_user_log(user),
             tariff.name,
             campaign.id,
             duration_days,

@@ -67,19 +67,32 @@ class MenuLayoutStatsService:
         button_type: Optional[str] = None,
         button_text: Optional[str] = None,
     ) -> Optional[ButtonClickLog]:
-        """Записать клик по кнопке."""
+        """Записать клик по кнопке.
+
+        Args:
+            user_id: Telegram ID пользователя (из middleware) или internal User.id (из API)
+        """
         try:
             # Проверяем существование пользователя перед вставкой
             # чтобы избежать ошибки foreign key в логах БД
-            actual_user_id = user_id
+            # user_id может быть telegram_id (из middleware) или internal id (из API)
+            actual_user_id = None
             if user_id is not None:
                 from app.database.models import User
-                from sqlalchemy import select
+                from sqlalchemy import select, or_
+
+                # Пробуем найти пользователя по telegram_id или по internal id
                 result = await db.execute(
-                    select(User.telegram_id).where(User.telegram_id == user_id).limit(1)
+                    select(User.id).where(
+                        or_(
+                            User.telegram_id == user_id,
+                            User.id == user_id
+                        )
+                    ).limit(1)
                 )
-                if result.scalar_one_or_none() is None:
-                    actual_user_id = None  # Пользователь не зарегистрирован
+                found_user_id = result.scalar_one_or_none()
+                if found_user_id is not None:
+                    actual_user_id = found_user_id  # Используем internal User.id для FK
 
             click_log = ButtonClickLog(
                 button_id=button_id,

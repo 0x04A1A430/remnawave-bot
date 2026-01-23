@@ -565,8 +565,9 @@ class SubscriptionRenewalService:
                     unavailable_servers.append(server.display_name or server.squad_uuid)
 
         if unavailable_servers:
+            user_identifier = user.telegram_id or user.email or f"user#{user.id}"
             logger.warning(
-                f"⚠️ Пользователь {user.telegram_id} (promo_group={user_promo_group.name}) "
+                f"⚠️ Пользователь {user_identifier} (promo_group={user_promo_group.name}) "
                 f"продлевает подписку с серверами, недоступными для его промогруппы: "
                 f"{', '.join(unavailable_servers)}. "
                 f"Это может привести к неправильному расчёту цены!"

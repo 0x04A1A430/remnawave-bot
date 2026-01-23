@@ -245,6 +245,11 @@ class ReferralContestService:
                 is_final=is_final,
             )
 
+            # Skip email-only users (no telegram_id)
+            if not user.telegram_id:
+                logger.debug(f"Skipping contest notification for email-only user {user.id}")
+                continue
+
             try:
                 await self.bot.send_message(user.telegram_id, text, disable_web_page_preview=True)
             except (TelegramForbiddenError, TelegramNotFound):
@@ -285,7 +290,8 @@ class ReferralContestService:
         if leaderboard:
             for idx, (user, score, _) in enumerate(leaderboard[:5], start=1):
                 name = user.full_name
-                lines.append(f"{idx}. {name} ({user.telegram_id}) — {score}")
+                user_id_display = user.telegram_id or user.email or f"#{user.id}"
+                lines.append(f"{idx}. {name} ({user_id_display}) — {score}")
         else:
             lines.append("Пока нет участников.")
 

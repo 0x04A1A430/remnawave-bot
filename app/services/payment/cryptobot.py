@@ -676,6 +676,11 @@ class CryptoBotPaymentMixin:
         if not bot_instance:
             return
 
+        # Skip email-only users (no telegram_id)
+        if not payload.telegram_id:
+            logger.info("Пропуск Telegram-уведомления о пополнении CryptoBot для email-пользователя")
+            return
+
         try:
             await bot_instance.send_message(
                 payload.telegram_id,
@@ -700,6 +705,11 @@ class CryptoBotPaymentMixin:
     ) -> None:
         bot_instance = getattr(self, "bot", None)
         if not bot_instance:
+            return
+
+        # Skip email-only users (no telegram_id)
+        if not payload.telegram_id:
+            logger.debug("Пропуск напоминания о корзине для email-пользователя")
             return
 
         try:

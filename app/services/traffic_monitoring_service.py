@@ -654,9 +654,10 @@ class TrafficMonitoringServiceV2:
                 async with AsyncSessionLocal() as db:
                     db_user = await get_user_by_remnawave_uuid(db, violation.user_uuid)
                     if db_user:
+                        user_id_display = db_user.telegram_id or db_user.email or f"#{db_user.id}"
                         user_info = (
                             f"👤 <b>{db_user.full_name or 'Без имени'}</b>\n"
-                            f"🆔 Telegram ID: <code>{db_user.telegram_id}</code>\n"
+                            f"🆔 ID: <code>{user_id_display}</code>\n"
                         )
                         if db_user.username:
                             user_info += f"📱 Username: @{db_user.username}\n"
