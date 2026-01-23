@@ -218,7 +218,8 @@ async def show_support_audit(
                 extra = f" ({details['minutes']} мин)"
             elif log.action == 'close_all_tickets' and 'count' in details:
                 extra = f" ({details['count']})"
-            lines.append(f"{ts} • {role} <code>{log.actor_telegram_id}</code> — {action_text}{ticket_part}{extra}")
+            actor_id_display = log.actor_telegram_id or f"user#{log.actor_user_id}" if log.actor_user_id else "unknown"
+            lines.append(f"{ts} • {role} <code>{actor_id_display}</code> — {action_text}{ticket_part}{extra}")
 
     # keyboard with pagination
     nav_row = []

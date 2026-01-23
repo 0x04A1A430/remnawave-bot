@@ -1292,6 +1292,11 @@ async def confirm_broadcast(
 
     async def send_single_broadcast(user):
         """Отправляет одно сообщение рассылки с семафором ограничения"""
+        # Skip email-only users (no telegram_id)
+        if not user.telegram_id:
+            logger.debug("Пропуск email-пользователя %s при рассылке", user.id)
+            return False, None
+
         async with semaphore:
             for attempt in range(3):
                 try:

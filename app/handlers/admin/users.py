@@ -960,8 +960,13 @@ async def _render_user_subscription_overview(
     subscription = profile["subscription"]
 
     text = "📱 <b>Подписка и настройки пользователя</b>\n\n"
-    user_link = f'<a href="tg://user?id={user.telegram_id}">{user.full_name}</a>'
-    text += f"👤 {user_link} (ID: <code>{user.telegram_id}</code>)\n\n"
+    if user.telegram_id:
+        user_link = f'<a href="tg://user?id={user.telegram_id}">{user.full_name}</a>'
+        user_id_display = user.telegram_id
+    else:
+        user_link = f"<b>{user.full_name}</b>"
+        user_id_display = user.email or f"#{user.id}"
+    text += f"👤 {user_link} (ID: <code>{user_id_display}</code>)\n\n"
 
     keyboard = []
 
@@ -1152,8 +1157,13 @@ async def show_user_transactions(
     transactions = await get_user_transactions(db, user_id, limit=10)
     
     text = f"💳 <b>Транзакции пользователя</b>\n\n"
-    user_link = f'<a href="tg://user?id={user.telegram_id}">{user.full_name}</a>'
-    text += f"👤 {user_link} (ID: <code>{user.telegram_id}</code>)\n"
+    if user.telegram_id:
+        user_link = f'<a href="tg://user?id={user.telegram_id}">{user.full_name}</a>'
+        user_id_display = user.telegram_id
+    else:
+        user_link = f"<b>{user.full_name}</b>"
+        user_id_display = user.email or f"#{user.id}"
+    text += f"👤 {user_link} (ID: <code>{user_id_display}</code>)\n"
     text += f"💰 Текущий баланс: {settings.format_price(user.balance_kopeks)}\n\n"
     
     if transactions:
@@ -1287,17 +1297,18 @@ async def process_user_search(
             subscription_emoji = "❌"
         
         button_text = f"{status_emoji} {subscription_emoji} {user.full_name}"
-        
-        button_text += f" | 🆔 {user.telegram_id}"
-        
+
+        user_id_display = user.telegram_id or user.email or f"#{user.id}"
+        button_text += f" | 🆔 {user_id_display}"
+
         if user.balance_kopeks > 0:
             button_text += f" | 💰 {settings.format_price(user.balance_kopeks)}"
-        
+
         if len(button_text) > 60:
             short_name = user.full_name
             if len(short_name) > 15:
                 short_name = short_name[:12] + "..."
-            button_text = f"{status_emoji} {subscription_emoji} {short_name} | 🆔 {user.telegram_id}"
+            button_text = f"{status_emoji} {subscription_emoji} {short_name} | 🆔 {user_id_display}"
         
         keyboard.append([
             types.InlineKeyboardButton(
@@ -1585,14 +1596,19 @@ async def _build_user_referrals_view(
                 if referral.username
                 else ""
             )
-            referral_link = f'<a href="tg://user?id={referral.telegram_id}">{referral.full_name}</a>'
+            if referral.telegram_id:
+                referral_link = f'<a href="tg://user?id={referral.telegram_id}">{referral.full_name}</a>'
+                referral_id_display = referral.telegram_id
+            else:
+                referral_link = f"<b>{referral.full_name}</b>"
+                referral_id_display = referral.email or f"#{referral.id}"
             items.append(
                 texts.t(
                     "ADMIN_USER_REFERRALS_LIST_ITEM",
                     "• {name} (ID: <code>{telegram_id}</code>{username_part})",
                 ).format(
                     name=referral_link,
-                    telegram_id=referral.telegram_id,
+                    telegram_id=referral_id_display,
                     username_part=username_part,
                 )
             )
@@ -2454,6 +2470,15 @@ async def process_send_user_message(
         inline_keyboard=[[types.InlineKeyboardButton(text="👤 К пользователю", callback_data=f"admin_user_manage_{user_id}")]]
     )
 
+    # Check if user has telegram_id (email-only users cannot receive Telegram messages)
+    if not target_user.telegram_id:
+        await message.answer(
+            texts.t("ADMIN_USER_NO_TELEGRAM_ID", "❌ Этот пользователь зарегистрирован только по email и не может получать сообщения в Telegram."),
+            reply_markup=confirmation_keyboard,
+        )
+        await state.clear()
+        return
+
     try:
         await message.bot.send_message(target_user.telegram_id, text, parse_mode="HTML")
         await message.answer(
@@ -2853,9 +2878,14 @@ async def show_inactive_users(
     text += f"Без активности более {settings.INACTIVE_USER_DELETE_MONTHS} месяцев: {len(inactive_users)}\n\n"
 
     for user in inactive_users[:10]:
-        user_link = f'<a href="tg://user?id={user.telegram_id}">{user.full_name}</a>'
+        if user.telegram_id:
+            user_link = f'<a href="tg://user?id={user.telegram_id}">{user.full_name}</a>'
+            user_id_display = user.telegram_id
+        else:
+            user_link = f"<b>{user.full_name}</b>"
+            user_id_display = user.email or f"#{user.id}"
         text += f"👤 {user_link}\n"
-        text += f"🆔 <code>{user.telegram_id}</code>\n"
+        text += f"🆔 <code>{user_id_display}</code>\n"
         last_activity_display = (
             format_time_ago(user.last_activity, db_user.language)
             if user.last_activity
@@ -2956,8 +2986,13 @@ async def show_user_statistics(
         campaign_stats = await get_campaign_statistics(db, campaign_registration.campaign_id)
     
     text = f"📊 <b>Статистика пользователя</b>\n\n"
-    user_link = f'<a href="tg://user?id={user.telegram_id}">{user.full_name}</a>'
-    text += f"👤 {user_link} (ID: <code>{user.telegram_id}</code>)\n\n"
+    if user.telegram_id:
+        user_link = f'<a href="tg://user?id={user.telegram_id}">{user.full_name}</a>'
+        user_id_display = user.telegram_id
+    else:
+        user_link = f"<b>{user.full_name}</b>"
+        user_id_display = user.email or f"#{user.id}"
+    text += f"👤 {user_link} (ID: <code>{user_id_display}</code>)\n\n"
     
     text += f"<b>Основная информация:</b>\n"
     text += f"• Дней с регистрации: {profile['registration_days']}\n"
@@ -4635,8 +4670,13 @@ async def admin_buy_subscription(
     ])
 
     text = f"💳 <b>Покупка подписки для пользователя</b>\n\n"
-    target_user_link = f'<a href="tg://user?id={target_user.telegram_id}">{target_user.full_name}</a>'
-    text += f"👤 {target_user_link} (ID: {target_user.telegram_id})\n"
+    if target_user.telegram_id:
+        target_user_link = f'<a href="tg://user?id={target_user.telegram_id}">{target_user.full_name}</a>'
+        target_user_id_display = target_user.telegram_id
+    else:
+        target_user_link = f"<b>{target_user.full_name}</b>"
+        target_user_id_display = target_user.email or f"#{target_user.id}"
+    text += f"👤 {target_user_link} (ID: {target_user_id_display})\n"
     text += f"💰 Баланс пользователя: {settings.format_price(target_user.balance_kopeks)}\n\n"
     traffic_text = "Безлимит" if (subscription.traffic_limit_gb or 0) <= 0 else f"{subscription.traffic_limit_gb} ГБ"
     devices_limit = subscription.device_limit
@@ -4727,8 +4767,13 @@ async def admin_buy_subscription_confirm(
         return
     
     text = f"💳 <b>Подтверждение покупки подписки</b>\n\n"
-    target_user_link = f'<a href="tg://user?id={target_user.telegram_id}">{target_user.full_name}</a>'
-    text += f"👤 {target_user_link} (ID: {target_user.telegram_id})\n"
+    if target_user.telegram_id:
+        target_user_link = f'<a href="tg://user?id={target_user.telegram_id}">{target_user.full_name}</a>'
+        target_user_id_display = target_user.telegram_id
+    else:
+        target_user_link = f"<b>{target_user.full_name}</b>"
+        target_user_id_display = target_user.email or f"#{target_user.id}"
+    text += f"👤 {target_user_link} (ID: {target_user_id_display})\n"
     text += f"📅 Период подписки: {period_days} дней\n"
     text += f"💰 Стоимость: {settings.format_price(price_kopeks)}\n"
     text += f"💰 Баланс пользователя: {settings.format_price(target_user.balance_kopeks)}\n\n"
@@ -4950,10 +4995,15 @@ async def admin_buy_subscription_execute(
         else:
             message = "❌ Ошибка: у пользователя нет существующей подписки"
         
-        target_user_link = f'<a href="tg://user?id={target_user.telegram_id}">{target_user.full_name}</a>'
+        if target_user.telegram_id:
+            target_user_link = f'<a href="tg://user?id={target_user.telegram_id}">{target_user.full_name}</a>'
+            target_user_id_display = target_user.telegram_id
+        else:
+            target_user_link = f"<b>{target_user.full_name}</b>"
+            target_user_id_display = target_user.email or f"#{target_user.id}"
         await callback.message.edit_text(
             f"{message}\n\n"
-            f"👤 {target_user_link} (ID: {target_user.telegram_id})\n"
+            f"👤 {target_user_link} (ID: {target_user_id_display})\n"
             f"💰 Списано: {settings.format_price(price_kopeks)}\n"
             f"📅 Подписка действительна до: {format_datetime(subscription.end_date)}",
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
@@ -4966,7 +5016,7 @@ async def admin_buy_subscription_execute(
         )
         
         try:
-            if callback.bot:
+            if callback.bot and target_user.telegram_id:
                 await callback.bot.send_message(
                     chat_id=target_user.telegram_id,
                     text=f"💳 <b>Администратор продлил вашу подписку</b>\n\n"
@@ -4976,7 +5026,8 @@ async def admin_buy_subscription_execute(
                     parse_mode="HTML"
                 )
         except Exception as e:
-            logger.error(f"Ошибка отправки уведомления пользователю {target_user.telegram_id}: {e}")
+            user_id_display = target_user.telegram_id or target_user.email or f"#{target_user.id}"
+            logger.error(f"Ошибка отправки уведомления пользователю {user_id_display}: {e}")
         
         await callback.answer()
         
@@ -5023,9 +5074,14 @@ async def admin_buy_tariff(
         await callback.answer()
         return
 
-    target_user_link = f'<a href="tg://user?id={target_user.telegram_id}">{target_user.full_name}</a>'
+    if target_user.telegram_id:
+        target_user_link = f'<a href="tg://user?id={target_user.telegram_id}">{target_user.full_name}</a>'
+        target_user_id_display = target_user.telegram_id
+    else:
+        target_user_link = f"<b>{target_user.full_name}</b>"
+        target_user_id_display = target_user.email or f"#{target_user.id}"
     text = f"💳 <b>Покупка тарифа для пользователя</b>\n\n"
-    text += f"👤 {target_user_link} (ID: {target_user.telegram_id})\n"
+    text += f"👤 {target_user_link} (ID: {target_user_id_display})\n"
     text += f"💰 Баланс: {settings.format_price(target_user.balance_kopeks)}\n\n"
     text += "📦 <b>Выберите тариф:</b>\n\n"
 
@@ -5084,11 +5140,16 @@ async def admin_buy_tariff_period(
         await callback.answer("❌ Тариф недоступен", show_alert=True)
         return
 
-    target_user_link = f'<a href="tg://user?id={target_user.telegram_id}">{target_user.full_name}</a>'
+    if target_user.telegram_id:
+        target_user_link = f'<a href="tg://user?id={target_user.telegram_id}">{target_user.full_name}</a>'
+        target_user_id_display = target_user.telegram_id
+    else:
+        target_user_link = f"<b>{target_user.full_name}</b>"
+        target_user_id_display = target_user.email or f"#{target_user.id}"
     traffic = "♾️ Безлимит" if tariff.traffic_limit_gb == 0 else f"{tariff.traffic_limit_gb} ГБ"
 
     text = f"💳 <b>Покупка тарифа для пользователя</b>\n\n"
-    text += f"👤 {target_user_link} (ID: {target_user.telegram_id})\n"
+    text += f"👤 {target_user_link} (ID: {target_user_id_display})\n"
     text += f"💰 Баланс: {settings.format_price(target_user.balance_kopeks)}\n\n"
     text += f"📦 <b>Тариф: {tariff.name}</b>\n"
     text += f"📊 Трафик: {traffic}\n"
@@ -5167,11 +5228,16 @@ async def admin_buy_tariff_confirm(
         await callback.answer()
         return
 
-    target_user_link = f'<a href="tg://user?id={target_user.telegram_id}">{target_user.full_name}</a>'
+    if target_user.telegram_id:
+        target_user_link = f'<a href="tg://user?id={target_user.telegram_id}">{target_user.full_name}</a>'
+        target_user_id_display = target_user.telegram_id
+    else:
+        target_user_link = f"<b>{target_user.full_name}</b>"
+        target_user_id_display = target_user.email or f"#{target_user.id}"
     traffic = "♾️ Безлимит" if tariff.traffic_limit_gb == 0 else f"{tariff.traffic_limit_gb} ГБ"
 
     text = f"💳 <b>Подтверждение покупки тарифа</b>\n\n"
-    text += f"👤 {target_user_link} (ID: {target_user.telegram_id})\n"
+    text += f"👤 {target_user_link} (ID: {target_user_id_display})\n"
     text += f"💰 Баланс: {settings.format_price(target_user.balance_kopeks)}\n\n"
     text += f"📦 <b>Тариф: {tariff.name}</b>\n"
     text += f"📊 Трафик: {traffic}\n"
@@ -5304,12 +5370,17 @@ async def admin_buy_tariff_execute(
             description=f"Покупка тарифа {tariff.name} на {period} дней (администратор)",
         )
 
-        target_user_link = f'<a href="tg://user?id={target_user.telegram_id}">{target_user.full_name}</a>'
+        if target_user.telegram_id:
+            target_user_link = f'<a href="tg://user?id={target_user.telegram_id}">{target_user.full_name}</a>'
+            target_user_id_display = target_user.telegram_id
+        else:
+            target_user_link = f"<b>{target_user.full_name}</b>"
+            target_user_id_display = target_user.email or f"#{target_user.id}"
         traffic = "♾️ Безлимит" if tariff.traffic_limit_gb == 0 else f"{tariff.traffic_limit_gb} ГБ"
 
         await callback.message.edit_text(
             f"✅ <b>Тариф успешно куплен!</b>\n\n"
-            f"👤 {target_user_link} (ID: {target_user.telegram_id})\n"
+            f"👤 {target_user_link} (ID: {target_user_id_display})\n"
             f"📦 Тариф: {tariff.name}\n"
             f"📊 Трафик: {traffic}\n"
             f"📱 Устройств: {tariff.device_limit}\n"
@@ -5324,7 +5395,7 @@ async def admin_buy_tariff_execute(
 
         # Уведомляем пользователя
         try:
-            if callback.bot:
+            if callback.bot and target_user.telegram_id:
                 await callback.bot.send_message(
                     chat_id=target_user.telegram_id,
                     text=f"💳 <b>Администратор оформил вам тариф</b>\n\n"
@@ -5466,7 +5537,10 @@ async def show_admin_tariff_change(
         current_tariff = await get_tariff_by_id(db, subscription.tariff_id)
 
     text = "📦 <b>Смена тарифа пользователя</b>\n\n"
-    user_link = f'<a href="tg://user?id={user.telegram_id}">{user.full_name}</a>'
+    if user.telegram_id:
+        user_link = f'<a href="tg://user?id={user.telegram_id}">{user.full_name}</a>'
+    else:
+        user_link = f"<b>{user.full_name}</b> ({user.email or f'#{user.id}'})"
     text += f"👤 {user_link}\n\n"
 
     if current_tariff:
@@ -5543,7 +5617,10 @@ async def select_admin_tariff_change(
     servers_count = len(tariff.allowed_squads) if tariff.allowed_squads else 0
 
     text = f"📦 <b>Подтверждение смены тарифа</b>\n\n"
-    user_link = f'<a href="tg://user?id={user.telegram_id}">{user.full_name}</a>'
+    if user.telegram_id:
+        user_link = f'<a href="tg://user?id={user.telegram_id}">{user.full_name}</a>'
+    else:
+        user_link = f"<b>{user.full_name}</b> ({user.email or f'#{user.id}'})"
     text += f"👤 {user_link}\n\n"
     text += f"<b>Новый тариф:</b> {tariff.name}\n"
     text += f"• Устройства: {tariff.device_limit}\n"

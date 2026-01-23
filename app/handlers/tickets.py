@@ -997,14 +997,14 @@ async def notify_admins_about_new_ticket(ticket: Ticket, db: AsyncSession):
         except Exception:
             user = None
         full_name = user.full_name if user else "Unknown"
-        telegram_id_display = user.telegram_id if user else "—"
+        telegram_id_display = (user.telegram_id or user.email or f"#{user.id}") if user else "—"
         username_display = (user.username or "отсутствует") if user else "отсутствует"
 
         notification_text = (
             f"🎫 <b>НОВЫЙ ТИКЕТ</b>\n\n"
             f"🆔 <b>ID:</b> <code>{ticket.id}</code>\n"
             f"👤 <b>Пользователь:</b> {full_name}\n"
-            f"🆔 <b>Telegram ID:</b> <code>{telegram_id_display}</code>\n"
+            f"🆔 <b>ID:</b> <code>{telegram_id_display}</code>\n"
             f"📱 <b>Username:</b> @{username_display}\n"
             f"📝 <b>Заголовок:</b> {title or '—'}\n"
             f"📅 <b>Создан:</b> {format_local_datetime(ticket.created_at, '%d.%m.%Y %H:%M')}\n"
@@ -1045,7 +1045,7 @@ async def notify_admins_about_ticket_reply(ticket: Ticket, reply_text: str, db: 
         except Exception:
             user = None
         full_name = user.full_name if user else "Unknown"
-        telegram_id_display = user.telegram_id if user else "—"
+        telegram_id_display = (user.telegram_id or user.email or f"#{user.id}") if user else "—"
         username_display = (user.username or "отсутствует") if user else "отсутствует"
 
         # Обрезаем текст ответа для уведомления
@@ -1056,7 +1056,7 @@ async def notify_admins_about_ticket_reply(ticket: Ticket, reply_text: str, db: 
             f"🆔 <b>ID тикета:</b> <code>{ticket.id}</code>\n"
             f"📝 <b>Заголовок:</b> {title or '—'}\n"
             f"👤 <b>Пользователь:</b> {full_name}\n"
-            f"🆔 <b>Telegram ID:</b> <code>{telegram_id_display}</code>\n"
+            f"🆔 <b>ID:</b> <code>{telegram_id_display}</code>\n"
             f"📱 <b>Username:</b> @{username_display}\n\n"
             f"📩 <b>Сообщение:</b>\n{reply_preview}\n"
         )

@@ -549,11 +549,16 @@ async def handle_successful_topup_with_cart(
     from aiogram.fsm.context import FSMContext
     from aiogram.fsm.storage.base import StorageKey
     from app.bot import dp
-    
+
     user = await get_user_by_id(db, user_id)
     if not user:
         return
-    
+
+    # Email-only users don't have telegram_id - skip Telegram notification
+    if not user.telegram_id:
+        logger.info(f"Skipping cart notification for email-only user {user_id}")
+        return
+
     storage = dp.storage
     key = StorageKey(bot_id=bot.id, chat_id=user.telegram_id, user_id=user.telegram_id)
     
@@ -622,6 +627,7 @@ async def request_support_topup(
         )
         return
 
+    user_id_display = db_user.telegram_id or db_user.email or f"#{db_user.id}"
     support_text = f"""
 🛠️ <b>Пополнение через поддержку</b>
 
@@ -629,7 +635,7 @@ async def request_support_topup(
 {settings.get_support_contact_display_html()}
 
 Укажите:
-• ID: {db_user.telegram_id}
+• ID: {user_id_display}
 • Сумму пополнения
 • Способ оплаты
 

@@ -301,7 +301,14 @@ def _format_promo_offer_log_entry(
 
     user = entry.user
     if user:
-        username = f"@{user.username}" if user.username else f"ID{user.telegram_id}"
+        if user.username:
+            username = f"@{user.username}"
+        elif user.telegram_id:
+            username = f"ID{user.telegram_id}"
+        elif user.email:
+            username = f"📧{user.email}"
+        else:
+            username = f"User#{user.id}"
         label = f"{username} (#{user.id})"
     elif entry.user_id:
         label = f"ID{entry.user_id}"
@@ -462,14 +469,27 @@ def _build_user_button_label(user: User) -> str:
     else:
         subscription_emoji = "❌"
 
-    name = (user.full_name or user.username or f"ID {user.telegram_id or user.id}").strip()
+    name = (user.full_name or user.username or "").strip()
     if not name:
-        name = f"ID {user.telegram_id or user.id}"
+        if user.telegram_id:
+            name = f"ID {user.telegram_id}"
+        elif user.email:
+            name = user.email.split('@')[0][:15]
+        else:
+            name = f"User#{user.id}"
 
     if len(name) > 20:
         name = name[:17] + "..."
 
-    parts = [status_emoji, subscription_emoji, name, f"🆔 {user.telegram_id}" if user.telegram_id else f"#{user.id}"]
+    # Build identifier: telegram_id, email, or internal id
+    if user.telegram_id:
+        identifier = f"🆔 {user.telegram_id}"
+    elif user.email:
+        identifier = f"📧 {user.email[:20]}"
+    else:
+        identifier = f"#{user.id}"
+
+    parts = [status_emoji, subscription_emoji, name, identifier]
 
     balance = getattr(user, "balance_kopeks", 0)
     if balance:
@@ -1907,6 +1927,11 @@ async def _send_offer_to_users(
 
     async def send_single_offer(user):
         """Отправляет одно предложение с семафором ограничения"""
+        # Skip email-only users (no telegram_id)
+        if not user.telegram_id:
+            logger.debug("Пропуск email-пользователя %s при рассылке промо", user.id)
+            return False
+
         async with semaphore:
             try:
                 # Используем отдельную сессию для изоляции транзакции
@@ -1961,10 +1986,10 @@ async def _send_offer_to_users(
                     )
                     return True
             except (TelegramForbiddenError, TelegramBadRequest) as exc:
-                logger.warning("Не удалось отправить предложение пользователю %s: %s", user.telegram_id, exc)
+                logger.warning("Не удалось отправить предложение пользователю %s: %s", user.telegram_id or user.id, exc)
                 return False
             except Exception as exc:  # pragma: no cover - defensive logging
-                logger.error("Ошибка рассылки промо предложения пользователю %s: %s", user.telegram_id, exc)
+                logger.error("Ошибка рассылки промо предложения пользователю %s: %s", user.telegram_id or user.id, exc)
                 return False
 
     # Отправляем предложения пакетами для эффективности

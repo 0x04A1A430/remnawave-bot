@@ -421,7 +421,10 @@ async def show_server_users(
         lines = []
         for index, user in enumerate(page_users, start=start_index + 1):
             safe_user_name = html.escape(user.full_name)
-            user_link = f'<a href="tg://user?id={user.telegram_id}">{safe_user_name}</a>'
+            if user.telegram_id:
+                user_link = f'<a href="tg://user?id={user.telegram_id}">{safe_user_name}</a>'
+            else:
+                user_link = f"<b>{safe_user_name}</b>"
             lines.append(f"{index}. {user_link}")
 
         text += "\n" + "\n".join(lines)

@@ -749,11 +749,12 @@ async def confirm_withdrawal_request(
     # Отправляем уведомление админам
     analysis = json.loads(request.risk_analysis) if request.risk_analysis else {}
 
+    user_id_display = db_user.telegram_id or db_user.email or f"#{db_user.id}"
     admin_text = f"""
 🔔 <b>Новая заявка на вывод #{request.id}</b>
 
 👤 Пользователь: {db_user.full_name or 'Без имени'}
-🆔 ID: <code>{db_user.telegram_id}</code>
+🆔 ID: <code>{user_id_display}</code>
 💰 Сумма: <b>{amount_kopeks / 100:.0f}₽</b>
 
 💳 Реквизиты:
@@ -762,7 +763,8 @@ async def confirm_withdrawal_request(
 {referral_withdrawal_service.format_analysis_for_admin(analysis)}
 """
 
-    admin_keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+    # Формируем клавиатуру - кнопка профиля только для Telegram-пользователей
+    keyboard_rows = [
         [
             types.InlineKeyboardButton(
                 text="✅ Одобрить",
@@ -772,12 +774,14 @@ async def confirm_withdrawal_request(
                 text="❌ Отклонить",
                 callback_data=f"admin_withdrawal_reject_{request.id}"
             )
-        ],
-        [types.InlineKeyboardButton(
+        ]
+    ]
+    if db_user.telegram_id:
+        keyboard_rows.append([types.InlineKeyboardButton(
             text="👤 Профиль пользователя",
             callback_data=f"admin_user_{db_user.telegram_id}"
-        )]
-    ])
+        )])
+    admin_keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
 
     try:
         notification_service = AdminNotificationService(callback.bot)

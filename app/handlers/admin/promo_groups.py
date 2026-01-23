@@ -1251,9 +1251,14 @@ async def show_promo_group_members(
         lines = []
         for index, user in enumerate(members, start=offset + 1):
             username = f"@{user.username}" if user.username else "—"
-            user_link = f'<a href="tg://user?id={user.telegram_id}">{user.full_name}</a>'
+            if user.telegram_id:
+                user_link = f'<a href="tg://user?id={user.telegram_id}">{user.full_name}</a>'
+                tg_display = str(user.telegram_id)
+            else:
+                user_link = f"<b>{user.full_name}</b>"
+                tg_display = user.email or f"#{user.id}"
             lines.append(
-                f"{index}. {user_link} (ID {user.id}, {username}, TG {user.telegram_id})"
+                f"{index}. {user_link} (ID {user.id}, {username}, TG {tg_display})"
             )
         body = "\n".join(lines)
 

@@ -1422,7 +1422,8 @@ async def handle_activate_button(
             )
 
     except Exception as e:
-        logger.error(f"Ошибка автоматической активации для {db_user.telegram_id}: {e}")
+        user_id_display = db_user.telegram_id or db_user.email or f"#{db_user.id}"
+        logger.error(f"Ошибка автоматической активации для {user_id_display}: {e}")
         await db.rollback()
         await callback.answer(
             texts.t("ACTIVATION_ERROR", "❌ Ошибка активации. Попробуйте позже."),

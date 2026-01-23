@@ -235,14 +235,17 @@ async def _show_top_referrers_filtered(
                 count = referrer.get('invited_count', 0)
                 display_name = referrer.get('display_name', 'N/A')
                 username = referrer.get('username', '')
-                telegram_id = referrer.get('telegram_id', 'N/A')
+                telegram_id = referrer.get('telegram_id')
+                user_email = referrer.get('email', '')
+                user_id = referrer.get('user_id', '')
+                id_display = telegram_id or user_email or f"#{user_id}" if user_id else "N/A"
 
                 if username:
-                    display_text = f"@{username} (ID{telegram_id})"
-                elif display_name and display_name != f"ID{telegram_id}":
-                    display_text = f"{display_name} (ID{telegram_id})"
+                    display_text = f"@{username} (ID{id_display})"
+                elif display_name and display_name != f"ID{id_display}":
+                    display_text = f"{display_name} (ID{id_display})"
                 else:
-                    display_text = f"ID{telegram_id}"
+                    display_text = f"ID{id_display}"
 
                 emoji = ""
                 if i == 1:
@@ -407,7 +410,7 @@ async def view_withdrawal_request(
 
     user = await get_user_by_id(db, request.user_id)
     user_name = user.full_name if user else "Неизвестно"
-    user_tg_id = user.telegram_id if user else "N/A"
+    user_tg_id = (user.telegram_id or user.email or f"#{user.id}") if user else "N/A"
 
     analysis = json.loads(request.risk_analysis) if request.risk_analysis else {}
 
@@ -457,12 +460,13 @@ async def view_withdrawal_request(
             )
         ])
 
-    keyboard.append([
-        types.InlineKeyboardButton(
-            text="👤 Профиль пользователя",
-            callback_data=f"admin_user_{user_tg_id}"
-        )
-    ])
+    if user:
+        keyboard.append([
+            types.InlineKeyboardButton(
+                text="👤 Профиль пользователя",
+                callback_data=f"admin_user_manage_{user.id}"
+            )
+        ])
     keyboard.append([
         types.InlineKeyboardButton(text="⬅️ К списку", callback_data="admin_withdrawal_requests")
     ])
@@ -498,9 +502,9 @@ async def approve_withdrawal_request(
     )
 
     if success:
-        # Уведомляем пользователя
+        # Уведомляем пользователя (только если есть telegram_id)
         user = await get_user_by_id(db, request.user_id)
-        if user:
+        if user and user.telegram_id:
             try:
                 texts = get_texts(user.language)
                 await callback.bot.send_message(
@@ -548,9 +552,9 @@ async def reject_withdrawal_request(
     )
 
     if success:
-        # Уведомляем пользователя
+        # Уведомляем пользователя (только если есть telegram_id)
         user = await get_user_by_id(db, request.user_id)
-        if user:
+        if user and user.telegram_id:
             try:
                 texts = get_texts(user.language)
                 await callback.bot.send_message(
@@ -597,9 +601,9 @@ async def complete_withdrawal_request(
     )
 
     if success:
-        # Уведомляем пользователя
+        # Уведомляем пользователя (только если есть telegram_id)
         user = await get_user_by_id(db, request.user_id)
-        if user:
+        if user and user.telegram_id:
             try:
                 texts = get_texts(user.language)
                 await callback.bot.send_message(
@@ -732,7 +736,7 @@ async def process_test_referral_earning(
         f"Начисление добавлено как реферальный доход.",
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
             [types.InlineKeyboardButton(text="📋 К заявкам", callback_data="admin_withdrawal_requests")],
-            [types.InlineKeyboardButton(text="👤 Профиль", callback_data=f"admin_user_manage_{target_telegram_id}")]
+            [types.InlineKeyboardButton(text="👤 Профиль", callback_data=f"admin_user_manage_{target_user.id}")]
         ])
     )
 

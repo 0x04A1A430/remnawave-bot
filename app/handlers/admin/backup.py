@@ -179,8 +179,9 @@ async def create_backup_handler(
     )
     
     # Создаем бекап
+    created_by_id = db_user.telegram_id or db_user.email or f"#{db_user.id}"
     success, message, file_path = await backup_service.create_backup(
-        created_by=db_user.telegram_id,
+        created_by=created_by_id,
         compress=True
     )
     

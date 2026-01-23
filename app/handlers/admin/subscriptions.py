@@ -119,7 +119,7 @@ async def show_subscriptions_list(
         text += f"📊 Всего: {total_count} | Страница: {page}/{total_pages}\n\n"
         
         for i, sub in enumerate(subscriptions, 1 + (page - 1) * 10):
-            user_info = f"ID{sub.user.telegram_id}" if sub.user else "Неизвестно"
+            user_info = (f"ID{sub.user.telegram_id}" if sub.user.telegram_id else sub.user.email or f"#{sub.user.id}") if sub.user else "Неизвестно"
             sub_type = "🎁" if sub.is_trial else "💎"
             status = "✅ Активна" if sub.is_active else "❌ Неактивна"
             
@@ -184,7 +184,7 @@ async def show_expiring_subscriptions(
 """
     
     for sub in expiring_3d[:5]:
-        user_info = f"ID{sub.user.telegram_id}" if sub.user else "Неизвестно"
+        user_info = (f"ID{sub.user.telegram_id}" if sub.user.telegram_id else sub.user.email or f"#{sub.user.id}") if sub.user else "Неизвестно"
         sub_type = "🎁" if sub.is_trial else "💎"
         text += f"{sub_type} {user_info} - {format_datetime(sub.end_date)}\n"
     
@@ -193,7 +193,7 @@ async def show_expiring_subscriptions(
     
     text += f"\n<b>Истекают завтра:</b>\n"
     for sub in expiring_1d[:5]:
-        user_info = f"ID{sub.user.telegram_id}" if sub.user else "Неизвестно"
+        user_info = (f"ID{sub.user.telegram_id}" if sub.user.telegram_id else sub.user.email or f"#{sub.user.id}") if sub.user else "Неизвестно"
         sub_type = "🎁" if sub.is_trial else "💎"
         text += f"{sub_type} {user_info} - {format_datetime(sub.end_date)}\n"
     
@@ -385,8 +385,13 @@ async def send_expiry_reminders(
         if subscription.user:
             try:
                 user = subscription.user
+                # Skip email-only users (no telegram_id)
+                if not user.telegram_id:
+                    logger.debug(f"Пропуск email-пользователя {user.id} при отправке напоминания")
+                    continue
+
                 days_left = max(1, subscription.days_left)
-                
+
                 reminder_text = f"""
 ⚠️ <b>Подписка истекает!</b>
 
@@ -396,13 +401,13 @@ async def send_expiry_reminders(
 
 💎 Продлить подписку можно в главном меню.
 """
-                
+
                 await callback.bot.send_message(
                     chat_id=user.telegram_id,
                     text=reminder_text
                 )
                 sent_count += 1
-                
+
             except Exception as e:
                 logger.error(f"Ошибка отправки напоминания пользователю {subscription.user_id}: {e}")
     

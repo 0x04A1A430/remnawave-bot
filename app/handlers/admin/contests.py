@@ -436,7 +436,8 @@ async def show_leaderboard(
         texts.t("ADMIN_CONTEST_LEADERBOARD_TITLE", "📊 Топ участников:"),
     ]
     for idx, (user, score, _) in enumerate(leaderboard, start=1):
-        lines.append(f"{idx}. {user.full_name} ({user.telegram_id}) — {score}")
+        user_id_display = user.telegram_id or user.email or f"#{user.id}"
+        lines.append(f"{idx}. {user.full_name} ({user_id_display}) — {score}")
 
     await callback.message.edit_text(
         "\n".join(lines),

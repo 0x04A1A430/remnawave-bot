@@ -245,12 +245,13 @@ async def view_admin_ticket(
     }.get(ticket.status, ticket.status)
 
     user_name = ticket.user.full_name if ticket.user else "Unknown"
-    telegram_id_display = ticket.user.telegram_id if ticket.user else "—"
+    telegram_id_display = (ticket.user.telegram_id or ticket.user.email or f"#{ticket.user.id}") if ticket.user else "—"
     username_value = ticket.user.username if ticket.user else None
+    id_label = "Telegram ID" if (ticket.user and ticket.user.telegram_id) else "ID"
 
     header = f"🎫 Тикет #{ticket.id}\n\n"
     header += f"👤 Пользователь: {user_name}\n"
-    header += f"🆔 Telegram ID: <code>{telegram_id_display}</code>\n"
+    header += f"🆔 {id_label}: <code>{telegram_id_display}</code>\n"
     if username_value:
         safe_username = html.escape(username_value)
         header += f"📱 Username: @{safe_username}\n"
@@ -888,6 +889,11 @@ async def handle_admin_block_duration_input(
                     ticket_text += "📱 Username: отсутствует\n"
                     chat_link = f"tg://user?id={int(updated.user.telegram_id)}"
                     ticket_text += f"🔗 Чат по ID: <a href=\"{chat_link}\">{chat_link}</a>\n"
+            elif updated.user:
+                # Email-only user
+                user_id_display = updated.user.email or f"#{updated.user.id}"
+                ticket_text += f"🆔 ID: <code>{user_id_display}</code>\n"
+                ticket_text += "📧 Тип: Email-пользователь\n"
             ticket_text += "\n"
             if updated.is_user_reply_blocked:
                 if updated.user_reply_block_permanent:

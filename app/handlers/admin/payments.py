@@ -287,7 +287,8 @@ def _build_detail_keyboard(
 
 def _format_user_line(user: User) -> str:
     username = format_username(user.username, user.telegram_id, user.full_name)
-    return f"👤 {html.escape(username)} (<code>{user.telegram_id}</code>)"
+    user_id_display = user.telegram_id or user.email or f"#{user.id}"
+    return f"👤 {html.escape(username)} (<code>{user_id_display}</code>)"
 
 
 def _build_record_lines(
