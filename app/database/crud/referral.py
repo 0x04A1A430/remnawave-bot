@@ -195,14 +195,16 @@ async def get_referral_statistics(db: AsyncSession) -> dict:
                     display_name += f" {user.last_name}"
             elif user.username:
                 display_name = f"@{user.username}"
-            else:
+            elif user.telegram_id:
                 display_name = f"ID{user.telegram_id}"
-            
+            else:
+                display_name = user.email or f"#{user.id}"
+
             top_referrers.append({
-                "user_id": user.telegram_id, 
+                "user_id": user.id,  # Use internal ID, not telegram_id
                 "display_name": display_name,
                 "username": user.username,
-                "telegram_id": user.telegram_id,
+                "telegram_id": user.telegram_id,  # Can be None for email users
                 "total_earned_kopeks": stats['total_earned'],
                 "referrals_count": stats['referrals_count']
             })
@@ -424,12 +426,14 @@ async def get_top_referrers_by_period(
                     display_name += f" {user.last_name}"
             elif user.username:
                 display_name = f"@{user.username}"
-            else:
+            elif user.telegram_id:
                 display_name = f"ID{user.telegram_id}"
+            else:
+                display_name = user.email or f"#{user.id}"
 
             result.append({
                 'user_id': user.id,
-                'telegram_id': user.telegram_id,
+                'telegram_id': user.telegram_id,  # Can be None for email users
                 'username': user.username,
                 'display_name': display_name,
                 'invited_count': data['invited_count'],

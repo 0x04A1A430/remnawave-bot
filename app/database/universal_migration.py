@@ -6295,6 +6295,93 @@ async def add_subscription_traffic_reset_at_column() -> bool:
         return False
 
 
+async def add_user_email_auth_columns() -> bool:
+    """
+    Миграция для поддержки email-регистрации без Telegram.
+
+    1. Делает telegram_id nullable (для email-only пользователей)
+    2. Добавляет колонку auth_type ('telegram' или 'email')
+    """
+    try:
+        db_type = await get_database_type()
+
+        # Проверяем существование колонки auth_type
+        auth_type_exists = await check_column_exists('users', 'auth_type')
+
+        async with engine.begin() as conn:
+            # 1. Добавляем колонку auth_type если её нет
+            if not auth_type_exists:
+                if db_type == 'sqlite':
+                    await conn.execute(text(
+                        "ALTER TABLE users ADD COLUMN auth_type VARCHAR(20) DEFAULT 'telegram' NOT NULL"
+                    ))
+                elif db_type == 'postgresql':
+                    await conn.execute(text(
+                        "ALTER TABLE users ADD COLUMN auth_type VARCHAR(20) DEFAULT 'telegram' NOT NULL"
+                    ))
+                elif db_type == 'mysql':
+                    await conn.execute(text(
+                        "ALTER TABLE users ADD COLUMN auth_type VARCHAR(20) DEFAULT 'telegram' NOT NULL"
+                    ))
+                else:
+                    logger.error(f"Неподдерживаемый тип БД: {db_type}")
+                    return False
+                logger.info("✅ Добавлена колонка users.auth_type")
+            else:
+                logger.info("ℹ️ Колонка auth_type уже существует")
+
+            # 2. Делаем telegram_id nullable (только PostgreSQL и MySQL поддерживают ALTER COLUMN)
+            # SQLite не поддерживает ALTER COLUMN, но мы можем просто не делать это -
+            # новые email-пользователи будут создаваться с telegram_id=NULL если БД уже nullable
+
+            if db_type == 'postgresql':
+                # Проверяем является ли telegram_id nullable
+                result = await conn.execute(text("""
+                    SELECT is_nullable
+                    FROM information_schema.columns
+                    WHERE table_name = 'users' AND column_name = 'telegram_id'
+                """))
+                row = result.fetchone()
+
+                if row and row[0] == 'NO':
+                    # telegram_id NOT NULL - нужно сделать nullable
+                    await conn.execute(text(
+                        "ALTER TABLE users ALTER COLUMN telegram_id DROP NOT NULL"
+                    ))
+                    logger.info("✅ Колонка users.telegram_id теперь nullable")
+                else:
+                    logger.info("ℹ️ Колонка telegram_id уже nullable")
+
+            elif db_type == 'mysql':
+                # MySQL требует полное определение колонки при ALTER
+                result = await conn.execute(text("""
+                    SELECT IS_NULLABLE
+                    FROM information_schema.COLUMNS
+                    WHERE TABLE_NAME = 'users' AND COLUMN_NAME = 'telegram_id'
+                """))
+                row = result.fetchone()
+
+                if row and row[0] == 'NO':
+                    await conn.execute(text(
+                        "ALTER TABLE users MODIFY COLUMN telegram_id BIGINT NULL"
+                    ))
+                    logger.info("✅ Колонка users.telegram_id теперь nullable")
+                else:
+                    logger.info("ℹ️ Колонка telegram_id уже nullable")
+
+            elif db_type == 'sqlite':
+                # SQLite не поддерживает ALTER COLUMN
+                # Для SQLite нужна пересоздание таблицы, но это сложно
+                # Оставляем как есть - при необходимости нужна ручная миграция
+                logger.info("ℹ️ SQLite: изменение nullable требует ручной миграции")
+
+        return True
+
+    except Exception as error:
+        logger.error(f"❌ Ошибка миграции email auth: {error}")
+        return False
+
+
 async def run_universal_migration():
     logger.info("=== НАЧАЛО УНИВЕРСАЛЬНОЙ МИГРАЦИИ ===")
 
@@ -6912,6 +6999,13 @@ async def run_universal_migration():
         else:
             logger.warning("⚠️ Проблемы с таблицей withdrawal_requests")
 
+        logger.info("=== НАСТРОЙКА EMAIL АУТЕНТИФИКАЦИИ ===")
+        email_auth_ready = await add_user_email_auth_columns()
+        if email_auth_ready:
+            logger.info("✅ Колонки для email-аутентификации готовы")
+        else:
+            logger.warning("⚠️ Проблемы с настройкой email-аутентификации")
+
         logger.info("=== СОЗДАНИЕ ТАБЛИЦ КОЛЕСА УДАЧИ ===")
         wheel_tables_ready = await create_wheel_tables()
         if wheel_tables_ready:
@@ -7079,6 +7173,7 @@ async def check_migration_status():
         status["users_promo_offer_discount_expires_column"] = await check_column_exists('users', 'promo_offer_discount_expires_at')
         status["users_referral_commission_percent_column"] = await check_column_exists('users', 'referral_commission_percent')
         status["users_notification_settings_column"] = await check_column_exists('users', 'notification_settings')
+        status["users_auth_type_column"] = await check_column_exists('users', 'auth_type')
         status["subscription_crypto_link_column"] = await check_column_exists('subscriptions', 'subscription_crypto_link')
         status["subscription_modem_enabled_column"] = await check_column_exists('subscriptions', 'modem_enabled')
         status["subscription_purchased_traffic_column"] = await check_column_exists('subscriptions', 'purchased_traffic_gb')
@@ -7163,6 +7258,7 @@ async def check_migration_status():
             "users_promo_offer_discount_expires_column": "Колонка срока действия промо-скидки у пользователей",
             "users_referral_commission_percent_column": "Колонка процента реферальной комиссии у пользователей",
             "users_notification_settings_column": "Колонка notification_settings у пользователей",
+            "users_auth_type_column": "Колонка auth_type у пользователей (email-регистрация)",
             "subscription_crypto_link_column": "Колонка subscription_crypto_link в subscriptions",
             "subscription_modem_enabled_column": "Колонка modem_enabled в subscriptions",
             "subscription_purchased_traffic_column": "Колонка purchased_traffic_gb в subscriptions",

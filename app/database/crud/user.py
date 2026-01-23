@@ -417,7 +417,8 @@ async def add_user_balance(
         await db.refresh(user)
         
         
-        logger.info(f"💰 Баланс пользователя {user.telegram_id} изменен: {old_balance} → {user.balance_kopeks} (изменение: +{amount_kopeks})")
+        user_id_display = user.telegram_id or user.email or f"#{user.id}"
+        logger.info(f"💰 Баланс пользователя {user_id_display} изменен: {old_balance} → {user.balance_kopeks} (изменение: +{amount_kopeks})")
         return True
         
     except Exception as e:
@@ -464,8 +465,9 @@ async def subtract_user_balance(
     *,
     consume_promo_offer: bool = False,
 ) -> bool:
+    user_id_display = user.telegram_id or user.email or f"#{user.id}"
     logger.info(f"💸 ОТЛАДКА subtract_user_balance:")
-    logger.info(f"   👤 User ID: {user.id} (TG: {user.telegram_id})")
+    logger.info(f"   👤 User ID: {user.id} (ID: {user_id_display})")
     logger.info(f"   💰 Баланс до списания: {user.balance_kopeks} копеек")
     logger.info(f"   💸 Сумма к списанию: {amount_kopeks} копеек")
     logger.info(f"   📝 Описание: {description}")
@@ -958,7 +960,8 @@ async def delete_user(db: AsyncSession, user: User) -> bool:
     user.updated_at = datetime.utcnow()
     
     await db.commit()
-    logger.info(f"🗑️ Пользователь {user.telegram_id} помечен как удаленный")
+    user_id_display = user.telegram_id or user.email or f"#{user.id}"
+    logger.info(f"🗑️ Пользователь {user_id_display} помечен как удаленный")
     return True
 
 
@@ -1040,3 +1043,82 @@ async def get_users_with_active_subscriptions(db: AsyncSession) -> List[User]:
     )
 
     return result.scalars().unique().all()
+
+
+async def create_user_by_email(
+    db: AsyncSession,
+    email: str,
+    password_hash: str,
+    first_name: Optional[str] = None,
+    language: str = "ru",
+    referred_by_id: Optional[int] = None,
+) -> User:
+    """
+    Создать пользователя через email регистрацию (без Telegram).
+
+    Args:
+        db: Database session
+        email: Email address (will be unverified initially)
+        password_hash: Hashed password
+        first_name: Optional first name
+        language: User language
+        referred_by_id: Referrer user ID
+
+    Returns:
+        Created User object
+    """
+    referral_code = await create_unique_referral_code(db)
+    default_group = await _get_or_create_default_promo_group(db)
+
+    user = User(
+        telegram_id=None,  # Email-only user
+        auth_type="email",
+        email=email,
+        email_verified=False,
+        password_hash=password_hash,
+        username=None,
+        first_name=sanitize_telegram_name(first_name) if first_name else None,
+        last_name=None,
+        language=language,
+        referred_by_id=referred_by_id,
+        referral_code=referral_code,
+        balance_kopeks=0,
+        has_had_paid_subscription=False,
+        has_made_first_topup=False,
+        promo_group_id=default_group.id,
+    )
+
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+
+    user.promo_group = default_group
+    logger.info(f"✅ Создан email-пользователь {email} с id={user.id}")
+
+    # Emit event
+    try:
+        from app.services.event_emitter import event_emitter
+        await event_emitter.emit(
+            "user.created",
+            {
+                "user_id": user.id,
+                "email": user.email,
+                "auth_type": "email",
+                "first_name": user.first_name,
+                "referral_code": user.referral_code,
+                "referred_by_id": user.referred_by_id,
+            },
+            db=db,
+        )
+    except Exception as error:
+        logger.warning("Failed to emit user.created event: %s", error)
+
+    return user
+
+
+async def get_user_by_email(db: AsyncSession, email: str) -> Optional[User]:
+    """Get user by email address."""
+    result = await db.execute(
+        select(User).where(User.email == email)
+    )
+    return result.scalar_one_or_none()

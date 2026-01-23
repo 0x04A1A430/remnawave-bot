@@ -997,7 +997,8 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    telegram_id = Column(BigInteger, unique=True, index=True, nullable=False)
+    telegram_id = Column(BigInteger, unique=True, index=True, nullable=True)  # Nullable для email-only пользователей
+    auth_type = Column(String(20), default="telegram", nullable=False)  # "telegram" или "email"
     username = Column(String(255), nullable=True)
     first_name = Column(String(255), nullable=True)
     last_name = Column(String(255), nullable=True)
@@ -1065,8 +1066,23 @@ class User(Base):
 
     @property
     def full_name(self) -> str:
+        """Полное имя пользователя с поддержкой email-only юзеров."""
         parts = [self.first_name, self.last_name]
-        return " ".join(filter(None, parts)) or self.username or f"ID{self.telegram_id}"
+        name = " ".join(filter(None, parts))
+        if name:
+            return name
+        if self.username:
+            return self.username
+        if self.telegram_id:
+            return f"ID{self.telegram_id}"
+        if self.email:
+            return self.email.split('@')[0]
+        return f"User{self.id}"
+
+    @property
+    def is_email_user(self) -> bool:
+        """Пользователь зарегистрирован через email (без Telegram)."""
+        return self.auth_type == "email" and self.telegram_id is None
 
     def get_primary_promo_group(self):
         """Возвращает промогруппу с максимальным приоритетом."""
@@ -2066,7 +2082,7 @@ class SupportAuditLog(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     actor_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    actor_telegram_id = Column(BigInteger, nullable=False)
+    actor_telegram_id = Column(BigInteger, nullable=True)  # Can be None for email-only users
     is_moderator = Column(Boolean, default=False)
     action = Column(String(50), nullable=False)  # close_ticket, block_user_timed, block_user_perm, unblock_user
     ticket_id = Column(Integer, ForeignKey("tickets.id", ondelete="SET NULL"), nullable=True)
@@ -2398,7 +2414,7 @@ class ButtonClickLog(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     button_id = Column(String(100), nullable=False, index=True)  # ID кнопки
-    user_id = Column(BigInteger, ForeignKey("users.telegram_id", ondelete="SET NULL"), nullable=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     callback_data = Column(String(255), nullable=True)  # callback_data кнопки
     clicked_at = Column(DateTime, default=func.now(), index=True)
 
