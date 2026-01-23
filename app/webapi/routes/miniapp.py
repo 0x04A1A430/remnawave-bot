@@ -6811,7 +6811,8 @@ async def purchase_tariff_endpoint(
             "description": f"Продление тарифа {tariff.name} на {payload.period_days} дней",
         }
         await user_cart_service.save_user_cart(user.id, cart_data)
-        logger.info(f"Корзина тарифа сохранена для автопродления (miniapp) пользователя {user.telegram_id}")
+        user_id_display = user.telegram_id or user.email or f"#{user.id}"
+        logger.info(f"Корзина тарифа сохранена для автопродления (miniapp) пользователя {user_id_display}")
     except Exception as e:
         logger.error(f"Ошибка сохранения корзины тарифа (miniapp): {e}")
 

@@ -98,9 +98,13 @@ def _serialize_referral_item(referral: dict) -> PartnerReferralItem:
     balance_kopeks = int(referral.get("balance_kopeks") or 0)
     total_earned_kopeks = int(referral.get("total_earned_kopeks") or 0)
 
+    # Handle email-only users (telegram_id=None)
+    raw_telegram_id = referral.get("telegram_id")
+    telegram_id = int(raw_telegram_id) if raw_telegram_id is not None else None
+
     return PartnerReferralItem(
         id=int(referral.get("id")),
-        telegram_id=int(referral.get("telegram_id")),
+        telegram_id=telegram_id,
         full_name=str(referral.get("full_name")),
         username=referral.get("username"),
         created_at=referral.get("created_at"),

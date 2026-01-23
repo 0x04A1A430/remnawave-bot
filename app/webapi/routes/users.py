@@ -204,9 +204,11 @@ async def create_user_endpoint(
     _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> UserResponse:
-    existing = await get_user_by_telegram_id(db, payload.telegram_id)
-    if existing:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "User with this telegram_id already exists")
+    # Check for duplicate telegram_id only if provided (skip for email-only users)
+    if payload.telegram_id is not None:
+        existing = await get_user_by_telegram_id(db, payload.telegram_id)
+        if existing:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "User with this telegram_id already exists")
 
     user = await create_user(
         db,
