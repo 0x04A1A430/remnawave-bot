@@ -40,7 +40,7 @@ class SubscriptionEventResponse(BaseModel):
     user_id: int
     user_full_name: str
     user_username: Optional[str] = None
-    user_telegram_id: int
+    user_telegram_id: Optional[int] = None
     subscription_id: Optional[int] = None
     transaction_id: Optional[int] = None
     amount_kopeks: Optional[int] = None

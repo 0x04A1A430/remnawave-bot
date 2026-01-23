@@ -164,7 +164,7 @@ class RemnaWaveInboundsResponse(BaseModel):
 
 
 class RemnaWaveUserTrafficResponse(BaseModel):
-    telegram_id: int
+    telegram_id: Optional[int] = None
     used_traffic_bytes: int
     used_traffic_gb: float
     lifetime_used_traffic_bytes: int

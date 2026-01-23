@@ -123,7 +123,7 @@ class ServerConnectedUser(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     id: int
-    telegram_id: int = Field(alias="telegramId")
+    telegram_id: Optional[int] = Field(default=None, alias="telegramId")
     username: Optional[str] = None
     first_name: Optional[str] = Field(default=None, alias="firstName")
     last_name: Optional[str] = Field(default=None, alias="lastName")

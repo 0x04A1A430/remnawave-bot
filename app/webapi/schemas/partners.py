@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 class PartnerReferrerItem(BaseModel):
     id: int
-    telegram_id: int
+    telegram_id: Optional[int] = None
     username: Optional[str] = None
     first_name: Optional[str] = None
     last_name: Optional[str] = None
@@ -34,7 +34,7 @@ class PartnerReferrerListResponse(BaseModel):
 
 class PartnerReferralItem(BaseModel):
     id: int
-    telegram_id: int
+    telegram_id: Optional[int] = None
     full_name: str
     username: Optional[str] = None
     created_at: datetime
@@ -133,7 +133,7 @@ class DailyStatsResponse(BaseModel):
 class TopReferralItem(BaseModel):
     """Топ реферал."""
     id: int
-    telegram_id: int
+    telegram_id: Optional[int] = None
     username: Optional[str] = None
     first_name: Optional[str] = None
     last_name: Optional[str] = None
@@ -215,7 +215,7 @@ class GlobalPartnerStats(BaseModel):
 class TopReferrerItem(BaseModel):
     """Топ реферер."""
     id: int
-    telegram_id: int
+    telegram_id: Optional[int] = None
     username: Optional[str] = None
     first_name: Optional[str] = None
     last_name: Optional[str] = None

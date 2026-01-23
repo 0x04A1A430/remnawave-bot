@@ -41,7 +41,7 @@ class SupportAuditLogEntry(BaseModel):
 
     id: int
     actor_user_id: Optional[int]
-    actor_telegram_id: int
+    actor_telegram_id: Optional[int] = None
     is_moderator: bool
     action: str
     ticket_id: Optional[int]

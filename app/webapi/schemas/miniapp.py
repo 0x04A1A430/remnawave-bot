@@ -26,7 +26,7 @@ class MiniAppMaintenanceStatusResponse(BaseModel):
 
 
 class MiniAppSubscriptionUser(BaseModel):
-    telegram_id: int
+    telegram_id: Optional[int] = None
     username: Optional[str] = None
     first_name: Optional[str] = None
     last_name: Optional[str] = None
