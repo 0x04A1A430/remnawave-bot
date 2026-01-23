@@ -31,6 +31,12 @@ class Settings(BaseSettings):
     BOT_TOKEN: str
     BOT_USERNAME: Optional[str] = None
     ADMIN_IDS: str = ""
+    ADMIN_EMAILS: str = ""  # Comma-separated admin emails for email-only users
+
+    # Test email account for development/testing (bypasses email verification and SMTP)
+    TEST_EMAIL: str = ""  # e.g., test@example.com
+    TEST_EMAIL_PASSWORD: str = ""  # Password for test account
+
     SUPPORT_USERNAME: str = "@support"
     SUPPORT_MENU_ENABLED: bool = True
     SUPPORT_SYSTEM_MODE: str = "both"  # one of: tickets, contact, both
@@ -834,22 +840,77 @@ class Settings(BaseSettings):
         """Проверяет, используется ли SQLite"""
         return "sqlite" in self.get_database_url()
     
-    def is_admin(self, user_id: int) -> bool:
-        return user_id in self.get_admin_ids()
-    
+    def is_admin(self, telegram_id: Optional[int] = None, email: Optional[str] = None) -> bool:
+        """
+        Check if user is admin by telegram_id or email.
+
+        Args:
+            telegram_id: Telegram user ID
+            email: User email address
+
+        Returns:
+            True if user is admin
+        """
+        if telegram_id and telegram_id in self.get_admin_ids():
+            return True
+        if email and email.lower() in [e.lower() for e in self.get_admin_emails()]:
+            return True
+        return False
+
     def get_admin_ids(self) -> List[int]:
         try:
             admin_ids = self.ADMIN_IDS
-            
+
             if isinstance(admin_ids, str):
                 if not admin_ids.strip():
                     return []
                 return [int(x.strip()) for x in admin_ids.split(',') if x.strip()]
-            
+
             return []
-            
+
         except (ValueError, AttributeError):
             return []
+
+    def get_admin_emails(self) -> List[str]:
+        """Get list of admin emails for email-only users."""
+        try:
+            admin_emails = self.ADMIN_EMAILS
+
+            if isinstance(admin_emails, str):
+                if not admin_emails.strip():
+                    return []
+                return [e.strip().lower() for e in admin_emails.split(',') if e.strip()]
+
+            return []
+
+        except (ValueError, AttributeError):
+            return []
+
+    def get_test_email(self) -> Optional[str]:
+        """Get test email for development/testing."""
+        email = (self.TEST_EMAIL or "").strip().lower()
+        return email if email else None
+
+    def get_test_email_password(self) -> Optional[str]:
+        """Get test email password."""
+        password = (self.TEST_EMAIL_PASSWORD or "").strip()
+        return password if password else None
+
+    def is_test_email(self, email: str) -> bool:
+        """Check if email is the configured test email."""
+        test_email = self.get_test_email()
+        if not test_email:
+            return False
+        return email.lower().strip() == test_email
+
+    def validate_test_email_password(self, email: str, password: str) -> bool:
+        """Validate test email credentials."""
+        if not self.is_test_email(email):
+            return False
+        test_password = self.get_test_email_password()
+        if not test_password:
+            return False
+        return password == test_password
 
     def get_remnawave_auth_params(self) -> Dict[str, Optional[str]]:
         return {
@@ -886,17 +947,37 @@ class Settings(BaseSettings):
         *,
         full_name: str,
         username: Optional[str],
-        telegram_id: int
+        telegram_id: Optional[int],
+        email: Optional[str] = None,
+        user_id: Optional[int] = None
     ) -> str:
+        """
+        Форматирует описание пользователя для RemnaWave.
+
+        Поддерживает как Telegram-пользователей, так и email-only пользователей.
+        """
         template = self.REMNAWAVE_USER_DESCRIPTION_TEMPLATE or "Bot user: {full_name} {username}"
         template_for_formatting = template.replace("@{username}", "{username}")
 
         username_clean = (username or "").lstrip("@")
+
+        # Формируем идентификатор для description
+        identifier_parts = []
+        if telegram_id:
+            identifier_parts.append(f"TG: {telegram_id}")
+        if email:
+            identifier_parts.append(f"Email: {email}")
+        if user_id and not identifier_parts:
+            identifier_parts.append(f"ID: {user_id}")
+
         values = defaultdict(str, {
             "full_name": full_name,
             "username": f"@{username_clean}" if username_clean else "",
             "username_clean": username_clean,
-            "telegram_id": str(telegram_id)
+            "telegram_id": str(telegram_id) if telegram_id else "",
+            "email": email or "",
+            "user_id": str(user_id) if user_id else "",
+            "identifier": " | ".join(identifier_parts)
         })
 
         description = template_for_formatting.format_map(values)
@@ -913,18 +994,39 @@ class Settings(BaseSettings):
         *,
         full_name: str,
         username: Optional[str],
-        telegram_id: int
+        telegram_id: Optional[int],
+        email: Optional[str] = None,
+        user_id: Optional[int] = None
     ) -> str:
+        """
+        Форматирует username для RemnaWave.
+
+        Для email-пользователей (telegram_id=None) использует email prefix + user_id.
+        """
         template = self.REMNAWAVE_USER_USERNAME_TEMPLATE or "user_{telegram_id}"
 
         username_clean = (username or "").lstrip("@")
         full_name_value = full_name or ""
 
+        # Для email-пользователей формируем уникальный identifier
+        if telegram_id:
+            identifier = str(telegram_id)
+        elif email:
+            email_prefix = email.split('@')[0][:10]
+            identifier = f"email_{email_prefix}_{user_id}" if user_id else f"email_{email_prefix}"
+        elif user_id:
+            identifier = f"id_{user_id}"
+        else:
+            identifier = "unknown"
+
         values = defaultdict(str, {
             "full_name": full_name_value,
             "username": username_clean,
             "username_clean": username_clean,
-            "telegram_id": str(telegram_id),
+            "telegram_id": str(telegram_id) if telegram_id else identifier,
+            "identifier": identifier,
+            "email": email.split('@')[0] if email else "",
+            "user_id": str(user_id) if user_id else "",
         })
 
         raw_username = template.format_map(values).strip()
@@ -932,7 +1034,7 @@ class Settings(BaseSettings):
         sanitized_username = re.sub(r"_+", "_", sanitized_username).strip("._-")
 
         if not sanitized_username:
-            sanitized_username = f"user_{telegram_id}"
+            sanitized_username = f"user_{identifier}"
 
         return sanitized_username[:64]
 
