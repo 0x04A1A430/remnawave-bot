@@ -69,9 +69,10 @@ def get_effective_referral_commission_percent(user: User) -> int:
         percent = settings.REFERRAL_COMMISSION_PERCENT
 
     if percent < 0 or percent > 100:
+        user_id_display = getattr(user, "telegram_id", None) or getattr(user, "email", None) or f"#{getattr(user, 'id', 'unknown')}"
         logger.error(
             "❌ Некорректный процент комиссии для пользователя %s: %s",
-            getattr(user, "telegram_id", None),
+            user_id_display,
             percent,
         )
         return max(0, min(100, settings.REFERRAL_COMMISSION_PERCENT))
