@@ -9,13 +9,13 @@ from app.config import settings
 JWT_ALGORITHM = "HS256"
 
 
-def create_access_token(user_id: int, telegram_id: int) -> str:
+def create_access_token(user_id: int, telegram_id: Optional[int] = None) -> str:
     """
     Create a short-lived access token.
 
     Args:
         user_id: Database user ID
-        telegram_id: Telegram user ID
+        telegram_id: Telegram user ID (optional for email-only users)
 
     Returns:
         Encoded JWT access token
@@ -25,11 +25,14 @@ def create_access_token(user_id: int, telegram_id: int) -> str:
 
     payload = {
         "sub": str(user_id),
-        "telegram_id": telegram_id,
         "type": "access",
         "exp": expires,
         "iat": datetime.utcnow(),
     }
+
+    # Добавляем telegram_id только если он есть
+    if telegram_id is not None:
+        payload["telegram_id"] = telegram_id
 
     secret = settings.get_cabinet_jwt_secret()
     return jwt.encode(payload, secret, algorithm=JWT_ALGORITHM)

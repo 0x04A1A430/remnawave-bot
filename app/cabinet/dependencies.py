@@ -103,7 +103,12 @@ async def get_current_cabinet_user(
 
     # Check maintenance mode (allow admins to pass)
     if maintenance_service.is_maintenance_active():
-        if not settings.is_admin(user.telegram_id):
+        # Проверяем админа по telegram_id ИЛИ email
+        is_admin = settings.is_admin(
+            telegram_id=user.telegram_id,
+            email=user.email if user.email_verified else None
+        )
+        if not is_admin:
             status_info = maintenance_service.get_status_info()
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -114,32 +119,38 @@ async def get_current_cabinet_user(
                 },
             )
 
-    # Check required channel subscription
+    # Check required channel subscription - ТОЛЬКО для Telegram юзеров
     if settings.CHANNEL_IS_REQUIRED_SUB and settings.CHANNEL_SUB_ID:
-        # Skip check for admins
-        if not settings.is_admin(user.telegram_id):
-            try:
-                bot = _get_channel_check_bot()
-                chat_member = await bot.get_chat_member(
-                    chat_id=settings.CHANNEL_SUB_ID,
-                    user_id=user.telegram_id
-                )
-                # Не закрываем сессию - бот переиспользуется
-
-                if chat_member.status not in ["member", "administrator", "creator"]:
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail={
-                            "code": "channel_subscription_required",
-                            "message": "Please subscribe to our channel to continue",
-                            "channel_link": settings.CHANNEL_LINK,
-                        },
+        # Пропускаем проверку для email-only юзеров (нет telegram_id)
+        if user.telegram_id is not None:
+            # Проверяем админа по telegram_id ИЛИ email
+            is_admin = settings.is_admin(
+                telegram_id=user.telegram_id,
+                email=user.email if user.email_verified else None
+            )
+            if not is_admin:
+                try:
+                    bot = _get_channel_check_bot()
+                    chat_member = await bot.get_chat_member(
+                        chat_id=settings.CHANNEL_SUB_ID,
+                        user_id=user.telegram_id
                     )
-            except HTTPException:
-                raise
-            except Exception as e:
-                logger.warning(f"Failed to check channel subscription for user {user.telegram_id}: {e}")
-                # Don't block user if check fails
+                    # Не закрываем сессию - бот переиспользуется
+
+                    if chat_member.status not in ["member", "administrator", "creator"]:
+                        raise HTTPException(
+                            status_code=status.HTTP_403_FORBIDDEN,
+                            detail={
+                                "code": "channel_subscription_required",
+                                "message": "Please subscribe to our channel to continue",
+                                "channel_link": settings.CHANNEL_LINK,
+                            },
+                        )
+                except HTTPException:
+                    raise
+                except Exception as e:
+                    logger.warning(f"Failed to check channel subscription for user {user.telegram_id}: {e}")
+                    # Don't block user if check fails
 
     return user
 
@@ -181,7 +192,7 @@ async def get_current_admin_user(
     """
     Get current authenticated admin user.
 
-    Checks if the user's telegram_id is in ADMIN_IDS from settings.
+    Checks if the user is admin by telegram_id or email.
 
     Args:
         user: Authenticated User object
@@ -192,7 +203,11 @@ async def get_current_admin_user(
     Raises:
         HTTPException: If user is not an admin
     """
-    if not settings.is_admin(user.telegram_id):
+    is_admin = settings.is_admin(
+        telegram_id=user.telegram_id,
+        email=user.email if user.email_verified else None
+    )
+    if not is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access required",

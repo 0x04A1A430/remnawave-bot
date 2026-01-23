@@ -1561,7 +1561,7 @@ async def purchase_tariff(
                     "description": f"Продление тарифа {tariff.name} на {period_days} дней",
                 }
                 await user_cart_service.save_user_cart(user.id, cart_data)
-                logger.info(f"Tariff cart saved for auto-renewal (cabinet) user {user.telegram_id}")
+                logger.info(f"Tariff cart saved for auto-renewal (cabinet) user {user.id}")
             except Exception as e:
                 logger.error(f"Error saving tariff cart (cabinet): {e}")
 
@@ -1717,7 +1717,7 @@ async def purchase_devices(
         await db.refresh(user)
 
         logger.info(
-            f"User {user.telegram_id} purchased {request.devices} devices for {price_kopeks} kopeks"
+            f"User {user.id} purchased {request.devices} devices for {price_kopeks} kopeks"
         )
 
         return {
@@ -3318,9 +3318,12 @@ async def refresh_traffic(
             detail="No active subscription",
         )
 
+    # Используем user.id для rate limit и кеша (работает и для email-пользователей)
+    user_cache_id = user.id
+
     # Check rate limit
     is_limited = await RateLimitCache.is_rate_limited(
-        user.telegram_id,
+        user_cache_id,
         "traffic_refresh",
         TRAFFIC_REFRESH_RATE_LIMIT,
         TRAFFIC_REFRESH_RATE_WINDOW,
@@ -3328,7 +3331,7 @@ async def refresh_traffic(
 
     if is_limited:
         # Check if we have cached data
-        traffic_cache_key = cache_key("traffic", user.telegram_id)
+        traffic_cache_key = cache_key("traffic", user_cache_id)
         cached_data = await cache.get(traffic_cache_key)
 
         if cached_data:
@@ -3349,7 +3352,14 @@ async def refresh_traffic(
     # Fetch traffic from RemnaWave
     try:
         remnawave_service = RemnaWaveService()
-        traffic_stats = await remnawave_service.get_user_traffic_stats(user.telegram_id)
+
+        # Для email-пользователей (без telegram_id) используем UUID
+        if user.telegram_id:
+            traffic_stats = await remnawave_service.get_user_traffic_stats(user.telegram_id)
+        elif user.remnawave_uuid:
+            traffic_stats = await remnawave_service.get_user_traffic_stats_by_uuid(user.remnawave_uuid)
+        else:
+            traffic_stats = None
 
         if not traffic_stats:
             # Return current database values if RemnaWave unavailable
@@ -3399,7 +3409,7 @@ async def refresh_traffic(
         }
 
         # Cache the result
-        traffic_cache_key = cache_key("traffic", user.telegram_id)
+        traffic_cache_key = cache_key("traffic", user_cache_id)
         await cache.set(traffic_cache_key, traffic_data, TRAFFIC_CACHE_TTL)
 
         return {
@@ -3410,7 +3420,7 @@ async def refresh_traffic(
         }
 
     except Exception as e:
-        logger.error(f"Error refreshing traffic for user {user.telegram_id}: {e}")
+        logger.error(f"Error refreshing traffic for user {user.id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to refresh traffic data",

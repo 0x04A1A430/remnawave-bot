@@ -29,7 +29,8 @@ router = APIRouter(prefix="/admin/tickets", tags=["Cabinet Admin Tickets"])
 class AdminTicketUserInfo(BaseModel):
     """User info for admin view."""
     id: int
-    telegram_id: int
+    telegram_id: Optional[int] = None  # Can be None for email-only users
+    email: Optional[str] = None
     username: Optional[str] = None
     first_name: Optional[str] = None
     last_name: Optional[str] = None
@@ -148,6 +149,7 @@ def _user_to_info(user: User) -> AdminTicketUserInfo:
     return AdminTicketUserInfo(
         id=user.id,
         telegram_id=user.telegram_id,
+        email=user.email,
         username=user.username,
         first_name=user.first_name,
         last_name=user.last_name,

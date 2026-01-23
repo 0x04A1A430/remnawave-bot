@@ -63,7 +63,7 @@ class UserPromoGroupInfo(BaseModel):
 class UserListItem(BaseModel):
     """User item in list."""
     id: int
-    telegram_id: int
+    telegram_id: Optional[int] = None
     username: Optional[str] = None
     first_name: Optional[str] = None
     last_name: Optional[str] = None
@@ -129,7 +129,7 @@ class UserReferralInfo(BaseModel):
 class UserDetailResponse(BaseModel):
     """Detailed user information."""
     id: int
-    telegram_id: int
+    telegram_id: Optional[int] = None
     username: Optional[str] = None
     first_name: Optional[str] = None
     last_name: Optional[str] = None
@@ -429,7 +429,7 @@ class SyncToPanelResponse(BaseModel):
 class PanelSyncStatusResponse(BaseModel):
     """Panel sync status for user."""
     user_id: int
-    telegram_id: int
+    telegram_id: Optional[int] = None
     remnawave_uuid: Optional[str] = None
     last_sync: Optional[datetime] = None
 

@@ -144,7 +144,7 @@ class CampaignRegistrationItem(BaseModel):
     """Campaign registration item."""
     id: int
     user_id: int
-    telegram_id: int
+    telegram_id: Optional[int] = None
     username: Optional[str] = None
     first_name: Optional[str] = None
     bonus_type: str

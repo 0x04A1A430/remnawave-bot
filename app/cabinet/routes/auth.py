@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.database.models import User, CabinetRefreshToken
-from app.database.crud.user import get_user_by_telegram_id, get_user_by_id, create_user
+from app.database.crud.user import get_user_by_telegram_id, get_user_by_id, create_user, create_user_by_email
 from app.config import settings
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
@@ -19,6 +19,7 @@ from ..schemas.auth import (
     TelegramAuthRequest,
     TelegramWidgetAuthRequest,
     EmailRegisterRequest,
+    EmailRegisterStandaloneRequest,
     EmailVerifyRequest,
     EmailLoginRequest,
     RefreshTokenRequest,
@@ -67,6 +68,7 @@ def _user_to_response(user: User) -> UserResponse:
         referral_code=user.referral_code,
         language=user.language,
         created_at=user.created_at,
+        auth_type=getattr(user, 'auth_type', 'telegram'),  # Поддержка старых записей
     )
 
 
@@ -315,6 +317,90 @@ async def register_email(
     }
 
 
+@router.post("/email/register/standalone", response_model=AuthResponse)
+async def register_email_standalone(
+    request: EmailRegisterStandaloneRequest,
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """
+    Register new account with email and password.
+
+    This endpoint creates a new user WITHOUT requiring Telegram authentication.
+    An email verification link will be sent to confirm the email address.
+
+    The user can login immediately but some features may be restricted
+    until email is verified.
+
+    If TEST_EMAIL is configured, test email accounts are auto-verified.
+    """
+    # Check if this is a test email registration
+    is_test_email = settings.is_test_email(request.email)
+
+    if is_test_email:
+        # Validate test email password
+        if not settings.validate_test_email_password(request.email, request.password):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid test email password",
+            )
+        logger.info(f"Test email registration: {request.email}")
+
+    # Проверить что email не занят
+    existing = await db.execute(
+        select(User).where(User.email == request.email)
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This email is already registered",
+        )
+
+    # Хешировать пароль
+    password_hash = hash_password(request.password)
+
+    # Создать пользователя
+    user = await create_user_by_email(
+        db=db,
+        email=request.email,
+        password_hash=password_hash,
+        first_name=request.first_name,
+        language=request.language,
+    )
+
+    # Для тестового email - автоматически верифицировать
+    if is_test_email:
+        user.email_verified = True
+        user.email_verified_at = datetime.utcnow()
+        await db.commit()
+        logger.info(f"Test email auto-verified: {request.email}, user_id={user.id}")
+    else:
+        # Сгенерировать токен верификации
+        verification_token = generate_verification_token()
+        verification_expires = get_verification_expires_at()
+
+        user.email_verification_token = verification_token
+        user.email_verification_expires = verification_expires
+        await db.commit()
+
+        # Отправить email верификации
+        if settings.is_cabinet_email_verification_enabled() and email_service.is_configured():
+            cabinet_url = getattr(settings, 'CABINET_URL', 'https://example.com/cabinet')
+            verification_url = f"{cabinet_url}/verify-email?token={verification_token}"
+            await asyncio.to_thread(
+                email_service.send_verification_email,
+                to_email=request.email,
+                verification_token=verification_token,
+                verification_url=verification_url,
+                username=user.first_name or "User",
+            )
+
+    # Создать токены и вернуть ответ
+    response = _create_auth_response(user)
+    await _store_refresh_token(db, user.id, response.refresh_token)
+
+    return response
+
+
 @router.post("/email/verify")
 async def verify_email(
     request: EmailVerifyRequest,
@@ -406,7 +492,13 @@ async def login_email(
     request: EmailLoginRequest,
     db: AsyncSession = Depends(get_cabinet_db),
 ):
-    """Login with email and password."""
+    """Login with email and password.
+
+    Test email accounts (configured via TEST_EMAIL) bypass email verification.
+    """
+    # Check if this is a test email login
+    is_test_email = settings.is_test_email(request.email)
+
     # Find user by email
     result = await db.execute(
         select(User).where(User.email == request.email)
@@ -414,10 +506,25 @@ async def login_email(
     user = result.scalar_one_or_none()
 
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password",
-        )
+        # For test email - auto-create user if not exists
+        if is_test_email and settings.validate_test_email_password(request.email, request.password):
+            logger.info(f"Test email login - creating new user: {request.email}")
+            password_hash = hash_password(request.password)
+            user = await create_user_by_email(
+                db=db,
+                email=request.email,
+                password_hash=password_hash,
+                first_name="Test User",
+                language="ru",
+            )
+            user.email_verified = True
+            user.email_verified_at = datetime.utcnow()
+            await db.commit()
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid email or password",
+            )
 
     if not user.password_hash:
         raise HTTPException(
@@ -431,7 +538,8 @@ async def login_email(
             detail="Invalid email or password",
         )
 
-    if not user.email_verified:
+    # Test email bypasses verification check
+    if not user.email_verified and not is_test_email:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Please verify your email first",
@@ -621,5 +729,8 @@ async def check_is_admin(
     user: User = Depends(get_current_cabinet_user),
 ):
     """Check if current user is an admin."""
-    is_admin = settings.is_admin(user.telegram_id)
+    is_admin = settings.is_admin(
+        telegram_id=user.telegram_id,
+        email=user.email if user.email_verified else None
+    )
     return {"is_admin": is_admin}

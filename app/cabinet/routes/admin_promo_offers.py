@@ -29,7 +29,7 @@ from app.database.crud.promo_offer_template import (
     list_promo_offer_templates,
     update_promo_offer_template,
 )
-from app.database.crud.user import get_user_by_telegram_id
+from app.database.crud.user import get_user_by_telegram_id, get_user_by_email
 from app.database.models import DiscountOffer, PromoOfferLog, PromoOfferTemplate, User
 from app.handlers.admin.messages import get_custom_users, get_target_users
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button
@@ -45,7 +45,8 @@ router = APIRouter(prefix="/admin/promo-offers", tags=["Admin Promo Offers"])
 
 class PromoOfferUserInfo(BaseModel):
     id: int
-    telegram_id: int
+    telegram_id: Optional[int] = None  # Can be None for email-only users
+    email: Optional[str] = None
     username: Optional[str] = None
     first_name: Optional[str] = None
     last_name: Optional[str] = None
@@ -121,6 +122,7 @@ class PromoOfferBroadcastRequest(BaseModel):
     target: Optional[str] = None
     user_id: Optional[int] = None
     telegram_id: Optional[int] = None
+    email: Optional[str] = Field(None, description="User email (for email-only users)")
     # Telegram notification options
     send_notification: bool = Field(False, description="Send Telegram notification to users")
     message_text: Optional[str] = Field(None, description="Custom message text (HTML)")
@@ -175,6 +177,7 @@ def _serialize_user(user: Optional[User]) -> Optional[PromoOfferUserInfo]:
     return PromoOfferUserInfo(
         id=user.id,
         telegram_id=user.telegram_id,
+        email=user.email,
         username=user.username,
         first_name=user.first_name,
         last_name=user.last_name,
@@ -422,6 +425,11 @@ async def _send_promo_notifications(
     semaphore = asyncio.Semaphore(20)
 
     async def send_single(user: User, offer: DiscountOffer) -> bool:
+        # Skip email-only users (no telegram_id)
+        if not user.telegram_id:
+            logger.debug(f"Skipping promo notification for email-only user {user.id}")
+            return False
+
         async with semaphore:
             try:
                 keyboard = InlineKeyboardMarkup(
@@ -506,11 +514,23 @@ async def broadcast_offer(
     if payload.telegram_id is not None:
         user = await get_user_by_telegram_id(db, payload.telegram_id)
         if not user:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found by telegram_id")
         if target_user_id and target_user_id != user.id:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
                 "Provided user_id does not match telegram_id",
+            )
+        target_user_id = user.id
+
+    # Support email lookup for email-only users
+    if payload.email is not None and user is None:
+        user = await get_user_by_email(db, payload.email)
+        if not user:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found by email")
+        if target_user_id and target_user_id != user.id:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Provided user_id does not match email",
             )
         target_user_id = user.id
 

@@ -133,7 +133,8 @@ class DashboardStats(BaseModel):
 class TopReferrerItem(BaseModel):
     """Single referrer in top list."""
     user_id: int
-    telegram_id: int
+    telegram_id: Optional[int] = None  # Can be None for email-only users
+    email: Optional[str] = None
     username: Optional[str] = None
     display_name: str
     invited_count: int
@@ -182,7 +183,8 @@ class RecentPaymentItem(BaseModel):
     """Single recent payment."""
     id: int
     user_id: int
-    telegram_id: int
+    telegram_id: Optional[int] = None  # Can be None for email-only users
+    email: Optional[str] = None
     username: Optional[str] = None
     display_name: str
     amount_kopeks: int
@@ -750,12 +752,17 @@ async def get_top_referrers(
                     display_name += f" {user.last_name}"
             elif user.username:
                 display_name = f"@{user.username}"
-            else:
+            elif user.telegram_id:
                 display_name = f"ID{user.telegram_id}"
+            elif user.email:
+                display_name = user.email.split('@')[0]
+            else:
+                display_name = f"User#{user.id}"
 
             referrer_items.append(TopReferrerItem(
                 user_id=user.id,
                 telegram_id=user.telegram_id,
+                email=user.email,
                 username=user.username,
                 display_name=display_name,
                 invited_count=data.get('total_invited', 0),
@@ -908,13 +915,18 @@ async def get_recent_payments(
                     display_name += f" {user.last_name}"
             elif user.username:
                 display_name = f"@{user.username}"
-            else:
+            elif user.telegram_id:
                 display_name = f"ID{user.telegram_id}"
+            elif user.email:
+                display_name = user.email.split('@')[0]
+            else:
+                display_name = f"User#{user.id}"
 
             payment_items.append(RecentPaymentItem(
                 id=trans.id,
                 user_id=user.id,
                 telegram_id=user.telegram_id,
+                email=user.email,
                 username=user.username,
                 display_name=display_name,
                 amount_kopeks=trans.amount_kopeks,

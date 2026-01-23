@@ -207,7 +207,7 @@ async def _sync_subscription_to_panel(db: AsyncSession, user: User, subscription
             panel_uuid = user.remnawave_uuid
 
             # Try to find existing user
-            if not panel_uuid:
+            if not panel_uuid and user.telegram_id:
                 existing_users = await api.get_user_by_telegram_id(user.telegram_id)
                 if existing_users:
                     panel_uuid = existing_users[0].uuid
@@ -1341,7 +1341,7 @@ async def get_user_sync_status(
         from app.services.remnawave_service import RemnaWaveService
 
         service = RemnaWaveService()
-        if service.is_configured:
+        if service.is_configured and user.telegram_id:
             async with service.get_api_client() as api:
                 panel_users = await api.get_user_by_telegram_id(user.telegram_id)
                 if panel_users:
@@ -1463,6 +1463,14 @@ async def sync_user_from_panel(
         changes = {}
         errors = []
         panel_info = None
+
+        # Email-only users cannot be synced from panel by telegram_id
+        if not user.telegram_id:
+            return SyncFromPanelResponse(
+                success=False,
+                message="Cannot sync email-only user",
+                errors=["Email-only users don't have telegram_id for panel lookup"],
+            )
 
         async with service.get_api_client() as api:
             # Find user in panel
@@ -1697,7 +1705,7 @@ async def sync_user_to_panel(
 
         async with service.get_api_client() as api:
             # Try to find existing user in panel
-            if not panel_uuid:
+            if not panel_uuid and user.telegram_id:
                 existing_users = await api.get_user_by_telegram_id(user.telegram_id)
                 if existing_users:
                     panel_uuid = existing_users[0].uuid

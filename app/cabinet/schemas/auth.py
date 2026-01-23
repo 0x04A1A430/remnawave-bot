@@ -65,7 +65,7 @@ class TokenResponse(BaseModel):
 class UserResponse(BaseModel):
     """User data response."""
     id: int
-    telegram_id: int
+    telegram_id: Optional[int] = None  # Nullable для email-only пользователей
     username: Optional[str] = None
     first_name: Optional[str] = None
     last_name: Optional[str] = None
@@ -76,9 +76,18 @@ class UserResponse(BaseModel):
     referral_code: Optional[str] = None
     language: str = "ru"
     created_at: datetime
+    auth_type: str = "telegram"  # "telegram" или "email"
 
     class Config:
         from_attributes = True
+
+
+class EmailRegisterStandaloneRequest(BaseModel):
+    """Request to register new account with email (no Telegram required)."""
+    email: EmailStr = Field(..., description="Email address")
+    password: str = Field(..., min_length=8, max_length=128, description="Password (min 8 chars)")
+    first_name: Optional[str] = Field(None, max_length=64, description="First name")
+    language: str = Field("ru", description="Preferred language")
 
 
 class AuthResponse(BaseModel):
