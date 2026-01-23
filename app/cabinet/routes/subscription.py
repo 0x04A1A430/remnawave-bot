@@ -979,8 +979,8 @@ async def _build_tariff_response(
     periods = []
     if tariff.period_prices:
         for period_str, price_kopeks in sorted(tariff.period_prices.items(), key=lambda x: int(x[0])):
-            if int(price_kopeks) <= 0:
-                continue  # Skip disabled periods
+            if int(price_kopeks) < 0:
+                continue  # Skip disabled periods (negative price)
             period_days = int(period_str)
 
             # Apply promo group discount for this period
