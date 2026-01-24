@@ -111,6 +111,10 @@ class CloudPaymentsPaymentMixin:
             logger.error("Не удалось создать локальную запись CloudPayments платежа")
             return None
 
+        # CRITICAL: Commit immediately so webhook can find the payment
+        # (webhook runs in a different database session)
+        await db.commit()
+
         logger.info(
             "Создан CloudPayments платёж: invoice=%s, amount=%s₽, user=%s",
             invoice_id,
@@ -221,8 +225,8 @@ class CloudPaymentsPaymentMixin:
             logger.error("Пользователь не найден: id=%s", payment.user_id)
             return False
 
-        # Add balance
-        await add_user_balance(db, user, amount_kopeks)
+        # Add balance (don't create transaction here - we create it explicitly below with external_id)
+        await add_user_balance(db, user, amount_kopeks, create_transaction=False)
 
         # Create transaction record
         from app.database.crud.transaction import create_transaction
@@ -309,7 +313,46 @@ class CloudPaymentsPaymentMixin:
         payment = await payment_module.get_cloudpayments_payment_by_invoice_id(db, invoice_id)
 
         if payment:
+            # CRITICAL: If payment was already credited, reverse the balance
+            if payment.is_paid:
+                logger.warning(
+                    "CloudPayments: получен Declined для уже оплаченного платежа! "
+                    "invoice=%s, amount=%s, reversing balance",
+                    invoice_id,
+                    payment.amount_kopeks,
+                )
+
+                # Get user and subtract balance
+                from app.database.crud.user import get_user_by_id, subtract_user_balance
+                user = await get_user_by_id(db, payment.user_id)
+
+                if user:
+                    await subtract_user_balance(
+                        db, user, payment.amount_kopeks,
+                        f"Возврат: платёж CloudPayments отклонён ({reason})"
+                    )
+
+                    # Create reversal transaction
+                    from app.database.crud.transaction import create_transaction
+                    await create_transaction(
+                        db=db,
+                        user_id=user.id,
+                        type=TransactionType.WITHDRAWAL,
+                        amount_kopeks=payment.amount_kopeks,
+                        description=f"Возврат: платёж CloudPayments отклонён ({reason})",
+                        payment_method=PaymentMethod.CLOUDPAYMENTS,
+                        external_id=f"reversal_{invoice_id}",
+                        is_completed=True,
+                    )
+
+                    logger.info(
+                        "CloudPayments: баланс возвращён для пользователя %s, сумма %s₽",
+                        user.telegram_id,
+                        payment.amount_kopeks / 100,
+                    )
+
             payment.status = "failed"
+            payment.is_paid = False
             payment.callback_payload = webhook_data
             await db.commit()
 
