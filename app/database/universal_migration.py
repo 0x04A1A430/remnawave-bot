@@ -6295,6 +6295,70 @@ async def add_subscription_traffic_reset_at_column() -> bool:
         return False
 
 
+async def migrate_cloudpayments_transaction_id_to_bigint() -> bool:
+    """
+    Миграция колонки transaction_id_cp в cloudpayments_payments с INTEGER на BIGINT.
+    CloudPayments transaction IDs могут превышать максимум int32 (2,147,483,647).
+    """
+    try:
+        table_exists = await check_table_exists('cloudpayments_payments')
+        if not table_exists:
+            logger.info("ℹ️ Таблица cloudpayments_payments не существует, пропускаем миграцию")
+            return True
+
+        db_type = await get_database_type()
+
+        async with engine.begin() as conn:
+            if db_type == 'postgresql':
+                # Проверяем текущий тип колонки
+                result = await conn.execute(text("""
+                    SELECT data_type
+                    FROM information_schema.columns
+                    WHERE table_name = 'cloudpayments_payments'
+                    AND column_name = 'transaction_id_cp'
+                """))
+                row = result.fetchone()
+
+                if row and row[0] == 'bigint':
+                    logger.info("ℹ️ Колонка transaction_id_cp уже имеет тип BIGINT")
+                    return True
+
+                # Меняем тип на BIGINT
+                await conn.execute(text(
+                    "ALTER TABLE cloudpayments_payments ALTER COLUMN transaction_id_cp TYPE BIGINT"
+                ))
+                logger.info("✅ Колонка transaction_id_cp изменена на BIGINT")
+
+            elif db_type == 'mysql':
+                # Проверяем текущий тип колонки
+                result = await conn.execute(text("""
+                    SELECT DATA_TYPE
+                    FROM INFORMATION_SCHEMA.COLUMNS
+                    WHERE TABLE_NAME = 'cloudpayments_payments'
+                    AND COLUMN_NAME = 'transaction_id_cp'
+                """))
+                row = result.fetchone()
+
+                if row and row[0].lower() == 'bigint':
+                    logger.info("ℹ️ Колонка transaction_id_cp уже имеет тип BIGINT")
+                    return True
+
+                await conn.execute(text(
+                    "ALTER TABLE cloudpayments_payments MODIFY transaction_id_cp BIGINT"
+                ))
+                logger.info("✅ Колонка transaction_id_cp изменена на BIGINT")
+
+            elif db_type == 'sqlite':
+                # SQLite не поддерживает ALTER COLUMN, но INTEGER в SQLite уже 64-bit
+                logger.info("ℹ️ SQLite использует 64-bit INTEGER по умолчанию, миграция не требуется")
+
+            return True
+
+    except Exception as error:
+        logger.error(f"❌ Ошибка миграции transaction_id_cp на BIGINT: {error}")
+        return False
+
+
 async def run_universal_migration():
     logger.info("=== НАЧАЛО УНИВЕРСАЛЬНОЙ МИГРАЦИИ ===")
 
@@ -6918,6 +6982,13 @@ async def run_universal_migration():
             logger.info("✅ Таблицы колеса удачи готовы")
         else:
             logger.warning("⚠️ Проблемы с таблицами колеса удачи")
+
+        logger.info("=== МИГРАЦИЯ CLOUDPAYMENTS TRANSACTION_ID НА BIGINT ===")
+        cloudpayments_bigint_ready = await migrate_cloudpayments_transaction_id_to_bigint()
+        if cloudpayments_bigint_ready:
+            logger.info("✅ Колонка transaction_id_cp в cloudpayments_payments обновлена до BIGINT")
+        else:
+            logger.warning("⚠️ Проблемы с миграцией transaction_id_cp")
 
         async with engine.begin() as conn:
             total_subs = await conn.execute(text("SELECT COUNT(*) FROM subscriptions"))
