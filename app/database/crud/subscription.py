@@ -1984,6 +1984,7 @@ async def get_daily_subscriptions_for_charge(db: AsyncSession) -> List[Subscript
                 Tariff.is_active.is_(True),
                 Subscription.status == SubscriptionStatus.ACTIVE.value,
                 Subscription.is_daily_paused.is_(False),
+                Subscription.is_trial.is_(False),  # Не списываем с триальных подписок
                 # Списания ещё не было ИЛИ прошло более 24 часов
                 (
                     (Subscription.last_daily_charge_at.is_(None)) |
@@ -1998,6 +1999,45 @@ async def get_daily_subscriptions_for_charge(db: AsyncSession) -> List[Subscript
 
     logger.info(
         f"🔍 Найдено {len(subscriptions)} суточных подписок для списания"
+    )
+
+    return list(subscriptions)
+
+
+async def get_disabled_daily_subscriptions_for_resume(
+    db: AsyncSession,
+) -> List[Subscription]:
+    """
+    Получает список DISABLED суточных подписок, которые можно возобновить.
+    Подписки с достаточным балансом пользователя будут возобновлены.
+    """
+    from app.database.models import Tariff, User
+
+    query = (
+        select(Subscription)
+        .join(Tariff, Subscription.tariff_id == Tariff.id)
+        .join(User, Subscription.user_id == User.id)
+        .options(
+            selectinload(Subscription.user),
+            selectinload(Subscription.tariff),
+        )
+        .where(
+            and_(
+                Tariff.is_daily.is_(True),
+                Tariff.is_active.is_(True),
+                Subscription.status == SubscriptionStatus.DISABLED.value,
+                Subscription.is_trial.is_(False),
+                # Баланс пользователя >= суточной цены тарифа
+                User.balance_kopeks >= Tariff.daily_price_kopeks,
+            )
+        )
+    )
+
+    result = await db.execute(query)
+    subscriptions = result.scalars().all()
+
+    logger.info(
+        f"🔍 Найдено {len(subscriptions)} DISABLED суточных подписок для возобновления"
     )
 
     return list(subscriptions)

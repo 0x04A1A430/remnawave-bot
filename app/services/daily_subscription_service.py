@@ -16,8 +16,10 @@ from app.config import settings
 from app.database.database import AsyncSessionLocal
 from app.database.crud.subscription import (
     get_daily_subscriptions_for_charge,
+    get_disabled_daily_subscriptions_for_resume,
     update_daily_charge_time,
     suspend_daily_subscription_insufficient_balance,
+    resume_daily_subscription,
 )
 from app.database.crud.user import subtract_user_balance, get_user_by_id
 from app.database.crud.transaction import create_transaction
@@ -94,6 +96,106 @@ class DailySubscriptionService:
             logger.error(f"Ошибка при получении подписок для списания: {e}", exc_info=True)
 
         return stats
+
+    async def process_disabled_subscriptions_resume(self) -> dict:
+        """
+        Проверяет DISABLED суточные подписки и возобновляет их,
+        если у пользователя достаточно средств на балансе.
+
+        Returns:
+            dict: Статистика обработки
+        """
+        stats = {
+            "checked": 0,
+            "resumed": 0,
+            "errors": 0,
+        }
+
+        try:
+            async with AsyncSessionLocal() as db:
+                try:
+                    subscriptions = await get_disabled_daily_subscriptions_for_resume(db)
+                    stats["checked"] = len(subscriptions)
+
+                    for subscription in subscriptions:
+                        try:
+                            user = subscription.user
+                            tariff = subscription.tariff
+
+                            if not user or not tariff:
+                                continue
+
+                            # Возобновляем подписку
+                            await resume_daily_subscription(db, subscription)
+
+                            # Синхронизируем с Remnawave
+                            try:
+                                from app.services.subscription_service import SubscriptionService
+                                subscription_service = SubscriptionService()
+                                await subscription_service.update_remnawave_user(db, subscription)
+                            except Exception as sync_err:
+                                logger.warning(f"Не удалось синхронизировать с RemnaWave: {sync_err}")
+
+                            # Уведомляем пользователя
+                            if self._bot:
+                                await self._notify_subscription_resumed(user, subscription)
+
+                            stats["resumed"] += 1
+                            logger.info(
+                                f"✅ Суточная подписка {subscription.id} автоматически возобновлена "
+                                f"(user_id={user.id}, баланс={user.balance_kopeks})"
+                            )
+
+                        except Exception as e:
+                            logger.error(
+                                f"Ошибка возобновления подписки {subscription.id}: {e}",
+                                exc_info=True
+                            )
+                            stats["errors"] += 1
+
+                    await db.commit()
+
+                except Exception as e:
+                    logger.error(f"Ошибка при возобновлении подписок: {e}", exc_info=True)
+                    await db.rollback()
+
+        except Exception as e:
+            logger.error(f"Ошибка при получении подписок для возобновления: {e}", exc_info=True)
+
+        return stats
+
+    async def _notify_subscription_resumed(self, user, subscription):
+        """Уведомляет пользователя о возобновлении подписки."""
+        if not self._bot:
+            return
+
+        try:
+            from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+
+            message = (
+                f"✅ <b>Подписка возобновлена!</b>\n\n"
+                f"Ваш баланс достаточен для суточной оплаты.\n"
+                f"Подписка автоматически активирована.\n\n"
+                f"Следующее списание через 24 часа."
+            )
+
+            keyboard = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(
+                        text="📱 Моя подписка",
+                        callback_data="menu_subscription"
+                    )],
+                ]
+            )
+
+            await self._bot.send_message(
+                chat_id=user.telegram_id,
+                text=message,
+                reply_markup=keyboard,
+                parse_mode="HTML",
+            )
+        except Exception as e:
+            logger.warning(f"Не удалось отправить уведомление о возобновлении: {e}")
 
     async def _process_single_charge(self, db, subscription) -> str:
         """
@@ -460,6 +562,14 @@ class DailySubscriptionService:
 
         while self._running:
             try:
+                # Сначала возобновляем DISABLED подписки если баланс достаточный
+                resume_stats = await self.process_disabled_subscriptions_resume()
+                if resume_stats["resumed"] > 0:
+                    logger.info(
+                        f"📊 Возобновление подписок: проверено={resume_stats['checked']}, "
+                        f"возобновлено={resume_stats['resumed']}, ошибок={resume_stats['errors']}"
+                    )
+
                 # Обработка суточных списаний
                 stats = await self.process_daily_charges()
 
