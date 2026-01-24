@@ -514,7 +514,7 @@ class CloudPaymentsPayment(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
 
     # CloudPayments идентификаторы
-    transaction_id_cp = Column(Integer, unique=True, nullable=True, index=True)  # TransactionId от CloudPayments
+    transaction_id_cp = Column(BigInteger, unique=True, nullable=True, index=True)  # TransactionId от CloudPayments
     invoice_id = Column(String(255), unique=True, nullable=False, index=True)  # Наш InvoiceId
 
     amount_kopeks = Column(Integer, nullable=False)
