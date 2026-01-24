@@ -222,7 +222,7 @@ class CloudPaymentsPaymentMixin:
             return False
 
         # Add balance
-        await add_user_balance(db, user.id, amount_kopeks)
+        await add_user_balance(db, user, amount_kopeks)
 
         # Create transaction record
         from app.database.crud.transaction import create_transaction
