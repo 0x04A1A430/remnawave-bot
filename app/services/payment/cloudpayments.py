@@ -229,7 +229,7 @@ class CloudPaymentsPaymentMixin:
         transaction = await create_transaction(
             db=db,
             user_id=user.id,
-            type_=TransactionType.DEPOSIT,
+            type=TransactionType.DEPOSIT,
             amount_kopeks=amount_kopeks,
             description=payment.description or settings.CLOUDPAYMENTS_DESCRIPTION,
             payment_method=PaymentMethod.CLOUDPAYMENTS,
