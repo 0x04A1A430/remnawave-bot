@@ -2,7 +2,6 @@
 
 import logging
 from dataclasses import dataclass
-from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,6 +13,7 @@ from app.database.crud.user import get_user_by_id
 from app.database.models import ContestAttempt, ContestRound, ContestTemplate
 from app.services.contests.enums import PrizeType
 from app.services.contests.games import get_game_strategy
+
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +58,7 @@ class ContestAttemptService:
             return AttemptResult(
                 success=False,
                 is_winner=False,
-                message="Конкурс не найден",
+                message='Конкурс не найден',
             )
 
         # Check if user already played
@@ -67,7 +67,7 @@ class ContestAttemptService:
             return AttemptResult(
                 success=False,
                 is_winner=False,
-                message="У вас уже была попытка",
+                message='У вас уже была попытка',
                 already_played=True,
             )
 
@@ -77,7 +77,7 @@ class ContestAttemptService:
             return AttemptResult(
                 success=False,
                 is_winner=False,
-                message="Тип игры не поддерживается",
+                message='Тип игры не поддерживается',
             )
 
         check_result = strategy.check_answer(pick, round_obj.payload or {}, language)
@@ -95,23 +95,20 @@ class ContestAttemptService:
             is_winner=is_winner,
         )
 
-        logger.info(
-            "Contest attempt: user %s, round %s, pick '%s', winner %s",
-            user_id, round_obj.id, pick, is_winner
-        )
+        logger.info("Contest attempt: user %s, round %s, pick '%s', winner %s", user_id, round_obj.id, pick, is_winner)
 
         if is_winner:
             prize_msg = await self._award_prize(db, user_id, tpl, language)
             return AttemptResult(
                 success=True,
                 is_winner=True,
-                message=f"🎉 Победа! {prize_msg}" if prize_msg else "🎉 Победа!",
+                message=f'🎉 Победа! {prize_msg}' if prize_msg else '🎉 Победа!',
             )
 
         return AttemptResult(
             success=True,
             is_winner=False,
-            message=check_result.response_text or "Неудача",
+            message=check_result.response_text or 'Неудача',
         )
 
     async def process_text_attempt(
@@ -140,7 +137,7 @@ class ContestAttemptService:
             return AttemptResult(
                 success=False,
                 is_winner=False,
-                message="Конкурс не найден",
+                message='Конкурс не найден',
             )
 
         # For text games, attempt should already exist (created in render phase)
@@ -149,7 +146,7 @@ class ContestAttemptService:
             return AttemptResult(
                 success=False,
                 is_winner=False,
-                message="Сначала начните игру",
+                message='Сначала начните игру',
             )
 
         # Check if already answered
@@ -157,7 +154,7 @@ class ContestAttemptService:
             return AttemptResult(
                 success=False,
                 is_winner=False,
-                message="У вас уже была попытка",
+                message='У вас уже была попытка',
                 already_played=True,
             )
 
@@ -167,7 +164,7 @@ class ContestAttemptService:
             return AttemptResult(
                 success=False,
                 is_winner=False,
-                message="Тип игры не поддерживается",
+                message='Тип игры не поддерживается',
             )
 
         check_result = strategy.check_answer(text_answer, round_obj.payload or {}, language)
@@ -181,7 +178,10 @@ class ContestAttemptService:
 
         logger.info(
             "Contest text attempt: user %s, round %s, answer '%s', winner %s",
-            user_id, round_obj.id, text_answer, is_winner
+            user_id,
+            round_obj.id,
+            text_answer,
+            is_winner,
         )
 
         if is_winner:
@@ -189,13 +189,13 @@ class ContestAttemptService:
             return AttemptResult(
                 success=True,
                 is_winner=True,
-                message=f"🎉 Победа! {prize_msg}" if prize_msg else "🎉 Победа!",
+                message=f'🎉 Победа! {prize_msg}' if prize_msg else '🎉 Победа!',
             )
 
         return AttemptResult(
             success=True,
             is_winner=False,
-            message=check_result.response_text or "Неверно, попробуй в следующем раунде",
+            message=check_result.response_text or 'Неверно, попробуй в следующем раунде',
         )
 
     async def create_pending_attempt(
@@ -203,7 +203,7 @@ class ContestAttemptService:
         db: AsyncSession,
         round_id: int,
         user_id: int,
-    ) -> Optional[ContestAttempt]:
+    ) -> ContestAttempt | None:
         """
         Create a pending attempt for text-input games.
         This blocks re-entry while user is answering.
@@ -280,36 +280,36 @@ class ContestAttemptService:
             Prize notification message
         """
         from app.localization.texts import get_texts
+
         texts = get_texts(language)
 
         prize_type = template.prize_type or PrizeType.DAYS.value
-        prize_value = template.prize_value or "1"
+        prize_value = template.prize_value or '1'
 
         if prize_type == PrizeType.DAYS.value:
             subscription = await get_subscription_by_user_id(db, user_id)
             if not subscription:
-                return ""
+                return ''
             days = int(prize_value) if prize_value.isdigit() else 1
             await extend_subscription(db, subscription, days)
-            return texts.t("CONTEST_PRIZE_GRANTED", "Бонус {days} дней зачислен!").format(days=days)
+            return texts.t('CONTEST_PRIZE_GRANTED', 'Бонус {days} дней зачислен!').format(days=days)
 
-        elif prize_type == PrizeType.BALANCE.value:
+        if prize_type == PrizeType.BALANCE.value:
             user = await get_user_by_id(db, user_id)
             if not user:
-                return ""
+                return ''
             kopeks = int(prize_value) if prize_value.isdigit() else 0
             if kopeks > 0:
                 user.balance_kopeks += kopeks
                 await db.commit()
-                return texts.t(
-                    "CONTEST_BALANCE_GRANTED",
-                    "Бонус {amount} зачислен!"
-                ).format(amount=settings.format_price(kopeks))
+                return texts.t('CONTEST_BALANCE_GRANTED', 'Бонус {amount} зачислен!').format(
+                    amount=settings.format_price(kopeks)
+                )
 
         elif prize_type == PrizeType.CUSTOM.value:
-            return f"🎁 {prize_value}"
+            return f'🎁 {prize_value}'
 
-        return ""
+        return ''
 
 
 # Singleton instance

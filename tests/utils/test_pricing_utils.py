@@ -5,9 +5,7 @@
 особенно функции отображения цен со скидками на кнопках подписки.
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
-from typing import Dict, Any
+from unittest.mock import MagicMock, patch
 
 from app.localization.texts import _build_dynamic_values
 
@@ -27,14 +25,14 @@ class TestBuildDynamicValues:
     @patch('app.localization.texts.settings')
     def test_returns_empty_dict_for_unknown_language(self, mock_settings: MagicMock) -> None:
         """Неизвестный язык должен возвращать пустой словарь."""
-        result = _build_dynamic_values("fr-FR")  # Французский не поддерживается
+        result = _build_dynamic_values('fr-FR')  # Французский не поддерживается
         assert result == {}
 
     @patch('app.localization.texts.settings')
     def test_traffic_keys_also_generated(self, mock_settings: MagicMock) -> None:
         """Должны генерироваться ключи трафика и другие динамические значения."""
         # Настройка моков для traffic цен
-        mock_settings.format_price = lambda x: f"{x // 100} ₽"
+        mock_settings.format_price = lambda x: f'{x // 100} ₽'
         mock_settings.PRICE_TRAFFIC_5GB = 10000
         mock_settings.PRICE_TRAFFIC_10GB = 20000
         mock_settings.PRICE_TRAFFIC_25GB = 30000
@@ -43,10 +41,10 @@ class TestBuildDynamicValues:
         mock_settings.PRICE_TRAFFIC_250GB = 60000
         mock_settings.PRICE_TRAFFIC_UNLIMITED = 70000
 
-        result = _build_dynamic_values("ru-RU")
+        result = _build_dynamic_values('ru-RU')
 
         # Проверяем наличие ключей трафика
-        assert "TRAFFIC_5GB" in result
-        assert "TRAFFIC_10GB" in result
-        assert "TRAFFIC_UNLIMITED" in result
-        assert "SUPPORT_INFO" in result
+        assert 'TRAFFIC_5GB' in result
+        assert 'TRAFFIC_10GB' in result
+        assert 'TRAFFIC_UNLIMITED' in result
+        assert 'SUPPORT_INFO' in result

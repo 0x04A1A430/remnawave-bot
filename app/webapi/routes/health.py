@@ -9,13 +9,14 @@ from app.services.version_service import version_service
 from ..dependencies import require_api_token
 from ..schemas.health import HealthCheckResponse, HealthFeatureFlags
 
+
 router = APIRouter()
 
 
-@router.get("/health", tags=["health"], response_model=HealthCheckResponse)
+@router.get('/health', tags=['health'], response_model=HealthCheckResponse)
 async def health_check(_: object = Security(require_api_token)) -> HealthCheckResponse:
     return HealthCheckResponse(
-        status="ok",
+        status='ok',
         api_version=settings.WEB_API_VERSION,
         bot_version=version_service.current_version,
         features=HealthFeatureFlags(
@@ -27,14 +28,14 @@ async def health_check(_: object = Security(require_api_token)) -> HealthCheckRe
     )
 
 
-@router.get("/health/database", tags=["health"])
+@router.get('/health/database', tags=['health'])
 async def database_health(_: object = Security(require_api_token)) -> dict:
     """Детальная информация о состоянии базы данных."""
 
     return await db_manager.health_check()
 
 
-@router.get("/metrics/pool", tags=["health"])
+@router.get('/metrics/pool', tags=['health'])
 async def pool_metrics(_: object = Security(require_api_token)) -> dict:
     """Метрики пула подключений к базе данных."""
 

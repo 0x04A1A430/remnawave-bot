@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-from typing import Dict
 
 from app.config import settings
 from app.utils.payment_logger import payment_logger as logger
@@ -21,35 +20,33 @@ class TributePaymentMixin:
     ) -> str:
         """Формирует URL оплаты для Tribute и логирует результат."""
         if not settings.TRIBUTE_ENABLED:
-            raise ValueError("Tribute payments are disabled")
+            raise ValueError('Tribute payments are disabled')
 
         try:
             # Сохраняем полезную информацию для метрик и отладки.
             payment_data = {
-                "amount": amount_kopeks,
-                "currency": "RUB",
-                "description": description,
-                "user_id": user_id,
-                "callback_url": f"{settings.WEBHOOK_URL}/tribute/callback",
+                'amount': amount_kopeks,
+                'currency': 'RUB',
+                'description': description,
+                'user_id': user_id,
+                'callback_url': f'{settings.WEBHOOK_URL}/tribute/callback',
             }
             del payment_data  # данные пока не отправляются вовне, но оставляем структуру для будущего API.
 
-            payment_url = (
-                f"https://tribute.ru/pay?amount={amount_kopeks}&user={user_id}"
-            )
+            payment_url = f'https://tribute.ru/pay?amount={amount_kopeks}&user={user_id}'
 
             logger.info(
-                "Создан Tribute платеж на %s₽ для пользователя %s",
+                'Создан Tribute платеж на %s₽ для пользователя %s',
                 amount_kopeks / 100,
                 user_id,
             )
             return payment_url
 
         except Exception as error:
-            logger.error("Ошибка создания Tribute платежа: %s", error)
+            logger.error('Ошибка создания Tribute платежа: %s', error)
             raise
 
-    def verify_tribute_webhook(self, data: Dict[str, object], signature: str) -> bool:
+    def verify_tribute_webhook(self, data: dict[str, object], signature: str) -> bool:
         """Проверяет подпись запроса, присланного Tribute."""
         if not settings.TRIBUTE_API_KEY:
             return False
@@ -65,5 +62,5 @@ class TributePaymentMixin:
             return hmac.compare_digest(signature, expected_signature)
 
         except Exception as error:
-            logger.error("Ошибка проверки Tribute webhook: %s", error)
+            logger.error('Ошибка проверки Tribute webhook: %s', error)
             return False

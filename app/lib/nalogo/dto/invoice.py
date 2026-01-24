@@ -20,11 +20,11 @@ class InvoiceServiceItem(BaseModel):
     Similar to IncomeServiceItem but for invoices.
     """
 
-    name: str = Field(..., description="Service name/description")
-    amount: Decimal = Field(..., description="Service amount", gt=0)
-    quantity: Decimal = Field(..., description="Service quantity", gt=0)
+    name: str = Field(..., description='Service name/description')
+    amount: Decimal = Field(..., description='Service amount', gt=0)
+    quantity: Decimal = Field(..., description='Service quantity', gt=0)
 
-    @field_serializer("amount", "quantity")
+    @field_serializer('amount', 'quantity')
     def serialize_decimal(self, value: Decimal) -> str:
         """Serialize Decimal as string."""
         return str(value)
@@ -37,9 +37,9 @@ class InvoiceServiceItem(BaseModel):
         """Custom serialization to match API format."""
         _ = kwargs
         return {
-            "name": self.name,
-            "amount": str(self.amount),
-            "quantity": str(self.quantity),
+            'name': self.name,
+            'amount': str(self.amount),
+            'quantity': str(self.quantity),
         }
 
 
@@ -51,19 +51,15 @@ class InvoiceClient(BaseModel):
     Similar to IncomeClient but for invoices.
     """
 
-    contact_phone: str | None = Field(
-        None, alias="contactPhone", description="Client contact phone"
-    )
-    display_name: str | None = Field(
-        None, alias="displayName", description="Client display name"
-    )
-    inn: str | None = Field(None, description="Client INN")
+    contact_phone: str | None = Field(None, alias='contactPhone', description='Client contact phone')
+    display_name: str | None = Field(None, alias='displayName', description='Client display name')
+    inn: str | None = Field(None, description='Client INN')
 
     def model_dump(self, **kwargs: Any) -> dict[str, Any]:
         """Custom serialization to match API format."""
         _ = kwargs
         return {
-            "contactPhone": self.contact_phone,
-            "displayName": self.display_name,
-            "inn": self.inn,
+            'contactPhone': self.contact_phone,
+            'displayName': self.display_name,
+            'inn': self.inn,
         }

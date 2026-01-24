@@ -1,32 +1,29 @@
 import logging
+from collections.abc import Sequence
 from datetime import datetime
-from typing import List, Optional, Sequence, Tuple
 
-from sqlalchemy import and_, delete, desc, func, select
+from sqlalchemy import and_, delete, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.database.models import ContestTemplate, ContestRound, ContestAttempt, User
+from app.database.models import ContestAttempt, ContestRound, ContestTemplate, User
+
 
 logger = logging.getLogger(__name__)
 
 
 # Templates
-async def get_template_by_id(db: AsyncSession, template_id: int) -> Optional[ContestTemplate]:
-    result = await db.execute(
-        select(ContestTemplate).where(ContestTemplate.id == template_id)
-    )
+async def get_template_by_id(db: AsyncSession, template_id: int) -> ContestTemplate | None:
+    result = await db.execute(select(ContestTemplate).where(ContestTemplate.id == template_id))
     return result.scalar_one_or_none()
 
 
-async def get_template_by_slug(db: AsyncSession, slug: str) -> Optional[ContestTemplate]:
-    result = await db.execute(
-        select(ContestTemplate).where(ContestTemplate.slug == slug)
-    )
+async def get_template_by_slug(db: AsyncSession, slug: str) -> ContestTemplate | None:
+    result = await db.execute(select(ContestTemplate).where(ContestTemplate.slug == slug))
     return result.scalar_one_or_none()
 
 
-async def list_templates(db: AsyncSession, enabled_only: bool = True) -> List[ContestTemplate]:
+async def list_templates(db: AsyncSession, enabled_only: bool = True) -> list[ContestTemplate]:
     query = select(ContestTemplate).order_by(ContestTemplate.id)
     if enabled_only:
         query = query.where(ContestTemplate.is_enabled.is_(True))
@@ -39,16 +36,16 @@ async def upsert_template(
     *,
     slug: str,
     name: str,
-    description: str = "",
-    prize_type: str = "days",
-    prize_value: str = "1",
+    description: str = '',
+    prize_type: str = 'days',
+    prize_value: str = '1',
     max_winners: int = 1,
     attempts_per_user: int = 1,
     times_per_day: int = 1,
-    schedule_times: Optional[str] = None,
+    schedule_times: str | None = None,
     cooldown_hours: int = 24,
-    payload: Optional[dict] = None,
-    is_enabled: Optional[bool] = None,
+    payload: dict | None = None,
+    is_enabled: bool | None = None,
 ) -> ContestTemplate:
     template = await get_template_by_slug(db, slug)
     if not template:
@@ -98,7 +95,7 @@ async def create_round(
         template_id=template.id,
         starts_at=starts_at,
         ends_at=ends_at,
-        status="active",
+        status='active',
         payload=payload,
         max_winners=template.max_winners,
         attempts_per_user=template.attempts_per_user,
@@ -109,14 +106,14 @@ async def create_round(
     return round_obj
 
 
-async def get_active_rounds(db: AsyncSession) -> List[ContestRound]:
+async def get_active_rounds(db: AsyncSession) -> list[ContestRound]:
     now = datetime.utcnow()
     result = await db.execute(
         select(ContestRound)
         .options(selectinload(ContestRound.template))
         .where(
             and_(
-                ContestRound.status == "active",
+                ContestRound.status == 'active',
                 ContestRound.starts_at <= now,
                 ContestRound.ends_at >= now,
             )
@@ -126,7 +123,7 @@ async def get_active_rounds(db: AsyncSession) -> List[ContestRound]:
     return list(result.scalars().all())
 
 
-async def get_active_round_by_template(db: AsyncSession, template_id: int) -> Optional[ContestRound]:
+async def get_active_round_by_template(db: AsyncSession, template_id: int) -> ContestRound | None:
     now = datetime.utcnow()
     result = await db.execute(
         select(ContestRound)
@@ -134,7 +131,7 @@ async def get_active_round_by_template(db: AsyncSession, template_id: int) -> Op
         .where(
             and_(
                 ContestRound.template_id == template_id,
-                ContestRound.status == "active",
+                ContestRound.status == 'active',
                 ContestRound.starts_at <= now,
                 ContestRound.ends_at >= now,
             )
@@ -145,7 +142,7 @@ async def get_active_round_by_template(db: AsyncSession, template_id: int) -> Op
 
 
 async def finish_round(db: AsyncSession, round_obj: ContestRound) -> ContestRound:
-    round_obj.status = "finished"
+    round_obj.status = 'finished'
     await db.commit()
     await db.refresh(round_obj)
     return round_obj
@@ -159,7 +156,7 @@ async def increment_winner_count(db: AsyncSession, round_obj: ContestRound) -> C
 
 
 # Attempts
-async def get_attempt(db: AsyncSession, round_id: int, user_id: int) -> Optional[ContestAttempt]:
+async def get_attempt(db: AsyncSession, round_id: int, user_id: int) -> ContestAttempt | None:
     result = await db.execute(
         select(ContestAttempt).where(
             and_(
@@ -176,7 +173,7 @@ async def create_attempt(
     *,
     round_id: int,
     user_id: int,
-    answer: Optional[str],
+    answer: str | None,
     is_winner: bool,
 ) -> ContestAttempt:
     attempt = ContestAttempt(
@@ -195,7 +192,7 @@ async def update_attempt(
     db: AsyncSession,
     attempt: ContestAttempt,
     *,
-    answer: Optional[str] = None,
+    answer: str | None = None,
     is_winner: bool = False,
 ) -> ContestAttempt:
     """Update existing attempt with answer and winner status."""
@@ -214,7 +211,7 @@ async def clear_attempts(db: AsyncSession, round_id: int) -> int:
     return deleted_count
 
 
-async def list_winners(db: AsyncSession, round_id: int) -> Sequence[Tuple[User, ContestAttempt]]:
+async def list_winners(db: AsyncSession, round_id: int) -> Sequence[tuple[User, ContestAttempt]]:
     result = await db.execute(
         select(User, ContestAttempt)
         .join(ContestAttempt, ContestAttempt.user_id == User.id)

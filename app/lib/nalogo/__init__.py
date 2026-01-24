@@ -22,16 +22,16 @@ from .exceptions import (
     ValidationException,
 )
 
-__version__ = "1.0.0"
+__version__ = '1.0.0'
 __all__ = [
-    "Client",
-    "ClientException",
-    "DomainException",
-    "ForbiddenException",
-    "NotFoundException",
-    "PhoneException",
-    "ServerException",
-    "UnauthorizedException",
-    "UnknownErrorException",
-    "ValidationException",
+    'Client',
+    'ClientException',
+    'DomainException',
+    'ForbiddenException',
+    'NotFoundException',
+    'PhoneException',
+    'ServerException',
+    'UnauthorizedException',
+    'UnknownErrorException',
+    'ValidationException',
 ]

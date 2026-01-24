@@ -2,66 +2,74 @@
 
 import logging
 from datetime import datetime, timedelta
-from typing import List, Dict, Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
+from sqlalchemy import and_, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from sqlalchemy import select, func, and_
-
-from app.database.crud.subscription import get_subscriptions_statistics
-from app.database.crud.transaction import get_transactions_statistics, get_revenue_by_period
+from app.database.crud.campaign import get_campaign_statistics, get_campaigns_count, get_campaigns_list
 from app.database.crud.server_squad import get_server_statistics
-from app.database.crud.campaign import get_campaigns_list, get_campaign_statistics, get_campaigns_count
+from app.database.crud.subscription import get_subscriptions_statistics
+from app.database.crud.transaction import get_revenue_by_period, get_transactions_statistics
+from app.database.models import (
+    ReferralEarning,
+    Subscription,
+    SubscriptionStatus,
+    Tariff,
+    Transaction,
+    TransactionType,
+    User,
+)
 from app.services.remnawave_service import RemnaWaveService
 
 from ..dependencies import get_cabinet_db, get_current_admin_user
-from app.database.models import (
-    User, Subscription, Tariff, SubscriptionStatus,
-    Transaction, TransactionType, ReferralEarning,
-)
+
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/admin/stats", tags=["Cabinet Admin Stats"])
+router = APIRouter(prefix='/admin/stats', tags=['Cabinet Admin Stats'])
 
 
 # ============ Schemas ============
 
+
 class NodeStatus(BaseModel):
     """Node status info."""
+
     uuid: str
     name: str
     address: str
     is_connected: bool
     is_disabled: bool
     users_online: int
-    traffic_used_bytes: Optional[int] = None
-    uptime: Optional[str] = None
-    xray_version: Optional[str] = None
-    node_version: Optional[str] = None
-    last_status_message: Optional[str] = None
-    xray_uptime: Optional[str] = None
-    is_xray_running: Optional[bool] = None
-    cpu_count: Optional[int] = None
-    cpu_model: Optional[str] = None
-    total_ram: Optional[str] = None
-    country_code: Optional[str] = None
+    traffic_used_bytes: int | None = None
+    uptime: str | None = None
+    xray_version: str | None = None
+    node_version: str | None = None
+    last_status_message: str | None = None
+    xray_uptime: str | None = None
+    is_xray_running: bool | None = None
+    cpu_count: int | None = None
+    cpu_model: str | None = None
+    total_ram: str | None = None
+    country_code: str | None = None
 
 
 class NodesOverview(BaseModel):
     """Overview of all nodes."""
+
     total: int
     online: int
     offline: int
     disabled: int
     total_users_online: int
-    nodes: List[NodeStatus]
+    nodes: list[NodeStatus]
 
 
 class RevenueData(BaseModel):
     """Revenue data point."""
+
     date: str
     amount_kopeks: int
     amount_rubles: float
@@ -69,6 +77,7 @@ class RevenueData(BaseModel):
 
 class SubscriptionStats(BaseModel):
     """Subscription statistics."""
+
     total: int
     active: int
     trial: int
@@ -82,6 +91,7 @@ class SubscriptionStats(BaseModel):
 
 class FinancialStats(BaseModel):
     """Financial statistics."""
+
     income_today_kopeks: int
     income_today_rubles: float
     income_month_kopeks: int
@@ -94,6 +104,7 @@ class FinancialStats(BaseModel):
 
 class ServerStats(BaseModel):
     """Server statistics."""
+
     total_servers: int
     available_servers: int
     servers_with_connections: int
@@ -103,6 +114,7 @@ class ServerStats(BaseModel):
 
 class TariffStatItem(BaseModel):
     """Statistics for a single tariff."""
+
     tariff_id: int
     tariff_name: str
     active_subscriptions: int
@@ -114,28 +126,32 @@ class TariffStatItem(BaseModel):
 
 class TariffStats(BaseModel):
     """Tariff statistics."""
-    tariffs: List[TariffStatItem]
+
+    tariffs: list[TariffStatItem]
     total_tariff_subscriptions: int
 
 
 class DashboardStats(BaseModel):
     """Complete dashboard statistics."""
+
     nodes: NodesOverview
     subscriptions: SubscriptionStats
     financial: FinancialStats
     servers: ServerStats
-    revenue_chart: List[RevenueData]
-    tariff_stats: Optional[TariffStats] = None
+    revenue_chart: list[RevenueData]
+    tariff_stats: TariffStats | None = None
 
 
 # ============ Extended Stats Schemas ============
 
+
 class TopReferrerItem(BaseModel):
     """Single referrer in top list."""
+
     user_id: int
-    telegram_id: Optional[int] = None  # Can be None for email-only users
-    email: Optional[str] = None
-    username: Optional[str] = None
+    telegram_id: int | None = None  # Can be None for email-only users
+    email: str | None = None
+    username: str | None = None
     display_name: str
     invited_count: int
     invited_today: int = 0
@@ -149,8 +165,9 @@ class TopReferrerItem(BaseModel):
 
 class TopReferrersResponse(BaseModel):
     """Top referrers response."""
-    by_earnings: List[TopReferrerItem]
-    by_invited: List[TopReferrerItem]
+
+    by_earnings: list[TopReferrerItem]
+    by_invited: list[TopReferrerItem]
     total_referrers: int
     total_referrals: int
     total_earnings_kopeks: int
@@ -158,6 +175,7 @@ class TopReferrersResponse(BaseModel):
 
 class TopCampaignItem(BaseModel):
     """Single campaign in top list."""
+
     id: int
     name: str
     start_parameter: str
@@ -168,12 +186,13 @@ class TopCampaignItem(BaseModel):
     conversion_rate: float
     total_revenue_kopeks: int
     avg_revenue_per_user_kopeks: int
-    created_at: Optional[str] = None
+    created_at: str | None = None
 
 
 class TopCampaignsResponse(BaseModel):
     """Top campaigns response."""
-    campaigns: List[TopCampaignItem]
+
+    campaigns: list[TopCampaignItem]
     total_campaigns: int
     total_registrations: int
     total_revenue_kopeks: int
@@ -181,25 +200,27 @@ class TopCampaignsResponse(BaseModel):
 
 class RecentPaymentItem(BaseModel):
     """Single recent payment."""
+
     id: int
     user_id: int
-    telegram_id: Optional[int] = None  # Can be None for email-only users
-    email: Optional[str] = None
-    username: Optional[str] = None
+    telegram_id: int | None = None  # Can be None for email-only users
+    email: str | None = None
+    username: str | None = None
     display_name: str
     amount_kopeks: int
     amount_rubles: float
     type: str
     type_display: str
-    payment_method: Optional[str] = None
-    description: Optional[str] = None
+    payment_method: str | None = None
+    description: str | None = None
     created_at: str
     is_completed: bool
 
 
 class RecentPaymentsResponse(BaseModel):
     """Recent payments response."""
-    payments: List[RecentPaymentItem]
+
+    payments: list[RecentPaymentItem]
     total_count: int
     total_today_kopeks: int
     total_week_kopeks: int
@@ -207,7 +228,8 @@ class RecentPaymentsResponse(BaseModel):
 
 # ============ Routes ============
 
-@router.get("/dashboard", response_model=DashboardStats)
+
+@router.get('/dashboard', response_model=DashboardStats)
 async def get_dashboard_stats(
     admin: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_cabinet_db),
@@ -239,38 +261,40 @@ async def get_dashboard_stats(
         return DashboardStats(
             nodes=nodes_data,
             subscriptions=SubscriptionStats(
-                total=sub_stats.get("total_subscriptions", 0),
-                active=sub_stats.get("active_subscriptions", 0),
-                trial=sub_stats.get("trial_subscriptions", 0),
-                paid=sub_stats.get("paid_subscriptions", 0),
-                expired=sub_stats.get("total_subscriptions", 0) - sub_stats.get("active_subscriptions", 0),
-                purchased_today=sub_stats.get("purchased_today", 0),
-                purchased_week=sub_stats.get("purchased_week", 0),
-                purchased_month=sub_stats.get("purchased_month", 0),
-                trial_to_paid_conversion=sub_stats.get("trial_to_paid_conversion", 0.0),
+                total=sub_stats.get('total_subscriptions', 0),
+                active=sub_stats.get('active_subscriptions', 0),
+                trial=sub_stats.get('trial_subscriptions', 0),
+                paid=sub_stats.get('paid_subscriptions', 0),
+                expired=sub_stats.get('total_subscriptions', 0) - sub_stats.get('active_subscriptions', 0),
+                purchased_today=sub_stats.get('purchased_today', 0),
+                purchased_week=sub_stats.get('purchased_week', 0),
+                purchased_month=sub_stats.get('purchased_month', 0),
+                trial_to_paid_conversion=sub_stats.get('trial_to_paid_conversion', 0.0),
             ),
             financial=FinancialStats(
-                income_today_kopeks=trans_stats.get("today", {}).get("income_kopeks", 0),
-                income_today_rubles=trans_stats.get("today", {}).get("income_kopeks", 0) / 100,
-                income_month_kopeks=trans_stats.get("totals", {}).get("income_kopeks", 0),
-                income_month_rubles=trans_stats.get("totals", {}).get("income_kopeks", 0) / 100,
-                income_total_kopeks=trans_stats.get("totals", {}).get("income_kopeks", 0),
-                income_total_rubles=trans_stats.get("totals", {}).get("income_kopeks", 0) / 100,
-                subscription_income_kopeks=trans_stats.get("totals", {}).get("subscription_income_kopeks", 0),
-                subscription_income_rubles=trans_stats.get("totals", {}).get("subscription_income_kopeks", 0) / 100,
+                income_today_kopeks=trans_stats.get('today', {}).get('income_kopeks', 0),
+                income_today_rubles=trans_stats.get('today', {}).get('income_kopeks', 0) / 100,
+                income_month_kopeks=trans_stats.get('totals', {}).get('income_kopeks', 0),
+                income_month_rubles=trans_stats.get('totals', {}).get('income_kopeks', 0) / 100,
+                income_total_kopeks=trans_stats.get('totals', {}).get('income_kopeks', 0),
+                income_total_rubles=trans_stats.get('totals', {}).get('income_kopeks', 0) / 100,
+                subscription_income_kopeks=trans_stats.get('totals', {}).get('subscription_income_kopeks', 0),
+                subscription_income_rubles=trans_stats.get('totals', {}).get('subscription_income_kopeks', 0) / 100,
             ),
             servers=ServerStats(
-                total_servers=server_stats.get("total_servers", 0),
-                available_servers=server_stats.get("available_servers", 0),
-                servers_with_connections=server_stats.get("servers_with_connections", 0),
-                total_revenue_kopeks=server_stats.get("total_revenue_kopeks", 0),
-                total_revenue_rubles=server_stats.get("total_revenue_rubles", 0.0),
+                total_servers=server_stats.get('total_servers', 0),
+                available_servers=server_stats.get('available_servers', 0),
+                servers_with_connections=server_stats.get('servers_with_connections', 0),
+                total_revenue_kopeks=server_stats.get('total_revenue_kopeks', 0),
+                total_revenue_rubles=server_stats.get('total_revenue_rubles', 0.0),
             ),
             revenue_chart=[
                 RevenueData(
-                    date=item.get("date", "").isoformat() if hasattr(item.get("date", ""), "isoformat") else str(item.get("date", "")),
-                    amount_kopeks=item.get("amount_kopeks", 0),
-                    amount_rubles=item.get("amount_kopeks", 0) / 100,
+                    date=item.get('date', '').isoformat()
+                    if hasattr(item.get('date', ''), 'isoformat')
+                    else str(item.get('date', '')),
+                    amount_kopeks=item.get('amount_kopeks', 0),
+                    amount_rubles=item.get('amount_kopeks', 0) / 100,
                 )
                 for item in revenue_data
             ],
@@ -278,14 +302,14 @@ async def get_dashboard_stats(
         )
 
     except Exception as e:
-        logger.error(f"Failed to get dashboard stats: {e}")
+        logger.error(f'Failed to get dashboard stats: {e}')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to load dashboard statistics",
+            detail='Failed to load dashboard statistics',
         )
 
 
-@router.get("/nodes", response_model=NodesOverview)
+@router.get('/nodes', response_model=NodesOverview)
 async def get_nodes_status(
     admin: User = Depends(get_current_admin_user),
 ):
@@ -293,14 +317,14 @@ async def get_nodes_status(
     try:
         return await _get_nodes_overview()
     except Exception as e:
-        logger.error(f"Failed to get nodes status: {e}")
+        logger.error(f'Failed to get nodes status: {e}')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to load nodes status",
+            detail='Failed to load nodes status',
         )
 
 
-@router.post("/nodes/{node_uuid}/restart")
+@router.post('/nodes/{node_uuid}/restart')
 async def restart_node(
     node_uuid: str,
     admin: User = Depends(get_current_admin_user),
@@ -308,27 +332,26 @@ async def restart_node(
     """Restart a node."""
     try:
         service = RemnaWaveService()
-        success = await service.manage_node(node_uuid, "restart")
+        success = await service.manage_node(node_uuid, 'restart')
 
         if success:
-            logger.info(f"Admin {admin.id} restarted node {node_uuid}")
-            return {"success": True, "message": "Node restart initiated"}
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Failed to restart node",
-            )
+            logger.info(f'Admin {admin.id} restarted node {node_uuid}')
+            return {'success': True, 'message': 'Node restart initiated'}
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Failed to restart node',
+        )
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to restart node {node_uuid}: {e}")
+        logger.error(f'Failed to restart node {node_uuid}: {e}')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to restart node",
+            detail='Failed to restart node',
         )
 
 
-@router.post("/nodes/{node_uuid}/toggle")
+@router.post('/nodes/{node_uuid}/toggle')
 async def toggle_node(
     node_uuid: str,
     admin: User = Depends(get_current_admin_user),
@@ -338,32 +361,31 @@ async def toggle_node(
         service = RemnaWaveService()
         nodes = await service.get_all_nodes()
 
-        node = next((n for n in nodes if n.get("uuid") == node_uuid), None)
+        node = next((n for n in nodes if n.get('uuid') == node_uuid), None)
         if not node:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Node not found",
+                detail='Node not found',
             )
 
-        is_disabled = node.get("is_disabled", False)
-        action = "enable" if is_disabled else "disable"
+        is_disabled = node.get('is_disabled', False)
+        action = 'enable' if is_disabled else 'disable'
         success = await service.manage_node(node_uuid, action)
 
         if success:
-            logger.info(f"Admin {admin.id} {action}d node {node_uuid}")
-            return {"success": True, "message": f"Node {action}d", "is_disabled": not is_disabled}
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to {action} node",
-            )
+            logger.info(f'Admin {admin.id} {action}d node {node_uuid}')
+            return {'success': True, 'message': f'Node {action}d', 'is_disabled': not is_disabled}
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f'Failed to {action} node',
+        )
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to toggle node {node_uuid}: {e}")
+        logger.error(f'Failed to toggle node {node_uuid}: {e}')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to toggle node",
+            detail='Failed to toggle node',
         )
 
 
@@ -374,30 +396,30 @@ async def _get_nodes_overview() -> NodesOverview:
         nodes = await service.get_all_nodes()
 
         total = len(nodes)
-        online = sum(1 for n in nodes if n.get("is_connected") and not n.get("is_disabled"))
-        disabled = sum(1 for n in nodes if n.get("is_disabled"))
+        online = sum(1 for n in nodes if n.get('is_connected') and not n.get('is_disabled'))
+        disabled = sum(1 for n in nodes if n.get('is_disabled'))
         offline = total - online - disabled
-        total_users_online = sum(n.get("users_online", 0) or 0 for n in nodes)
+        total_users_online = sum(n.get('users_online', 0) or 0 for n in nodes)
 
         node_statuses = [
             NodeStatus(
-                uuid=n.get("uuid", ""),
-                name=n.get("name", "Unknown"),
-                address=n.get("address", ""),
-                is_connected=n.get("is_connected", False),
-                is_disabled=n.get("is_disabled", False),
-                users_online=n.get("users_online", 0) or 0,
-                traffic_used_bytes=n.get("traffic_used_bytes"),
-                uptime=n.get("uptime"),
-                xray_version=n.get("xray_version"),
-                node_version=n.get("node_version"),
-                last_status_message=n.get("last_status_message"),
-                xray_uptime=n.get("xray_uptime"),
-                is_xray_running=n.get("is_xray_running"),
-                cpu_count=n.get("cpu_count"),
-                cpu_model=n.get("cpu_model"),
-                total_ram=n.get("total_ram"),
-                country_code=n.get("country_code"),
+                uuid=n.get('uuid', ''),
+                name=n.get('name', 'Unknown'),
+                address=n.get('address', ''),
+                is_connected=n.get('is_connected', False),
+                is_disabled=n.get('is_disabled', False),
+                users_online=n.get('users_online', 0) or 0,
+                traffic_used_bytes=n.get('traffic_used_bytes'),
+                uptime=n.get('uptime'),
+                xray_version=n.get('xray_version'),
+                node_version=n.get('node_version'),
+                last_status_message=n.get('last_status_message'),
+                xray_uptime=n.get('xray_uptime'),
+                is_xray_running=n.get('is_xray_running'),
+                cpu_count=n.get('cpu_count'),
+                cpu_model=n.get('cpu_model'),
+                total_ram=n.get('total_ram'),
+                country_code=n.get('country_code'),
             )
             for n in nodes
         ]
@@ -411,7 +433,7 @@ async def _get_nodes_overview() -> NodesOverview:
             nodes=node_statuses,
         )
     except Exception as e:
-        logger.warning(f"Failed to get nodes from RemnaWave: {e}")
+        logger.warning(f'Failed to get nodes from RemnaWave: {e}')
         # Return empty data if RemnaWave is unavailable
         return NodesOverview(
             total=0,
@@ -423,18 +445,15 @@ async def _get_nodes_overview() -> NodesOverview:
         )
 
 
-async def _get_tariff_stats(db: AsyncSession) -> Optional[TariffStats]:
+async def _get_tariff_stats(db: AsyncSession) -> TariffStats | None:
     """Get statistics for all tariffs."""
     try:
         # Получаем ВСЕ тарифы (включая неактивные) для статистики
-        tariffs_result = await db.execute(
-            select(Tariff)
-            .order_by(Tariff.display_order)
-        )
+        tariffs_result = await db.execute(select(Tariff).order_by(Tariff.display_order))
         tariffs = tariffs_result.scalars().all()
 
         if not tariffs:
-            logger.info("📊 Нет тарифов в системе, пропускаем статистику")
+            logger.info('📊 Нет тарифов в системе, пропускаем статистику')
             return None
 
         now = datetime.utcnow()
@@ -448,73 +467,69 @@ async def _get_tariff_stats(db: AsyncSession) -> Optional[TariffStats]:
         for tariff in tariffs:
             # Активные подписки на этом тарифе
             active_result = await db.execute(
-                select(func.count(Subscription.id))
-                .where(
-                    Subscription.tariff_id == tariff.id,
-                    Subscription.status == SubscriptionStatus.ACTIVE.value
+                select(func.count(Subscription.id)).where(
+                    Subscription.tariff_id == tariff.id, Subscription.status == SubscriptionStatus.ACTIVE.value
                 )
             )
             active_count = active_result.scalar() or 0
 
             # Триальные подписки на этом тарифе
             trial_result = await db.execute(
-                select(func.count(Subscription.id))
-                .where(
+                select(func.count(Subscription.id)).where(
                     Subscription.tariff_id == tariff.id,
                     Subscription.status == SubscriptionStatus.ACTIVE.value,
-                    Subscription.is_trial == True
+                    Subscription.is_trial == True,
                 )
             )
             trial_count = trial_result.scalar() or 0
 
             # Куплено сегодня (не триальные)
             today_result = await db.execute(
-                select(func.count(Subscription.id))
-                .where(
+                select(func.count(Subscription.id)).where(
                     Subscription.tariff_id == tariff.id,
                     Subscription.created_at >= today_start,
-                    Subscription.is_trial == False
+                    Subscription.is_trial == False,
                 )
             )
             purchased_today = today_result.scalar() or 0
 
             # Куплено за неделю
             week_result = await db.execute(
-                select(func.count(Subscription.id))
-                .where(
+                select(func.count(Subscription.id)).where(
                     Subscription.tariff_id == tariff.id,
                     Subscription.created_at >= week_ago,
-                    Subscription.is_trial == False
+                    Subscription.is_trial == False,
                 )
             )
             purchased_week = week_result.scalar() or 0
 
             # Куплено за месяц
             month_result = await db.execute(
-                select(func.count(Subscription.id))
-                .where(
+                select(func.count(Subscription.id)).where(
                     Subscription.tariff_id == tariff.id,
                     Subscription.created_at >= month_ago,
-                    Subscription.is_trial == False
+                    Subscription.is_trial == False,
                 )
             )
             purchased_month = month_result.scalar() or 0
 
             logger.info(f"📊 Тариф '{tariff.name}': активных={active_count}, триал={trial_count}")
 
-            tariff_items.append(TariffStatItem(
-                tariff_id=tariff.id,
-                tariff_name=tariff.name,
-                active_subscriptions=active_count,
-                trial_subscriptions=trial_count,
-                purchased_today=purchased_today,
-                purchased_week=purchased_week,
-                purchased_month=purchased_month,
-            ))
+            tariff_items.append(
+                TariffStatItem(
+                    tariff_id=tariff.id,
+                    tariff_name=tariff.name,
+                    active_subscriptions=active_count,
+                    trial_subscriptions=trial_count,
+                    purchased_today=purchased_today,
+                    purchased_week=purchased_week,
+                    purchased_month=purchased_month,
+                )
+            )
 
             total_tariff_subscriptions += active_count
 
-        logger.info(f"📊 Всего подписок по тарифам: {total_tariff_subscriptions}")
+        logger.info(f'📊 Всего подписок по тарифам: {total_tariff_subscriptions}')
 
         return TariffStats(
             tariffs=tariff_items,
@@ -522,13 +537,14 @@ async def _get_tariff_stats(db: AsyncSession) -> Optional[TariffStats]:
         )
 
     except Exception as e:
-        logger.error(f"Failed to get tariff stats: {e}", exc_info=True)
+        logger.error(f'Failed to get tariff stats: {e}', exc_info=True)
         return None
 
 
 # ============ Extended Stats Routes ============
 
-@router.get("/referrals/top", response_model=TopReferrersResponse)
+
+@router.get('/referrals/top', response_model=TopReferrersResponse)
 async def get_top_referrers(
     limit: int = 20,
     admin: User = Depends(get_current_admin_user),
@@ -543,10 +559,7 @@ async def get_top_referrers(
 
         # Get all referrers with their stats
         referrers_query = await db.execute(
-            select(
-                User.referred_by_id.label('referrer_id'),
-                func.count(User.id).label('total_invited')
-            )
+            select(User.referred_by_id.label('referrer_id'), func.count(User.id).label('total_invited'))
             .where(User.referred_by_id.isnot(None))
             .group_by(User.referred_by_id)
         )
@@ -555,16 +568,8 @@ async def get_top_referrers(
         # Get invited counts by period for each referrer
         # Today
         today_invited_query = await db.execute(
-            select(
-                User.referred_by_id.label('referrer_id'),
-                func.count(User.id).label('count')
-            )
-            .where(
-                and_(
-                    User.referred_by_id.isnot(None),
-                    User.created_at >= today_start
-                )
-            )
+            select(User.referred_by_id.label('referrer_id'), func.count(User.id).label('count'))
+            .where(and_(User.referred_by_id.isnot(None), User.created_at >= today_start))
             .group_by(User.referred_by_id)
         )
         for row in today_invited_query:
@@ -573,16 +578,8 @@ async def get_top_referrers(
 
         # Week
         week_invited_query = await db.execute(
-            select(
-                User.referred_by_id.label('referrer_id'),
-                func.count(User.id).label('count')
-            )
-            .where(
-                and_(
-                    User.referred_by_id.isnot(None),
-                    User.created_at >= week_ago
-                )
-            )
+            select(User.referred_by_id.label('referrer_id'), func.count(User.id).label('count'))
+            .where(and_(User.referred_by_id.isnot(None), User.created_at >= week_ago))
             .group_by(User.referred_by_id)
         )
         for row in week_invited_query:
@@ -591,16 +588,8 @@ async def get_top_referrers(
 
         # Month
         month_invited_query = await db.execute(
-            select(
-                User.referred_by_id.label('referrer_id'),
-                func.count(User.id).label('count')
-            )
-            .where(
-                and_(
-                    User.referred_by_id.isnot(None),
-                    User.created_at >= month_ago
-                )
-            )
+            select(User.referred_by_id.label('referrer_id'), func.count(User.id).label('count'))
+            .where(and_(User.referred_by_id.isnot(None), User.created_at >= month_ago))
             .group_by(User.referred_by_id)
         )
         for row in month_invited_query:
@@ -611,10 +600,8 @@ async def get_top_referrers(
         # Total earnings
         total_earnings_query = await db.execute(
             select(
-                ReferralEarning.user_id.label('referrer_id'),
-                func.sum(ReferralEarning.amount_kopeks).label('total')
-            )
-            .group_by(ReferralEarning.user_id)
+                ReferralEarning.user_id.label('referrer_id'), func.sum(ReferralEarning.amount_kopeks).label('total')
+            ).group_by(ReferralEarning.user_id)
         )
         for row in total_earnings_query:
             if row.referrer_id in referrers_data:
@@ -622,10 +609,7 @@ async def get_top_referrers(
 
         # Today earnings
         today_earnings_query = await db.execute(
-            select(
-                ReferralEarning.user_id.label('referrer_id'),
-                func.sum(ReferralEarning.amount_kopeks).label('total')
-            )
+            select(ReferralEarning.user_id.label('referrer_id'), func.sum(ReferralEarning.amount_kopeks).label('total'))
             .where(ReferralEarning.created_at >= today_start)
             .group_by(ReferralEarning.user_id)
         )
@@ -635,10 +619,7 @@ async def get_top_referrers(
 
         # Week earnings
         week_earnings_query = await db.execute(
-            select(
-                ReferralEarning.user_id.label('referrer_id'),
-                func.sum(ReferralEarning.amount_kopeks).label('total')
-            )
+            select(ReferralEarning.user_id.label('referrer_id'), func.sum(ReferralEarning.amount_kopeks).label('total'))
             .where(ReferralEarning.created_at >= week_ago)
             .group_by(ReferralEarning.user_id)
         )
@@ -648,10 +629,7 @@ async def get_top_referrers(
 
         # Month earnings
         month_earnings_query = await db.execute(
-            select(
-                ReferralEarning.user_id.label('referrer_id'),
-                func.sum(ReferralEarning.amount_kopeks).label('total')
-            )
+            select(ReferralEarning.user_id.label('referrer_id'), func.sum(ReferralEarning.amount_kopeks).label('total'))
             .where(ReferralEarning.created_at >= month_ago)
             .group_by(ReferralEarning.user_id)
         )
@@ -661,78 +639,58 @@ async def get_top_referrers(
 
         # Also add REFERRAL_REWARD transactions
         trans_total_query = await db.execute(
-            select(
-                Transaction.user_id.label('referrer_id'),
-                func.sum(Transaction.amount_kopeks).label('total')
-            )
+            select(Transaction.user_id.label('referrer_id'), func.sum(Transaction.amount_kopeks).label('total'))
             .where(Transaction.type == TransactionType.REFERRAL_REWARD.value)
             .group_by(Transaction.user_id)
         )
         for row in trans_total_query:
             if row.referrer_id in referrers_data:
-                referrers_data[row.referrer_id]['earnings_total'] = \
-                    referrers_data[row.referrer_id].get('earnings_total', 0) + (row.total or 0)
+                referrers_data[row.referrer_id]['earnings_total'] = referrers_data[row.referrer_id].get(
+                    'earnings_total', 0
+                ) + (row.total or 0)
 
         trans_today_query = await db.execute(
-            select(
-                Transaction.user_id.label('referrer_id'),
-                func.sum(Transaction.amount_kopeks).label('total')
-            )
+            select(Transaction.user_id.label('referrer_id'), func.sum(Transaction.amount_kopeks).label('total'))
             .where(
-                and_(
-                    Transaction.type == TransactionType.REFERRAL_REWARD.value,
-                    Transaction.created_at >= today_start
-                )
+                and_(Transaction.type == TransactionType.REFERRAL_REWARD.value, Transaction.created_at >= today_start)
             )
             .group_by(Transaction.user_id)
         )
         for row in trans_today_query:
             if row.referrer_id in referrers_data:
-                referrers_data[row.referrer_id]['earnings_today'] = \
-                    referrers_data[row.referrer_id].get('earnings_today', 0) + (row.total or 0)
+                referrers_data[row.referrer_id]['earnings_today'] = referrers_data[row.referrer_id].get(
+                    'earnings_today', 0
+                ) + (row.total or 0)
 
         trans_week_query = await db.execute(
-            select(
-                Transaction.user_id.label('referrer_id'),
-                func.sum(Transaction.amount_kopeks).label('total')
-            )
-            .where(
-                and_(
-                    Transaction.type == TransactionType.REFERRAL_REWARD.value,
-                    Transaction.created_at >= week_ago
-                )
-            )
+            select(Transaction.user_id.label('referrer_id'), func.sum(Transaction.amount_kopeks).label('total'))
+            .where(and_(Transaction.type == TransactionType.REFERRAL_REWARD.value, Transaction.created_at >= week_ago))
             .group_by(Transaction.user_id)
         )
         for row in trans_week_query:
             if row.referrer_id in referrers_data:
-                referrers_data[row.referrer_id]['earnings_week'] = \
-                    referrers_data[row.referrer_id].get('earnings_week', 0) + (row.total or 0)
+                referrers_data[row.referrer_id]['earnings_week'] = referrers_data[row.referrer_id].get(
+                    'earnings_week', 0
+                ) + (row.total or 0)
 
         trans_month_query = await db.execute(
-            select(
-                Transaction.user_id.label('referrer_id'),
-                func.sum(Transaction.amount_kopeks).label('total')
-            )
-            .where(
-                and_(
-                    Transaction.type == TransactionType.REFERRAL_REWARD.value,
-                    Transaction.created_at >= month_ago
-                )
-            )
+            select(Transaction.user_id.label('referrer_id'), func.sum(Transaction.amount_kopeks).label('total'))
+            .where(and_(Transaction.type == TransactionType.REFERRAL_REWARD.value, Transaction.created_at >= month_ago))
             .group_by(Transaction.user_id)
         )
         for row in trans_month_query:
             if row.referrer_id in referrers_data:
-                referrers_data[row.referrer_id]['earnings_month'] = \
-                    referrers_data[row.referrer_id].get('earnings_month', 0) + (row.total or 0)
+                referrers_data[row.referrer_id]['earnings_month'] = referrers_data[row.referrer_id].get(
+                    'earnings_month', 0
+                ) + (row.total or 0)
 
         # Get user info for all referrers
         referrer_ids = list(referrers_data.keys())
         if referrer_ids:
             users_query = await db.execute(
-                select(User.id, User.telegram_id, User.username, User.first_name, User.last_name)
-                .where(User.id.in_(referrer_ids))
+                select(User.id, User.telegram_id, User.username, User.first_name, User.last_name).where(
+                    User.id.in_(referrer_ids)
+                )
             )
             users_info = {u.id: u for u in users_query}
         else:
@@ -745,35 +703,37 @@ async def get_top_referrers(
             if not user:
                 continue
 
-            display_name = ""
+            display_name = ''
             if user.first_name:
                 display_name = user.first_name
                 if user.last_name:
-                    display_name += f" {user.last_name}"
+                    display_name += f' {user.last_name}'
             elif user.username:
-                display_name = f"@{user.username}"
+                display_name = f'@{user.username}'
             elif user.telegram_id:
-                display_name = f"ID{user.telegram_id}"
+                display_name = f'ID{user.telegram_id}'
             elif user.email:
                 display_name = user.email.split('@')[0]
             else:
-                display_name = f"User#{user.id}"
+                display_name = f'User#{user.id}'
 
-            referrer_items.append(TopReferrerItem(
-                user_id=user.id,
-                telegram_id=user.telegram_id,
-                email=user.email,
-                username=user.username,
-                display_name=display_name,
-                invited_count=data.get('total_invited', 0),
-                invited_today=data.get('invited_today', 0),
-                invited_week=data.get('invited_week', 0),
-                invited_month=data.get('invited_month', 0),
-                earnings_today_kopeks=data.get('earnings_today', 0),
-                earnings_week_kopeks=data.get('earnings_week', 0),
-                earnings_month_kopeks=data.get('earnings_month', 0),
-                earnings_total_kopeks=data.get('earnings_total', 0),
-            ))
+            referrer_items.append(
+                TopReferrerItem(
+                    user_id=user.id,
+                    telegram_id=user.telegram_id,
+                    email=user.email,
+                    username=user.username,
+                    display_name=display_name,
+                    invited_count=data.get('total_invited', 0),
+                    invited_today=data.get('invited_today', 0),
+                    invited_week=data.get('invited_week', 0),
+                    invited_month=data.get('invited_month', 0),
+                    earnings_today_kopeks=data.get('earnings_today', 0),
+                    earnings_week_kopeks=data.get('earnings_week', 0),
+                    earnings_month_kopeks=data.get('earnings_month', 0),
+                    earnings_total_kopeks=data.get('earnings_total', 0),
+                )
+            )
 
         # Sort by earnings and by invited
         by_earnings = sorted(referrer_items, key=lambda x: x.earnings_total_kopeks, reverse=True)[:limit]
@@ -793,14 +753,14 @@ async def get_top_referrers(
         )
 
     except Exception as e:
-        logger.error(f"Failed to get top referrers: {e}", exc_info=True)
+        logger.error(f'Failed to get top referrers: {e}', exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to load referrers statistics",
+            detail='Failed to load referrers statistics',
         )
 
 
-@router.get("/campaigns/top", response_model=TopCampaignsResponse)
+@router.get('/campaigns/top', response_model=TopCampaignsResponse)
 async def get_top_campaigns(
     limit: int = 20,
     admin: User = Depends(get_current_admin_user),
@@ -818,22 +778,24 @@ async def get_top_campaigns(
         for campaign in campaigns:
             stats = await get_campaign_statistics(db, campaign.id)
 
-            campaign_items.append(TopCampaignItem(
-                id=campaign.id,
-                name=campaign.name,
-                start_parameter=campaign.start_parameter,
-                bonus_type=campaign.bonus_type,
-                is_active=campaign.is_active,
-                registrations=stats.get("registrations", 0),
-                conversions=stats.get("conversion_count", 0),
-                conversion_rate=stats.get("conversion_rate", 0.0),
-                total_revenue_kopeks=stats.get("total_revenue_kopeks", 0),
-                avg_revenue_per_user_kopeks=stats.get("avg_revenue_per_user_kopeks", 0),
-                created_at=campaign.created_at.isoformat() if campaign.created_at else None,
-            ))
+            campaign_items.append(
+                TopCampaignItem(
+                    id=campaign.id,
+                    name=campaign.name,
+                    start_parameter=campaign.start_parameter,
+                    bonus_type=campaign.bonus_type,
+                    is_active=campaign.is_active,
+                    registrations=stats.get('registrations', 0),
+                    conversions=stats.get('conversion_count', 0),
+                    conversion_rate=stats.get('conversion_rate', 0.0),
+                    total_revenue_kopeks=stats.get('total_revenue_kopeks', 0),
+                    avg_revenue_per_user_kopeks=stats.get('avg_revenue_per_user_kopeks', 0),
+                    created_at=campaign.created_at.isoformat() if campaign.created_at else None,
+                )
+            )
 
-            total_registrations += stats.get("registrations", 0)
-            total_revenue += stats.get("total_revenue_kopeks", 0)
+            total_registrations += stats.get('registrations', 0)
+            total_revenue += stats.get('total_revenue_kopeks', 0)
 
         # Sort by revenue
         campaign_items.sort(key=lambda x: x.total_revenue_kopeks, reverse=True)
@@ -848,14 +810,14 @@ async def get_top_campaigns(
         )
 
     except Exception as e:
-        logger.error(f"Failed to get top campaigns: {e}", exc_info=True)
+        logger.error(f'Failed to get top campaigns: {e}', exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to load campaigns statistics",
+            detail='Failed to load campaigns statistics',
         )
 
 
-@router.get("/payments/recent", response_model=RecentPaymentsResponse)
+@router.get('/payments/recent', response_model=RecentPaymentsResponse)
 async def get_recent_payments(
     limit: int = 50,
     admin: User = Depends(get_current_admin_user),
@@ -871,10 +833,12 @@ async def get_recent_payments(
         transactions_query = await db.execute(
             select(Transaction)
             .where(
-                Transaction.type.in_([
-                    TransactionType.DEPOSIT.value,
-                    TransactionType.SUBSCRIPTION_PAYMENT.value,
-                ])
+                Transaction.type.in_(
+                    [
+                        TransactionType.DEPOSIT.value,
+                        TransactionType.SUBSCRIPTION_PAYMENT.value,
+                    ]
+                )
             )
             .order_by(Transaction.created_at.desc())
             .limit(limit)
@@ -882,11 +846,12 @@ async def get_recent_payments(
         transactions = transactions_query.scalars().all()
 
         # Get user info for all transactions
-        user_ids = list(set(t.user_id for t in transactions))
+        user_ids = list({t.user_id for t in transactions})
         if user_ids:
             users_query = await db.execute(
-                select(User.id, User.telegram_id, User.username, User.first_name, User.last_name)
-                .where(User.id.in_(user_ids))
+                select(User.id, User.telegram_id, User.username, User.first_name, User.last_name).where(
+                    User.id.in_(user_ids)
+                )
             )
             users_info = {u.id: u for u in users_query}
         else:
@@ -894,12 +859,12 @@ async def get_recent_payments(
 
         # Type display names
         type_display = {
-            TransactionType.DEPOSIT.value: "Пополнение",
-            TransactionType.SUBSCRIPTION_PAYMENT.value: "Оплата подписки",
-            TransactionType.WITHDRAWAL.value: "Вывод",
-            TransactionType.REFUND.value: "Возврат",
-            TransactionType.REFERRAL_REWARD.value: "Реферальный бонус",
-            TransactionType.POLL_REWARD.value: "Награда за опрос",
+            TransactionType.DEPOSIT.value: 'Пополнение',
+            TransactionType.SUBSCRIPTION_PAYMENT.value: 'Оплата подписки',
+            TransactionType.WITHDRAWAL.value: 'Вывод',
+            TransactionType.REFUND.value: 'Возврат',
+            TransactionType.REFERRAL_REWARD.value: 'Реферальный бонус',
+            TransactionType.POLL_REWARD.value: 'Награда за опрос',
         }
 
         payment_items = []
@@ -908,68 +873,69 @@ async def get_recent_payments(
             if not user:
                 continue
 
-            display_name = ""
+            display_name = ''
             if user.first_name:
                 display_name = user.first_name
                 if user.last_name:
-                    display_name += f" {user.last_name}"
+                    display_name += f' {user.last_name}'
             elif user.username:
-                display_name = f"@{user.username}"
+                display_name = f'@{user.username}'
             elif user.telegram_id:
-                display_name = f"ID{user.telegram_id}"
+                display_name = f'ID{user.telegram_id}'
             elif user.email:
                 display_name = user.email.split('@')[0]
             else:
-                display_name = f"User#{user.id}"
+                display_name = f'User#{user.id}'
 
-            payment_items.append(RecentPaymentItem(
-                id=trans.id,
-                user_id=user.id,
-                telegram_id=user.telegram_id,
-                email=user.email,
-                username=user.username,
-                display_name=display_name,
-                amount_kopeks=trans.amount_kopeks,
-                amount_rubles=trans.amount_kopeks / 100,
-                type=trans.type,
-                type_display=type_display.get(trans.type, trans.type),
-                payment_method=trans.payment_method,
-                description=trans.description,
-                created_at=trans.created_at.isoformat() if trans.created_at else "",
-                is_completed=trans.is_completed,
-            ))
+            payment_items.append(
+                RecentPaymentItem(
+                    id=trans.id,
+                    user_id=user.id,
+                    telegram_id=user.telegram_id,
+                    email=user.email,
+                    username=user.username,
+                    display_name=display_name,
+                    amount_kopeks=trans.amount_kopeks,
+                    amount_rubles=trans.amount_kopeks / 100,
+                    type=trans.type,
+                    type_display=type_display.get(trans.type, trans.type),
+                    payment_method=trans.payment_method,
+                    description=trans.description,
+                    created_at=trans.created_at.isoformat() if trans.created_at else '',
+                    is_completed=trans.is_completed,
+                )
+            )
 
         # Calculate totals
         total_count_result = await db.execute(
-            select(func.count(Transaction.id))
-            .where(
-                Transaction.type.in_([
-                    TransactionType.DEPOSIT.value,
-                    TransactionType.SUBSCRIPTION_PAYMENT.value,
-                ])
+            select(func.count(Transaction.id)).where(
+                Transaction.type.in_(
+                    [
+                        TransactionType.DEPOSIT.value,
+                        TransactionType.SUBSCRIPTION_PAYMENT.value,
+                    ]
+                )
             )
         )
         total_count = total_count_result.scalar() or 0
 
         today_total_result = await db.execute(
-            select(func.coalesce(func.sum(Transaction.amount_kopeks), 0))
-            .where(
+            select(func.coalesce(func.sum(Transaction.amount_kopeks), 0)).where(
                 and_(
                     Transaction.type == TransactionType.DEPOSIT.value,
                     Transaction.is_completed == True,
-                    Transaction.created_at >= today_start
+                    Transaction.created_at >= today_start,
                 )
             )
         )
         total_today = today_total_result.scalar() or 0
 
         week_total_result = await db.execute(
-            select(func.coalesce(func.sum(Transaction.amount_kopeks), 0))
-            .where(
+            select(func.coalesce(func.sum(Transaction.amount_kopeks), 0)).where(
                 and_(
                     Transaction.type == TransactionType.DEPOSIT.value,
                     Transaction.is_completed == True,
-                    Transaction.created_at >= week_ago
+                    Transaction.created_at >= week_ago,
                 )
             )
         )
@@ -983,8 +949,8 @@ async def get_recent_payments(
         )
 
     except Exception as e:
-        logger.error(f"Failed to get recent payments: {e}", exc_info=True)
+        logger.error(f'Failed to get recent payments: {e}', exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to load recent payments",
+            detail='Failed to load recent payments',
         )

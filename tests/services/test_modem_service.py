@@ -2,21 +2,14 @@
 Тесты для ModemService - управление модемом в подписке.
 """
 
-import pytest
 from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
 
 from app.services.modem_service import (
-    ModemService,
     ModemError,
-    ModemAvailabilityResult,
-    ModemPriceResult,
-    ModemEnableResult,
-    ModemDisableResult,
+    ModemService,
     get_modem_service,
-    MODEM_WARNING_DAYS_CRITICAL,
-    MODEM_WARNING_DAYS_INFO,
 )
 
 
@@ -35,7 +28,7 @@ def create_sample_user():
         id=1,
         telegram_id=123456789,
         balance_kopeks=50000,  # 500 рублей
-        language="ru",
+        language='ru',
         subscription=None,
     )
     return user
@@ -246,16 +239,16 @@ class TestModemServicePeriodWarning:
     def test_warning_critical(self, monkeypatch):
         """Критическое предупреждение при <= 7 днях."""
         modem_service, _ = create_modem_service(monkeypatch)
-        assert modem_service.get_period_warning_level(7) == "critical"
-        assert modem_service.get_period_warning_level(5) == "critical"
-        assert modem_service.get_period_warning_level(1) == "critical"
+        assert modem_service.get_period_warning_level(7) == 'critical'
+        assert modem_service.get_period_warning_level(5) == 'critical'
+        assert modem_service.get_period_warning_level(1) == 'critical'
 
     def test_warning_info(self, monkeypatch):
         """Информационное предупреждение при <= 30 днях."""
         modem_service, _ = create_modem_service(monkeypatch)
-        assert modem_service.get_period_warning_level(30) == "info"
-        assert modem_service.get_period_warning_level(15) == "info"
-        assert modem_service.get_period_warning_level(8) == "info"
+        assert modem_service.get_period_warning_level(30) == 'info'
+        assert modem_service.get_period_warning_level(15) == 'info'
+        assert modem_service.get_period_warning_level(8) == 'info'
 
     def test_warning_none(self, monkeypatch):
         """Нет предупреждения при > 30 днях."""
@@ -281,19 +274,11 @@ class TestModemServiceEnable:
         mock_create_transaction = AsyncMock()
         mock_update_remnawave = AsyncMock()
 
-        monkeypatch.setattr(
-            'app.services.modem_service.subtract_user_balance',
-            mock_subtract
-        )
-        monkeypatch.setattr(
-            'app.services.modem_service.create_transaction',
-            mock_create_transaction
-        )
+        monkeypatch.setattr('app.services.modem_service.subtract_user_balance', mock_subtract)
+        monkeypatch.setattr('app.services.modem_service.create_transaction', mock_create_transaction)
         modem_service._subscription_service.update_remnawave_user = mock_update_remnawave
 
-        result = await modem_service.enable_modem(
-            mock_db, sample_user, sample_subscription
-        )
+        result = await modem_service.enable_modem(mock_db, sample_user, sample_subscription)
 
         assert result.success
         assert result.error is None
@@ -311,9 +296,7 @@ class TestModemServiceEnable:
 
         mock_db = AsyncMock()
 
-        result = await modem_service.enable_modem(
-            mock_db, sample_user, sample_subscription
-        )
+        result = await modem_service.enable_modem(mock_db, sample_user, sample_subscription)
 
         assert not result.success
         assert result.error == ModemError.INSUFFICIENT_FUNDS
@@ -329,14 +312,9 @@ class TestModemServiceEnable:
         mock_db = AsyncMock()
         mock_subtract = AsyncMock(return_value=False)  # ошибка списания
 
-        monkeypatch.setattr(
-            'app.services.modem_service.subtract_user_balance',
-            mock_subtract
-        )
+        monkeypatch.setattr('app.services.modem_service.subtract_user_balance', mock_subtract)
 
-        result = await modem_service.enable_modem(
-            mock_db, sample_user, sample_subscription
-        )
+        result = await modem_service.enable_modem(mock_db, sample_user, sample_subscription)
 
         assert not result.success
         assert result.error == ModemError.CHARGE_ERROR
@@ -358,9 +336,7 @@ class TestModemServiceDisable:
         mock_update_remnawave = AsyncMock()
         modem_service._subscription_service.update_remnawave_user = mock_update_remnawave
 
-        result = await modem_service.disable_modem(
-            mock_db, sample_user, sample_subscription
-        )
+        result = await modem_service.disable_modem(mock_db, sample_user, sample_subscription)
 
         assert result.success
         assert result.error is None
@@ -375,6 +351,7 @@ class TestModemServiceSingleton:
         """get_modem_service возвращает один и тот же экземпляр."""
         # Сбрасываем глобальный экземпляр
         import app.services.modem_service as modem_module
+
         modem_module._modem_service = None
 
         mock_settings = create_mock_settings()

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -21,8 +20,8 @@ class PromoCodeResponse(BaseModel):
     is_active: bool
     is_valid: bool
     valid_from: datetime
-    valid_until: Optional[datetime] = None
-    created_by: Optional[int] = None
+    valid_until: datetime | None = None
+    created_by: int | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -40,29 +39,29 @@ class PromoCodeCreateRequest(BaseModel):
     balance_bonus_kopeks: int = 0
     subscription_days: int = 0
     max_uses: int = Field(default=1, ge=0)
-    valid_from: Optional[datetime] = None
-    valid_until: Optional[datetime] = None
+    valid_from: datetime | None = None
+    valid_until: datetime | None = None
     is_active: bool = True
-    created_by: Optional[int] = None
+    created_by: int | None = None
 
 
 class PromoCodeUpdateRequest(BaseModel):
-    code: Optional[str] = None
-    type: Optional[PromoCodeType] = None
-    balance_bonus_kopeks: Optional[int] = None
-    subscription_days: Optional[int] = None
-    max_uses: Optional[int] = Field(default=None, ge=0)
-    valid_from: Optional[datetime] = None
-    valid_until: Optional[datetime] = None
-    is_active: Optional[bool] = None
+    code: str | None = None
+    type: PromoCodeType | None = None
+    balance_bonus_kopeks: int | None = None
+    subscription_days: int | None = None
+    max_uses: int | None = Field(default=None, ge=0)
+    valid_from: datetime | None = None
+    valid_until: datetime | None = None
+    is_active: bool | None = None
 
 
 class PromoCodeRecentUse(BaseModel):
     id: int
     user_id: int
-    user_username: Optional[str] = None
-    user_full_name: Optional[str] = None
-    user_telegram_id: Optional[int] = None
+    user_username: str | None = None
+    user_full_name: str | None = None
+    user_telegram_id: int | None = None
     used_at: datetime
 
 
@@ -70,4 +69,3 @@ class PromoCodeDetailResponse(PromoCodeResponse):
     total_uses: int
     today_uses: int
     recent_uses: list[PromoCodeRecentUse] = Field(default_factory=list)
-

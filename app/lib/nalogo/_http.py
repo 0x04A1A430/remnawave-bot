@@ -52,14 +52,12 @@ class AsyncHTTPClient:
     async def _get_auth_headers(self) -> dict[str, str]:
         """Get authorization headers from current token."""
         token_data = await self.auth_provider.get_token()
-        if not token_data or "token" not in token_data:
+        if not token_data or 'token' not in token_data:
             return {}
 
-        return {"Authorization": f"Bearer {token_data['token']}"}
+        return {'Authorization': f'Bearer {token_data["token"]}'}
 
-    async def _handle_401_response(
-        self, client: httpx.AsyncClient, request: httpx.Request
-    ) -> httpx.Response | None:
+    async def _handle_401_response(self, client: httpx.AsyncClient, request: httpx.Request) -> httpx.Response | None:
         """
         Handle 401 response by refreshing token and retrying request.
 
@@ -68,18 +66,16 @@ class AsyncHTTPClient:
         """
         async with self._refresh_lock:
             token_data = await self.auth_provider.get_token()
-            if not token_data or "refreshToken" not in token_data:
+            if not token_data or 'refreshToken' not in token_data:
                 return None
 
             # Attempt token refresh
-            new_token_data = await self.auth_provider.refresh(
-                token_data["refreshToken"]
-            )
-            if not new_token_data or "token" not in new_token_data:
+            new_token_data = await self.auth_provider.refresh(token_data['refreshToken'])
+            if not new_token_data or 'token' not in new_token_data:
                 return None
 
             # Update request with new authorization header
-            new_auth_headers = {"Authorization": f"Bearer {new_token_data['token']}"}
+            new_auth_headers = {'Authorization': f'Bearer {new_token_data["token"]}'}
             request.headers.update(new_auth_headers)
 
             # Retry request with new token
@@ -118,15 +114,15 @@ class AsyncHTTPClient:
 
         # Prepare request parameters
         request_kwargs = {
-            "method": method,
-            "url": self.base_url + path,
-            "headers": request_headers,
-            "timeout": self.timeout,
+            'method': method,
+            'url': self.base_url + path,
+            'headers': request_headers,
+            'timeout': self.timeout,
             **kwargs,
         }
 
         if json_data is not None:
-            request_kwargs["json"] = json_data
+            request_kwargs['json'] = json_data
 
         async with httpx.AsyncClient() as client:
             # Initial request
@@ -152,7 +148,7 @@ class AsyncHTTPClient:
         **kwargs: Any,
     ) -> httpx.Response:
         """GET request."""
-        return await self.request("GET", path, headers=headers, **kwargs)
+        return await self.request('GET', path, headers=headers, **kwargs)
 
     async def post(
         self,
@@ -162,9 +158,7 @@ class AsyncHTTPClient:
         **kwargs: Any,
     ) -> httpx.Response:
         """POST request with JSON data."""
-        return await self.request(
-            "POST", path, headers=headers, json_data=json_data, **kwargs
-        )
+        return await self.request('POST', path, headers=headers, json_data=json_data, **kwargs)
 
     async def put(
         self,
@@ -174,9 +168,7 @@ class AsyncHTTPClient:
         **kwargs: Any,
     ) -> httpx.Response:
         """PUT request with JSON data."""
-        return await self.request(
-            "PUT", path, headers=headers, json_data=json_data, **kwargs
-        )
+        return await self.request('PUT', path, headers=headers, json_data=json_data, **kwargs)
 
     async def delete(
         self,
@@ -185,4 +177,4 @@ class AsyncHTTPClient:
         **kwargs: Any,
     ) -> httpx.Response:
         """DELETE request."""
-        return await self.request("DELETE", path, headers=headers, **kwargs)
+        return await self.request('DELETE', path, headers=headers, **kwargs)

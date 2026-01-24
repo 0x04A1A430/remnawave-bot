@@ -2,28 +2,28 @@ import logging
 import secrets
 import string
 from datetime import datetime, timedelta
-from typing import Optional, List, Dict
-from sqlalchemy import select, and_, or_, func, case, nullslast, text
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload, joinedload
-from sqlalchemy.exc import IntegrityError
 
+from sqlalchemy import and_, case, func, nullslast, or_, select, text
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.database.crud.discount_offer import get_latest_claimed_offer_for_user
+from app.database.crud.promo_group import get_default_promo_group
+from app.database.crud.promo_offer_log import log_promo_offer_action
 from app.database.models import (
-    User,
-    UserStatus,
+    PaymentMethod,
+    PromoGroup,
     Subscription,
     SubscriptionStatus,
     Transaction,
-    PromoGroup,
-    UserPromoGroup,
-    PaymentMethod,
     TransactionType,
+    User,
+    UserPromoGroup,
+    UserStatus,
 )
-from app.config import settings
-from app.database.crud.promo_group import get_default_promo_group
-from app.database.crud.discount_offer import get_latest_claimed_offer_for_user
-from app.database.crud.promo_offer_log import log_promo_offer_action
 from app.utils.validators import sanitize_telegram_name
+
 
 logger = logging.getLogger(__name__)
 
@@ -39,10 +39,9 @@ def _build_spending_stats_select():
     Returns:
         Tuple колонок (user_id, total_spent, purchase_count)
     """
-    from app.database.models import Transaction
 
     return (
-        Transaction.user_id.label("user_id"),
+        Transaction.user_id.label('user_id'),
         func.coalesce(
             func.sum(
                 case(
@@ -54,7 +53,7 @@ def _build_spending_stats_select():
                 )
             ),
             0,
-        ).label("total_spent"),
+        ).label('total_spent'),
         func.coalesce(
             func.sum(
                 case(
@@ -66,17 +65,17 @@ def _build_spending_stats_select():
                 )
             ),
             0,
-        ).label("purchase_count"),
+        ).label('purchase_count'),
     )
 
 
 def generate_referral_code() -> str:
     alphabet = string.ascii_letters + string.digits
     code_suffix = ''.join(secrets.choice(alphabet) for _ in range(8))
-    return f"ref{code_suffix}"
+    return f'ref{code_suffix}'
 
 
-async def get_user_by_id(db: AsyncSession, user_id: int) -> Optional[User]:
+async def get_user_by_id(db: AsyncSession, user_id: int) -> User | None:
     result = await db.execute(
         select(User)
         .options(
@@ -88,15 +87,15 @@ async def get_user_by_id(db: AsyncSession, user_id: int) -> Optional[User]:
         .where(User.id == user_id)
     )
     user = result.scalar_one_or_none()
-    
+
     if user and user.subscription:
         # Загружаем дополнительные зависимости для subscription
         _ = user.subscription.is_active
-    
+
     return user
 
 
-async def get_user_by_telegram_id(db: AsyncSession, telegram_id: int) -> Optional[User]:
+async def get_user_by_telegram_id(db: AsyncSession, telegram_id: int) -> User | None:
     result = await db.execute(
         select(User)
         .options(
@@ -116,7 +115,7 @@ async def get_user_by_telegram_id(db: AsyncSession, telegram_id: int) -> Optiona
     return user
 
 
-async def get_user_by_username(db: AsyncSession, username: str) -> Optional[User]:
+async def get_user_by_username(db: AsyncSession, username: str) -> User | None:
     if not username:
         return None
 
@@ -142,7 +141,7 @@ async def get_user_by_username(db: AsyncSession, username: str) -> Optional[User
     return user
 
 
-async def get_user_by_referral_code(db: AsyncSession, referral_code: str) -> Optional[User]:
+async def get_user_by_referral_code(db: AsyncSession, referral_code: str) -> User | None:
     result = await db.execute(
         select(User)
         .options(
@@ -153,15 +152,15 @@ async def get_user_by_referral_code(db: AsyncSession, referral_code: str) -> Opt
         .where(User.referral_code == referral_code)
     )
     user = result.scalar_one_or_none()
-    
+
     if user and user.subscription:
         # Загружаем дополнительные зависимости для subscription
         _ = user.subscription.is_active
-    
+
     return user
 
 
-async def get_user_by_remnawave_uuid(db: AsyncSession, remnawave_uuid: str) -> Optional[User]:
+async def get_user_by_remnawave_uuid(db: AsyncSession, remnawave_uuid: str) -> User | None:
     result = await db.execute(
         select(User)
         .options(
@@ -182,29 +181,22 @@ async def get_user_by_remnawave_uuid(db: AsyncSession, remnawave_uuid: str) -> O
 
 async def create_unique_referral_code(db: AsyncSession) -> str:
     max_attempts = 10
-    
+
     for _ in range(max_attempts):
         code = generate_referral_code()
         existing_user = await get_user_by_referral_code(db, code)
         if not existing_user:
             return code
-    
+
     timestamp = str(int(datetime.utcnow().timestamp()))[-6:]
-    return f"ref{timestamp}"
+    return f'ref{timestamp}'
 
 
 async def _sync_users_sequence(db: AsyncSession) -> None:
     """Ensure the users.id sequence matches the current max ID."""
-    await db.execute(
-        text(
-            "SELECT setval('users_id_seq', "
-            "COALESCE((SELECT MAX(id) FROM users), 0) + 1, false)"
-        )
-    )
+    await db.execute(text("SELECT setval('users_id_seq', COALESCE((SELECT MAX(id) FROM users), 0) + 1, false)"))
     await db.commit()
-    logger.warning(
-        "🔄 Последовательность users_id_seq была синхронизирована с текущим максимумом id"
-    )
+    logger.warning('🔄 Последовательность users_id_seq была синхронизирована с текущим максимумом id')
 
 
 async def _get_or_create_default_promo_group(db: AsyncSession) -> PromoGroup:
@@ -213,7 +205,7 @@ async def _get_or_create_default_promo_group(db: AsyncSession) -> PromoGroup:
         return default_group
 
     default_group = PromoGroup(
-        name="Базовый юзер",
+        name='Базовый юзер',
         server_discount_percent=0,
         traffic_discount_percent=0,
         device_discount_percent=0,
@@ -230,17 +222,17 @@ async def create_user_no_commit(
     username: str = None,
     first_name: str = None,
     last_name: str = None,
-    language: str = "ru",
+    language: str = 'ru',
     referred_by_id: int = None,
-    referral_code: str = None
+    referral_code: str = None,
 ) -> User:
     """
     Создает пользователя без немедленного коммита для пакетной обработки
     """
-    
+
     if not referral_code:
         referral_code = await create_unique_referral_code(db)
-    
+
     default_group = await _get_or_create_default_promo_group(db)
     promo_group_id = default_group.id
 
@@ -269,9 +261,7 @@ async def create_user_no_commit(
     user.promo_group = default_group
 
     # Не коммитим сразу, оставляем для пакетной обработки
-    logger.info(
-        f"✅ Подготовлен пользователь {telegram_id} с реферальным кодом {referral_code} (ожидает коммита)"
-    )
+    logger.info(f'✅ Подготовлен пользователь {telegram_id} с реферальным кодом {referral_code} (ожидает коммита)')
     return user
 
 
@@ -281,14 +271,13 @@ async def create_user(
     username: str = None,
     first_name: str = None,
     last_name: str = None,
-    language: str = "ru",
+    language: str = 'ru',
     referred_by_id: int = None,
-    referral_code: str = None
+    referral_code: str = None,
 ) -> User:
-    
     if not referral_code:
         referral_code = await create_unique_referral_code(db)
-    
+
     attempts = 3
 
     for attempt in range(1, attempts + 1):
@@ -318,42 +307,41 @@ async def create_user(
             await db.refresh(user)
 
             user.promo_group = default_group
-            logger.info(
-                f"✅ Создан пользователь {telegram_id} с реферальным кодом {referral_code}"
-            )
-            
+            logger.info(f'✅ Создан пользователь {telegram_id} с реферальным кодом {referral_code}')
+
             # Отправляем событие о создании пользователя
             try:
                 from app.services.event_emitter import event_emitter
+
                 await event_emitter.emit(
-                    "user.created",
+                    'user.created',
                     {
-                        "user_id": user.id,
-                        "telegram_id": user.telegram_id,
-                        "username": user.username,
-                        "first_name": user.first_name,
-                        "last_name": user.last_name,
-                        "referral_code": user.referral_code,
-                        "referred_by_id": user.referred_by_id,
+                        'user_id': user.id,
+                        'telegram_id': user.telegram_id,
+                        'username': user.username,
+                        'first_name': user.first_name,
+                        'last_name': user.last_name,
+                        'referral_code': user.referral_code,
+                        'referred_by_id': user.referred_by_id,
                     },
                     db=db,
                 )
             except Exception as error:
-                logger.warning("Failed to emit user.created event: %s", error)
-            
+                logger.warning('Failed to emit user.created event: %s', error)
+
             return user
 
         except IntegrityError as exc:
             await db.rollback()
 
             if (
-                isinstance(getattr(exc, "orig", None), Exception)
-                and "users_pkey" in str(exc.orig)
+                isinstance(getattr(exc, 'orig', None), Exception)
+                and 'users_pkey' in str(exc.orig)
                 and attempt < attempts
             ):
                 logger.warning(
-                    "⚠️ Обнаружено несоответствие последовательности users_id_seq при создании пользователя %s. "
-                    "Выполняем повторную синхронизацию (попытка %s/%s)",
+                    '⚠️ Обнаружено несоответствие последовательности users_id_seq при создании пользователя %s. '
+                    'Выполняем повторную синхронизацию (попытка %s/%s)',
                     telegram_id,
                     attempt,
                     attempts,
@@ -363,26 +351,22 @@ async def create_user(
 
             raise
 
-    raise RuntimeError("Не удалось создать пользователя после синхронизации последовательности")
+    raise RuntimeError('Не удалось создать пользователя после синхронизации последовательности')
 
 
-async def update_user(
-    db: AsyncSession,
-    user: User,
-    **kwargs
-) -> User:
-    
+async def update_user(db: AsyncSession, user: User, **kwargs) -> User:
     from app.utils.validators import sanitize_telegram_name
+
     for field, value in kwargs.items():
-        if field in ("first_name", "last_name"):
+        if field in ('first_name', 'last_name'):
             value = sanitize_telegram_name(value)
         if hasattr(user, field):
             setattr(user, field, value)
-    
+
     user.updated_at = datetime.utcnow()
     await db.commit()
     await db.refresh(user)
-    
+
     return user
 
 
@@ -390,11 +374,11 @@ async def add_user_balance(
     db: AsyncSession,
     user: User,
     amount_kopeks: int,
-    description: str = "Пополнение баланса",
+    description: str = 'Пополнение баланса',
     create_transaction: bool = True,
     transaction_type: TransactionType = TransactionType.DEPOSIT,
-    bot = None,
-    payment_method: Optional[PaymentMethod] = None
+    bot=None,
+    payment_method: PaymentMethod | None = None,
 ) -> bool:
     try:
         old_balance = user.balance_kopeks
@@ -410,14 +394,16 @@ async def add_user_balance(
                 type=transaction_type,
                 amount_kopeks=amount_kopeks,
                 description=description,
-                payment_method=payment_method
+                payment_method=payment_method,
             )
-        
+
         await db.commit()
         await db.refresh(user)
 
-        user_id_display = user.telegram_id or user.email or f"#{user.id}"
-        logger.info(f"💰 Баланс пользователя {user_id_display} изменен: {old_balance} → {user.balance_kopeks} (изменение: +{amount_kopeks})")
+        user_id_display = user.telegram_id or user.email or f'#{user.id}'
+        logger.info(
+            f'💰 Баланс пользователя {user_id_display} изменен: {old_balance} → {user.balance_kopeks} (изменение: +{amount_kopeks})'
+        )
 
         # Автоматическое возобновление приостановленной суточной подписки
         try:
@@ -434,23 +420,24 @@ async def add_user_balance(
                     if daily_price > 0 and user.balance_kopeks >= daily_price:
                         await resume_daily_subscription(db, subscription)
                         logger.info(
-                            f"✅ Автоматически возобновлена суточная подписка {subscription.id} "
-                            f"после пополнения баланса (user_id={user.id})"
+                            f'✅ Автоматически возобновлена суточная подписка {subscription.id} '
+                            f'после пополнения баланса (user_id={user.id})'
                         )
                         # Синхронизируем с RemnaWave
                         try:
                             from app.services.subscription_service import SubscriptionService
+
                             subscription_service = SubscriptionService()
                             await subscription_service.update_remnawave_user(db, subscription)
                         except Exception as sync_err:
-                            logger.warning(f"Не удалось синхронизировать с RemnaWave: {sync_err}")
+                            logger.warning(f'Не удалось синхронизировать с RemnaWave: {sync_err}')
         except Exception as resume_err:
-            logger.warning(f"Ошибка при попытке возобновить суточную подписку: {resume_err}")
+            logger.warning(f'Ошибка при попытке возобновить суточную подписку: {resume_err}')
 
         return True
 
     except Exception as e:
-        logger.error(f"Ошибка изменения баланса пользователя {user.id}: {e}")
+        logger.error(f'Ошибка изменения баланса пользователя {user.id}: {e}')
         await db.rollback()
         return False
 
@@ -459,14 +446,14 @@ async def add_user_balance_by_id(
     db: AsyncSession,
     telegram_id: int,
     amount_kopeks: int,
-    description: str = "Пополнение баланса",
+    description: str = 'Пополнение баланса',
     transaction_type: TransactionType = TransactionType.DEPOSIT,
-    payment_method: Optional[PaymentMethod] = None,
+    payment_method: PaymentMethod | None = None,
 ) -> bool:
     try:
         user = await get_user_by_telegram_id(db, telegram_id)
         if not user:
-            logger.error(f"Пользователь с telegram_id {telegram_id} не найден")
+            logger.error(f'Пользователь с telegram_id {telegram_id} не найден')
             return False
 
         return await add_user_balance(
@@ -477,9 +464,9 @@ async def add_user_balance_by_id(
             transaction_type=transaction_type,
             payment_method=payment_method,
         )
-        
+
     except Exception as e:
-        logger.error(f"Ошибка пополнения баланса пользователя {telegram_id}: {e}")
+        logger.error(f'Ошибка пополнения баланса пользователя {telegram_id}: {e}')
         return False
 
 
@@ -489,62 +476,62 @@ async def subtract_user_balance(
     amount_kopeks: int,
     description: str,
     create_transaction: bool = False,
-    payment_method: Optional[PaymentMethod] = None,
+    payment_method: PaymentMethod | None = None,
     *,
     consume_promo_offer: bool = False,
 ) -> bool:
-    user_id_display = user.telegram_id or user.email or f"#{user.id}"
-    logger.info(f"💸 ОТЛАДКА subtract_user_balance:")
-    logger.info(f"   👤 User ID: {user.id} (ID: {user_id_display})")
-    logger.info(f"   💰 Баланс до списания: {user.balance_kopeks} копеек")
-    logger.info(f"   💸 Сумма к списанию: {amount_kopeks} копеек")
-    logger.info(f"   📝 Описание: {description}")
-    
-    log_context: Optional[Dict[str, object]] = None
+    user_id_display = user.telegram_id or user.email or f'#{user.id}'
+    logger.info('💸 ОТЛАДКА subtract_user_balance:')
+    logger.info(f'   👤 User ID: {user.id} (ID: {user_id_display})')
+    logger.info(f'   💰 Баланс до списания: {user.balance_kopeks} копеек')
+    logger.info(f'   💸 Сумма к списанию: {amount_kopeks} копеек')
+    logger.info(f'   📝 Описание: {description}')
+
+    log_context: dict[str, object] | None = None
     if consume_promo_offer:
         try:
-            current_percent = int(getattr(user, "promo_offer_discount_percent", 0) or 0)
+            current_percent = int(getattr(user, 'promo_offer_discount_percent', 0) or 0)
         except (TypeError, ValueError):
             current_percent = 0
 
         if current_percent > 0:
-            source = getattr(user, "promo_offer_discount_source", None)
+            source = getattr(user, 'promo_offer_discount_source', None)
             log_context = {
-                "offer_id": None,
-                "percent": current_percent,
-                "source": source,
-                "effect_type": None,
-                "details": {
-                    "reason": "manual_charge",
-                    "description": description,
-                    "amount_kopeks": amount_kopeks,
+                'offer_id': None,
+                'percent': current_percent,
+                'source': source,
+                'effect_type': None,
+                'details': {
+                    'reason': 'manual_charge',
+                    'description': description,
+                    'amount_kopeks': amount_kopeks,
                 },
             }
             try:
                 offer = await get_latest_claimed_offer_for_user(db, user.id, source)
             except Exception as lookup_error:  # pragma: no cover - defensive logging
                 logger.warning(
-                    "Failed to fetch latest claimed promo offer for user %s: %s",
+                    'Failed to fetch latest claimed promo offer for user %s: %s',
                     user.id,
                     lookup_error,
                 )
                 offer = None
 
             if offer:
-                log_context["offer_id"] = offer.id
-                log_context["effect_type"] = offer.effect_type
-                if not log_context["percent"] and offer.discount_percent:
-                    log_context["percent"] = offer.discount_percent
+                log_context['offer_id'] = offer.id
+                log_context['effect_type'] = offer.effect_type
+                if not log_context['percent'] and offer.discount_percent:
+                    log_context['percent'] = offer.discount_percent
 
     if user.balance_kopeks < amount_kopeks:
-        logger.error(f"   ❌ НЕДОСТАТОЧНО СРЕДСТВ!")
+        logger.error('   ❌ НЕДОСТАТОЧНО СРЕДСТВ!')
         return False
 
     try:
         old_balance = user.balance_kopeks
         user.balance_kopeks -= amount_kopeks
 
-        if consume_promo_offer and getattr(user, "promo_offer_discount_percent", 0):
+        if consume_promo_offer and getattr(user, 'promo_offer_discount_percent', 0):
             user.promo_offer_discount_percent = 0
             user.promo_offer_discount_source = None
             user.promo_offer_discount_expires_at = None
@@ -573,16 +560,16 @@ async def subtract_user_balance(
                 await log_promo_offer_action(
                     db,
                     user_id=user.id,
-                    offer_id=log_context.get("offer_id"),
-                    action="consumed",
-                    source=log_context.get("source"),
-                    percent=log_context.get("percent"),
-                    effect_type=log_context.get("effect_type"),
-                    details=log_context.get("details"),
+                    offer_id=log_context.get('offer_id'),
+                    action='consumed',
+                    source=log_context.get('source'),
+                    percent=log_context.get('percent'),
+                    effect_type=log_context.get('effect_type'),
+                    details=log_context.get('details'),
                 )
             except Exception as log_error:  # pragma: no cover - defensive logging
                 logger.warning(
-                    "Failed to record promo offer consumption log for user %s: %s",
+                    'Failed to record promo offer consumption log for user %s: %s',
                     user.id,
                     log_error,
                 )
@@ -590,15 +577,15 @@ async def subtract_user_balance(
                     await db.rollback()
                 except Exception as rollback_error:  # pragma: no cover - defensive logging
                     logger.warning(
-                        "Failed to rollback session after promo offer consumption log failure: %s",
+                        'Failed to rollback session after promo offer consumption log failure: %s',
                         rollback_error,
                     )
 
-        logger.info(f"   ✅ Средства списаны: {old_balance} → {user.balance_kopeks}")
+        logger.info(f'   ✅ Средства списаны: {old_balance} → {user.balance_kopeks}')
         return True
-        
+
     except Exception as e:
-        logger.error(f"   ❌ ОШИБКА СПИСАНИЯ: {e}")
+        logger.error(f'   ❌ ОШИБКА СПИСАНИЯ: {e}')
         await db.rollback()
         return False
 
@@ -616,15 +603,15 @@ async def cleanup_expired_promo_offer_discounts(db: AsyncSession) -> int:
     if not users:
         return 0
 
-    log_payloads: List[Dict[str, object]] = []
+    log_payloads: list[dict[str, object]] = []
 
     for user in users:
         try:
-            percent = int(getattr(user, "promo_offer_discount_percent", 0) or 0)
+            percent = int(getattr(user, 'promo_offer_discount_percent', 0) or 0)
         except (TypeError, ValueError):
             percent = 0
 
-        source = getattr(user, "promo_offer_discount_source", None)
+        source = getattr(user, 'promo_offer_discount_source', None)
         offer_id = None
         effect_type = None
 
@@ -633,7 +620,7 @@ async def cleanup_expired_promo_offer_discounts(db: AsyncSession) -> int:
                 offer = await get_latest_claimed_offer_for_user(db, user.id, source)
             except Exception as lookup_error:  # pragma: no cover - defensive logging
                 logger.warning(
-                    "Failed to fetch latest claimed promo offer for user %s during expiration cleanup: %s",
+                    'Failed to fetch latest claimed promo offer for user %s during expiration cleanup: %s',
                     user.id,
                     lookup_error,
                 )
@@ -647,11 +634,11 @@ async def cleanup_expired_promo_offer_discounts(db: AsyncSession) -> int:
 
         log_payloads.append(
             {
-                "user_id": user.id,
-                "offer_id": offer_id,
-                "source": source,
-                "percent": percent,
-                "effect_type": effect_type,
+                'user_id': user.id,
+                'offer_id': offer_id,
+                'source': source,
+                'percent': percent,
+                'effect_type': effect_type,
             }
         )
 
@@ -663,23 +650,23 @@ async def cleanup_expired_promo_offer_discounts(db: AsyncSession) -> int:
     await db.commit()
 
     for payload in log_payloads:
-        user_id = payload.get("user_id")
+        user_id = payload.get('user_id')
         if not user_id:
             continue
         try:
             await log_promo_offer_action(
                 db,
                 user_id=user_id,
-                offer_id=payload.get("offer_id"),
-                action="disabled",
-                source=payload.get("source"),
-                percent=payload.get("percent"),
-                effect_type=payload.get("effect_type"),
-                details={"reason": "offer_expired"},
+                offer_id=payload.get('offer_id'),
+                action='disabled',
+                source=payload.get('source'),
+                percent=payload.get('percent'),
+                effect_type=payload.get('effect_type'),
+                details={'reason': 'offer_expired'},
             )
         except Exception as log_error:  # pragma: no cover - defensive logging
             logger.warning(
-                "Failed to log promo offer expiration for user %s: %s",
+                'Failed to log promo offer expiration for user %s: %s',
                 user_id,
                 log_error,
             )
@@ -687,7 +674,7 @@ async def cleanup_expired_promo_offer_discounts(db: AsyncSession) -> int:
                 await db.rollback()
             except Exception as rollback_error:  # pragma: no cover - defensive logging
                 logger.warning(
-                    "Failed to rollback session after promo offer expiration log failure: %s",
+                    'Failed to rollback session after promo offer expiration log failure: %s',
                     rollback_error,
                 )
 
@@ -698,32 +685,31 @@ async def get_users_list(
     db: AsyncSession,
     offset: int = 0,
     limit: int = 50,
-    search: Optional[str] = None,
-    status: Optional[UserStatus] = None,
+    search: str | None = None,
+    status: UserStatus | None = None,
     order_by_balance: bool = False,
     order_by_traffic: bool = False,
     order_by_last_activity: bool = False,
     order_by_total_spent: bool = False,
-    order_by_purchase_count: bool = False
-) -> List[User]:
-    
+    order_by_purchase_count: bool = False,
+) -> list[User]:
     query = select(User).options(
         selectinload(User.subscription),
         selectinload(User.promo_group),
         selectinload(User.referrer),
     )
-    
+
     if status:
         query = query.where(User.status == status.value)
-    
+
     if search:
-        search_term = f"%{search}%"
+        search_term = f'%{search}%'
         conditions = [
             User.first_name.ilike(search_term),
             User.last_name.ilike(search_term),
-            User.username.ilike(search_term)
+            User.username.ilike(search_term),
         ]
-        
+
         if search.isdigit():
             try:
                 search_int = int(search)
@@ -733,7 +719,7 @@ async def get_users_list(
             except ValueError:
                 # Если не удалось преобразовать в int, просто ищем по текстовым полям
                 pass
-        
+
         query = query.where(or_(*conditions))
 
     sort_flags = [
@@ -745,7 +731,7 @@ async def get_users_list(
     ]
     if sum(int(flag) for flag in sort_flags) > 1:
         logger.debug(
-            "Выбрано несколько сортировок пользователей — применяется приоритет: трафик > траты > покупки > баланс > активность"
+            'Выбрано несколько сортировок пользователей — применяется приоритет: трафик > траты > покупки > баланс > активность'
         )
 
     transactions_stats = None
@@ -776,40 +762,35 @@ async def get_users_list(
         query = query.order_by(nullslast(User.last_activity.desc()), User.created_at.desc())
     else:
         query = query.order_by(User.created_at.desc())
-    
+
     query = query.offset(offset).limit(limit)
-    
+
     result = await db.execute(query)
     users = result.scalars().all()
-    
+
     # Загружаем дополнительные зависимости для всех пользователей
     for user in users:
         if user and user.subscription:
             # Загружаем дополнительные зависимости для subscription
             _ = user.subscription.is_active
-    
+
     return users
 
 
-async def get_users_count(
-    db: AsyncSession,
-    status: Optional[UserStatus] = None,
-    search: Optional[str] = None
-) -> int:
-    
+async def get_users_count(db: AsyncSession, status: UserStatus | None = None, search: str | None = None) -> int:
     query = select(func.count(User.id))
-    
+
     if status:
         query = query.where(User.status == status.value)
-    
+
     if search:
-        search_term = f"%{search}%"
+        search_term = f'%{search}%'
         conditions = [
             User.first_name.ilike(search_term),
             User.last_name.ilike(search_term),
-            User.username.ilike(search_term)
+            User.username.ilike(search_term),
         ]
-        
+
         if search.isdigit():
             try:
                 search_int = int(search)
@@ -819,17 +800,14 @@ async def get_users_count(
             except ValueError:
                 # Если не удалось преобразовать в int, просто ищем по текстовым полям
                 pass
-        
+
         query = query.where(or_(*conditions))
-    
+
     result = await db.execute(query)
     return result.scalar()
 
 
-async def get_users_spending_stats(
-    db: AsyncSession,
-    user_ids: List[int]
-) -> Dict[int, Dict[str, int]]:
+async def get_users_spending_stats(db: AsyncSession, user_ids: list[int]) -> dict[int, dict[str, int]]:
     """
     Получает статистику трат для списка пользователей.
 
@@ -842,8 +820,6 @@ async def get_users_spending_stats(
     """
     if not user_ids:
         return {}
-
-    from app.database.models import Transaction
 
     stats_query = (
         select(*_build_spending_stats_select())
@@ -859,14 +835,14 @@ async def get_users_spending_stats(
 
     return {
         row.user_id: {
-            "total_spent": int(row.total_spent or 0),
-            "purchase_count": int(row.purchase_count or 0),
+            'total_spent': int(row.total_spent or 0),
+            'purchase_count': int(row.purchase_count or 0),
         }
         for row in rows
     }
 
 
-async def get_referrals(db: AsyncSession, user_id: int) -> List[User]:
+async def get_referrals(db: AsyncSession, user_id: int) -> list[User]:
     result = await db.execute(
         select(User)
         .options(
@@ -879,17 +855,17 @@ async def get_referrals(db: AsyncSession, user_id: int) -> List[User]:
         .order_by(User.created_at.desc())
     )
     users = result.scalars().all()
-    
+
     # Загружаем дополнительные зависимости для всех пользователей
     for user in users:
         if user and user.subscription:
             # Загружаем дополнительные зависимости для subscription
             _ = user.subscription.is_active
-    
+
     return users
 
 
-async def get_users_for_promo_segment(db: AsyncSession, segment: str) -> List[User]:
+async def get_users_for_promo_segment(db: AsyncSession, segment: str) -> list[User]:
     now = datetime.utcnow()
 
     base_query = (
@@ -902,61 +878,58 @@ async def get_users_for_promo_segment(db: AsyncSession, segment: str) -> List[Us
         .where(User.status == UserStatus.ACTIVE.value)
     )
 
-    if segment == "no_subscription":
-        query = (
-            base_query.outerjoin(Subscription, Subscription.user_id == User.id)
-            .where(Subscription.id.is_(None))
-        )
+    if segment == 'no_subscription':
+        query = base_query.outerjoin(Subscription, Subscription.user_id == User.id).where(Subscription.id.is_(None))
     else:
         query = base_query.join(Subscription)
 
-        if segment == "paid_active":
+        if segment == 'paid_active':
             query = query.where(
-                Subscription.is_trial == False,  # noqa: E712
+                Subscription.is_trial == False,
                 Subscription.status == SubscriptionStatus.ACTIVE.value,
                 Subscription.end_date > now,
             )
-        elif segment == "paid_expired":
+        elif segment == 'paid_expired':
             query = query.where(
-                Subscription.is_trial == False,  # noqa: E712
+                Subscription.is_trial == False,
                 or_(
                     Subscription.status == SubscriptionStatus.EXPIRED.value,
                     Subscription.end_date <= now,
                 ),
             )
-        elif segment == "trial_active":
+        elif segment == 'trial_active':
             query = query.where(
-                Subscription.is_trial == True,  # noqa: E712
+                Subscription.is_trial == True,
                 Subscription.status == SubscriptionStatus.ACTIVE.value,
                 Subscription.end_date > now,
             )
-        elif segment == "trial_expired":
+        elif segment == 'trial_expired':
             query = query.where(
-                Subscription.is_trial == True,  # noqa: E712
+                Subscription.is_trial == True,
                 or_(
                     Subscription.status == SubscriptionStatus.EXPIRED.value,
                     Subscription.end_date <= now,
                 ),
             )
         else:
-            logger.warning("Неизвестный сегмент для промо: %s", segment)
+            logger.warning('Неизвестный сегмент для промо: %s', segment)
             return []
 
     result = await db.execute(query.order_by(User.id))
     users = result.scalars().unique().all()
-    
+
     # Загружаем дополнительные зависимости для всех пользователей
     for user in users:
         if user and user.subscription:
             # Загружаем дополнительные зависимости для subscription
             _ = user.subscription.is_active
-    
+
     return users
 
 
-async def get_inactive_users(db: AsyncSession, months: int = 3) -> List[User]:
+async def get_inactive_users(db: AsyncSession, months: int = 3) -> list[User]:
     threshold_date = datetime.utcnow() - timedelta(days=months * 30)
-    
+
     result = await db.execute(
         select(User)
         .options(
@@ -965,88 +938,65 @@ async def get_inactive_users(db: AsyncSession, months: int = 3) -> List[User]:
             selectinload(User.referrer),
             selectinload(User.promo_group),
         )
-        .where(
-            and_(
-                User.last_activity < threshold_date,
-                User.status == UserStatus.ACTIVE.value
-            )
-        )
+        .where(and_(User.last_activity < threshold_date, User.status == UserStatus.ACTIVE.value))
     )
     users = result.scalars().all()
-    
+
     # Загружаем дополнительные зависимости для всех пользователей
     for user in users:
         if user and user.subscription:
             # Загружаем дополнительные зависимости для subscription
             _ = user.subscription.is_active
-    
+
     return users
 
 
 async def delete_user(db: AsyncSession, user: User) -> bool:
     user.status = UserStatus.DELETED.value
     user.updated_at = datetime.utcnow()
-    
+
     await db.commit()
-    user_id_display = user.telegram_id or user.email or f"#{user.id}"
-    logger.info(f"🗑️ Пользователь {user_id_display} помечен как удаленный")
+    user_id_display = user.telegram_id or user.email or f'#{user.id}'
+    logger.info(f'🗑️ Пользователь {user_id_display} помечен как удаленный')
     return True
 
 
 async def get_users_statistics(db: AsyncSession) -> dict:
-    
     total_result = await db.execute(select(func.count(User.id)))
     total_users = total_result.scalar()
-    
-    active_result = await db.execute(
-        select(func.count(User.id)).where(User.status == UserStatus.ACTIVE.value)
-    )
+
+    active_result = await db.execute(select(func.count(User.id)).where(User.status == UserStatus.ACTIVE.value))
     active_users = active_result.scalar()
-    
+
     today = datetime.utcnow().date()
     today_result = await db.execute(
-        select(func.count(User.id)).where(
-            and_(
-                User.created_at >= today,
-                User.status == UserStatus.ACTIVE.value
-            )
-        )
+        select(func.count(User.id)).where(and_(User.created_at >= today, User.status == UserStatus.ACTIVE.value))
     )
     new_today = today_result.scalar()
-    
+
     week_ago = datetime.utcnow() - timedelta(days=7)
     week_result = await db.execute(
-        select(func.count(User.id)).where(
-            and_(
-                User.created_at >= week_ago,
-                User.status == UserStatus.ACTIVE.value
-            )
-        )
+        select(func.count(User.id)).where(and_(User.created_at >= week_ago, User.status == UserStatus.ACTIVE.value))
     )
     new_week = week_result.scalar()
-    
+
     month_ago = datetime.utcnow() - timedelta(days=30)
     month_result = await db.execute(
-        select(func.count(User.id)).where(
-            and_(
-                User.created_at >= month_ago,
-                User.status == UserStatus.ACTIVE.value
-            )
-        )
+        select(func.count(User.id)).where(and_(User.created_at >= month_ago, User.status == UserStatus.ACTIVE.value))
     )
     new_month = month_result.scalar()
-    
+
     return {
-        "total_users": total_users,
-        "active_users": active_users,
-        "blocked_users": total_users - active_users,
-        "new_today": new_today,
-        "new_week": new_week,
-        "new_month": new_month
+        'total_users': total_users,
+        'active_users': active_users,
+        'blocked_users': total_users - active_users,
+        'new_today': new_today,
+        'new_week': new_week,
+        'new_month': new_month,
     }
 
 
-async def get_users_with_active_subscriptions(db: AsyncSession) -> List[User]:
+async def get_users_with_active_subscriptions(db: AsyncSession) -> list[User]:
     """
     Получает список пользователей с активными подписками.
     Используется для мониторинга трафика.
@@ -1077,9 +1027,9 @@ async def create_user_by_email(
     db: AsyncSession,
     email: str,
     password_hash: str,
-    first_name: Optional[str] = None,
-    language: str = "ru",
-    referred_by_id: Optional[int] = None,
+    first_name: str | None = None,
+    language: str = 'ru',
+    referred_by_id: int | None = None,
 ) -> User:
     """
     Создать пользователя через email регистрацию (без Telegram).
@@ -1100,7 +1050,7 @@ async def create_user_by_email(
 
     user = User(
         telegram_id=None,  # Email-only user
-        auth_type="email",
+        auth_type='email',
         email=email,
         email_verified=False,
         password_hash=password_hash,
@@ -1121,32 +1071,31 @@ async def create_user_by_email(
     await db.refresh(user)
 
     user.promo_group = default_group
-    logger.info(f"✅ Создан email-пользователь {email} с id={user.id}")
+    logger.info(f'✅ Создан email-пользователь {email} с id={user.id}')
 
     # Emit event
     try:
         from app.services.event_emitter import event_emitter
+
         await event_emitter.emit(
-            "user.created",
+            'user.created',
             {
-                "user_id": user.id,
-                "email": user.email,
-                "auth_type": "email",
-                "first_name": user.first_name,
-                "referral_code": user.referral_code,
-                "referred_by_id": user.referred_by_id,
+                'user_id': user.id,
+                'email': user.email,
+                'auth_type': 'email',
+                'first_name': user.first_name,
+                'referral_code': user.referral_code,
+                'referred_by_id': user.referred_by_id,
             },
             db=db,
         )
     except Exception as error:
-        logger.warning("Failed to emit user.created event: %s", error)
+        logger.warning('Failed to emit user.created event: %s', error)
 
     return user
 
 
-async def get_user_by_email(db: AsyncSession, email: str) -> Optional[User]:
+async def get_user_by_email(db: AsyncSession, email: str) -> User | None:
     """Get user by email address."""
-    result = await db.execute(
-        select(User).where(User.email == email)
-    )
+    result = await db.execute(select(User).where(User.email == email))
     return result.scalar_one_or_none()

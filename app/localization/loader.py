@@ -1,29 +1,30 @@
 from __future__ import annotations
 
 import json
-import os
 import logging
+import os
 import shutil
 import tempfile
-from functools import lru_cache
+from functools import cache
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 from app.config import settings
 
+
 _logger = logging.getLogger(__name__)
 
-_FALLBACK_LANGUAGE = "ru"
+_FALLBACK_LANGUAGE = 'ru'
 
 _BASE_DIR = Path(__file__).resolve().parent
-_DEFAULT_LOCALES_DIR = _BASE_DIR / "locales"
+_DEFAULT_LOCALES_DIR = _BASE_DIR / 'locales'
 
 
 def _normalize_language_code(value: Any) -> str:
     if isinstance(value, str):
         return value.strip().lower()
     if value is None:
-        return ""
+        return ''
     return str(value).strip().lower()
 
 
@@ -39,18 +40,15 @@ def _locale_file_exists(language: str) -> bool:
     if not code:
         return False
 
-    default_candidate = _DEFAULT_LOCALES_DIR / f"{code}.json"
+    default_candidate = _DEFAULT_LOCALES_DIR / f'{code}.json'
     if default_candidate.exists():
         return True
 
     user_dir = _resolve_user_locales_dir()
-    for extension in (".json", ".yml", ".yaml"):
-        if (user_dir / f"{code}{extension}").exists():
-            return True
-    return False
+    return any((user_dir / f'{code}{extension}').exists() for extension in ('.json', '.yml', '.yaml'))
 
 
-def _select_fallback_language(available_map: Dict[str, str]) -> str:
+def _select_fallback_language(available_map: dict[str, str]) -> str:
     candidates = []
     if _FALLBACK_LANGUAGE:
         candidates.append(_FALLBACK_LANGUAGE)
@@ -72,7 +70,7 @@ def _select_fallback_language(available_map: Dict[str, str]) -> str:
     if _FALLBACK_LANGUAGE and _locale_file_exists(_FALLBACK_LANGUAGE):
         return _FALLBACK_LANGUAGE
 
-    return _FALLBACK_LANGUAGE or "ru"
+    return _FALLBACK_LANGUAGE or 'ru'
 
 
 def _determine_default_language() -> str:
@@ -81,12 +79,12 @@ def _determine_default_language() -> str:
     except AttributeError:
         raw_default = None
 
-    configured = raw_default.strip() if isinstance(raw_default, str) else ""
+    configured = raw_default.strip() if isinstance(raw_default, str) else ''
 
     try:
         available_languages = settings.get_available_languages()
     except Exception as error:  # pragma: no cover - defensive logging
-        _logger.warning("Failed to load available languages from settings: %s", error)
+        _logger.warning('Failed to load available languages from settings: %s', error)
         available_languages = []
 
     available_map = {
@@ -135,16 +133,16 @@ DEFAULT_LANGUAGE = _determine_default_language()
 
 
 def _normalize_key(raw_key: Any) -> str:
-    key = str(raw_key).strip().replace(" ", "_")
+    key = str(raw_key).strip().replace(' ', '_')
     return key.upper()
 
 
-def _flatten_locale_dict(data: Dict[str, Any], parent_key: str = "") -> Dict[str, Any]:
-    flattened: Dict[str, Any] = {}
+def _flatten_locale_dict(data: dict[str, Any], parent_key: str = '') -> dict[str, Any]:
+    flattened: dict[str, Any] = {}
     for key, value in (data or {}).items():
         composite_key = _normalize_key(key)
         if parent_key:
-            composite_key = f"{parent_key}_{composite_key}"
+            composite_key = f'{parent_key}_{composite_key}'
 
         if isinstance(value, dict):
             flattened.update(_flatten_locale_dict(value, composite_key))
@@ -153,8 +151,8 @@ def _flatten_locale_dict(data: Dict[str, Any], parent_key: str = "") -> Dict[str
     return flattened
 
 
-def _normalize_locale_dict(data: Dict[str, Any]) -> Dict[str, Any]:
-    normalized: Dict[str, Any] = {}
+def _normalize_locale_dict(data: dict[str, Any]) -> dict[str, Any]:
+    normalized: dict[str, Any] = {}
     for key, value in (data or {}).items():
         if isinstance(value, dict):
             normalized.update(_flatten_locale_dict(value, _normalize_key(key)))
@@ -165,32 +163,32 @@ def _normalize_locale_dict(data: Dict[str, Any]) -> Dict[str, Any]:
 
 def _directory_is_writable(directory: Path) -> bool:
     try:
-        current_user = f"{os.geteuid()}:{os.getegid()}"
-        user_hint = f" (running as UID:GID {current_user})"
+        current_user = f'{os.geteuid()}:{os.getegid()}'
+        user_hint = f' (running as UID:GID {current_user})'
     except Exception:  # pragma: no cover - best effort only
-        user_hint = ""
+        user_hint = ''
 
     try:
-        with tempfile.NamedTemporaryFile(dir=directory, prefix=".locale_write_test_", delete=True):
+        with tempfile.NamedTemporaryFile(dir=directory, prefix='.locale_write_test_', delete=True):
             pass
         return True
     except PermissionError as error:
         _logger.warning(
-            "Locale directory %s is not writable%s. Ensure the mounted directory allows writes for the container user or configure LOCALES_PATH to a writable path. (%s)",
+            'Locale directory %s is not writable%s. Ensure the mounted directory allows writes for the container user or configure LOCALES_PATH to a writable path. (%s)',
             directory,
             user_hint,
             error,
         )
     except OSError as error:
         _logger.warning(
-            "Unable to prepare locale directory %s for writing%s: %s. Configure LOCALES_PATH to a writable path.",
+            'Unable to prepare locale directory %s for writing%s: %s. Configure LOCALES_PATH to a writable path.',
             directory,
             user_hint,
             error,
         )
     except Exception as error:  # pragma: no cover - defensive logging
         _logger.warning(
-            "Unexpected error while checking locale directory %s%s: %s",
+            'Unexpected error while checking locale directory %s%s: %s',
             directory,
             user_hint,
             error,
@@ -203,24 +201,24 @@ def ensure_locale_templates() -> None:
     try:
         destination.mkdir(parents=True, exist_ok=True)
     except Exception as error:
-        _logger.warning("Unable to create locales directory %s: %s", destination, error)
+        _logger.warning('Unable to create locales directory %s: %s', destination, error)
         return
 
     if not _DEFAULT_LOCALES_DIR.exists():
-        _logger.debug("Default locales directory %s is missing", _DEFAULT_LOCALES_DIR)
+        _logger.debug('Default locales directory %s is missing', _DEFAULT_LOCALES_DIR)
         return
 
     if not _directory_is_writable(destination):
         return
 
-    destination_has_files = any(destination.glob("*"))
+    destination_has_files = any(destination.glob('*'))
 
     def _copy_locale(source: Path, target: Path) -> None:
         try:
             shutil.copyfile(source, target)
         except Exception as error:
             _logger.warning(
-                "Failed to copy default locale %s to %s: %s",
+                'Failed to copy default locale %s to %s: %s',
                 source,
                 target,
                 error,
@@ -233,75 +231,69 @@ def ensure_locale_templates() -> None:
             _copy_locale(template, destination / template.name)
         return
 
-    for locale_code in ("ru", "en"):
-        source_path = _DEFAULT_LOCALES_DIR / f"{locale_code}.json"
-        target_path = destination / f"{locale_code}.json"
+    for locale_code in ('ru', 'en'):
+        source_path = _DEFAULT_LOCALES_DIR / f'{locale_code}.json'
+        target_path = destination / f'{locale_code}.json'
 
         if target_path.exists():
             continue
 
         if not source_path.exists():
-            _logger.debug(
-                "Default locale template %s is missing at %s", locale_code, source_path
-            )
+            _logger.debug('Default locale template %s is missing at %s', locale_code, source_path)
             continue
 
         _copy_locale(source_path, target_path)
 
 
-def _load_default_locale(language: str) -> Dict[str, Any]:
-    default_path = _DEFAULT_LOCALES_DIR / f"{language}.json"
+def _load_default_locale(language: str) -> dict[str, Any]:
+    default_path = _DEFAULT_LOCALES_DIR / f'{language}.json'
     if not default_path.exists():
         return {}
     return _normalize_locale_dict(_load_locale_file(default_path))
 
 
-def _load_user_locale(language: str) -> Dict[str, Any]:
+def _load_user_locale(language: str) -> dict[str, Any]:
     user_dir = _resolve_user_locales_dir()
-    for extension in (".json", ".yml", ".yaml"):
-        candidate = user_dir / f"{language}{extension}"
+    for extension in ('.json', '.yml', '.yaml'):
+        candidate = user_dir / f'{language}{extension}'
         if candidate.exists():
             return _normalize_locale_dict(_load_locale_file(candidate))
     return {}
 
 
-def _load_locale_file(path: Path) -> Dict[str, Any]:
+def _load_locale_file(path: Path) -> dict[str, Any]:
     suffix = path.suffix.lower()
     try:
-        if suffix == ".json":
-            return json.loads(path.read_text(encoding="utf-8"))
-        if suffix in {".yml", ".yaml"}:
+        if suffix == '.json':
+            return json.loads(path.read_text(encoding='utf-8'))
+        if suffix in {'.yml', '.yaml'}:
             try:
                 import yaml  # type: ignore
             except ModuleNotFoundError as import_error:
                 raise RuntimeError(
-                    "PyYAML is required to load YAML locale files. Install PyYAML or provide JSON files."
+                    'PyYAML is required to load YAML locale files. Install PyYAML or provide JSON files.'
                 ) from import_error
-            return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+            return yaml.safe_load(path.read_text(encoding='utf-8')) or {}
     except Exception as error:
-        _logger.warning("Failed to parse locale file %s: %s", path, error)
+        _logger.warning('Failed to parse locale file %s: %s', path, error)
         return {}
 
-    _logger.warning("Unsupported locale format for %s", path)
+    _logger.warning('Unsupported locale format for %s', path)
     return {}
 
 
-def _merge_dicts(base: Dict[str, Any], overrides: Dict[str, Any]) -> Dict[str, Any]:
+def _merge_dicts(base: dict[str, Any], overrides: dict[str, Any]) -> dict[str, Any]:
     result = dict(base)
     for key, value in overrides.items():
-        if (
-            key in result
-            and isinstance(result[key], dict)
-            and isinstance(value, dict)
-        ):
+        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
             result[key] = _merge_dicts(result[key], value)
         else:
             result[key] = value
     return result
 
 
-@lru_cache(maxsize=None)
-def load_locale(language: str) -> Dict[str, Any]:
+@cache
+def load_locale(language: str) -> dict[str, Any]:
     language = language or DEFAULT_LANGUAGE
     defaults = _load_default_locale(language)
     overrides = _load_user_locale(language)
@@ -309,7 +301,7 @@ def load_locale(language: str) -> Dict[str, Any]:
 
     if not merged and language != DEFAULT_LANGUAGE:
         _logger.warning(
-            "Locale %s not found. Falling back to default language %s.",
+            'Locale %s not found. Falling back to default language %s.',
             language,
             DEFAULT_LANGUAGE,
         )

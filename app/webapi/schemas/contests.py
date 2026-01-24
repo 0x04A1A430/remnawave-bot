@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -10,43 +10,43 @@ class ContestTemplateResponse(BaseModel):
     id: int
     name: str
     slug: str
-    description: Optional[str] = None
+    description: str | None = None
     prize_type: str
     prize_value: str
     max_winners: int
     attempts_per_user: int
     times_per_day: int
-    schedule_times: Optional[str] = None
+    schedule_times: str | None = None
     cooldown_hours: int
-    payload: Dict[str, Any] = Field(default_factory=dict)
+    payload: dict[str, Any] = Field(default_factory=dict)
     is_enabled: bool
     created_at: datetime
     updated_at: datetime
 
 
 class ContestTemplateListResponse(BaseModel):
-    items: List[ContestTemplateResponse]
+    items: list[ContestTemplateResponse]
 
 
 class ContestTemplateUpdateRequest(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    prize_type: Optional[str] = None
-    prize_value: Optional[str] = None
-    max_winners: Optional[int] = Field(None, ge=1)
-    attempts_per_user: Optional[int] = Field(None, ge=1)
-    times_per_day: Optional[int] = Field(None, ge=1)
-    schedule_times: Optional[str] = None
-    cooldown_hours: Optional[int] = Field(None, ge=1)
-    payload: Optional[Dict[str, Any]] = None
-    is_enabled: Optional[bool] = None
+    name: str | None = None
+    description: str | None = None
+    prize_type: str | None = None
+    prize_value: str | None = None
+    max_winners: int | None = Field(None, ge=1)
+    attempts_per_user: int | None = Field(None, ge=1)
+    times_per_day: int | None = Field(None, ge=1)
+    schedule_times: str | None = None
+    cooldown_hours: int | None = Field(None, ge=1)
+    payload: dict[str, Any] | None = None
+    is_enabled: bool | None = None
 
 
 class StartRoundRequest(BaseModel):
-    starts_at: Optional[datetime] = None
-    ends_at: Optional[datetime] = None
-    cooldown_hours: Optional[int] = Field(None, ge=1)
-    payload: Optional[Dict[str, Any]] = None
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+    cooldown_hours: int | None = Field(None, ge=1)
+    payload: dict[str, Any] | None = None
     force: bool = False
 
 
@@ -54,11 +54,11 @@ class ContestRoundResponse(BaseModel):
     id: int
     template_id: int
     template_slug: str
-    template_name: Optional[str] = None
+    template_name: str | None = None
     starts_at: datetime
     ends_at: datetime
     status: str
-    payload: Dict[str, Any] = Field(default_factory=dict)
+    payload: dict[str, Any] = Field(default_factory=dict)
     winners_count: int
     max_winners: int
     attempts_per_user: int
@@ -67,7 +67,7 @@ class ContestRoundResponse(BaseModel):
 
 
 class ContestRoundListResponse(BaseModel):
-    items: List[ContestRoundResponse]
+    items: list[ContestRoundResponse]
     total: int
     limit: int
     offset: int
@@ -75,22 +75,22 @@ class ContestRoundListResponse(BaseModel):
 
 class ContestAttemptUser(BaseModel):
     id: int
-    telegram_id: Optional[int] = None
-    username: Optional[str] = None
-    full_name: Optional[str] = None
+    telegram_id: int | None = None
+    username: str | None = None
+    full_name: str | None = None
 
 
 class ContestAttemptResponse(BaseModel):
     id: int
     round_id: int
     user: ContestAttemptUser
-    answer: Optional[str] = None
+    answer: str | None = None
     is_winner: bool
     created_at: datetime
 
 
 class ContestAttemptListResponse(BaseModel):
-    items: List[ContestAttemptResponse]
+    items: list[ContestAttemptResponse]
     total: int
     limit: int
     offset: int
@@ -99,25 +99,25 @@ class ContestAttemptListResponse(BaseModel):
 class ReferralContestResponse(BaseModel):
     id: int
     title: str
-    description: Optional[str] = None
-    prize_text: Optional[str] = None
+    description: str | None = None
+    prize_text: str | None = None
     contest_type: str
     start_at: datetime
     end_at: datetime
     daily_summary_time: time
-    daily_summary_times: Optional[str] = None
+    daily_summary_times: str | None = None
     timezone: str
     is_active: bool
-    last_daily_summary_date: Optional[date] = None
-    last_daily_summary_at: Optional[datetime] = None
+    last_daily_summary_date: date | None = None
+    last_daily_summary_at: datetime | None = None
     final_summary_sent: bool
-    created_by: Optional[int] = None
+    created_by: int | None = None
     created_at: datetime
     updated_at: datetime
 
 
 class ReferralContestListResponse(BaseModel):
-    items: List[ReferralContestResponse]
+    items: list[ReferralContestResponse]
     total: int
     limit: int
     offset: int
@@ -125,57 +125,55 @@ class ReferralContestListResponse(BaseModel):
 
 class ReferralContestCreateRequest(BaseModel):
     title: str
-    description: Optional[str] = None
-    prize_text: Optional[str] = None
-    contest_type: str = Field("referral_paid", min_length=1)
+    description: str | None = None
+    prize_text: str | None = None
+    contest_type: str = Field('referral_paid', min_length=1)
     start_at: datetime
     end_at: datetime
     daily_summary_time: time = Field(default=time(hour=12))
-    daily_summary_times: Optional[str] = Field(
-        default=None, description="Список времён ЧЧ:ММ через запятую (например, 12:00,18:00)"
+    daily_summary_times: str | None = Field(
+        default=None, description='Список времён ЧЧ:ММ через запятую (например, 12:00,18:00)'
     )
-    timezone: str = Field(default="UTC")
+    timezone: str = Field(default='UTC')
     is_active: bool = True
-    created_by: Optional[int] = None
+    created_by: int | None = None
 
 
 class ReferralContestUpdateRequest(BaseModel):
-    title: Optional[str] = None
-    description: Optional[str] = None
-    prize_text: Optional[str] = None
-    contest_type: Optional[str] = Field(None, min_length=1)
-    start_at: Optional[datetime] = None
-    end_at: Optional[datetime] = None
-    daily_summary_time: Optional[time] = None
-    daily_summary_times: Optional[str] = Field(
-        default=None, description="Список времён ЧЧ:ММ через запятую"
-    )
-    timezone: Optional[str] = None
-    is_active: Optional[bool] = None
-    final_summary_sent: Optional[bool] = None
-    created_by: Optional[int] = None
+    title: str | None = None
+    description: str | None = None
+    prize_text: str | None = None
+    contest_type: str | None = Field(None, min_length=1)
+    start_at: datetime | None = None
+    end_at: datetime | None = None
+    daily_summary_time: time | None = None
+    daily_summary_times: str | None = Field(default=None, description='Список времён ЧЧ:ММ через запятую')
+    timezone: str | None = None
+    is_active: bool | None = None
+    final_summary_sent: bool | None = None
+    created_by: int | None = None
 
 
 class ReferralContestLeaderboardItem(BaseModel):
     user_id: int
-    telegram_id: Optional[int] = None
-    username: Optional[str] = None
-    full_name: Optional[str] = None
+    telegram_id: int | None = None
+    username: str | None = None
+    full_name: str | None = None
     referrals_count: int
     total_amount_kopeks: int
     total_amount_rubles: float
 
 
 class ReferralContestDetailResponse(ReferralContestResponse):
-    total_events: Optional[int] = None
-    leaderboard: Optional[List[ReferralContestLeaderboardItem]] = None
+    total_events: int | None = None
+    leaderboard: list[ReferralContestLeaderboardItem] | None = None
 
 
 class ReferralContestEventUser(BaseModel):
     id: int
-    telegram_id: Optional[int] = None
-    username: Optional[str] = None
-    full_name: Optional[str] = None
+    telegram_id: int | None = None
+    username: str | None = None
+    full_name: str | None = None
 
 
 class ReferralContestEventResponse(BaseModel):
@@ -190,7 +188,7 @@ class ReferralContestEventResponse(BaseModel):
 
 
 class ReferralContestEventListResponse(BaseModel):
-    items: List[ReferralContestEventResponse]
+    items: list[ReferralContestEventResponse]
     total: int
     limit: int
     offset: int
@@ -210,4 +208,4 @@ class ReferralContestDetailedStatsResponse(BaseModel):
     total_invited: int
     total_paid_amount: int
     total_unpaid: int
-    participants: List[ReferralContestParticipant]
+    participants: list[ReferralContestParticipant]

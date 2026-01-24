@@ -4,7 +4,7 @@ from aiogram.types import InlineKeyboardButton
 from app.config import settings
 
 
-DEFAULT_UNAVAILABLE_CALLBACK = "menu_profile_unavailable"
+DEFAULT_UNAVAILABLE_CALLBACK = 'menu_profile_unavailable'
 
 
 def build_miniapp_or_callback_button(

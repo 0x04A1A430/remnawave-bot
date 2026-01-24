@@ -2,11 +2,11 @@
 
 import logging
 import smtplib
-from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from typing import Optional
+from email.mime.text import MIMEText
 
 from app.config import settings
+
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +45,7 @@ class EmailService:
         to_email: str,
         subject: str,
         body_html: str,
-        body_text: Optional[str] = None,
+        body_text: str | None = None,
     ) -> bool:
         """
         Send an email.
@@ -60,27 +60,28 @@ class EmailService:
             True if email was sent successfully, False otherwise
         """
         if not self.is_configured():
-            logger.warning("SMTP is not configured, cannot send email")
+            logger.warning('SMTP is not configured, cannot send email')
             return False
 
         try:
-            msg = MIMEMultipart("alternative")
-            msg["Subject"] = subject
-            msg["From"] = f"{self.from_name} <{self.from_email}>"
-            msg["To"] = to_email
+            msg = MIMEMultipart('alternative')
+            msg['Subject'] = subject
+            msg['From'] = f'{self.from_name} <{self.from_email}>'
+            msg['To'] = to_email
 
             # Plain text version
             if body_text is None:
                 # Simple HTML to text conversion
                 import re
-                body_text = re.sub(r"<[^>]+>", "", body_html)
-                body_text = body_text.replace("&nbsp;", " ")
-                body_text = body_text.replace("&amp;", "&")
-                body_text = body_text.replace("&lt;", "<")
-                body_text = body_text.replace("&gt;", ">")
 
-            part1 = MIMEText(body_text, "plain", "utf-8")
-            part2 = MIMEText(body_html, "html", "utf-8")
+                body_text = re.sub(r'<[^>]+>', '', body_html)
+                body_text = body_text.replace('&nbsp;', ' ')
+                body_text = body_text.replace('&amp;', '&')
+                body_text = body_text.replace('&lt;', '<')
+                body_text = body_text.replace('&gt;', '>')
+
+            part1 = MIMEText(body_text, 'plain', 'utf-8')
+            part2 = MIMEText(body_html, 'html', 'utf-8')
 
             msg.attach(part1)
             msg.attach(part2)
@@ -88,11 +89,11 @@ class EmailService:
             with self._get_smtp_connection() as smtp:
                 smtp.sendmail(self.from_email, to_email, msg.as_string())
 
-            logger.info(f"Email sent successfully to {to_email}")
+            logger.info(f'Email sent successfully to {to_email}')
             return True
 
         except Exception as e:
-            logger.error(f"Failed to send email to {to_email}: {e}")
+            logger.error(f'Failed to send email to {to_email}: {e}')
             return False
 
     def send_verification_email(
@@ -100,7 +101,7 @@ class EmailService:
         to_email: str,
         verification_token: str,
         verification_url: str,
-        username: Optional[str] = None,
+        username: str | None = None,
     ) -> bool:
         """
         Send email verification email.
@@ -114,10 +115,10 @@ class EmailService:
         Returns:
             True if email was sent successfully, False otherwise
         """
-        full_url = f"{verification_url}?token={verification_token}"
-        greeting = f"Hello{', ' + username if username else ''}!"
+        full_url = f'{verification_url}?token={verification_token}'
+        greeting = f'Hello{", " + username if username else ""}!'
 
-        subject = "Verify your email address"
+        subject = 'Verify your email address'
         body_html = f"""
         <!DOCTYPE html>
         <html>
@@ -162,7 +163,7 @@ class EmailService:
         to_email: str,
         reset_token: str,
         reset_url: str,
-        username: Optional[str] = None,
+        username: str | None = None,
     ) -> bool:
         """
         Send password reset email.
@@ -176,10 +177,10 @@ class EmailService:
         Returns:
             True if email was sent successfully, False otherwise
         """
-        full_url = f"{reset_url}?token={reset_token}"
-        greeting = f"Hello{', ' + username if username else ''}!"
+        full_url = f'{reset_url}?token={reset_token}'
+        greeting = f'Hello{", " + username if username else ""}!'
 
-        subject = "Reset your password"
+        subject = 'Reset your password'
         body_html = f"""
         <!DOCTYPE html>
         <html>

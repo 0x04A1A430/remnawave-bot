@@ -1,41 +1,43 @@
 """
 API роуты колеса удачи для пользователей.
 """
+
 import logging
 import math
 import time
+
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
-from typing import Optional
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
-from app.database.models import User
-from app.database.crud.wheel import (
-    get_or_create_wheel_config,
-    get_wheel_prizes,
-    get_user_spins_today,
-    get_user_spin_history,
-)
-from app.services.wheel_service import wheel_service
 from app.cabinet.dependencies import get_cabinet_db, get_current_cabinet_user
 from app.cabinet.schemas.wheel import (
-    WheelConfigResponse,
-    WheelPrizeDisplay,
     SpinAvailabilityResponse,
+    SpinHistoryItem,
+    SpinHistoryResponse,
     SpinRequest,
     SpinResultResponse,
-    SpinHistoryResponse,
-    SpinHistoryItem,
+    WheelConfigResponse,
+    WheelPrizeDisplay,
 )
+from app.config import settings
+from app.database.crud.wheel import (
+    get_or_create_wheel_config,
+    get_user_spin_history,
+    get_user_spins_today,
+    get_wheel_prizes,
+)
+from app.database.models import User
+from app.services.wheel_service import wheel_service
+
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/wheel", tags=["Fortune Wheel"])
+router = APIRouter(prefix='/wheel', tags=['Fortune Wheel'])
 
 
-@router.get("/config", response_model=WheelConfigResponse)
+@router.get('/config', response_model=WheelConfigResponse)
 async def get_wheel_config(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
@@ -78,7 +80,7 @@ async def get_wheel_config(
     )
 
 
-@router.get("/availability", response_model=SpinAvailabilityResponse)
+@router.get('/availability', response_model=SpinAvailabilityResponse)
 async def check_spin_availability(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
@@ -99,7 +101,7 @@ async def check_spin_availability(
     )
 
 
-@router.post("/spin", response_model=SpinResultResponse)
+@router.post('/spin', response_model=SpinResultResponse)
 async def spin_wheel(
     request: SpinRequest,
     user: User = Depends(get_current_cabinet_user),
@@ -130,7 +132,7 @@ async def spin_wheel(
     )
 
 
-@router.get("/history", response_model=SpinHistoryResponse)
+@router.get('/history', response_model=SpinHistoryResponse)
 async def get_spin_history(
     page: int = 1,
     per_page: int = 20,
@@ -138,8 +140,7 @@ async def get_spin_history(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Получить историю спинов пользователя."""
-    if page < 1:
-        page = 1
+    page = max(page, 1)
     if per_page < 1 or per_page > 100:
         per_page = 20
 
@@ -150,24 +151,26 @@ async def get_spin_history(
     items = []
     for spin in spins:
         # Получаем emoji и color из приза, если он есть
-        emoji = "🎁"
-        color = "#3B82F6"
+        emoji = '🎁'
+        color = '#3B82F6'
         if spin.prize:
             emoji = spin.prize.emoji
             color = spin.prize.color
 
-        items.append(SpinHistoryItem(
-            id=spin.id,
-            payment_type=spin.payment_type,
-            payment_amount=spin.payment_amount,
-            prize_type=spin.prize_type,
-            prize_value=spin.prize_value,
-            prize_display_name=spin.prize_display_name,
-            emoji=emoji,
-            color=color,
-            prize_value_kopeks=spin.prize_value_kopeks,
-            created_at=spin.created_at,
-        ))
+        items.append(
+            SpinHistoryItem(
+                id=spin.id,
+                payment_type=spin.payment_type,
+                payment_amount=spin.payment_amount,
+                prize_type=spin.prize_type,
+                prize_value=spin.prize_value,
+                prize_display_name=spin.prize_display_name,
+                emoji=emoji,
+                color=color,
+                prize_value_kopeks=spin.prize_value_kopeks,
+                created_at=spin.created_at,
+            )
+        )
 
     pages = math.ceil(total / per_page) if total > 0 else 1
 
@@ -182,11 +185,12 @@ async def get_spin_history(
 
 class StarsInvoiceResponse(BaseModel):
     """Ответ с ссылкой на Stars invoice."""
+
     invoice_url: str
     stars_amount: int
 
 
-@router.post("/stars-invoice", response_model=StarsInvoiceResponse)
+@router.post('/stars-invoice', response_model=StarsInvoiceResponse)
 async def create_stars_invoice(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
@@ -200,13 +204,13 @@ async def create_stars_invoice(
     if not config.is_enabled:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Колесо удачи недоступно",
+            detail='Колесо удачи недоступно',
         )
 
     if not config.spin_cost_stars_enabled or not config.spin_cost_stars:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Оплата Stars не включена",
+            detail='Оплата Stars не включена',
         )
 
     # Проверяем лимит спинов
@@ -214,7 +218,7 @@ async def create_stars_invoice(
     if config.daily_spin_limit > 0 and spins_today >= config.daily_spin_limit:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Достигнут дневной лимит спинов",
+            detail='Достигнут дневной лимит спинов',
         )
 
     # Проверяем наличие призов
@@ -222,41 +226,41 @@ async def create_stars_invoice(
     if not prizes:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Призы не настроены",
+            detail='Призы не настроены',
         )
 
     stars_amount = config.spin_cost_stars
-    payload = f"wheel_spin_{user.id}_{int(time.time())}"
+    payload = f'wheel_spin_{user.id}_{int(time.time())}'
 
     # Создаем invoice через Telegram Bot API
     try:
         bot_token = settings.BOT_TOKEN
-        api_url = f"https://api.telegram.org/bot{bot_token}/createInvoiceLink"
+        api_url = f'https://api.telegram.org/bot{bot_token}/createInvoiceLink'
 
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 api_url,
                 json={
-                    "title": "Колесо удачи",
-                    "description": f"Спин колеса удачи ({stars_amount} ⭐)",
-                    "payload": payload,
-                    "provider_token": "",  # Пустой для Stars
-                    "currency": "XTR",
-                    "prices": [{"label": "Спин колеса", "amount": stars_amount}],
+                    'title': 'Колесо удачи',
+                    'description': f'Спин колеса удачи ({stars_amount} ⭐)',
+                    'payload': payload,
+                    'provider_token': '',  # Пустой для Stars
+                    'currency': 'XTR',
+                    'prices': [{'label': 'Спин колеса', 'amount': stars_amount}],
                 },
             )
 
             result = response.json()
 
-            if not result.get("ok"):
-                logger.error(f"Telegram API error: {result}")
+            if not result.get('ok'):
+                logger.error(f'Telegram API error: {result}')
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Ошибка создания инвойса",
+                    detail='Ошибка создания инвойса',
                 )
 
-            invoice_url = result["result"]
-            logger.info(f"Created Stars invoice for wheel spin: user={user.id}, stars={stars_amount}")
+            invoice_url = result['result']
+            logger.info(f'Created Stars invoice for wheel spin: user={user.id}, stars={stars_amount}')
 
             return StarsInvoiceResponse(
                 invoice_url=invoice_url,
@@ -264,8 +268,8 @@ async def create_stars_invoice(
             )
 
     except httpx.HTTPError as e:
-        logger.error(f"HTTP error creating invoice: {e}")
+        logger.error(f'HTTP error creating invoice: {e}')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Ошибка соединения с Telegram",
+            detail='Ошибка соединения с Telegram',
         )

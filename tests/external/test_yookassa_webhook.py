@@ -13,38 +13,40 @@ from app.external.yookassa_webhook import (
 )
 
 
-ALLOWED_IP = "185.71.76.10"
+ALLOWED_IP = '185.71.76.10'
 
 
 class DummyDB:
     async def close(self) -> None:  # pragma: no cover - simple stub
         pass
+
+
 @pytest.fixture(autouse=True)
 def configure_settings(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings, "YOOKASSA_ENABLED", True, raising=False)
-    monkeypatch.setattr(settings, "YOOKASSA_SHOP_ID", "shop", raising=False)
-    monkeypatch.setattr(settings, "YOOKASSA_SECRET_KEY", "key", raising=False)
-    monkeypatch.setattr(settings, "YOOKASSA_WEBHOOK_PATH", "/yookassa-webhook", raising=False)
-    monkeypatch.setattr(settings, "YOOKASSA_TRUSTED_PROXY_NETWORKS", "", raising=False)
+    monkeypatch.setattr(settings, 'YOOKASSA_ENABLED', True, raising=False)
+    monkeypatch.setattr(settings, 'YOOKASSA_SHOP_ID', 'shop', raising=False)
+    monkeypatch.setattr(settings, 'YOOKASSA_SECRET_KEY', 'key', raising=False)
+    monkeypatch.setattr(settings, 'YOOKASSA_WEBHOOK_PATH', '/yookassa-webhook', raising=False)
+    monkeypatch.setattr(settings, 'YOOKASSA_TRUSTED_PROXY_NETWORKS', '', raising=False)
 
 
 def _build_headers(**overrides: str) -> dict[str, str]:
     headers = {
-        "Content-Type": "application/json",
-        "X-Forwarded-For": ALLOWED_IP,
-        "Cf-Connecting-Ip": ALLOWED_IP,
+        'Content-Type': 'application/json',
+        'X-Forwarded-For': ALLOWED_IP,
+        'Cf-Connecting-Ip': ALLOWED_IP,
     }
     headers.update(overrides)
     return headers
 
 
 @pytest.mark.parametrize(
-    ("remote", "expected"),
+    ('remote', 'expected'),
     (
-        ("185.71.76.10", "185.71.76.10"),
-        ("8.8.8.8", "8.8.8.8"),
-        ("10.0.0.5", "185.71.76.10"),
-        (None, "185.71.76.10"),
+        ('185.71.76.10', '185.71.76.10'),
+        ('8.8.8.8', '8.8.8.8'),
+        ('10.0.0.5', '185.71.76.10'),
+        (None, '185.71.76.10'),
     ),
 )
 def test_resolve_yookassa_ip_trust_rules(remote: str | None, expected: str) -> None:
@@ -56,40 +58,40 @@ def test_resolve_yookassa_ip_trust_rules(remote: str | None, expected: str) -> N
 
 
 def test_resolve_yookassa_ip_prefers_last_forwarded_candidate() -> None:
-    candidates = ["185.71.76.10", "8.8.8.8"]
+    candidates = ['185.71.76.10', '8.8.8.8']
 
-    ip_object = resolve_yookassa_ip(candidates, remote="10.0.0.5")
+    ip_object = resolve_yookassa_ip(candidates, remote='10.0.0.5')
 
     assert ip_object is not None
-    assert str(ip_object) == "8.8.8.8"
+    assert str(ip_object) == '8.8.8.8'
 
 
 def test_resolve_yookassa_ip_accepts_allowed_last_forwarded_candidate() -> None:
-    candidates = ["8.8.8.8", ALLOWED_IP]
+    candidates = ['8.8.8.8', ALLOWED_IP]
 
-    ip_object = resolve_yookassa_ip(candidates, remote="10.0.0.5")
+    ip_object = resolve_yookassa_ip(candidates, remote='10.0.0.5')
 
     assert ip_object is not None
     assert str(ip_object) == ALLOWED_IP
 
 
 def test_resolve_yookassa_ip_skips_trusted_proxy_hops(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings, "YOOKASSA_TRUSTED_PROXY_NETWORKS", "203.0.113.0/24", raising=False)
+    monkeypatch.setattr(settings, 'YOOKASSA_TRUSTED_PROXY_NETWORKS', '203.0.113.0/24', raising=False)
 
-    candidates = [ALLOWED_IP, "203.0.113.10"]
+    candidates = [ALLOWED_IP, '203.0.113.10']
 
-    ip_object = resolve_yookassa_ip(candidates, remote="10.0.0.5")
+    ip_object = resolve_yookassa_ip(candidates, remote='10.0.0.5')
 
     assert ip_object is not None
     assert str(ip_object) == ALLOWED_IP
 
 
 def test_resolve_yookassa_ip_trusted_public_proxy(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings, "YOOKASSA_TRUSTED_PROXY_NETWORKS", "198.51.100.0/24", raising=False)
+    monkeypatch.setattr(settings, 'YOOKASSA_TRUSTED_PROXY_NETWORKS', '198.51.100.0/24', raising=False)
 
-    candidates = [ALLOWED_IP, "198.51.100.10"]
+    candidates = [ALLOWED_IP, '198.51.100.10']
 
-    ip_object = resolve_yookassa_ip(candidates, remote="198.51.100.20")
+    ip_object = resolve_yookassa_ip(candidates, remote='198.51.100.20')
 
     assert ip_object is not None
     assert str(ip_object) == ALLOWED_IP
@@ -103,7 +105,7 @@ async def _post_webhook(client: TestClient, payload: dict, **headers: str) -> we
     body = json.dumps(payload, ensure_ascii=False)
     return await client.post(
         settings.YOOKASSA_WEBHOOK_PATH,
-        data=body.encode("utf-8"),
+        data=body.encode('utf-8'),
         headers=_build_headers(**headers),
     )
 
@@ -112,7 +114,7 @@ def _patch_get_db(monkeypatch: pytest.MonkeyPatch) -> None:
     async def fake_get_db():
         yield DummyDB()
 
-    monkeypatch.setattr("app.external.yookassa_webhook.get_db", fake_get_db)
+    monkeypatch.setattr('app.external.yookassa_webhook.get_db', fake_get_db)
 
 
 @pytest.mark.asyncio
@@ -124,18 +126,18 @@ async def test_handle_webhook_success(monkeypatch: pytest.MonkeyPatch) -> None:
 
     app = create_yookassa_webhook_app(service)
     async with TestClient(TestServer(app)) as client:
-        payload = {"event": "payment.succeeded"}
+        payload = {'event': 'payment.succeeded'}
         body = json.dumps(payload, ensure_ascii=False)
         response = await client.post(
             settings.YOOKASSA_WEBHOOK_PATH,
-            data=body.encode("utf-8"),
+            data=body.encode('utf-8'),
             headers=_build_headers(),
         )
         status = response.status
         text = await response.text()
 
     assert status == 400
-    assert text == "No payment id"
+    assert text == 'No payment id'
     process_mock.assert_not_awaited()
 
 
@@ -148,20 +150,20 @@ async def test_handle_webhook_trusts_cf_connecting_ip(monkeypatch: pytest.Monkey
 
     app = create_yookassa_webhook_app(service)
     async with TestClient(TestServer(app)) as client:
-        payload = {"event": "payment.succeeded"}
+        payload = {'event': 'payment.succeeded'}
         body = json.dumps(payload, ensure_ascii=False)
         headers = _build_headers()
-        headers.pop("X-Forwarded-For")
+        headers.pop('X-Forwarded-For')
         response = await client.post(
             settings.YOOKASSA_WEBHOOK_PATH,
-            data=body.encode("utf-8"),
+            data=body.encode('utf-8'),
             headers=headers,
         )
         status = response.status
         text = await response.text()
 
     assert status == 400
-    assert text == "No payment id"
+    assert text == 'No payment id'
     process_mock.assert_not_awaited()
 
 
@@ -174,18 +176,18 @@ async def test_handle_webhook_with_optional_signature(monkeypatch: pytest.Monkey
 
     app = create_yookassa_webhook_app(service)
     async with TestClient(TestServer(app)) as client:
-        payload = {"event": "payment.succeeded"}
+        payload = {'event': 'payment.succeeded'}
         body = json.dumps(payload, ensure_ascii=False)
         response = await client.post(
             settings.YOOKASSA_WEBHOOK_PATH,
-            data=body.encode("utf-8"),
-            headers=_build_headers(Signature="test-signature"),
+            data=body.encode('utf-8'),
+            headers=_build_headers(Signature='test-signature'),
         )
         status = response.status
         text = await response.text()
 
     assert status == 400
-    assert text == "No payment id"
+    assert text == 'No payment id'
     process_mock.assert_not_awaited()
 
 
@@ -198,10 +200,10 @@ async def test_handle_webhook_accepts_canceled_event(monkeypatch: pytest.MonkeyP
 
     app = create_yookassa_webhook_app(service)
     async with TestClient(TestServer(app)) as client:
-        payload = {"event": "payment.canceled", "object": {"id": "yk_1"}}
+        payload = {'event': 'payment.canceled', 'object': {'id': 'yk_1'}}
         response = await client.post(
             settings.YOOKASSA_WEBHOOK_PATH,
-            data=json.dumps(payload).encode("utf-8"),
+            data=json.dumps(payload).encode('utf-8'),
             headers=_build_headers(),
         )
 

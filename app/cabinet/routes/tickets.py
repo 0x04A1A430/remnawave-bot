@@ -3,39 +3,39 @@
 import logging
 import math
 from datetime import datetime
-from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, desc
 from sqlalchemy.orm import selectinload
 
-from app.database.models import User, Ticket, TicketMessage
-from app.config import settings
-from app.handlers.tickets import notify_admins_about_new_ticket, notify_admins_about_ticket_reply
-from app.database.crud.ticket_notification import TicketNotificationCRUD
 from app.cabinet.routes.websocket import notify_admins_new_ticket, notify_admins_ticket_reply
+from app.config import settings
+from app.database.crud.ticket_notification import TicketNotificationCRUD
+from app.database.models import Ticket, TicketMessage, User
+from app.handlers.tickets import notify_admins_about_new_ticket, notify_admins_about_ticket_reply
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 from ..schemas.tickets import (
-    TicketResponse,
+    TicketCreateRequest,
     TicketDetailResponse,
     TicketListResponse,
-    TicketMessageResponse,
-    TicketCreateRequest,
     TicketMessageCreateRequest,
+    TicketMessageResponse,
+    TicketResponse,
 )
+
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/tickets", tags=["Cabinet Tickets"])
+router = APIRouter(prefix='/tickets', tags=['Cabinet Tickets'])
 
 
 def _message_to_response(message: TicketMessage) -> TicketMessageResponse:
     """Convert TicketMessage to response."""
     return TicketMessageResponse(
         id=message.id,
-        message_text=message.message_text or "",
+        message_text=message.message_text or '',
         is_from_admin=message.is_from_admin,
         has_media=bool(message.media_file_id),
         media_type=message.media_type,
@@ -56,9 +56,9 @@ def _ticket_to_response(ticket: Ticket, include_last_message: bool = True) -> Ti
 
     return TicketResponse(
         id=ticket.id,
-        title=ticket.title or f"Ticket #{ticket.id}",
+        title=ticket.title or f'Ticket #{ticket.id}',
         status=ticket.status,
-        priority=ticket.priority or "normal",
+        priority=ticket.priority or 'normal',
         created_at=ticket.created_at,
         updated_at=ticket.updated_at or ticket.created_at,
         closed_at=ticket.closed_at,
@@ -67,11 +67,11 @@ def _ticket_to_response(ticket: Ticket, include_last_message: bool = True) -> Ti
     )
 
 
-@router.get("", response_model=TicketListResponse)
+@router.get('', response_model=TicketListResponse)
 async def get_tickets(
-    page: int = Query(1, ge=1, description="Page number"),
-    per_page: int = Query(20, ge=1, le=100, description="Items per page"),
-    status_filter: Optional[str] = Query(None, alias="status", description="Filter by status"),
+    page: int = Query(1, ge=1, description='Page number'),
+    per_page: int = Query(20, ge=1, le=100, description='Items per page'),
+    status_filter: str | None = Query(None, alias='status', description='Filter by status'),
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
@@ -80,15 +80,11 @@ async def get_tickets(
     if not settings.is_support_tickets_enabled():
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Support tickets are disabled",
+            detail='Support tickets are disabled',
         )
 
     # Base query
-    query = (
-        select(Ticket)
-        .where(Ticket.user_id == user.id)
-        .options(selectinload(Ticket.messages))
-    )
+    query = select(Ticket).where(Ticket.user_id == user.id).options(selectinload(Ticket.messages))
 
     # Filter by status
     if status_filter:
@@ -121,7 +117,7 @@ async def get_tickets(
     )
 
 
-@router.post("", response_model=TicketDetailResponse)
+@router.post('', response_model=TicketDetailResponse)
 async def create_ticket(
     request: TicketCreateRequest,
     user: User = Depends(get_current_cabinet_user),
@@ -132,15 +128,15 @@ async def create_ticket(
     if not settings.is_support_tickets_enabled():
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Support tickets are disabled",
+            detail='Support tickets are disabled',
         )
 
     # Create ticket
     ticket = Ticket(
         user_id=user.id,
         title=request.title,
-        status="open",
-        priority="normal",
+        status='open',
+        priority='normal',
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
     )
@@ -162,13 +158,13 @@ async def create_ticket(
     await db.commit()
 
     # Refresh to get relationships
-    await db.refresh(ticket, ["messages"])
+    await db.refresh(ticket, ['messages'])
 
     # Уведомить админов о новом тикете (Telegram)
     try:
         await notify_admins_about_new_ticket(ticket, db)
     except Exception as e:
-        logger.error(f"Error notifying admins about new ticket from cabinet: {e}")
+        logger.error(f'Error notifying admins about new ticket from cabinet: {e}')
 
     # Уведомить админов в кабинете
     try:
@@ -177,7 +173,7 @@ async def create_ticket(
             # Отправить WebSocket уведомление
             await notify_admins_new_ticket(ticket.id, ticket.title, user.id)
     except Exception as e:
-        logger.error(f"Error creating cabinet notification for new ticket: {e}")
+        logger.error(f'Error creating cabinet notification for new ticket: {e}')
 
     messages = [_message_to_response(m) for m in ticket.messages]
 
@@ -185,16 +181,16 @@ async def create_ticket(
         id=ticket.id,
         title=ticket.title,
         status=ticket.status,
-        priority=ticket.priority or "normal",
+        priority=ticket.priority or 'normal',
         created_at=ticket.created_at,
         updated_at=ticket.updated_at,
         closed_at=ticket.closed_at,
-        is_reply_blocked=ticket.is_reply_blocked if hasattr(ticket, "is_reply_blocked") else False,
+        is_reply_blocked=ticket.is_reply_blocked if hasattr(ticket, 'is_reply_blocked') else False,
         messages=messages,
     )
 
 
-@router.get("/{ticket_id}", response_model=TicketDetailResponse)
+@router.get('/{ticket_id}', response_model=TicketDetailResponse)
 async def get_ticket(
     ticket_id: int,
     user: User = Depends(get_current_cabinet_user),
@@ -202,9 +198,7 @@ async def get_ticket(
 ):
     """Get ticket with all messages."""
     query = (
-        select(Ticket)
-        .where(Ticket.id == ticket_id, Ticket.user_id == user.id)
-        .options(selectinload(Ticket.messages))
+        select(Ticket).where(Ticket.id == ticket_id, Ticket.user_id == user.id).options(selectinload(Ticket.messages))
     )
 
     result = await db.execute(query)
@@ -213,7 +207,7 @@ async def get_ticket(
     if not ticket:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Ticket not found",
+            detail='Ticket not found',
         )
 
     messages = sorted(ticket.messages or [], key=lambda m: m.created_at)
@@ -221,18 +215,18 @@ async def get_ticket(
 
     return TicketDetailResponse(
         id=ticket.id,
-        title=ticket.title or f"Ticket #{ticket.id}",
+        title=ticket.title or f'Ticket #{ticket.id}',
         status=ticket.status,
-        priority=ticket.priority or "normal",
+        priority=ticket.priority or 'normal',
         created_at=ticket.created_at,
         updated_at=ticket.updated_at or ticket.created_at,
         closed_at=ticket.closed_at,
-        is_reply_blocked=ticket.is_reply_blocked if hasattr(ticket, "is_reply_blocked") else False,
+        is_reply_blocked=ticket.is_reply_blocked if hasattr(ticket, 'is_reply_blocked') else False,
         messages=messages_response,
     )
 
 
-@router.post("/{ticket_id}/messages", response_model=TicketMessageResponse)
+@router.post('/{ticket_id}/messages', response_model=TicketMessageResponse)
 async def add_ticket_message(
     ticket_id: int,
     request: TicketMessageCreateRequest,
@@ -248,21 +242,21 @@ async def add_ticket_message(
     if not ticket:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Ticket not found",
+            detail='Ticket not found',
         )
 
     # Check if ticket is closed
-    if ticket.status == "closed":
+    if ticket.status == 'closed':
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot add message to closed ticket",
+            detail='Cannot add message to closed ticket',
         )
 
     # Check if replies are blocked
-    if hasattr(ticket, "is_reply_blocked") and ticket.is_reply_blocked:
+    if hasattr(ticket, 'is_reply_blocked') and ticket.is_reply_blocked:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Replies to this ticket are blocked",
+            detail='Replies to this ticket are blocked',
         )
 
     # Create message with optional media
@@ -279,8 +273,8 @@ async def add_ticket_message(
     db.add(message)
 
     # Update ticket status and timestamp
-    if ticket.status == "answered":
-        ticket.status = "pending"
+    if ticket.status == 'answered':
+        ticket.status = 'pending'
     ticket.updated_at = datetime.utcnow()
 
     await db.commit()
@@ -290,7 +284,7 @@ async def add_ticket_message(
     try:
         await notify_admins_about_ticket_reply(ticket, request.message, db)
     except Exception as e:
-        logger.error(f"Error notifying admins about ticket reply from cabinet: {e}")
+        logger.error(f'Error notifying admins about ticket reply from cabinet: {e}')
 
     # Уведомить админов в кабинете
     try:
@@ -299,8 +293,8 @@ async def add_ticket_message(
         )
         if notification:
             # Отправить WebSocket уведомление
-            await notify_admins_ticket_reply(ticket.id, (request.message or "")[:100], user.id)
+            await notify_admins_ticket_reply(ticket.id, (request.message or '')[:100], user.id)
     except Exception as e:
-        logger.error(f"Error creating cabinet notification for user reply: {e}")
+        logger.error(f'Error creating cabinet notification for user reply: {e}')
 
     return _message_to_response(message)

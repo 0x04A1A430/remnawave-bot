@@ -18,7 +18,7 @@ from .exceptions import raise_for_status
 
 def generate_device_id() -> str:
     """Generate device ID similar to PHP's DeviceIdGenerator."""
-    return str(uuid.uuid4()).replace("-", "")[:21].lower()
+    return str(uuid.uuid4()).replace('-', '')[:21].lower()
 
 
 # DeviceInfo is now imported from dto.device
@@ -37,12 +37,12 @@ class AuthProviderImpl(AuthProvider):
 
     def __init__(
         self,
-        base_url: str = "https://lknpd.nalog.ru/api",
+        base_url: str = 'https://lknpd.nalog.ru/api',
         storage_path: str | None = None,
         device_id: str | None = None,
     ):
-        self.base_url_v1 = f"{base_url}/v1"
-        self.base_url_v2 = f"{base_url}/v2"
+        self.base_url_v1 = f'{base_url}/v1'
+        self.base_url_v2 = f'{base_url}/v2'
         self.storage_path = storage_path
         self.device_id = device_id or generate_device_id()
         self.device_info = DeviceInfo(sourceDeviceId=self.device_id)
@@ -50,10 +50,10 @@ class AuthProviderImpl(AuthProvider):
 
         # Default headers similar to PHP Authenticator
         self.default_headers = {
-            "Referrer": "https://lknpd.nalog.ru/auth/login",
-            "Content-Type": "application/json",
-            "Accept": "application/json, text/plain, */*",
-            "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
+            'Referrer': 'https://lknpd.nalog.ru/auth/login',
+            'Content-Type': 'application/json',
+            'Accept': 'application/json, text/plain, */*',
+            'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
         }
 
         # Load token from storage if available
@@ -69,7 +69,7 @@ class AuthProviderImpl(AuthProvider):
             return
 
         try:
-            with storage_path.open(encoding="utf-8") as f:
+            with storage_path.open(encoding='utf-8') as f:
                 self._token_data = json.load(f)
         except (json.JSONDecodeError, OSError):
             # Ignore errors, token will be None
@@ -85,7 +85,7 @@ class AuthProviderImpl(AuthProvider):
             # Ensure directory exists
             storage_path.parent.mkdir(parents=True, exist_ok=True)
 
-            with storage_path.open("w", encoding="utf-8") as f:
+            with storage_path.open('w', encoding='utf-8') as f:
                 json.dump(self._token_data, f, ensure_ascii=False, indent=2)
         except OSError:
             # Ignore storage errors
@@ -106,7 +106,7 @@ class AuthProviderImpl(AuthProvider):
             self._token_data = json.loads(token_json)
             self._save_token_to_storage()
         except json.JSONDecodeError as e:
-            raise ValueError(f"Invalid token JSON: {e}") from e
+            raise ValueError(f'Invalid token JSON: {e}') from e
 
     async def create_new_access_token(self, username: str, password: str) -> str:
         """
@@ -125,14 +125,14 @@ class AuthProviderImpl(AuthProvider):
             Domain exceptions for authentication errors
         """
         request_data = {
-            "username": username,
-            "password": password,
-            "deviceInfo": self.device_info.model_dump(),
+            'username': username,
+            'password': password,
+            'deviceInfo': self.device_info.model_dump(),
         }
 
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{self.base_url_v1}/auth/lkfl",
+                f'{self.base_url_v1}/auth/lkfl',
                 json=request_data,
                 headers=self.default_headers,
                 timeout=10.0,
@@ -161,13 +161,13 @@ class AuthProviderImpl(AuthProvider):
             Domain exceptions for API errors
         """
         request_data = {
-            "phone": phone,
-            "requireTpToBeActive": True,
+            'phone': phone,
+            'requireTpToBeActive': True,
         }
 
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{self.base_url_v2}/auth/challenge/sms/start",
+                f'{self.base_url_v2}/auth/challenge/sms/start',
                 json=request_data,
                 headers=self.default_headers,
                 timeout=10.0,
@@ -176,9 +176,7 @@ class AuthProviderImpl(AuthProvider):
             raise_for_status(response)
             return response.json()  # type: ignore[no-any-return]
 
-    async def create_new_access_token_by_phone(
-        self, phone: str, challenge_token: str, verification_code: str
-    ) -> str:
+    async def create_new_access_token_by_phone(self, phone: str, challenge_token: str, verification_code: str) -> str:
         """
         Complete phone-based authentication with SMS code.
 
@@ -196,15 +194,15 @@ class AuthProviderImpl(AuthProvider):
             Domain exceptions for authentication errors
         """
         request_data = {
-            "phone": phone,
-            "code": verification_code,
-            "challengeToken": challenge_token,
-            "deviceInfo": self.device_info.model_dump(),
+            'phone': phone,
+            'code': verification_code,
+            'challengeToken': challenge_token,
+            'deviceInfo': self.device_info.model_dump(),
         }
 
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{self.base_url_v1}/auth/challenge/sms/verify",
+                f'{self.base_url_v1}/auth/challenge/sms/verify',
                 json=request_data,
                 headers=self.default_headers,
                 timeout=10.0,
@@ -230,14 +228,14 @@ class AuthProviderImpl(AuthProvider):
             New token data dictionary or None if refresh failed
         """
         request_data = {
-            "deviceInfo": self.device_info.model_dump(),
-            "refreshToken": refresh_token,
+            'deviceInfo': self.device_info.model_dump(),
+            'refreshToken': refresh_token,
         }
 
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.post(
-                    f"{self.base_url_v1}/auth/token",
+                    f'{self.base_url_v1}/auth/token',
                     json=request_data,
                     headers=self.default_headers,
                     timeout=10.0,

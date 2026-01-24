@@ -1,0 +1,299 @@
+[project]
+name = 'remnawave-bedolaga-telegram-bot'
+version = '3.1.3'
+description = 'Telegram bot for RemnaWave VPN service'
+readme = 'README.md'
+license = { text = 'MIT' }
+requires-python = '==3.13.*'
+dependencies = [
+    'aiogram>=3.22.0',
+    'sqlalchemy>=2.0.43',
+    'alembic>=1.16.5',
+    'asyncpg>=0.30.0',
+    'aiosqlite>=0.21.0',
+    'fastapi[standard]>=0.115.6',
+    'redis>=5.0.1',
+    'pyyaml>=6.0.2',
+    'yookassa>=3.9.0',
+    'python-dateutil>=2.9.0.post0',
+    'cryptography>=41.0.0',
+    'qrcode[pil]>=7.4.2',
+    'packaging>=23.2',
+    'bcrypt>=4.2.0',
+    'pyjwt>=2.8.0',
+    'flask>=3.1.0',
+    'pyzipper>=0.3.6',
+]
+
+[dependency-groups]
+dev = [
+    'ruff',
+    'pytest',
+    'pytest-asyncio',
+    'pytest-cov',
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+target-version = 'py313'
+line-length = 120
+exclude = [
+    '.bzr',
+    '.direnv',
+    '.eggs',
+    '.git',
+    '.git-rewrite',
+    '.hg',
+    '.mypy_cache',
+    '.nox',
+    '.pants.d',
+    '.pytype',
+    '.ruff_cache',
+    '.svn',
+    '.tox',
+    '.venv',
+    '__pypackages__',
+    '_build',
+    'buck-out',
+    'build',
+    'dist',
+    'node_modules',
+    'venv',
+    'migrations',
+]
+
+[tool.ruff.lint]
+select = [
+    'F',
+    'E',
+    'W',
+    'C90',
+    'I',
+    'N',
+    'UP',
+    'YTT',
+    'ASYNC',
+    'S',
+    'B',
+    'A',
+    'COM',
+    'C4',
+    'DTZ',
+    'T10',
+    'EXE',
+    'FA',
+    'ISC',
+    'ICN',
+    'LOG',
+    'G',
+    'PIE',
+    'T20',
+    'PYI',
+    'PT',
+    'Q',
+    'RSE',
+    'RET',
+    'SLF',
+    'SLOT',
+    'SIM',
+    'TID',
+    'TCH',
+    'INT',
+    'PTH',
+    'ERA',
+    'PGH',
+    'PL',
+    'TRY',
+    'FLY',
+    'FAST',
+    'PERF',
+    'FURB',
+    'RUF',
+]
+ignore = [
+    'COM812',
+    'ISC001',
+    'RUF001',
+    'RUF002',
+    'RUF003',
+    'RUF005',
+    'RUF006',
+    'RUF012',
+    'RUF013',
+    'RUF046',
+    'RUF059',
+    'G003',
+    'G004',
+    'G201',
+    'PLR0913',
+    'PLR0915',
+    'PLR0912',
+    'PLR0911',
+    'PLR2004',
+    'PLR1714',
+    'PLW0603',
+    'PLW2901',
+    'TRY003',
+    'TRY400',
+    'TRY300',
+    'TRY301',
+    'TRY401',
+    'E501',
+    'E712',
+    'E722',
+    'B007',
+    'B008',
+    'B904',
+    'TID252',
+    'DTZ001',
+    'DTZ003',
+    'DTZ005',
+    'FAST001',
+    'FAST002',
+    'FURB162',
+    'C408',
+    'C901',
+    'SLF001',
+    'S104',
+    'S110',
+    'S311',
+    'SIM102',
+    'SIM105',
+    'SIM108',
+    'SIM118',
+    'TC001',
+    'TC002',
+    'TC003',
+    'N805',
+    'N815',
+    'RET504',
+    'ERA001',
+    'PERF401',
+    'PIE810',
+    'PTH123',
+    'SIM103',
+    'S608',
+    'DTZ006',
+    'DTZ007',
+    'UP045',
+    'TRY002',
+    'TRY201',
+    'T201',
+    'S324',
+    'E711',
+    'C416',
+    'S105',
+    'PGH003',
+    'S112',
+    'S307',
+    'S310',
+    'SIM117',
+    'PERF403',
+    'N806',
+    'N802',
+    'N818',
+    'ISC002',
+    'DTZ004',
+    'DTZ011',
+    'DTZ901',
+    'ASYNC109',
+    'ASYNC110',
+    'ASYNC230',
+    'A002',
+    'UP007',
+    'RUF034',
+    'PTH110',
+    'PTH117',
+    'F821',
+    'F823',
+    'F811',
+    'B023',
+    'TRY004',
+    'TRY203',
+    'S202',
+    'S106',
+    'COM818',
+]
+
+[tool.ruff.lint.per-file-ignores]
+'tests/**/*.py' = [
+    'S101',
+    'ARG',
+    'S105',
+    'S106',
+    'PT',
+    'E402',
+    'PLC0415',
+    'EM101',
+    'EM102',
+    'TRY003',
+    'INP001',
+]
+'**/migrations/**/*.py' = [
+    'ALL',
+]
+'app/lib/**/*.py' = [
+    'ALL',
+]
+'main.py' = [
+    'E402',
+    'PLC0415',
+]
+'app/bot.py' = [
+    'E402',
+    'PLC0415',
+]
+'app/**/*.py' = [
+    'ARG001',
+    'ARG002',
+    'BLE001',
+    'PLC0415',
+    'E402',
+    'EM101',
+    'EM102',
+    'INP001',
+    'S101',
+]
+'*.py' = [
+    'INP001',
+]
+'**/__init__.py' = [
+    'F401',
+    'F403',
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ['app']
+force-single-line = false
+lines-after-imports = 2
+combine-as-imports = true
+
+[tool.ruff.lint.mccabe]
+max-complexity = 12
+
+[tool.ruff.lint.pylint]
+max-args = 15
+max-branches = 25
+max-returns = 10
+max-statements = 100
+max-locals = 25
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = 'all'
+
+[tool.ruff.lint.flake8-quotes]
+docstring-quotes = 'double'
+inline-quotes = 'single'
+
+[tool.ruff.lint.pydocstyle]
+convention = 'google'
+
+[tool.ruff.format]
+quote-style = 'single'
+indent-style = 'space'
+skip-magic-trailing-comma = false
+line-ending = 'auto'
+docstring-code-format = true
+docstring-code-line-length = 'dynamic'

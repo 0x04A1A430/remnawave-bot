@@ -2,11 +2,13 @@
 Сервис для работы с черным списком пользователей
 Проверяет пользователей по списку из GitHub репозитория
 """
+
 import asyncio
 import logging
-from typing import List, Dict, Optional, Tuple
 from datetime import datetime, timedelta
+
 import aiohttp
+
 from app.config import settings
 
 
@@ -17,7 +19,7 @@ class BlacklistService:
     """
     Сервис для проверки пользователей по черному списку
     """
-    
+
     def __init__(self):
         self.blacklist_data = []  # Список в формате [(telegram_id, username, reason), ...]
         self.last_update = None
@@ -30,7 +32,7 @@ class BlacklistService:
         """Проверяет, включена ли проверка черного списка"""
         return getattr(settings, 'BLACKLIST_CHECK_ENABLED', False)
 
-    def get_blacklist_github_url(self) -> Optional[str]:
+    def get_blacklist_github_url(self) -> str | None:
         """Получает URL к файлу черного списка на GitHub"""
         return getattr(settings, 'BLACKLIST_GITHUB_URL', None)
 
@@ -53,24 +55,23 @@ class BlacklistService:
         async with self.lock:
             github_url = self.get_blacklist_github_url()
             if not github_url:
-                logger.warning("URL к черному списку не задан в настройках")
+                logger.warning('URL к черному списку не задан в настройках')
                 return False
 
             try:
                 # Заменяем github.com на raw.githubusercontent.com для получения raw содержимого
-                if "github.com" in github_url:
-                    raw_url = github_url.replace("github.com", "raw.githubusercontent.com").replace("/blob/", "/")
+                if 'github.com' in github_url:
+                    raw_url = github_url.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/')
                 else:
                     raw_url = github_url
 
                 # Получаем содержимое файла
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(raw_url) as response:
-                        if response.status != 200:
-                            logger.error(f"Ошибка при получении черного списка: статус {response.status}")
-                            return False
+                async with aiohttp.ClientSession() as session, session.get(raw_url) as response:
+                    if response.status != 200:
+                        logger.error(f'Ошибка при получении черного списка: статус {response.status}')
+                        return False
 
-                        content = await response.text()
+                    content = await response.text()
 
                 # Разбираем содержимое файла
                 blacklist_data = []
@@ -91,17 +92,17 @@ class BlacklistService:
                         telegram_id = int(parts[0])  # Первое число - это Telegram ID
                         # Всё остальное - просто комментарий, не используем его для логики
                         # Но можем использовать первую часть после ID как username для отображения
-                        username = ""
+                        username = ''
                         if len(parts) > 1:
                             # Берем вторую часть как username (если начинается с @)
                             if parts[1].startswith('@'):
                                 username = parts[1]
 
                         # По умолчанию используем "Занесен в черный список", если нет другой информации
-                        reason = "Занесен в черный список"
+                        reason = 'Занесен в черный список'
 
                         # Если есть запятая в строке, можем использовать часть после нее как причину
-                        full_line_after_id = line[len(str(telegram_id)):].strip()
+                        full_line_after_id = line[len(str(telegram_id)) :].strip()
                         if ',' in full_line_after_id:
                             # Извлекаем причину после запятой
                             after_comma = full_line_after_id.split(',', 1)[1].strip()
@@ -110,21 +111,23 @@ class BlacklistService:
                         blacklist_data.append((telegram_id, username, reason))
                     except ValueError:
                         # Если не удается преобразовать в число, это не ID
-                        logger.warning(f"Неверный формат строки {line_num} в черном списке - первое значение не является числом: {line}")
+                        logger.warning(
+                            f'Неверный формат строки {line_num} в черном списке - первое значение не является числом: {line}'
+                        )
 
                 self.blacklist_data = blacklist_data
                 self.last_update = datetime.utcnow()
-                logger.info(f"Черный список успешно обновлен. Найдено {len(blacklist_data)} записей")
+                logger.info(f'Черный список успешно обновлен. Найдено {len(blacklist_data)} записей')
                 return True
 
             except ValueError as e:
-                logger.error(f"Ошибка при парсинге ID из черного списка: {e}")
+                logger.error(f'Ошибка при парсинге ID из черного списка: {e}')
                 return False
             except Exception as e:
-                logger.error(f"Ошибка при обновлении черного списка: {e}")
+                logger.error(f'Ошибка при обновлении черного списка: {e}')
                 return False
 
-    async def is_user_blacklisted(self, telegram_id: int, username: Optional[str] = None) -> Tuple[bool, Optional[str]]:
+    async def is_user_blacklisted(self, telegram_id: int, username: str | None = None) -> tuple[bool, str | None]:
         """
         Проверяет, находится ли пользователь в черном списке
 
@@ -140,44 +143,44 @@ class BlacklistService:
 
         # Проверяем, является ли пользователь администратором и нужно ли его игнорировать
         if self.should_ignore_admins() and self.is_admin(telegram_id):
-            logger.info(f"Пользователь {telegram_id} является администратором, игнорируем проверку черного списка")
+            logger.info(f'Пользователь {telegram_id} является администратором, игнорируем проверку черного списка')
             return False, None
 
         # Если черный список пуст или устарел, обновляем его
         interval_hours = self.get_blacklist_update_interval_hours()
         required_interval = timedelta(hours=interval_hours)
-        if not self.blacklist_data or (self.last_update and
-                                     datetime.utcnow() - self.last_update > required_interval):
+        if not self.blacklist_data or (self.last_update and datetime.utcnow() - self.last_update > required_interval):
             await self.update_blacklist()
 
         # Проверяем по Telegram ID
         for bl_id, bl_username, bl_reason in self.blacklist_data:
             if bl_id == telegram_id:
-                logger.info(f"Пользователь {telegram_id} найден в черном списке по ID: {bl_reason}")
+                logger.info(f'Пользователь {telegram_id} найден в черном списке по ID: {bl_reason}')
                 return True, bl_reason
 
         # Проверяем по username, если он передан
         if username:
             for bl_id, bl_username, bl_reason in self.blacklist_data:
-                if bl_username and (bl_username == username or bl_username == f"@{username}"):
-                    logger.info(f"Пользователь {username} ({telegram_id}) найден в черном списке по username: {bl_reason}")
+                if bl_username and (bl_username == username or bl_username == f'@{username}'):
+                    logger.info(
+                        f'Пользователь {username} ({telegram_id}) найден в черном списке по username: {bl_reason}'
+                    )
                     return True, bl_reason
 
         return False, None
 
-    async def get_all_blacklisted_users(self) -> List[Tuple[int, str, str]]:
+    async def get_all_blacklisted_users(self) -> list[tuple[int, str, str]]:
         """
         Возвращает весь черный список
         """
         interval_hours = self.get_blacklist_update_interval_hours()
         required_interval = timedelta(hours=interval_hours)
-        if not self.blacklist_data or (self.last_update and
-                                     datetime.utcnow() - self.last_update > required_interval):
+        if not self.blacklist_data or (self.last_update and datetime.utcnow() - self.last_update > required_interval):
             await self.update_blacklist()
 
         return self.blacklist_data.copy()
 
-    async def get_user_by_telegram_id(self, telegram_id: int) -> Optional[Tuple[int, str, str]]:
+    async def get_user_by_telegram_id(self, telegram_id: int) -> tuple[int, str, str] | None:
         """
         Возвращает информацию о пользователе из черного списка по Telegram ID
 
@@ -192,7 +195,7 @@ class BlacklistService:
                 return (bl_id, bl_username, bl_reason)
         return None
 
-    async def get_user_by_username(self, username: str) -> Optional[Tuple[int, str, str]]:
+    async def get_user_by_username(self, username: str) -> tuple[int, str, str] | None:
         """
         Возвращает информацию о пользователе из черного списка по username
 
@@ -203,7 +206,7 @@ class BlacklistService:
             Кортеж (telegram_id, username, reason) или None, если не найден
         """
         # Проверяем как с @, так и без
-        username_with_at = f"@{username}" if not username.startswith('@') else username
+        username_with_at = f'@{username}' if not username.startswith('@') else username
         username_without_at = username.lstrip('@')
 
         for bl_id, bl_username, bl_reason in self.blacklist_data:
@@ -211,18 +214,17 @@ class BlacklistService:
                 return (bl_id, bl_username, bl_reason)
         return None
 
-    async def force_update_blacklist(self) -> Tuple[bool, str]:
+    async def force_update_blacklist(self) -> tuple[bool, str]:
         """
         Принудительно обновляет черный список
-        
+
         Returns:
             Кортеж (успешно, сообщение)
         """
         success = await self.update_blacklist()
         if success:
-            return True, f"Черный список обновлен успешно. Записей: {len(self.blacklist_data)}"
-        else:
-            return False, "Ошибка обновления черного списка"
+            return True, f'Черный список обновлен успешно. Записей: {len(self.blacklist_data)}'
+        return False, 'Ошибка обновления черного списка'
 
 
 # Глобальный экземпляр сервиса

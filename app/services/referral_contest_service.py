@@ -1,7 +1,7 @@
 import asyncio
 import logging
-from datetime import datetime, date, time, timedelta, timezone
-from typing import Optional, Sequence, Tuple
+from collections.abc import Sequence
+from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from aiogram import Bot
@@ -23,13 +23,14 @@ from app.database.crud.user import get_user_by_id
 from app.database.database import AsyncSessionLocal
 from app.database.models import ReferralContest, User
 
+
 logger = logging.getLogger(__name__)
 
 
 class ReferralContestService:
     def __init__(self) -> None:
-        self.bot: Optional[Bot] = None
-        self._task: Optional[asyncio.Task] = None
+        self.bot: Bot | None = None
+        self._task: asyncio.Task | None = None
         self._poll_interval_seconds = 60
 
     def set_bot(self, bot: Bot) -> None:
@@ -42,15 +43,15 @@ class ReferralContestService:
         await self.stop()
 
         if not settings.is_contests_enabled():
-            logger.info("Сервис конкурсов отключен настройками")
+            logger.info('Сервис конкурсов отключен настройками')
             return
 
         if not self.bot:
-            logger.warning("Невозможно запустить сервис конкурсов без экземпляра бота")
+            logger.warning('Невозможно запустить сервис конкурсов без экземпляра бота')
             return
 
         self._task = asyncio.create_task(self._run_loop())
-        logger.info("🏆 Сервис конкурсов запущен")
+        logger.info('🏆 Сервис конкурсов запущен')
 
     async def stop(self) -> None:
         if self._task and not self._task.done():
@@ -68,12 +69,12 @@ class ReferralContestService:
                     await self._process_summaries()
                 except asyncio.CancelledError:
                     raise
-                except Exception as exc:  # noqa: BLE001
-                    logger.error("Ошибка сервиса конкурсов: %s", exc)
+                except Exception as exc:
+                    logger.error('Ошибка сервиса конкурсов: %s', exc)
 
                 await asyncio.sleep(self._poll_interval_seconds)
         except asyncio.CancelledError:
-            logger.info("Сервис конкурсов остановлен")
+            logger.info('Сервис конкурсов остановлен')
             raise
 
     async def _process_summaries(self) -> None:
@@ -90,9 +91,9 @@ class ReferralContestService:
                     await self._maybe_send_final_summary(db, contest, now_utc)
                 except asyncio.CancelledError:
                     raise
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     logger.error(
-                        "Ошибка обработки конкурса %s (%s): %s",
+                        'Ошибка обработки конкурса %s (%s): %s',
                         contest.id,
                         contest.title,
                         exc,
@@ -105,7 +106,7 @@ class ReferralContestService:
         now_utc: datetime,
     ) -> None:
         tz = self._get_timezone(contest)
-        now_local = now_utc.replace(tzinfo=timezone.utc).astimezone(tz)
+        now_local = now_utc.replace(tzinfo=UTC).astimezone(tz)
         start_local = self._to_local(contest.start_at, tz)
         end_local = self._to_local(contest.end_at, tz)
 
@@ -115,7 +116,7 @@ class ReferralContestService:
         summary_times = self._get_summary_times(contest)
         for summary_time in summary_times:
             summary_dt = datetime.combine(now_local.date(), summary_time, tzinfo=tz)
-            summary_dt_utc = summary_dt.astimezone(timezone.utc).replace(tzinfo=None)
+            summary_dt_utc = summary_dt.astimezone(UTC).replace(tzinfo=None)
 
             if now_utc < summary_dt_utc:
                 continue
@@ -146,7 +147,7 @@ class ReferralContestService:
         summary_times = self._get_summary_times(contest)
         summary_time = summary_times[-1] if summary_times else time(hour=12, minute=0)
         summary_dt = datetime.combine(end_local.date(), summary_time, tzinfo=tz)
-        summary_dt_utc = summary_dt.astimezone(timezone.utc).replace(tzinfo=None)
+        summary_dt_utc = summary_dt.astimezone(UTC).replace(tzinfo=None)
 
         if now_utc < contest.end_at:
             return
@@ -164,13 +165,13 @@ class ReferralContestService:
         target_date: date,
         *,
         is_final: bool,
-        summary_dt_utc: Optional[datetime] = None,
+        summary_dt_utc: datetime | None = None,
     ) -> None:
         tz = self._get_timezone(contest)
         day_start_local = datetime.combine(target_date, time.min, tzinfo=tz)
         day_end_local = day_start_local + timedelta(days=1)
-        day_start_utc = day_start_local.astimezone(timezone.utc).replace(tzinfo=None)
-        day_end_utc = day_end_local.astimezone(timezone.utc).replace(tzinfo=None)
+        day_start_utc = day_start_local.astimezone(UTC).replace(tzinfo=None)
+        day_end_utc = day_end_local.astimezone(UTC).replace(tzinfo=None)
 
         leaderboard = list(await get_contest_leaderboard(db, contest.id))
         total_events = await get_contest_events_count(db, contest.id)
@@ -200,7 +201,7 @@ class ReferralContestService:
         )
 
         if not leaderboard:
-            logger.info("Конкурс %s: пока нет участников", contest.id)
+            logger.info('Конкурс %s: пока нет участников', contest.id)
 
         if is_final:
             await mark_final_summary_sent(db, contest)
@@ -212,7 +213,7 @@ class ReferralContestService:
         db: AsyncSession,
         *,
         contest: ReferralContest,
-        leaderboard: Sequence[Tuple[User, int, int]],
+        leaderboard: Sequence[tuple[User, int, int]],
         total_events: int,
         today_events: int,
         day_start_utc: datetime,
@@ -227,13 +228,17 @@ class ReferralContestService:
 
         for user, score, _ in leaderboard:
             rank = score_map.get(user.id, (None, score))[0]
-            today_score = await get_referrer_score(
-                db=db,
-                contest_id=contest.id,
-                referrer_id=user.id,
-                start=day_start_utc,
-                end=day_end_utc,
-            ) if score else 0
+            today_score = (
+                await get_referrer_score(
+                    db=db,
+                    contest_id=contest.id,
+                    referrer_id=user.id,
+                    start=day_start_utc,
+                    end=day_end_utc,
+                )
+                if score
+                else 0
+            )
 
             text = self._build_participant_message(
                 contest=contest,
@@ -247,24 +252,24 @@ class ReferralContestService:
 
             # Skip email-only users (no telegram_id)
             if not user.telegram_id:
-                logger.debug(f"Skipping contest notification for email-only user {user.id}")
+                logger.debug(f'Skipping contest notification for email-only user {user.id}')
                 continue
 
             try:
                 await self.bot.send_message(user.telegram_id, text, disable_web_page_preview=True)
             except (TelegramForbiddenError, TelegramNotFound):
                 logger.info(
-                    "Не удалось отправить сообщение участнику %s (вероятно, блокировка)",
+                    'Не удалось отправить сообщение участнику %s (вероятно, блокировка)',
                     user.telegram_id,
                 )
-            except Exception as exc:  # noqa: BLE001
-                logger.error("Ошибка отправки участнику конкурса %s: %s", user.telegram_id, exc)
+            except Exception as exc:
+                logger.error('Ошибка отправки участнику конкурса %s: %s', user.telegram_id, exc)
 
     async def _notify_admins(
         self,
         *,
         contest: ReferralContest,
-        leaderboard: Sequence[Tuple[User, int, int]],
+        leaderboard: Sequence[tuple[User, int, int]],
         total_events: int,
         today_events: int,
         is_final: bool,
@@ -278,42 +283,42 @@ class ReferralContestService:
             return
 
         lines = [
-            "🏆 <b>Конкурс рефералов</b>",
-            f"Название: <b>{contest.title}</b>",
-            f"Статус: {'финал' if is_final else 'дневная сводка'}",
-            f"Временная зона: <code>{tz.key}</code>",
-            f"Всего рефералов: <b>{total_events}</b>",
-            "",
-            "Топ участников:",
+            '🏆 <b>Конкурс рефералов</b>',
+            f'Название: <b>{contest.title}</b>',
+            f'Статус: {"финал" if is_final else "дневная сводка"}',
+            f'Временная зона: <code>{tz.key}</code>',
+            f'Всего рефералов: <b>{total_events}</b>',
+            '',
+            'Топ участников:',
         ]
 
         if leaderboard:
             for idx, (user, score, _) in enumerate(leaderboard[:5], start=1):
                 name = user.full_name
-                user_id_display = user.telegram_id or user.email or f"#{user.id}"
-                lines.append(f"{idx}. {name} ({user_id_display}) — {score}")
+                user_id_display = user.telegram_id or user.email or f'#{user.id}'
+                lines.append(f'{idx}. {name} ({user_id_display}) — {score}')
         else:
-            lines.append("Пока нет участников.")
+            lines.append('Пока нет участников.')
 
         if contest.prize_text:
-            lines.append("")
-            lines.append(f"Приз: {contest.prize_text}")
+            lines.append('')
+            lines.append(f'Приз: {contest.prize_text}')
 
         try:
             await self.bot.send_message(
                 chat_id=chat_id,
-                text="\n".join(lines),
+                text='\n'.join(lines),
                 disable_web_page_preview=True,
                 message_thread_id=settings.ADMIN_NOTIFICATIONS_TOPIC_ID,
             )
-        except Exception as exc:  # noqa: BLE001
-            logger.error("Не удалось отправить админскую сводку конкурса: %s", exc)
+        except Exception as exc:
+            logger.error('Не удалось отправить админскую сводку конкурса: %s', exc)
 
     async def _notify_public_channel(
         self,
         *,
         contest: ReferralContest,
-        leaderboard: Sequence[Tuple[User, int, int]],
+        leaderboard: Sequence[tuple[User, int, int]],
         total_events: int,
         today_events: int,
         is_final: bool,
@@ -332,34 +337,34 @@ class ReferralContestService:
             channel_id = channel_id_raw
 
         lines = [
-            f"🏆 {contest.title}",
-            "🏁 Итоги конкурса" if is_final else "📊 Промежуточные итоги",
-            f"Время зоны: {tz.key}",
-            f"Всего участников: <b>{len(leaderboard)}</b>",
-            "",
-            "Топ участников:",
+            f'🏆 {contest.title}',
+            '🏁 Итоги конкурса' if is_final else '📊 Промежуточные итоги',
+            f'Время зоны: {tz.key}',
+            f'Всего участников: <b>{len(leaderboard)}</b>',
+            '',
+            'Топ участников:',
         ]
 
         if leaderboard:
             for idx, (user, score, _) in enumerate(leaderboard[:5], start=1):
-                lines.append(f"{idx}. {user.full_name} — {score}")
+                lines.append(f'{idx}. {user.full_name} — {score}')
         else:
-            lines.append("Пока нет участников.")
+            lines.append('Пока нет участников.')
 
         if contest.prize_text:
-            lines.append("")
-            lines.append(f"Приз: {contest.prize_text}")
+            lines.append('')
+            lines.append(f'Приз: {contest.prize_text}')
 
         try:
             await self.bot.send_message(
                 chat_id=channel_id,
-                text="\n".join(lines),
+                text='\n'.join(lines),
                 disable_web_page_preview=True,
             )
         except (TelegramForbiddenError, TelegramNotFound):
-            logger.info("Не удалось отправить сводку конкурса в канал %s", channel_id_raw)
-        except Exception as exc:  # noqa: BLE001
-            logger.error("Ошибка отправки сводки конкурса в канал %s: %s", channel_id_raw, exc)
+            logger.info('Не удалось отправить сводку конкурса в канал %s', channel_id_raw)
+        except Exception as exc:
+            logger.error('Ошибка отправки сводки конкурса в канал %s: %s', channel_id_raw, exc)
 
     def _build_participant_message(
         self,
@@ -372,36 +377,36 @@ class ReferralContestService:
         today_events: int,
         is_final: bool,
     ) -> str:
-        status_line = "🏁 Итоги конкурса" if is_final else "📊 Промежуточные итоги"
+        status_line = '🏁 Итоги конкурса' if is_final else '📊 Промежуточные итоги'
         lines = [
-            f"🏆 {contest.title}",
+            f'🏆 {contest.title}',
             status_line,
-            "",
-            f"Ваше место: <b>{rank}</b>",
-            f"Зачётов за всё время: <b>{score}</b>",
-            f"За сегодня: <b>{today_score}</b>",
-            f"Общий пул зачётов: <b>{total_events}</b> (сегодня {today_events})",
+            '',
+            f'Ваше место: <b>{rank}</b>',
+            f'Зачётов за всё время: <b>{score}</b>',
+            f'За сегодня: <b>{today_score}</b>',
+            f'Общий пул зачётов: <b>{total_events}</b> (сегодня {today_events})',
         ]
 
         if contest.prize_text:
-            lines.append("")
-            lines.append(f"Призовой фонд: {contest.prize_text}")
+            lines.append('')
+            lines.append(f'Призовой фонд: {contest.prize_text}')
 
         if not is_final:
-            remaining = contest.end_at - datetime.now(timezone.utc)
+            remaining = contest.end_at - datetime.now(UTC)
             if remaining.total_seconds() > 0:
                 hours_left = int(remaining.total_seconds() // 3600)
-                lines.append("")
-                lines.append(f"До окончания: ~{hours_left} ч.")
+                lines.append('')
+                lines.append(f'До окончания: ~{hours_left} ч.')
 
-        return "\n".join(lines)
+        return '\n'.join(lines)
 
     async def get_detailed_contest_stats(self, db: AsyncSession, contest_id: int) -> dict:
         from app.database.crud.referral_contest import (
             get_contest_leaderboard,
-            get_referral_contest,
             get_contest_payment_stats,
             get_contest_transaction_breakdown,
+            get_referral_contest,
         )
 
         contest = await get_referral_contest(db, contest_id)
@@ -448,14 +453,16 @@ class ReferralContestService:
         # Build participants stats directly from leaderboard (already has User objects)
         participants_stats = []
         for user, score, amount in leaderboard:
-            participants_stats.append({
-                'referrer_id': user.id,
-                'full_name': user.full_name,
-                'total_referrals': score,
-                'paid_referrals': score if amount > 0 else 0,
-                'unpaid_referrals': 0 if amount > 0 else score,
-                'total_paid_amount': amount,
-            })
+            participants_stats.append(
+                {
+                    'referrer_id': user.id,
+                    'full_name': user.full_name,
+                    'total_referrals': score,
+                    'paid_referrals': score if amount > 0 else 0,
+                    'unpaid_referrals': 0 if amount > 0 else score,
+                    'total_paid_amount': amount,
+                }
+            )
 
         return {
             'total_participants': total_participants,
@@ -473,20 +480,20 @@ class ReferralContestService:
         tz_name = contest.timezone or settings.TIMEZONE
         try:
             return ZoneInfo(tz_name)
-        except Exception:  # noqa: BLE001
-            logger.warning("Не удалось загрузить TZ %s, используем UTC", tz_name)
-            return ZoneInfo("UTC")
+        except Exception:
+            logger.warning('Не удалось загрузить TZ %s, используем UTC', tz_name)
+            return ZoneInfo('UTC')
 
-    def _parse_times(self, times_str: Optional[str]) -> list[time]:
+    def _parse_times(self, times_str: str | None) -> list[time]:
         if not times_str:
             return []
         parsed: list[time] = []
-        for part in times_str.split(","):
+        for part in times_str.split(','):
             part = part.strip()
             if not part:
                 continue
             try:
-                parsed.append(datetime.strptime(part, "%H:%M").time())
+                parsed.append(datetime.strptime(part, '%H:%M').time())
             except Exception:
                 continue
         return parsed
@@ -502,7 +509,7 @@ class ReferralContestService:
     def _to_local(self, dt_value: datetime, tz: ZoneInfo) -> datetime:
         base = dt_value
         if dt_value.tzinfo is None:
-            base = dt_value.replace(tzinfo=timezone.utc)
+            base = dt_value.replace(tzinfo=UTC)
         return base.astimezone(tz)
 
     async def on_subscription_payment(
@@ -522,7 +529,7 @@ class ReferralContestService:
         contests = await get_contests_for_events(
             db,
             now_utc,
-            contest_types=["referral_paid"],
+            contest_types=['referral_paid'],
         )
         if not contests:
             return
@@ -535,17 +542,17 @@ class ReferralContestService:
                     referrer_id=user.referred_by_id,
                     referral_id=user.id,
                     amount_kopeks=amount_kopeks,
-                    event_type="subscription_purchase",
+                    event_type='subscription_purchase',
                 )
                 if event:
                     logger.info(
-                        "Записан зачёт конкурса %s: реферер %s, реферал %s",
+                        'Записан зачёт конкурса %s: реферер %s, реферал %s',
                         contest.id,
                         user.referred_by_id,
                         user.id,
                     )
-            except Exception as exc:  # noqa: BLE001
-                logger.error("Не удалось записать зачёт конкурса %s: %s", contest.id, exc)
+            except Exception as exc:
+                logger.error('Не удалось записать зачёт конкурса %s: %s', contest.id, exc)
 
     async def on_referral_registration(
         self,
@@ -563,7 +570,7 @@ class ReferralContestService:
         contests = await get_contests_for_events(
             db,
             now_utc,
-            contest_types=["referral_registered"],
+            contest_types=['referral_registered'],
         )
         if not contests:
             return
@@ -576,17 +583,17 @@ class ReferralContestService:
                     referrer_id=user.referred_by_id,
                     referral_id=user.id,
                     amount_kopeks=0,
-                    event_type="referral_registration",
+                    event_type='referral_registration',
                 )
                 if event:
                     logger.info(
-                        "Записан зачёт конкурса регистрации %s: реферер %s, реферал %s",
+                        'Записан зачёт конкурса регистрации %s: реферер %s, реферал %s',
                         contest.id,
                         user.referred_by_id,
                         user.id,
                     )
-            except Exception as exc:  # noqa: BLE001
-                logger.error("Не удалось записать зачёт регистрации для конкурса %s: %s", contest.id, exc)
+            except Exception as exc:
+                logger.error('Не удалось записать зачёт регистрации для конкурса %s: %s', contest.id, exc)
 
     async def sync_contest(
         self,
@@ -602,18 +609,18 @@ class ReferralContestService:
 
         try:
             stats = await sync_contest_events(db, contest_id)
-            if "error" not in stats:
+            if 'error' not in stats:
                 logger.info(
-                    "Синхронизация конкурса %s: создано %s, обновлено %s, пропущено %s",
+                    'Синхронизация конкурса %s: создано %s, обновлено %s, пропущено %s',
                     contest_id,
-                    stats.get("created", 0),
-                    stats.get("updated", 0),
-                    stats.get("skipped", 0),
+                    stats.get('created', 0),
+                    stats.get('updated', 0),
+                    stats.get('skipped', 0),
                 )
             return stats
         except Exception as exc:
-            logger.error("Ошибка синхронизации конкурса %s: %s", contest_id, exc)
-            return {"error": str(exc)}
+            logger.error('Ошибка синхронизации конкурса %s: %s', contest_id, exc)
+            return {'error': str(exc)}
 
 
 referral_contest_service = ReferralContestService()

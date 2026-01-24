@@ -1,34 +1,33 @@
 import base64
 import hashlib
 import hmac
-import logging
 import json
-from typing import Optional, Iterable
+import logging
+from collections.abc import Iterable
 
-from aiohttp import web
 from aiogram import Bot
+from aiohttp import web
 
 from app.config import settings
-from app.services.tribute_service import TributeService
-from app.services.payment_service import PaymentService
 from app.database.database import get_db
+from app.services.payment_service import PaymentService
+from app.services.tribute_service import TributeService
+
 
 logger = logging.getLogger(__name__)
 
 
 class WebhookServer:
-    
     def __init__(self, bot: Bot):
         self.bot = bot
         self.app = None
         self.runner = None
         self.site = None
         self.tribute_service = TributeService(bot)
-    
+
     async def create_app(self) -> web.Application:
-        
         self.app = web.Application()
-        
+
         self.app.router.add_post(settings.TRIBUTE_WEBHOOK_PATH, self._tribute_webhook_handler)
 
         if settings.is_mulenpay_enabled():
@@ -39,26 +38,25 @@ class WebhookServer:
 
         if settings.is_freekassa_enabled():
             self.app.router.add_post(settings.FREEKASSA_WEBHOOK_PATH, self._freekassa_webhook_handler)
-        else:
-            # Диагностика почему Freekassa не включена
-            if settings.FREEKASSA_ENABLED:
-                missing = []
-                if settings.FREEKASSA_SHOP_ID is None:
-                    missing.append("FREEKASSA_SHOP_ID")
-                if settings.FREEKASSA_API_KEY is None:
-                    missing.append("FREEKASSA_API_KEY")
-                if settings.FREEKASSA_SECRET_WORD_1 is None:
-                    missing.append("FREEKASSA_SECRET_WORD_1")
-                if settings.FREEKASSA_SECRET_WORD_2 is None:
-                    missing.append("FREEKASSA_SECRET_WORD_2")
-                if missing:
-                    logger.warning(
-                        f"Freekassa ENABLED=true, но webhook не зарегистрирован. "
-                        f"Отсутствуют параметры: {', '.join(missing)}"
-                    )
+        # Диагностика почему Freekassa не включена
+        elif settings.FREEKASSA_ENABLED:
+            missing = []
+            if settings.FREEKASSA_SHOP_ID is None:
+                missing.append('FREEKASSA_SHOP_ID')
+            if settings.FREEKASSA_API_KEY is None:
+                missing.append('FREEKASSA_API_KEY')
+            if settings.FREEKASSA_SECRET_WORD_1 is None:
+                missing.append('FREEKASSA_SECRET_WORD_1')
+            if settings.FREEKASSA_SECRET_WORD_2 is None:
+                missing.append('FREEKASSA_SECRET_WORD_2')
+            if missing:
+                logger.warning(
+                    f'Freekassa ENABLED=true, но webhook не зарегистрирован. '
+                    f'Отсутствуют параметры: {", ".join(missing)}'
+                )
 
         self.app.router.add_get('/health', self._health_check)
-        
+
         self.app.router.add_options(settings.TRIBUTE_WEBHOOK_PATH, self._options_handler)
         if settings.is_mulenpay_enabled():
             self.app.router.add_options(settings.MULENPAY_WEBHOOK_PATH, self._options_handler)
@@ -67,47 +65,42 @@ class WebhookServer:
         if settings.is_freekassa_enabled():
             self.app.router.add_options(settings.FREEKASSA_WEBHOOK_PATH, self._options_handler)
 
-        logger.info(f"Webhook сервер настроен:")
-        logger.info(f"  - Tribute webhook: POST {settings.TRIBUTE_WEBHOOK_PATH}")
+        logger.info('Webhook сервер настроен:')
+        logger.info(f'  - Tribute webhook: POST {settings.TRIBUTE_WEBHOOK_PATH}')
         if settings.is_mulenpay_enabled():
             mulenpay_name = settings.get_mulenpay_display_name()
             logger.info(
-                "  - %s webhook: POST %s",
+                '  - %s webhook: POST %s',
                 mulenpay_name,
                 settings.MULENPAY_WEBHOOK_PATH,
             )
         if settings.is_cryptobot_enabled():
-            logger.info(f"  - CryptoBot webhook: POST {settings.CRYPTOBOT_WEBHOOK_PATH}")
+            logger.info(f'  - CryptoBot webhook: POST {settings.CRYPTOBOT_WEBHOOK_PATH}')
         if settings.is_freekassa_enabled():
-            logger.info(f"  - Freekassa webhook: POST {settings.FREEKASSA_WEBHOOK_PATH}")
-        logger.info(f"  - Health check: GET /health")
-        
+            logger.info(f'  - Freekassa webhook: POST {settings.FREEKASSA_WEBHOOK_PATH}')
+        logger.info('  - Health check: GET /health')
+
         return self.app
-    
+
     async def start(self):
-        
         try:
             if not self.app:
                 await self.create_app()
-            
+
             self.runner = web.AppRunner(self.app)
             await self.runner.setup()
-            
-            self.site = web.TCPSite(
-                self.runner,
-                host=settings.TRIBUTE_WEBHOOK_HOST,
-                port=settings.TRIBUTE_WEBHOOK_PORT
-            )
+
+            self.site = web.TCPSite(self.runner, host=settings.TRIBUTE_WEBHOOK_HOST, port=settings.TRIBUTE_WEBHOOK_PORT)
 
             await self.site.start()
 
             logger.info(
-                "Webhook сервер запущен на %s:%s",
+                'Webhook сервер запущен на %s:%s',
                 settings.TRIBUTE_WEBHOOK_HOST,
                 settings.TRIBUTE_WEBHOOK_PORT,
             )
             logger.info(
-                "Tribute webhook URL: http://%s:%s%s",
+                'Tribute webhook URL: http://%s:%s%s',
                 settings.TRIBUTE_WEBHOOK_HOST,
                 settings.TRIBUTE_WEBHOOK_PORT,
                 settings.TRIBUTE_WEBHOOK_PATH,
@@ -115,7 +108,7 @@ class WebhookServer:
             if settings.is_mulenpay_enabled():
                 mulenpay_name = settings.get_mulenpay_display_name()
                 logger.info(
-                    "%s webhook URL: http://%s:%s%s",
+                    '%s webhook URL: http://%s:%s%s',
                     mulenpay_name,
                     settings.TRIBUTE_WEBHOOK_HOST,
                     settings.TRIBUTE_WEBHOOK_PORT,
@@ -123,30 +116,29 @@ class WebhookServer:
                 )
             if settings.is_cryptobot_enabled():
                 logger.info(
-                    "CryptoBot webhook URL: http://%s:%s%s",
+                    'CryptoBot webhook URL: http://%s:%s%s',
                     settings.TRIBUTE_WEBHOOK_HOST,
                     settings.TRIBUTE_WEBHOOK_PORT,
                     settings.CRYPTOBOT_WEBHOOK_PATH,
                 )
-            
+
         except Exception as e:
-            logger.error(f"Ошибка запуска webhook сервера: {e}")
+            logger.error(f'Ошибка запуска webhook сервера: {e}')
             raise
-    
+
     async def stop(self):
-        
         try:
             if self.site:
                 await self.site.stop()
-                logger.info("Webhook сайт остановлен")
-            
+                logger.info('Webhook сайт остановлен')
+
             if self.runner:
                 await self.runner.cleanup()
-                logger.info("Webhook runner очищен")
-                
+                logger.info('Webhook runner очищен')
+
         except Exception as e:
-            logger.error(f"Ошибка остановки webhook сервера: {e}")
-    
+            logger.error(f'Ошибка остановки webhook сервера: {e}')
+
     async def _options_handler(self, request: web.Request) -> web.Response:
         return web.Response(
             status=200,
@@ -154,34 +146,34 @@ class WebhookServer:
                 'Access-Control-Allow-Origin': '*',
                 'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
                 'Access-Control-Allow-Headers': 'Content-Type, trbt-signature, Crypto-Pay-API-Signature, X-MulenPay-Signature, Authorization',
-            }
+            },
         )
 
     async def _mulenpay_webhook_handler(self, request: web.Request) -> web.Response:
         try:
             mulenpay_name = settings.get_mulenpay_display_name()
             logger.info(
-                "%s webhook: %s %s",
+                '%s webhook: %s %s',
                 mulenpay_name,
                 request.method,
                 request.path,
             )
             logger.info(
-                "%s webhook headers: %s",
+                '%s webhook headers: %s',
                 mulenpay_name,
                 dict(request.headers),
             )
             raw_body = await request.read()
 
             if not raw_body:
-                logger.warning("Пустой %s webhook", mulenpay_name)
-                return web.json_response({"status": "error", "reason": "empty_body"}, status=400)
+                logger.warning('Пустой %s webhook', mulenpay_name)
+                return web.json_response({'status': 'error', 'reason': 'empty_body'}, status=400)
 
             # Временно отключаем проверку подписи для отладки
             # TODO: Включить обратно после настройки MulenPay
             if not self._verify_mulenpay_signature(request, raw_body):
                 logger.warning(
-                    "%s webhook signature verification failed, but processing anyway for debugging",
+                    '%s webhook signature verification failed, but processing anyway for debugging',
                     mulenpay_name,
                 )
                 # return web.json_response({"status": "error", "reason": "invalid_signature"}, status=401)
@@ -189,26 +181,26 @@ class WebhookServer:
             try:
                 payload = json.loads(raw_body.decode('utf-8'))
             except json.JSONDecodeError as error:
-                logger.error(f"Ошибка парсинга {mulenpay_name} webhook: {error}")
-                return web.json_response({"status": "error", "reason": "invalid_json"}, status=400)
+                logger.error(f'Ошибка парсинга {mulenpay_name} webhook: {error}')
+                return web.json_response({'status': 'error', 'reason': 'invalid_json'}, status=400)
 
             payment_service = PaymentService(self.bot)
 
             # Получаем соединение с БД
             db_generator = get_db()
             db = await db_generator.__anext__()
-            
+
             try:
                 success = await payment_service.process_mulenpay_callback(db, payload)
                 if success:
-                    return web.json_response({"status": "ok"}, status=200)
-                return web.json_response({"status": "error", "reason": "processing_failed"}, status=400)
+                    return web.json_response({'status': 'ok'}, status=200)
+                return web.json_response({'status': 'error', 'reason': 'processing_failed'}, status=400)
             except Exception as error:
                 logger.error(
-                    f"Ошибка обработки {mulenpay_name} webhook: {error}",
+                    f'Ошибка обработки {mulenpay_name} webhook: {error}',
                     exc_info=True,
                 )
-                return web.json_response({"status": "error", "reason": "internal_error"}, status=500)
+                return web.json_response({'status': 'error', 'reason': 'internal_error'}, status=500)
             finally:
                 try:
                     await db_generator.__anext__()
@@ -218,13 +210,13 @@ class WebhookServer:
         except Exception as error:
             mulenpay_name = settings.get_mulenpay_display_name()
             logger.error(
-                f"Критическая ошибка {mulenpay_name} webhook: {error}",
+                f'Критическая ошибка {mulenpay_name} webhook: {error}',
                 exc_info=True,
             )
-            return web.json_response({"status": "error", "reason": "internal_error", "message": str(error)}, status=500)
+            return web.json_response({'status': 'error', 'reason': 'internal_error', 'message': str(error)}, status=500)
 
     @staticmethod
-    def _extract_mulenpay_header(request: web.Request, header_names: Iterable[str]) -> Optional[str]:
+    def _extract_mulenpay_header(request: web.Request, header_names: Iterable[str]) -> str | None:
         for header_name in header_names:
             value = request.headers.get(header_name)
             if value:
@@ -236,14 +228,14 @@ class WebhookServer:
         secret_key = settings.MULENPAY_SECRET_KEY
         display_name = settings.get_mulenpay_display_name()
         if not secret_key:
-            logger.error("%s secret key is not configured", display_name)
+            logger.error('%s secret key is not configured', display_name)
             return False
 
         # Логируем все заголовки для отладки
-        logger.info("%s webhook headers for signature verification:", display_name)
+        logger.info('%s webhook headers for signature verification:', display_name)
         for header_name, header_value in request.headers.items():
             if any(keyword in header_name.lower() for keyword in ['signature', 'sign', 'token', 'auth']):
-                logger.info(f"  {header_name}: {header_value}")
+                logger.info(f'  {header_name}: {header_value}')
 
         signature = WebhookServer._extract_mulenpay_header(
             request,
@@ -264,7 +256,7 @@ class WebhookServer:
                 'MULENPAY-SIGNATURE',
                 'signature',
                 'sign',
-            )
+            ),
         )
         if signature:
             normalized_signature = signature
@@ -291,7 +283,7 @@ class WebhookServer:
             if hmac.compare_digest(normalized_signature_no_padding, expected_urlsafe_base64_signature.rstrip('=')):
                 return True
 
-            logger.error("Неверная подпись %s webhook", display_name)
+            logger.error('Неверная подпись %s webhook', display_name)
             return False
 
         authorization_header = request.headers.get('Authorization')
@@ -304,7 +296,7 @@ class WebhookServer:
                 if hmac.compare_digest(token, secret_key):
                     return True
 
-                logger.error("Неверный %s токен %s webhook", scheme, display_name)
+                logger.error('Неверный %s токен %s webhook', scheme, display_name)
                 return False
 
             if not value and hmac.compare_digest(token, secret_key):
@@ -316,166 +308,132 @@ class WebhookServer:
                 'X-MulenPay-Token',
                 'X-Mulenpay-Token',
                 'X-Webhook-Token',
-            )
+            ),
         )
         if fallback_token and hmac.compare_digest(fallback_token, secret_key):
             return True
 
         logger.info(
-            "%s webhook headers received: %s",
+            '%s webhook headers received: %s',
             display_name,
-            {key: value for key, value in request.headers.items() if 'authorization' not in key.lower()}
+            {key: value for key, value in request.headers.items() if 'authorization' not in key.lower()},
         )
 
-        logger.error("Отсутствует подпись %s webhook", display_name)
+        logger.error('Отсутствует подпись %s webhook', display_name)
         return False
 
     async def _tribute_webhook_handler(self, request: web.Request) -> web.Response:
-
         try:
-            logger.info(f"Получен Tribute webhook: {request.method} {request.path}")
-            logger.info(f"Headers: {dict(request.headers)}")
-            
+            logger.info(f'Получен Tribute webhook: {request.method} {request.path}')
+            logger.info(f'Headers: {dict(request.headers)}')
+
             raw_body = await request.read()
-            
+
             if not raw_body:
-                logger.warning("Получен пустой webhook от Tribute")
-                return web.json_response(
-                    {"status": "error", "reason": "empty_body"},
-                    status=400
-                )
-            
+                logger.warning('Получен пустой webhook от Tribute')
+                return web.json_response({'status': 'error', 'reason': 'empty_body'}, status=400)
+
             payload = raw_body.decode('utf-8')
-            logger.info(f"Payload: {payload}")
-            
+            logger.info(f'Payload: {payload}')
+
             try:
                 webhook_data = json.loads(payload)
-                logger.info(f"Распарсенные данные: {webhook_data}")
+                logger.info(f'Распарсенные данные: {webhook_data}')
             except json.JSONDecodeError as e:
-                logger.error(f"Ошибка парсинга JSON: {e}")
-                return web.json_response(
-                    {"status": "error", "reason": "invalid_json"},
-                    status=400
-                )
-            
+                logger.error(f'Ошибка парсинга JSON: {e}')
+                return web.json_response({'status': 'error', 'reason': 'invalid_json'}, status=400)
+
             signature = request.headers.get('trbt-signature')
-            logger.info(f"Signature: {signature}")
+            logger.info(f'Signature: {signature}')
 
             if not signature:
-                logger.error("Отсутствует заголовок подписи Tribute webhook")
-                return web.json_response(
-                    {"status": "error", "reason": "missing_signature"},
-                    status=401
-                )
+                logger.error('Отсутствует заголовок подписи Tribute webhook')
+                return web.json_response({'status': 'error', 'reason': 'missing_signature'}, status=401)
 
             if settings.TRIBUTE_API_KEY:
                 from app.external.tribute import TributeService as TributeAPI
+
                 tribute_api = TributeAPI()
                 if not tribute_api.verify_webhook_signature(payload, signature):
-                    logger.error("Неверная подпись Tribute webhook")
-                    return web.json_response(
-                        {"status": "error", "reason": "invalid_signature"},
-                        status=401
-                    )
+                    logger.error('Неверная подпись Tribute webhook')
+                    return web.json_response({'status': 'error', 'reason': 'invalid_signature'}, status=401)
 
             result = await self.tribute_service.process_webhook(payload)
-            
+
             if result:
-                logger.info(f"Tribute webhook обработан успешно: {result}")
-                return web.json_response({"status": "ok", "result": result}, status=200)
-            else:
-                logger.error("Ошибка обработки Tribute webhook")
-                return web.json_response(
-                    {"status": "error", "reason": "processing_failed"},
-                    status=400
-                )
-            
+                logger.info(f'Tribute webhook обработан успешно: {result}')
+                return web.json_response({'status': 'ok', 'result': result}, status=200)
+            logger.error('Ошибка обработки Tribute webhook')
+            return web.json_response({'status': 'error', 'reason': 'processing_failed'}, status=400)
+
         except Exception as e:
-            logger.error(f"Критическая ошибка обработки Tribute webhook: {e}", exc_info=True)
-            return web.json_response(
-                {"status": "error", "reason": "internal_error", "message": str(e)},
-                status=500
-            )
-    
+            logger.error(f'Критическая ошибка обработки Tribute webhook: {e}', exc_info=True)
+            return web.json_response({'status': 'error', 'reason': 'internal_error', 'message': str(e)}, status=500)
+
     async def _cryptobot_webhook_handler(self, request: web.Request) -> web.Response:
-        
         try:
-            logger.info(f"Получен CryptoBot webhook: {request.method} {request.path}")
-            logger.info(f"Headers: {dict(request.headers)}")
-            
+            logger.info(f'Получен CryptoBot webhook: {request.method} {request.path}')
+            logger.info(f'Headers: {dict(request.headers)}')
+
             raw_body = await request.read()
-            
+
             if not raw_body:
-                logger.warning("Получен пустой CryptoBot webhook")
-                return web.json_response(
-                    {"status": "error", "reason": "empty_body"},
-                    status=400
-                )
-            
+                logger.warning('Получен пустой CryptoBot webhook')
+                return web.json_response({'status': 'error', 'reason': 'empty_body'}, status=400)
+
             payload = raw_body.decode('utf-8')
-            logger.info(f"CryptoBot Payload: {payload}")
-            
+            logger.info(f'CryptoBot Payload: {payload}')
+
             try:
                 webhook_data = json.loads(payload)
-                logger.info(f"CryptoBot данные: {webhook_data}")
+                logger.info(f'CryptoBot данные: {webhook_data}')
             except json.JSONDecodeError as e:
-                logger.error(f"Ошибка парсинга CryptoBot JSON: {e}")
-                return web.json_response(
-                    {"status": "error", "reason": "invalid_json"},
-                    status=400
-                )
-            
+                logger.error(f'Ошибка парсинга CryptoBot JSON: {e}')
+                return web.json_response({'status': 'error', 'reason': 'invalid_json'}, status=400)
+
             signature = request.headers.get('Crypto-Pay-API-Signature')
-            logger.info(f"CryptoBot Signature: {signature}")
+            logger.info(f'CryptoBot Signature: {signature}')
 
             if signature and settings.CRYPTOBOT_WEBHOOK_SECRET:
                 from app.external.cryptobot import CryptoBotService
+
                 cryptobot_service = CryptoBotService()
                 if not cryptobot_service.verify_webhook_signature(payload, signature):
-                    logger.error("Неверная подпись CryptoBot webhook")
-                    return web.json_response(
-                        {"status": "error", "reason": "invalid_signature"},
-                        status=401
-                    )
+                    logger.error('Неверная подпись CryptoBot webhook')
+                    return web.json_response({'status': 'error', 'reason': 'invalid_signature'}, status=401)
 
-            from app.services.payment_service import PaymentService
             from app.database.database import AsyncSessionLocal
-            
+            from app.services.payment_service import PaymentService
+
             payment_service = PaymentService(self.bot)
-            
+
             async with AsyncSessionLocal() as db:
                 result = await payment_service.process_cryptobot_webhook(db, webhook_data)
-            
+
             if result:
-                logger.info(f"CryptoBot webhook обработан успешно")
-                return web.json_response({"status": "ok"}, status=200)
-            else:
-                logger.error("Ошибка обработки CryptoBot webhook")
-                return web.json_response(
-                    {"status": "error", "reason": "processing_failed"},
-                    status=400
-                )
-            
+                logger.info('CryptoBot webhook обработан успешно')
+                return web.json_response({'status': 'ok'}, status=200)
+            logger.error('Ошибка обработки CryptoBot webhook')
+            return web.json_response({'status': 'error', 'reason': 'processing_failed'}, status=400)
+
         except Exception as e:
-            logger.error(f"Критическая ошибка обработки CryptoBot webhook: {e}", exc_info=True)
-            return web.json_response(
-                {"status": "error", "reason": "internal_error", "message": str(e)},
-                status=500
-            )
-    
+            logger.error(f'Критическая ошибка обработки CryptoBot webhook: {e}', exc_info=True)
+            return web.json_response({'status': 'error', 'reason': 'internal_error', 'message': str(e)}, status=500)
+
     async def _health_check(self, request: web.Request) -> web.Response:
-        
-        return web.json_response({
-            "status": "ok",
-            "service": "payment-webhooks",
-            "tribute_enabled": settings.TRIBUTE_ENABLED,
-            "cryptobot_enabled": settings.is_cryptobot_enabled(),
-            "freekassa_enabled": settings.is_freekassa_enabled(),
-            "port": settings.TRIBUTE_WEBHOOK_PORT,
-            "tribute_path": settings.TRIBUTE_WEBHOOK_PATH,
-            "cryptobot_path": settings.CRYPTOBOT_WEBHOOK_PATH if settings.is_cryptobot_enabled() else None,
-            "freekassa_path": settings.FREEKASSA_WEBHOOK_PATH if settings.is_freekassa_enabled() else None,
-        })
+        return web.json_response(
+            {
+                'status': 'ok',
+                'service': 'payment-webhooks',
+                'tribute_enabled': settings.TRIBUTE_ENABLED,
+                'cryptobot_enabled': settings.is_cryptobot_enabled(),
+                'freekassa_enabled': settings.is_freekassa_enabled(),
+                'port': settings.TRIBUTE_WEBHOOK_PORT,
+                'tribute_path': settings.TRIBUTE_WEBHOOK_PATH,
+                'cryptobot_path': settings.CRYPTOBOT_WEBHOOK_PATH if settings.is_cryptobot_enabled() else None,
+                'freekassa_path': settings.FREEKASSA_WEBHOOK_PATH if settings.is_freekassa_enabled() else None,
+            }
+        )
 
     async def _freekassa_webhook_handler(self, request: web.Request) -> web.Response:
         """
@@ -490,38 +448,38 @@ class WebhookServer:
         - CUR_ID: ID валюты/платежной системы
         """
         try:
-            logger.info(f"Получен Freekassa webhook: {request.method} {request.path}")
+            logger.info(f'Получен Freekassa webhook: {request.method} {request.path}')
 
             # Получаем IP клиента
-            client_ip = request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+            client_ip = request.headers.get('X-Forwarded-For', '').split(',')[0].strip()
             if not client_ip:
-                client_ip = request.remote or "unknown"
-            logger.info(f"Freekassa webhook IP: {client_ip}")
+                client_ip = request.remote or 'unknown'
+            logger.info(f'Freekassa webhook IP: {client_ip}')
 
             # Freekassa отправляет form-data
             try:
                 form_data = await request.post()
             except Exception as e:
-                logger.error(f"Ошибка парсинга Freekassa form-data: {e}")
-                return web.Response(text="NO", status=400)
+                logger.error(f'Ошибка парсинга Freekassa form-data: {e}')
+                return web.Response(text='NO', status=400)
 
-            logger.info(f"Freekassa webhook data: {dict(form_data)}")
+            logger.info(f'Freekassa webhook data: {dict(form_data)}')
 
             # Извлекаем параметры
-            merchant_id = int(form_data.get("MERCHANT_ID", 0))
-            amount = float(form_data.get("AMOUNT", 0))
-            order_id = form_data.get("MERCHANT_ORDER_ID", "")
-            sign = form_data.get("SIGN", "")
-            intid = form_data.get("intid", "")
-            cur_id = form_data.get("CUR_ID")
+            merchant_id = int(form_data.get('MERCHANT_ID', 0))
+            amount = float(form_data.get('AMOUNT', 0))
+            order_id = form_data.get('MERCHANT_ORDER_ID', '')
+            sign = form_data.get('SIGN', '')
+            intid = form_data.get('intid', '')
+            cur_id = form_data.get('CUR_ID')
 
             if not order_id or not sign:
-                logger.warning("Freekassa webhook: отсутствуют обязательные параметры")
-                return web.Response(text="NO", status=400)
+                logger.warning('Freekassa webhook: отсутствуют обязательные параметры')
+                return web.Response(text='NO', status=400)
 
             # Обрабатываем платеж через PaymentService
-            from app.services.payment_service import PaymentService
             from app.database.database import AsyncSessionLocal
+            from app.services.payment_service import PaymentService
 
             payment_service = PaymentService(self.bot)
 
@@ -538,13 +496,12 @@ class WebhookServer:
                 )
 
             if success:
-                logger.info(f"Freekassa webhook обработан успешно: order_id={order_id}")
+                logger.info(f'Freekassa webhook обработан успешно: order_id={order_id}')
                 # Freekassa ожидает YES в ответе
-                return web.Response(text="YES", status=200)
-            else:
-                logger.error(f"Ошибка обработки Freekassa webhook: order_id={order_id}")
-                return web.Response(text="NO", status=400)
+                return web.Response(text='YES', status=200)
+            logger.error(f'Ошибка обработки Freekassa webhook: order_id={order_id}')
+            return web.Response(text='NO', status=400)
 
         except Exception as e:
-            logger.error(f"Критическая ошибка обработки Freekassa webhook: {e}", exc_info=True)
-            return web.Response(text="NO", status=500)
+            logger.error(f'Критическая ошибка обработки Freekassa webhook: {e}', exc_info=True)
+            return web.Response(text='NO', status=500)

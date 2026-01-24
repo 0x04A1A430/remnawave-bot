@@ -24,15 +24,15 @@ class Client:
 
     Example:
         >>> client = Client()
-        >>> token = await client.create_new_access_token("inn", "password")
+        >>> token = await client.create_new_access_token('inn', 'password')
         >>> await client.authenticate(token)
         >>> income_api = client.income()
-        >>> result = await income_api.create("Service", 100, 1)
+        >>> result = await income_api.create('Service', 100, 1)
     """
 
     def __init__(
         self,
-        base_url: str = "https://lknpd.nalog.ru/api",
+        base_url: str = 'https://lknpd.nalog.ru/api',
         storage_path: str | None = None,
         device_id: str | None = None,
         timeout: float = 10.0,
@@ -58,13 +58,13 @@ class Client:
 
         # Initialize HTTP client with auth middleware
         self.http_client = AsyncHTTPClient(
-            base_url=f"{base_url}/v1",
+            base_url=f'{base_url}/v1',
             auth_provider=self.auth_provider,
             default_headers={
-                "Content-Type": "application/json",
-                "Accept": "application/json, text/plain, */*",
-                "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
-                "Referrer": "https://lknpd.nalog.ru/auth/login",
+                'Content-Type': 'application/json',
+                'Accept': 'application/json, text/plain, */*',
+                'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+                'Referrer': 'https://lknpd.nalog.ru/auth/login',
             },
             timeout=timeout,
         )
@@ -108,9 +108,7 @@ class Client:
         """
         return await self.auth_provider.create_phone_challenge(phone)
 
-    async def create_new_access_token_by_phone(
-        self, phone: str, challenge_token: str, verification_code: str
-    ) -> str:
+    async def create_new_access_token_by_phone(self, phone: str, challenge_token: str, verification_code: str) -> str:
         """
         Complete phone-based authentication with SMS code.
 
@@ -128,9 +126,7 @@ class Client:
             UnauthorizedException: For invalid verification
             DomainException: For other API errors
         """
-        return await self.auth_provider.create_new_access_token_by_phone(
-            phone, challenge_token, verification_code
-        )
+        return await self.auth_provider.create_new_access_token_by_phone(phone, challenge_token, verification_code)
 
     async def authenticate(self, access_token: str) -> None:
         """
@@ -149,8 +145,8 @@ class Client:
         # Parse token to extract user profile (like PHP version)
         try:
             token_data = json.loads(access_token)
-            if "profile" in token_data:
-                self._user_profile = token_data["profile"]
+            if 'profile' in token_data:
+                self._user_profile = token_data['profile']
         except json.JSONDecodeError:
             # If token parsing fails, profile will remain None
             pass
@@ -192,13 +188,13 @@ class Client:
         Raises:
             ValueError: If user is not authenticated (no profile data)
         """
-        if not self._user_profile or "inn" not in self._user_profile:
-            raise ValueError("User profile not available. Please authenticate first.")
+        if not self._user_profile or 'inn' not in self._user_profile:
+            raise ValueError('User profile not available. Please authenticate first.')
 
         return ReceiptAPI(
             http_client=self.http_client,
             base_endpoint=self.base_url,
-            user_inn=self._user_profile["inn"],
+            user_inn=self._user_profile['inn'],
         )
 
     def payment_type(self) -> PaymentTypeAPI:

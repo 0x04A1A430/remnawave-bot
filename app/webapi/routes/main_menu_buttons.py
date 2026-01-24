@@ -42,7 +42,7 @@ def _serialize(button: MainMenuButton) -> MainMenuButtonResponse:
     )
 
 
-@router.get("", response_model=MainMenuButtonListResponse)
+@router.get('', response_model=MainMenuButtonListResponse)
 async def list_main_menu_buttons(
     _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
@@ -60,7 +60,7 @@ async def list_main_menu_buttons(
     )
 
 
-@router.post("", response_model=MainMenuButtonResponse, status_code=status.HTTP_201_CREATED)
+@router.post('', response_model=MainMenuButtonResponse, status_code=status.HTTP_201_CREATED)
 async def create_main_menu_button_endpoint(
     payload: MainMenuButtonCreateRequest,
     _: Any = Security(require_api_token),
@@ -80,7 +80,7 @@ async def create_main_menu_button_endpoint(
     return _serialize(button)
 
 
-@router.patch("/{button_id}", response_model=MainMenuButtonResponse)
+@router.patch('/{button_id}', response_model=MainMenuButtonResponse)
 async def update_main_menu_button_endpoint(
     button_id: int,
     payload: MainMenuButtonUpdateRequest,
@@ -89,7 +89,7 @@ async def update_main_menu_button_endpoint(
 ) -> MainMenuButtonResponse:
     button = await get_main_menu_button_by_id(db, button_id)
     if not button:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Main menu button not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Main menu button not found')
 
     update_payload = payload.dict(exclude_unset=True)
     button = await update_main_menu_button(db, button, **update_payload)
@@ -98,7 +98,7 @@ async def update_main_menu_button_endpoint(
     return _serialize(button)
 
 
-@router.delete("/{button_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete('/{button_id}', status_code=status.HTTP_204_NO_CONTENT)
 async def delete_main_menu_button_endpoint(
     button_id: int,
     _: Any = Security(require_api_token),
@@ -106,7 +106,7 @@ async def delete_main_menu_button_endpoint(
 ) -> Response:
     button = await get_main_menu_button_by_id(db, button_id)
     if not button:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Main menu button not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Main menu button not found')
 
     await delete_main_menu_button(db, button)
     MainMenuButtonService.invalidate_cache()

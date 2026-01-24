@@ -7,15 +7,14 @@
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from typing import Optional
-
-from dateutil.parser import isoparse
 
 from aiogram import Bot
+from dateutil.parser import isoparse
 
 from app.config import settings
 from app.services.nalogo_service import NaloGoService
 from app.utils.cache import cache
+
 
 logger = logging.getLogger(__name__)
 
@@ -23,12 +22,12 @@ logger = logging.getLogger(__name__)
 class NalogoQueueService:
     """Сервис фоновой обработки очереди чеков NaloGO."""
 
-    def __init__(self, nalogo_service: Optional[NaloGoService] = None):
+    def __init__(self, nalogo_service: NaloGoService | None = None):
         self._nalogo_service = nalogo_service
-        self._bot: Optional[Bot] = None
-        self._task: Optional[asyncio.Task] = None
+        self._bot: Bot | None = None
+        self._task: asyncio.Task | None = None
         self._running = False
-        self._last_notification_time: Optional[datetime] = None
+        self._last_notification_time: datetime | None = None
         self._notification_cooldown = timedelta(hours=1)  # Не чаще раза в час
         self._had_pending_receipts = False  # Флаг для отслеживания успешной разгрузки
 
@@ -47,33 +46,33 @@ class NalogoQueueService:
     @property
     def _check_interval(self) -> int:
         """Интервал проверки очереди в секундах."""
-        return getattr(settings, "NALOGO_QUEUE_CHECK_INTERVAL", 300)
+        return getattr(settings, 'NALOGO_QUEUE_CHECK_INTERVAL', 300)
 
     @property
     def _receipt_delay(self) -> int:
         """Задержка между отправкой чеков в секундах."""
-        return getattr(settings, "NALOGO_QUEUE_RECEIPT_DELAY", 3)
+        return getattr(settings, 'NALOGO_QUEUE_RECEIPT_DELAY', 3)
 
     @property
     def _max_attempts(self) -> int:
         """Максимальное количество попыток отправки чека."""
-        return getattr(settings, "NALOGO_QUEUE_MAX_ATTEMPTS", 10)
+        return getattr(settings, 'NALOGO_QUEUE_MAX_ATTEMPTS', 10)
 
     async def start(self) -> None:
         """Запустить фоновую обработку очереди."""
         if not self._nalogo_service or not self._nalogo_service.configured:
-            logger.info("NaloGO не настроен, сервис очереди чеков не запущен")
+            logger.info('NaloGO не настроен, сервис очереди чеков не запущен')
             return
 
         if self.is_running():
-            logger.warning("Сервис очереди чеков уже запущен")
+            logger.warning('Сервис очереди чеков уже запущен')
             return
 
         self._running = True
         self._task = asyncio.create_task(self._process_queue_loop())
         logger.info(
-            f"Сервис очереди чеков NaloGO запущен "
-            f"(интервал: {self._check_interval}с, задержка между чеками: {self._receipt_delay}с)"
+            f'Сервис очереди чеков NaloGO запущен '
+            f'(интервал: {self._check_interval}с, задержка между чеками: {self._receipt_delay}с)'
         )
 
     async def stop(self) -> None:
@@ -86,7 +85,7 @@ class NalogoQueueService:
             except asyncio.CancelledError:
                 pass
         self._task = None
-        logger.info("Сервис очереди чеков NaloGO остановлен")
+        logger.info('Сервис очереди чеков NaloGO остановлен')
 
     async def _send_admin_notification(self, message: str, skip_cooldown: bool = False) -> None:
         """Отправить уведомление админам о чеках."""
@@ -104,7 +103,7 @@ class NalogoQueueService:
             now = datetime.now()
             if self._last_notification_time:
                 if now - self._last_notification_time < self._notification_cooldown:
-                    logger.debug("Уведомление о чеках пропущено (cooldown)")
+                    logger.debug('Уведомление о чеках пропущено (cooldown)')
                     return
 
         try:
@@ -112,12 +111,12 @@ class NalogoQueueService:
                 chat_id=chat_id,
                 message_thread_id=topic_id,
                 text=message,
-                parse_mode="HTML",
+                parse_mode='HTML',
             )
             self._last_notification_time = datetime.now()
-            logger.info("Отправлено уведомление о чеках NaloGO")
+            logger.info('Отправлено уведомление о чеках NaloGO')
         except Exception as error:
-            logger.error(f"Ошибка отправки уведомления о чеках: {error}")
+            logger.error(f'Ошибка отправки уведомления о чеках: {error}')
 
     async def _process_queue_loop(self) -> None:
         """Основной цикл обработки очереди."""
@@ -125,7 +124,7 @@ class NalogoQueueService:
             try:
                 await self._process_pending_receipts()
             except Exception as error:
-                logger.error(f"Ошибка в цикле обработки очереди чеков: {error}")
+                logger.error(f'Ошибка в цикле обработки очереди чеков: {error}')
 
             await asyncio.sleep(self._check_interval)
 
@@ -138,7 +137,7 @@ class NalogoQueueService:
         if queue_length == 0:
             return
 
-        logger.info(f"Начинаем обработку очереди чеков: {queue_length} шт.")
+        logger.info(f'Начинаем обработку очереди чеков: {queue_length} шт.')
         self._had_pending_receipts = True
 
         processed = 0
@@ -152,50 +151,43 @@ class NalogoQueueService:
             if not receipt_data:
                 break
 
-            attempts = receipt_data.get("attempts", 0)
-            payment_id = receipt_data.get("payment_id", "unknown")
-            amount = receipt_data.get("amount", 0)
+            attempts = receipt_data.get('attempts', 0)
+            payment_id = receipt_data.get('payment_id', 'unknown')
+            amount = receipt_data.get('amount', 0)
 
             # Логируем количество попыток (чек никогда не удаляется из очереди)
             if attempts >= 10:
-                logger.warning(
-                    f"Чек {payment_id} уже {attempts} попыток, продолжаем пытаться..."
-                )
+                logger.warning(f'Чек {payment_id} уже {attempts} попыток, продолжаем пытаться...')
 
             # Пытаемся отправить чек
             try:
                 # Восстанавливаем описание из сохранённых данных
-                telegram_user_id = receipt_data.get("telegram_user_id")
-                amount_kopeks = receipt_data.get("amount_kopeks")
+                telegram_user_id = receipt_data.get('telegram_user_id')
+                amount_kopeks = receipt_data.get('amount_kopeks')
 
                 # Извлекаем время оплаты из очереди (чтобы чек был с правильным временем)
                 operation_time = None
-                created_at_str = receipt_data.get("created_at")
+                created_at_str = receipt_data.get('created_at')
                 if created_at_str:
                     try:
                         operation_time = isoparse(created_at_str)
                     except (ValueError, TypeError) as parse_error:
-                        logger.warning(
-                            f"Не удалось распарсить created_at '{created_at_str}': {parse_error}"
-                        )
+                        logger.warning(f"Не удалось распарсить created_at '{created_at_str}': {parse_error}")
 
                 # Формируем описание заново из настроек (если есть данные)
                 if amount_kopeks is not None:
-                    receipt_name = settings.get_balance_payment_description(
-                        amount_kopeks, telegram_user_id
-                    )
+                    receipt_name = settings.get_balance_payment_description(amount_kopeks, telegram_user_id)
                 else:
                     # Fallback на сохранённое имя
                     receipt_name = receipt_data.get(
-                        "name",
-                        settings.get_balance_payment_description(int(amount * 100), telegram_user_id)
+                        'name', settings.get_balance_payment_description(int(amount * 100), telegram_user_id)
                     )
 
                 receipt_uuid = await self._nalogo_service.create_receipt(
                     name=receipt_name,
                     amount=amount,
-                    quantity=receipt_data.get("quantity", 1),
-                    client_info=receipt_data.get("client_info"),
+                    quantity=receipt_data.get('quantity', 1),
+                    client_info=receipt_data.get('client_info'),
                     payment_id=payment_id,
                     queue_on_failure=False,  # Не добавлять в очередь повторно автоматически
                     telegram_user_id=telegram_user_id,
@@ -209,12 +201,12 @@ class NalogoQueueService:
 
                     # Удаляем метку "в очереди" (чек создан успешно)
                     if payment_id:
-                        queued_key = f"nalogo:queued:{payment_id}"
+                        queued_key = f'nalogo:queued:{payment_id}'
                         await cache.delete(queued_key)
 
                     logger.info(
-                        f"Чек из очереди успешно создан: {receipt_uuid} "
-                        f"(payment_id={payment_id}, попытка {attempts + 1})"
+                        f'Чек из очереди успешно создан: {receipt_uuid} '
+                        f'(payment_id={payment_id}, попытка {attempts + 1})'
                     )
                 else:
                     # Вернуть в очередь с увеличенным счетчиком попыток
@@ -222,8 +214,8 @@ class NalogoQueueService:
                     failed += 1
                     service_unavailable = True
                     logger.warning(
-                        f"Не удалось создать чек из очереди (payment_id={payment_id}), "
-                        f"возвращен в очередь (попытка {attempts + 1}/{self._max_attempts})"
+                        f'Не удалось создать чек из очереди (payment_id={payment_id}), '
+                        f'возвращен в очередь (попытка {attempts + 1}/{self._max_attempts})'
                     )
                     # Если сервис недоступен, прекращаем попытки до следующего цикла
                     break
@@ -231,9 +223,7 @@ class NalogoQueueService:
             except Exception as error:
                 await self._nalogo_service.requeue_receipt(receipt_data)
                 failed += 1
-                logger.error(
-                    f"Ошибка при создании чека из очереди (payment_id={payment_id}): {error}"
-                )
+                logger.error(f'Ошибка при создании чека из очереди (payment_id={payment_id}): {error}')
                 # Прекращаем попытки при ошибке
                 break
 
@@ -241,10 +231,7 @@ class NalogoQueueService:
             await asyncio.sleep(self._receipt_delay)
 
         if processed > 0 or failed > 0 or skipped > 0:
-            logger.info(
-                f"Обработка очереди завершена: "
-                f"успешно={processed}, неудачно={failed}, пропущено={skipped}"
-            )
+            logger.info(f'Обработка очереди завершена: успешно={processed}, неудачно={failed}, пропущено={skipped}')
 
         # Проверяем остаток в очереди
         remaining = await self._nalogo_service.get_queue_length()
@@ -253,14 +240,14 @@ class NalogoQueueService:
         if service_unavailable or failed > 0:
             if remaining > 0:
                 queued = await self._nalogo_service.get_queued_receipts()
-                total_queued_amount = sum(r.get("amount", 0) for r in queued)
+                total_queued_amount = sum(r.get('amount', 0) for r in queued)
 
                 message = (
-                    f"<b>⚠️ Проблема с отправкой чеков NaloGO</b>\n\n"
-                    f"Сервис nalog.ru временно недоступен.\n\n"
-                    f"📋 <b>В очереди:</b> {remaining} чек(ов)\n"
-                    f"💰 <b>На сумму:</b> {total_queued_amount:,.2f} ₽\n\n"
-                    f"Чеки будут отправлены автоматически когда сервис восстановится."
+                    f'<b>⚠️ Проблема с отправкой чеков NaloGO</b>\n\n'
+                    f'Сервис nalog.ru временно недоступен.\n\n'
+                    f'📋 <b>В очереди:</b> {remaining} чек(ов)\n'
+                    f'💰 <b>На сумму:</b> {total_queued_amount:,.2f} ₽\n\n'
+                    f'Чеки будут отправлены автоматически когда сервис восстановится.'
                 )
                 await self._send_admin_notification(message)
 
@@ -268,30 +255,30 @@ class NalogoQueueService:
         elif remaining == 0 and self._had_pending_receipts and processed > 0:
             self._had_pending_receipts = False
             message = (
-                f"<b>✅ Очередь чеков NaloGO разгружена</b>\n\n"
-                f"Все отложенные чеки успешно отправлены!\n\n"
-                f"📋 <b>Отправлено:</b> {processed} чек(ов)\n"
-                f"💰 <b>На сумму:</b> {total_processed_amount:,.2f} ₽"
+                f'<b>✅ Очередь чеков NaloGO разгружена</b>\n\n'
+                f'Все отложенные чеки успешно отправлены!\n\n'
+                f'📋 <b>Отправлено:</b> {processed} чек(ов)\n'
+                f'💰 <b>На сумму:</b> {total_processed_amount:,.2f} ₽'
             )
             await self._send_admin_notification(message, skip_cooldown=True)
 
     async def force_process(self) -> dict:
         """Принудительно обработать очередь (для ручного запуска)."""
         if not self._nalogo_service:
-            return {"error": "NaloGO сервис не настроен"}
+            return {'error': 'NaloGO сервис не настроен'}
 
         queue_length = await self._nalogo_service.get_queue_length()
         if queue_length == 0:
-            return {"message": "Очередь пуста", "processed": 0}
+            return {'message': 'Очередь пуста', 'processed': 0}
 
         await self._process_pending_receipts()
         new_length = await self._nalogo_service.get_queue_length()
 
         return {
-            "message": "Обработка завершена",
-            "was_in_queue": queue_length,
-            "remaining": new_length,
-            "processed": queue_length - new_length,
+            'message': 'Обработка завершена',
+            'was_in_queue': queue_length,
+            'remaining': new_length,
+            'processed': queue_length - new_length,
         }
 
     async def get_status(self) -> dict:
@@ -307,26 +294,26 @@ class NalogoQueueService:
             queue_length = await self._nalogo_service.get_queue_length()
             if queue_length > 0:
                 queued_receipts = await self._nalogo_service.get_queued_receipts()
-                total_amount = sum(r.get("amount", 0) for r in queued_receipts)
+                total_amount = sum(r.get('amount', 0) for r in queued_receipts)
 
             # Чеки ожидающие ручной проверки
             pending_verification_count = await self._nalogo_service.get_pending_verification_count()
             if pending_verification_count > 0:
                 pending_verification_receipts = await self._nalogo_service.get_pending_verification_receipts()
-                pending_verification_amount = sum(r.get("amount", 0) for r in pending_verification_receipts)
+                pending_verification_amount = sum(r.get('amount', 0) for r in pending_verification_receipts)
 
         return {
-            "running": self.is_running(),
-            "check_interval_seconds": self._check_interval,
-            "receipt_delay_seconds": self._receipt_delay,
-            "queue_length": queue_length,
-            "total_amount": total_amount,
-            "max_attempts": self._max_attempts,
-            "queued_receipts": queued_receipts[:10],
+            'running': self.is_running(),
+            'check_interval_seconds': self._check_interval,
+            'receipt_delay_seconds': self._receipt_delay,
+            'queue_length': queue_length,
+            'total_amount': total_amount,
+            'max_attempts': self._max_attempts,
+            'queued_receipts': queued_receipts[:10],
             # Чеки требующие ручной проверки (таймаут после успешной авторизации)
-            "pending_verification_count": pending_verification_count,
-            "pending_verification_amount": pending_verification_amount,
-            "pending_verification_receipts": pending_verification_receipts[:10],
+            'pending_verification_count': pending_verification_count,
+            'pending_verification_amount': pending_verification_amount,
+            'pending_verification_receipts': pending_verification_receipts[:10],
         }
 
 

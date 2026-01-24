@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import secrets
 from datetime import datetime
-from typing import Optional, Tuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,7 +16,7 @@ class WebApiTokenService:
     """Сервис для управления токенами административного веб-API."""
 
     def __init__(self):
-        self.algorithm = settings.WEB_API_TOKEN_HASH_ALGORITHM or "sha256"
+        self.algorithm = settings.WEB_API_TOKEN_HASH_ALGORITHM or 'sha256'
 
     def hash_token(self, token: str) -> str:
         return hash_api_token(token, self.algorithm)  # type: ignore[arg-type]
@@ -27,20 +26,20 @@ class WebApiTokenService:
         db: AsyncSession,
         token_value: str,
         *,
-        remote_ip: Optional[str] = None,
-    ) -> Optional[WebApiToken]:
+        remote_ip: str | None = None,
+    ) -> WebApiToken | None:
         normalized_value = token_value.strip()
         if not normalized_value:
             return None
 
-        async def _load_token(value: str) -> Optional[WebApiToken]:
+        async def _load_token(value: str) -> WebApiToken | None:
             token_hash = self.hash_token(value)
             return await crud.get_token_by_hash(db, token_hash)
 
         token = await _load_token(normalized_value)
 
         if not token:
-            default_token = (settings.WEB_API_DEFAULT_TOKEN or "").strip()
+            default_token = (settings.WEB_API_DEFAULT_TOKEN or '').strip()
             if default_token and secrets.compare_digest(default_token, normalized_value):
                 await ensure_default_web_api_token()
                 token = await _load_token(default_token)
@@ -62,11 +61,11 @@ class WebApiTokenService:
         db: AsyncSession,
         *,
         name: str,
-        description: Optional[str] = None,
-        expires_at: Optional[datetime] = None,
-        created_by: Optional[str] = None,
-        token_value: Optional[str] = None,
-    ) -> Tuple[str, WebApiToken]:
+        description: str | None = None,
+        expires_at: datetime | None = None,
+        created_by: str | None = None,
+        token_value: str | None = None,
+    ) -> tuple[str, WebApiToken]:
         plain_token = token_value or generate_api_token()
         token_hash = self.hash_token(plain_token)
 

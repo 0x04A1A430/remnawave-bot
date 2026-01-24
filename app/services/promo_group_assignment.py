@@ -1,6 +1,5 @@
 import logging
 from datetime import datetime
-from typing import Optional
 
 from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
@@ -12,31 +11,32 @@ from app.database.crud.transaction import get_user_total_spent_kopeks
 from app.database.models import PromoGroup, User
 from app.services.admin_notification_service import AdminNotificationService
 
+
 logger = logging.getLogger(__name__)
 
 
 async def _notify_admins_about_auto_assignment(
     db: AsyncSession,
     user: User,
-    old_group: Optional[PromoGroup],
+    old_group: PromoGroup | None,
     new_group: PromoGroup,
     total_spent_kopeks: int,
 ):
-    if not getattr(settings, "ADMIN_NOTIFICATIONS_ENABLED", False):
+    if not getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False):
         return
 
-    bot_token = getattr(settings, "BOT_TOKEN", None)
+    bot_token = getattr(settings, 'BOT_TOKEN', None)
     if not bot_token:
-        logger.debug("BOT_TOKEN не настроен — пропускаем уведомление о промогруппе")
+        logger.debug('BOT_TOKEN не настроен — пропускаем уведомление о промогруппе')
         return
 
-    bot = Bot(token=bot_token, default=DefaultBotProperties(parse_mode="HTML"))
+    bot = Bot(token=bot_token, default=DefaultBotProperties(parse_mode='HTML'))
     try:
         notification_service = AdminNotificationService(bot)
         reason = (
-            f"Автоназначение за траты {settings.format_price(total_spent_kopeks)}"
-            if hasattr(settings, "format_price")
-            else f"Автоназначение за траты {total_spent_kopeks / 100:.2f}₽"
+            f'Автоназначение за траты {settings.format_price(total_spent_kopeks)}'
+            if hasattr(settings, 'format_price')
+            else f'Автоназначение за траты {total_spent_kopeks / 100:.2f}₽'
         )
         await notification_service.send_user_promo_group_change_notification(
             db,
@@ -49,7 +49,7 @@ async def _notify_admins_about_auto_assignment(
         )
     except Exception as exc:
         logger.error(
-            "Ошибка отправки уведомления о автоназначении промогруппы пользователю %s: %s",
+            'Ошибка отправки уведомления о автоназначении промогруппы пользователю %s: %s',
             user.telegram_id,
             exc,
         )
@@ -64,7 +64,7 @@ async def _get_best_group_for_spending(
     db: AsyncSession,
     total_spent_kopeks: int,
     min_threshold_kopeks: int = 0,
-) -> Optional[PromoGroup]:
+) -> PromoGroup | None:
     if total_spent_kopeks <= 0:
         return None
 
@@ -78,11 +78,7 @@ async def _get_best_group_for_spending(
 
     for group in groups:
         threshold = group.auto_assign_total_spent_kopeks or 0
-        if (
-            threshold
-            and total_spent_kopeks >= threshold
-            and threshold > min_threshold_kopeks
-        ):
+        if threshold and total_spent_kopeks >= threshold and threshold > min_threshold_kopeks:
             return group
 
     return None
@@ -91,7 +87,7 @@ async def _get_best_group_for_spending(
 async def maybe_assign_promo_group_by_total_spent(
     db: AsyncSession,
     user_id: int,
-) -> Optional[PromoGroup]:
+) -> PromoGroup | None:
     from app.database.crud.user_promo_group import (
         add_user_to_promo_group,
         has_user_promo_group,
@@ -100,7 +96,7 @@ async def maybe_assign_promo_group_by_total_spent(
 
     user = await db.get(User, user_id)
     if not user:
-        logger.debug("Не удалось найти пользователя %s для автовыдачи промогруппы", user_id)
+        logger.debug('Не удалось найти пользователя %s для автовыдачи промогруппы', user_id)
         return None
 
     # Получаем текущую primary промогруппу
@@ -156,7 +152,7 @@ async def maybe_assign_promo_group_by_total_spent(
 
         if not already_has_group:
             # Добавляем новую промогруппу к существующим
-            await add_user_to_promo_group(db, user_id, target_group.id, assigned_by="auto")
+            await add_user_to_promo_group(db, user_id, target_group.id, assigned_by='auto')
             logger.info(
                 "🤖 Пользователю %s добавлена промогруппа '%s' за траты %s ₽",
                 user.telegram_id,
@@ -185,7 +181,7 @@ async def maybe_assign_promo_group_by_total_spent(
         return target_group
     except Exception as exc:
         logger.error(
-            "Ошибка при автоматическом назначении промогруппы пользователю %s: %s",
+            'Ошибка при автоматическом назначении промогруппы пользователю %s: %s',
             user_id,
             exc,
         )

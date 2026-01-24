@@ -29,7 +29,7 @@ from ..schemas.media import MediaUploadResponse
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-ALLOWED_MEDIA_TYPES = {"photo", "video", "document"}
+ALLOWED_MEDIA_TYPES = {'photo', 'video', 'document'}
 
 
 def _resolve_target_chat_id() -> int:
@@ -45,32 +45,32 @@ def _resolve_target_chat_id() -> int:
 
     raise HTTPException(
         status.HTTP_500_INTERNAL_SERVER_ERROR,
-        "Не настроен чат для загрузки файлов (ADMIN_NOTIFICATIONS_CHAT_ID или ADMIN_IDS)",
+        'Не настроен чат для загрузки файлов (ADMIN_NOTIFICATIONS_CHAT_ID или ADMIN_IDS)',
     )
 
 
 def _build_media_url(request: Request, file_id: str) -> str:
-    return str(request.url_for("download_media", file_id=file_id))
+    return str(request.url_for('download_media', file_id=file_id))
 
 
-@router.post("/upload", response_model=MediaUploadResponse, tags=["media"], status_code=status.HTTP_201_CREATED)
+@router.post('/upload', response_model=MediaUploadResponse, tags=['media'], status_code=status.HTTP_201_CREATED)
 async def upload_media(
     request: Request,
     _: Any = Security(require_api_token),
     file: UploadFile = File(...),
-    media_type: str = Form("document", description="Тип файла: photo, video или document"),
-    caption: str | None = Form(None, description="Необязательная подпись к файлу"),
+    media_type: str = Form('document', description='Тип файла: photo, video или document'),
+    caption: str | None = Form(None, description='Необязательная подпись к файлу'),
 ) -> MediaUploadResponse:
-    media_type_normalized = (media_type or "").strip().lower()
+    media_type_normalized = (media_type or '').strip().lower()
     if media_type_normalized not in ALLOWED_MEDIA_TYPES:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Unsupported media type")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Unsupported media type')
 
     file_bytes = await file.read()
     if not file_bytes:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "File is empty")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'File is empty')
 
     target_chat_id = _resolve_target_chat_id()
-    upload = BufferedInputFile(file_bytes, filename=file.filename or "upload")
+    upload = BufferedInputFile(file_bytes, filename=file.filename or 'upload')
 
     bot = Bot(
         token=settings.BOT_TOKEN,
@@ -78,14 +78,14 @@ async def upload_media(
     )
 
     try:
-        if media_type_normalized == "photo":
+        if media_type_normalized == 'photo':
             message = await bot.send_photo(
                 chat_id=target_chat_id,
                 photo=upload,
                 caption=caption,
             )
             media = message.photo[-1]
-        elif media_type_normalized == "video":
+        elif media_type_normalized == 'video':
             message = await bot.send_video(
                 chat_id=target_chat_id,
                 video=upload,
@@ -104,19 +104,19 @@ async def upload_media(
         return MediaUploadResponse(
             media_type=media_type_normalized,
             file_id=media.file_id,
-            file_unique_id=getattr(media, "file_unique_id", None),
+            file_unique_id=getattr(media, 'file_unique_id', None),
             media_url=media_url,
         )
     except HTTPException:
         raise
     except Exception as error:
-        logger.error("Failed to upload media: %s", error)
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Failed to upload media") from error
+        logger.error('Failed to upload media: %s', error)
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, 'Failed to upload media') from error
     finally:
         await bot.session.close()
 
 
-@router.get("/media/{file_id}", name="download_media", tags=["media"])
+@router.get('/media/{file_id}', name='download_media', tags=['media'])
 async def download_media(
     file_id: str,
     _: Any = Security(require_api_token),
@@ -129,30 +129,29 @@ async def download_media(
     try:
         file = await bot.get_file(file_id)
         if not file.file_path:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Media file not found")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, 'Media file not found')
 
         buffer = await bot.download_file(file.file_path)
 
-        if hasattr(buffer, "seek"):
+        if hasattr(buffer, 'seek'):
             buffer.seek(0)
 
-        content = buffer.read() if hasattr(buffer, "read") else bytes(buffer)
-        filename = file.file_path.split("/")[-1]
+        content = buffer.read() if hasattr(buffer, 'read') else bytes(buffer)
+        filename = file.file_path.split('/')[-1]
 
-        media_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+        media_type = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
 
         return Response(
             content=content,
             media_type=media_type,
             headers={
-                "Content-Disposition": f"inline; filename={filename}",
+                'Content-Disposition': f'inline; filename={filename}',
             },
         )
     except HTTPException:
         raise
     except Exception as error:  # pragma: no cover - неожиданные ошибки загрузки файла
-        logger.error("Failed to download media %s: %s", file_id, error)
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Failed to download media") from error
+        logger.error('Failed to download media %s: %s', file_id, error)
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, 'Failed to download media') from error
     finally:
         await bot.session.close()
-

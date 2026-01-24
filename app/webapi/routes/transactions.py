@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Security
 from sqlalchemy import and_, func, select
@@ -11,6 +11,7 @@ from app.database.models import Transaction
 
 from ..dependencies import get_db_session, require_api_token
 from ..schemas.transactions import TransactionListResponse, TransactionResponse
+
 
 router = APIRouter()
 
@@ -31,18 +32,18 @@ def _serialize(transaction: Transaction) -> TransactionResponse:
     )
 
 
-@router.get("", response_model=TransactionListResponse)
+@router.get('', response_model=TransactionListResponse)
 async def list_transactions(
     _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    user_id: Optional[int] = Query(default=None),
-    type_filter: Optional[str] = Query(default=None, alias="type"),
-    payment_method: Optional[str] = Query(default=None),
-    is_completed: Optional[bool] = Query(default=None),
-    date_from: Optional[datetime] = Query(default=None),
-    date_to: Optional[datetime] = Query(default=None),
+    user_id: int | None = Query(default=None),
+    type_filter: str | None = Query(default=None, alias='type'),
+    payment_method: str | None = Query(default=None),
+    is_completed: bool | None = Query(default=None),
+    date_from: datetime | None = Query(default=None),
+    date_to: datetime | None = Query(default=None),
 ) -> TransactionListResponse:
     base_query = select(Transaction)
     conditions = []
@@ -66,9 +67,7 @@ async def list_transactions(
     total_query = base_query.with_only_columns(func.count()).order_by(None)
     total = await db.scalar(total_query) or 0
 
-    result = await db.execute(
-        base_query.order_by(Transaction.created_at.desc()).offset(offset).limit(limit)
-    )
+    result = await db.execute(base_query.order_by(Transaction.created_at.desc()).offset(offset).limit(limit))
     transactions = result.scalars().all()
 
     return TransactionListResponse(

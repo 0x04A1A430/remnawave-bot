@@ -1,14 +1,15 @@
 """Contest services module."""
 
-from app.services.contests.enums import GameType, RoundStatus, PrizeType
-from app.services.contests.games import get_game_strategy, BaseGameStrategy
 from app.services.contests.attempt_service import ContestAttemptService
+from app.services.contests.enums import GameType, PrizeType, RoundStatus
+from app.services.contests.games import BaseGameStrategy, get_game_strategy
+
 
 __all__ = [
-    "GameType",
-    "RoundStatus",
-    "PrizeType",
-    "get_game_strategy",
-    "BaseGameStrategy",
-    "ContestAttemptService",
+    'BaseGameStrategy',
+    'ContestAttemptService',
+    'GameType',
+    'PrizeType',
+    'RoundStatus',
+    'get_game_strategy',
 ]

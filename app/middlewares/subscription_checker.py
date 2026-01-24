@@ -1,10 +1,13 @@
 import logging
-from typing import Callable, Dict, Any, Awaitable
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta
+from typing import Any
+
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject
 
 from app.database.models import SubscriptionStatus
+
 
 logger = logging.getLogger(__name__)
 
@@ -24,9 +27,9 @@ class SubscriptionStatusMiddleware(BaseMiddleware):
 
     async def __call__(
         self,
-        handler: Callable[[TelegramObject, Dict[str, Any]], Awaitable[Any]],
+        handler: Callable[[TelegramObject, dict[str, Any]], Awaitable[Any]],
         event: TelegramObject,
-        data: Dict[str, Any]
+        data: dict[str, Any],
     ) -> Any:
         # Используем db и user из AuthMiddleware - не создаём новую сессию!
         db = data.get('db')
@@ -37,10 +40,11 @@ class SubscriptionStatusMiddleware(BaseMiddleware):
                 current_time = datetime.utcnow()
                 subscription = user.subscription
 
-                if (subscription.status == SubscriptionStatus.ACTIVE.value and
-                    subscription.end_date and
-                    subscription.end_date <= current_time):
-
+                if (
+                    subscription.status == SubscriptionStatus.ACTIVE.value
+                    and subscription.end_date
+                    and subscription.end_date <= current_time
+                ):
                     # Вычисляем насколько давно истекла подписка
                     time_since_expiry = current_time - subscription.end_date
 
@@ -51,18 +55,18 @@ class SubscriptionStatusMiddleware(BaseMiddleware):
                         await db.commit()
 
                         logger.warning(
-                            f"⏰ Middleware DEACTIVATION: подписка {subscription.id} "
-                            f"(user_id={user.id}) деактивирована. "
-                            f"end_date={subscription.end_date}, просрочена на {time_since_expiry}"
+                            f'⏰ Middleware DEACTIVATION: подписка {subscription.id} '
+                            f'(user_id={user.id}) деактивирована. '
+                            f'end_date={subscription.end_date}, просрочена на {time_since_expiry}'
                         )
                     else:
                         # Подписка только что истекла - не деактивируем сразу (может быть продление)
                         logger.debug(
-                            f"⏰ Middleware: подписка пользователя {user.id} истекла недавно "
-                            f"({time_since_expiry}), ждём буфер {EXPIRATION_BUFFER_MINUTES} мин"
+                            f'⏰ Middleware: подписка пользователя {user.id} истекла недавно '
+                            f'({time_since_expiry}), ждём буфер {EXPIRATION_BUFFER_MINUTES} мин'
                         )
 
             except Exception as e:
-                logger.error(f"Ошибка проверки статуса подписки: {e}")
+                logger.error(f'Ошибка проверки статуса подписки: {e}')
 
         return await handler(event, data)

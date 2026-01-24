@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -12,7 +12,7 @@ class SettingCategorySummary(BaseModel):
     label: str
     items: int
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra='forbid')
 
 
 class SettingCategoryRef(BaseModel):
@@ -21,7 +21,7 @@ class SettingCategoryRef(BaseModel):
     key: str
     label: str
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra='forbid')
 
 
 class SettingChoice(BaseModel):
@@ -29,9 +29,9 @@ class SettingChoice(BaseModel):
 
     value: Any
     label: str
-    description: Optional[str] = None
+    description: str | None = None
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra='forbid')
 
 
 class SettingDefinition(BaseModel):
@@ -48,7 +48,7 @@ class SettingDefinition(BaseModel):
     read_only: bool = Field(default=False)
     choices: list[SettingChoice] = Field(default_factory=list)
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra='forbid')
 
 
 class SettingUpdateRequest(BaseModel):
@@ -56,4 +56,4 @@ class SettingUpdateRequest(BaseModel):
 
     value: Any
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra='forbid')

@@ -1,15 +1,16 @@
 """Проверяем, что PaymentService собирается из mixin-классов."""
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import pytest
+
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from app.services.payment import (  # noqa: E402
+from app.services.payment import (
     CryptoBotPaymentMixin,
     HeleketPaymentMixin,
     MulenPayPaymentMixin,
@@ -17,10 +18,10 @@ from app.services.payment import (  # noqa: E402
     PaymentCommonMixin,
     TelegramStarsMixin,
     TributePaymentMixin,
-    YooKassaPaymentMixin,
     WataPaymentMixin,
+    YooKassaPaymentMixin,
 )
-from app.services.payment_service import PaymentService  # noqa: E402
+from app.services.payment_service import PaymentService
 
 
 def test_payment_service_mro_contains_all_mixins() -> None:
@@ -37,23 +38,23 @@ def test_payment_service_mro_contains_all_mixins() -> None:
         WataPaymentMixin,
     }
     service_mro = set(PaymentService.__mro__)
-    assert mixins.issubset(service_mro), "PaymentService должен содержать все mixin-классы"
+    assert mixins.issubset(service_mro), 'PaymentService должен содержать все mixin-классы'
 
 
 @pytest.mark.parametrize(
-    "attribute",
+    'attribute',
     [
-        "build_topup_success_keyboard",
-        "create_stars_invoice",
-        "create_yookassa_payment",
-        "create_tribute_payment",
-        "create_cryptobot_payment",
-        "create_heleket_payment",
-        "create_mulenpay_payment",
-        "create_pal24_payment",
-        "create_wata_payment",
+        'build_topup_success_keyboard',
+        'create_stars_invoice',
+        'create_yookassa_payment',
+        'create_tribute_payment',
+        'create_cryptobot_payment',
+        'create_heleket_payment',
+        'create_mulenpay_payment',
+        'create_pal24_payment',
+        'create_wata_payment',
     ],
 )
 def test_payment_service_exposes_provider_methods(attribute: str) -> None:
     """Каждый mixin обязан добавить публичный метод в PaymentService."""
-    assert hasattr(PaymentService, attribute), f"Отсутствует метод {attribute}"
+    assert hasattr(PaymentService, attribute), f'Отсутствует метод {attribute}'

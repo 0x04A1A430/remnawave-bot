@@ -1,34 +1,33 @@
 import asyncio
 import logging
-from functools import wraps
-from typing import AsyncGenerator, Callable, Optional, TypeVar
-from contextlib import asynccontextmanager
-from sqlalchemy.ext.asyncio import (
-    AsyncSession,
-    create_async_engine,
-    async_sessionmaker,
-    AsyncEngine
-)
-from sqlalchemy.pool import NullPool, AsyncAdaptedQueuePool
-from sqlalchemy import event, text, bindparam, inspect
-from sqlalchemy.exc import ProgrammingError
-from sqlalchemy.engine import Engine
-from sqlalchemy.exc import OperationalError, InterfaceError
 import time
+from collections.abc import AsyncGenerator, Callable
+from contextlib import asynccontextmanager
+from functools import wraps
+from typing import TypeVar
+
+from sqlalchemy import bindparam, event, inspect, text
+from sqlalchemy.engine import Engine
+from sqlalchemy.exc import InterfaceError, OperationalError, ProgrammingError
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import AsyncAdaptedQueuePool, NullPool
+
 from app.config import settings
 from app.database.models import Base
 
+
 logger = logging.getLogger(__name__)
 
-T = TypeVar("T")
+T = TypeVar('T')
 
 # ============================================================================
 # PRODUCTION-GRADE CONNECTION POOLING
 # ============================================================================
 
+
 def _is_sqlite_url(url: str) -> bool:
     """Проверка на SQLite URL (поддерживает sqlite:// и sqlite+aiosqlite://)"""
-    return url.startswith("sqlite") or ":memory:" in url
+    return url.startswith('sqlite') or ':memory:' in url
 
 
 DATABASE_URL = settings.get_database_url()
@@ -40,13 +39,13 @@ if IS_SQLITE:
 else:
     poolclass = AsyncAdaptedQueuePool
     pool_kwargs = {
-        "pool_size": 30,  # Увеличен с 20
-        "max_overflow": 50,  # Увеличен с 30
-        "pool_timeout": 30,
-        "pool_recycle": 1800,  # Уменьшен с 3600 до 30 мин для более быстрого recycling
-        "pool_pre_ping": True,
+        'pool_size': 30,  # Увеличен с 20
+        'max_overflow': 50,  # Увеличен с 30
+        'pool_timeout': 30,
+        'pool_recycle': 1800,  # Уменьшен с 3600 до 30 мин для более быстрого recycling
+        'pool_pre_ping': True,
         # Агрессивная очистка мертвых соединений
-        "pool_reset_on_return": "rollback",
+        'pool_reset_on_return': 'rollback',
     }
 
 # ============================================================================
@@ -55,14 +54,14 @@ else:
 
 # PostgreSQL-специфичные connect_args
 _pg_connect_args = {
-    "server_settings": {
-        "application_name": "remnawave_bot",
-        "jit": "on",
-        "statement_timeout": "60000",  # 60 секунд
-        "idle_in_transaction_session_timeout": "300000",  # 5 минут
+    'server_settings': {
+        'application_name': 'remnawave_bot',
+        'jit': 'on',
+        'statement_timeout': '60000',  # 60 секунд
+        'idle_in_transaction_session_timeout': '300000',  # 5 минут
     },
-    "command_timeout": 60,
-    "timeout": 30,  # Увеличен с 10 до 30 сек для высокой нагрузки
+    'command_timeout': 60,
+    'timeout': 30,  # Увеличен с 10 до 30 сек для высокой нагрузки
 }
 
 engine = create_async_engine(
@@ -74,7 +73,7 @@ engine = create_async_engine(
     query_cache_size=500,
     connect_args=_pg_connect_args if not IS_SQLITE else {},
     execution_options={
-        "isolation_level": "READ COMMITTED",
+        'isolation_level': 'READ COMMITTED',
     },
     **pool_kwargs,
 )
@@ -113,6 +112,7 @@ def with_db_retry(
         delay: Начальная задержка между попытками (секунды)
         backoff: Множитель задержки для каждой следующей попытки
     """
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         async def wrapper(*args, **kwargs):
@@ -126,19 +126,21 @@ def with_db_retry(
                     last_exception = e
                     if attempt < attempts:
                         logger.warning(
-                            "Ошибка БД (попытка %d/%d): %s. Повтор через %.1f сек...",
-                            attempt, attempts, str(e)[:100], current_delay
+                            'Ошибка БД (попытка %d/%d): %s. Повтор через %.1f сек...',
+                            attempt,
+                            attempts,
+                            str(e)[:100],
+                            current_delay,
                         )
                         await asyncio.sleep(current_delay)
                         current_delay *= backoff
                     else:
-                        logger.error(
-                            "Ошибка БД: все %d попыток исчерпаны. Последняя ошибка: %s",
-                            attempts, str(e)
-                        )
+                        logger.error('Ошибка БД: все %d попыток исчерпаны. Последняя ошибка: %s', attempts, str(e))
 
             raise last_exception
+
         return wrapper
+
     return decorator
 
 
@@ -157,10 +159,7 @@ async def execute_with_retry(
         except RETRYABLE_EXCEPTIONS as e:
             last_exception = e
             if attempt < attempts:
-                logger.warning(
-                    "SQL retry (попытка %d/%d): %s",
-                    attempt, attempts, str(e)[:100]
-                )
+                logger.warning('SQL retry (попытка %d/%d): %s', attempt, attempts, str(e)[:100])
                 await asyncio.sleep(delay)
                 delay *= 2
 
@@ -172,18 +171,19 @@ async def execute_with_retry(
 # ============================================================================
 
 if settings.DEBUG:
-    @event.listens_for(Engine, "before_cursor_execute")
-    def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
-        conn.info.setdefault("query_start_time", []).append(time.time())
-        logger.debug(f"🔍 Executing query: {statement[:100]}...")
 
-    @event.listens_for(Engine, "after_cursor_execute")
+    @event.listens_for(Engine, 'before_cursor_execute')
+    def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+        conn.info.setdefault('query_start_time', []).append(time.time())
+        logger.debug(f'🔍 Executing query: {statement[:100]}...')
+
+    @event.listens_for(Engine, 'after_cursor_execute')
     def after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
-        total = time.time() - conn.info["query_start_time"].pop(-1)
+        total = time.time() - conn.info['query_start_time'].pop(-1)
         if total > 0.1:  # Логируем медленные запросы > 100ms
-            logger.warning(f"🐌 Slow query ({total:.3f}s): {statement[:100]}...")
+            logger.warning(f'🐌 Slow query ({total:.3f}s): {statement[:100]}...')
         else:
-            logger.debug(f"⚡ Query executed in {total:.3f}s")
+            logger.debug(f'⚡ Query executed in {total:.3f}s')
 
 # ============================================================================
 # ADVANCED SESSION MANAGER WITH READ REPLICAS
@@ -192,7 +192,7 @@ if settings.DEBUG:
 HEALTH_CHECK_TIMEOUT = 5.0  # секунды
 
 
-def _validate_database_url(url: Optional[str]) -> Optional[str]:
+def _validate_database_url(url: str | None) -> str | None:
     """Валидация URL базы данных."""
     if not url:
         return None
@@ -200,8 +200,8 @@ def _validate_database_url(url: Optional[str]) -> Optional[str]:
     if not url or url.isspace():
         return None
     # Простая проверка на валидный формат
-    if not ("://" in url or url.startswith("sqlite")):
-        logger.warning("Невалидный DATABASE_URL: %s", url[:20])
+    if not ('://' in url or url.startswith('sqlite')):
+        logger.warning('Невалидный DATABASE_URL: %s', url[:20])
         return None
     return url
 
@@ -211,13 +211,11 @@ class DatabaseManager:
 
     def __init__(self):
         self.engine = engine
-        self.read_replica_engine: Optional[AsyncEngine] = None
-        self._read_replica_session_factory: Optional[async_sessionmaker] = None
+        self.read_replica_engine: AsyncEngine | None = None
+        self._read_replica_session_factory: async_sessionmaker | None = None
 
         # Валидация и создание read replica engine
-        replica_url = _validate_database_url(
-            getattr(settings, 'DATABASE_READ_REPLICA_URL', None)
-        )
+        replica_url = _validate_database_url(getattr(settings, 'DATABASE_READ_REPLICA_URL', None))
         if replica_url:
             try:
                 self.read_replica_engine = create_async_engine(
@@ -236,9 +234,9 @@ class DatabaseManager:
                     expire_on_commit=False,
                     autoflush=False,
                 )
-                logger.info("Read replica настроена: %s", replica_url[:30] + "...")
+                logger.info('Read replica настроена: %s', replica_url[:30] + '...')
             except Exception as e:
-                logger.error("Не удалось настроить read replica: %s", e)
+                logger.error('Не удалось настроить read replica: %s', e)
                 self.read_replica_engine = None
 
     @asynccontextmanager
@@ -267,54 +265,54 @@ class DatabaseManager:
             timeout: Максимальное время ожидания (секунды)
         """
         pool = self.engine.pool
-        status = "unhealthy"
+        status = 'unhealthy'
         latency = None
 
         try:
             async with asyncio.timeout(timeout):
                 async with AsyncSessionLocal() as session:
                     start = time.time()
-                    await session.execute(text("SELECT 1"))
+                    await session.execute(text('SELECT 1'))
                     latency = (time.time() - start) * 1000
-            status = "healthy"
-        except asyncio.TimeoutError:
-            logger.error("Health check таймаут (%s сек)", timeout)
-            status = "timeout"
+            status = 'healthy'
+        except TimeoutError:
+            logger.error('Health check таймаут (%s сек)', timeout)
+            status = 'timeout'
         except Exception as e:
-            logger.error("Database health check failed: %s", e)
-            status = "unhealthy"
+            logger.error('Database health check failed: %s', e)
+            status = 'unhealthy'
 
         return {
-            "status": status,
-            "latency_ms": round(latency, 2) if latency else None,
-            "pool": _collect_health_pool_metrics(pool),
+            'status': status,
+            'latency_ms': round(latency, 2) if latency else None,
+            'pool': _collect_health_pool_metrics(pool),
         }
 
-    async def health_check_replica(self, timeout: float = HEALTH_CHECK_TIMEOUT) -> Optional[dict]:
+    async def health_check_replica(self, timeout: float = HEALTH_CHECK_TIMEOUT) -> dict | None:
         """Проверка здоровья read replica."""
         if not self.read_replica_engine:
             return None
 
         pool = self.read_replica_engine.pool
-        status = "unhealthy"
+        status = 'unhealthy'
         latency = None
 
         try:
             async with asyncio.timeout(timeout):
                 async with self._read_replica_session_factory() as session:
                     start = time.time()
-                    await session.execute(text("SELECT 1"))
+                    await session.execute(text('SELECT 1'))
                     latency = (time.time() - start) * 1000
-            status = "healthy"
-        except asyncio.TimeoutError:
-            status = "timeout"
+            status = 'healthy'
+        except TimeoutError:
+            status = 'timeout'
         except Exception as e:
-            logger.error("Read replica health check failed: %s", e)
+            logger.error('Read replica health check failed: %s', e)
 
         return {
-            "status": status,
-            "latency_ms": round(latency, 2) if latency else None,
-            "pool": _collect_health_pool_metrics(pool),
+            'status': status,
+            'latency_ms': round(latency, 2) if latency else None,
+            'pool': _collect_health_pool_metrics(pool),
         }
 
 
@@ -324,7 +322,8 @@ db_manager = DatabaseManager()
 # SESSION DEPENDENCY FOR FASTAPI/AIOGRAM
 # ============================================================================
 
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
+
+async def get_db() -> AsyncGenerator[AsyncSession]:
     """Стандартная dependency для FastAPI"""
     async with AsyncSessionLocal() as session:
         try:
@@ -334,27 +333,30 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             await session.rollback()
             raise
 
-async def get_db_read_only() -> AsyncGenerator[AsyncSession, None]:
+
+async def get_db_read_only() -> AsyncGenerator[AsyncSession]:
     """Read-only dependency для тяжелых SELECT запросов"""
     async with db_manager.session(read_only=True) as session:
         yield session
+
 
 # ============================================================================
 # BATCH OPERATIONS FOR PERFORMANCE
 # ============================================================================
 
+
 class BatchOperations:
     """Утилиты для массовых операций"""
-    
+
     @staticmethod
     async def bulk_insert(session: AsyncSession, model, data: list[dict], chunk_size: int = 1000):
         """Массовая вставка с чанками"""
         for i in range(0, len(data), chunk_size):
-            chunk = data[i:i + chunk_size]
+            chunk = data[i : i + chunk_size]
             session.add_all([model(**item) for item in chunk])
             await session.flush()
         await session.commit()
-    
+
     @staticmethod
     async def bulk_update(session: AsyncSession, model, data: list[dict], chunk_size: int = 1000):
         """Массовое обновление с чанками"""
@@ -363,52 +365,35 @@ class BatchOperations:
 
         primary_keys = [column.name for column in model.__table__.primary_key.columns]
         if not primary_keys:
-            raise ValueError("Model must have a primary key for bulk_update")
+            raise ValueError('Model must have a primary key for bulk_update')
 
-        updatable_columns = [
-            column.name
-            for column in model.__table__.columns
-            if column.name not in primary_keys
-        ]
+        updatable_columns = [column.name for column in model.__table__.columns if column.name not in primary_keys]
 
         if not updatable_columns:
-            raise ValueError("No columns available for update in bulk_update")
+            raise ValueError('No columns available for update in bulk_update')
 
         stmt = (
             model.__table__.update()
-            .where(
-                *[
-                    getattr(model.__table__.c, pk) == bindparam(pk)
-                    for pk in primary_keys
-                ]
-            )
-            .values(
-                **{
-                    column: bindparam(column, required=False)
-                    for column in updatable_columns
-                }
-            )
+            .where(*[getattr(model.__table__.c, pk) == bindparam(pk) for pk in primary_keys])
+            .values(**{column: bindparam(column, required=False) for column in updatable_columns})
         )
 
         for i in range(0, len(data), chunk_size):
-            chunk = data[i:i + chunk_size]
+            chunk = data[i : i + chunk_size]
             filtered_chunk = []
             for item in chunk:
                 missing_keys = [pk for pk in primary_keys if pk not in item]
                 if missing_keys:
-                    raise ValueError(
-                        f"Missing primary key values {missing_keys} for bulk_update"
-                    )
+                    raise ValueError(f'Missing primary key values {missing_keys} for bulk_update')
 
                 filtered_item = {
-                    key: value
-                    for key, value in item.items()
-                    if key in primary_keys or key in updatable_columns
+                    key: value for key, value in item.items() if key in primary_keys or key in updatable_columns
                 }
                 filtered_chunk.append(filtered_item)
 
             await session.execute(stmt, filtered_chunk)
         await session.commit()
+
 
 batch_ops = BatchOperations()
 
@@ -416,9 +401,10 @@ batch_ops = BatchOperations()
 # INITIALIZATION AND CLEANUP
 # ============================================================================
 
+
 async def init_db():
     """Инициализация БД с оптимизациями"""
-    logger.info("🚀 Создание таблиц базы данных...")
+    logger.info('🚀 Создание таблиц базы данных...')
 
     try:
         async with engine.begin() as conn:
@@ -430,52 +416,50 @@ async def init_db():
         error_type = type(e).__name__.lower()
 
         # Проверяем оригинальную ошибку для asyncpg
-        orig_error = getattr(e, "orig", None)
+        orig_error = getattr(e, 'orig', None)
         if orig_error:
             orig_type = type(orig_error).__name__.lower()
-            if "duplicatetableerror" in orig_type or "duplicatekeyerror" in orig_type:
+            if 'duplicatetableerror' in orig_type or 'duplicatekeyerror' in orig_type:
                 logger.warning(
-                    "⚠️ Некоторые индексы/таблицы уже существуют в БД, это нормально. "
-                    "Продолжаем инициализацию..."
+                    '⚠️ Некоторые индексы/таблицы уже существуют в БД, это нормально. Продолжаем инициализацию...'
                 )
                 return
 
         # Проверяем, является ли это ошибкой дублирования
         is_duplicate_error = (
-            "already exists" in error_str
-            or "duplicate" in error_str
-            or "duplicatetableerror" in error_type
-            or "duplicatekeyerror" in error_type
+            'already exists' in error_str
+            or 'duplicate' in error_str
+            or 'duplicatetableerror' in error_type
+            or 'duplicatekeyerror' in error_type
         )
 
         if is_duplicate_error:
             logger.warning(
-                "⚠️ Некоторые объекты БД уже существуют (таблицы/индексы), это нормально. "
-                "Продолжаем инициализацию..."
+                '⚠️ Некоторые объекты БД уже существуют (таблицы/индексы), это нормально. Продолжаем инициализацию...'
             )
             # Продолжаем выполнение, так как основные таблицы могут быть созданы
         else:
             # Для других ошибок пробрасываем исключение
-            logger.error(f"❌ Ошибка при создании таблиц: {e}")
+            logger.error(f'❌ Ошибка при создании таблиц: {e}')
             raise
 
     if not IS_SQLITE:
-        logger.info("Создание индексов для оптимизации...")
+        logger.info('Создание индексов для оптимизации...')
 
         async with engine.begin() as conn:
             indexes = [
-                ("users", "CREATE INDEX IF NOT EXISTS idx_users_telegram_id ON users(telegram_id)"),
+                ('users', 'CREATE INDEX IF NOT EXISTS idx_users_telegram_id ON users(telegram_id)'),
                 (
-                    "subscriptions",
-                    "CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON subscriptions(user_id)",
+                    'subscriptions',
+                    'CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON subscriptions(user_id)',
                 ),
                 (
-                    "subscriptions",
+                    'subscriptions',
                     "CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions(status) WHERE status = 'active'",
                 ),
                 (
-                    "payments",
-                    "CREATE INDEX IF NOT EXISTS idx_payments_created_at ON payments(created_at DESC)",
+                    'payments',
+                    'CREATE INDEX IF NOT EXISTS idx_payments_created_at ON payments(created_at DESC)',
                 ),
             ]
 
@@ -484,7 +468,7 @@ async def init_db():
 
                 if not table_exists:
                     logger.debug(
-                        "Пропускаем создание индекса %s: таблица %s отсутствует",
+                        'Пропускаем создание индекса %s: таблица %s отсутствует',
                         index_sql,
                         table_name,
                     )
@@ -493,33 +477,35 @@ async def init_db():
                 try:
                     await conn.execute(text(index_sql))
                 except Exception as e:
-                    logger.debug("Index creation skipped for %s: %s", table_name, e)
+                    logger.debug('Index creation skipped for %s: %s', table_name, e)
 
-    logger.info("База данных успешно инициализирована")
+    logger.info('База данных успешно инициализирована')
 
     health = await db_manager.health_check()
-    logger.info("Database health: %s", health)
+    logger.info('Database health: %s', health)
 
 
 async def close_db():
     """Корректное закрытие всех соединений"""
-    logger.info("Закрытие соединений с БД...")
+    logger.info('Закрытие соединений с БД...')
 
     await engine.dispose()
 
     if db_manager.read_replica_engine:
         await db_manager.read_replica_engine.dispose()
 
-    logger.info("Все подключения к базе данных закрыты")
+    logger.info('Все подключения к базе данных закрыты')
+
 
 # ============================================================================
 # CONNECTION POOL METRICS (для мониторинга)
 # ============================================================================
 
+
 def _pool_counters(pool):
     """Return basic pool counters or ``None`` when unsupported."""
 
-    required_methods = ("size", "checkedin", "checkedout", "overflow")
+    required_methods = ('size', 'checkedin', 'checkedout', 'overflow')
 
     for method_name in required_methods:
         method = getattr(pool, method_name, None)
@@ -534,12 +520,12 @@ def _pool_counters(pool):
     total_connections = size + overflow
 
     return {
-        "size": size,
-        "checked_in": checked_in,
-        "checked_out": checked_out,
-        "overflow": overflow,
-        "total_connections": total_connections,
-        "utilization_percent": (checked_out / total_connections * 100) if total_connections else 0.0,
+        'size': size,
+        'checked_in': checked_in,
+        'checked_out': checked_out,
+        'overflow': overflow,
+        'total_connections': total_connections,
+        'utilization_percent': (checked_out / total_connections * 100) if total_connections else 0.0,
     }
 
 
@@ -548,23 +534,23 @@ def _collect_health_pool_metrics(pool) -> dict:
 
     if counters is None:
         return {
-            "metrics_available": False,
-            "size": 0,
-            "checked_in": 0,
-            "checked_out": 0,
-            "overflow": 0,
-            "total_connections": 0,
-            "utilization": "0.0%",
+            'metrics_available': False,
+            'size': 0,
+            'checked_in': 0,
+            'checked_out': 0,
+            'overflow': 0,
+            'total_connections': 0,
+            'utilization': '0.0%',
         }
 
     return {
-        "metrics_available": True,
-        "size": counters["size"],
-        "checked_in": counters["checked_in"],
-        "checked_out": counters["checked_out"],
-        "overflow": counters["overflow"],
-        "total_connections": counters["total_connections"],
-        "utilization": f"{counters['utilization_percent']:.1f}%",
+        'metrics_available': True,
+        'size': counters['size'],
+        'checked_in': counters['checked_in'],
+        'checked_out': counters['checked_out'],
+        'overflow': counters['overflow'],
+        'total_connections': counters['total_connections'],
+        'utilization': f'{counters["utilization_percent"]:.1f}%',
     }
 
 
@@ -576,23 +562,23 @@ async def get_pool_metrics() -> dict:
 
     if counters is None:
         return {
-            "metrics_available": False,
-            "pool_size": 0,
-            "checked_in_connections": 0,
-            "checked_out_connections": 0,
-            "overflow_connections": 0,
-            "total_connections": 0,
-            "max_possible_connections": 0,
-            "pool_utilization_percent": 0.0,
+            'metrics_available': False,
+            'pool_size': 0,
+            'checked_in_connections': 0,
+            'checked_out_connections': 0,
+            'overflow_connections': 0,
+            'total_connections': 0,
+            'max_possible_connections': 0,
+            'pool_utilization_percent': 0.0,
         }
 
     return {
-        "metrics_available": True,
-        "pool_size": counters["size"],
-        "checked_in_connections": counters["checked_in"],
-        "checked_out_connections": counters["checked_out"],
-        "overflow_connections": counters["overflow"],
-        "total_connections": counters["total_connections"],
-        "max_possible_connections": counters["total_connections"] + (getattr(pool, "_max_overflow", 0) or 0),
-        "pool_utilization_percent": round(counters["utilization_percent"], 2),
+        'metrics_available': True,
+        'pool_size': counters['size'],
+        'checked_in_connections': counters['checked_in'],
+        'checked_out_connections': counters['checked_out'],
+        'overflow_connections': counters['overflow'],
+        'total_connections': counters['total_connections'],
+        'max_possible_connections': counters['total_connections'] + (getattr(pool, '_max_overflow', 0) or 0),
+        'pool_utilization_percent': round(counters['utilization_percent'], 2),
     }
