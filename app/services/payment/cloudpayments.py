@@ -340,9 +340,9 @@ class CloudPaymentsPaymentMixin:
         transaction: Any,
     ) -> None:
         """Send success notification to user via Telegram."""
-        from app.bot import bot
         from app.localization.texts import get_texts
 
+        bot = getattr(self, "bot", None)
         if not bot:
             return
 
@@ -385,8 +385,7 @@ class CloudPaymentsPaymentMixin:
         message: str,
     ) -> None:
         """Send failure notification to user via Telegram."""
-        from app.bot import bot
-
+        bot = getattr(self, "bot", None)
         if not bot:
             return
 
