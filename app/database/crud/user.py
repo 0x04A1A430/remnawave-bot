@@ -415,12 +415,40 @@ async def add_user_balance(
         
         await db.commit()
         await db.refresh(user)
-        
-        
+
         user_id_display = user.telegram_id or user.email or f"#{user.id}"
         logger.info(f"💰 Баланс пользователя {user_id_display} изменен: {old_balance} → {user.balance_kopeks} (изменение: +{amount_kopeks})")
+
+        # Автоматическое возобновление приостановленной суточной подписки
+        try:
+            from app.database.crud.subscription import resume_daily_subscription
+            from app.database.models import SubscriptionStatus
+
+            subscription = user.subscription
+            if subscription and subscription.status == SubscriptionStatus.DISABLED.value:
+                # Проверяем что это суточный тариф
+                is_daily = getattr(subscription, 'is_daily_tariff', False)
+                if is_daily and subscription.tariff:
+                    daily_price = getattr(subscription.tariff, 'daily_price_kopeks', 0)
+                    # Если баланс достаточный для суточной оплаты - возобновляем
+                    if daily_price > 0 and user.balance_kopeks >= daily_price:
+                        await resume_daily_subscription(db, subscription)
+                        logger.info(
+                            f"✅ Автоматически возобновлена суточная подписка {subscription.id} "
+                            f"после пополнения баланса (user_id={user.id})"
+                        )
+                        # Синхронизируем с RemnaWave
+                        try:
+                            from app.services.subscription_service import SubscriptionService
+                            subscription_service = SubscriptionService()
+                            await subscription_service.update_remnawave_user(db, subscription)
+                        except Exception as sync_err:
+                            logger.warning(f"Не удалось синхронизировать с RemnaWave: {sync_err}")
+        except Exception as resume_err:
+            logger.warning(f"Ошибка при попытке возобновить суточную подписку: {resume_err}")
+
         return True
-        
+
     except Exception as e:
         logger.error(f"Ошибка изменения баланса пользователя {user.id}: {e}")
         await db.rollback()
