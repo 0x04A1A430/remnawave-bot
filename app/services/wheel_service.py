@@ -1,39 +1,38 @@
 """
 Сервис колеса удачи (Fortune Wheel) с RTP алгоритмом.
 """
+
 import logging
 import random
 import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from decimal import Decimal, ROUND_HALF_UP
-from typing import Optional, List, Tuple, Dict, Any
+from decimal import Decimal
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database.models import (
-    User,
-    Subscription,
-    WheelConfig,
-    WheelPrize,
-    WheelSpin,
-    WheelPrizeType,
-    WheelSpinPaymentType,
-    PromoCode,
-    PromoCodeType,
-)
+from app.database.crud.subscription import get_subscription_by_user_id
+from app.database.crud.user import add_user_balance
 from app.database.crud.wheel import (
-    get_or_create_wheel_config,
-    get_wheel_prizes,
-    get_user_spins_today,
     create_wheel_spin,
-    mark_spin_applied,
+    get_or_create_wheel_config,
+    get_user_spins_today,
+    get_wheel_prizes,
     get_wheel_statistics,
 )
-from app.database.crud.user import add_user_balance
-from app.database.crud.subscription import get_subscription_by_user_id
+from app.database.models import (
+    PromoCode,
+    PromoCodeType,
+    User,
+    WheelConfig,
+    WheelPrize,
+    WheelPrizeType,
+    WheelSpinPaymentType,
+)
 from app.services.subscription_service import SubscriptionService
+
 
 logger = logging.getLogger(__name__)
 
@@ -41,24 +40,26 @@ logger = logging.getLogger(__name__)
 @dataclass
 class SpinResult:
     """Результат спина колеса."""
+
     success: bool
-    prize_id: Optional[int] = None
-    prize_type: Optional[str] = None
+    prize_id: int | None = None
+    prize_type: str | None = None
     prize_value: int = 0
-    prize_display_name: str = ""
-    emoji: str = "🎁"
-    color: str = "#3B82F6"
+    prize_display_name: str = ''
+    emoji: str = '🎁'
+    color: str = '#3B82F6'
     rotation_degrees: float = 0.0
-    message: str = ""
-    promocode: Optional[str] = None
-    error: Optional[str] = None
+    message: str = ''
+    promocode: str | None = None
+    error: str | None = None
 
 
 @dataclass
 class SpinAvailability:
     """Доступность спина для пользователя."""
+
     can_spin: bool
-    reason: Optional[str] = None
+    reason: str | None = None
     spins_remaining_today: int = 0
     can_pay_stars: bool = False
     can_pay_days: bool = False
@@ -74,11 +75,7 @@ class FortuneWheelService:
     def __init__(self):
         pass
 
-    async def check_availability(
-        self,
-        db: AsyncSession,
-        user: User
-    ) -> SpinAvailability:
+    async def check_availability(self, db: AsyncSession, user: User) -> SpinAvailability:
         """Проверить доступность спина для пользователя."""
         config = await get_or_create_wheel_config(db)
 
@@ -86,7 +83,7 @@ class FortuneWheelService:
         if not config.is_enabled:
             return SpinAvailability(
                 can_spin=False,
-                reason="wheel_disabled",
+                reason='wheel_disabled',
             )
 
         # Проверяем лимит спинов
@@ -96,7 +93,7 @@ class FortuneWheelService:
         if config.daily_spin_limit > 0 and spins_today >= config.daily_spin_limit:
             return SpinAvailability(
                 can_spin=False,
-                reason="daily_limit_reached",
+                reason='daily_limit_reached',
                 spins_remaining_today=0,
             )
 
@@ -125,9 +122,9 @@ class FortuneWheelService:
 
         if not can_pay_stars and not can_pay_days:
             # Определяем причину
-            reason = "no_payment_method_available"
+            reason = 'no_payment_method_available'
             if config.spin_cost_stars_enabled and user.balance_kopeks < required_balance_kopeks:
-                reason = "insufficient_balance"
+                reason = 'insufficient_balance'
 
             return SpinAvailability(
                 can_spin=False,
@@ -146,7 +143,7 @@ class FortuneWheelService:
         if not prizes:
             return SpinAvailability(
                 can_spin=False,
-                reason="no_prizes_configured",
+                reason='no_prizes_configured',
             )
 
         return SpinAvailability(
@@ -161,11 +158,8 @@ class FortuneWheelService:
         )
 
     def calculate_prize_probabilities(
-        self,
-        config: WheelConfig,
-        prizes: List[WheelPrize],
-        spin_cost_kopeks: int
-    ) -> List[Tuple[WheelPrize, float]]:
+        self, config: WheelConfig, prizes: list[WheelPrize], spin_cost_kopeks: int
+    ) -> list[tuple[WheelPrize, float]]:
         """
         Рассчитать вероятности выпадения призов на основе RTP.
 
@@ -216,10 +210,7 @@ class FortuneWheelService:
 
         # Нормализуем веса авто-призов до remaining_prob
         total_weight = sum(w[1] for w in weights)
-        auto_probabilities = [
-            (prize, (weight / total_weight) * remaining_prob)
-            for prize, weight in weights
-        ]
+        auto_probabilities = [(prize, (weight / total_weight) * remaining_prob) for prize, weight in weights]
 
         # Объединяем
         result = manual_prizes + auto_probabilities
@@ -231,13 +222,10 @@ class FortuneWheelService:
 
         return result
 
-    def _select_prize(
-        self,
-        prizes_with_probabilities: List[Tuple[WheelPrize, float]]
-    ) -> WheelPrize:
+    def _select_prize(self, prizes_with_probabilities: list[tuple[WheelPrize, float]]) -> WheelPrize:
         """Выбрать приз на основе вероятностей."""
         if not prizes_with_probabilities:
-            raise ValueError("No prizes to select from")
+            raise ValueError('No prizes to select from')
 
         rand = random.random()
         cumulative = 0.0
@@ -250,11 +238,7 @@ class FortuneWheelService:
         # Fallback на последний приз
         return prizes_with_probabilities[-1][0]
 
-    def _calculate_rotation(
-        self,
-        prizes: List[WheelPrize],
-        selected_prize: WheelPrize
-    ) -> float:
+    def _calculate_rotation(self, prizes: list[WheelPrize], selected_prize: WheelPrize) -> float:
         """
         Рассчитать угол поворота колеса для анимации.
         Возвращает градусы для CSS transform.
@@ -263,10 +247,7 @@ class FortuneWheelService:
             return 0.0
 
         # Находим индекс выбранного приза
-        prize_index = next(
-            (i for i, p in enumerate(prizes) if p.id == selected_prize.id),
-            0
-        )
+        prize_index = next((i for i, p in enumerate(prizes) if p.id == selected_prize.id), 0)
 
         # Угол одного сектора
         sector_angle = 360 / len(prizes)
@@ -285,12 +266,7 @@ class FortuneWheelService:
 
         return full_rotations + stop_angle
 
-    async def _process_stars_payment(
-        self,
-        db: AsyncSession,
-        user: User,
-        config: WheelConfig
-    ) -> int:
+    async def _process_stars_payment(self, db: AsyncSession, user: User, config: WheelConfig) -> int:
         """
         Обработать оплату Stars (списание эквивалента с баланса).
         Возвращает стоимость в копейках.
@@ -301,20 +277,15 @@ class FortuneWheelService:
         kopeks = int(rubles * 100)
 
         if user.balance_kopeks < kopeks:
-            raise ValueError("Недостаточно средств на балансе")
+            raise ValueError('Недостаточно средств на балансе')
 
         # Списываем с баланса
         user.balance_kopeks -= kopeks
-        logger.info(f"💫 Списано {kopeks/100:.2f}₽ ({config.spin_cost_stars}⭐) с баланса user_id={user.id}")
+        logger.info(f'💫 Списано {kopeks / 100:.2f}₽ ({config.spin_cost_stars}⭐) с баланса user_id={user.id}')
 
         return kopeks
 
-    async def _process_days_payment(
-        self,
-        db: AsyncSession,
-        user: User,
-        config: WheelConfig
-    ) -> int:
+    async def _process_days_payment(self, db: AsyncSession, user: User, config: WheelConfig) -> int:
         """
         Обработать оплату днями подписки.
         Возвращает эквивалент в копейках.
@@ -322,10 +293,10 @@ class FortuneWheelService:
         subscription = await get_subscription_by_user_id(db, user.id)
 
         if not subscription or not subscription.is_active:
-            raise ValueError("Нет активной подписки")
+            raise ValueError('Нет активной подписки')
 
         if subscription.days_left < config.min_subscription_days_for_day_payment + config.spin_cost_days:
-            raise ValueError("Недостаточно дней подписки")
+            raise ValueError('Недостаточно дней подписки')
 
         # Уменьшаем end_date
         subscription.end_date -= timedelta(days=config.spin_cost_days)
@@ -334,29 +305,24 @@ class FortuneWheelService:
         # Оцениваем стоимость в копейках (для статистики)
         # Берем цену 30-дневного периода и делим на 30
         from app.config import PERIOD_PRICES
+
         price_30_days = PERIOD_PRICES.get(30, settings.PRICE_30_DAYS) or 19900
         daily_price = price_30_days / 30
         kopeks = int(daily_price * config.spin_cost_days)
 
-        logger.info(f"📅 Списано {config.spin_cost_days} дней подписки у user_id={user.id}")
+        logger.info(f'📅 Списано {config.spin_cost_days} дней подписки у user_id={user.id}')
 
         # Синхронизируем с RemnaWave
         try:
             subscription_service = SubscriptionService()
             await subscription_service.update_remnawave_user(db, subscription)
-            logger.info(f"✅ Списание дней синхронизировано с RemnaWave для user_id={user.id}")
+            logger.info(f'✅ Списание дней синхронизировано с RemnaWave для user_id={user.id}')
         except Exception as e:
-            logger.error(f"⚠️ Ошибка синхронизации списания дней с RemnaWave: {e}")
+            logger.error(f'⚠️ Ошибка синхронизации списания дней с RemnaWave: {e}')
 
         return kopeks
 
-    async def _apply_prize(
-        self,
-        db: AsyncSession,
-        user: User,
-        prize: WheelPrize,
-        config: WheelConfig
-    ) -> Optional[str]:
+    async def _apply_prize(self, db: AsyncSession, user: User, prize: WheelPrize, config: WheelConfig) -> str | None:
         """
         Применить приз к пользователю.
         Возвращает промокод (если приз - промокод), иначе None.
@@ -364,17 +330,19 @@ class FortuneWheelService:
         prize_type = prize.prize_type
 
         if prize_type == WheelPrizeType.NOTHING.value:
-            logger.info(f"🎰 Пустой приз для user_id={user.id}")
+            logger.info(f'🎰 Пустой приз для user_id={user.id}')
             return None
 
         if prize_type == WheelPrizeType.BALANCE_BONUS.value:
             # Пополнение баланса
             await add_user_balance(
-                db, user, prize.prize_value,
-                description=f"Выигрыш в колесе удачи: {prize.prize_value/100:.2f}₽",
+                db,
+                user,
+                prize.prize_value,
+                description=f'Выигрыш в колесе удачи: {prize.prize_value / 100:.2f}₽',
                 create_transaction=True,
             )
-            logger.info(f"💰 Начислено {prize.prize_value/100:.2f}₽ на баланс user_id={user.id}")
+            logger.info(f'💰 Начислено {prize.prize_value / 100:.2f}₽ на баланс user_id={user.id}')
             return None
 
         if prize_type == WheelPrizeType.SUBSCRIPTION_DAYS.value:
@@ -395,40 +363,48 @@ class FortuneWheelService:
                     if daily_price > 0:
                         balance_bonus = prize.prize_value * daily_price
                         await add_user_balance(
-                            db, user, balance_bonus,
-                            description=f"Выигрыш в колесе удачи: {prize.prize_value} дней → {balance_bonus/100:.2f}₽",
+                            db,
+                            user,
+                            balance_bonus,
+                            description=f'Выигрыш в колесе удачи: {prize.prize_value} дней → {balance_bonus / 100:.2f}₽',
                             create_transaction=True,
                         )
-                        logger.info(f"💰 Суточный тариф: {prize.prize_value} дней конвертированы в {balance_bonus/100:.2f}₽ для user_id={user.id}")
+                        logger.info(
+                            f'💰 Суточный тариф: {prize.prize_value} дней конвертированы в {balance_bonus / 100:.2f}₽ для user_id={user.id}'
+                        )
                     else:
                         # Если нет цены - используем prize_value_kopeks
                         await add_user_balance(
-                            db, user, prize.prize_value_kopeks,
-                            description=f"Выигрыш в колесе удачи: {prize.prize_value} дней (на баланс)",
+                            db,
+                            user,
+                            prize.prize_value_kopeks,
+                            description=f'Выигрыш в колесе удачи: {prize.prize_value} дней (на баланс)',
                             create_transaction=True,
                         )
-                        logger.info(f"💰 Дни конвертированы в баланс для user_id={user.id}")
+                        logger.info(f'💰 Дни конвертированы в баланс для user_id={user.id}')
                 else:
                     # Обычная подписка - добавляем дни и синхронизируем с RemnaWave
                     subscription.end_date += timedelta(days=prize.prize_value)
                     subscription.updated_at = datetime.utcnow()
-                    logger.info(f"📅 Начислено {prize.prize_value} дней подписки user_id={user.id}")
+                    logger.info(f'📅 Начислено {prize.prize_value} дней подписки user_id={user.id}')
 
                     # Синхронизируем с RemnaWave
                     try:
                         subscription_service = SubscriptionService()
                         await subscription_service.update_remnawave_user(db, subscription)
-                        logger.info(f"✅ Синхронизировано с RemnaWave для user_id={user.id}")
+                        logger.info(f'✅ Синхронизировано с RemnaWave для user_id={user.id}')
                     except Exception as e:
-                        logger.error(f"⚠️ Ошибка синхронизации с RemnaWave: {e}")
+                        logger.error(f'⚠️ Ошибка синхронизации с RemnaWave: {e}')
             else:
                 # Если нет подписки - начисляем на баланс эквивалент
                 await add_user_balance(
-                    db, user, prize.prize_value_kopeks,
-                    description=f"Выигрыш в колесе удачи: {prize.prize_value} дней (на баланс)",
+                    db,
+                    user,
+                    prize.prize_value_kopeks,
+                    description=f'Выигрыш в колесе удачи: {prize.prize_value} дней (на баланс)',
                     create_transaction=True,
                 )
-                logger.info(f"💰 Дни конвертированы в баланс для user_id={user.id}")
+                logger.info(f'💰 Дни конвертированы в баланс для user_id={user.id}')
             return None
 
         if prize_type == WheelPrizeType.TRAFFIC_GB.value:
@@ -437,20 +413,22 @@ class FortuneWheelService:
             if subscription and subscription.traffic_limit_gb > 0:
                 subscription.traffic_limit_gb += prize.prize_value
                 subscription.updated_at = datetime.utcnow()
-                logger.info(f"📊 Начислено {prize.prize_value}GB трафика user_id={user.id}")
+                logger.info(f'📊 Начислено {prize.prize_value}GB трафика user_id={user.id}')
 
                 # Синхронизируем с RemnaWave
                 try:
                     subscription_service = SubscriptionService()
                     await subscription_service.update_remnawave_user(db, subscription)
-                    logger.info(f"✅ Трафик синхронизирован с RemnaWave для user_id={user.id}")
+                    logger.info(f'✅ Трафик синхронизирован с RemnaWave для user_id={user.id}')
                 except Exception as e:
-                    logger.error(f"⚠️ Ошибка синхронизации трафика с RemnaWave: {e}")
+                    logger.error(f'⚠️ Ошибка синхронизации трафика с RemnaWave: {e}')
             else:
                 # Если безлимит или нет подписки - на баланс
                 await add_user_balance(
-                    db, user, prize.prize_value_kopeks,
-                    description=f"Выигрыш в колесе удачи: {prize.prize_value}GB (на баланс)",
+                    db,
+                    user,
+                    prize.prize_value_kopeks,
+                    description=f'Выигрыш в колесе удачи: {prize.prize_value}GB (на баланс)',
                     create_transaction=True,
                 )
             return None
@@ -458,21 +436,17 @@ class FortuneWheelService:
         if prize_type == WheelPrizeType.PROMOCODE.value:
             # Генерация промокода
             promocode = await self._generate_prize_promocode(db, user, prize, config)
-            logger.info(f"🎟️ Сгенерирован промокод {promocode.code} для user_id={user.id}")
+            logger.info(f'🎟️ Сгенерирован промокод {promocode.code} для user_id={user.id}')
             return promocode.code
 
         return None
 
     async def _generate_prize_promocode(
-        self,
-        db: AsyncSession,
-        user: User,
-        prize: WheelPrize,
-        config: WheelConfig
+        self, db: AsyncSession, user: User, prize: WheelPrize, config: WheelConfig
     ) -> PromoCode:
         """Сгенерировать уникальный промокод для приза."""
         # Генерируем уникальный код
-        code = f"{config.promo_prefix}{secrets.token_hex(4).upper()}"
+        code = f'{config.promo_prefix}{secrets.token_hex(4).upper()}'
 
         # Определяем тип промокода
         if prize.promo_subscription_days > 0:
@@ -496,12 +470,7 @@ class FortuneWheelService:
 
         return promocode
 
-    async def spin(
-        self,
-        db: AsyncSession,
-        user: User,
-        payment_type: str
-    ) -> SpinResult:
+    async def spin(self, db: AsyncSession, user: User, payment_type: str) -> SpinResult:
         """
         Выполнить спин колеса.
 
@@ -529,8 +498,8 @@ class FortuneWheelService:
             if not prizes:
                 return SpinResult(
                     success=False,
-                    error="no_prizes",
-                    message="Призы не настроены",
+                    error='no_prizes',
+                    message='Призы не настроены',
                 )
 
             # 2. Обрабатываем оплату
@@ -538,8 +507,8 @@ class FortuneWheelService:
                 if not availability.can_pay_stars:
                     return SpinResult(
                         success=False,
-                        error="cannot_pay_stars",
-                        message="Оплата Stars недоступна",
+                        error='cannot_pay_stars',
+                        message='Оплата Stars недоступна',
                     )
                 payment_amount = config.spin_cost_stars
                 payment_value_kopeks = await self._process_stars_payment(db, user, config)
@@ -547,16 +516,16 @@ class FortuneWheelService:
                 if not availability.can_pay_days:
                     return SpinResult(
                         success=False,
-                        error="cannot_pay_days",
-                        message="Оплата днями подписки недоступна",
+                        error='cannot_pay_days',
+                        message='Оплата днями подписки недоступна',
                     )
                 payment_amount = config.spin_cost_days
                 payment_value_kopeks = await self._process_days_payment(db, user, config)
             else:
                 return SpinResult(
                     success=False,
-                    error="invalid_payment_type",
-                    message="Неверный способ оплаты",
+                    error='invalid_payment_type',
+                    message='Неверный способ оплаты',
                 )
 
             # 3. Рассчитываем вероятности и выбираем приз
@@ -571,15 +540,13 @@ class FortuneWheelService:
             promocode_id = None
             if generated_promocode:
                 # Получаем ID промокода
-                result = await db.execute(
-                    f"SELECT id FROM promocodes WHERE code = '{generated_promocode}'"
-                )
+                result = await db.execute(f"SELECT id FROM promocodes WHERE code = '{generated_promocode}'")
                 row = result.fetchone()
                 if row:
                     promocode_id = row[0]
 
             # 6. Создаем запись спина
-            spin = await create_wheel_spin(
+            await create_wheel_spin(
                 db=db,
                 user_id=user.id,
                 prize_id=selected_prize.id,
@@ -616,68 +583,64 @@ class FortuneWheelService:
             await db.rollback()
             return SpinResult(
                 success=False,
-                error="payment_error",
+                error='payment_error',
                 message=str(e),
             )
         except Exception as e:
             await db.rollback()
-            logger.exception(f"Ошибка спина колеса для user_id={user.id}: {e}")
+            logger.exception(f'Ошибка спина колеса для user_id={user.id}: {e}')
             return SpinResult(
                 success=False,
-                error="internal_error",
-                message="Произошла ошибка, попробуйте позже",
+                error='internal_error',
+                message='Произошла ошибка, попробуйте позже',
             )
 
-    def _get_error_message(self, reason: Optional[str]) -> str:
+    def _get_error_message(self, reason: str | None) -> str:
         """Получить человекочитаемое сообщение об ошибке."""
         messages = {
-            "wheel_disabled": "Колесо удачи временно недоступно",
-            "daily_limit_reached": "Вы достигли лимита спинов на сегодня",
-            "no_payment_method_available": "Нет доступных способов оплаты",
-            "no_prizes_configured": "Призы еще не настроены",
-            "insufficient_balance": "Недостаточно средств на балансе. Пополните баланс для оплаты спина.",
+            'wheel_disabled': 'Колесо удачи временно недоступно',
+            'daily_limit_reached': 'Вы достигли лимита спинов на сегодня',
+            'no_payment_method_available': 'Нет доступных способов оплаты',
+            'no_prizes_configured': 'Призы еще не настроены',
+            'insufficient_balance': 'Недостаточно средств на балансе. Пополните баланс для оплаты спина.',
         }
-        return messages.get(reason, "Произошла ошибка")
+        return messages.get(reason, 'Произошла ошибка')
 
-    def _get_prize_message(self, prize: WheelPrize, promocode: Optional[str]) -> str:
+    def _get_prize_message(self, prize: WheelPrize, promocode: str | None) -> str:
         """Сформировать сообщение о выигрыше."""
         prize_type = prize.prize_type
 
         if prize_type == WheelPrizeType.NOTHING.value:
-            return "К сожалению, в этот раз не повезло. Попробуйте еще!"
+            return 'К сожалению, в этот раз не повезло. Попробуйте еще!'
 
         if prize_type == WheelPrizeType.BALANCE_BONUS.value:
-            return f"Поздравляем! Вы выиграли {prize.prize_value/100:.0f}₽ на баланс!"
+            return f'Поздравляем! Вы выиграли {prize.prize_value / 100:.0f}₽ на баланс!'
 
         if prize_type == WheelPrizeType.SUBSCRIPTION_DAYS.value:
             days_word = self._pluralize_days(prize.prize_value)
-            return f"Поздравляем! Вы выиграли {prize.prize_value} {days_word} подписки!"
+            return f'Поздравляем! Вы выиграли {prize.prize_value} {days_word} подписки!'
 
         if prize_type == WheelPrizeType.TRAFFIC_GB.value:
-            return f"Поздравляем! Вы выиграли {prize.prize_value}GB трафика!"
+            return f'Поздравляем! Вы выиграли {prize.prize_value}GB трафика!'
 
         if prize_type == WheelPrizeType.PROMOCODE.value:
-            return f"Поздравляем! Ваш промокод: {promocode}"
+            return f'Поздравляем! Ваш промокод: {promocode}'
 
-        return "Поздравляем с выигрышем!"
+        return 'Поздравляем с выигрышем!'
 
     def _pluralize_days(self, n: int) -> str:
         """Склонение слова 'день'."""
         if 11 <= n % 100 <= 19:
-            return "дней"
-        elif n % 10 == 1:
-            return "день"
-        elif 2 <= n % 10 <= 4:
-            return "дня"
-        else:
-            return "дней"
+            return 'дней'
+        if n % 10 == 1:
+            return 'день'
+        if 2 <= n % 10 <= 4:
+            return 'дня'
+        return 'дней'
 
     async def get_statistics(
-        self,
-        db: AsyncSession,
-        date_from: Optional[datetime] = None,
-        date_to: Optional[datetime] = None
-    ) -> Dict[str, Any]:
+        self, db: AsyncSession, date_from: datetime | None = None, date_to: datetime | None = None
+    ) -> dict[str, Any]:
         """Получить статистику колеса."""
         return await get_wheel_statistics(db, date_from, date_to)
 

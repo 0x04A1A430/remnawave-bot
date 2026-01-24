@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Security, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,7 +11,6 @@ from app.database.crud.discount_offer import (
     list_discount_offers,
     upsert_discount_offer,
 )
-from app.handlers.admin.messages import get_custom_users, get_target_users
 from app.database.crud.promo_offer_log import list_promo_offer_logs
 from app.database.crud.promo_offer_template import (
     get_promo_offer_template_by_id,
@@ -20,6 +19,7 @@ from app.database.crud.promo_offer_template import (
 )
 from app.database.crud.user import get_user_by_telegram_id
 from app.database.models import DiscountOffer, PromoOfferLog, PromoOfferTemplate, Subscription, User
+from app.handlers.admin.messages import get_custom_users, get_target_users
 
 from ..dependencies import get_db_session, require_api_token
 from ..schemas.promo_offers import (
@@ -38,10 +38,11 @@ from ..schemas.promo_offers import (
     PromoOfferUserInfo,
 )
 
+
 router = APIRouter()
 
 
-def _serialize_user(user: Optional[User]) -> Optional[PromoOfferUserInfo]:
+def _serialize_user(user: User | None) -> PromoOfferUserInfo | None:
     if not user:
         return None
 
@@ -51,11 +52,11 @@ def _serialize_user(user: Optional[User]) -> Optional[PromoOfferUserInfo]:
         username=user.username,
         first_name=user.first_name,
         last_name=user.last_name,
-        full_name=getattr(user, "full_name", None),
+        full_name=getattr(user, 'full_name', None),
     )
 
 
-def _serialize_subscription(subscription: Optional[Subscription]) -> Optional[PromoOfferSubscriptionInfo]:
+def _serialize_subscription(subscription: Subscription | None) -> PromoOfferSubscriptionInfo | None:
     if not subscription:
         return None
 
@@ -84,8 +85,8 @@ def _serialize_offer(offer: DiscountOffer) -> PromoOfferResponse:
         extra_data=offer.extra_data or {},
         created_at=offer.created_at,
         updated_at=offer.updated_at,
-        user=_serialize_user(getattr(offer, "user", None)),
-        subscription=_serialize_subscription(getattr(offer, "subscription", None)),
+        user=_serialize_user(getattr(offer, 'user', None)),
+        subscription=_serialize_subscription(getattr(offer, 'subscription', None)),
     )
 
 
@@ -110,10 +111,10 @@ def _serialize_template(template: PromoOfferTemplate) -> PromoOfferTemplateRespo
 
 
 def _build_log_response(entry: PromoOfferLog) -> PromoOfferLogResponse:
-    user_info = _serialize_user(getattr(entry, "user", None))
+    user_info = _serialize_user(getattr(entry, 'user', None))
 
-    offer = getattr(entry, "offer", None)
-    offer_info: Optional[PromoOfferLogOfferInfo] = None
+    offer = getattr(entry, 'offer', None)
+    offer_info: PromoOfferLogOfferInfo | None = None
     if offer:
         offer_info = PromoOfferLogOfferInfo(
             id=offer.id,
@@ -143,33 +144,33 @@ def _build_log_response(entry: PromoOfferLog) -> PromoOfferLogResponse:
 
 async def _resolve_target_users(db: AsyncSession, target: str) -> list[User]:
     normalized = target.strip().lower()
-    if normalized.startswith("custom_"):
-        criteria = normalized[len("custom_"):]
+    if normalized.startswith('custom_'):
+        criteria = normalized[len('custom_') :]
         return await get_custom_users(db, criteria)
     return await get_target_users(db, normalized)
 
 
-@router.get("", response_model=PromoOfferListResponse)
+@router.get('', response_model=PromoOfferListResponse)
 async def list_promo_offers(
     _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    user_id: Optional[int] = Query(None, ge=1),
-    telegram_id: Optional[int] = Query(None, ge=1),
-    notification_type: Optional[str] = Query(None, min_length=1),
-    is_active: Optional[bool] = Query(None),
+    user_id: int | None = Query(None, ge=1),
+    telegram_id: int | None = Query(None, ge=1),
+    notification_type: str | None = Query(None, min_length=1),
+    is_active: bool | None = Query(None),
 ) -> PromoOfferListResponse:
     resolved_user_id = user_id
     if telegram_id is not None:
         user = await get_user_by_telegram_id(db, telegram_id)
         if not user:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="User not found")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='User not found')
 
         if resolved_user_id and resolved_user_id != user.id:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                detail="telegram_id does not match the provided user_id",
+                detail='telegram_id does not match the provided user_id',
             )
 
         resolved_user_id = user.id
@@ -197,52 +198,52 @@ async def list_promo_offers(
     )
 
 
-@router.post("", response_model=PromoOfferResponse, status_code=status.HTTP_201_CREATED)
+@router.post('', response_model=PromoOfferResponse, status_code=status.HTTP_201_CREATED)
 async def create_promo_offer(
     payload: PromoOfferCreateRequest,
     _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> PromoOfferResponse:
     if payload.discount_percent < 0:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "discount_percent must be non-negative")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'discount_percent must be non-negative')
     if payload.bonus_amount_kopeks < 0:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "bonus_amount_kopeks must be non-negative")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'bonus_amount_kopeks must be non-negative')
     if payload.valid_hours <= 0:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "valid_hours must be positive")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'valid_hours must be positive')
     if not payload.notification_type.strip():
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "notification_type must not be empty")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'notification_type must not be empty')
     if not payload.effect_type.strip():
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "effect_type must not be empty")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'effect_type must not be empty')
 
     target_user_id = payload.user_id
-    user: Optional[User] = None
+    user: User | None = None
     if payload.telegram_id is not None:
         user = await get_user_by_telegram_id(db, payload.telegram_id)
         if not user:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, 'User not found')
 
         if target_user_id and target_user_id != user.id:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                "Provided user_id does not match telegram_id",
+                'Provided user_id does not match telegram_id',
             )
 
         target_user_id = user.id
 
     if target_user_id is None:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "user_id or telegram_id is required")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'user_id or telegram_id is required')
 
     if user is None:
         user = await db.get(User, target_user_id)
     if not user:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'User not found')
 
     if payload.subscription_id is not None:
         subscription = await db.get(Subscription, payload.subscription_id)
         if not subscription:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Subscription not found")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, 'Subscription not found')
         if subscription.user_id != target_user_id:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Subscription does not belong to the user")
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Subscription does not belong to the user')
 
     offer = await upsert_discount_offer(
         db,
@@ -256,13 +257,13 @@ async def create_promo_offer(
         extra_data=payload.extra_data,
     )
 
-    await db.refresh(offer, attribute_names=["user", "subscription"])
+    await db.refresh(offer, attribute_names=['user', 'subscription'])
 
     return _serialize_offer(offer)
 
 
 @router.post(
-    "/broadcast",
+    '/broadcast',
     response_model=PromoOfferBroadcastResponse,
     status_code=status.HTTP_201_CREATED,
 )
@@ -272,15 +273,15 @@ async def broadcast_promo_offers(
     db: AsyncSession = Depends(get_db_session),
 ) -> PromoOfferBroadcastResponse:
     if payload.discount_percent < 0:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "discount_percent must be non-negative")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'discount_percent must be non-negative')
     if payload.bonus_amount_kopeks < 0:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "bonus_amount_kopeks must be non-negative")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'bonus_amount_kopeks must be non-negative')
     if payload.valid_hours <= 0:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "valid_hours must be positive")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'valid_hours must be positive')
     if not payload.notification_type.strip():
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "notification_type must not be empty")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'notification_type must not be empty')
     if not payload.effect_type.strip():
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "effect_type must not be empty")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'effect_type must not be empty')
 
     recipients: dict[int, User] = {}
 
@@ -290,16 +291,16 @@ async def broadcast_promo_offers(
         recipients.update({user.id: user for user in users if user and user.id})
 
     target_user_id = payload.user_id
-    user: Optional[User] = None
+    user: User | None = None
     if payload.telegram_id is not None:
         user = await get_user_by_telegram_id(db, payload.telegram_id)
         if not user:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, 'User not found')
 
         if target_user_id and target_user_id != user.id:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                "Provided user_id does not match telegram_id",
+                'Provided user_id does not match telegram_id',
             )
 
         target_user_id = user.id
@@ -308,29 +309,29 @@ async def broadcast_promo_offers(
         if user is None:
             user = await db.get(User, target_user_id)
         if not user:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, 'User not found')
         recipients[target_user_id] = user
 
     if not recipients:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            "Пустая аудитория: укажите target или конкретного пользователя",
+            'Пустая аудитория: укажите target или конкретного пользователя',
         )
 
     if payload.subscription_id is not None:
         if len(recipients) > 1:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                "subscription_id можно использовать только при отправке одному пользователю",
+                'subscription_id можно использовать только при отправке одному пользователю',
             )
         sole_user = next(iter(recipients.values()))
         subscription = await db.get(Subscription, payload.subscription_id)
         if not subscription:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Subscription not found")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, 'Subscription not found')
         if subscription.user_id != sole_user.id:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                "Subscription does not belong to the user",
+                'Subscription does not belong to the user',
             )
 
     created_offers = 0
@@ -356,16 +357,16 @@ async def broadcast_promo_offers(
     )
 
 
-@router.get("/logs", response_model=PromoOfferLogListResponse)
+@router.get('/logs', response_model=PromoOfferLogListResponse)
 async def get_promo_offer_logs(
     _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    user_id: Optional[int] = Query(None, ge=1),
-    offer_id: Optional[int] = Query(None, ge=1),
-    action: Optional[str] = Query(None, min_length=1),
-    source: Optional[str] = Query(None, min_length=1),
+    user_id: int | None = Query(None, ge=1),
+    offer_id: int | None = Query(None, ge=1),
+    action: str | None = Query(None, min_length=1),
+    source: str | None = Query(None, min_length=1),
 ) -> PromoOfferLogListResponse:
     logs, total = await list_promo_offer_logs(
         db,
@@ -385,7 +386,7 @@ async def get_promo_offer_logs(
     )
 
 
-@router.get("/templates", response_model=PromoOfferTemplateListResponse)
+@router.get('/templates', response_model=PromoOfferTemplateListResponse)
 async def list_promo_offer_templates_endpoint(
     _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
@@ -394,7 +395,7 @@ async def list_promo_offer_templates_endpoint(
     return PromoOfferTemplateListResponse(items=[_serialize_template(template) for template in templates])
 
 
-@router.get("/templates/{template_id}", response_model=PromoOfferTemplateResponse)
+@router.get('/templates/{template_id}', response_model=PromoOfferTemplateResponse)
 async def get_promo_offer_template_endpoint(
     template_id: int,
     _: Any = Security(require_api_token),
@@ -402,11 +403,11 @@ async def get_promo_offer_template_endpoint(
 ) -> PromoOfferTemplateResponse:
     template = await get_promo_offer_template_by_id(db, template_id)
     if not template:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Promo offer template not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Promo offer template not found')
     return _serialize_template(template)
 
 
-@router.patch("/templates/{template_id}", response_model=PromoOfferTemplateResponse)
+@router.patch('/templates/{template_id}', response_model=PromoOfferTemplateResponse)
 async def update_promo_offer_template_endpoint(
     template_id: int,
     payload: PromoOfferTemplateUpdateRequest,
@@ -415,18 +416,18 @@ async def update_promo_offer_template_endpoint(
 ) -> PromoOfferTemplateResponse:
     template = await get_promo_offer_template_by_id(db, template_id)
     if not template:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Promo offer template not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Promo offer template not found')
 
     if payload.valid_hours is not None and payload.valid_hours <= 0:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "valid_hours must be positive")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'valid_hours must be positive')
     if payload.active_discount_hours is not None and payload.active_discount_hours <= 0:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "active_discount_hours must be positive")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'active_discount_hours must be positive')
     if payload.test_duration_hours is not None and payload.test_duration_hours <= 0:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "test_duration_hours must be positive")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'test_duration_hours must be positive')
     if payload.discount_percent is not None and payload.discount_percent < 0:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "discount_percent must be non-negative")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'discount_percent must be non-negative')
     if payload.bonus_amount_kopeks is not None and payload.bonus_amount_kopeks < 0:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "bonus_amount_kopeks must be non-negative")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'bonus_amount_kopeks must be non-negative')
 
     if payload.test_squad_uuids is not None:
         normalized_squads = [str(uuid).strip() for uuid in payload.test_squad_uuids if str(uuid).strip()]
@@ -451,7 +452,7 @@ async def update_promo_offer_template_endpoint(
     return _serialize_template(updated_template)
 
 
-@router.get("/{offer_id}", response_model=PromoOfferResponse)
+@router.get('/{offer_id}', response_model=PromoOfferResponse)
 async def get_promo_offer_endpoint(
     offer_id: int,
     _: Any = Security(require_api_token),
@@ -459,6 +460,6 @@ async def get_promo_offer_endpoint(
 ) -> PromoOfferResponse:
     offer = await get_offer_by_id(db, offer_id)
     if not offer:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Promo offer not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Promo offer not found')
 
     return _serialize_offer(offer)

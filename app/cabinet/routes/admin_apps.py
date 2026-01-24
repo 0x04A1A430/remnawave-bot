@@ -2,70 +2,77 @@
 
 import json
 import logging
-from typing import List, Optional, Dict, Any
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.models import User
 from app.config import settings
+from app.database.models import User
 from app.services.remnawave_service import RemnaWaveService
 from app.services.system_settings_service import bot_configuration_service
 
 from ..dependencies import get_cabinet_db, get_current_admin_user
 
+
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/admin/apps", tags=["Cabinet Admin Apps"])
+router = APIRouter(prefix='/admin/apps', tags=['Cabinet Admin Apps'])
 
 
 # ============ Schemas ============
 
+
 class LocalizedText(BaseModel):
     """Localized text for multiple languages."""
-    en: str = ""
-    ru: str = ""
-    zh: Optional[str] = ""
-    fa: Optional[str] = ""
+
+    en: str = ''
+    ru: str = ''
+    zh: str | None = ''
+    fa: str | None = ''
 
 
 class AppButton(BaseModel):
     """Button with link and localized text."""
+
     buttonLink: str
     buttonText: LocalizedText
 
 
 class AppStep(BaseModel):
     """Step with description and optional buttons/title."""
+
     description: LocalizedText
-    buttons: Optional[List[AppButton]] = None
-    title: Optional[LocalizedText] = None
+    buttons: list[AppButton] | None = None
+    title: LocalizedText | None = None
 
 
 class AppDefinition(BaseModel):
     """VPN application definition."""
+
     id: str
     name: str
     isFeatured: bool = False
     urlScheme: str
-    isNeedBase64Encoding: Optional[bool] = None
+    isNeedBase64Encoding: bool | None = None
     installationStep: AppStep
     addSubscriptionStep: AppStep
     connectAndUseStep: AppStep
-    additionalBeforeAddSubscriptionStep: Optional[AppStep] = None
-    additionalAfterAddSubscriptionStep: Optional[AppStep] = None
+    additionalBeforeAddSubscriptionStep: AppStep | None = None
+    additionalAfterAddSubscriptionStep: AppStep | None = None
 
 
 class PlatformApps(BaseModel):
     """Apps for a specific platform."""
+
     platform: str
-    apps: List[AppDefinition]
+    apps: list[AppDefinition]
 
 
 class AppConfigBranding(BaseModel):
     """Branding configuration."""
+
     name: str
     logoUrl: str
     supportUrl: str
@@ -73,38 +80,45 @@ class AppConfigBranding(BaseModel):
 
 class AppConfigConfig(BaseModel):
     """Top-level config section."""
-    additionalLocales: List[str]
+
+    additionalLocales: list[str]
     branding: AppConfigBranding
 
 
 class AppConfigResponse(BaseModel):
     """Full app config response."""
+
     config: AppConfigConfig
-    platforms: Dict[str, List[AppDefinition]]
+    platforms: dict[str, list[AppDefinition]]
 
 
 class CreateAppRequest(BaseModel):
     """Request to create a new app."""
+
     platform: str
     app: AppDefinition
 
 
 class UpdateAppRequest(BaseModel):
     """Request to update an app."""
+
     app: AppDefinition
 
 
 class ReorderAppsRequest(BaseModel):
     """Request to reorder apps in a platform."""
-    app_ids: List[str]
+
+    app_ids: list[str]
 
 
 class UpdateBrandingRequest(BaseModel):
     """Request to update branding."""
+
     branding: AppConfigBranding
 
 
 # ============ Helpers ============
+
 
 def _get_config_path() -> Path:
     """Get path to app-config.json."""
@@ -117,16 +131,16 @@ def _load_config() -> dict:
     if not config_path.exists():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"App config file not found: {config_path}",
+            detail=f'App config file not found: {config_path}',
         )
 
     try:
-        with open(config_path, "r", encoding="utf-8") as f:
+        with open(config_path, encoding='utf-8') as f:
             return json.load(f)
     except json.JSONDecodeError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to parse app config: {e}",
+            detail=f'Failed to parse app config: {e}',
         )
 
 
@@ -135,21 +149,22 @@ def _save_config(config: dict) -> None:
     config_path = _get_config_path()
 
     try:
-        with open(config_path, "w", encoding="utf-8") as f:
+        with open(config_path, 'w', encoding='utf-8') as f:
             json.dump(config, f, indent=2, ensure_ascii=False)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to save app config: {e}",
+            detail=f'Failed to save app config: {e}',
         )
 
 
-VALID_PLATFORMS = ["ios", "android", "macos", "windows", "linux", "androidTV", "appleTV"]
+VALID_PLATFORMS = ['ios', 'android', 'macos', 'windows', 'linux', 'androidTV', 'appleTV']
 
 
 # ============ Routes ============
 
-@router.get("", response_model=AppConfigResponse)
+
+@router.get('', response_model=AppConfigResponse)
 async def get_app_config(
     admin: User = Depends(get_current_admin_user),
 ):
@@ -158,7 +173,7 @@ async def get_app_config(
     return config
 
 
-@router.get("/platforms", response_model=List[str])
+@router.get('/platforms', response_model=list[str])
 async def get_platforms(
     admin: User = Depends(get_current_admin_user),
 ):
@@ -166,7 +181,7 @@ async def get_platforms(
     return VALID_PLATFORMS
 
 
-@router.get("/platforms/{platform}", response_model=List[AppDefinition])
+@router.get('/platforms/{platform}', response_model=list[AppDefinition])
 async def get_platform_apps(
     platform: str,
     admin: User = Depends(get_current_admin_user),
@@ -175,15 +190,15 @@ async def get_platform_apps(
     if platform not in VALID_PLATFORMS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid platform: {platform}. Valid platforms: {VALID_PLATFORMS}",
+            detail=f'Invalid platform: {platform}. Valid platforms: {VALID_PLATFORMS}',
         )
 
     config = _load_config()
-    platforms = config.get("platforms", {})
+    platforms = config.get('platforms', {})
     return platforms.get(platform, [])
 
 
-@router.post("/platforms/{platform}", response_model=AppDefinition)
+@router.post('/platforms/{platform}', response_model=AppDefinition)
 async def create_app(
     platform: str,
     request: CreateAppRequest,
@@ -193,17 +208,17 @@ async def create_app(
     if platform not in VALID_PLATFORMS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid platform: {platform}",
+            detail=f'Invalid platform: {platform}',
         )
 
     config = _load_config()
-    platforms = config.get("platforms", {})
+    platforms = config.get('platforms', {})
 
     if platform not in platforms:
         platforms[platform] = []
 
     # Check if app with same ID already exists
-    existing_ids = [app.get("id") for app in platforms[platform]]
+    existing_ids = [app.get('id') for app in platforms[platform]]
     if request.app.id in existing_ids:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -213,7 +228,7 @@ async def create_app(
     # Add new app
     app_dict = request.app.model_dump(exclude_none=True)
     platforms[platform].append(app_dict)
-    config["platforms"] = platforms
+    config['platforms'] = platforms
 
     _save_config(config)
     logger.info(f"Admin {admin.id} created app '{request.app.id}' for platform '{platform}'")
@@ -221,7 +236,7 @@ async def create_app(
     return request.app
 
 
-@router.put("/platforms/{platform}/{app_id}", response_model=AppDefinition)
+@router.put('/platforms/{platform}/{app_id}', response_model=AppDefinition)
 async def update_app(
     platform: str,
     app_id: str,
@@ -232,17 +247,17 @@ async def update_app(
     if platform not in VALID_PLATFORMS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid platform: {platform}",
+            detail=f'Invalid platform: {platform}',
         )
 
     config = _load_config()
-    platforms = config.get("platforms", {})
+    platforms = config.get('platforms', {})
     apps = platforms.get(platform, [])
 
     # Find and update app
     app_index = None
     for i, app in enumerate(apps):
-        if app.get("id") == app_id:
+        if app.get('id') == app_id:
             app_index = i
             break
 
@@ -256,7 +271,7 @@ async def update_app(
     app_dict = request.app.model_dump(exclude_none=True)
     apps[app_index] = app_dict
     platforms[platform] = apps
-    config["platforms"] = platforms
+    config['platforms'] = platforms
 
     _save_config(config)
     logger.info(f"Admin {admin.id} updated app '{app_id}' in platform '{platform}'")
@@ -264,7 +279,7 @@ async def update_app(
     return request.app
 
 
-@router.delete("/platforms/{platform}/{app_id}")
+@router.delete('/platforms/{platform}/{app_id}')
 async def delete_app(
     platform: str,
     app_id: str,
@@ -274,16 +289,16 @@ async def delete_app(
     if platform not in VALID_PLATFORMS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid platform: {platform}",
+            detail=f'Invalid platform: {platform}',
         )
 
     config = _load_config()
-    platforms = config.get("platforms", {})
+    platforms = config.get('platforms', {})
     apps = platforms.get(platform, [])
 
     # Find and remove app
     original_length = len(apps)
-    apps = [app for app in apps if app.get("id") != app_id]
+    apps = [app for app in apps if app.get('id') != app_id]
 
     if len(apps) == original_length:
         raise HTTPException(
@@ -292,15 +307,15 @@ async def delete_app(
         )
 
     platforms[platform] = apps
-    config["platforms"] = platforms
+    config['platforms'] = platforms
 
     _save_config(config)
     logger.info(f"Admin {admin.id} deleted app '{app_id}' from platform '{platform}'")
 
-    return {"status": "deleted", "app_id": app_id}
+    return {'status': 'deleted', 'app_id': app_id}
 
 
-@router.post("/platforms/{platform}/reorder")
+@router.post('/platforms/{platform}/reorder')
 async def reorder_apps(
     platform: str,
     request: ReorderAppsRequest,
@@ -310,15 +325,15 @@ async def reorder_apps(
     if platform not in VALID_PLATFORMS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid platform: {platform}",
+            detail=f'Invalid platform: {platform}',
         )
 
     config = _load_config()
-    platforms = config.get("platforms", {})
+    platforms = config.get('platforms', {})
     apps = platforms.get(platform, [])
 
     # Create a map of apps by ID
-    apps_map = {app.get("id"): app for app in apps}
+    apps_map = {app.get('id'): app for app in apps}
 
     # Verify all IDs exist
     for app_id in request.app_ids:
@@ -333,19 +348,19 @@ async def reorder_apps(
 
     # Add any apps that weren't in the reorder list (shouldn't happen but just in case)
     for app in apps:
-        if app.get("id") not in request.app_ids:
+        if app.get('id') not in request.app_ids:
             reordered_apps.append(app)
 
     platforms[platform] = reordered_apps
-    config["platforms"] = platforms
+    config['platforms'] = platforms
 
     _save_config(config)
     logger.info(f"Admin {admin.id} reordered apps in platform '{platform}'")
 
-    return {"status": "reordered", "order": request.app_ids}
+    return {'status': 'reordered', 'order': request.app_ids}
 
 
-@router.put("/branding", response_model=AppConfigBranding)
+@router.put('/branding', response_model=AppConfigBranding)
 async def update_branding(
     request: UpdateBrandingRequest,
     admin: User = Depends(get_current_admin_user),
@@ -353,28 +368,28 @@ async def update_branding(
     """Update branding configuration."""
     config = _load_config()
 
-    if "config" not in config:
-        config["config"] = {}
+    if 'config' not in config:
+        config['config'] = {}
 
-    config["config"]["branding"] = request.branding.model_dump()
+    config['config']['branding'] = request.branding.model_dump()
 
     _save_config(config)
-    logger.info(f"Admin {admin.id} updated branding")
+    logger.info(f'Admin {admin.id} updated branding')
 
     return request.branding
 
 
-@router.get("/branding", response_model=AppConfigBranding)
+@router.get('/branding', response_model=AppConfigBranding)
 async def get_branding(
     admin: User = Depends(get_current_admin_user),
 ):
     """Get branding configuration."""
     config = _load_config()
-    branding = config.get("config", {}).get("branding", {})
+    branding = config.get('config', {}).get('branding', {})
     return branding
 
 
-@router.post("/platforms/{platform}/copy/{app_id}")
+@router.post('/platforms/{platform}/copy/{app_id}')
 async def copy_app_to_platform(
     platform: str,
     app_id: str,
@@ -385,17 +400,17 @@ async def copy_app_to_platform(
     if platform not in VALID_PLATFORMS or target_platform not in VALID_PLATFORMS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid platform(s)",
+            detail='Invalid platform(s)',
         )
 
     config = _load_config()
-    platforms = config.get("platforms", {})
+    platforms = config.get('platforms', {})
     source_apps = platforms.get(platform, [])
 
     # Find source app
     source_app = None
     for app in source_apps:
-        if app.get("id") == app_id:
+        if app.get('id') == app_id:
             source_app = app.copy()
             break
 
@@ -407,44 +422,48 @@ async def copy_app_to_platform(
 
     # Generate new ID for copied app
     import time
-    new_id = f"{app_id}-copy-{int(time.time())}"
-    source_app["id"] = new_id
+
+    new_id = f'{app_id}-copy-{int(time.time())}'
+    source_app['id'] = new_id
 
     # Add to target platform
     if target_platform not in platforms:
         platforms[target_platform] = []
 
     platforms[target_platform].append(source_app)
-    config["platforms"] = platforms
+    config['platforms'] = platforms
 
     _save_config(config)
     logger.info(f"Admin {admin.id} copied app '{app_id}' from '{platform}' to '{target_platform}' as '{new_id}'")
 
-    return {"status": "copied", "new_id": new_id, "target_platform": target_platform}
+    return {'status': 'copied', 'new_id': new_id, 'target_platform': target_platform}
 
 
 # ============ RemnaWave Config Routes ============
 
+
 class RemnaWaveConfigStatus(BaseModel):
     """Status of RemnaWave config integration."""
+
     enabled: bool
-    config_uuid: Optional[str] = None
+    config_uuid: str | None = None
 
 
 class UpdateRemnaWaveUuidRequest(BaseModel):
     """Request to update RemnaWave config UUID."""
-    uuid: Optional[str] = None
+
+    uuid: str | None = None
 
 
-def _get_remnawave_config_uuid() -> Optional[str]:
+def _get_remnawave_config_uuid() -> str | None:
     """Get RemnaWave config UUID from system settings or env."""
     try:
-        return bot_configuration_service.get_current_value("CABINET_REMNA_SUB_CONFIG")
+        return bot_configuration_service.get_current_value('CABINET_REMNA_SUB_CONFIG')
     except Exception:
         return settings.CABINET_REMNA_SUB_CONFIG
 
 
-@router.get("/remnawave/status", response_model=RemnaWaveConfigStatus)
+@router.get('/remnawave/status', response_model=RemnaWaveConfigStatus)
 async def get_remnawave_config_status(
     admin: User = Depends(get_current_admin_user),
 ):
@@ -456,7 +475,7 @@ async def get_remnawave_config_status(
     )
 
 
-@router.put("/remnawave/uuid", response_model=RemnaWaveConfigStatus)
+@router.put('/remnawave/uuid', response_model=RemnaWaveConfigStatus)
 async def set_remnawave_config_uuid(
     request: UpdateRemnaWaveUuidRequest,
     admin: User = Depends(get_current_admin_user),
@@ -468,24 +487,23 @@ async def set_remnawave_config_uuid(
     # Validate UUID format if provided
     if uuid_value:
         import re
-        uuid_pattern = re.compile(
-            r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
-        )
+
+        uuid_pattern = re.compile(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$')
         if not uuid_pattern.match(uuid_value):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid UUID format",
+                detail='Invalid UUID format',
             )
 
     try:
-        await bot_configuration_service.set_value(db, "CABINET_REMNA_SUB_CONFIG", uuid_value)
+        await bot_configuration_service.set_value(db, 'CABINET_REMNA_SUB_CONFIG', uuid_value)
         await db.commit()
         logger.info(f"Admin {admin.id} updated CABINET_REMNA_SUB_CONFIG to '{uuid_value}'")
     except Exception as e:
-        logger.error(f"Error saving RemnaWave config UUID: {e}")
+        logger.error(f'Error saving RemnaWave config UUID: {e}')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to save configuration",
+            detail='Failed to save configuration',
         )
 
     return RemnaWaveConfigStatus(
@@ -494,7 +512,7 @@ async def set_remnawave_config_uuid(
     )
 
 
-@router.get("/remnawave/config")
+@router.get('/remnawave/config')
 async def get_remnawave_subscription_config(
     admin: User = Depends(get_current_admin_user),
 ):
@@ -506,7 +524,7 @@ async def get_remnawave_subscription_config(
     if not config_uuid:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="CABINET_REMNA_SUB_CONFIG is not configured",
+            detail='CABINET_REMNA_SUB_CONFIG is not configured',
         )
 
     try:
@@ -521,22 +539,22 @@ async def get_remnawave_subscription_config(
 
             # Return the raw config data from RemnaWave
             return {
-                "uuid": config.uuid,
-                "name": config.name,
-                "view_position": config.view_position,
-                "config": config.config,
+                'uuid': config.uuid,
+                'name': config.name,
+                'view_position': config.view_position,
+                'config': config.config,
             }
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error fetching RemnaWave config: {e}")
+        logger.error(f'Error fetching RemnaWave config: {e}')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch config from RemnaWave: {str(e)}",
+            detail=f'Failed to fetch config from RemnaWave: {e!s}',
         )
 
 
-@router.get("/remnawave/configs")
+@router.get('/remnawave/configs')
 async def list_remnawave_subscription_configs(
     admin: User = Depends(get_current_admin_user),
 ):
@@ -547,15 +565,15 @@ async def list_remnawave_subscription_configs(
             configs = await api.get_subscription_page_configs()
             return [
                 {
-                    "uuid": c.uuid,
-                    "name": c.name,
-                    "view_position": c.view_position,
+                    'uuid': c.uuid,
+                    'name': c.name,
+                    'view_position': c.view_position,
                 }
                 for c in configs
             ]
     except Exception as e:
-        logger.error(f"Error listing RemnaWave configs: {e}")
+        logger.error(f'Error listing RemnaWave configs: {e}')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch configs from RemnaWave: {str(e)}",
+            detail=f'Failed to fetch configs from RemnaWave: {e!s}',
         )

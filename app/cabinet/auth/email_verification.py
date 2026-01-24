@@ -2,7 +2,6 @@
 
 import secrets
 from datetime import datetime, timedelta
-from typing import Optional
 
 from app.config import settings
 
@@ -49,7 +48,7 @@ def get_password_reset_expires_at() -> datetime:
     return datetime.utcnow() + timedelta(hours=hours)
 
 
-def is_token_expired(expires_at: Optional[datetime]) -> bool:
+def is_token_expired(expires_at: datetime | None) -> bool:
     """
     Check if a token has expired.
 

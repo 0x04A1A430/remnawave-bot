@@ -22,6 +22,7 @@ from ..schemas.welcome_texts import (
     WelcomeTextUpdateRequest,
 )
 
+
 router = APIRouter()
 
 
@@ -37,13 +38,13 @@ def _serialize(text) -> WelcomeTextResponse:
     )
 
 
-@router.get("", response_model=WelcomeTextListResponse)
+@router.get('', response_model=WelcomeTextListResponse)
 async def list_welcome_texts_endpoint(
     _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    include_inactive: bool = Query(True, description="Включать неактивные тексты"),
+    include_inactive: bool = Query(True, description='Включать неактивные тексты'),
 ) -> WelcomeTextListResponse:
     total = await count_welcome_texts(db, include_inactive=include_inactive)
     records = await list_welcome_texts(
@@ -61,13 +62,13 @@ async def list_welcome_texts_endpoint(
     )
 
 
-@router.post("", response_model=WelcomeTextResponse, status_code=status.HTTP_201_CREATED)
+@router.post('', response_model=WelcomeTextResponse, status_code=status.HTTP_201_CREATED)
 async def create_welcome_text_endpoint(
     payload: WelcomeTextCreateRequest,
     token: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> WelcomeTextResponse:
-    created_by = getattr(token, "id", None)
+    created_by = getattr(token, 'id', None)
     record = await create_welcome_text(
         db,
         text_content=payload.text,
@@ -79,7 +80,7 @@ async def create_welcome_text_endpoint(
     return _serialize(record)
 
 
-@router.get("/{welcome_text_id}", response_model=WelcomeTextResponse)
+@router.get('/{welcome_text_id}', response_model=WelcomeTextResponse)
 async def get_welcome_text_endpoint(
     welcome_text_id: int,
     _: Any = Security(require_api_token),
@@ -87,12 +88,12 @@ async def get_welcome_text_endpoint(
 ) -> WelcomeTextResponse:
     record = await get_welcome_text_by_id(db, welcome_text_id)
     if not record:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Welcome text not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Welcome text not found')
 
     return _serialize(record)
 
 
-@router.patch("/{welcome_text_id}", response_model=WelcomeTextResponse)
+@router.patch('/{welcome_text_id}', response_model=WelcomeTextResponse)
 async def update_welcome_text_endpoint(
     welcome_text_id: int,
     payload: WelcomeTextUpdateRequest,
@@ -101,16 +102,16 @@ async def update_welcome_text_endpoint(
 ) -> WelcomeTextResponse:
     record = await get_welcome_text_by_id(db, welcome_text_id)
     if not record:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Welcome text not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Welcome text not found')
 
     update_payload = payload.dict(exclude_unset=True)
-    if "text" in update_payload:
-        update_payload["text_content"] = update_payload.pop("text")
+    if 'text' in update_payload:
+        update_payload['text_content'] = update_payload.pop('text')
     updated = await update_welcome_text(db, record, **update_payload)
     return _serialize(updated)
 
 
-@router.delete("/{welcome_text_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete('/{welcome_text_id}', status_code=status.HTTP_204_NO_CONTENT)
 async def delete_welcome_text_endpoint(
     welcome_text_id: int,
     _: Any = Security(require_api_token),
@@ -118,7 +119,7 @@ async def delete_welcome_text_endpoint(
 ) -> Response:
     record = await get_welcome_text_by_id(db, welcome_text_id)
     if not record:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Welcome text not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Welcome text not found')
 
     await delete_welcome_text(db, record)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

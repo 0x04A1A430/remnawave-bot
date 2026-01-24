@@ -1,19 +1,17 @@
 import logging
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import PublicOffer
 
+
 logger = logging.getLogger(__name__)
 
 
-async def get_public_offer(db: AsyncSession, language: str) -> Optional[PublicOffer]:
-    result = await db.execute(
-        select(PublicOffer).where(PublicOffer.language == language)
-    )
+async def get_public_offer(db: AsyncSession, language: str) -> PublicOffer | None:
+    result = await db.execute(select(PublicOffer).where(PublicOffer.language == language))
     return result.scalar_one_or_none()
 
 
@@ -27,13 +25,13 @@ async def upsert_public_offer(
     offer = await get_public_offer(db, language)
 
     if offer:
-        offer.content = content or ""
+        offer.content = content or ''
         offer.updated_at = datetime.utcnow()
     else:
         offer = PublicOffer(
             language=language,
-            content=content or "",
-            is_enabled=True if enable_if_new else False,
+            content=content or '',
+            is_enabled=bool(enable_if_new),
         )
         db.add(offer)
 
@@ -41,7 +39,7 @@ async def upsert_public_offer(
     await db.refresh(offer)
 
     logger.info(
-        "✅ Публичная оферта для языка %s обновлена (ID: %s)",
+        '✅ Публичная оферта для языка %s обновлена (ID: %s)',
         language,
         offer.id,
     )
@@ -62,7 +60,7 @@ async def set_public_offer_enabled(
     else:
         offer = PublicOffer(
             language=language,
-            content="",
+            content='',
             is_enabled=bool(enabled),
         )
         db.add(offer)
@@ -71,9 +69,9 @@ async def set_public_offer_enabled(
     await db.refresh(offer)
 
     logger.info(
-        "✅ Статус публичной оферты для языка %s обновлен: %s",
+        '✅ Статус публичной оферты для языка %s обновлен: %s',
         language,
-        "enabled" if offer.is_enabled else "disabled",
+        'enabled' if offer.is_enabled else 'disabled',
     )
 
     return offer

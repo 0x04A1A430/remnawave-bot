@@ -1,27 +1,25 @@
-from datetime import datetime, timedelta, time, date
-from typing import Optional, List, Dict, Any
+from datetime import datetime, time, timedelta
 from enum import Enum
 
 from sqlalchemy import (
-    Column,
-    Integer,
-    String,
-    DateTime,
-    Date,
-    Time,
-    Boolean,
-    Text,
-    ForeignKey,
-    Float,
     JSON,
     BigInteger,
-    UniqueConstraint,
+    Boolean,
+    Column,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
     Index,
+    Integer,
+    String,
     Table,
-    SmallInteger,
+    Text,
+    Time,
+    UniqueConstraint,
 )
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 
@@ -29,18 +27,18 @@ Base = declarative_base()
 
 
 server_squad_promo_groups = Table(
-    "server_squad_promo_groups",
+    'server_squad_promo_groups',
     Base.metadata,
     Column(
-        "server_squad_id",
+        'server_squad_id',
         Integer,
-        ForeignKey("server_squads.id", ondelete="CASCADE"),
+        ForeignKey('server_squads.id', ondelete='CASCADE'),
         primary_key=True,
     ),
     Column(
-        "promo_group_id",
+        'promo_group_id',
         Integer,
-        ForeignKey("promo_groups.id", ondelete="CASCADE"),
+        ForeignKey('promo_groups.id', ondelete='CASCADE'),
         primary_key=True,
     ),
 )
@@ -48,199 +46,203 @@ server_squad_promo_groups = Table(
 
 # M2M таблица для связи тарифов с промогруппами (доступ к тарифу)
 tariff_promo_groups = Table(
-    "tariff_promo_groups",
+    'tariff_promo_groups',
     Base.metadata,
     Column(
-        "tariff_id",
+        'tariff_id',
         Integer,
-        ForeignKey("tariffs.id", ondelete="CASCADE"),
+        ForeignKey('tariffs.id', ondelete='CASCADE'),
         primary_key=True,
     ),
     Column(
-        "promo_group_id",
+        'promo_group_id',
         Integer,
-        ForeignKey("promo_groups.id", ondelete="CASCADE"),
+        ForeignKey('promo_groups.id', ondelete='CASCADE'),
         primary_key=True,
     ),
 )
 
 
 class UserStatus(Enum):
-    ACTIVE = "active"
-    BLOCKED = "blocked"
-    DELETED = "deleted"
+    ACTIVE = 'active'
+    BLOCKED = 'blocked'
+    DELETED = 'deleted'
 
 
 class SubscriptionStatus(Enum):
-    TRIAL = "trial"
-    ACTIVE = "active"
-    EXPIRED = "expired"
-    DISABLED = "disabled"
-    PENDING = "pending"
+    TRIAL = 'trial'
+    ACTIVE = 'active'
+    EXPIRED = 'expired'
+    DISABLED = 'disabled'
+    PENDING = 'pending'
 
 
 class TransactionType(Enum):
-    DEPOSIT = "deposit"
-    WITHDRAWAL = "withdrawal"
-    SUBSCRIPTION_PAYMENT = "subscription_payment"
-    REFUND = "refund"
-    REFERRAL_REWARD = "referral_reward"
-    POLL_REWARD = "poll_reward"
+    DEPOSIT = 'deposit'
+    WITHDRAWAL = 'withdrawal'
+    SUBSCRIPTION_PAYMENT = 'subscription_payment'
+    REFUND = 'refund'
+    REFERRAL_REWARD = 'referral_reward'
+    POLL_REWARD = 'poll_reward'
 
 
 class PromoCodeType(Enum):
-    BALANCE = "balance"
-    SUBSCRIPTION_DAYS = "subscription_days"
-    TRIAL_SUBSCRIPTION = "trial_subscription"
-    PROMO_GROUP = "promo_group"
-    DISCOUNT = "discount"  # Одноразовая процентная скидка (balance_bonus_kopeks = процент, subscription_days = часы)
+    BALANCE = 'balance'
+    SUBSCRIPTION_DAYS = 'subscription_days'
+    TRIAL_SUBSCRIPTION = 'trial_subscription'
+    PROMO_GROUP = 'promo_group'
+    DISCOUNT = 'discount'  # Одноразовая процентная скидка (balance_bonus_kopeks = процент, subscription_days = часы)
 
 
 class PaymentMethod(Enum):
-    TELEGRAM_STARS = "telegram_stars"
-    TRIBUTE = "tribute"
-    YOOKASSA = "yookassa"
-    CRYPTOBOT = "cryptobot"
-    HELEKET = "heleket"
-    MULENPAY = "mulenpay"
-    PAL24 = "pal24"
-    WATA = "wata"
-    PLATEGA = "platega"
-    CLOUDPAYMENTS = "cloudpayments"
-    FREEKASSA = "freekassa"
-    KASSA_AI = "kassa_ai"
-    MANUAL = "manual"
-    BALANCE = "balance"
+    TELEGRAM_STARS = 'telegram_stars'
+    TRIBUTE = 'tribute'
+    YOOKASSA = 'yookassa'
+    CRYPTOBOT = 'cryptobot'
+    HELEKET = 'heleket'
+    MULENPAY = 'mulenpay'
+    PAL24 = 'pal24'
+    WATA = 'wata'
+    PLATEGA = 'platega'
+    CLOUDPAYMENTS = 'cloudpayments'
+    FREEKASSA = 'freekassa'
+    KASSA_AI = 'kassa_ai'
+    MANUAL = 'manual'
+    BALANCE = 'balance'
 
 
 class MainMenuButtonActionType(Enum):
-    URL = "url"
-    MINI_APP = "mini_app"
+    URL = 'url'
+    MINI_APP = 'mini_app'
 
 
 class MainMenuButtonVisibility(Enum):
-    ALL = "all"
-    ADMINS = "admins"
-    SUBSCRIBERS = "subscribers"
+    ALL = 'all'
+    ADMINS = 'admins'
+    SUBSCRIBERS = 'subscribers'
 
 
 class WheelPrizeType(Enum):
     """Типы призов на колесе удачи."""
-    SUBSCRIPTION_DAYS = "subscription_days"
-    BALANCE_BONUS = "balance_bonus"
-    TRAFFIC_GB = "traffic_gb"
-    PROMOCODE = "promocode"
-    NOTHING = "nothing"
+
+    SUBSCRIPTION_DAYS = 'subscription_days'
+    BALANCE_BONUS = 'balance_bonus'
+    TRAFFIC_GB = 'traffic_gb'
+    PROMOCODE = 'promocode'
+    NOTHING = 'nothing'
 
 
 class WheelSpinPaymentType(Enum):
     """Способы оплаты спина колеса."""
-    TELEGRAM_STARS = "telegram_stars"
-    SUBSCRIPTION_DAYS = "subscription_days"
+
+    TELEGRAM_STARS = 'telegram_stars'
+    SUBSCRIPTION_DAYS = 'subscription_days'
+
 
 class YooKassaPayment(Base):
-    __tablename__ = "yookassa_payments"
-    
+    __tablename__ = 'yookassa_payments'
+
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     yookassa_payment_id = Column(String(255), unique=True, nullable=False, index=True)
     amount_kopeks = Column(Integer, nullable=False)
-    currency = Column(String(3), default="RUB", nullable=False)
+    currency = Column(String(3), default='RUB', nullable=False)
     description = Column(Text, nullable=True)
-    status = Column(String(50), nullable=False)  
+    status = Column(String(50), nullable=False)
     is_paid = Column(Boolean, default=False)
     is_captured = Column(Boolean, default=False)
     confirmation_url = Column(Text, nullable=True)
     metadata_json = Column(JSON, nullable=True)
-    transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=True)
-    payment_method_type = Column(String(50), nullable=True) 
+    transaction_id = Column(Integer, ForeignKey('transactions.id'), nullable=True)
+    payment_method_type = Column(String(50), nullable=True)
     refundable = Column(Boolean, default=False)
     test_mode = Column(Boolean, default=False)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
-    yookassa_created_at = Column(DateTime, nullable=True) 
-    captured_at = Column(DateTime, nullable=True) 
-    user = relationship("User", backref="yookassa_payments")
-    transaction = relationship("Transaction", backref="yookassa_payment")
-    
+    yookassa_created_at = Column(DateTime, nullable=True)
+    captured_at = Column(DateTime, nullable=True)
+    user = relationship('User', backref='yookassa_payments')
+    transaction = relationship('Transaction', backref='yookassa_payment')
+
     @property
     def amount_rubles(self) -> float:
         return self.amount_kopeks / 100
-    
+
     @property
     def is_pending(self) -> bool:
-        return self.status == "pending"
-    
+        return self.status == 'pending'
+
     @property
     def is_succeeded(self) -> bool:
-        return self.status == "succeeded" and self.is_paid
-    
+        return self.status == 'succeeded' and self.is_paid
+
     @property
     def is_failed(self) -> bool:
-        return self.status in ["canceled", "failed"]
-    
+        return self.status in ['canceled', 'failed']
+
     @property
     def can_be_captured(self) -> bool:
-        return self.status == "waiting_for_capture"
-    
+        return self.status == 'waiting_for_capture'
+
     def __repr__(self):
-        return f"<YooKassaPayment(id={self.id}, yookassa_id={self.yookassa_payment_id}, amount={self.amount_rubles}₽, status={self.status})>"
+        return f'<YooKassaPayment(id={self.id}, yookassa_id={self.yookassa_payment_id}, amount={self.amount_rubles}₽, status={self.status})>'
+
 
 class CryptoBotPayment(Base):
-    __tablename__ = "cryptobot_payments"
+    __tablename__ = 'cryptobot_payments'
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+
     invoice_id = Column(String(255), unique=True, nullable=False, index=True)
     amount = Column(String(50), nullable=False)
     asset = Column(String(10), nullable=False)
-    
+
     status = Column(String(50), nullable=False)
     description = Column(Text, nullable=True)
     payload = Column(Text, nullable=True)
-    
+
     bot_invoice_url = Column(Text, nullable=True)
     mini_app_invoice_url = Column(Text, nullable=True)
     web_app_invoice_url = Column(Text, nullable=True)
-    
+
     paid_at = Column(DateTime, nullable=True)
-    transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=True)
-    
+    transaction_id = Column(Integer, ForeignKey('transactions.id'), nullable=True)
+
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
-    
-    user = relationship("User", backref="cryptobot_payments")
-    transaction = relationship("Transaction", backref="cryptobot_payment")
-    
+
+    user = relationship('User', backref='cryptobot_payments')
+    transaction = relationship('Transaction', backref='cryptobot_payment')
+
     @property
     def amount_float(self) -> float:
         try:
             return float(self.amount)
         except (ValueError, TypeError):
             return 0.0
-    
+
     @property
     def is_paid(self) -> bool:
-        return self.status == "paid"
-    
+        return self.status == 'paid'
+
     @property
     def is_pending(self) -> bool:
-        return self.status == "active"
-    
+        return self.status == 'active'
+
     @property
     def is_expired(self) -> bool:
-        return self.status == "expired"
-    
+        return self.status == 'expired'
+
     def __repr__(self):
-        return f"<CryptoBotPayment(id={self.id}, invoice_id={self.invoice_id}, amount={self.amount} {self.asset}, status={self.status})>"
+        return f'<CryptoBotPayment(id={self.id}, invoice_id={self.invoice_id}, amount={self.amount} {self.asset}, status={self.status})>'
 
 
 class HeleketPayment(Base):
-    __tablename__ = "heleket_payments"
+    __tablename__ = 'heleket_payments'
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
 
     uuid = Column(String(255), unique=True, nullable=False, index=True)
     order_id = Column(String(128), unique=True, nullable=False, index=True)
@@ -258,13 +260,13 @@ class HeleketPayment(Base):
 
     paid_at = Column(DateTime, nullable=True)
     expires_at = Column(DateTime, nullable=True)
-    transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=True)
+    transaction_id = Column(Integer, ForeignKey('transactions.id'), nullable=True)
 
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
-    user = relationship("User", backref="heleket_payments")
-    transaction = relationship("Transaction", backref="heleket_payment")
+    user = relationship('User', backref='heleket_payments')
+    transaction = relationship('Transaction', backref='heleket_payment')
 
     @property
     def amount_float(self) -> float:
@@ -286,35 +288,28 @@ class HeleketPayment(Base):
 
     @property
     def is_paid(self) -> bool:
-        return self.status in {"paid", "paid_over"}
+        return self.status in {'paid', 'paid_over'}
 
     def __repr__(self):
         return (
-            "<HeleketPayment(id={id}, uuid={uuid}, order_id={order_id}, amount={amount}"
-            " {currency}, status={status})>"
-        ).format(
-            id=self.id,
-            uuid=self.uuid,
-            order_id=self.order_id,
-            amount=self.amount,
-            currency=self.currency,
-            status=self.status,
+            f'<HeleketPayment(id={self.id}, uuid={self.uuid}, order_id={self.order_id}, amount={self.amount}'
+            f' {self.currency}, status={self.status})>'
         )
 
 
 class MulenPayPayment(Base):
-    __tablename__ = "mulenpay_payments"
+    __tablename__ = 'mulenpay_payments'
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
 
     mulen_payment_id = Column(Integer, nullable=True, index=True)
     uuid = Column(String(255), unique=True, nullable=False, index=True)
     amount_kopeks = Column(Integer, nullable=False)
-    currency = Column(String(10), nullable=False, default="RUB")
+    currency = Column(String(10), nullable=False, default='RUB')
     description = Column(Text, nullable=True)
 
-    status = Column(String(50), nullable=False, default="created")
+    status = Column(String(50), nullable=False, default='created')
     is_paid = Column(Boolean, default=False)
     paid_at = Column(DateTime, nullable=True)
 
@@ -322,43 +317,36 @@ class MulenPayPayment(Base):
     metadata_json = Column(JSON, nullable=True)
     callback_payload = Column(JSON, nullable=True)
 
-    transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=True)
+    transaction_id = Column(Integer, ForeignKey('transactions.id'), nullable=True)
 
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
-    user = relationship("User", backref="mulenpay_payments")
-    transaction = relationship("Transaction", backref="mulenpay_payment")
+    user = relationship('User', backref='mulenpay_payments')
+    transaction = relationship('Transaction', backref='mulenpay_payment')
 
     @property
     def amount_rubles(self) -> float:
         return self.amount_kopeks / 100
 
     def __repr__(self) -> str:  # pragma: no cover - debug helper
-        return (
-            "<MulenPayPayment(id={0}, mulen_id={1}, amount={2}₽, status={3})>".format(
-                self.id,
-                self.mulen_payment_id,
-                self.amount_rubles,
-                self.status,
-            )
-        )
+        return f'<MulenPayPayment(id={self.id}, mulen_id={self.mulen_payment_id}, amount={self.amount_rubles}₽, status={self.status})>'
 
 
 class Pal24Payment(Base):
-    __tablename__ = "pal24_payments"
+    __tablename__ = 'pal24_payments'
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
 
     bill_id = Column(String(255), unique=True, nullable=False, index=True)
     order_id = Column(String(255), nullable=True, index=True)
     amount_kopeks = Column(Integer, nullable=False)
-    currency = Column(String(10), nullable=False, default="RUB")
+    currency = Column(String(10), nullable=False, default='RUB')
     description = Column(Text, nullable=True)
-    type = Column(String(20), nullable=False, default="normal")
+    type = Column(String(20), nullable=False, default='normal')
 
-    status = Column(String(50), nullable=False, default="NEW")
+    status = Column(String(50), nullable=False, default='NEW')
     is_active = Column(Boolean, default=True)
     is_paid = Column(Boolean, default=False)
     paid_at = Column(DateTime, nullable=True)
@@ -380,13 +368,13 @@ class Pal24Payment(Base):
     ttl = Column(Integer, nullable=True)
     expires_at = Column(DateTime, nullable=True)
 
-    transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=True)
+    transaction_id = Column(Integer, ForeignKey('transactions.id'), nullable=True)
 
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
-    user = relationship("User", backref="pal24_payments")
-    transaction = relationship("Transaction", backref="pal24_payment")
+    user = relationship('User', backref='pal24_payments')
+    transaction = relationship('Transaction', backref='pal24_payment')
 
     @property
     def amount_rubles(self) -> float:
@@ -394,33 +382,28 @@ class Pal24Payment(Base):
 
     @property
     def is_pending(self) -> bool:
-        return self.status in {"NEW", "PROCESS"}
+        return self.status in {'NEW', 'PROCESS'}
 
     def __repr__(self) -> str:  # pragma: no cover - debug helper
         return (
-            "<Pal24Payment(id={0}, bill_id={1}, amount={2}₽, status={3})>".format(
-                self.id,
-                self.bill_id,
-                self.amount_rubles,
-                self.status,
-            )
+            f'<Pal24Payment(id={self.id}, bill_id={self.bill_id}, amount={self.amount_rubles}₽, status={self.status})>'
         )
 
 
 class WataPayment(Base):
-    __tablename__ = "wata_payments"
+    __tablename__ = 'wata_payments'
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
 
     payment_link_id = Column(String(64), unique=True, nullable=False, index=True)
     order_id = Column(String(255), nullable=True, index=True)
     amount_kopeks = Column(Integer, nullable=False)
-    currency = Column(String(10), nullable=False, default="RUB")
+    currency = Column(String(10), nullable=False, default='RUB')
     description = Column(Text, nullable=True)
     type = Column(String(50), nullable=True)
 
-    status = Column(String(50), nullable=False, default="Opened")
+    status = Column(String(50), nullable=False, default='Opened')
     is_paid = Column(Boolean, default=False)
     paid_at = Column(DateTime, nullable=True)
     last_status = Column(String(50), nullable=True)
@@ -434,43 +417,36 @@ class WataPayment(Base):
 
     expires_at = Column(DateTime, nullable=True)
 
-    transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=True)
+    transaction_id = Column(Integer, ForeignKey('transactions.id'), nullable=True)
 
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
-    user = relationship("User", backref="wata_payments")
-    transaction = relationship("Transaction", backref="wata_payment")
+    user = relationship('User', backref='wata_payments')
+    transaction = relationship('Transaction', backref='wata_payment')
 
     @property
     def amount_rubles(self) -> float:
         return self.amount_kopeks / 100
 
     def __repr__(self) -> str:  # pragma: no cover - debug helper
-        return (
-            "<WataPayment(id={0}, link_id={1}, amount={2}₽, status={3})>".format(
-                self.id,
-                self.payment_link_id,
-                self.amount_rubles,
-                self.status,
-            )
-        )
+        return f'<WataPayment(id={self.id}, link_id={self.payment_link_id}, amount={self.amount_rubles}₽, status={self.status})>'
 
 
 class PlategaPayment(Base):
-    __tablename__ = "platega_payments"
+    __tablename__ = 'platega_payments'
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
 
     platega_transaction_id = Column(String(255), unique=True, nullable=True, index=True)
     correlation_id = Column(String(64), unique=True, nullable=False, index=True)
     amount_kopeks = Column(Integer, nullable=False)
-    currency = Column(String(10), nullable=False, default="RUB")
+    currency = Column(String(10), nullable=False, default='RUB')
     description = Column(Text, nullable=True)
 
     payment_method_code = Column(Integer, nullable=False)
-    status = Column(String(50), nullable=False, default="PENDING")
+    status = Column(String(50), nullable=False, default='PENDING')
     is_paid = Column(Boolean, default=False)
     paid_at = Column(DateTime, nullable=True)
 
@@ -483,45 +459,37 @@ class PlategaPayment(Base):
 
     expires_at = Column(DateTime, nullable=True)
 
-    transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=True)
+    transaction_id = Column(Integer, ForeignKey('transactions.id'), nullable=True)
 
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
-    user = relationship("User", backref="platega_payments")
-    transaction = relationship("Transaction", backref="platega_payment")
+    user = relationship('User', backref='platega_payments')
+    transaction = relationship('Transaction', backref='platega_payment')
 
     @property
     def amount_rubles(self) -> float:
         return self.amount_kopeks / 100
 
     def __repr__(self) -> str:  # pragma: no cover - debug helper
-        return (
-            "<PlategaPayment(id={0}, transaction_id={1}, amount={2}₽, status={3}, method={4})>".format(
-                self.id,
-                self.platega_transaction_id,
-                self.amount_rubles,
-                self.status,
-                self.payment_method_code,
-            )
-        )
+        return f'<PlategaPayment(id={self.id}, transaction_id={self.platega_transaction_id}, amount={self.amount_rubles}₽, status={self.status}, method={self.payment_method_code})>'
 
 
 class CloudPaymentsPayment(Base):
-    __tablename__ = "cloudpayments_payments"
+    __tablename__ = 'cloudpayments_payments'
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
 
     # CloudPayments идентификаторы
     transaction_id_cp = Column(Integer, unique=True, nullable=True, index=True)  # TransactionId от CloudPayments
     invoice_id = Column(String(255), unique=True, nullable=False, index=True)  # Наш InvoiceId
 
     amount_kopeks = Column(Integer, nullable=False)
-    currency = Column(String(10), nullable=False, default="RUB")
+    currency = Column(String(10), nullable=False, default='RUB')
     description = Column(Text, nullable=True)
 
-    status = Column(String(50), nullable=False, default="pending")  # pending, completed, failed, authorized
+    status = Column(String(50), nullable=False, default='pending')  # pending, completed, failed, authorized
     is_paid = Column(Boolean, default=False)
     paid_at = Column(DateTime, nullable=True)
 
@@ -548,13 +516,13 @@ class CloudPaymentsPayment(Base):
     callback_payload = Column(JSON, nullable=True)
 
     # Связь с транзакцией в нашей системе
-    transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=True)
+    transaction_id = Column(Integer, ForeignKey('transactions.id'), nullable=True)
 
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
-    user = relationship("User", backref="cloudpayments_payments")
-    transaction = relationship("Transaction", backref="cloudpayments_payment")
+    user = relationship('User', backref='cloudpayments_payments')
+    transaction = relationship('Transaction', backref='cloudpayments_payment')
 
     @property
     def amount_rubles(self) -> float:
@@ -562,32 +530,25 @@ class CloudPaymentsPayment(Base):
 
     @property
     def is_pending(self) -> bool:
-        return self.status == "pending"
+        return self.status == 'pending'
 
     @property
     def is_completed(self) -> bool:
-        return self.status == "completed" and self.is_paid
+        return self.status == 'completed' and self.is_paid
 
     @property
     def is_failed(self) -> bool:
-        return self.status == "failed"
+        return self.status == 'failed'
 
     def __repr__(self) -> str:  # pragma: no cover - debug helper
-        return (
-            "<CloudPaymentsPayment(id={0}, invoice={1}, amount={2}₽, status={3})>".format(
-                self.id,
-                self.invoice_id,
-                self.amount_rubles,
-                self.status,
-            )
-        )
+        return f'<CloudPaymentsPayment(id={self.id}, invoice={self.invoice_id}, amount={self.amount_rubles}₽, status={self.status})>'
 
 
 class FreekassaPayment(Base):
-    __tablename__ = "freekassa_payments"
+    __tablename__ = 'freekassa_payments'
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
 
     # Идентификаторы
     order_id = Column(String(64), unique=True, nullable=False, index=True)  # Наш ID заказа
@@ -595,11 +556,11 @@ class FreekassaPayment(Base):
 
     # Суммы
     amount_kopeks = Column(Integer, nullable=False)
-    currency = Column(String(10), nullable=False, default="RUB")
+    currency = Column(String(10), nullable=False, default='RUB')
     description = Column(Text, nullable=True)
 
     # Статусы
-    status = Column(String(32), nullable=False, default="pending")  # pending, success, failed, expired
+    status = Column(String(32), nullable=False, default='pending')  # pending, success, failed, expired
     is_paid = Column(Boolean, default=False)
 
     # Данные платежа
@@ -617,11 +578,11 @@ class FreekassaPayment(Base):
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
     # Связь с транзакцией
-    transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=True)
+    transaction_id = Column(Integer, ForeignKey('transactions.id'), nullable=True)
 
     # Relationships
-    user = relationship("User", backref="freekassa_payments")
-    transaction = relationship("Transaction", backref="freekassa_payment")
+    user = relationship('User', backref='freekassa_payments')
+    transaction = relationship('Transaction', backref='freekassa_payment')
 
     @property
     def amount_rubles(self) -> float:
@@ -629,33 +590,27 @@ class FreekassaPayment(Base):
 
     @property
     def is_pending(self) -> bool:
-        return self.status == "pending"
+        return self.status == 'pending'
 
     @property
     def is_success(self) -> bool:
-        return self.status == "success" and self.is_paid
+        return self.status == 'success' and self.is_paid
 
     @property
     def is_failed(self) -> bool:
-        return self.status in ["failed", "expired"]
+        return self.status in ['failed', 'expired']
 
     def __repr__(self) -> str:  # pragma: no cover - debug helper
-        return (
-            "<FreekassaPayment(id={0}, order_id={1}, amount={2}₽, status={3})>".format(
-                self.id,
-                self.order_id,
-                self.amount_rubles,
-                self.status,
-            )
-        )
+        return f'<FreekassaPayment(id={self.id}, order_id={self.order_id}, amount={self.amount_rubles}₽, status={self.status})>'
 
 
 class KassaAiPayment(Base):
     """Платежи через KassaAI (api.fk.life)."""
-    __tablename__ = "kassa_ai_payments"
+
+    __tablename__ = 'kassa_ai_payments'
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
 
     # Идентификаторы
     order_id = Column(String(64), unique=True, nullable=False, index=True)  # Наш ID заказа
@@ -663,11 +618,11 @@ class KassaAiPayment(Base):
 
     # Суммы
     amount_kopeks = Column(Integer, nullable=False)
-    currency = Column(String(10), nullable=False, default="RUB")
+    currency = Column(String(10), nullable=False, default='RUB')
     description = Column(Text, nullable=True)
 
     # Статусы
-    status = Column(String(32), nullable=False, default="pending")  # pending, success, failed, expired
+    status = Column(String(32), nullable=False, default='pending')  # pending, success, failed, expired
     is_paid = Column(Boolean, default=False)
 
     # Данные платежа
@@ -685,11 +640,11 @@ class KassaAiPayment(Base):
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
     # Связь с транзакцией
-    transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=True)
+    transaction_id = Column(Integer, ForeignKey('transactions.id'), nullable=True)
 
     # Relationships
-    user = relationship("User", backref="kassa_ai_payments")
-    transaction = relationship("Transaction", backref="kassa_ai_payment")
+    user = relationship('User', backref='kassa_ai_payments')
+    transaction = relationship('Transaction', backref='kassa_ai_payment')
 
     @property
     def amount_rubles(self) -> float:
@@ -697,29 +652,22 @@ class KassaAiPayment(Base):
 
     @property
     def is_pending(self) -> bool:
-        return self.status == "pending"
+        return self.status == 'pending'
 
     @property
     def is_success(self) -> bool:
-        return self.status == "success" and self.is_paid
+        return self.status == 'success' and self.is_paid
 
     @property
     def is_failed(self) -> bool:
-        return self.status in ["failed", "expired"]
+        return self.status in ['failed', 'expired']
 
     def __repr__(self) -> str:  # pragma: no cover - debug helper
-        return (
-            "<KassaAiPayment(id={0}, order_id={1}, amount={2}₽, status={3})>".format(
-                self.id,
-                self.order_id,
-                self.amount_rubles,
-                self.status,
-            )
-        )
+        return f'<KassaAiPayment(id={self.id}, order_id={self.order_id}, amount={self.amount_rubles}₽, status={self.status})>'
 
 
 class PromoGroup(Base):
-    __tablename__ = "promo_groups"
+    __tablename__ = 'promo_groups'
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), unique=True, nullable=False)
@@ -734,16 +682,16 @@ class PromoGroup(Base):
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
-    users = relationship("User", back_populates="promo_group")
-    user_promo_groups = relationship("UserPromoGroup", back_populates="promo_group", cascade="all, delete-orphan")
+    users = relationship('User', back_populates='promo_group')
+    user_promo_groups = relationship('UserPromoGroup', back_populates='promo_group', cascade='all, delete-orphan')
     server_squads = relationship(
-        "ServerSquad",
+        'ServerSquad',
         secondary=server_squad_promo_groups,
-        back_populates="allowed_promo_groups",
-        lazy="selectin",
+        back_populates='allowed_promo_groups',
+        lazy='selectin',
     )
 
-    def _get_period_discounts_map(self) -> Dict[int, int]:
+    def _get_period_discounts_map(self) -> dict[int, int]:
         raw_discounts = self.period_discounts or {}
 
         if isinstance(raw_discounts, dict):
@@ -751,7 +699,7 @@ class PromoGroup(Base):
         else:
             items = []
 
-        normalized: Dict[int, int] = {}
+        normalized: dict[int, int] = {}
 
         for key, value in items:
             try:
@@ -764,7 +712,7 @@ class PromoGroup(Base):
 
         return normalized
 
-    def _get_period_discount(self, period_days: Optional[int]) -> int:
+    def _get_period_discount(self, period_days: int | None) -> int:
         if not period_days:
             return 0
 
@@ -785,14 +733,14 @@ class PromoGroup(Base):
 
         return 0
 
-    def get_discount_percent(self, category: str, period_days: Optional[int] = None) -> int:
-        if category == "period":
+    def get_discount_percent(self, category: str, period_days: int | None = None) -> int:
+        if category == 'period':
             return max(0, min(100, self._get_period_discount(period_days)))
 
         mapping = {
-            "servers": self.server_discount_percent,
-            "traffic": self.traffic_discount_percent,
-            "devices": self.device_discount_percent,
+            'servers': self.server_discount_percent,
+            'traffic': self.traffic_discount_percent,
+            'devices': self.device_discount_percent,
         }
         percent = mapping.get(category) or 0
 
@@ -805,15 +753,16 @@ class PromoGroup(Base):
 
 class UserPromoGroup(Base):
     """Таблица связи Many-to-Many между пользователями и промогруппами."""
-    __tablename__ = "user_promo_groups"
 
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
-    promo_group_id = Column(Integer, ForeignKey("promo_groups.id", ondelete="CASCADE"), primary_key=True)
+    __tablename__ = 'user_promo_groups'
+
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), primary_key=True)
+    promo_group_id = Column(Integer, ForeignKey('promo_groups.id', ondelete='CASCADE'), primary_key=True)
     assigned_at = Column(DateTime, default=func.now())
-    assigned_by = Column(String(50), default="system")
+    assigned_by = Column(String(50), default='system')
 
-    user = relationship("User", back_populates="user_promo_groups")
-    promo_group = relationship("PromoGroup", back_populates="user_promo_groups")
+    user = relationship('User', back_populates='user_promo_groups')
+    promo_group = relationship('PromoGroup', back_populates='user_promo_groups')
 
     def __repr__(self):
         return f"<UserPromoGroup(user_id={self.user_id}, promo_group_id={self.promo_group_id}, assigned_by='{self.assigned_by}')>"
@@ -821,7 +770,8 @@ class UserPromoGroup(Base):
 
 class Tariff(Base):
     """Тарифный план для режима продаж 'Тарифы'."""
-    __tablename__ = "tariffs"
+
+    __tablename__ = 'tariffs'
 
     id = Column(Integer, primary_key=True, index=True)
 
@@ -834,7 +784,9 @@ class Tariff(Base):
     # Параметры тарифа
     traffic_limit_gb = Column(Integer, nullable=False, default=100)  # 0 = безлимит
     device_limit = Column(Integer, nullable=False, default=1)
-    device_price_kopeks = Column(Integer, nullable=True, default=None)  # Цена за доп. устройство (None = нельзя докупить)
+    device_price_kopeks = Column(
+        Integer, nullable=True, default=None
+    )  # Цена за доп. устройство (None = нельзя докупить)
     max_device_limit = Column(Integer, nullable=True, default=None)  # Макс. устройств (None = без ограничений)
 
     # Сквады (серверы) доступные в тарифе
@@ -885,30 +837,30 @@ class Tariff(Base):
 
     # M2M связь с промогруппами (какие промогруппы имеют доступ к тарифу)
     allowed_promo_groups = relationship(
-        "PromoGroup",
+        'PromoGroup',
         secondary=tariff_promo_groups,
-        lazy="selectin",
+        lazy='selectin',
     )
 
     # Подписки на этом тарифе
-    subscriptions = relationship("Subscription", back_populates="tariff")
+    subscriptions = relationship('Subscription', back_populates='tariff')
 
     @property
     def is_unlimited_traffic(self) -> bool:
         """Проверяет, безлимитный ли трафик."""
         return self.traffic_limit_gb == 0
 
-    def get_price_for_period(self, period_days: int) -> Optional[int]:
+    def get_price_for_period(self, period_days: int) -> int | None:
         """Возвращает цену в копейках для указанного периода."""
         prices = self.period_prices or {}
         return prices.get(str(period_days))
 
-    def get_available_periods(self) -> List[int]:
+    def get_available_periods(self) -> list[int]:
         """Возвращает список доступных периодов в днях."""
         prices = self.period_prices or {}
         return sorted([int(p) for p in prices.keys()])
 
-    def get_price_rubles(self, period_days: int) -> Optional[float]:
+    def get_price_rubles(self, period_days: int) -> float | None:
         """Возвращает цену в рублях для указанного периода."""
         price_kopeks = self.get_price_for_period(period_days)
         if price_kopeks is not None:
@@ -926,11 +878,11 @@ class Tariff(Base):
             server_limit = limits[squad_uuid]
             if isinstance(server_limit, dict) and 'traffic_limit_gb' in server_limit:
                 return server_limit['traffic_limit_gb']
-            elif isinstance(server_limit, int):
+            if isinstance(server_limit, int):
                 return server_limit
         return self.traffic_limit_gb
 
-    def is_available_for_promo_group(self, promo_group_id: Optional[int]) -> bool:
+    def is_available_for_promo_group(self, promo_group_id: int | None) -> bool:
         """Проверяет, доступен ли тариф для указанной промогруппы."""
         if not self.allowed_promo_groups:
             return True  # Если нет ограничений - доступен всем
@@ -938,34 +890,30 @@ class Tariff(Base):
             return True  # Если у пользователя нет группы - доступен
         return any(pg.id == promo_group_id for pg in self.allowed_promo_groups)
 
-    def get_traffic_topup_packages(self) -> Dict[int, int]:
+    def get_traffic_topup_packages(self) -> dict[int, int]:
         """Возвращает пакеты трафика для докупки: {ГБ: цена в копейках}."""
         packages = self.traffic_topup_packages or {}
         return {int(gb): int(price) for gb, price in packages.items()}
 
-    def get_traffic_topup_price(self, gb: int) -> Optional[int]:
+    def get_traffic_topup_price(self, gb: int) -> int | None:
         """Возвращает цену в копейках для указанного пакета трафика."""
         packages = self.get_traffic_topup_packages()
         return packages.get(gb)
 
-    def get_available_traffic_packages(self) -> List[int]:
+    def get_available_traffic_packages(self) -> list[int]:
         """Возвращает список доступных пакетов трафика в ГБ."""
         packages = self.get_traffic_topup_packages()
         return sorted(packages.keys())
 
     def can_topup_traffic(self) -> bool:
         """Проверяет, можно ли докупить трафик на этом тарифе."""
-        return (
-            self.traffic_topup_enabled
-            and bool(self.traffic_topup_packages)
-            and not self.is_unlimited_traffic
-        )
+        return self.traffic_topup_enabled and bool(self.traffic_topup_packages) and not self.is_unlimited_traffic
 
     def get_daily_price_rubles(self) -> float:
         """Возвращает суточную цену в рублях."""
         return self.daily_price_kopeks / 100 if self.daily_price_kopeks else 0
 
-    def get_price_for_custom_days(self, days: int) -> Optional[int]:
+    def get_price_for_custom_days(self, days: int) -> int | None:
         """Возвращает цену для произвольного количества дней."""
         if not self.custom_days_enabled or not self.price_per_day_kopeks:
             return None
@@ -973,7 +921,7 @@ class Tariff(Base):
             return None
         return self.price_per_day_kopeks * days
 
-    def get_price_for_custom_traffic(self, gb: int) -> Optional[int]:
+    def get_price_for_custom_traffic(self, gb: int) -> int | None:
         """Возвращает цену для произвольного количества трафика."""
         if not self.custom_traffic_enabled or not self.traffic_price_per_gb_kopeks:
             return None
@@ -994,20 +942,20 @@ class Tariff(Base):
 
 
 class User(Base):
-    __tablename__ = "users"
+    __tablename__ = 'users'
 
     id = Column(Integer, primary_key=True, index=True)
     telegram_id = Column(BigInteger, unique=True, index=True, nullable=True)  # Nullable для email-only пользователей
-    auth_type = Column(String(20), default="telegram", nullable=False)  # "telegram" или "email"
+    auth_type = Column(String(20), default='telegram', nullable=False)  # "telegram" или "email"
     username = Column(String(255), nullable=True)
     first_name = Column(String(255), nullable=True)
     last_name = Column(String(255), nullable=True)
     status = Column(String(20), default=UserStatus.ACTIVE.value)
-    language = Column(String(5), default="ru")
+    language = Column(String(5), default='ru')
     balance_kopeks = Column(Integer, default=0)
     used_promocodes = Column(Integer, default=0)
     has_had_paid_subscription = Column(Boolean, default=False, nullable=False)
-    referred_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    referred_by_id = Column(Integer, ForeignKey('users.id'), nullable=True)
     referral_code = Column(String(20), unique=True, nullable=True)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
@@ -1024,13 +972,13 @@ class User(Base):
     password_reset_token = Column(String(255), nullable=True)
     password_reset_expires = Column(DateTime, nullable=True)
     cabinet_last_login = Column(DateTime, nullable=True)
-    broadcasts = relationship("BroadcastHistory", back_populates="admin")
-    referrals = relationship("User", backref="referrer", remote_side=[id], foreign_keys="User.referred_by_id")
-    subscription = relationship("Subscription", back_populates="user", uselist=False)
-    transactions = relationship("Transaction", back_populates="user")
-    referral_earnings = relationship("ReferralEarning", foreign_keys="ReferralEarning.user_id", back_populates="user")
-    discount_offers = relationship("DiscountOffer", back_populates="user")
-    promo_offer_logs = relationship("PromoOfferLog", back_populates="user")
+    broadcasts = relationship('BroadcastHistory', back_populates='admin')
+    referrals = relationship('User', backref='referrer', remote_side=[id], foreign_keys='User.referred_by_id')
+    subscription = relationship('Subscription', back_populates='user', uselist=False)
+    transactions = relationship('Transaction', back_populates='user')
+    referral_earnings = relationship('ReferralEarning', foreign_keys='ReferralEarning.user_id', back_populates='user')
+    discount_offers = relationship('DiscountOffer', back_populates='user')
+    promo_offer_logs = relationship('PromoOfferLog', back_populates='user')
     lifetime_used_traffic_bytes = Column(BigInteger, default=0)
     auto_promo_group_assigned = Column(Boolean, nullable=False, default=False)
     auto_promo_group_threshold_kopeks = Column(BigInteger, nullable=False, default=0)
@@ -1043,10 +991,10 @@ class User(Base):
     vless_uuid = Column(String(255), nullable=True)
     ss_password = Column(String(255), nullable=True)
     has_made_first_topup: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    promo_group_id = Column(Integer, ForeignKey("promo_groups.id", ondelete="RESTRICT"), nullable=True, index=True)
-    promo_group = relationship("PromoGroup", back_populates="users")
-    user_promo_groups = relationship("UserPromoGroup", back_populates="user", cascade="all, delete-orphan")
-    poll_responses = relationship("PollResponse", back_populates="user")
+    promo_group_id = Column(Integer, ForeignKey('promo_groups.id', ondelete='RESTRICT'), nullable=True, index=True)
+    promo_group = relationship('PromoGroup', back_populates='users')
+    user_promo_groups = relationship('UserPromoGroup', back_populates='user', cascade='all, delete-orphan')
+    poll_responses = relationship('PollResponse', back_populates='user')
     notification_settings = Column(JSON, nullable=True, default=dict)
     last_pinned_message_id = Column(Integer, nullable=True)
 
@@ -1068,37 +1016,34 @@ class User(Base):
     def full_name(self) -> str:
         """Полное имя пользователя с поддержкой email-only юзеров."""
         parts = [self.first_name, self.last_name]
-        name = " ".join(filter(None, parts))
+        name = ' '.join(filter(None, parts))
         if name:
             return name
         if self.username:
             return self.username
         if self.telegram_id:
-            return f"ID{self.telegram_id}"
+            return f'ID{self.telegram_id}'
         if self.email:
             return self.email.split('@')[0]
-        return f"User{self.id}"
+        return f'User{self.id}'
 
     @property
     def is_email_user(self) -> bool:
         """Пользователь зарегистрирован через email (без Telegram)."""
-        return self.auth_type == "email" and self.telegram_id is None
+        return self.auth_type == 'email' and self.telegram_id is None
 
     def get_primary_promo_group(self):
         """Возвращает промогруппу с максимальным приоритетом."""
         if not self.user_promo_groups:
-            return getattr(self, "promo_group", None)
+            return getattr(self, 'promo_group', None)
 
         try:
             # Сортируем по приоритету группы (убывание), затем по ID группы
             # Используем getattr для защиты от ленивой загрузки
             sorted_groups = sorted(
                 self.user_promo_groups,
-                key=lambda upg: (
-                    getattr(upg.promo_group, 'priority', 0) if upg.promo_group else 0,
-                    upg.promo_group_id
-                ),
-                reverse=True
+                key=lambda upg: (getattr(upg.promo_group, 'priority', 0) if upg.promo_group else 0, upg.promo_group_id),
+                reverse=True,
             )
 
             if sorted_groups and sorted_groups[0].promo_group:
@@ -1108,17 +1053,17 @@ class User(Base):
             pass
 
         # Fallback на старую связь если новая пустая или возникла ошибка
-        return getattr(self, "promo_group", None)
+        return getattr(self, 'promo_group', None)
 
-    def get_promo_discount(self, category: str, period_days: Optional[int] = None) -> int:
+    def get_promo_discount(self, category: str, period_days: int | None = None) -> int:
         primary_group = self.get_primary_promo_group()
         if not primary_group:
             return 0
         return primary_group.get_discount_percent(category, period_days)
-    
+
     def add_balance(self, kopeks: int) -> None:
         self.balance_kopeks += kopeks
-    
+
     def subtract_balance(self, kopeks: int) -> bool:
         if self.balance_kopeks >= kopeks:
             self.balance_kopeks -= kopeks
@@ -1127,59 +1072,60 @@ class User(Base):
 
 
 class Subscription(Base):
-    __tablename__ = "subscriptions"
-    
+    __tablename__ = 'subscriptions'
+
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True)
-    
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, unique=True)
+
     status = Column(String(20), default=SubscriptionStatus.TRIAL.value)
     is_trial = Column(Boolean, default=True)
-    
+
     start_date = Column(DateTime, default=func.now())
     end_date = Column(DateTime, nullable=False)
-    
+
     traffic_limit_gb = Column(Integer, default=0)
     traffic_used_gb = Column(Float, default=0.0)
     purchased_traffic_gb = Column(Integer, default=0)  # Докупленный трафик
-    traffic_reset_at = Column(DateTime, nullable=True)  # Дата сброса докупленного трафика (30 дней после первой докупки)
+    traffic_reset_at = Column(
+        DateTime, nullable=True
+    )  # Дата сброса докупленного трафика (30 дней после первой докупки)
 
     subscription_url = Column(String, nullable=True)
     subscription_crypto_link = Column(String, nullable=True)
 
     device_limit = Column(Integer, default=1)
     modem_enabled = Column(Boolean, default=False)
-    
+
     connected_squads = Column(JSON, default=list)
-    
+
     autopay_enabled = Column(Boolean, default=False)
     autopay_days_before = Column(Integer, default=3)
-    
+
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
     remnawave_short_uuid = Column(String(255), nullable=True)
 
     # Тариф (для режима продаж "Тарифы")
-    tariff_id = Column(Integer, ForeignKey("tariffs.id", ondelete="SET NULL"), nullable=True, index=True)
+    tariff_id = Column(Integer, ForeignKey('tariffs.id', ondelete='SET NULL'), nullable=True, index=True)
 
     # Суточная подписка
-    is_daily_paused = Column(Boolean, default=False, nullable=False)  # Приостановлена ли суточная подписка пользователем
+    is_daily_paused = Column(
+        Boolean, default=False, nullable=False
+    )  # Приостановлена ли суточная подписка пользователем
     last_daily_charge_at = Column(DateTime, nullable=True)  # Время последнего суточного списания
 
-    user = relationship("User", back_populates="subscription")
-    tariff = relationship("Tariff", back_populates="subscriptions")
-    discount_offers = relationship("DiscountOffer", back_populates="subscription")
-    temporary_accesses = relationship("SubscriptionTemporaryAccess", back_populates="subscription")
-    traffic_purchases = relationship("TrafficPurchase", back_populates="subscription", cascade="all, delete-orphan")
-    
+    user = relationship('User', back_populates='subscription')
+    tariff = relationship('Tariff', back_populates='subscriptions')
+    discount_offers = relationship('DiscountOffer', back_populates='subscription')
+    temporary_accesses = relationship('SubscriptionTemporaryAccess', back_populates='subscription')
+    traffic_purchases = relationship('TrafficPurchase', back_populates='subscription', cascade='all, delete-orphan')
+
     @property
     def is_active(self) -> bool:
         current_time = datetime.utcnow()
-        return (
-            self.status == SubscriptionStatus.ACTIVE.value and 
-            self.end_date > current_time
-        )
-    
+        return self.status == SubscriptionStatus.ACTIVE.value and self.end_date > current_time
+
     @property
     def is_expired(self) -> bool:
         """Проверяет, истёк ли срок подписки"""
@@ -1188,71 +1134,64 @@ class Subscription(Base):
     @property
     def should_be_expired(self) -> bool:
         current_time = datetime.utcnow()
-        return (
-            self.status == SubscriptionStatus.ACTIVE.value and 
-            self.end_date <= current_time
-        )
+        return self.status == SubscriptionStatus.ACTIVE.value and self.end_date <= current_time
 
     @property
     def actual_status(self) -> str:
         current_time = datetime.utcnow()
-        
+
         if self.status == SubscriptionStatus.EXPIRED.value:
-            return "expired"
-        
+            return 'expired'
+
         if self.status == SubscriptionStatus.DISABLED.value:
-            return "disabled"
-        
+            return 'disabled'
+
         if self.status == SubscriptionStatus.ACTIVE.value:
             if self.end_date <= current_time:
-                return "expired"
-            else:
-                return "active"
-        
+                return 'expired'
+            return 'active'
+
         if self.status == SubscriptionStatus.TRIAL.value:
             if self.end_date <= current_time:
-                return "expired"
-            else:
-                return "trial"
-        
+                return 'expired'
+            return 'trial'
+
         return self.status
 
     @property
     def status_display(self) -> str:
         actual_status = self.actual_status
-        current_time = datetime.utcnow()
-        
-        if actual_status == "expired":
-            return "🔴 Истекла"
-        elif actual_status == "active":
+        datetime.utcnow()
+
+        if actual_status == 'expired':
+            return '🔴 Истекла'
+        if actual_status == 'active':
             if self.is_trial:
-                return "🎯 Тестовая"
-            else:
-                return "🟢 Активна"
-        elif actual_status == "disabled":
-            return "⚫ Отключена"
-        elif actual_status == "trial":
-            return "🎯 Тестовая"
-        
-        return "❓ Неизвестно"
+                return '🎯 Тестовая'
+            return '🟢 Активна'
+        if actual_status == 'disabled':
+            return '⚫ Отключена'
+        if actual_status == 'trial':
+            return '🎯 Тестовая'
+
+        return '❓ Неизвестно'
 
     @property
     def status_emoji(self) -> str:
         actual_status = self.actual_status
-        
-        if actual_status == "expired":
-            return "🔴"
-        elif actual_status == "active":
+
+        if actual_status == 'expired':
+            return '🔴'
+        if actual_status == 'active':
             if self.is_trial:
-                return "🎁"
-            else:
-                return "💎"
-        elif actual_status == "disabled":
-            return "⚫"
-        elif actual_status == "trial":
-            return "🎁"
-        
-        return "❓"
+                return '🎁'
+            return '💎'
+        if actual_status == 'disabled':
+            return '⚫'
+        if actual_status == 'trial':
+            return '🎁'
+
+        return '❓'
 
     @property
     def days_left(self) -> int:
@@ -1266,38 +1205,36 @@ class Subscription(Base):
     def time_left_display(self) -> str:
         current_time = datetime.utcnow()
         if self.end_date <= current_time:
-            return "истёк"
-        
+            return 'истёк'
+
         delta = self.end_date - current_time
         days = delta.days
         hours = delta.seconds // 3600
         minutes = (delta.seconds % 3600) // 60
-        
+
         if days > 0:
-            return f"{days} дн."
-        elif hours > 0:
-            return f"{hours} ч."
-        else:
-            return f"{minutes} мин."
-    
+            return f'{days} дн.'
+        if hours > 0:
+            return f'{hours} ч.'
+        return f'{minutes} мин.'
+
     @property
     def traffic_used_percent(self) -> float:
-        if self.traffic_limit_gb == 0: 
+        if self.traffic_limit_gb == 0:
             return 0.0
         if self.traffic_limit_gb > 0:
             return min((self.traffic_used_gb / self.traffic_limit_gb) * 100, 100.0)
         return 0.0
-    
-    def extend_subscription(self, days: int):
 
+    def extend_subscription(self, days: int):
         if self.end_date > datetime.utcnow():
             self.end_date = self.end_date + timedelta(days=days)
         else:
             self.end_date = datetime.utcnow() + timedelta(days=days)
-    
+
         if self.status == SubscriptionStatus.EXPIRED.value:
             self.status = SubscriptionStatus.ACTIVE.value
-    
+
     def add_traffic(self, gb: int):
         if self.traffic_limit_gb == 0:
             return
@@ -1331,17 +1268,18 @@ class Subscription(Base):
 
 class TrafficPurchase(Base):
     """Докупка трафика с индивидуальной датой истечения."""
-    __tablename__ = "traffic_purchases"
+
+    __tablename__ = 'traffic_purchases'
 
     id = Column(Integer, primary_key=True, index=True)
-    subscription_id = Column(Integer, ForeignKey("subscriptions.id", ondelete="CASCADE"), nullable=False, index=True)
+    subscription_id = Column(Integer, ForeignKey('subscriptions.id', ondelete='CASCADE'), nullable=False, index=True)
 
     traffic_gb = Column(Integer, nullable=False)  # Количество ГБ в покупке
     expires_at = Column(DateTime, nullable=False, index=True)  # Дата истечения (покупка + 30 дней)
 
     created_at = Column(DateTime, default=func.now())
 
-    subscription = relationship("Subscription", back_populates="traffic_purchases")
+    subscription = relationship('Subscription', back_populates='traffic_purchases')
 
     @property
     def is_expired(self) -> bool:
@@ -1350,15 +1288,15 @@ class TrafficPurchase(Base):
 
 
 class Transaction(Base):
-    __tablename__ = "transactions"
-    
+    __tablename__ = 'transactions'
+
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+
     type = Column(String(50), nullable=False)
     amount_kopeks = Column(Integer, nullable=False)
     description = Column(Text, nullable=True)
-    
+
     payment_method = Column(String(50), nullable=True)
     external_id = Column(String(255), nullable=True)
 
@@ -1370,116 +1308,117 @@ class Transaction(Base):
 
     created_at = Column(DateTime, default=func.now())
     completed_at = Column(DateTime, nullable=True)
-    
-    user = relationship("User", back_populates="transactions")
-    
+
+    user = relationship('User', back_populates='transactions')
+
     @property
     def amount_rubles(self) -> float:
         return self.amount_kopeks / 100
 
+
 class SubscriptionConversion(Base):
-    __tablename__ = "subscription_conversions"
-    
+    __tablename__ = 'subscription_conversions'
+
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+
     converted_at = Column(DateTime, default=func.now())
-    
+
     trial_duration_days = Column(Integer, nullable=True)
-    
+
     payment_method = Column(String(50), nullable=True)
-    
+
     first_payment_amount_kopeks = Column(Integer, nullable=True)
-    
+
     first_paid_period_days = Column(Integer, nullable=True)
-    
+
     created_at = Column(DateTime, default=func.now())
-    
-    user = relationship("User", backref="subscription_conversions")
-    
+
+    user = relationship('User', backref='subscription_conversions')
+
     @property
     def first_payment_amount_rubles(self) -> float:
         return (self.first_payment_amount_kopeks or 0) / 100
-    
+
     def __repr__(self):
-        return f"<SubscriptionConversion(user_id={self.user_id}, converted_at={self.converted_at})>"
+        return f'<SubscriptionConversion(user_id={self.user_id}, converted_at={self.converted_at})>'
 
 
 class PromoCode(Base):
-    __tablename__ = "promocodes"
-    
+    __tablename__ = 'promocodes'
+
     id = Column(Integer, primary_key=True, index=True)
-    
+
     code = Column(String(50), unique=True, nullable=False, index=True)
     type = Column(String(50), nullable=False)
-    
-    balance_bonus_kopeks = Column(Integer, default=0)  
-    subscription_days = Column(Integer, default=0) 
-    
-    max_uses = Column(Integer, default=1)  
+
+    balance_bonus_kopeks = Column(Integer, default=0)
+    subscription_days = Column(Integer, default=0)
+
+    max_uses = Column(Integer, default=1)
     current_uses = Column(Integer, default=0)
-    
+
     valid_from = Column(DateTime, default=func.now())
     valid_until = Column(DateTime, nullable=True)
-    
+
     is_active = Column(Boolean, default=True)
     first_purchase_only = Column(Boolean, default=False)  # Только для первой покупки
 
-    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
-    promo_group_id = Column(Integer, ForeignKey("promo_groups.id", ondelete="SET NULL"), nullable=True, index=True)
+    created_by = Column(Integer, ForeignKey('users.id'), nullable=True)
+    promo_group_id = Column(Integer, ForeignKey('promo_groups.id', ondelete='SET NULL'), nullable=True, index=True)
 
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
-    uses = relationship("PromoCodeUse", back_populates="promocode")
-    promo_group = relationship("PromoGroup")
-    
+    uses = relationship('PromoCodeUse', back_populates='promocode')
+    promo_group = relationship('PromoGroup')
+
     @property
     def is_valid(self) -> bool:
         now = datetime.utcnow()
         return (
-            self.is_active and
-            self.current_uses < self.max_uses and
-            self.valid_from <= now and
-            (self.valid_until is None or self.valid_until >= now)
+            self.is_active
+            and self.current_uses < self.max_uses
+            and self.valid_from <= now
+            and (self.valid_until is None or self.valid_until >= now)
         )
-    
+
     @property
     def uses_left(self) -> int:
         return max(0, self.max_uses - self.current_uses)
 
 
 class PromoCodeUse(Base):
-    __tablename__ = "promocode_uses"
-    
+    __tablename__ = 'promocode_uses'
+
     id = Column(Integer, primary_key=True, index=True)
-    promocode_id = Column(Integer, ForeignKey("promocodes.id"), nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    
+    promocode_id = Column(Integer, ForeignKey('promocodes.id'), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+
     used_at = Column(DateTime, default=func.now())
-    
-    promocode = relationship("PromoCode", back_populates="uses")
-    user = relationship("User")
+
+    promocode = relationship('PromoCode', back_populates='uses')
+    user = relationship('User')
 
 
 class ReferralEarning(Base):
-    __tablename__ = "referral_earnings"
-    
+    __tablename__ = 'referral_earnings'
+
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)  
-    referral_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    referral_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+
     amount_kopeks = Column(Integer, nullable=False)
-    reason = Column(String(100), nullable=False) 
-    
-    referral_transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=True)
-    
+    reason = Column(String(100), nullable=False)
+
+    referral_transaction_id = Column(Integer, ForeignKey('transactions.id'), nullable=True)
+
     created_at = Column(DateTime, default=func.now())
-    
-    user = relationship("User", foreign_keys=[user_id], back_populates="referral_earnings")
-    referral = relationship("User", foreign_keys=[referral_id])
-    referral_transaction = relationship("Transaction")
-    
+
+    user = relationship('User', foreign_keys=[user_id], back_populates='referral_earnings')
+    referral = relationship('User', foreign_keys=[referral_id])
+    referral_transaction = relationship('Transaction')
+
     @property
     def amount_rubles(self) -> float:
         return self.amount_kopeks / 100
@@ -1487,19 +1426,21 @@ class ReferralEarning(Base):
 
 class WithdrawalRequestStatus(Enum):
     """Статусы заявки на вывод реферального баланса."""
-    PENDING = "pending"  # Ожидает рассмотрения
-    APPROVED = "approved"  # Одобрена
-    REJECTED = "rejected"  # Отклонена
-    COMPLETED = "completed"  # Выполнена (деньги переведены)
-    CANCELLED = "cancelled"  # Отменена пользователем
+
+    PENDING = 'pending'  # Ожидает рассмотрения
+    APPROVED = 'approved'  # Одобрена
+    REJECTED = 'rejected'  # Отклонена
+    COMPLETED = 'completed'  # Выполнена (деньги переведены)
+    CANCELLED = 'cancelled'  # Отменена пользователем
 
 
 class WithdrawalRequest(Base):
     """Заявка на вывод реферального баланса."""
-    __tablename__ = "withdrawal_requests"
+
+    __tablename__ = 'withdrawal_requests'
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
 
     amount_kopeks = Column(Integer, nullable=False)  # Сумма к выводу
     status = Column(String(50), default=WithdrawalRequestStatus.PENDING.value, nullable=False)
@@ -1512,15 +1453,15 @@ class WithdrawalRequest(Base):
     risk_analysis = Column(Text, nullable=True)  # JSON с деталями анализа
 
     # Обработка админом
-    processed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    processed_by = Column(Integer, ForeignKey('users.id'), nullable=True)
     processed_at = Column(DateTime, nullable=True)
     admin_comment = Column(Text, nullable=True)
 
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
-    user = relationship("User", foreign_keys=[user_id], backref="withdrawal_requests")
-    admin = relationship("User", foreign_keys=[processed_by])
+    user = relationship('User', foreign_keys=[user_id], backref='withdrawal_requests')
+    admin = relationship('User', foreign_keys=[processed_by])
 
     @property
     def amount_rubles(self) -> float:
@@ -1528,31 +1469,31 @@ class WithdrawalRequest(Base):
 
 
 class ReferralContest(Base):
-    __tablename__ = "referral_contests"
+    __tablename__ = 'referral_contests'
 
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     prize_text = Column(Text, nullable=True)
-    contest_type = Column(String(50), nullable=False, default="referral_paid")
+    contest_type = Column(String(50), nullable=False, default='referral_paid')
     start_at = Column(DateTime, nullable=False)
     end_at = Column(DateTime, nullable=False)
     daily_summary_time = Column(Time, nullable=False, default=time(hour=12, minute=0))
     daily_summary_times = Column(String(255), nullable=True)  # CSV HH:MM
-    timezone = Column(String(64), nullable=False, default="UTC")
+    timezone = Column(String(64), nullable=False, default='UTC')
     is_active = Column(Boolean, nullable=False, default=True)
     last_daily_summary_date = Column(Date, nullable=True)
     last_daily_summary_at = Column(DateTime, nullable=True)
     final_summary_sent = Column(Boolean, nullable=False, default=False)
-    created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_by = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
-    creator = relationship("User", backref="created_referral_contests")
+    creator = relationship('User', backref='created_referral_contests')
     events = relationship(
-        "ReferralContestEvent",
-        back_populates="contest",
-        cascade="all, delete-orphan",
+        'ReferralContestEvent',
+        back_populates='contest',
+        cascade='all, delete-orphan',
     )
 
     def __repr__(self):
@@ -1560,44 +1501,43 @@ class ReferralContest(Base):
 
 
 class ReferralContestEvent(Base):
-    __tablename__ = "referral_contest_events"
+    __tablename__ = 'referral_contest_events'
     __table_args__ = (
         UniqueConstraint(
-            "contest_id",
-            "referral_id",
-            name="uq_referral_contest_referral",
+            'contest_id',
+            'referral_id',
+            name='uq_referral_contest_referral',
         ),
-        Index("idx_referral_contest_referrer", "contest_id", "referrer_id"),
+        Index('idx_referral_contest_referrer', 'contest_id', 'referrer_id'),
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    contest_id = Column(Integer, ForeignKey("referral_contests.id", ondelete="CASCADE"), nullable=False)
-    referrer_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    referral_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    contest_id = Column(Integer, ForeignKey('referral_contests.id', ondelete='CASCADE'), nullable=False)
+    referrer_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    referral_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
     event_type = Column(String(50), nullable=False)
     amount_kopeks = Column(Integer, nullable=False, default=0)
     occurred_at = Column(DateTime, nullable=False, default=func.now())
 
-    contest = relationship("ReferralContest", back_populates="events")
-    referrer = relationship("User", foreign_keys=[referrer_id])
-    referral = relationship("User", foreign_keys=[referral_id])
+    contest = relationship('ReferralContest', back_populates='events')
+    referrer = relationship('User', foreign_keys=[referrer_id])
+    referral = relationship('User', foreign_keys=[referral_id])
 
     def __repr__(self):
         return (
-            f"<ReferralContestEvent contest={self.contest_id} "
-            f"referrer={self.referrer_id} referral={self.referral_id}>"
+            f'<ReferralContestEvent contest={self.contest_id} referrer={self.referrer_id} referral={self.referral_id}>'
         )
 
 
 class ContestTemplate(Base):
-    __tablename__ = "contest_templates"
+    __tablename__ = 'contest_templates'
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), nullable=False)
     slug = Column(String(50), nullable=False, unique=True, index=True)
     description = Column(Text, nullable=True)
-    prize_type = Column(String(20), nullable=False, default="days")
-    prize_value = Column(String(50), nullable=False, default="1")
+    prize_type = Column(String(20), nullable=False, default='days')
+    prize_value = Column(String(50), nullable=False, default='1')
     max_winners = Column(Integer, nullable=False, default=1)
     attempts_per_user = Column(Integer, nullable=False, default=1)
     times_per_day = Column(Integer, nullable=False, default=1)
@@ -1608,21 +1548,21 @@ class ContestTemplate(Base):
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
-    rounds = relationship("ContestRound", back_populates="template")
+    rounds = relationship('ContestRound', back_populates='template')
 
 
 class ContestRound(Base):
-    __tablename__ = "contest_rounds"
+    __tablename__ = 'contest_rounds'
     __table_args__ = (
-        Index("idx_contest_round_status", "status"),
-        Index("idx_contest_round_template", "template_id"),
+        Index('idx_contest_round_status', 'status'),
+        Index('idx_contest_round_template', 'template_id'),
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    template_id = Column(Integer, ForeignKey("contest_templates.id", ondelete="CASCADE"), nullable=False)
+    template_id = Column(Integer, ForeignKey('contest_templates.id', ondelete='CASCADE'), nullable=False)
     starts_at = Column(DateTime, nullable=False)
     ends_at = Column(DateTime, nullable=False)
-    status = Column(String(20), nullable=False, default="active")  # active, finished
+    status = Column(String(20), nullable=False, default='active')  # active, finished
     payload = Column(JSON, nullable=True)
     winners_count = Column(Integer, nullable=False, default=0)
     max_winners = Column(Integer, nullable=False, default=1)
@@ -1632,70 +1572,70 @@ class ContestRound(Base):
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
-    template = relationship("ContestTemplate", back_populates="rounds")
-    attempts = relationship("ContestAttempt", back_populates="round", cascade="all, delete-orphan")
+    template = relationship('ContestTemplate', back_populates='rounds')
+    attempts = relationship('ContestAttempt', back_populates='round', cascade='all, delete-orphan')
 
 
 class ContestAttempt(Base):
-    __tablename__ = "contest_attempts"
+    __tablename__ = 'contest_attempts'
     __table_args__ = (
-        UniqueConstraint("round_id", "user_id", name="uq_round_user_attempt"),
-        Index("idx_contest_attempt_round", "round_id"),
+        UniqueConstraint('round_id', 'user_id', name='uq_round_user_attempt'),
+        Index('idx_contest_attempt_round', 'round_id'),
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    round_id = Column(Integer, ForeignKey("contest_rounds.id", ondelete="CASCADE"), nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    round_id = Column(Integer, ForeignKey('contest_rounds.id', ondelete='CASCADE'), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
     answer = Column(Text, nullable=True)
     is_winner = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, default=func.now())
 
-    round = relationship("ContestRound", back_populates="attempts")
-    user = relationship("User")
+    round = relationship('ContestRound', back_populates='attempts')
+    user = relationship('User')
 
 
 class Squad(Base):
-    __tablename__ = "squads"
-    
+    __tablename__ = 'squads'
+
     id = Column(Integer, primary_key=True, index=True)
-    
+
     uuid = Column(String(255), unique=True, nullable=False)
     name = Column(String(255), nullable=False)
     country_code = Column(String(5), nullable=True)
-    
+
     is_available = Column(Boolean, default=True)
-    price_kopeks = Column(Integer, default=0) 
-    
+    price_kopeks = Column(Integer, default=0)
+
     description = Column(Text, nullable=True)
-    
+
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
-    
+
     @property
     def price_rubles(self) -> float:
         return self.price_kopeks / 100
 
 
 class ServiceRule(Base):
-    __tablename__ = "service_rules"
+    __tablename__ = 'service_rules'
 
     id = Column(Integer, primary_key=True, index=True)
 
     order = Column(Integer, default=0)
     title = Column(String(255), nullable=False)
-    
+
     content = Column(Text, nullable=False)
-    
+
     is_active = Column(Boolean, default=True)
-    
-    language = Column(String(5), default="ru")
-    
+
+    language = Column(String(5), default='ru')
+
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
 
 class PrivacyPolicy(Base):
-    __tablename__ = "privacy_policies"
+    __tablename__ = 'privacy_policies'
 
     id = Column(Integer, primary_key=True, index=True)
     language = Column(String(10), nullable=False, unique=True)
@@ -1706,7 +1646,7 @@ class PrivacyPolicy(Base):
 
 
 class PublicOffer(Base):
-    __tablename__ = "public_offers"
+    __tablename__ = 'public_offers'
 
     id = Column(Integer, primary_key=True, index=True)
     language = Column(String(10), nullable=False, unique=True)
@@ -1717,7 +1657,7 @@ class PublicOffer(Base):
 
 
 class FaqSetting(Base):
-    __tablename__ = "faq_settings"
+    __tablename__ = 'faq_settings'
 
     id = Column(Integer, primary_key=True, index=True)
     language = Column(String(10), nullable=False, unique=True)
@@ -1727,7 +1667,7 @@ class FaqSetting(Base):
 
 
 class FaqPage(Base):
-    __tablename__ = "faq_pages"
+    __tablename__ = 'faq_pages'
 
     id = Column(Integer, primary_key=True, index=True)
     language = Column(String(10), nullable=False, index=True)
@@ -1740,58 +1680,54 @@ class FaqPage(Base):
 
 
 class SystemSetting(Base):
-    __tablename__ = "system_settings"
+    __tablename__ = 'system_settings'
 
     id = Column(Integer, primary_key=True, index=True)
     key = Column(String(255), unique=True, nullable=False)
     value = Column(Text, nullable=True)
     description = Column(Text, nullable=True)
-    
+
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
 
 class MonitoringLog(Base):
-    __tablename__ = "monitoring_logs"
-    
+    __tablename__ = 'monitoring_logs'
+
     id = Column(Integer, primary_key=True, index=True)
-    
+
     event_type = Column(String(100), nullable=False)
-    
+
     message = Column(Text, nullable=False)
     data = Column(JSON, nullable=True)
-    
+
     is_success = Column(Boolean, default=True)
-    
+
     created_at = Column(DateTime, default=func.now())
 
 
 class SentNotification(Base):
-    __tablename__ = "sent_notifications"
+    __tablename__ = 'sent_notifications'
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    subscription_id = Column(Integer, ForeignKey("subscriptions.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    subscription_id = Column(Integer, ForeignKey('subscriptions.id', ondelete='CASCADE'), nullable=False)
     notification_type = Column(String(50), nullable=False)
     days_before = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=func.now())
 
-    user = relationship("User", backref="sent_notifications")
-    subscription = relationship("Subscription", backref="sent_notifications")
+    user = relationship('User', backref='sent_notifications')
+    subscription = relationship('Subscription', backref='sent_notifications')
 
 
 class SubscriptionEvent(Base):
-    __tablename__ = "subscription_events"
+    __tablename__ = 'subscription_events'
 
     id = Column(Integer, primary_key=True, index=True)
     event_type = Column(String(50), nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    subscription_id = Column(
-        Integer, ForeignKey("subscriptions.id", ondelete="SET NULL"), nullable=True
-    )
-    transaction_id = Column(
-        Integer, ForeignKey("transactions.id", ondelete="SET NULL"), nullable=True
-    )
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    subscription_id = Column(Integer, ForeignKey('subscriptions.id', ondelete='SET NULL'), nullable=True)
+    transaction_id = Column(Integer, ForeignKey('transactions.id', ondelete='SET NULL'), nullable=True)
     amount_kopeks = Column(Integer, nullable=True)
     currency = Column(String(16), nullable=True)
     message = Column(Text, nullable=True)
@@ -1799,41 +1735,37 @@ class SubscriptionEvent(Base):
     extra = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=func.now())
 
-    user = relationship("User", backref="subscription_events")
-    subscription = relationship("Subscription", backref="subscription_events")
-    transaction = relationship("Transaction", backref="subscription_events")
+    user = relationship('User', backref='subscription_events')
+    subscription = relationship('Subscription', backref='subscription_events')
+    transaction = relationship('Transaction', backref='subscription_events')
 
 
 class DiscountOffer(Base):
-    __tablename__ = "discount_offers"
-    __table_args__ = (
-        Index("ix_discount_offers_user_type", "user_id", "notification_type"),
-    )
+    __tablename__ = 'discount_offers'
+    __table_args__ = (Index('ix_discount_offers_user_type', 'user_id', 'notification_type'),)
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    subscription_id = Column(Integer, ForeignKey("subscriptions.id", ondelete="SET NULL"), nullable=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    subscription_id = Column(Integer, ForeignKey('subscriptions.id', ondelete='SET NULL'), nullable=True)
     notification_type = Column(String(50), nullable=False)
     discount_percent = Column(Integer, nullable=False, default=0)
     bonus_amount_kopeks = Column(Integer, nullable=False, default=0)
     expires_at = Column(DateTime, nullable=False)
     claimed_at = Column(DateTime, nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
-    effect_type = Column(String(50), nullable=False, default="percent_discount")
+    effect_type = Column(String(50), nullable=False, default='percent_discount')
     extra_data = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
-    user = relationship("User", back_populates="discount_offers")
-    subscription = relationship("Subscription", back_populates="discount_offers")
-    logs = relationship("PromoOfferLog", back_populates="offer")
+    user = relationship('User', back_populates='discount_offers')
+    subscription = relationship('Subscription', back_populates='discount_offers')
+    logs = relationship('PromoOfferLog', back_populates='offer')
 
 
 class PromoOfferTemplate(Base):
-    __tablename__ = "promo_offer_templates"
-    __table_args__ = (
-        Index("ix_promo_offer_templates_type", "offer_type"),
-    )
+    __tablename__ = 'promo_offer_templates'
+    __table_args__ = (Index('ix_promo_offer_templates_type', 'offer_type'),)
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
@@ -1847,19 +1779,19 @@ class PromoOfferTemplate(Base):
     test_duration_hours = Column(Integer, nullable=True)
     test_squad_uuids = Column(JSON, default=list)
     is_active = Column(Boolean, default=True, nullable=False)
-    created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_by = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
-    creator = relationship("User")
+    creator = relationship('User')
 
 
 class SubscriptionTemporaryAccess(Base):
-    __tablename__ = "subscription_temporary_access"
+    __tablename__ = 'subscription_temporary_access'
 
     id = Column(Integer, primary_key=True, index=True)
-    subscription_id = Column(Integer, ForeignKey("subscriptions.id", ondelete="CASCADE"), nullable=False)
-    offer_id = Column(Integer, ForeignKey("discount_offers.id", ondelete="CASCADE"), nullable=False)
+    subscription_id = Column(Integer, ForeignKey('subscriptions.id', ondelete='CASCADE'), nullable=False)
+    offer_id = Column(Integer, ForeignKey('discount_offers.id', ondelete='CASCADE'), nullable=False)
     squad_uuid = Column(String(255), nullable=False)
     expires_at = Column(DateTime, nullable=False)
     created_at = Column(DateTime, default=func.now())
@@ -1867,16 +1799,16 @@ class SubscriptionTemporaryAccess(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     was_already_connected = Column(Boolean, default=False, nullable=False)
 
-    subscription = relationship("Subscription", back_populates="temporary_accesses")
-    offer = relationship("DiscountOffer")
+    subscription = relationship('Subscription', back_populates='temporary_accesses')
+    offer = relationship('DiscountOffer')
 
 
 class PromoOfferLog(Base):
-    __tablename__ = "promo_offer_logs"
+    __tablename__ = 'promo_offer_logs'
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
-    offer_id = Column(Integer, ForeignKey("discount_offers.id", ondelete="SET NULL"), nullable=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
+    offer_id = Column(Integer, ForeignKey('discount_offers.id', ondelete='SET NULL'), nullable=True, index=True)
     action = Column(String(50), nullable=False)
     source = Column(String(100), nullable=True)
     percent = Column(Integer, nullable=True)
@@ -1884,262 +1816,260 @@ class PromoOfferLog(Base):
     details = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=func.now())
 
-    user = relationship("User", back_populates="promo_offer_logs")
-    offer = relationship("DiscountOffer", back_populates="logs")
+    user = relationship('User', back_populates='promo_offer_logs')
+    offer = relationship('DiscountOffer', back_populates='logs')
+
 
 class BroadcastHistory(Base):
-    __tablename__ = "broadcast_history"
+    __tablename__ = 'broadcast_history'
 
     id = Column(Integer, primary_key=True, index=True)
     target_type = Column(String(100), nullable=False)
-    message_text = Column(Text, nullable=False)  
+    message_text = Column(Text, nullable=False)
     has_media = Column(Boolean, default=False)
-    media_type = Column(String(20), nullable=True) 
+    media_type = Column(String(20), nullable=True)
     media_file_id = Column(String(255), nullable=True)
     media_caption = Column(Text, nullable=True)
-    total_count = Column(Integer, default=0) 
-    sent_count = Column(Integer, default=0)  
-    failed_count = Column(Integer, default=0) 
-    status = Column(String(50), default="in_progress")
-    admin_id = Column(Integer, ForeignKey("users.id")) 
-    admin_name = Column(String(255)) 
+    total_count = Column(Integer, default=0)
+    sent_count = Column(Integer, default=0)
+    failed_count = Column(Integer, default=0)
+    status = Column(String(50), default='in_progress')
+    admin_id = Column(Integer, ForeignKey('users.id'))
+    admin_name = Column(String(255))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     completed_at = Column(DateTime(timezone=True), nullable=True)
-    admin = relationship("User", back_populates="broadcasts")
+    admin = relationship('User', back_populates='broadcasts')
 
 
 class Poll(Base):
-    __tablename__ = "polls"
+    __tablename__ = 'polls'
 
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     reward_enabled = Column(Boolean, nullable=False, default=False)
     reward_amount_kopeks = Column(Integer, nullable=False, default=0)
-    created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_by = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
     created_at = Column(DateTime, default=func.now(), nullable=False)
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
 
-    creator = relationship("User", backref="created_polls", foreign_keys=[created_by])
+    creator = relationship('User', backref='created_polls', foreign_keys=[created_by])
     questions = relationship(
-        "PollQuestion",
-        back_populates="poll",
-        cascade="all, delete-orphan",
-        order_by="PollQuestion.order",
+        'PollQuestion',
+        back_populates='poll',
+        cascade='all, delete-orphan',
+        order_by='PollQuestion.order',
     )
     responses = relationship(
-        "PollResponse",
-        back_populates="poll",
-        cascade="all, delete-orphan",
+        'PollResponse',
+        back_populates='poll',
+        cascade='all, delete-orphan',
     )
 
 
 class PollQuestion(Base):
-    __tablename__ = "poll_questions"
+    __tablename__ = 'poll_questions'
 
     id = Column(Integer, primary_key=True, index=True)
-    poll_id = Column(Integer, ForeignKey("polls.id", ondelete="CASCADE"), nullable=False, index=True)
+    poll_id = Column(Integer, ForeignKey('polls.id', ondelete='CASCADE'), nullable=False, index=True)
     text = Column(Text, nullable=False)
     order = Column(Integer, nullable=False, default=0)
 
-    poll = relationship("Poll", back_populates="questions")
+    poll = relationship('Poll', back_populates='questions')
     options = relationship(
-        "PollOption",
-        back_populates="question",
-        cascade="all, delete-orphan",
-        order_by="PollOption.order",
+        'PollOption',
+        back_populates='question',
+        cascade='all, delete-orphan',
+        order_by='PollOption.order',
     )
-    answers = relationship("PollAnswer", back_populates="question")
+    answers = relationship('PollAnswer', back_populates='question')
 
 
 class PollOption(Base):
-    __tablename__ = "poll_options"
+    __tablename__ = 'poll_options'
 
     id = Column(Integer, primary_key=True, index=True)
-    question_id = Column(Integer, ForeignKey("poll_questions.id", ondelete="CASCADE"), nullable=False, index=True)
+    question_id = Column(Integer, ForeignKey('poll_questions.id', ondelete='CASCADE'), nullable=False, index=True)
     text = Column(Text, nullable=False)
     order = Column(Integer, nullable=False, default=0)
 
-    question = relationship("PollQuestion", back_populates="options")
-    answers = relationship("PollAnswer", back_populates="option")
+    question = relationship('PollQuestion', back_populates='options')
+    answers = relationship('PollAnswer', back_populates='option')
 
 
 class PollResponse(Base):
-    __tablename__ = "poll_responses"
+    __tablename__ = 'poll_responses'
 
     id = Column(Integer, primary_key=True, index=True)
-    poll_id = Column(Integer, ForeignKey("polls.id", ondelete="CASCADE"), nullable=False, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    poll_id = Column(Integer, ForeignKey('polls.id', ondelete='CASCADE'), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
     sent_at = Column(DateTime, default=func.now(), nullable=False)
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
     reward_given = Column(Boolean, nullable=False, default=False)
     reward_amount_kopeks = Column(Integer, nullable=False, default=0)
 
-    poll = relationship("Poll", back_populates="responses")
-    user = relationship("User", back_populates="poll_responses")
+    poll = relationship('Poll', back_populates='responses')
+    user = relationship('User', back_populates='poll_responses')
     answers = relationship(
-        "PollAnswer",
-        back_populates="response",
-        cascade="all, delete-orphan",
+        'PollAnswer',
+        back_populates='response',
+        cascade='all, delete-orphan',
     )
 
-    __table_args__ = (
-        UniqueConstraint("poll_id", "user_id", name="uq_poll_user"),
-    )
+    __table_args__ = (UniqueConstraint('poll_id', 'user_id', name='uq_poll_user'),)
 
 
 class PollAnswer(Base):
-    __tablename__ = "poll_answers"
+    __tablename__ = 'poll_answers'
 
     id = Column(Integer, primary_key=True, index=True)
-    response_id = Column(Integer, ForeignKey("poll_responses.id", ondelete="CASCADE"), nullable=False, index=True)
-    question_id = Column(Integer, ForeignKey("poll_questions.id", ondelete="CASCADE"), nullable=False, index=True)
-    option_id = Column(Integer, ForeignKey("poll_options.id", ondelete="CASCADE"), nullable=False, index=True)
+    response_id = Column(Integer, ForeignKey('poll_responses.id', ondelete='CASCADE'), nullable=False, index=True)
+    question_id = Column(Integer, ForeignKey('poll_questions.id', ondelete='CASCADE'), nullable=False, index=True)
+    option_id = Column(Integer, ForeignKey('poll_options.id', ondelete='CASCADE'), nullable=False, index=True)
     created_at = Column(DateTime, default=func.now(), nullable=False)
 
-    response = relationship("PollResponse", back_populates="answers")
-    question = relationship("PollQuestion", back_populates="answers")
-    option = relationship("PollOption", back_populates="answers")
+    response = relationship('PollResponse', back_populates='answers')
+    question = relationship('PollQuestion', back_populates='answers')
+    option = relationship('PollOption', back_populates='answers')
 
-    __table_args__ = (
-        UniqueConstraint("response_id", "question_id", name="uq_poll_answer_unique"),
-    )
+    __table_args__ = (UniqueConstraint('response_id', 'question_id', name='uq_poll_answer_unique'),)
 
 
 class ServerSquad(Base):
-    __tablename__ = "server_squads"
+    __tablename__ = 'server_squads'
 
     id = Column(Integer, primary_key=True, index=True)
 
     squad_uuid = Column(String(255), unique=True, nullable=False, index=True)
-    
+
     display_name = Column(String(255), nullable=False)
-    
+
     original_name = Column(String(255), nullable=True)
-    
+
     country_code = Column(String(5), nullable=True)
-    
+
     is_available = Column(Boolean, default=True)
     is_trial_eligible = Column(Boolean, default=False, nullable=False)
-    
+
     price_kopeks = Column(Integer, default=0)
-    
+
     description = Column(Text, nullable=True)
-    
+
     sort_order = Column(Integer, default=0)
-    
-    max_users = Column(Integer, nullable=True) 
+
+    max_users = Column(Integer, nullable=True)
     current_users = Column(Integer, default=0)
 
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
     allowed_promo_groups = relationship(
-        "PromoGroup",
+        'PromoGroup',
         secondary=server_squad_promo_groups,
-        back_populates="server_squads",
-        lazy="selectin",
+        back_populates='server_squads',
+        lazy='selectin',
     )
-    
+
     @property
     def price_rubles(self) -> float:
         return self.price_kopeks / 100
-    
+
     @property
     def is_full(self) -> bool:
         if self.max_users is None:
             return False
         return self.current_users >= self.max_users
-    
+
     @property
     def availability_status(self) -> str:
         if not self.is_available:
-            return "Недоступен"
-        elif self.is_full:
-            return "Переполнен"
-        else:
-            return "Доступен"
+            return 'Недоступен'
+        if self.is_full:
+            return 'Переполнен'
+        return 'Доступен'
 
 
 class SubscriptionServer(Base):
-    __tablename__ = "subscription_servers"
-    
+    __tablename__ = 'subscription_servers'
+
     id = Column(Integer, primary_key=True, index=True)
-    subscription_id = Column(Integer, ForeignKey("subscriptions.id"), nullable=False)
-    server_squad_id = Column(Integer, ForeignKey("server_squads.id"), nullable=False)
-    
+    subscription_id = Column(Integer, ForeignKey('subscriptions.id'), nullable=False)
+    server_squad_id = Column(Integer, ForeignKey('server_squads.id'), nullable=False)
+
     connected_at = Column(DateTime, default=func.now())
-    
+
     paid_price_kopeks = Column(Integer, default=0)
-    
-    subscription = relationship("Subscription", backref="subscription_servers")
-    server_squad = relationship("ServerSquad", backref="subscription_servers")
+
+    subscription = relationship('Subscription', backref='subscription_servers')
+    server_squad = relationship('ServerSquad', backref='subscription_servers')
 
 
 class SupportAuditLog(Base):
-    __tablename__ = "support_audit_logs"
+    __tablename__ = 'support_audit_logs'
 
     id = Column(Integer, primary_key=True, index=True)
-    actor_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    actor_user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
     actor_telegram_id = Column(BigInteger, nullable=True)  # Can be None for email-only users
     is_moderator = Column(Boolean, default=False)
     action = Column(String(50), nullable=False)  # close_ticket, block_user_timed, block_user_perm, unblock_user
-    ticket_id = Column(Integer, ForeignKey("tickets.id", ondelete="SET NULL"), nullable=True)
-    target_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    ticket_id = Column(Integer, ForeignKey('tickets.id', ondelete='SET NULL'), nullable=True)
+    target_user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
     details = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=func.now())
 
-    actor = relationship("User", foreign_keys=[actor_user_id])
-    ticket = relationship("Ticket", foreign_keys=[ticket_id])
+    actor = relationship('User', foreign_keys=[actor_user_id])
+    ticket = relationship('Ticket', foreign_keys=[ticket_id])
+
 
 class UserMessage(Base):
-    __tablename__ = "user_messages"
+    __tablename__ = 'user_messages'
     id = Column(Integer, primary_key=True, index=True)
     message_text = Column(Text, nullable=False)
     is_active = Column(Boolean, default=True)
     sort_order = Column(Integer, default=0)
-    created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True) 
+    created_by = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
-    creator = relationship("User", backref="created_messages")
-    
+    creator = relationship('User', backref='created_messages')
+
     def __repr__(self):
         return f"<UserMessage(id={self.id}, active={self.is_active}, text='{self.message_text[:50]}...')>"
 
+
 class WelcomeText(Base):
-    __tablename__ = "welcome_texts"
+    __tablename__ = 'welcome_texts'
 
     id = Column(Integer, primary_key=True, index=True)
     text_content = Column(Text, nullable=False)
     is_active = Column(Boolean, default=True)
     is_enabled = Column(Boolean, default=True)
-    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_by = Column(Integer, ForeignKey('users.id'), nullable=True)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
-    creator = relationship("User", backref="created_welcome_texts")
+    creator = relationship('User', backref='created_welcome_texts')
 
 
 class PinnedMessage(Base):
-    __tablename__ = "pinned_messages"
+    __tablename__ = 'pinned_messages'
 
     id = Column(Integer, primary_key=True, index=True)
-    content = Column(Text, nullable=False, default="")
+    content = Column(Text, nullable=False, default='')
     media_type = Column(String(32), nullable=True)
     media_file_id = Column(String(255), nullable=True)
-    send_before_menu = Column(Boolean, nullable=False, server_default="1", default=True)
-    send_on_every_start = Column(Boolean, nullable=False, server_default="1", default=True)
+    send_before_menu = Column(Boolean, nullable=False, server_default='1', default=True)
+    send_on_every_start = Column(Boolean, nullable=False, server_default='1', default=True)
     is_active = Column(Boolean, default=True)
-    created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_by = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
-    creator = relationship("User", backref="pinned_messages")
+    creator = relationship('User', backref='pinned_messages')
 
 
 class AdvertisingCampaign(Base):
-    __tablename__ = "advertising_campaigns"
+    __tablename__ = 'advertising_campaigns'
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
@@ -2154,60 +2084,58 @@ class AdvertisingCampaign(Base):
     subscription_squads = Column(JSON, default=list)
 
     # Поля для типа "tariff" - выдача тарифа
-    tariff_id = Column(Integer, ForeignKey("tariffs.id", ondelete="SET NULL"), nullable=True)
+    tariff_id = Column(Integer, ForeignKey('tariffs.id', ondelete='SET NULL'), nullable=True)
     tariff_duration_days = Column(Integer, nullable=True)
 
     is_active = Column(Boolean, default=True)
 
-    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_by = Column(Integer, ForeignKey('users.id'), nullable=True)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
-    registrations = relationship("AdvertisingCampaignRegistration", back_populates="campaign")
-    tariff = relationship("Tariff", foreign_keys=[tariff_id])
+    registrations = relationship('AdvertisingCampaignRegistration', back_populates='campaign')
+    tariff = relationship('Tariff', foreign_keys=[tariff_id])
 
     @property
     def is_balance_bonus(self) -> bool:
-        return self.bonus_type == "balance"
+        return self.bonus_type == 'balance'
 
     @property
     def is_subscription_bonus(self) -> bool:
-        return self.bonus_type == "subscription"
+        return self.bonus_type == 'subscription'
 
     @property
     def is_none_bonus(self) -> bool:
         """Ссылка без награды - только для отслеживания."""
-        return self.bonus_type == "none"
+        return self.bonus_type == 'none'
 
     @property
     def is_tariff_bonus(self) -> bool:
         """Выдача тарифа на определённое время."""
-        return self.bonus_type == "tariff"
+        return self.bonus_type == 'tariff'
 
 
 class AdvertisingCampaignRegistration(Base):
-    __tablename__ = "advertising_campaign_registrations"
-    __table_args__ = (
-        UniqueConstraint("campaign_id", "user_id", name="uq_campaign_user"),
-    )
+    __tablename__ = 'advertising_campaign_registrations'
+    __table_args__ = (UniqueConstraint('campaign_id', 'user_id', name='uq_campaign_user'),)
 
     id = Column(Integer, primary_key=True, index=True)
-    campaign_id = Column(Integer, ForeignKey("advertising_campaigns.id", ondelete="CASCADE"), nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    campaign_id = Column(Integer, ForeignKey('advertising_campaigns.id', ondelete='CASCADE'), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
 
     bonus_type = Column(String(20), nullable=False)
     balance_bonus_kopeks = Column(Integer, default=0)
     subscription_duration_days = Column(Integer, nullable=True)
 
     # Поля для типа "tariff"
-    tariff_id = Column(Integer, ForeignKey("tariffs.id", ondelete="SET NULL"), nullable=True)
+    tariff_id = Column(Integer, ForeignKey('tariffs.id', ondelete='SET NULL'), nullable=True)
     tariff_duration_days = Column(Integer, nullable=True)
 
     created_at = Column(DateTime, default=func.now())
 
-    campaign = relationship("AdvertisingCampaign", back_populates="registrations")
-    user = relationship("User")
-    tariff = relationship("Tariff")
+    campaign = relationship('AdvertisingCampaign', back_populates='registrations')
+    user = relationship('User')
+    tariff = relationship('Tariff')
 
     @property
     def balance_bonus_rubles(self) -> float:
@@ -2215,47 +2143,47 @@ class AdvertisingCampaignRegistration(Base):
 
 
 class TicketStatus(Enum):
-    OPEN = "open"
-    ANSWERED = "answered"
-    CLOSED = "closed"
-    PENDING = "pending"
+    OPEN = 'open'
+    ANSWERED = 'answered'
+    CLOSED = 'closed'
+    PENDING = 'pending'
 
 
 class Ticket(Base):
-    __tablename__ = "tickets"
-    
+    __tablename__ = 'tickets'
+
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+
     title = Column(String(255), nullable=False)
     status = Column(String(20), default=TicketStatus.OPEN.value, nullable=False)
-    priority = Column(String(20), default="normal", nullable=False)  # low, normal, high, urgent
+    priority = Column(String(20), default='normal', nullable=False)  # low, normal, high, urgent
     # Блокировка ответов пользователя в этом тикете
     user_reply_block_permanent = Column(Boolean, default=False, nullable=False)
     user_reply_block_until = Column(DateTime, nullable=True)
-    
+
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
     closed_at = Column(DateTime, nullable=True)
     # SLA reminders
     last_sla_reminder_at = Column(DateTime, nullable=True)
-    
+
     # Связи
-    user = relationship("User", backref="tickets")
-    messages = relationship("TicketMessage", back_populates="ticket", cascade="all, delete-orphan")
-    
+    user = relationship('User', backref='tickets')
+    messages = relationship('TicketMessage', back_populates='ticket', cascade='all, delete-orphan')
+
     @property
     def is_open(self) -> bool:
         return self.status == TicketStatus.OPEN.value
-    
+
     @property
     def is_answered(self) -> bool:
         return self.status == TicketStatus.ANSWERED.value
-    
+
     @property
     def is_closed(self) -> bool:
         return self.status == TicketStatus.CLOSED.value
-    
+
     @property
     def is_pending(self) -> bool:
         return self.status == TicketStatus.PENDING.value
@@ -2267,61 +2195,57 @@ class Ticket(Base):
         if self.user_reply_block_until:
             try:
                 from datetime import datetime
+
                 return self.user_reply_block_until > datetime.utcnow()
             except Exception:
                 return True
         return False
-    
+
     @property
     def status_emoji(self) -> str:
         status_emojis = {
-            TicketStatus.OPEN.value: "🔴",
-            TicketStatus.ANSWERED.value: "🟡", 
-            TicketStatus.CLOSED.value: "🟢",
-            TicketStatus.PENDING.value: "⏳"
+            TicketStatus.OPEN.value: '🔴',
+            TicketStatus.ANSWERED.value: '🟡',
+            TicketStatus.CLOSED.value: '🟢',
+            TicketStatus.PENDING.value: '⏳',
         }
-        return status_emojis.get(self.status, "❓")
-    
+        return status_emojis.get(self.status, '❓')
+
     @property
     def priority_emoji(self) -> str:
-        priority_emojis = {
-            "low": "🟢",
-            "normal": "🟡", 
-            "high": "🟠",
-            "urgent": "🔴"
-        }
-        return priority_emojis.get(self.priority, "🟡")
-    
+        priority_emojis = {'low': '🟢', 'normal': '🟡', 'high': '🟠', 'urgent': '🔴'}
+        return priority_emojis.get(self.priority, '🟡')
+
     def __repr__(self):
         return f"<Ticket(id={self.id}, user_id={self.user_id}, status={self.status}, title='{self.title[:30]}...')>"
 
 
 class TicketMessage(Base):
-    __tablename__ = "ticket_messages"
+    __tablename__ = 'ticket_messages'
 
     id = Column(Integer, primary_key=True, index=True)
-    ticket_id = Column(Integer, ForeignKey("tickets.id", ondelete="CASCADE"), nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    
+    ticket_id = Column(Integer, ForeignKey('tickets.id', ondelete='CASCADE'), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+
     message_text = Column(Text, nullable=False)
     is_from_admin = Column(Boolean, default=False, nullable=False)
-    
+
     # Для медиа файлов
     has_media = Column(Boolean, default=False)
     media_type = Column(String(20), nullable=True)  # photo, video, document, voice, etc.
     media_file_id = Column(String(255), nullable=True)
     media_caption = Column(Text, nullable=True)
-    
+
     created_at = Column(DateTime, default=func.now())
-    
+
     # Связи
-    ticket = relationship("Ticket", back_populates="messages")
-    user = relationship("User")
-    
+    ticket = relationship('Ticket', back_populates='messages')
+    user = relationship('User')
+
     @property
     def is_user_message(self) -> bool:
         return not self.is_from_admin
-    
+
     @property
     def is_admin_message(self) -> bool:
         return self.is_from_admin
@@ -2331,7 +2255,7 @@ class TicketMessage(Base):
 
 
 class WebApiToken(Base):
-    __tablename__ = "web_api_tokens"
+    __tablename__ = 'web_api_tokens'
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
@@ -2347,12 +2271,12 @@ class WebApiToken(Base):
     created_by = Column(String(255), nullable=True)
 
     def __repr__(self) -> str:
-        status = "active" if self.is_active else "revoked"
+        status = 'active' if self.is_active else 'revoked'
         return f"<WebApiToken id={self.id} name='{self.name}' status={status}>"
 
 
 class MainMenuButton(Base):
-    __tablename__ = "main_menu_buttons"
+    __tablename__ = 'main_menu_buttons'
 
     id = Column(Integer, primary_key=True, index=True)
     text = Column(String(64), nullable=False)
@@ -2364,9 +2288,7 @@ class MainMenuButton(Base):
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
-    __table_args__ = (
-        Index("ix_main_menu_buttons_order", "display_order", "id"),
-    )
+    __table_args__ = (Index('ix_main_menu_buttons_order', 'display_order', 'id'),)
 
     @property
     def action_type_enum(self) -> MainMenuButtonActionType:
@@ -2385,13 +2307,14 @@ class MainMenuButton(Base):
     def __repr__(self) -> str:
         return (
             f"<MainMenuButton id={self.id} text='{self.text}' "
-            f"action={self.action_type} visibility={self.visibility} active={self.is_active}>"
+            f'action={self.action_type} visibility={self.visibility} active={self.is_active}>'
         )
 
 
 class MenuLayoutHistory(Base):
     """История изменений конфигурации меню."""
-    __tablename__ = "menu_layout_history"
+
+    __tablename__ = 'menu_layout_history'
 
     id = Column(Integer, primary_key=True, index=True)
     config_json = Column(Text, nullable=False)  # Полная конфигурация в JSON
@@ -2400,9 +2323,7 @@ class MenuLayoutHistory(Base):
     user_info = Column(String(255), nullable=True)  # Информация о пользователе/токене
     created_at = Column(DateTime, default=func.now(), index=True)
 
-    __table_args__ = (
-        Index("ix_menu_layout_history_created", "created_at"),
-    )
+    __table_args__ = (Index('ix_menu_layout_history_created', 'created_at'),)
 
     def __repr__(self) -> str:
         return f"<MenuLayoutHistory id={self.id} action='{self.action}' created_at={self.created_at}>"
@@ -2410,11 +2331,12 @@ class MenuLayoutHistory(Base):
 
 class ButtonClickLog(Base):
     """Логи кликов по кнопкам меню."""
-    __tablename__ = "button_click_logs"
+
+    __tablename__ = 'button_click_logs'
 
     id = Column(Integer, primary_key=True, index=True)
     button_id = Column(String(100), nullable=False, index=True)  # ID кнопки
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
     callback_data = Column(String(255), nullable=True)  # callback_data кнопки
     clicked_at = Column(DateTime, default=func.now(), index=True)
 
@@ -2423,12 +2345,12 @@ class ButtonClickLog(Base):
     button_text = Column(String(255), nullable=True)  # Текст кнопки на момент клика
 
     __table_args__ = (
-        Index("ix_button_click_logs_button_date", "button_id", "clicked_at"),
-        Index("ix_button_click_logs_user_date", "user_id", "clicked_at"),
+        Index('ix_button_click_logs_button_date', 'button_id', 'clicked_at'),
+        Index('ix_button_click_logs_user_date', 'user_id', 'clicked_at'),
     )
 
     # Связи
-    user = relationship("User", foreign_keys=[user_id])
+    user = relationship('User', foreign_keys=[user_id])
 
     def __repr__(self) -> str:
         return f"<ButtonClickLog id={self.id} button='{self.button_id}' user={self.user_id} at={self.clicked_at}>"
@@ -2436,10 +2358,11 @@ class ButtonClickLog(Base):
 
 class Webhook(Base):
     """Webhook конфигурация для подписки на события."""
-    __tablename__ = "webhooks"
+
+    __tablename__ = 'webhooks'
     __table_args__ = (
-        Index("ix_webhooks_event_type", "event_type"),
-        Index("ix_webhooks_is_active", "is_active"),
+        Index('ix_webhooks_event_type', 'event_type'),
+        Index('ix_webhooks_is_active', 'is_active'),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -2455,23 +2378,24 @@ class Webhook(Base):
     failure_count = Column(Integer, default=0, nullable=False)
     success_count = Column(Integer, default=0, nullable=False)
 
-    deliveries = relationship("WebhookDelivery", back_populates="webhook", cascade="all, delete-orphan")
+    deliveries = relationship('WebhookDelivery', back_populates='webhook', cascade='all, delete-orphan')
 
     def __repr__(self) -> str:
-        status = "active" if self.is_active else "inactive"
+        status = 'active' if self.is_active else 'inactive'
         return f"<Webhook id={self.id} name='{self.name}' event='{self.event_type}' status={status}>"
 
 
 class WebhookDelivery(Base):
     """История доставки webhooks."""
-    __tablename__ = "webhook_deliveries"
+
+    __tablename__ = 'webhook_deliveries'
     __table_args__ = (
-        Index("ix_webhook_deliveries_webhook_created", "webhook_id", "created_at"),
-        Index("ix_webhook_deliveries_status", "status"),
+        Index('ix_webhook_deliveries_webhook_created', 'webhook_id', 'created_at'),
+        Index('ix_webhook_deliveries_status', 'status'),
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    webhook_id = Column(Integer, ForeignKey("webhooks.id", ondelete="CASCADE"), nullable=False)
+    webhook_id = Column(Integer, ForeignKey('webhooks.id', ondelete='CASCADE'), nullable=False)
     event_type = Column(String(50), nullable=False)
     payload = Column(JSON, nullable=False)  # Отправленный payload
     response_status = Column(Integer, nullable=True)  # HTTP статус ответа
@@ -2483,7 +2407,7 @@ class WebhookDelivery(Base):
     delivered_at = Column(DateTime, nullable=True)
     next_retry_at = Column(DateTime, nullable=True)
 
-    webhook = relationship("Webhook", back_populates="deliveries")
+    webhook = relationship('Webhook', back_populates='deliveries')
 
     def __repr__(self) -> str:
         return f"<WebhookDelivery id={self.id} webhook_id={self.webhook_id} status='{self.status}' event='{self.event_type}'>"
@@ -2491,20 +2415,19 @@ class WebhookDelivery(Base):
 
 class CabinetRefreshToken(Base):
     """Refresh tokens for cabinet JWT authentication."""
-    __tablename__ = "cabinet_refresh_tokens"
-    __table_args__ = (
-        Index("ix_cabinet_refresh_tokens_user", "user_id"),
-    )
+
+    __tablename__ = 'cabinet_refresh_tokens'
+    __table_args__ = (Index('ix_cabinet_refresh_tokens_user', 'user_id'),)
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
     token_hash = Column(String(255), unique=True, nullable=False, index=True)
     device_info = Column(String(500), nullable=True)
     expires_at = Column(DateTime, nullable=False)
     created_at = Column(DateTime, default=func.now())
     revoked_at = Column(DateTime, nullable=True)
 
-    user = relationship("User", backref="cabinet_tokens")
+    user = relationship('User', backref='cabinet_tokens')
 
     @property
     def is_expired(self) -> bool:
@@ -2519,8 +2442,8 @@ class CabinetRefreshToken(Base):
         return not self.is_expired and not self.is_revoked
 
     def __repr__(self) -> str:
-        status = "valid" if self.is_valid else ("revoked" if self.is_revoked else "expired")
-        return f"<CabinetRefreshToken id={self.id} user_id={self.user_id} status={status}>"
+        status = 'valid' if self.is_valid else ('revoked' if self.is_revoked else 'expired')
+        return f'<CabinetRefreshToken id={self.id} user_id={self.user_id} status={status}>'
 
 
 # ==================== FORTUNE WHEEL ====================
@@ -2528,17 +2451,18 @@ class CabinetRefreshToken(Base):
 
 class WheelConfig(Base):
     """Глобальная конфигурация колеса удачи."""
-    __tablename__ = "wheel_configs"
+
+    __tablename__ = 'wheel_configs'
 
     id = Column(Integer, primary_key=True, index=True)
 
     # Основные настройки
     is_enabled = Column(Boolean, default=False, nullable=False)
-    name = Column(String(255), default="Колесо удачи", nullable=False)
+    name = Column(String(255), default='Колесо удачи', nullable=False)
 
     # Стоимость спина
     spin_cost_stars = Column(Integer, default=10, nullable=False)  # Стоимость в Stars
-    spin_cost_days = Column(Integer, default=1, nullable=False)    # Стоимость в днях подписки
+    spin_cost_days = Column(Integer, default=1, nullable=False)  # Стоимость в днях подписки
     spin_cost_stars_enabled = Column(Boolean, default=True, nullable=False)
     spin_cost_days_enabled = Column(Boolean, default=True, nullable=False)
 
@@ -2550,24 +2474,25 @@ class WheelConfig(Base):
     min_subscription_days_for_day_payment = Column(Integer, default=3, nullable=False)
 
     # Генерация промокодов
-    promo_prefix = Column(String(20), default="WHEEL", nullable=False)
+    promo_prefix = Column(String(20), default='WHEEL', nullable=False)
     promo_validity_days = Column(Integer, default=7, nullable=False)
 
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
-    prizes = relationship("WheelPrize", back_populates="config", cascade="all, delete-orphan")
+    prizes = relationship('WheelPrize', back_populates='config', cascade='all, delete-orphan')
 
     def __repr__(self) -> str:
-        return f"<WheelConfig id={self.id} enabled={self.is_enabled} rtp={self.rtp_percent}%>"
+        return f'<WheelConfig id={self.id} enabled={self.is_enabled} rtp={self.rtp_percent}%>'
 
 
 class WheelPrize(Base):
     """Приз на колесе удачи."""
-    __tablename__ = "wheel_prizes"
+
+    __tablename__ = 'wheel_prizes'
 
     id = Column(Integer, primary_key=True, index=True)
-    config_id = Column(Integer, ForeignKey("wheel_configs.id", ondelete="CASCADE"), nullable=False)
+    config_id = Column(Integer, ForeignKey('wheel_configs.id', ondelete='CASCADE'), nullable=False)
 
     # Тип и значение приза
     prize_type = Column(String(50), nullable=False)  # WheelPrizeType
@@ -2575,8 +2500,8 @@ class WheelPrize(Base):
 
     # Отображение
     display_name = Column(String(100), nullable=False)
-    emoji = Column(String(10), default="🎁", nullable=False)
-    color = Column(String(20), default="#3B82F6", nullable=False)  # HEX цвет сектора
+    emoji = Column(String(10), default='🎁', nullable=False)
+    color = Column(String(20), default='#3B82F6', nullable=False)  # HEX цвет сектора
 
     # Стоимость приза для расчета RTP (в копейках)
     prize_value_kopeks = Column(Integer, default=0, nullable=False)
@@ -2594,8 +2519,8 @@ class WheelPrize(Base):
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
-    config = relationship("WheelConfig", back_populates="prizes")
-    spins = relationship("WheelSpin", back_populates="prize")
+    config = relationship('WheelConfig', back_populates='prizes')
+    spins = relationship('WheelSpin', back_populates='prize')
 
     def __repr__(self) -> str:
         return f"<WheelPrize id={self.id} type={self.prize_type} name='{self.display_name}'>"
@@ -2603,14 +2528,13 @@ class WheelPrize(Base):
 
 class WheelSpin(Base):
     """История спинов колеса удачи."""
-    __tablename__ = "wheel_spins"
-    __table_args__ = (
-        Index("ix_wheel_spins_user_created", "user_id", "created_at"),
-    )
+
+    __tablename__ = 'wheel_spins'
+    __table_args__ = (Index('ix_wheel_spins_user_created', 'user_id', 'created_at'),)
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    prize_id = Column(Integer, ForeignKey("wheel_prizes.id", ondelete="SET NULL"), nullable=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    prize_id = Column(Integer, ForeignKey('wheel_prizes.id', ondelete='SET NULL'), nullable=True)
 
     # Способ оплаты
     payment_type = Column(String(50), nullable=False)  # WheelSpinPaymentType
@@ -2624,7 +2548,7 @@ class WheelSpin(Base):
     prize_value_kopeks = Column(Integer, nullable=False)  # Стоимость приза в копейках
 
     # Сгенерированный промокод (если приз - промокод)
-    generated_promocode_id = Column(Integer, ForeignKey("promocodes.id"), nullable=True)
+    generated_promocode_id = Column(Integer, ForeignKey('promocodes.id'), nullable=True)
 
     # Флаг успешного начисления
     is_applied = Column(Boolean, default=False, nullable=False)
@@ -2632,9 +2556,9 @@ class WheelSpin(Base):
 
     created_at = Column(DateTime, default=func.now())
 
-    user = relationship("User", backref="wheel_spins")
-    prize = relationship("WheelPrize", back_populates="spins")
-    generated_promocode = relationship("PromoCode")
+    user = relationship('User', backref='wheel_spins')
+    prize = relationship('WheelPrize', back_populates='spins')
+    generated_promocode = relationship('PromoCode')
 
     @property
     def prize_value_rubles(self) -> float:
@@ -2652,15 +2576,16 @@ class WheelSpin(Base):
 
 class TicketNotification(Base):
     """Уведомления о тикетах для кабинета (веб-интерфейс)."""
-    __tablename__ = "ticket_notifications"
+
+    __tablename__ = 'ticket_notifications'
     __table_args__ = (
-        Index("ix_ticket_notifications_user_read", "user_id", "is_read"),
-        Index("ix_ticket_notifications_admin_read", "is_for_admin", "is_read"),
+        Index('ix_ticket_notifications_user_read', 'user_id', 'is_read'),
+        Index('ix_ticket_notifications_admin_read', 'is_for_admin', 'is_read'),
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    ticket_id = Column(Integer, ForeignKey("tickets.id", ondelete="CASCADE"), nullable=False, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    ticket_id = Column(Integer, ForeignKey('tickets.id', ondelete='CASCADE'), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
 
     # Тип уведомления: new_ticket, admin_reply, user_reply
     notification_type = Column(String(50), nullable=False)
@@ -2677,8 +2602,8 @@ class TicketNotification(Base):
     created_at = Column(DateTime, default=func.now())
     read_at = Column(DateTime, nullable=True)
 
-    ticket = relationship("Ticket", backref="notifications")
-    user = relationship("User", backref="ticket_notifications")
+    ticket = relationship('Ticket', backref='notifications')
+    user = relationship('User', backref='ticket_notifications')
 
     def __repr__(self) -> str:
-        return f"<TicketNotification id={self.id} type={self.notification_type} for_admin={self.is_for_admin}>"
+        return f'<TicketNotification id={self.id} type={self.notification_type} for_admin={self.is_for_admin}>'

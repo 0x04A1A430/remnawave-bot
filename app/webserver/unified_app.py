@@ -3,21 +3,18 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from aiogram import Bot, Dispatcher
 from fastapi import FastAPI, status
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from aiogram import Bot
-from aiogram import Dispatcher
-
+from app.cabinet.routes import router as cabinet_router
 from app.config import settings
 from app.services.payment_service import PaymentService
 from app.webapi.app import create_web_api_app
 from app.webapi.docs import add_redoc_endpoint
-from app.cabinet.routes import router as cabinet_router
 
-from . import payments
-from . import telegram
+from . import payments, telegram
 
 
 logger = logging.getLogger(__name__)
@@ -27,12 +24,12 @@ def _attach_docs_alias(app: FastAPI, docs_url: str | None) -> None:
     if not docs_url:
         return
 
-    alias_path = "/doc"
+    alias_path = '/doc'
     if alias_path == docs_url:
         return
 
     for route in app.router.routes:
-        if getattr(route, "path", None) == alias_path:
+        if getattr(route, 'path', None) == alias_path:
             return
 
     target_url = docs_url
@@ -49,30 +46,31 @@ def _create_base_app() -> FastAPI:
         app = create_web_api_app()
     else:
         app = FastAPI(
-            title="Bedolaga Unified Server",
+            title='Bedolaga Unified Server',
             version=settings.WEB_API_VERSION,
-            docs_url=docs_config.get("docs_url"),
+            docs_url=docs_config.get('docs_url'),
             redoc_url=None,
-            openapi_url=docs_config.get("openapi_url"),
+            openapi_url=docs_config.get('openapi_url'),
         )
 
         add_redoc_endpoint(
             app,
-            redoc_url=docs_config.get("redoc_url"),
-            openapi_url=docs_config.get("openapi_url"),
-            title="Bedolaga Unified Server",
+            redoc_url=docs_config.get('redoc_url'),
+            openapi_url=docs_config.get('openapi_url'),
+            title='Bedolaga Unified Server',
         )
 
         # Add cabinet routes even when web API is disabled
         if settings.is_cabinet_enabled():
             from fastapi.middleware.cors import CORSMiddleware
+
             cabinet_origins = settings.get_cabinet_allowed_origins()
             app.add_middleware(
                 CORSMiddleware,
-                allow_origins=["*"] if "*" in cabinet_origins else cabinet_origins,
+                allow_origins=['*'] if '*' in cabinet_origins else cabinet_origins,
                 allow_credentials=True,
-                allow_methods=["*"],
-                allow_headers=["*"],
+                allow_methods=['*'],
+                allow_headers=['*'],
             )
             app.include_router(cabinet_router)
 
@@ -83,14 +81,14 @@ def _create_base_app() -> FastAPI:
 def _mount_miniapp_static(app: FastAPI) -> tuple[bool, Path]:
     static_path: Path = settings.get_miniapp_static_path()
     if not static_path.exists():
-        logger.debug("Miniapp static path %s does not exist, skipping mount", static_path)
+        logger.debug('Miniapp static path %s does not exist, skipping mount', static_path)
         return False, static_path
 
     try:
-        app.mount("/miniapp/static", StaticFiles(directory=static_path), name="miniapp-static")
-        logger.info("📦 Miniapp static files mounted at /miniapp/static from %s", static_path)
+        app.mount('/miniapp/static', StaticFiles(directory=static_path), name='miniapp-static')
+        logger.info('📦 Miniapp static files mounted at /miniapp/static from %s', static_path)
     except RuntimeError as error:  # pragma: no cover - defensive guard
-        logger.warning("Не удалось смонтировать статические файлы миниаппа: %s", error)
+        logger.warning('Не удалось смонтировать статические файлы миниаппа: %s', error)
         return False, static_path
 
     return True, static_path
@@ -113,14 +111,14 @@ def create_unified_app(
     if payments_router:
         app.include_router(payments_router)
     payment_providers_state = {
-        "tribute": settings.TRIBUTE_ENABLED,
-        "mulenpay": settings.is_mulenpay_enabled(),
-        "cryptobot": settings.is_cryptobot_enabled(),
-        "yookassa": settings.is_yookassa_enabled(),
-        "pal24": settings.is_pal24_enabled(),
-        "wata": settings.is_wata_enabled(),
-        "heleket": settings.is_heleket_enabled(),
-        "freekassa": settings.is_freekassa_enabled(),
+        'tribute': settings.TRIBUTE_ENABLED,
+        'mulenpay': settings.is_mulenpay_enabled(),
+        'cryptobot': settings.is_cryptobot_enabled(),
+        'yookassa': settings.is_yookassa_enabled(),
+        'pal24': settings.is_pal24_enabled(),
+        'wata': settings.is_wata_enabled(),
+        'heleket': settings.is_heleket_enabled(),
+        'freekassa': settings.is_freekassa_enabled(),
     }
 
     if enable_telegram_webhook:
@@ -134,11 +132,11 @@ def create_unified_app(
         )
         app.state.telegram_webhook_processor = telegram_processor
 
-        @app.on_event("startup")
+        @app.on_event('startup')
         async def start_telegram_webhook_processor() -> None:  # pragma: no cover - event hook
             await telegram_processor.start()
 
-        @app.on_event("shutdown")
+        @app.on_event('shutdown')
         async def stop_telegram_webhook_processor() -> None:  # pragma: no cover - event hook
             await telegram_processor.stop()
 
@@ -148,40 +146,40 @@ def create_unified_app(
 
     miniapp_mounted, miniapp_path = _mount_miniapp_static(app)
 
-    unified_health_path = "/health/unified" if settings.is_web_api_enabled() else "/health"
+    unified_health_path = '/health/unified' if settings.is_web_api_enabled() else '/health'
 
     @app.get(unified_health_path)
     async def unified_health() -> JSONResponse:
         webhook_path = settings.get_telegram_webhook_path() if enable_telegram_webhook else None
 
         telegram_state = {
-            "enabled": enable_telegram_webhook,
-            "running": bool(telegram_processor and telegram_processor.is_running),
-            "url": settings.get_telegram_webhook_url(),
-            "path": webhook_path,
-            "secret_configured": bool(settings.WEBHOOK_SECRET_TOKEN),
-            "queue_maxsize": settings.get_webhook_queue_maxsize(),
-            "workers": settings.get_webhook_worker_count(),
+            'enabled': enable_telegram_webhook,
+            'running': bool(telegram_processor and telegram_processor.is_running),
+            'url': settings.get_telegram_webhook_url(),
+            'path': webhook_path,
+            'secret_configured': bool(settings.WEBHOOK_SECRET_TOKEN),
+            'queue_maxsize': settings.get_webhook_queue_maxsize(),
+            'workers': settings.get_webhook_worker_count(),
         }
 
         payment_state = {
-            "enabled": bool(payments_router),
-            "providers": payment_providers_state,
+            'enabled': bool(payments_router),
+            'providers': payment_providers_state,
         }
 
         miniapp_state = {
-            "mounted": miniapp_mounted,
-            "path": str(miniapp_path),
+            'mounted': miniapp_mounted,
+            'path': str(miniapp_path),
         }
 
         return JSONResponse(
             {
-                "status": "ok",
-                "bot_run_mode": settings.get_bot_run_mode(),
-                "web_api_enabled": settings.is_web_api_enabled(),
-                "payment_webhooks": payment_state,
-                "telegram_webhook": telegram_state,
-                "miniapp_static": miniapp_state,
+                'status': 'ok',
+                'bot_run_mode': settings.get_bot_run_mode(),
+                'web_api_enabled': settings.is_web_api_enabled(),
+                'payment_webhooks': payment_state,
+                'telegram_webhook': telegram_state,
+                'miniapp_static': miniapp_state,
             }
         )
 

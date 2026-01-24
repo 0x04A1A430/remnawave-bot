@@ -22,9 +22,9 @@ def _build_user_with_subscription(actual_status: str, is_trial: bool, days_left:
 
 def test_get_subscription_status_marks_trial_as_trial():
     texts = DummyTexts()
-    user = _build_user_with_subscription(actual_status="active", is_trial=True, days_left=5)
+    user = _build_user_with_subscription(actual_status='active', is_trial=True, days_left=5)
 
     status_text = _get_subscription_status(user, texts)
 
-    assert "Тестовая подписка" in status_text
-    assert "Активна" not in status_text
+    assert 'Тестовая подписка' in status_text
+    assert 'Активна' not in status_text

@@ -35,7 +35,7 @@ class TaxAPI:
         Raises:
             DomainException: For API errors
         """
-        response = await self.http.get("/taxes")
+        response = await self.http.get('/taxes')
         return response.json()  # type: ignore[no-any-return]
 
     async def history(self, oktmo: str | None = None) -> dict[str, Any]:
@@ -53,13 +53,11 @@ class TaxAPI:
         Raises:
             DomainException: For API errors
         """
-        request_data = {"oktmo": oktmo}
-        response = await self.http.post("/taxes/history", json_data=request_data)
+        request_data = {'oktmo': oktmo}
+        response = await self.http.post('/taxes/history', json_data=request_data)
         return response.json()  # type: ignore[no-any-return]
 
-    async def payments(
-        self, oktmo: str | None = None, only_paid: bool = False
-    ) -> dict[str, Any]:
+    async def payments(self, oktmo: str | None = None, only_paid: bool = False) -> dict[str, Any]:
         """
         Get tax payment records.
 
@@ -76,8 +74,8 @@ class TaxAPI:
             DomainException: For API errors
         """
         request_data = {
-            "oktmo": oktmo,
-            "onlyPaid": only_paid,
+            'oktmo': oktmo,
+            'onlyPaid': only_paid,
         }
-        response = await self.http.post("/taxes/payments", json_data=request_data)
+        response = await self.http.post('/taxes/payments', json_data=request_data)
         return response.json()  # type: ignore[no-any-return]

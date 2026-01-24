@@ -17,13 +17,13 @@ import tarfile
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 from aiogram import Bot
 from aiogram.types import FSInputFile
 
 from app.config import settings
 from app.utils.timezone import get_local_timezone
+
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ class LogRotationStatus:
     rotation_time: str
     keep_days: int
     send_to_telegram: bool
-    next_rotation: Optional[str]
+    next_rotation: str | None
     log_dir: str
     archive_count: int
 
@@ -45,33 +45,33 @@ class LogRotationStatus:
 class LogRotationService:
     """Сервис ежедневной ротации и архивации логов."""
 
-    def __init__(self, bot: Optional[Bot] = None):
+    def __init__(self, bot: Bot | None = None):
         self.bot = bot
-        self._rotation_task: Optional[asyncio.Task] = None
+        self._rotation_task: asyncio.Task | None = None
         self._running = False
-        self._handlers: List[logging.Handler] = []
+        self._handlers: list[logging.Handler] = []
 
         # Пути
         self.log_dir = Path(settings.LOG_DIR).resolve()
-        self.current_dir = self.log_dir / "current"
-        self.archive_dir = self.log_dir / "archive"
+        self.current_dir = self.log_dir / 'current'
+        self.archive_dir = self.log_dir / 'archive'
 
     @property
-    def log_files(self) -> Dict[str, Path]:
+    def log_files(self) -> dict[str, Path]:
         """Пути к текущим лог-файлам."""
         return {
-            "bot": self.current_dir / "bot.log",
-            "info": self.current_dir / settings.LOG_INFO_FILE,
-            "warning": self.current_dir / settings.LOG_WARNING_FILE,
-            "error": self.current_dir / settings.LOG_ERROR_FILE,
-            "payments": self.current_dir / settings.LOG_PAYMENTS_FILE,
+            'bot': self.current_dir / 'bot.log',
+            'info': self.current_dir / settings.LOG_INFO_FILE,
+            'warning': self.current_dir / settings.LOG_WARNING_FILE,
+            'error': self.current_dir / settings.LOG_ERROR_FILE,
+            'payments': self.current_dir / settings.LOG_PAYMENTS_FILE,
         }
 
     def set_bot(self, bot: Bot) -> None:
         """Установить экземпляр бота для отправки логов."""
         self.bot = bot
 
-    def register_handlers(self, handlers: List[logging.Handler]) -> None:
+    def register_handlers(self, handlers: list[logging.Handler]) -> None:
         """Зарегистрировать хэндлеры для управления при ротации."""
         self._handlers = handlers
 
@@ -87,7 +87,7 @@ class LogRotationService:
 
         self._running = True
         self._rotation_task = asyncio.create_task(self._rotation_loop())
-        logger.info("Сервис ротации логов запущен")
+        logger.info('Сервис ротации логов запущен')
 
     async def stop(self) -> None:
         """Остановить сервис ротации."""
@@ -98,7 +98,7 @@ class LogRotationService:
                 await self._rotation_task
             except asyncio.CancelledError:
                 pass
-        logger.info("Сервис ротации логов остановлен")
+        logger.info('Сервис ротации логов остановлен')
 
     def is_running(self) -> bool:
         """Проверить, запущен ли сервис."""
@@ -113,8 +113,8 @@ class LogRotationService:
 
             if wait_seconds > 0:
                 logger.info(
-                    "Следующая ротация логов: %s (через %.1f часов)",
-                    next_rotation.strftime("%Y-%m-%d %H:%M"),
+                    'Следующая ротация логов: %s (через %.1f часов)',
+                    next_rotation.strftime('%Y-%m-%d %H:%M'),
                     wait_seconds / 3600,
                 )
                 try:
@@ -132,12 +132,10 @@ class LogRotationService:
         # Парсим время ротации
         time_str = settings.LOG_ROTATION_TIME
         try:
-            hours, minutes = map(int, time_str.split(":"))
+            hours, minutes = map(int, time_str.split(':'))
         except ValueError:
             hours, minutes = 0, 0
-            logger.warning(
-                "Некорректное LOG_ROTATION_TIME='%s', используем 00:00", time_str
-            )
+            logger.warning("Некорректное LOG_ROTATION_TIME='%s', используем 00:00", time_str)
 
         next_rotation = now.replace(hour=hours, minute=minutes, second=0, microsecond=0)
 
@@ -147,7 +145,7 @@ class LogRotationService:
 
         return next_rotation
 
-    async def rotate_logs(self) -> Tuple[bool, str]:
+    async def rotate_logs(self) -> tuple[bool, str]:
         """Выполнить ротацию логов.
 
         Создаёт один архив logs_YYYY-MM-DD.tar.gz со всеми лог-файлами за день.
@@ -156,12 +154,10 @@ class LogRotationService:
             Tuple[bool, str]: (успех, сообщение)
         """
         try:
-            logger.info("Начинаем ротацию логов...")
+            logger.info('Начинаем ротацию логов...')
 
             # Дата для архива (вчера, т.к. логи были за предыдущие сутки)
-            yesterday = (
-                datetime.now(get_local_timezone()) - timedelta(days=1)
-            ).strftime("%Y-%m-%d")
+            yesterday = (datetime.now(get_local_timezone()) - timedelta(days=1)).strftime('%Y-%m-%d')
 
             # Сбрасываем буферы хэндлеров перед архивацией
             for handler in self._handlers:
@@ -171,13 +167,13 @@ class LogRotationService:
                     pass
 
             # Собираем файлы для архивации
-            files_to_archive: List[Tuple[Path, str]] = []
+            files_to_archive: list[tuple[Path, str]] = []
             for name, log_path in self.log_files.items():
                 if log_path.exists() and log_path.stat().st_size > 0:
-                    files_to_archive.append((log_path, f"{name}.log"))
+                    files_to_archive.append((log_path, f'{name}.log'))
 
             if not files_to_archive:
-                message = "Нет логов для архивации"
+                message = 'Нет логов для архивации'
                 logger.info(message)
                 return True, message
 
@@ -187,7 +183,7 @@ class LogRotationService:
             if archive_path:
                 # Очищаем текущие лог-файлы
                 for log_path, _ in files_to_archive:
-                    log_path.write_text("")
+                    log_path.write_text('')
 
                 # Очистка старых архивов
                 await self._cleanup_old_archives()
@@ -196,24 +192,23 @@ class LogRotationService:
                 if settings.LOG_ROTATION_SEND_TO_TELEGRAM and self.bot:
                     await self._send_logs_to_telegram(archive_path, yesterday)
 
-                message = f"Ротация логов завершена. Архив: {archive_path.name}"
+                message = f'Ротация логов завершена. Архив: {archive_path.name}'
                 logger.info(message)
                 return True, message
-            else:
-                message = "Ошибка создания архива логов"
-                logger.error(message)
-                return False, message
+            message = 'Ошибка создания архива логов'
+            logger.error(message)
+            return False, message
 
         except Exception as error:
-            message = f"Ошибка ротации логов: {error}"
+            message = f'Ошибка ротации логов: {error}'
             logger.error(message, exc_info=True)
             return False, message
 
     async def _create_archive(
         self,
-        files: List[Tuple[Path, str]],
+        files: list[tuple[Path, str]],
         date_str: str,
-    ) -> Optional[Path]:
+    ) -> Path | None:
         """Создать архив со всеми логами за день.
 
         Args:
@@ -225,11 +220,11 @@ class LogRotationService:
         """
         try:
             if settings.LOG_ROTATION_COMPRESS:
-                archive_name = f"logs_{date_str}.tar.gz"
-                mode = "w:gz"
+                archive_name = f'logs_{date_str}.tar.gz'
+                mode = 'w:gz'
             else:
-                archive_name = f"logs_{date_str}.tar"
-                mode = "w"
+                archive_name = f'logs_{date_str}.tar'
+                mode = 'w'
 
             archive_path = self.archive_dir / archive_name
 
@@ -239,11 +234,11 @@ class LogRotationService:
                         tar.add(file_path, arcname=arcname)
 
             await asyncio.to_thread(_create_tar)
-            logger.debug("Создан архив: %s", archive_path)
+            logger.debug('Создан архив: %s', archive_path)
             return archive_path
 
         except Exception as error:
-            logger.error("Ошибка создания архива: %s", error)
+            logger.error('Ошибка создания архива: %s', error)
             return None
 
     async def _cleanup_old_archives(self) -> None:
@@ -261,18 +256,18 @@ class LogRotationService:
 
             # Извлекаем дату из имени файла logs_YYYY-MM-DD.tar.gz
             name = archive_file.name
-            if not name.startswith("logs_"):
+            if not name.startswith('logs_'):
                 continue
 
             try:
                 # logs_2025-01-26.tar.gz -> 2025-01-26
-                date_part = name.replace("logs_", "").replace(".tar.gz", "").replace(".tar", "")
-                file_date = datetime.strptime(date_part, "%Y-%m-%d")
+                date_part = name.replace('logs_', '').replace('.tar.gz', '').replace('.tar', '')
+                file_date = datetime.strptime(date_part, '%Y-%m-%d')
                 file_date = file_date.replace(tzinfo=get_local_timezone())
 
                 if file_date < cutoff_date:
                     archive_file.unlink()
-                    logger.info("Удален старый архив логов: %s", archive_file.name)
+                    logger.info('Удален старый архив логов: %s', archive_file.name)
             except ValueError:
                 # Пропускаем файлы с некорректным форматом имени
                 pass
@@ -285,7 +280,7 @@ class LogRotationService:
         """Отправить архив логов в Telegram."""
         chat_id = settings.get_log_rotation_chat_id()
         if not chat_id:
-            logger.warning("LOG_ROTATION_CHAT_ID не задан, пропускаем отправку")
+            logger.warning('LOG_ROTATION_CHAT_ID не задан, пропускаем отправку')
             return
 
         topic_id = settings.get_log_rotation_topic_id()
@@ -293,31 +288,31 @@ class LogRotationService:
         try:
             file_size_kb = archive_path.stat().st_size / 1024
             caption = (
-                f"<b>Логи бота</b>\n"
-                f"Дата: {date_str}\n"
-                f"Файл: <code>{archive_path.name}</code>\n"
-                f"Размер: {file_size_kb:.1f} KB"
+                f'<b>Логи бота</b>\n'
+                f'Дата: {date_str}\n'
+                f'Файл: <code>{archive_path.name}</code>\n'
+                f'Размер: {file_size_kb:.1f} KB'
             )
 
             send_kwargs = {
-                "chat_id": chat_id,
-                "document": FSInputFile(archive_path),
-                "caption": caption,
-                "parse_mode": "HTML",
+                'chat_id': chat_id,
+                'document': FSInputFile(archive_path),
+                'caption': caption,
+                'parse_mode': 'HTML',
             }
 
             if topic_id:
-                send_kwargs["message_thread_id"] = topic_id
+                send_kwargs['message_thread_id'] = topic_id
 
             await self.bot.send_document(**send_kwargs)
-            logger.info("Архив логов отправлен: %s", archive_path.name)
+            logger.info('Архив логов отправлен: %s', archive_path.name)
 
         except Exception as error:
-            logger.error("Ошибка отправки архива %s: %s", archive_path.name, error)
+            logger.error('Ошибка отправки архива %s: %s', archive_path.name, error)
 
     # === Ручные операции ===
 
-    async def force_rotate(self) -> Tuple[bool, str]:
+    async def force_rotate(self) -> tuple[bool, str]:
         """Принудительная ротация (для админ-команды)."""
         return await self.rotate_logs()
 
@@ -326,10 +321,7 @@ class LogRotationService:
         archive_count = 0
         if self.archive_dir.exists():
             # Считаем файлы logs_*.tar.gz или logs_*.tar
-            archive_count = len(
-                [f for f in self.archive_dir.iterdir()
-                 if f.is_file() and f.name.startswith("logs_")]
-            )
+            archive_count = len([f for f in self.archive_dir.iterdir() if f.is_file() and f.name.startswith('logs_')])
 
         next_rotation = None
         if self._running:

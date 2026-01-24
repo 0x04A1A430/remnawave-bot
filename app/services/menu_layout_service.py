@@ -14,27 +14,28 @@
 
 # Реэкспорт для обратной совместимости
 from app.services.menu_layout import (
+    AVAILABLE_CALLBACKS,
+    BUILTIN_BUTTONS_INFO,
+    DEFAULT_MENU_CONFIG,
+    DYNAMIC_PLACEHOLDERS,
     # Константы
     MENU_LAYOUT_CONFIG_KEY,
-    DEFAULT_MENU_CONFIG,
-    BUILTIN_BUTTONS_INFO,
-    AVAILABLE_CALLBACKS,
-    DYNAMIC_PLACEHOLDERS,
     # Классы
     MenuContext,
-    MenuLayoutService,
     MenuLayoutHistoryService,
+    MenuLayoutService,
     MenuLayoutStatsService,
 )
 
+
 __all__ = [
-    "MENU_LAYOUT_CONFIG_KEY",
-    "DEFAULT_MENU_CONFIG",
-    "BUILTIN_BUTTONS_INFO",
-    "AVAILABLE_CALLBACKS",
-    "DYNAMIC_PLACEHOLDERS",
-    "MenuContext",
-    "MenuLayoutService",
-    "MenuLayoutHistoryService",
-    "MenuLayoutStatsService",
+    'AVAILABLE_CALLBACKS',
+    'BUILTIN_BUTTONS_INFO',
+    'DEFAULT_MENU_CONFIG',
+    'DYNAMIC_PLACEHOLDERS',
+    'MENU_LAYOUT_CONFIG_KEY',
+    'MenuContext',
+    'MenuLayoutHistoryService',
+    'MenuLayoutService',
+    'MenuLayoutStatsService',
 ]

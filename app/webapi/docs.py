@@ -21,13 +21,13 @@ def add_redoc_endpoint(
         return
 
     for route in app.router.routes:
-        if getattr(route, "path", None) == redoc_url:
+        if getattr(route, 'path', None) == redoc_url:
             return
 
     @app.get(redoc_url, include_in_schema=False)
     async def redoc_html():  # pragma: no cover - template rendering
         return get_redoc_html(
             openapi_url=openapi_url,
-            title=f"{title or app.title} - ReDoc",
-            redoc_js_url="https://cdn.jsdelivr.net/npm/redoc@2.1.5/bundles/redoc.standalone.js",
+            title=f'{title or app.title} - ReDoc',
+            redoc_js_url='https://cdn.jsdelivr.net/npm/redoc@2.1.5/bundles/redoc.standalone.js',
         )

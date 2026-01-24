@@ -41,11 +41,11 @@ class ReceiptAPI:
             ValueError: If receipt_uuid is empty
         """
         if not receipt_uuid.strip():
-            raise ValueError("Receipt UUID cannot be empty")
+            raise ValueError('Receipt UUID cannot be empty')
 
         # Compose URL like PHP: sprintf('/receipt/%s/%s/print', $this->profile->getInn(), $receiptUuid)
-        path = f"/receipt/{self.user_inn}/{receipt_uuid.strip()}/print"
-        return f"{self.base_endpoint}{path}"
+        path = f'/receipt/{self.user_inn}/{receipt_uuid.strip()}/print'
+        return f'{self.base_endpoint}{path}'
 
     async def json(self, receipt_uuid: str) -> dict[str, Any]:
         """
@@ -64,10 +64,10 @@ class ReceiptAPI:
             DomainException: For API errors
         """
         if not receipt_uuid.strip():
-            raise ValueError("Receipt UUID cannot be empty")
+            raise ValueError('Receipt UUID cannot be empty')
 
         # Make GET request like PHP: sprintf('/receipt/%s/%s/json', $this->profile->getInn(), $receiptUuid)
-        path = f"/receipt/{self.user_inn}/{receipt_uuid.strip()}/json"
+        path = f'/receipt/{self.user_inn}/{receipt_uuid.strip()}/json'
         response = await self.http.get(path)
 
         return response.json()  # type: ignore[no-any-return]

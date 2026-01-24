@@ -6,6 +6,7 @@ from aiogram.exceptions import TelegramBadRequest, TelegramNetworkError
 from aiogram.types import FSInputFile, InaccessibleMessage, InputMediaPhoto
 
 from app.config import settings
+
 from .message_patch import (
     LOGO_PATH,
     append_privacy_hint,
@@ -13,6 +14,7 @@ from .message_patch import (
     is_qr_message,
     prepare_privacy_safe_kwargs,
 )
+
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +31,7 @@ def _resolve_media(message: types.Message):
     if settings.ENABLE_LOGO_MODE and not is_qr_message(message):
         return FSInputFile(LOGO_PATH)
     # Только если режим логотипа выключен, используем фото из сообщения
-    elif message.photo:
+    if message.photo:
         return message.photo[-1].file_id
     return FSInputFile(LOGO_PATH)
 
@@ -37,7 +39,7 @@ def _resolve_media(message: types.Message):
 def _get_language(callback: types.CallbackQuery) -> str | None:
     try:
         user = callback.from_user
-        if user and getattr(user, "language_code", None):
+        if user and getattr(user, 'language_code', None):
             return user.language_code
     except AttributeError:
         pass
@@ -47,9 +49,9 @@ def _get_language(callback: types.CallbackQuery) -> str | None:
 def _build_base_kwargs(keyboard: types.InlineKeyboardMarkup | None, parse_mode: str | None):
     kwargs: dict[str, object] = {}
     if parse_mode is not None:
-        kwargs["parse_mode"] = parse_mode
+        kwargs['parse_mode'] = parse_mode
     if keyboard is not None:
-        kwargs["reply_markup"] = keyboard
+        kwargs['reply_markup'] = keyboard
     return kwargs
 
 
@@ -67,7 +69,7 @@ async def _answer_text(
         caption = append_privacy_hint(caption, language)
         kwargs = prepare_privacy_safe_kwargs(kwargs)
 
-    kwargs.setdefault("parse_mode", parse_mode or "HTML")
+    kwargs.setdefault('parse_mode', parse_mode or 'HTML')
 
     await callback.message.answer(
         caption,
@@ -79,11 +81,11 @@ async def edit_or_answer_photo(
     callback: types.CallbackQuery,
     caption: str,
     keyboard: types.InlineKeyboardMarkup,
-    parse_mode: str | None = "HTML",
+    parse_mode: str | None = 'HTML',
     *,
     force_text: bool = False,
 ) -> None:
-    resolved_parse_mode = parse_mode or "HTML"
+    resolved_parse_mode = parse_mode or 'HTML'
 
     # Если сообщение недоступно, отправляем новое сообщение
     if isinstance(callback.message, InaccessibleMessage):
@@ -102,7 +104,7 @@ async def edit_or_answer_photo(
                     parse_mode=resolved_parse_mode,
                 )
         except Exception as e:
-            logger.warning("Не удалось отправить новое сообщение для InaccessibleMessage: %s", e)
+            logger.warning('Не удалось отправить новое сообщение для InaccessibleMessage: %s', e)
             try:
                 await callback.message.answer(
                     caption,
@@ -149,27 +151,23 @@ async def edit_or_answer_photo(
     for attempt in range(MAX_RETRIES):
         try:
             await callback.message.edit_media(
-                InputMediaPhoto(media=media, caption=caption, parse_mode=(parse_mode or "HTML")),
+                InputMediaPhoto(media=media, caption=caption, parse_mode=(parse_mode or 'HTML')),
                 reply_markup=keyboard,
             )
             return  # Успешно — выходим
         except TelegramNetworkError as net_error:
             if attempt < MAX_RETRIES - 1:
-                logger.warning(
-                    "Сетевая ошибка edit_media (попытка %d/%d): %s",
-                    attempt + 1, MAX_RETRIES, net_error
-                )
+                logger.warning('Сетевая ошибка edit_media (попытка %d/%d): %s', attempt + 1, MAX_RETRIES, net_error)
                 await asyncio.sleep(RETRY_DELAY * (attempt + 1))
                 continue
-            else:
-                logger.error("Сетевая ошибка edit_media после %d попыток: %s", MAX_RETRIES, net_error)
-                # После всех попыток — фоллбек на текст
-                try:
-                    await callback.message.delete()
-                except Exception:
-                    pass
-                await _answer_text(callback, caption, keyboard, resolved_parse_mode)
-                return
+            logger.error('Сетевая ошибка edit_media после %d попыток: %s', MAX_RETRIES, net_error)
+            # После всех попыток — фоллбек на текст
+            try:
+                await callback.message.delete()
+            except Exception:
+                pass
+            await _answer_text(callback, caption, keyboard, resolved_parse_mode)
+            return
         except TelegramBadRequest as error:
             if is_privacy_restricted_error(error):
                 try:

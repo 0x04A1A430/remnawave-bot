@@ -6,7 +6,7 @@ import hmac
 import json
 import logging
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 import aiohttp
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +16,7 @@ from app.database.crud.webhook import (
     record_webhook_delivery,
     update_webhook_stats,
 )
+
 
 logger = logging.getLogger(__name__)
 
@@ -28,16 +29,16 @@ class DeliveryResult:
     event_type: str
     payload: dict[str, Any]
     status: str
-    response_status: Optional[int] = None
-    response_body: Optional[str] = None
-    error_message: Optional[str] = None
+    response_status: int | None = None
+    response_body: str | None = None
+    error_message: str | None = None
 
 
 class WebhookService:
     """Сервис для отправки webhooks."""
 
     def __init__(self) -> None:
-        self._session: Optional[aiohttp.ClientSession] = None
+        self._session: aiohttp.ClientSession | None = None
 
     async def _get_session(self) -> aiohttp.ClientSession:
         """Получить или создать HTTP сессию."""
@@ -54,8 +55,8 @@ class WebhookService:
     def _sign_payload(self, payload: str, secret: str) -> str:
         """Подписать payload с помощью секрета."""
         return hmac.new(
-            secret.encode("utf-8"),
-            payload.encode("utf-8"),
+            secret.encode('utf-8'),
+            payload.encode('utf-8'),
             hashlib.sha256,
         ).hexdigest()
 
@@ -69,20 +70,17 @@ class WebhookService:
         webhooks = await get_active_webhooks_for_event(db, event_type)
 
         if not webhooks:
-            logger.debug("No active webhooks for event type: %s", event_type)
+            logger.debug('No active webhooks for event type: %s', event_type)
             return
 
         # Выполняем HTTP запросы параллельно (без операций с БД)
-        tasks = [
-            self._deliver_webhook_http(webhook, event_type, payload)
-            for webhook in webhooks
-        ]
+        tasks = [self._deliver_webhook_http(webhook, event_type, payload) for webhook in webhooks]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         # Записываем результаты в БД последовательно (избегаем concurrent session access)
         for result in results:
             if isinstance(result, Exception):
-                logger.exception("Unexpected error during webhook delivery: %s", result)
+                logger.exception('Unexpected error during webhook delivery: %s', result)
                 continue
             if isinstance(result, DeliveryResult):
                 await self._record_result(db, result)
@@ -96,15 +94,15 @@ class WebhookService:
         """Выполнить HTTP доставку webhook (без операций с БД)."""
         payload_json = json.dumps(payload, default=str, ensure_ascii=False)
         headers = {
-            "Content-Type": "application/json",
-            "X-Webhook-Event": event_type,
-            "X-Webhook-Id": str(webhook.id),
+            'Content-Type': 'application/json',
+            'X-Webhook-Event': event_type,
+            'X-Webhook-Id': str(webhook.id),
         }
 
         # Добавляем подпись, если есть секрет
         if webhook.secret:
             signature = self._sign_payload(payload_json, webhook.secret)
-            headers["X-Webhook-Signature"] = f"sha256={signature}"
+            headers['X-Webhook-Signature'] = f'sha256={signature}'
 
         try:
             session = await self._get_session()
@@ -116,12 +114,12 @@ class WebhookService:
                 response_body = await response.text()
                 # Ограничиваем размер ответа для хранения
                 if len(response_body) > 1000:
-                    response_body = response_body[:1000] + "... (truncated)"
+                    response_body = response_body[:1000] + '... (truncated)'
 
-                status = "success" if 200 <= response.status < 300 else "failed"
+                status = 'success' if 200 <= response.status < 300 else 'failed'
                 error_message = None
-                if status == "failed":
-                    error_message = f"HTTP {response.status}: {response_body[:500]}"
+                if status == 'failed':
+                    error_message = f'HTTP {response.status}: {response_body[:500]}'
 
                 return DeliveryResult(
                     webhook=webhook,
@@ -133,13 +131,13 @@ class WebhookService:
                     error_message=error_message,
                 )
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return DeliveryResult(
                 webhook=webhook,
                 event_type=event_type,
                 payload=payload,
-                status="failed",
-                error_message="Request timeout",
+                status='failed',
+                error_message='Request timeout',
             )
 
         except Exception as error:
@@ -147,7 +145,7 @@ class WebhookService:
                 webhook=webhook,
                 event_type=event_type,
                 payload=payload,
-                status="failed",
+                status='failed',
                 error_message=str(error),
             )
 
@@ -165,23 +163,23 @@ class WebhookService:
                 error_message=result.error_message,
             )
 
-            await update_webhook_stats(db, result.webhook, result.status == "success")
+            await update_webhook_stats(db, result.webhook, result.status == 'success')
 
-            if result.status == "success":
+            if result.status == 'success':
                 logger.info(
-                    "Webhook %s delivered successfully to %s",
+                    'Webhook %s delivered successfully to %s',
                     result.webhook.id,
                     result.webhook.url,
                 )
             else:
                 logger.warning(
-                    "Webhook %s delivery failed: %s",
+                    'Webhook %s delivery failed: %s',
                     result.webhook.id,
                     result.error_message,
                 )
         except Exception as error:
             logger.exception(
-                "Failed to record webhook delivery result for %s: %s",
+                'Failed to record webhook delivery result for %s: %s',
                 result.webhook.id,
                 error,
             )
@@ -189,4 +187,3 @@ class WebhookService:
 
 # Глобальный экземпляр сервиса
 webhook_service = WebhookService()
-

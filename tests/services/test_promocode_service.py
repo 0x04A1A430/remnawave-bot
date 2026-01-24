@@ -1,27 +1,13 @@
 """
 Tests for PromoCodeService - focus on promo group integration
 """
-import pytest
-from unittest.mock import AsyncMock, patch
-from types import SimpleNamespace
+
+from unittest.mock import AsyncMock
 
 from app.services.promocode_service import PromoCodeService
-from app.database.models import PromoCodeType
+
 
 # Import fixtures
-from tests.fixtures.promocode_fixtures import (
-    sample_promo_group,
-    sample_user,
-    sample_promocode_promo_group,
-    mock_db_session,
-    mock_has_user_promo_group,
-    mock_add_user_to_promo_group,
-    mock_get_promo_group_by_id,
-    mock_get_user_by_id,
-    mock_get_promocode_by_code,
-    mock_check_user_promocode_usage,
-    mock_create_promocode_use,
-)
 
 
 async def test_activate_promo_group_promocode_success(
@@ -45,87 +31,48 @@ async def test_activate_promo_group_promocode_success(
 
     # Mock CRUD functions
     get_user_mock = AsyncMock(return_value=sample_user)
-    monkeypatch.setattr(
-        'app.services.promocode_service.get_user_by_id',
-        get_user_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.get_user_by_id', get_user_mock)
 
     get_promocode_mock = AsyncMock(return_value=sample_promocode_promo_group)
-    monkeypatch.setattr(
-        'app.services.promocode_service.get_promocode_by_code',
-        get_promocode_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.get_promocode_by_code', get_promocode_mock)
 
     check_usage_mock = AsyncMock(return_value=False)
-    monkeypatch.setattr(
-        'app.services.promocode_service.check_user_promocode_usage',
-        check_usage_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.check_user_promocode_usage', check_usage_mock)
 
     get_promo_group_mock = AsyncMock(return_value=sample_promo_group)
-    monkeypatch.setattr(
-        'app.services.promocode_service.get_promo_group_by_id',
-        get_promo_group_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.get_promo_group_by_id', get_promo_group_mock)
 
     has_promo_group_mock = AsyncMock(return_value=False)
-    monkeypatch.setattr(
-        'app.services.promocode_service.has_user_promo_group',
-        has_promo_group_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.has_user_promo_group', has_promo_group_mock)
 
     add_promo_group_mock = AsyncMock()
-    monkeypatch.setattr(
-        'app.services.promocode_service.add_user_to_promo_group',
-        add_promo_group_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.add_user_to_promo_group', add_promo_group_mock)
 
     create_usage_mock = AsyncMock()
-    monkeypatch.setattr(
-        'app.services.promocode_service.create_promocode_use',
-        create_usage_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.create_promocode_use', create_usage_mock)
 
     # Execute
     service = PromoCodeService()
-    result = await service.activate_promocode(
-        mock_db_session,
-        sample_user.id,
-        "VIPGROUP"
-    )
+    result = await service.activate_promocode(mock_db_session, sample_user.id, 'VIPGROUP')
 
     # Assertions
-    assert result["success"] is True
-    assert "Test VIP Group" in result["description"]
-    assert result["promocode"]["promo_group_id"] == sample_promo_group.id
+    assert result['success'] is True
+    assert 'Test VIP Group' in result['description']
+    assert result['promocode']['promo_group_id'] == sample_promo_group.id
 
     # Verify promo group was fetched
-    get_promo_group_mock.assert_awaited_once_with(
-        mock_db_session,
-        sample_promo_group.id
-    )
+    get_promo_group_mock.assert_awaited_once_with(mock_db_session, sample_promo_group.id)
 
     # Verify user promo group check
-    has_promo_group_mock.assert_awaited_once_with(
-        mock_db_session,
-        sample_user.id,
-        sample_promo_group.id
-    )
+    has_promo_group_mock.assert_awaited_once_with(mock_db_session, sample_user.id, sample_promo_group.id)
 
     # Verify promo group assignment
     add_promo_group_mock.assert_awaited_once_with(
-        mock_db_session,
-        sample_user.id,
-        sample_promo_group.id,
-        assigned_by="promocode"
+        mock_db_session, sample_user.id, sample_promo_group.id, assigned_by='promocode'
     )
 
     # Verify usage recorded
-    create_usage_mock.assert_awaited_once_with(
-        mock_db_session,
-        sample_promocode_promo_group.id,
-        sample_user.id
-    )
+    create_usage_mock.assert_awaited_once_with(mock_db_session, sample_promocode_promo_group.id, sample_user.id)
 
     # Verify counter incremented
     assert sample_promocode_promo_group.current_uses == 21
@@ -152,52 +99,30 @@ async def test_activate_promo_group_user_already_has_group(
 
     # Mock CRUD functions
     get_user_mock = AsyncMock(return_value=sample_user)
-    monkeypatch.setattr(
-        'app.services.promocode_service.get_user_by_id',
-        get_user_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.get_user_by_id', get_user_mock)
 
     get_promocode_mock = AsyncMock(return_value=sample_promocode_promo_group)
-    monkeypatch.setattr(
-        'app.services.promocode_service.get_promocode_by_code',
-        get_promocode_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.get_promocode_by_code', get_promocode_mock)
 
     check_usage_mock = AsyncMock(return_value=False)
-    monkeypatch.setattr(
-        'app.services.promocode_service.check_user_promocode_usage',
-        check_usage_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.check_user_promocode_usage', check_usage_mock)
 
     # User ALREADY HAS the promo group
     has_promo_group_mock = AsyncMock(return_value=True)
-    monkeypatch.setattr(
-        'app.services.promocode_service.has_user_promo_group',
-        has_promo_group_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.has_user_promo_group', has_promo_group_mock)
 
     add_promo_group_mock = AsyncMock()
-    monkeypatch.setattr(
-        'app.services.promocode_service.add_user_to_promo_group',
-        add_promo_group_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.add_user_to_promo_group', add_promo_group_mock)
 
     create_usage_mock = AsyncMock()
-    monkeypatch.setattr(
-        'app.services.promocode_service.create_promocode_use',
-        create_usage_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.create_promocode_use', create_usage_mock)
 
     # Execute
     service = PromoCodeService()
-    result = await service.activate_promocode(
-        mock_db_session,
-        sample_user.id,
-        "VIPGROUP"
-    )
+    result = await service.activate_promocode(mock_db_session, sample_user.id, 'VIPGROUP')
 
     # Assertions
-    assert result["success"] is True
+    assert result['success'] is True
 
     # Verify promo group assignment was NOT called
     add_promo_group_mock.assert_not_awaited()
@@ -225,58 +150,33 @@ async def test_activate_promo_group_group_not_found(
 
     # Mock CRUD functions
     get_user_mock = AsyncMock(return_value=sample_user)
-    monkeypatch.setattr(
-        'app.services.promocode_service.get_user_by_id',
-        get_user_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.get_user_by_id', get_user_mock)
 
     get_promocode_mock = AsyncMock(return_value=sample_promocode_promo_group)
-    monkeypatch.setattr(
-        'app.services.promocode_service.get_promocode_by_code',
-        get_promocode_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.get_promocode_by_code', get_promocode_mock)
 
     check_usage_mock = AsyncMock(return_value=False)
-    monkeypatch.setattr(
-        'app.services.promocode_service.check_user_promocode_usage',
-        check_usage_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.check_user_promocode_usage', check_usage_mock)
 
     has_promo_group_mock = AsyncMock(return_value=False)
-    monkeypatch.setattr(
-        'app.services.promocode_service.has_user_promo_group',
-        has_promo_group_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.has_user_promo_group', has_promo_group_mock)
 
     # Promo group NOT FOUND
     get_promo_group_mock = AsyncMock(return_value=None)
-    monkeypatch.setattr(
-        'app.services.promocode_service.get_promo_group_by_id',
-        get_promo_group_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.get_promo_group_by_id', get_promo_group_mock)
 
     add_promo_group_mock = AsyncMock()
-    monkeypatch.setattr(
-        'app.services.promocode_service.add_user_to_promo_group',
-        add_promo_group_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.add_user_to_promo_group', add_promo_group_mock)
 
     create_usage_mock = AsyncMock()
-    monkeypatch.setattr(
-        'app.services.promocode_service.create_promocode_use',
-        create_usage_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.create_promocode_use', create_usage_mock)
 
     # Execute
     service = PromoCodeService()
-    result = await service.activate_promocode(
-        mock_db_session,
-        sample_user.id,
-        "VIPGROUP"
-    )
+    result = await service.activate_promocode(mock_db_session, sample_user.id, 'VIPGROUP')
 
     # Assertions
-    assert result["success"] is True  # Still succeeds!
+    assert result['success'] is True  # Still succeeds!
 
     # Verify promo group was attempted to fetch
     get_promo_group_mock.assert_awaited_once()
@@ -307,58 +207,33 @@ async def test_activate_promo_group_assignment_error(
 
     # Mock CRUD functions
     get_user_mock = AsyncMock(return_value=sample_user)
-    monkeypatch.setattr(
-        'app.services.promocode_service.get_user_by_id',
-        get_user_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.get_user_by_id', get_user_mock)
 
     get_promocode_mock = AsyncMock(return_value=sample_promocode_promo_group)
-    monkeypatch.setattr(
-        'app.services.promocode_service.get_promocode_by_code',
-        get_promocode_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.get_promocode_by_code', get_promocode_mock)
 
     check_usage_mock = AsyncMock(return_value=False)
-    monkeypatch.setattr(
-        'app.services.promocode_service.check_user_promocode_usage',
-        check_usage_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.check_user_promocode_usage', check_usage_mock)
 
     get_promo_group_mock = AsyncMock(return_value=sample_promo_group)
-    monkeypatch.setattr(
-        'app.services.promocode_service.get_promo_group_by_id',
-        get_promo_group_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.get_promo_group_by_id', get_promo_group_mock)
 
     has_promo_group_mock = AsyncMock(return_value=False)
-    monkeypatch.setattr(
-        'app.services.promocode_service.has_user_promo_group',
-        has_promo_group_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.has_user_promo_group', has_promo_group_mock)
 
     # add_user_to_promo_group RAISES EXCEPTION
-    add_promo_group_mock = AsyncMock(side_effect=Exception("Database error"))
-    monkeypatch.setattr(
-        'app.services.promocode_service.add_user_to_promo_group',
-        add_promo_group_mock
-    )
+    add_promo_group_mock = AsyncMock(side_effect=Exception('Database error'))
+    monkeypatch.setattr('app.services.promocode_service.add_user_to_promo_group', add_promo_group_mock)
 
     create_usage_mock = AsyncMock()
-    monkeypatch.setattr(
-        'app.services.promocode_service.create_promocode_use',
-        create_usage_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.create_promocode_use', create_usage_mock)
 
     # Execute
     service = PromoCodeService()
-    result = await service.activate_promocode(
-        mock_db_session,
-        sample_user.id,
-        "VIPGROUP"
-    )
+    result = await service.activate_promocode(mock_db_session, sample_user.id, 'VIPGROUP')
 
     # Assertions
-    assert result["success"] is True  # Still succeeds!
+    assert result['success'] is True  # Still succeeds!
 
     # Verify promo group assignment was attempted
     add_promo_group_mock.assert_awaited_once()
@@ -384,61 +259,36 @@ async def test_activate_promo_group_assigned_by_value(
 
     # Mock CRUD functions
     get_user_mock = AsyncMock(return_value=sample_user)
-    monkeypatch.setattr(
-        'app.services.promocode_service.get_user_by_id',
-        get_user_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.get_user_by_id', get_user_mock)
 
     get_promocode_mock = AsyncMock(return_value=sample_promocode_promo_group)
-    monkeypatch.setattr(
-        'app.services.promocode_service.get_promocode_by_code',
-        get_promocode_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.get_promocode_by_code', get_promocode_mock)
 
     check_usage_mock = AsyncMock(return_value=False)
-    monkeypatch.setattr(
-        'app.services.promocode_service.check_user_promocode_usage',
-        check_usage_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.check_user_promocode_usage', check_usage_mock)
 
     get_promo_group_mock = AsyncMock(return_value=sample_promo_group)
-    monkeypatch.setattr(
-        'app.services.promocode_service.get_promo_group_by_id',
-        get_promo_group_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.get_promo_group_by_id', get_promo_group_mock)
 
     has_promo_group_mock = AsyncMock(return_value=False)
-    monkeypatch.setattr(
-        'app.services.promocode_service.has_user_promo_group',
-        has_promo_group_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.has_user_promo_group', has_promo_group_mock)
 
     add_promo_group_mock = AsyncMock()
-    monkeypatch.setattr(
-        'app.services.promocode_service.add_user_to_promo_group',
-        add_promo_group_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.add_user_to_promo_group', add_promo_group_mock)
 
     create_usage_mock = AsyncMock()
-    monkeypatch.setattr(
-        'app.services.promocode_service.create_promocode_use',
-        create_usage_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.create_promocode_use', create_usage_mock)
 
     # Execute
     service = PromoCodeService()
-    await service.activate_promocode(
-        mock_db_session,
-        sample_user.id,
-        "VIPGROUP"
-    )
+    await service.activate_promocode(mock_db_session, sample_user.id, 'VIPGROUP')
 
     # Verify assigned_by="promocode"
     add_promo_group_mock.assert_awaited_once_with(
         mock_db_session,
         sample_user.id,
         sample_promo_group.id,
-        assigned_by="promocode"  # Critical assertion
+        assigned_by='promocode',  # Critical assertion
     )
 
 
@@ -459,57 +309,32 @@ async def test_activate_promo_group_description_includes_group_name(
 
     # Mock CRUD functions
     get_user_mock = AsyncMock(return_value=sample_user)
-    monkeypatch.setattr(
-        'app.services.promocode_service.get_user_by_id',
-        get_user_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.get_user_by_id', get_user_mock)
 
     get_promocode_mock = AsyncMock(return_value=sample_promocode_promo_group)
-    monkeypatch.setattr(
-        'app.services.promocode_service.get_promocode_by_code',
-        get_promocode_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.get_promocode_by_code', get_promocode_mock)
 
     check_usage_mock = AsyncMock(return_value=False)
-    monkeypatch.setattr(
-        'app.services.promocode_service.check_user_promocode_usage',
-        check_usage_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.check_user_promocode_usage', check_usage_mock)
 
     get_promo_group_mock = AsyncMock(return_value=sample_promo_group)
-    monkeypatch.setattr(
-        'app.services.promocode_service.get_promo_group_by_id',
-        get_promo_group_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.get_promo_group_by_id', get_promo_group_mock)
 
     has_promo_group_mock = AsyncMock(return_value=False)
-    monkeypatch.setattr(
-        'app.services.promocode_service.has_user_promo_group',
-        has_promo_group_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.has_user_promo_group', has_promo_group_mock)
 
     add_promo_group_mock = AsyncMock()
-    monkeypatch.setattr(
-        'app.services.promocode_service.add_user_to_promo_group',
-        add_promo_group_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.add_user_to_promo_group', add_promo_group_mock)
 
     create_usage_mock = AsyncMock()
-    monkeypatch.setattr(
-        'app.services.promocode_service.create_promocode_use',
-        create_usage_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.create_promocode_use', create_usage_mock)
 
     # Execute
     service = PromoCodeService()
-    result = await service.activate_promocode(
-        mock_db_session,
-        sample_user.id,
-        "VIPGROUP"
-    )
+    result = await service.activate_promocode(mock_db_session, sample_user.id, 'VIPGROUP')
 
     # Verify description includes promo group name
-    assert "Назначена промогруппа: Test VIP Group" in result["description"]
+    assert 'Назначена промогруппа: Test VIP Group' in result['description']
 
 
 async def test_promocode_data_includes_promo_group_id(
@@ -529,56 +354,31 @@ async def test_promocode_data_includes_promo_group_id(
 
     # Mock CRUD functions
     get_user_mock = AsyncMock(return_value=sample_user)
-    monkeypatch.setattr(
-        'app.services.promocode_service.get_user_by_id',
-        get_user_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.get_user_by_id', get_user_mock)
 
     get_promocode_mock = AsyncMock(return_value=sample_promocode_promo_group)
-    monkeypatch.setattr(
-        'app.services.promocode_service.get_promocode_by_code',
-        get_promocode_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.get_promocode_by_code', get_promocode_mock)
 
     check_usage_mock = AsyncMock(return_value=False)
-    monkeypatch.setattr(
-        'app.services.promocode_service.check_user_promocode_usage',
-        check_usage_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.check_user_promocode_usage', check_usage_mock)
 
     get_promo_group_mock = AsyncMock(return_value=sample_promo_group)
-    monkeypatch.setattr(
-        'app.services.promocode_service.get_promo_group_by_id',
-        get_promo_group_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.get_promo_group_by_id', get_promo_group_mock)
 
     has_promo_group_mock = AsyncMock(return_value=False)
-    monkeypatch.setattr(
-        'app.services.promocode_service.has_user_promo_group',
-        has_promo_group_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.has_user_promo_group', has_promo_group_mock)
 
     add_promo_group_mock = AsyncMock()
-    monkeypatch.setattr(
-        'app.services.promocode_service.add_user_to_promo_group',
-        add_promo_group_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.add_user_to_promo_group', add_promo_group_mock)
 
     create_usage_mock = AsyncMock()
-    monkeypatch.setattr(
-        'app.services.promocode_service.create_promocode_use',
-        create_usage_mock
-    )
+    monkeypatch.setattr('app.services.promocode_service.create_promocode_use', create_usage_mock)
 
     # Execute
     service = PromoCodeService()
-    result = await service.activate_promocode(
-        mock_db_session,
-        sample_user.id,
-        "VIPGROUP"
-    )
+    result = await service.activate_promocode(mock_db_session, sample_user.id, 'VIPGROUP')
 
     # Verify promocode data structure
-    assert "promocode" in result
-    assert "promo_group_id" in result["promocode"]
-    assert result["promocode"]["promo_group_id"] == sample_promo_group.id
+    assert 'promocode' in result
+    assert 'promo_group_id' in result['promocode']
+    assert result['promocode']['promo_group_id'] == sample_promo_group.id

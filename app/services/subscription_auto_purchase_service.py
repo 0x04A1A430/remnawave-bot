@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Optional
 
 from aiogram import Bot
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -19,24 +18,25 @@ from app.localization.texts import get_texts
 from app.services.admin_notification_service import AdminNotificationService
 from app.services.subscription_checkout_service import clear_subscription_checkout_draft
 from app.services.subscription_purchase_service import (
+    MiniAppSubscriptionPurchaseService,
+    PurchaseBalanceError,
     PurchaseOptionsContext,
     PurchasePricingResult,
     PurchaseSelection,
     PurchaseValidationError,
-    PurchaseBalanceError,
-    MiniAppSubscriptionPurchaseService,
 )
 from app.services.subscription_service import SubscriptionService
 from app.services.user_cart_service import user_cart_service
 from app.utils.pricing_utils import format_period_description
 from app.utils.timezone import format_local_datetime
 
+
 logger = logging.getLogger(__name__)
 
 
 def _format_user_id(user: User) -> str:
     """Format user identifier for logging (supports email-only users)."""
-    return str(user.telegram_id) if user.telegram_id else f"email:{user.id}"
+    return str(user.telegram_id) if user.telegram_id else f'email:{user.id}'
 
 
 @dataclass(slots=True)
@@ -57,25 +57,25 @@ class AutoExtendContext:
     period_days: int
     price_kopeks: int
     description: str
-    device_limit: Optional[int] = None
-    traffic_limit_gb: Optional[int] = None
-    squad_uuid: Optional[str] = None
+    device_limit: int | None = None
+    traffic_limit_gb: int | None = None
+    squad_uuid: str | None = None
     consume_promo_offer: bool = False
-    tariff_id: Optional[int] = None
-    allowed_squads: Optional[list] = None
+    tariff_id: int | None = None
+    allowed_squads: list | None = None
 
 
 async def _prepare_auto_purchase(
     db: AsyncSession,
     user: User,
     cart_data: dict,
-) -> Optional[AutoPurchaseContext]:
+) -> AutoPurchaseContext | None:
     """Builds purchase context and pricing for a saved cart."""
 
-    period_days = int(cart_data.get("period_days") or 0)
+    period_days = int(cart_data.get('period_days') or 0)
     if period_days <= 0:
         logger.info(
-            "🔁 Автопокупка: у пользователя %s нет корректного периода в сохранённой корзине",
+            '🔁 Автопокупка: у пользователя %s нет корректного периода в сохранённой корзине',
             _format_user_id(user),
         )
         return None
@@ -85,7 +85,7 @@ async def _prepare_auto_purchase(
     fresh_user = await get_user_by_id(db, user.id)
     if not fresh_user:
         logger.warning(
-            "🔁 Автопокупка: не удалось перезагрузить пользователя %s",
+            '🔁 Автопокупка: не удалось перезагрузить пользователя %s',
             _format_user_id(user),
         )
         return None
@@ -94,16 +94,16 @@ async def _prepare_auto_purchase(
     miniapp_service = MiniAppSubscriptionPurchaseService()
     context = await miniapp_service.build_options(db, user)
 
-    period_config = context.period_map.get(f"days:{period_days}")
+    period_config = context.period_map.get(f'days:{period_days}')
     if not period_config:
         logger.warning(
-            "🔁 Автопокупка: период %s дней недоступен для пользователя %s",
+            '🔁 Автопокупка: период %s дней недоступен для пользователя %s',
             period_days,
             _format_user_id(user),
         )
         return None
 
-    traffic_value = cart_data.get("traffic_gb")
+    traffic_value = cart_data.get('traffic_gb')
     if traffic_value is None:
         traffic_value = (
             period_config.traffic.current_value
@@ -113,8 +113,8 @@ async def _prepare_auto_purchase(
     else:
         traffic_value = int(traffic_value)
 
-    devices = int(cart_data.get("devices") or period_config.devices.current or 1)
-    servers = list(cart_data.get("countries") or [])
+    devices = int(cart_data.get('devices') or period_config.devices.current or 1)
+    servers = list(cart_data.get('countries') or [])
     if not servers:
         servers = list(period_config.servers.default_selection)
 
@@ -134,7 +134,7 @@ async def _prepare_auto_purchase(
     )
 
 
-def _safe_int(value: Optional[object], default: int = 0) -> int:
+def _safe_int(value: object | None, default: int = 0) -> int:
     try:
         return int(value)  # type: ignore[arg-type]
     except (TypeError, ValueError):
@@ -154,7 +154,7 @@ async def _get_tariff_price_for_period(
     user: User,
     tariff_id: int,
     period_days: int,
-) -> Optional[int]:
+) -> int | None:
     """Получает актуальную цену тарифа для заданного периода с учётом скидки пользователя."""
     from app.database.crud.tariff import get_tariff_by_id
     from app.utils.promo_offer import get_user_active_promo_discount_percent
@@ -162,7 +162,7 @@ async def _get_tariff_price_for_period(
     tariff = await get_tariff_by_id(db, tariff_id)
     if not tariff or not tariff.is_active:
         logger.warning(
-            "🔁 Автопокупка: тариф %s недоступен для пользователя %s",
+            '🔁 Автопокупка: тариф %s недоступен для пользователя %s',
             tariff_id,
             _format_user_id(user),
         )
@@ -172,7 +172,7 @@ async def _get_tariff_price_for_period(
     base_price = prices.get(str(period_days))
     if base_price is None:
         logger.warning(
-            "🔁 Автопокупка: период %s дней недоступен для тарифа %s",
+            '🔁 Автопокупка: период %s дней недоступен для тарифа %s',
             period_days,
             tariff_id,
         )
@@ -185,8 +185,7 @@ async def _get_tariff_price_for_period(
         discount_percent = getattr(promo_group, 'server_discount_percent', 0)
 
     personal_discount = get_user_active_promo_discount_percent(user)
-    if personal_discount > discount_percent:
-        discount_percent = personal_discount
+    discount_percent = max(discount_percent, personal_discount)
 
     final_price = _apply_promo_discount_for_tariff(base_price, discount_percent)
     return final_price
@@ -196,66 +195,62 @@ async def _prepare_auto_extend_context(
     db: AsyncSession,
     user: User,
     cart_data: dict,
-) -> Optional[AutoExtendContext]:
+) -> AutoExtendContext | None:
     from app.database.crud.subscription import get_subscription_by_user_id
 
     subscription = await get_subscription_by_user_id(db, user.id)
     if subscription is None:
         logger.info(
-            "🔁 Автопокупка: у пользователя %s нет активной подписки для продления",
+            '🔁 Автопокупка: у пользователя %s нет активной подписки для продления',
             _format_user_id(user),
         )
         return None
 
-    saved_subscription_id = cart_data.get("subscription_id")
+    saved_subscription_id = cart_data.get('subscription_id')
     if saved_subscription_id is not None:
         saved_subscription_id = _safe_int(saved_subscription_id, subscription.id)
         if saved_subscription_id != subscription.id:
             logger.warning(
-                "🔁 Автопокупка: сохранённая подписка %s не совпадает с текущей %s у пользователя %s",
+                '🔁 Автопокупка: сохранённая подписка %s не совпадает с текущей %s у пользователя %s',
                 saved_subscription_id,
                 subscription.id,
                 _format_user_id(user),
             )
             return None
 
-    period_days = _safe_int(cart_data.get("period_days"))
+    period_days = _safe_int(cart_data.get('period_days'))
 
     if period_days <= 0:
         logger.warning(
-            "🔁 Автопокупка: некорректное количество дней продления (%s) у пользователя %s",
+            '🔁 Автопокупка: некорректное количество дней продления (%s) у пользователя %s',
             period_days,
             _format_user_id(user),
         )
         return None
 
     # Если в корзине есть tariff_id - пересчитываем цену по актуальному тарифу
-    tariff_id = cart_data.get("tariff_id")
+    tariff_id = cart_data.get('tariff_id')
     if tariff_id:
         tariff_id = _safe_int(tariff_id)
         price_kopeks = await _get_tariff_price_for_period(db, user, tariff_id, period_days)
         if price_kopeks is None:
             # Тариф недоступен или период отсутствует - используем сохранённую цену как fallback
             price_kopeks = _safe_int(
-                cart_data.get("total_price")
-                or cart_data.get("price")
-                or cart_data.get("final_price"),
+                cart_data.get('total_price') or cart_data.get('price') or cart_data.get('final_price'),
             )
             logger.warning(
-                "🔁 Автопокупка: не удалось пересчитать цену тарифа %s, используем сохранённую: %s",
+                '🔁 Автопокупка: не удалось пересчитать цену тарифа %s, используем сохранённую: %s',
                 tariff_id,
                 price_kopeks,
             )
     else:
         price_kopeks = _safe_int(
-            cart_data.get("total_price")
-            or cart_data.get("price")
-            or cart_data.get("final_price"),
+            cart_data.get('total_price') or cart_data.get('price') or cart_data.get('final_price'),
         )
 
     if price_kopeks <= 0:
         logger.warning(
-            "🔁 Автопокупка: некорректная цена продления (%s) у пользователя %s",
+            '🔁 Автопокупка: некорректная цена продления (%s) у пользователя %s',
             price_kopeks,
             _format_user_id(user),
         )
@@ -264,23 +259,24 @@ async def _prepare_auto_extend_context(
     # Формируем описание с учётом тарифа
     if tariff_id:
         from app.database.crud.tariff import get_tariff_by_id
-        tariff = await get_tariff_by_id(db, tariff_id)
-        tariff_name = tariff.name if tariff else "тариф"
-        description = cart_data.get("description") or f"Продление тарифа {tariff_name} на {period_days} дней"
-    else:
-        description = cart_data.get("description") or f"Продление подписки на {period_days} дней"
 
-    device_limit = cart_data.get("device_limit")
+        tariff = await get_tariff_by_id(db, tariff_id)
+        tariff_name = tariff.name if tariff else 'тариф'
+        description = cart_data.get('description') or f'Продление тарифа {tariff_name} на {period_days} дней'
+    else:
+        description = cart_data.get('description') or f'Продление подписки на {period_days} дней'
+
+    device_limit = cart_data.get('device_limit')
     if device_limit is not None:
         device_limit = _safe_int(device_limit, subscription.device_limit)
 
-    traffic_limit_gb = cart_data.get("traffic_limit_gb")
+    traffic_limit_gb = cart_data.get('traffic_limit_gb')
     if traffic_limit_gb is not None:
         traffic_limit_gb = _safe_int(traffic_limit_gb, subscription.traffic_limit_gb or 0)
 
-    squad_uuid = cart_data.get("squad_uuid")
-    consume_promo_offer = bool(cart_data.get("consume_promo_offer"))
-    allowed_squads = cart_data.get("allowed_squads")
+    squad_uuid = cart_data.get('squad_uuid')
+    consume_promo_offer = bool(cart_data.get('consume_promo_offer'))
+    allowed_squads = cart_data.get('allowed_squads')
 
     return AutoExtendContext(
         subscription=subscription,
@@ -325,10 +321,7 @@ def _apply_extension_updates(context: AutoExtendContext) -> None:
         # Обновляем лимиты для платной подписки
         if context.traffic_limit_gb not in (None, 0):
             subscription.traffic_limit_gb = context.traffic_limit_gb
-        if (
-            context.device_limit is not None
-            and context.device_limit > subscription.device_limit
-        ):
+        if context.device_limit is not None and context.device_limit > subscription.device_limit:
             subscription.device_limit = context.device_limit
         if context.squad_uuid and context.squad_uuid not in (subscription.connected_squads or []):
             subscription.connected_squads = (subscription.connected_squads or []) + [context.squad_uuid]
@@ -339,13 +332,13 @@ async def _auto_extend_subscription(
     user: User,
     cart_data: dict,
     *,
-    bot: Optional[Bot] = None,
+    bot: Bot | None = None,
 ) -> bool:
     try:
         prepared = await _prepare_auto_extend_context(db, user, cart_data)
     except Exception as error:  # pragma: no cover - defensive logging
         logger.error(
-            "❌ Автопокупка: ошибка подготовки данных продления для пользователя %s: %s",
+            '❌ Автопокупка: ошибка подготовки данных продления для пользователя %s: %s',
             _format_user_id(user),
             error,
             exc_info=True,
@@ -357,7 +350,7 @@ async def _auto_extend_subscription(
 
     if user.balance_kopeks < prepared.price_kopeks:
         logger.info(
-            "🔁 Автопокупка: у пользователя %s недостаточно средств для продления (%s < %s)",
+            '🔁 Автопокупка: у пользователя %s недостаточно средств для продления (%s < %s)',
             _format_user_id(user),
             user.balance_kopeks,
             prepared.price_kopeks,
@@ -374,7 +367,7 @@ async def _auto_extend_subscription(
         )
     except Exception as error:  # pragma: no cover - defensive logging
         logger.error(
-            "❌ Автопокупка: ошибка списания средств при продлении пользователя %s: %s",
+            '❌ Автопокупка: ошибка списания средств при продлении пользователя %s: %s',
             _format_user_id(user),
             error,
             exc_info=True,
@@ -383,7 +376,7 @@ async def _auto_extend_subscription(
 
     if not deducted:
         logger.warning(
-            "❌ Автопокупка: списание средств для продления подписки пользователя %s не выполнено",
+            '❌ Автопокупка: списание средств для продления подписки пользователя %s не выполнено',
             _format_user_id(user),
         )
         return False
@@ -396,10 +389,7 @@ async def _auto_extend_subscription(
     _apply_extension_updates(prepared)
 
     # Определяем, произошла ли смена тарифа
-    is_tariff_change = (
-        prepared.tariff_id is not None
-        and old_tariff_id != prepared.tariff_id
-    )
+    is_tariff_change = prepared.tariff_id is not None and old_tariff_id != prepared.tariff_id
 
     try:
         # При смене тарифа передаём traffic_limit_gb для сброса трафика в БД
@@ -415,18 +405,18 @@ async def _auto_extend_subscription(
         # НОВОЕ: Конвертируем триал в платную подписку ТОЛЬКО после успешного продления
         if was_trial and subscription.is_trial:
             subscription.is_trial = False
-            subscription.status = "active"
+            subscription.status = 'active'
             user.has_had_paid_subscription = True
             await db.commit()
             logger.info(
-                "✅ Триал конвертирован в платную подписку %s для пользователя %s",
+                '✅ Триал конвертирован в платную подписку %s для пользователя %s',
                 subscription.id,
                 _format_user_id(user),
             )
 
     except Exception as error:  # pragma: no cover - defensive logging
         logger.error(
-            "❌ Автопокупка: не удалось продлить подписку пользователя %s: %s",
+            '❌ Автопокупка: не удалось продлить подписку пользователя %s: %s',
             _format_user_id(user),
             error,
             exc_info=True,
@@ -446,7 +436,7 @@ async def _auto_extend_subscription(
         )
     except Exception as error:  # pragma: no cover - defensive logging
         logger.error(
-            "⚠️ Автопокупка: не удалось зафиксировать транзакцию продления для пользователя %s: %s",
+            '⚠️ Автопокупка: не удалось зафиксировать транзакцию продления для пользователя %s: %s',
             _format_user_id(user),
             error,
             exc_info=True,
@@ -460,11 +450,11 @@ async def _auto_extend_subscription(
             db,
             updated_subscription,
             reset_traffic=should_reset_traffic,
-            reset_reason="смена тарифа" if is_tariff_change else "продление подписки",
+            reset_reason='смена тарифа' if is_tariff_change else 'продление подписки',
         )
     except Exception as error:  # pragma: no cover - defensive logging
         logger.error(
-            "⚠️ Автопокупка: не удалось обновить RemnaWave пользователя %s после продления: %s",
+            '⚠️ Автопокупка: не удалось обновить RemnaWave пользователя %s после продления: %s',
             _format_user_id(user),
             error,
         )
@@ -472,13 +462,13 @@ async def _auto_extend_subscription(
     await user_cart_service.delete_user_cart(user.id)
     await clear_subscription_checkout_draft(user.id)
 
-    texts = get_texts(getattr(user, "language", "ru"))
+    texts = get_texts(getattr(user, 'language', 'ru'))
     period_label = format_period_description(
         prepared.period_days,
-        getattr(user, "language", "ru"),
+        getattr(user, 'language', 'ru'),
     )
     new_end_date = updated_subscription.end_date
-    end_date_label = format_local_datetime(new_end_date, "%d.%m.%Y %H:%M")
+    end_date_label = format_local_datetime(new_end_date, '%d.%m.%Y %H:%M')
 
     if bot:
         try:
@@ -495,7 +485,7 @@ async def _auto_extend_subscription(
             )
         except Exception as error:  # pragma: no cover - defensive logging
             logger.error(
-                "⚠️ Автопокупка: не удалось уведомить администраторов о продлении пользователя %s: %s",
+                '⚠️ Автопокупка: не удалось уведомить администраторов о продлении пользователя %s: %s',
                 _format_user_id(user),
                 error,
             )
@@ -504,36 +494,34 @@ async def _auto_extend_subscription(
         if user.telegram_id:
             try:
                 auto_message = texts.t(
-                    "AUTO_PURCHASE_SUBSCRIPTION_EXTENDED",
-                    "✅ Subscription automatically extended for {period}.",
+                    'AUTO_PURCHASE_SUBSCRIPTION_EXTENDED',
+                    '✅ Subscription automatically extended for {period}.',
                 ).format(period=period_label)
                 details_message = texts.t(
-                    "AUTO_PURCHASE_SUBSCRIPTION_EXTENDED_DETAILS",
-                    "New expiration date: {date}.",
+                    'AUTO_PURCHASE_SUBSCRIPTION_EXTENDED_DETAILS',
+                    'New expiration date: {date}.',
                 ).format(date=end_date_label)
                 hint_message = texts.t(
-                    "AUTO_PURCHASE_SUBSCRIPTION_HINT",
+                    'AUTO_PURCHASE_SUBSCRIPTION_HINT',
                     "Open the 'My subscription' section to access your link.",
                 )
 
-                full_message = "\n\n".join(
-                    part.strip()
-                    for part in [auto_message, details_message, hint_message]
-                    if part and part.strip()
+                full_message = '\n\n'.join(
+                    part.strip() for part in [auto_message, details_message, hint_message] if part and part.strip()
                 )
 
                 keyboard = InlineKeyboardMarkup(
                     inline_keyboard=[
                         [
                             InlineKeyboardButton(
-                                text=texts.t("MY_SUBSCRIPTION_BUTTON", "📱 My subscription"),
-                                callback_data="menu_subscription",
+                                text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 My subscription'),
+                                callback_data='menu_subscription',
                             )
                         ],
                         [
                             InlineKeyboardButton(
-                                text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "🏠 Main menu"),
-                                callback_data="back_to_menu",
+                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '🏠 Main menu'),
+                                callback_data='back_to_menu',
                             )
                         ],
                     ]
@@ -543,17 +531,17 @@ async def _auto_extend_subscription(
                     chat_id=user.telegram_id,
                     text=full_message,
                     reply_markup=keyboard,
-                    parse_mode="HTML",
+                    parse_mode='HTML',
                 )
             except Exception as error:  # pragma: no cover - defensive logging
                 logger.error(
-                    "⚠️ Автопокупка: не удалось уведомить пользователя %s о продлении: %s",
+                    '⚠️ Автопокупка: не удалось уведомить пользователя %s о продлении: %s',
                     user.telegram_id or user.id,
                     error,
                 )
 
     logger.info(
-        "✅ Автопокупка: подписка продлена на %s дней для пользователя %s",
+        '✅ Автопокупка: подписка продлена на %s дней для пользователя %s',
         prepared.period_days,
         _format_user_id(user),
     )
@@ -566,24 +554,27 @@ async def _auto_purchase_tariff(
     user: User,
     cart_data: dict,
     *,
-    bot: Optional[Bot] = None,
+    bot: Bot | None = None,
 ) -> bool:
     """Автоматическая покупка периодного тарифа из сохранённой корзины."""
-    from datetime import datetime
+    from app.database.crud.server_squad import get_all_server_squads
+    from app.database.crud.subscription import (
+        create_paid_subscription,
+        extend_subscription,
+        get_subscription_by_user_id,
+    )
     from app.database.crud.tariff import get_tariff_by_id
-    from app.database.crud.subscription import create_paid_subscription, get_subscription_by_user_id, extend_subscription
     from app.database.crud.transaction import create_transaction
     from app.database.crud.user import subtract_user_balance
-    from app.database.crud.server_squad import get_all_server_squads
     from app.database.models import TransactionType
 
-    tariff_id = _safe_int(cart_data.get("tariff_id"))
-    period_days = _safe_int(cart_data.get("period_days"))
-    discount_percent = _safe_int(cart_data.get("discount_percent"))
+    tariff_id = _safe_int(cart_data.get('tariff_id'))
+    period_days = _safe_int(cart_data.get('period_days'))
+    discount_percent = _safe_int(cart_data.get('discount_percent'))
 
     if not tariff_id or period_days <= 0:
         logger.warning(
-            "🔁 Автопокупка тарифа: некорректные данные корзины для пользователя %s (tariff_id=%s, period=%s)",
+            '🔁 Автопокупка тарифа: некорректные данные корзины для пользователя %s (tariff_id=%s, period=%s)',
             _format_user_id(user),
             tariff_id,
             period_days,
@@ -593,7 +584,7 @@ async def _auto_purchase_tariff(
     tariff = await get_tariff_by_id(db, tariff_id)
     if not tariff or not tariff.is_active:
         logger.warning(
-            "🔁 Автопокупка тарифа: тариф %s недоступен для пользователя %s",
+            '🔁 Автопокупка тарифа: тариф %s недоступен для пользователя %s',
             tariff_id,
             _format_user_id(user),
         )
@@ -604,7 +595,7 @@ async def _auto_purchase_tariff(
     base_price = prices.get(str(period_days))
     if base_price is None:
         logger.warning(
-            "🔁 Автопокупка тарифа: период %s дней недоступен для тарифа %s",
+            '🔁 Автопокупка тарифа: период %s дней недоступен для тарифа %s',
             period_days,
             tariff_id,
         )
@@ -614,7 +605,7 @@ async def _auto_purchase_tariff(
 
     if user.balance_kopeks < final_price:
         logger.info(
-            "🔁 Автопокупка тарифа: у пользователя %s недостаточно средств (%s < %s)",
+            '🔁 Автопокупка тарифа: у пользователя %s недостаточно средств (%s < %s)',
             _format_user_id(user),
             user.balance_kopeks,
             final_price,
@@ -623,17 +614,17 @@ async def _auto_purchase_tariff(
 
     # Списываем баланс
     try:
-        description = f"Покупка тарифа {tariff.name} на {period_days} дней"
+        description = f'Покупка тарифа {tariff.name} на {period_days} дней'
         success = await subtract_user_balance(db, user, final_price, description)
         if not success:
             logger.warning(
-                "❌ Автопокупка тарифа: не удалось списать баланс пользователя %s",
+                '❌ Автопокупка тарифа: не удалось списать баланс пользователя %s',
                 _format_user_id(user),
             )
             return False
     except Exception as error:
         logger.error(
-            "❌ Автопокупка тарифа: ошибка списания баланса пользователя %s: %s",
+            '❌ Автопокупка тарифа: ошибка списания баланса пользователя %s: %s',
             _format_user_id(user),
             error,
             exc_info=True,
@@ -664,7 +655,7 @@ async def _auto_purchase_tariff(
             was_trial_conversion = existing_subscription.is_trial
             if was_trial_conversion:
                 subscription.is_trial = False
-                subscription.status = "active"
+                subscription.status = 'active'
                 user.has_had_paid_subscription = True
                 await db.commit()
         else:
@@ -681,7 +672,7 @@ async def _auto_purchase_tariff(
             was_trial_conversion = False
     except Exception as error:
         logger.error(
-            "❌ Автопокупка тарифа: ошибка создания подписки для пользователя %s: %s",
+            '❌ Автопокупка тарифа: ошибка создания подписки для пользователя %s: %s',
             _format_user_id(user),
             error,
             exc_info=True,
@@ -700,7 +691,7 @@ async def _auto_purchase_tariff(
         )
     except Exception as error:
         logger.warning(
-            "⚠️ Автопокупка тарифа: не удалось создать транзакцию для пользователя %s: %s",
+            '⚠️ Автопокупка тарифа: не удалось создать транзакцию для пользователя %s: %s',
             _format_user_id(user),
             error,
         )
@@ -714,11 +705,11 @@ async def _auto_purchase_tariff(
             db,
             subscription,
             reset_traffic=True,
-            reset_reason="покупка тарифа",
+            reset_reason='покупка тарифа',
         )
     except Exception as error:
         logger.warning(
-            "⚠️ Автопокупка тарифа: не удалось обновить Remnawave для пользователя %s: %s",
+            '⚠️ Автопокупка тарифа: не удалось обновить Remnawave для пользователя %s: %s',
             _format_user_id(user),
             error,
         )
@@ -729,8 +720,8 @@ async def _auto_purchase_tariff(
 
     # Уведомления
     if bot:
-        texts = get_texts(getattr(user, "language", "ru"))
-        period_label = format_period_description(period_days, getattr(user, "language", "ru"))
+        texts = get_texts(getattr(user, 'language', 'ru'))
+        period_label = format_period_description(period_days, getattr(user, 'language', 'ru'))
 
         try:
             notification_service = AdminNotificationService(bot)
@@ -739,7 +730,7 @@ async def _auto_purchase_tariff(
             )
         except Exception as error:
             logger.warning(
-                "⚠️ Автопокупка тарифа: не удалось уведомить админов о покупке пользователя %s: %s",
+                '⚠️ Автопокупка тарифа: не удалось уведомить админов о покупке пользователя %s: %s',
                 _format_user_id(user),
                 error,
             )
@@ -748,43 +739,47 @@ async def _auto_purchase_tariff(
         if user.telegram_id:
             try:
                 message = texts.t(
-                    "AUTO_PURCHASE_SUBSCRIPTION_SUCCESS",
-                    "✅ Подписка на {period} автоматически оформлена после пополнения баланса.",
+                    'AUTO_PURCHASE_SUBSCRIPTION_SUCCESS',
+                    '✅ Подписка на {period} автоматически оформлена после пополнения баланса.',
                 ).format(period=period_label)
 
                 hint = texts.t(
-                    "AUTO_PURCHASE_SUBSCRIPTION_HINT",
-                    "Перейдите в раздел «Моя подписка», чтобы получить ссылку.",
+                    'AUTO_PURCHASE_SUBSCRIPTION_HINT',
+                    'Перейдите в раздел «Моя подписка», чтобы получить ссылку.',
                 )
 
                 keyboard = InlineKeyboardMarkup(
                     inline_keyboard=[
-                        [InlineKeyboardButton(
-                            text=texts.t("MY_SUBSCRIPTION_BUTTON", "📱 Моя подписка"),
-                            callback_data="menu_subscription",
-                        )],
-                        [InlineKeyboardButton(
-                            text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "🏠 Главное меню"),
-                            callback_data="back_to_menu",
-                        )],
+                        [
+                            InlineKeyboardButton(
+                                text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
+                                callback_data='menu_subscription',
+                            )
+                        ],
+                        [
+                            InlineKeyboardButton(
+                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '🏠 Главное меню'),
+                                callback_data='back_to_menu',
+                            )
+                        ],
                     ]
                 )
 
                 await bot.send_message(
                     chat_id=user.telegram_id,
-                    text=f"{message}\n\n{hint}",
+                    text=f'{message}\n\n{hint}',
                     reply_markup=keyboard,
-                    parse_mode="HTML",
+                    parse_mode='HTML',
                 )
             except Exception as error:
                 logger.warning(
-                    "⚠️ Автопокупка тарифа: не удалось уведомить пользователя %s: %s",
+                    '⚠️ Автопокупка тарифа: не удалось уведомить пользователя %s: %s',
                     user.telegram_id or user.id,
                     error,
                 )
 
     logger.info(
-        "✅ Автопокупка тарифа: подписка на тариф %s (%s дней) оформлена для пользователя %s",
+        '✅ Автопокупка тарифа: подписка на тариф %s (%s дней) оформлена для пользователя %s',
         tariff.name,
         period_days,
         _format_user_id(user),
@@ -798,21 +793,22 @@ async def _auto_purchase_daily_tariff(
     user: User,
     cart_data: dict,
     *,
-    bot: Optional[Bot] = None,
+    bot: Bot | None = None,
 ) -> bool:
     """Автоматическая покупка суточного тарифа из сохранённой корзины."""
     from datetime import datetime, timedelta
-    from app.database.crud.tariff import get_tariff_by_id
+
+    from app.database.crud.server_squad import get_all_server_squads
     from app.database.crud.subscription import create_paid_subscription, get_subscription_by_user_id
+    from app.database.crud.tariff import get_tariff_by_id
     from app.database.crud.transaction import create_transaction
     from app.database.crud.user import subtract_user_balance
-    from app.database.crud.server_squad import get_all_server_squads
     from app.database.models import TransactionType
 
-    tariff_id = _safe_int(cart_data.get("tariff_id"))
+    tariff_id = _safe_int(cart_data.get('tariff_id'))
     if not tariff_id:
         logger.warning(
-            "🔁 Автопокупка суточного тарифа: нет tariff_id в корзине пользователя %s",
+            '🔁 Автопокупка суточного тарифа: нет tariff_id в корзине пользователя %s',
             _format_user_id(user),
         )
         return False
@@ -820,7 +816,7 @@ async def _auto_purchase_daily_tariff(
     tariff = await get_tariff_by_id(db, tariff_id)
     if not tariff or not tariff.is_active:
         logger.warning(
-            "🔁 Автопокупка суточного тарифа: тариф %s недоступен для пользователя %s",
+            '🔁 Автопокупка суточного тарифа: тариф %s недоступен для пользователя %s',
             tariff_id,
             _format_user_id(user),
         )
@@ -828,7 +824,7 @@ async def _auto_purchase_daily_tariff(
 
     if not getattr(tariff, 'is_daily', False):
         logger.warning(
-            "🔁 Автопокупка суточного тарифа: тариф %s не является суточным для пользователя %s",
+            '🔁 Автопокупка суточного тарифа: тариф %s не является суточным для пользователя %s',
             tariff_id,
             _format_user_id(user),
         )
@@ -837,7 +833,7 @@ async def _auto_purchase_daily_tariff(
     daily_price = getattr(tariff, 'daily_price_kopeks', 0)
     if daily_price <= 0:
         logger.warning(
-            "🔁 Автопокупка суточного тарифа: некорректная цена тарифа %s для пользователя %s",
+            '🔁 Автопокупка суточного тарифа: некорректная цена тарифа %s для пользователя %s',
             tariff_id,
             _format_user_id(user),
         )
@@ -845,7 +841,7 @@ async def _auto_purchase_daily_tariff(
 
     if user.balance_kopeks < daily_price:
         logger.info(
-            "🔁 Автопокупка суточного тарифа: у пользователя %s недостаточно средств (%s < %s)",
+            '🔁 Автопокупка суточного тарифа: у пользователя %s недостаточно средств (%s < %s)',
             _format_user_id(user),
             user.balance_kopeks,
             daily_price,
@@ -854,17 +850,17 @@ async def _auto_purchase_daily_tariff(
 
     # Списываем баланс за первый день
     try:
-        description = f"Активация суточного тарифа {tariff.name}"
+        description = f'Активация суточного тарифа {tariff.name}'
         success = await subtract_user_balance(db, user, daily_price, description)
         if not success:
             logger.warning(
-                "❌ Автопокупка суточного тарифа: не удалось списать баланс пользователя %s",
+                '❌ Автопокупка суточного тарифа: не удалось списать баланс пользователя %s',
                 _format_user_id(user),
             )
             return False
     except Exception as error:
         logger.error(
-            "❌ Автопокупка суточного тарифа: ошибка списания баланса пользователя %s: %s",
+            '❌ Автопокупка суточного тарифа: ошибка списания баланса пользователя %s: %s',
             _format_user_id(user),
             error,
             exc_info=True,
@@ -889,7 +885,7 @@ async def _auto_purchase_daily_tariff(
             existing_subscription.traffic_limit_gb = tariff.traffic_limit_gb
             existing_subscription.device_limit = tariff.device_limit
             existing_subscription.connected_squads = squads
-            existing_subscription.status = "active"
+            existing_subscription.status = 'active'
             existing_subscription.is_trial = False
             existing_subscription.last_daily_charge_at = datetime.utcnow()
             existing_subscription.is_daily_paused = False
@@ -918,7 +914,7 @@ async def _auto_purchase_daily_tariff(
             was_trial_conversion = False
     except Exception as error:
         logger.error(
-            "❌ Автопокупка суточного тарифа: ошибка создания подписки для пользователя %s: %s",
+            '❌ Автопокупка суточного тарифа: ошибка создания подписки для пользователя %s: %s',
             _format_user_id(user),
             error,
             exc_info=True,
@@ -937,7 +933,7 @@ async def _auto_purchase_daily_tariff(
         )
     except Exception as error:
         logger.warning(
-            "⚠️ Автопокупка суточного тарифа: не удалось создать транзакцию для пользователя %s: %s",
+            '⚠️ Автопокупка суточного тарифа: не удалось создать транзакцию для пользователя %s: %s',
             _format_user_id(user),
             error,
         )
@@ -951,11 +947,11 @@ async def _auto_purchase_daily_tariff(
             db,
             subscription,
             reset_traffic=True,
-            reset_reason="активация суточного тарифа",
+            reset_reason='активация суточного тарифа',
         )
     except Exception as error:
         logger.warning(
-            "⚠️ Автопокупка суточного тарифа: не удалось обновить Remnawave для пользователя %s: %s",
+            '⚠️ Автопокупка суточного тарифа: не удалось обновить Remnawave для пользователя %s: %s',
             _format_user_id(user),
             error,
         )
@@ -966,7 +962,7 @@ async def _auto_purchase_daily_tariff(
 
     # Уведомления
     if bot:
-        texts = get_texts(getattr(user, "language", "ru"))
+        texts = get_texts(getattr(user, 'language', 'ru'))
 
         try:
             notification_service = AdminNotificationService(bot)
@@ -975,7 +971,7 @@ async def _auto_purchase_daily_tariff(
             )
         except Exception as error:
             logger.warning(
-                "⚠️ Автопокупка суточного тарифа: не удалось уведомить админов о покупке пользователя %s: %s",
+                '⚠️ Автопокупка суточного тарифа: не удалось уведомить админов о покупке пользователя %s: %s',
                 _format_user_id(user),
                 error,
             )
@@ -984,22 +980,26 @@ async def _auto_purchase_daily_tariff(
         if user.telegram_id:
             try:
                 message = (
-                    f"✅ <b>Суточный тариф «{tariff.name}» активирован!</b>\n\n"
-                    f"💰 Списано: {daily_price / 100:.0f} ₽ за первый день\n"
-                    f"🔄 Средства будут списываться автоматически раз в сутки.\n\n"
-                    f"ℹ️ Вы можете приостановить подписку в любой момент."
+                    f'✅ <b>Суточный тариф «{tariff.name}» активирован!</b>\n\n'
+                    f'💰 Списано: {daily_price / 100:.0f} ₽ за первый день\n'
+                    f'🔄 Средства будут списываться автоматически раз в сутки.\n\n'
+                    f'ℹ️ Вы можете приостановить подписку в любой момент.'
                 )
 
                 keyboard = InlineKeyboardMarkup(
                     inline_keyboard=[
-                        [InlineKeyboardButton(
-                            text=texts.t("MY_SUBSCRIPTION_BUTTON", "📱 Моя подписка"),
-                            callback_data="menu_subscription",
-                        )],
-                        [InlineKeyboardButton(
-                            text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "🏠 Главное меню"),
-                            callback_data="back_to_menu",
-                        )],
+                        [
+                            InlineKeyboardButton(
+                                text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
+                                callback_data='menu_subscription',
+                            )
+                        ],
+                        [
+                            InlineKeyboardButton(
+                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '🏠 Главное меню'),
+                                callback_data='back_to_menu',
+                            )
+                        ],
                     ]
                 )
 
@@ -1007,17 +1007,17 @@ async def _auto_purchase_daily_tariff(
                     chat_id=user.telegram_id,
                     text=message,
                     reply_markup=keyboard,
-                    parse_mode="HTML",
+                    parse_mode='HTML',
                 )
             except Exception as error:
                 logger.warning(
-                    "⚠️ Автопокупка суточного тарифа: не удалось уведомить пользователя %s: %s",
+                    '⚠️ Автопокупка суточного тарифа: не удалось уведомить пользователя %s: %s',
                     user.telegram_id or user.id,
                     error,
                 )
 
     logger.info(
-        "✅ Автопокупка суточного тарифа: тариф %s активирован для пользователя %s",
+        '✅ Автопокупка суточного тарифа: тариф %s активирован для пользователя %s',
         tariff.name,
         _format_user_id(user),
     )
@@ -1029,50 +1029,48 @@ async def auto_purchase_saved_cart_after_topup(
     db: AsyncSession,
     user: User,
     *,
-    bot: Optional[Bot] = None,
+    bot: Bot | None = None,
 ) -> bool:
     """Attempts to automatically purchase a subscription from a saved cart."""
 
     if not settings.is_auto_purchase_after_topup_enabled():
         return False
 
-    if not user or not getattr(user, "id", None):
+    if not user or not getattr(user, 'id', None):
         return False
 
     cart_data = await user_cart_service.get_user_cart(user.id)
     if not cart_data:
         return False
 
-    logger.info(
-        "🔁 Автопокупка: обнаружена сохранённая корзина у пользователя %s", _format_user_id(user)
-    )
+    logger.info('🔁 Автопокупка: обнаружена сохранённая корзина у пользователя %s', _format_user_id(user))
 
-    cart_mode = cart_data.get("cart_mode") or cart_data.get("mode")
+    cart_mode = cart_data.get('cart_mode') or cart_data.get('mode')
 
     # Обработка продления подписки
-    if cart_mode == "extend":
+    if cart_mode == 'extend':
         return await _auto_extend_subscription(db, user, cart_data, bot=bot)
 
     # Обработка покупки периодного тарифа
-    if cart_mode == "tariff_purchase":
+    if cart_mode == 'tariff_purchase':
         return await _auto_purchase_tariff(db, user, cart_data, bot=bot)
 
     # Обработка покупки суточного тарифа
-    if cart_mode == "daily_tariff_purchase":
+    if cart_mode == 'daily_tariff_purchase':
         return await _auto_purchase_daily_tariff(db, user, cart_data, bot=bot)
 
     try:
         prepared = await _prepare_auto_purchase(db, user, cart_data)
     except PurchaseValidationError as error:
         logger.error(
-            "❌ Автопокупка: ошибка валидации корзины пользователя %s: %s",
+            '❌ Автопокупка: ошибка валидации корзины пользователя %s: %s',
             _format_user_id(user),
             error,
         )
         return False
     except Exception as error:  # pragma: no cover - defensive logging
         logger.error(
-            "❌ Автопокупка: непредвиденная ошибка при подготовке корзины %s: %s",
+            '❌ Автопокупка: непредвиденная ошибка при подготовке корзины %s: %s',
             _format_user_id(user),
             error,
             exc_info=True,
@@ -1087,7 +1085,7 @@ async def auto_purchase_saved_cart_after_topup(
 
     if pricing.final_total <= 0:
         logger.warning(
-            "❌ Автопокупка: итоговая сумма для пользователя %s некорректна (%s)",
+            '❌ Автопокупка: итоговая сумма для пользователя %s некорректна (%s)',
             _format_user_id(user),
             pricing.final_total,
         )
@@ -1095,7 +1093,7 @@ async def auto_purchase_saved_cart_after_topup(
 
     if user.balance_kopeks < pricing.final_total:
         logger.info(
-            "🔁 Автопокупка: у пользователя %s недостаточно средств (%s < %s)",
+            '🔁 Автопокупка: у пользователя %s недостаточно средств (%s < %s)',
             _format_user_id(user),
             user.balance_kopeks,
             pricing.final_total,
@@ -1112,20 +1110,20 @@ async def auto_purchase_saved_cart_after_topup(
         )
     except PurchaseBalanceError:
         logger.info(
-            "🔁 Автопокупка: баланс пользователя %s изменился и стал недостаточным",
+            '🔁 Автопокупка: баланс пользователя %s изменился и стал недостаточным',
             _format_user_id(user),
         )
         return False
     except PurchaseValidationError as error:
         logger.error(
-            "❌ Автопокупка: не удалось подтвердить корзину пользователя %s: %s",
+            '❌ Автопокупка: не удалось подтвердить корзину пользователя %s: %s',
             _format_user_id(user),
             error,
         )
         return False
     except Exception as error:  # pragma: no cover - defensive logging
         logger.error(
-            "❌ Автопокупка: ошибка оформления подписки для пользователя %s: %s",
+            '❌ Автопокупка: ошибка оформления подписки для пользователя %s: %s',
             _format_user_id(user),
             error,
             exc_info=True,
@@ -1135,10 +1133,10 @@ async def auto_purchase_saved_cart_after_topup(
     await user_cart_service.delete_user_cart(user.id)
     await clear_subscription_checkout_draft(user.id)
 
-    subscription = purchase_result.get("subscription")
-    transaction = purchase_result.get("transaction")
-    was_trial_conversion = purchase_result.get("was_trial_conversion", False)
-    texts = get_texts(getattr(user, "language", "ru"))
+    subscription = purchase_result.get('subscription')
+    transaction = purchase_result.get('transaction')
+    was_trial_conversion = purchase_result.get('was_trial_conversion', False)
+    texts = get_texts(getattr(user, 'language', 'ru'))
 
     if bot:
         try:
@@ -1153,7 +1151,7 @@ async def auto_purchase_saved_cart_after_topup(
             )
         except Exception as error:  # pragma: no cover - defensive logging
             logger.error(
-                "⚠️ Автопокупка: не удалось отправить уведомление админам (%s): %s",
+                '⚠️ Автопокупка: не удалось отправить уведомление админам (%s): %s',
                 _format_user_id(user),
                 error,
             )
@@ -1163,37 +1161,35 @@ async def auto_purchase_saved_cart_after_topup(
             try:
                 period_label = format_period_description(
                     selection.period.days,
-                    getattr(user, "language", "ru"),
+                    getattr(user, 'language', 'ru'),
                 )
                 auto_message = texts.t(
-                    "AUTO_PURCHASE_SUBSCRIPTION_SUCCESS",
-                    "✅ Subscription purchased automatically after balance top-up ({period}).",
+                    'AUTO_PURCHASE_SUBSCRIPTION_SUCCESS',
+                    '✅ Subscription purchased automatically after balance top-up ({period}).',
                 ).format(period=period_label)
 
                 hint_message = texts.t(
-                    "AUTO_PURCHASE_SUBSCRIPTION_HINT",
+                    'AUTO_PURCHASE_SUBSCRIPTION_HINT',
                     "Open the 'My subscription' section to access your link.",
                 )
 
-                purchase_message = purchase_result.get("message", "")
-                full_message = "\n\n".join(
-                    part.strip()
-                    for part in [auto_message, purchase_message, hint_message]
-                    if part and part.strip()
+                purchase_message = purchase_result.get('message', '')
+                full_message = '\n\n'.join(
+                    part.strip() for part in [auto_message, purchase_message, hint_message] if part and part.strip()
                 )
 
                 keyboard = InlineKeyboardMarkup(
                     inline_keyboard=[
                         [
                             InlineKeyboardButton(
-                                text=texts.t("MY_SUBSCRIPTION_BUTTON", "📱 My subscription"),
-                                callback_data="menu_subscription",
+                                text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 My subscription'),
+                                callback_data='menu_subscription',
                             )
                         ],
                         [
                             InlineKeyboardButton(
-                                text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "🏠 Main menu"),
-                                callback_data="back_to_menu",
+                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '🏠 Main menu'),
+                                callback_data='back_to_menu',
                             )
                         ],
                     ]
@@ -1203,17 +1199,17 @@ async def auto_purchase_saved_cart_after_topup(
                     chat_id=user.telegram_id,
                     text=full_message,
                     reply_markup=keyboard,
-                    parse_mode="HTML",
+                    parse_mode='HTML',
                 )
             except Exception as error:  # pragma: no cover - defensive logging
                 logger.error(
-                    "⚠️ Автопокупка: не удалось уведомить пользователя %s: %s",
+                    '⚠️ Автопокупка: не удалось уведомить пользователя %s: %s',
                     user.telegram_id or user.id,
                     error,
                 )
 
     logger.info(
-        "✅ Автопокупка: подписка на %s дней оформлена для пользователя %s",
+        '✅ Автопокупка: подписка на %s дней оформлена для пользователя %s',
         selection.period.days,
         _format_user_id(user),
     )
@@ -1225,8 +1221,8 @@ async def auto_activate_subscription_after_topup(
     db: AsyncSession,
     user: User,
     *,
-    bot: Optional[Bot] = None,
-    topup_amount: Optional[int] = None,
+    bot: Bot | None = None,
+    topup_amount: int | None = None,
 ) -> tuple[bool, bool]:
     """
     Умная автоактивация после пополнения баланса.
@@ -1247,16 +1243,17 @@ async def auto_activate_subscription_after_topup(
             - notification_sent: True если уведомление отправлено пользователю
     """
     from datetime import datetime
-    from app.database.crud.subscription import get_subscription_by_user_id, create_paid_subscription
-    from app.database.crud.server_squad import get_server_ids_by_uuids, get_available_server_squads
+
+    from app.database.crud.server_squad import get_available_server_squads, get_server_ids_by_uuids
+    from app.database.crud.subscription import create_paid_subscription, get_subscription_by_user_id
     from app.database.crud.transaction import create_transaction
     from app.database.crud.user import subtract_user_balance
-    from app.database.models import TransactionType, PaymentMethod
-    from app.services.subscription_service import SubscriptionService
-    from app.services.subscription_renewal_service import SubscriptionRenewalService
+    from app.database.models import PaymentMethod, TransactionType
     from app.services.admin_notification_service import AdminNotificationService
+    from app.services.subscription_renewal_service import SubscriptionRenewalService
+    from app.services.subscription_service import SubscriptionService
 
-    if not user or not getattr(user, "id", None):
+    if not user or not getattr(user, 'id', None):
         return (False, False)
 
     subscription = await get_subscription_by_user_id(db, user.id)
@@ -1264,15 +1261,15 @@ async def auto_activate_subscription_after_topup(
     # Если автоактивация отключена - уведомление отправится из _send_payment_success_notification
     if not settings.is_auto_activate_after_topup_enabled():
         logger.info(
-            "⚠️ Автоактивация отключена для пользователя %s, уведомление будет отправлено из payment service",
+            '⚠️ Автоактивация отключена для пользователя %s, уведомление будет отправлено из payment service',
             _format_user_id(user),
         )
         return (False, False)
 
     # Если подписка активна — ничего не делаем (автоактивация включена, но подписка уже есть)
-    if subscription and subscription.status == "ACTIVE" and subscription.end_date > datetime.utcnow():
+    if subscription and subscription.status == 'ACTIVE' and subscription.end_date > datetime.utcnow():
         logger.info(
-            "🔁 Автоактивация: у пользователя %s уже активная подписка, пропускаем",
+            '🔁 Автоактивация: у пользователя %s уже активная подписка, пропускаем',
             _format_user_id(user),
         )
         return (False, False)
@@ -1298,10 +1295,7 @@ async def auto_activate_subscription_after_topup(
     # Если серверы не выбраны — берём бесплатные по умолчанию
     if not connected_squads:
         available_servers = await get_available_server_squads(db, promo_group_id=user.promo_group_id)
-        connected_squads = [
-            s.squad_uuid for s in available_servers
-            if s.is_available and s.price_kopeks == 0
-        ]
+        connected_squads = [s.squad_uuid for s in available_servers if s.is_available and s.price_kopeks == 0]
         if not connected_squads and available_servers:
             connected_squads = [available_servers[0].squad_uuid]
 
@@ -1311,7 +1305,7 @@ async def auto_activate_subscription_after_topup(
     available_periods = sorted(settings.get_available_subscription_periods(), reverse=True)
 
     if not available_periods:
-        logger.warning("🔁 Автоактивация: нет доступных периодов подписки")
+        logger.warning('🔁 Автоактивация: нет доступных периодов подписки')
         return (False, False)
 
     subscription_service = SubscriptionService()
@@ -1323,12 +1317,7 @@ async def auto_activate_subscription_after_topup(
     for period in available_periods:
         try:
             price, _ = await subscription_service.calculate_subscription_price_with_months(
-                period,
-                traffic_limit_gb,
-                server_ids,
-                device_limit,
-                db,
-                user=user
+                period, traffic_limit_gb, server_ids, device_limit, db, user=user
             )
             if price <= balance:
                 best_period = period
@@ -1336,7 +1325,7 @@ async def auto_activate_subscription_after_topup(
                 break
         except Exception as calc_error:
             logger.warning(
-                "🔁 Автоактивация: ошибка расчёта цены для периода %s: %s",
+                '🔁 Автоактивация: ошибка расчёта цены для периода %s: %s',
                 period,
                 calc_error,
             )
@@ -1344,37 +1333,36 @@ async def auto_activate_subscription_after_topup(
 
     if not best_period:
         logger.info(
-            "🔁 Автоактивация: у пользователя %s недостаточно средств (%s) для любого периода",
+            '🔁 Автоактивация: у пользователя %s недостаточно средств (%s) для любого периода',
             _format_user_id(user),
             balance,
         )
         # Уведомление отправится из _send_payment_success_notification
         logger.info(
-            "⚠️ Недостаточно средств для автоактивации пользователя %s, уведомление будет отправлено из payment service",
+            '⚠️ Недостаточно средств для автоактивации пользователя %s, уведомление будет отправлено из payment service',
             _format_user_id(user),
         )
         return (False, False)
 
-    texts = get_texts(getattr(user, "language", "ru"))
+    texts = get_texts(getattr(user, 'language', 'ru'))
 
     try:
         if subscription:
             # Продление существующей подписки
             renewal_service = SubscriptionRenewalService()
-            pricing = await renewal_service.calculate_pricing(
-                db, user, subscription, best_period
-            )
+            pricing = await renewal_service.calculate_pricing(db, user, subscription, best_period)
 
-            old_end_date = subscription.end_date
             result = await renewal_service.finalize(
-                db, user, subscription,
+                db,
+                user,
+                subscription,
                 pricing,
-                description=f"Автоматическое продление на {best_period} дней",
+                description=f'Автоматическое продление на {best_period} дней',
                 payment_method=PaymentMethod.BALANCE,
             )
 
             logger.info(
-                "✅ Автоактивация: подписка пользователя %s продлена на %s дней за %s коп.",
+                '✅ Автоактивация: подписка пользователя %s продлена на %s дней за %s коп.',
                 _format_user_id(user),
                 best_period,
                 best_price,
@@ -1383,43 +1371,45 @@ async def auto_activate_subscription_after_topup(
             # Уведомление пользователю (только для Telegram-пользователей)
             if bot and user.telegram_id:
                 try:
-                    period_label = format_period_description(best_period, getattr(user, "language", "ru"))
+                    period_label = format_period_description(best_period, getattr(user, 'language', 'ru'))
                     new_end_date = result.subscription.end_date
-                    end_date_str = new_end_date.strftime("%d.%m.%Y") if new_end_date else "—"
+                    end_date_str = new_end_date.strftime('%d.%m.%Y') if new_end_date else '—'
 
                     message = texts.t(
-                        "AUTO_PURCHASE_SUBSCRIPTION_EXTENDED",
-                        "✅ Подписка автоматически продлена на {period}.",
+                        'AUTO_PURCHASE_SUBSCRIPTION_EXTENDED',
+                        '✅ Подписка автоматически продлена на {period}.',
                     ).format(period=period_label)
 
                     details = texts.t(
-                        "AUTO_PURCHASE_SUBSCRIPTION_EXTENDED_DETAILS",
-                        "⏰ Новая дата окончания: {date}.",
+                        'AUTO_PURCHASE_SUBSCRIPTION_EXTENDED_DETAILS',
+                        '⏰ Новая дата окончания: {date}.',
                     ).format(date=end_date_str)
 
                     hint = texts.t(
-                        "AUTO_PURCHASE_SUBSCRIPTION_HINT",
-                        "Перейдите в раздел «Моя подписка», чтобы получить ссылку.",
+                        'AUTO_PURCHASE_SUBSCRIPTION_HINT',
+                        'Перейдите в раздел «Моя подписка», чтобы получить ссылку.',
                     )
 
                     keyboard = InlineKeyboardMarkup(
                         inline_keyboard=[
-                            [InlineKeyboardButton(
-                                text=texts.t("MY_SUBSCRIPTION_BUTTON", "📱 Моя подписка"),
-                                callback_data="menu_subscription",
-                            )],
+                            [
+                                InlineKeyboardButton(
+                                    text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
+                                    callback_data='menu_subscription',
+                                )
+                            ],
                         ]
                     )
 
                     await bot.send_message(
                         chat_id=user.telegram_id,
-                        text=f"{message}\n{details}\n\n{hint}",
+                        text=f'{message}\n{details}\n\n{hint}',
                         reply_markup=keyboard,
-                        parse_mode="HTML",
+                        parse_mode='HTML',
                     )
                 except Exception as notify_error:
                     logger.warning(
-                        "⚠️ Автоактивация: не удалось уведомить пользователя %s: %s",
+                        '⚠️ Автоактивация: не удалось уведомить пользователя %s: %s',
                         user.telegram_id or user.id,
                         notify_error,
                     )
@@ -1433,13 +1423,10 @@ async def auto_activate_subscription_after_topup(
                 traffic_limit_gb=traffic_limit_gb,
                 device_limit=device_limit,
                 connected_squads=connected_squads,
-                update_server_counters=True
+                update_server_counters=True,
             )
 
-            await subtract_user_balance(
-                db, user, best_price,
-                f"Активация подписки на {best_period} дней"
-            )
+            await subtract_user_balance(db, user, best_price, f'Активация подписки на {best_period} дней')
 
             await subscription_service.create_remnawave_user(db, new_subscription)
 
@@ -1448,12 +1435,12 @@ async def auto_activate_subscription_after_topup(
                 user_id=user.id,
                 type=TransactionType.SUBSCRIPTION_PAYMENT,
                 amount_kopeks=best_price,
-                description=f"Активация подписки на {best_period} дней",
+                description=f'Активация подписки на {best_period} дней',
                 payment_method=PaymentMethod.BALANCE,
             )
 
             logger.info(
-                "✅ Автоактивация: новая подписка на %s дней создана для пользователя %s за %s коп.",
+                '✅ Автоактивация: новая подписка на %s дней создана для пользователя %s за %s коп.',
                 best_period,
                 _format_user_id(user),
                 best_price,
@@ -1462,37 +1449,39 @@ async def auto_activate_subscription_after_topup(
             # Уведомление пользователю (только для Telegram-пользователей)
             if bot and user.telegram_id:
                 try:
-                    period_label = format_period_description(best_period, getattr(user, "language", "ru"))
+                    period_label = format_period_description(best_period, getattr(user, 'language', 'ru'))
 
                     message = texts.t(
-                        "AUTO_PURCHASE_SUBSCRIPTION_SUCCESS",
-                        "✅ Подписка на {period} автоматически оформлена после пополнения баланса.",
+                        'AUTO_PURCHASE_SUBSCRIPTION_SUCCESS',
+                        '✅ Подписка на {period} автоматически оформлена после пополнения баланса.',
                     ).format(period=period_label)
 
                     hint = texts.t(
-                        "AUTO_PURCHASE_SUBSCRIPTION_HINT",
-                        "Перейдите в раздел «Моя подписка», чтобы получить ссылку.",
+                        'AUTO_PURCHASE_SUBSCRIPTION_HINT',
+                        'Перейдите в раздел «Моя подписка», чтобы получить ссылку.',
                     )
 
                     keyboard = InlineKeyboardMarkup(
                         inline_keyboard=[
-                            [InlineKeyboardButton(
-                                text=texts.t("MY_SUBSCRIPTION_BUTTON", "📱 Моя подписка"),
-                                callback_data="menu_subscription",
-                            )],
+                            [
+                                InlineKeyboardButton(
+                                    text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
+                                    callback_data='menu_subscription',
+                                )
+                            ],
                         ]
                     )
 
                     await bot.send_message(
                         chat_id=user.telegram_id,
-                        text=f"{message}\n\n{hint}",
+                        text=f'{message}\n\n{hint}',
                         reply_markup=keyboard,
-                        parse_mode="HTML",
+                        parse_mode='HTML',
                     )
 
                 except Exception as notify_error:
                     logger.warning(
-                        "⚠️ Автоактивация: не удалось уведомить пользователя %s: %s",
+                        '⚠️ Автоактивация: не удалось уведомить пользователя %s: %s',
                         user.telegram_id or user.id,
                         notify_error,
                     )
@@ -1511,7 +1500,7 @@ async def auto_activate_subscription_after_topup(
                     )
                 except Exception as admin_error:
                     logger.warning(
-                        "⚠️ Автоактивация: не удалось уведомить админов: %s",
+                        '⚠️ Автоактивация: не удалось уведомить админов: %s',
                         admin_error,
                     )
 
@@ -1519,7 +1508,7 @@ async def auto_activate_subscription_after_topup(
 
     except Exception as e:
         logger.error(
-            "❌ Автоактивация: ошибка для пользователя %s: %s",
+            '❌ Автоактивация: ошибка для пользователя %s: %s',
             _format_user_id(user),
             e,
             exc_info=True,
@@ -1529,4 +1518,4 @@ async def auto_activate_subscription_after_topup(
         return False
 
 
-__all__ = ["auto_purchase_saved_cart_after_topup", "auto_activate_subscription_after_topup"]
+__all__ = ['auto_activate_subscription_after_topup', 'auto_purchase_saved_cart_after_topup']

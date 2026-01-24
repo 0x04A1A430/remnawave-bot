@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -19,22 +18,22 @@ class SubscriptionResponse(BaseModel):
     device_limit: int
     modem_enabled: bool = False
     autopay_enabled: bool
-    autopay_days_before: Optional[int] = None
-    subscription_url: Optional[str] = None
-    subscription_crypto_link: Optional[str] = None
-    connected_squads: List[str] = Field(default_factory=list)
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    autopay_days_before: int | None = None
+    subscription_url: str | None = None
+    subscription_crypto_link: str | None = None
+    connected_squads: list[str] = Field(default_factory=list)
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 class SubscriptionCreateRequest(BaseModel):
     user_id: int
     is_trial: bool = False
-    duration_days: Optional[int] = None
-    traffic_limit_gb: Optional[int] = None
-    device_limit: Optional[int] = None
-    squad_uuid: Optional[str] = None
-    connected_squads: Optional[List[str]] = None
+    duration_days: int | None = None
+    traffic_limit_gb: int | None = None
+    device_limit: int | None = None
+    squad_uuid: str | None = None
+    connected_squads: list[str] | None = None
     replace_existing: bool = False
 
 

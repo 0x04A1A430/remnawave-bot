@@ -1,8 +1,7 @@
 import logging
 from datetime import datetime
-from typing import Dict, List, Optional
 
-from sqlalchemy import and_, func, select, update, delete
+from sqlalchemy import and_, delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -17,6 +16,7 @@ from app.database.models import (
     User,
 )
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -26,15 +26,15 @@ async def create_campaign(
     name: str,
     start_parameter: str,
     bonus_type: str,
-    created_by: Optional[int] = None,
+    created_by: int | None = None,
     balance_bonus_kopeks: int = 0,
-    subscription_duration_days: Optional[int] = None,
-    subscription_traffic_gb: Optional[int] = None,
-    subscription_device_limit: Optional[int] = None,
-    subscription_squads: Optional[List[str]] = None,
+    subscription_duration_days: int | None = None,
+    subscription_traffic_gb: int | None = None,
+    subscription_device_limit: int | None = None,
+    subscription_squads: list[str] | None = None,
     # Поля для типа "tariff"
-    tariff_id: Optional[int] = None,
-    tariff_duration_days: Optional[int] = None,
+    tariff_id: int | None = None,
+    tariff_duration_days: int | None = None,
     is_active: bool = True,
 ) -> AdvertisingCampaign:
     campaign = AdvertisingCampaign(
@@ -57,7 +57,7 @@ async def create_campaign(
     await db.refresh(campaign)
 
     logger.info(
-        "📣 Создана рекламная кампания %s (start=%s, bonus=%s)",
+        '📣 Создана рекламная кампания %s (start=%s, bonus=%s)',
         campaign.name,
         campaign.start_parameter,
         campaign.bonus_type,
@@ -65,9 +65,7 @@ async def create_campaign(
     return campaign
 
 
-async def get_campaign_by_id(
-    db: AsyncSession, campaign_id: int
-) -> Optional[AdvertisingCampaign]:
+async def get_campaign_by_id(db: AsyncSession, campaign_id: int) -> AdvertisingCampaign | None:
     result = await db.execute(
         select(AdvertisingCampaign)
         .options(
@@ -84,10 +82,8 @@ async def get_campaign_by_start_parameter(
     start_parameter: str,
     *,
     only_active: bool = False,
-) -> Optional[AdvertisingCampaign]:
-    stmt = select(AdvertisingCampaign).where(
-        AdvertisingCampaign.start_parameter == start_parameter
-    )
+) -> AdvertisingCampaign | None:
+    stmt = select(AdvertisingCampaign).where(AdvertisingCampaign.start_parameter == start_parameter)
     if only_active:
         stmt = stmt.where(AdvertisingCampaign.is_active.is_(True))
 
@@ -101,7 +97,7 @@ async def get_campaigns_list(
     offset: int = 0,
     limit: int = 20,
     include_inactive: bool = True,
-) -> List[AdvertisingCampaign]:
+) -> list[AdvertisingCampaign]:
     stmt = (
         select(AdvertisingCampaign)
         .options(
@@ -119,9 +115,7 @@ async def get_campaigns_list(
     return result.scalars().all()
 
 
-async def get_campaigns_count(
-    db: AsyncSession, *, is_active: Optional[bool] = None
-) -> int:
+async def get_campaigns_count(db: AsyncSession, *, is_active: bool | None = None) -> int:
     stmt = select(func.count(AdvertisingCampaign.id))
     if is_active is not None:
         stmt = stmt.where(AdvertisingCampaign.is_active.is_(is_active))
@@ -136,17 +130,17 @@ async def update_campaign(
     **kwargs,
 ) -> AdvertisingCampaign:
     allowed_fields = {
-        "name",
-        "start_parameter",
-        "bonus_type",
-        "balance_bonus_kopeks",
-        "subscription_duration_days",
-        "subscription_traffic_gb",
-        "subscription_device_limit",
-        "subscription_squads",
-        "tariff_id",
-        "tariff_duration_days",
-        "is_active",
+        'name',
+        'start_parameter',
+        'bonus_type',
+        'balance_bonus_kopeks',
+        'subscription_duration_days',
+        'subscription_traffic_gb',
+        'subscription_device_limit',
+        'subscription_squads',
+        'tariff_id',
+        'tariff_duration_days',
+        'is_active',
     }
 
     update_data = {}
@@ -157,33 +151,27 @@ async def update_campaign(
     if not update_data:
         return campaign
 
-    update_data["updated_at"] = datetime.utcnow()
+    update_data['updated_at'] = datetime.utcnow()
 
-    await db.execute(
-        update(AdvertisingCampaign)
-        .where(AdvertisingCampaign.id == campaign.id)
-        .values(**update_data)
-    )
+    await db.execute(update(AdvertisingCampaign).where(AdvertisingCampaign.id == campaign.id).values(**update_data))
     await db.commit()
     await db.refresh(campaign)
 
-    logger.info("✏️ Обновлена рекламная кампания %s (%s)", campaign.name, update_data)
+    logger.info('✏️ Обновлена рекламная кампания %s (%s)', campaign.name, update_data)
     return campaign
 
 
 async def delete_campaign(db: AsyncSession, campaign: AdvertisingCampaign) -> bool:
-    await db.execute(
-        delete(AdvertisingCampaign).where(AdvertisingCampaign.id == campaign.id)
-    )
+    await db.execute(delete(AdvertisingCampaign).where(AdvertisingCampaign.id == campaign.id))
     await db.commit()
-    logger.info("🗑️ Удалена рекламная кампания %s", campaign.name)
+    logger.info('🗑️ Удалена рекламная кампания %s', campaign.name)
     return True
 
 
 async def get_campaign_registration_by_user(
     db: AsyncSession,
     user_id: int,
-) -> Optional[AdvertisingCampaignRegistration]:
+) -> AdvertisingCampaignRegistration | None:
     result = await db.execute(
         select(AdvertisingCampaignRegistration)
         .options(selectinload(AdvertisingCampaignRegistration.campaign))
@@ -200,9 +188,9 @@ async def record_campaign_registration(
     user_id: int,
     bonus_type: str,
     balance_bonus_kopeks: int = 0,
-    subscription_duration_days: Optional[int] = None,
-    tariff_id: Optional[int] = None,
-    tariff_duration_days: Optional[int] = None,
+    subscription_duration_days: int | None = None,
+    tariff_id: int | None = None,
+    tariff_duration_days: int | None = None,
 ) -> AdvertisingCampaignRegistration:
     existing = await db.execute(
         select(AdvertisingCampaignRegistration).where(
@@ -229,14 +217,14 @@ async def record_campaign_registration(
     await db.commit()
     await db.refresh(registration)
 
-    logger.info("📈 Регистрируем пользователя %s в кампании %s", user_id, campaign_id)
+    logger.info('📈 Регистрируем пользователя %s в кампании %s', user_id, campaign_id)
     return registration
 
 
 async def get_campaign_statistics(
     db: AsyncSession,
     campaign_id: int,
-) -> Dict[str, Optional[int]]:
+) -> dict[str, int | None]:
     registrations_query = select(AdvertisingCampaignRegistration.user_id).where(
         AdvertisingCampaignRegistration.campaign_id == campaign_id
     )
@@ -245,9 +233,7 @@ async def get_campaign_statistics(
     result = await db.execute(
         select(
             func.count(AdvertisingCampaignRegistration.id),
-            func.coalesce(
-                func.sum(AdvertisingCampaignRegistration.balance_bonus_kopeks), 0
-            ),
+            func.coalesce(func.sum(AdvertisingCampaignRegistration.balance_bonus_kopeks), 0),
             func.max(AdvertisingCampaignRegistration.created_at),
         ).where(AdvertisingCampaignRegistration.campaign_id == campaign_id)
     )
@@ -259,7 +245,7 @@ async def get_campaign_statistics(
         select(func.count(AdvertisingCampaignRegistration.id)).where(
             and_(
                 AdvertisingCampaignRegistration.campaign_id == campaign_id,
-                AdvertisingCampaignRegistration.bonus_type == "subscription",
+                AdvertisingCampaignRegistration.bonus_type == 'subscription',
             )
         )
     )
@@ -312,11 +298,7 @@ async def get_campaign_statistics(
             SubscriptionConversion.first_payment_amount_kopeks,
             SubscriptionConversion.converted_at,
         )
-        .where(
-            SubscriptionConversion.user_id.in_(
-                select(registrations_subquery.c.user_id)
-            )
-        )
+        .where(SubscriptionConversion.user_id.in_(select(registrations_subquery.c.user_id)))
         .order_by(SubscriptionConversion.converted_at)
     )
     conversion_entries = conversions_rows.all()
@@ -339,8 +321,8 @@ async def get_campaign_statistics(
     subscription_payments_total = 0
     paid_users_from_transactions = set()
     conversion_user_ids = set()
-    first_payment_amount_by_user: Dict[int, int] = {}
-    first_payment_time_by_user: Dict[int, Optional[datetime]] = {}
+    first_payment_amount_by_user: dict[int, int] = {}
+    first_payment_time_by_user: dict[int, datetime | None] = {}
 
     for user_id, amount_kopeks, converted_at in conversion_entries:
         conversion_user_ids.add(user_id)
@@ -358,13 +340,8 @@ async def get_campaign_statistics(
             first_payment_time_by_user[user_id] = created_at
         else:
             existing_time = first_payment_time_by_user.get(user_id)
-            if existing_time is None and created_at is not None:
-                first_payment_amount_by_user[user_id] = amount_value
-                first_payment_time_by_user[user_id] = created_at
-            elif (
-                existing_time is not None
-                and created_at is not None
-                and created_at < existing_time
+            if (existing_time is None and created_at is not None) or (
+                existing_time is not None and created_at is not None and created_at < existing_time
             ):
                 first_payment_amount_by_user[user_id] = amount_value
                 first_payment_time_by_user[user_id] = created_at
@@ -376,15 +353,11 @@ async def get_campaign_statistics(
     paid_users_count = max(len(paid_user_ids), paid_users_from_flag)
 
     conversion_count = conversion_count or len(paid_user_ids)
-    if conversion_count < len(paid_user_ids):
-        conversion_count = len(paid_user_ids)
+    conversion_count = max(conversion_count, len(paid_user_ids))
 
     avg_first_payment = 0
     if first_payment_amount_by_user:
-        avg_first_payment = int(
-            sum(first_payment_amount_by_user.values())
-            / len(first_payment_amount_by_user)
-        )
+        avg_first_payment = int(sum(first_payment_amount_by_user.values()) / len(first_payment_amount_by_user))
 
     conversion_rate = 0.0
     if count:
@@ -459,50 +432,44 @@ async def get_campaign_statistics(
         avg_revenue_per_user = int(total_revenue / count)
 
     return {
-        "registrations": count,
-        "balance_issued": total_balance,
-        "subscription_issued": subscription_bonuses_issued,
-        "last_registration": last_registration,
-        "total_revenue_kopeks": total_revenue,
-        "trial_users_count": trial_users_count,
-        "active_trials_count": active_trials_count,
-        "conversion_count": conversion_count,
-        "paid_users_count": paid_users_count,
-        "conversion_rate": conversion_rate,
-        "trial_conversion_rate": trial_conversion_rate,
-        "avg_revenue_per_user_kopeks": avg_revenue_per_user,
-        "avg_first_payment_kopeks": avg_first_payment,
+        'registrations': count,
+        'balance_issued': total_balance,
+        'subscription_issued': subscription_bonuses_issued,
+        'last_registration': last_registration,
+        'total_revenue_kopeks': total_revenue,
+        'trial_users_count': trial_users_count,
+        'active_trials_count': active_trials_count,
+        'conversion_count': conversion_count,
+        'paid_users_count': paid_users_count,
+        'conversion_rate': conversion_rate,
+        'trial_conversion_rate': trial_conversion_rate,
+        'avg_revenue_per_user_kopeks': avg_revenue_per_user,
+        'avg_first_payment_kopeks': avg_first_payment,
     }
 
 
-async def get_campaigns_overview(db: AsyncSession) -> Dict[str, int]:
+async def get_campaigns_overview(db: AsyncSession) -> dict[str, int]:
     total = await get_campaigns_count(db)
     active = await get_campaigns_count(db, is_active=True)
     inactive = await get_campaigns_count(db, is_active=False)
 
-    registrations_result = await db.execute(
-        select(func.count(AdvertisingCampaignRegistration.id))
-    )
+    registrations_result = await db.execute(select(func.count(AdvertisingCampaignRegistration.id)))
 
     balance_result = await db.execute(
-        select(
-            func.coalesce(
-                func.sum(AdvertisingCampaignRegistration.balance_bonus_kopeks), 0
-            )
-        )
+        select(func.coalesce(func.sum(AdvertisingCampaignRegistration.balance_bonus_kopeks), 0))
     )
 
     subscription_result = await db.execute(
         select(func.count(AdvertisingCampaignRegistration.id)).where(
-            AdvertisingCampaignRegistration.bonus_type == "subscription"
+            AdvertisingCampaignRegistration.bonus_type == 'subscription'
         )
     )
 
     return {
-        "total": total,
-        "active": active,
-        "inactive": inactive,
-        "registrations": registrations_result.scalar() or 0,
-        "balance_total": balance_result.scalar() or 0,
-        "subscription_total": subscription_result.scalar() or 0,
+        'total': total,
+        'active': active,
+        'inactive': inactive,
+        'registrations': registrations_result.scalar() or 0,
+        'balance_total': balance_result.scalar() or 0,
+        'subscription_total': subscription_result.scalar() or 0,
     }

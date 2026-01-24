@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, List, Optional
+from typing import Any
 
 from aiogram.types import InlineKeyboardButton
 
@@ -12,24 +12,24 @@ from aiogram.types import InlineKeyboardButton
 class MenuContext:
     """Контекст пользователя для построения меню."""
 
-    language: str = "ru"
+    language: str = 'ru'
     is_admin: bool = False
     is_moderator: bool = False
     has_active_subscription: bool = False
     subscription_is_active: bool = False
     has_had_paid_subscription: bool = False
     balance_kopeks: int = 0
-    subscription: Optional[Any] = None
+    subscription: Any | None = None
     show_resume_checkout: bool = False
     has_saved_cart: bool = False
-    custom_buttons: List[InlineKeyboardButton] = field(default_factory=list)
+    custom_buttons: list[InlineKeyboardButton] = field(default_factory=list)
     # Расширенные поля для плейсхолдеров и условий
-    username: str = ""
+    username: str = ''
     subscription_days: int = 0
     traffic_used_gb: float = 0.0
     traffic_left_gb: float = 0.0
     referral_count: int = 0
     referral_earnings_kopeks: int = 0
     registration_days: int = 0
-    promo_group_id: Optional[str] = None
+    promo_group_id: str | None = None
     has_autopay: bool = False

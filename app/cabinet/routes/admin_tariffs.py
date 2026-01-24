@@ -1,51 +1,49 @@
 """Admin routes for managing tariffs in cabinet."""
 
 import logging
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
 
-from app.database.models import User, Tariff, Subscription, ServerSquad, PromoGroup, Transaction, TransactionType
+from app.database.crud.server_squad import get_all_server_squads
 from app.database.crud.tariff import (
+    create_tariff,
+    delete_tariff,
     get_all_tariffs,
     get_tariff_by_id,
-    create_tariff,
-    update_tariff,
-    delete_tariff,
     get_tariff_subscriptions_count,
-    set_tariff_promo_groups,
     load_period_prices_from_db,
+    set_tariff_promo_groups,
+    update_tariff,
 )
-from app.database.crud.server_squad import get_all_server_squads
+from app.database.models import PromoGroup, Subscription, Tariff, Transaction, TransactionType, User
 
 from ..dependencies import get_cabinet_db, get_current_admin_user
 from ..schemas.tariffs import (
-    TariffListResponse,
-    TariffListItem,
-    TariffDetailResponse,
+    PeriodPrice,
+    PromoGroupInfo,
+    ServerInfo,
+    ServerTrafficLimit,
     TariffCreateRequest,
-    TariffUpdateRequest,
+    TariffDetailResponse,
+    TariffListItem,
+    TariffListResponse,
+    TariffStatsResponse,
     TariffToggleResponse,
     TariffTrialResponse,
-    TariffStatsResponse,
-    PeriodPrice,
-    ServerInfo,
-    PromoGroupInfo,
-    ServerTrafficLimit,
+    TariffUpdateRequest,
 )
+
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/admin/tariffs", tags=["Cabinet Admin Tariffs"])
+router = APIRouter(prefix='/admin/tariffs', tags=['Cabinet Admin Tariffs'])
 
 
 async def _get_tariff_servers(
-    db: AsyncSession,
-    allowed_squads: List[str],
-    server_traffic_limits: dict = None
-) -> List[ServerInfo]:
+    db: AsyncSession, allowed_squads: list[str], server_traffic_limits: dict = None
+) -> list[ServerInfo]:
     """Get server info for tariff."""
     servers, _ = await get_all_server_squads(db, available_only=False)
     limits = server_traffic_limits or {}
@@ -60,18 +58,20 @@ async def _get_tariff_servers(
             elif isinstance(limit_data, int):
                 server_limit = limit_data
 
-        result.append(ServerInfo(
-            id=server.id,
-            squad_uuid=server.squad_uuid,
-            display_name=server.display_name,
-            country_code=server.country_code,
-            is_selected=server.squad_uuid in allowed_squads,
-            traffic_limit_gb=server_limit,
-        ))
+        result.append(
+            ServerInfo(
+                id=server.id,
+                squad_uuid=server.squad_uuid,
+                display_name=server.display_name,
+                country_code=server.country_code,
+                is_selected=server.squad_uuid in allowed_squads,
+                traffic_limit_gb=server_limit,
+            )
+        )
     return result
 
 
-async def _get_tariff_promo_groups(db: AsyncSession, tariff: Tariff) -> List[PromoGroupInfo]:
+async def _get_tariff_promo_groups(db: AsyncSession, tariff: Tariff) -> list[PromoGroupInfo]:
     """Get promo group info for tariff."""
     result = await db.execute(select(PromoGroup).order_by(PromoGroup.name))
     all_groups = result.scalars().all()
@@ -88,7 +88,7 @@ async def _get_tariff_promo_groups(db: AsyncSession, tariff: Tariff) -> List[Pro
     ]
 
 
-def _period_prices_to_list(period_prices: dict) -> List[PeriodPrice]:
+def _period_prices_to_list(period_prices: dict) -> list[PeriodPrice]:
     """Convert period_prices dict to list."""
     if not period_prices:
         return []
@@ -98,12 +98,12 @@ def _period_prices_to_list(period_prices: dict) -> List[PeriodPrice]:
     ]
 
 
-def _period_prices_to_dict(period_prices: List[PeriodPrice]) -> dict:
+def _period_prices_to_dict(period_prices: list[PeriodPrice]) -> dict:
     """Convert period_prices list to dict."""
     return {str(pp.days): pp.price_kopeks for pp in period_prices}
 
 
-@router.get("", response_model=TariffListResponse)
+@router.get('', response_model=TariffListResponse)
 async def list_tariffs(
     include_inactive: bool = True,
     admin: User = Depends(get_current_admin_user),
@@ -115,28 +115,30 @@ async def list_tariffs(
     items = []
     for tariff in tariffs:
         subs_count = await get_tariff_subscriptions_count(db, tariff.id)
-        items.append(TariffListItem(
-            id=tariff.id,
-            name=tariff.name,
-            description=tariff.description,
-            is_active=tariff.is_active,
-            is_trial_available=tariff.is_trial_available,
-            is_daily=tariff.is_daily,
-            daily_price_kopeks=tariff.daily_price_kopeks,
-            allow_traffic_topup=tariff.allow_traffic_topup,
-            traffic_limit_gb=tariff.traffic_limit_gb,
-            device_limit=tariff.device_limit,
-            tier_level=tariff.tier_level,
-            display_order=tariff.display_order,
-            servers_count=len(tariff.allowed_squads or []),
-            subscriptions_count=subs_count,
-            created_at=tariff.created_at,
-        ))
+        items.append(
+            TariffListItem(
+                id=tariff.id,
+                name=tariff.name,
+                description=tariff.description,
+                is_active=tariff.is_active,
+                is_trial_available=tariff.is_trial_available,
+                is_daily=tariff.is_daily,
+                daily_price_kopeks=tariff.daily_price_kopeks,
+                allow_traffic_topup=tariff.allow_traffic_topup,
+                traffic_limit_gb=tariff.traffic_limit_gb,
+                device_limit=tariff.device_limit,
+                tier_level=tariff.tier_level,
+                display_order=tariff.display_order,
+                servers_count=len(tariff.allowed_squads or []),
+                subscriptions_count=subs_count,
+                created_at=tariff.created_at,
+            )
+        )
 
     return TariffListResponse(tariffs=items, total=len(items))
 
 
-@router.get("/available-servers", response_model=List[ServerInfo])
+@router.get('/available-servers', response_model=list[ServerInfo])
 async def get_available_servers(
     admin: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_cabinet_db),
@@ -155,7 +157,7 @@ async def get_available_servers(
     ]
 
 
-@router.get("/{tariff_id}", response_model=TariffDetailResponse)
+@router.get('/{tariff_id}', response_model=TariffDetailResponse)
 async def get_tariff(
     tariff_id: int,
     admin: User = Depends(get_current_admin_user),
@@ -166,7 +168,7 @@ async def get_tariff(
     if not tariff:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Tariff not found",
+            detail='Tariff not found',
         )
 
     allowed_squads = tariff.allowed_squads or []
@@ -225,7 +227,7 @@ async def get_tariff(
     )
 
 
-@router.post("", response_model=TariffDetailResponse)
+@router.post('', response_model=TariffDetailResponse)
 async def create_new_tariff(
     request: TariffCreateRequest,
     admin: User = Depends(get_current_admin_user),
@@ -235,9 +237,11 @@ async def create_new_tariff(
     period_prices_dict = _period_prices_to_dict(request.period_prices)
 
     # Преобразуем ServerTrafficLimit в dict для хранения
-    server_limits_dict = {
-        uuid: limit.model_dump() for uuid, limit in request.server_traffic_limits.items()
-    } if request.server_traffic_limits else {}
+    server_limits_dict = (
+        {uuid: limit.model_dump() for uuid, limit in request.server_traffic_limits.items()}
+        if request.server_traffic_limits
+        else {}
+    )
 
     tariff = await create_tariff(
         db=db,
@@ -274,7 +278,7 @@ async def create_new_tariff(
         traffic_reset_mode=request.traffic_reset_mode,
     )
 
-    logger.info(f"Admin {admin.id} created tariff {tariff.id}: {tariff.name}")
+    logger.info(f'Admin {admin.id} created tariff {tariff.id}: {tariff.name}')
 
     # Перезагружаем периоды из БД для синхронизации с ботом
     await load_period_prices_from_db(db)
@@ -283,7 +287,7 @@ async def create_new_tariff(
     return await get_tariff(tariff.id, admin, db)
 
 
-@router.put("/{tariff_id}", response_model=TariffDetailResponse)
+@router.put('/{tariff_id}', response_model=TariffDetailResponse)
 async def update_existing_tariff(
     tariff_id: int,
     request: TariffUpdateRequest,
@@ -295,72 +299,72 @@ async def update_existing_tariff(
     if not tariff:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Tariff not found",
+            detail='Tariff not found',
         )
 
     # Build updates dict
     updates = {}
     if request.name is not None:
-        updates["name"] = request.name
+        updates['name'] = request.name
     if request.description is not None:
-        updates["description"] = request.description
+        updates['description'] = request.description
     if request.is_active is not None:
-        updates["is_active"] = request.is_active
+        updates['is_active'] = request.is_active
     if request.allow_traffic_topup is not None:
-        updates["allow_traffic_topup"] = request.allow_traffic_topup
+        updates['allow_traffic_topup'] = request.allow_traffic_topup
     if request.traffic_topup_enabled is not None:
-        updates["traffic_topup_enabled"] = request.traffic_topup_enabled
+        updates['traffic_topup_enabled'] = request.traffic_topup_enabled
     if request.traffic_topup_packages is not None:
-        updates["traffic_topup_packages"] = request.traffic_topup_packages
+        updates['traffic_topup_packages'] = request.traffic_topup_packages
     if request.max_topup_traffic_gb is not None:
-        updates["max_topup_traffic_gb"] = request.max_topup_traffic_gb
+        updates['max_topup_traffic_gb'] = request.max_topup_traffic_gb
     if request.traffic_limit_gb is not None:
-        updates["traffic_limit_gb"] = request.traffic_limit_gb
+        updates['traffic_limit_gb'] = request.traffic_limit_gb
     if request.device_limit is not None:
-        updates["device_limit"] = request.device_limit
+        updates['device_limit'] = request.device_limit
     if request.device_price_kopeks is not None:
-        updates["device_price_kopeks"] = request.device_price_kopeks
+        updates['device_price_kopeks'] = request.device_price_kopeks
     if request.max_device_limit is not None:
-        updates["max_device_limit"] = request.max_device_limit
+        updates['max_device_limit'] = request.max_device_limit
     if request.tier_level is not None:
-        updates["tier_level"] = request.tier_level
+        updates['tier_level'] = request.tier_level
     if request.display_order is not None:
-        updates["display_order"] = request.display_order
+        updates['display_order'] = request.display_order
     if request.period_prices is not None:
-        updates["period_prices"] = _period_prices_to_dict(request.period_prices)
+        updates['period_prices'] = _period_prices_to_dict(request.period_prices)
     if request.allowed_squads is not None:
-        updates["allowed_squads"] = request.allowed_squads
+        updates['allowed_squads'] = request.allowed_squads
     if request.server_traffic_limits is not None:
         # Преобразуем ServerTrafficLimit в dict для хранения
-        updates["server_traffic_limits"] = {
+        updates['server_traffic_limits'] = {
             uuid: limit.model_dump() for uuid, limit in request.server_traffic_limits.items()
         }
     # Произвольное количество дней
     if request.custom_days_enabled is not None:
-        updates["custom_days_enabled"] = request.custom_days_enabled
+        updates['custom_days_enabled'] = request.custom_days_enabled
     if request.price_per_day_kopeks is not None:
-        updates["price_per_day_kopeks"] = request.price_per_day_kopeks
+        updates['price_per_day_kopeks'] = request.price_per_day_kopeks
     if request.min_days is not None:
-        updates["min_days"] = request.min_days
+        updates['min_days'] = request.min_days
     if request.max_days is not None:
-        updates["max_days"] = request.max_days
+        updates['max_days'] = request.max_days
     # Произвольный трафик при покупке
     if request.custom_traffic_enabled is not None:
-        updates["custom_traffic_enabled"] = request.custom_traffic_enabled
+        updates['custom_traffic_enabled'] = request.custom_traffic_enabled
     if request.traffic_price_per_gb_kopeks is not None:
-        updates["traffic_price_per_gb_kopeks"] = request.traffic_price_per_gb_kopeks
+        updates['traffic_price_per_gb_kopeks'] = request.traffic_price_per_gb_kopeks
     if request.min_traffic_gb is not None:
-        updates["min_traffic_gb"] = request.min_traffic_gb
+        updates['min_traffic_gb'] = request.min_traffic_gb
     if request.max_traffic_gb is not None:
-        updates["max_traffic_gb"] = request.max_traffic_gb
+        updates['max_traffic_gb'] = request.max_traffic_gb
     # Дневной тариф
     if request.is_daily is not None:
-        updates["is_daily"] = request.is_daily
+        updates['is_daily'] = request.is_daily
     if request.daily_price_kopeks is not None:
-        updates["daily_price_kopeks"] = request.daily_price_kopeks
+        updates['daily_price_kopeks'] = request.daily_price_kopeks
     # Режим сброса трафика (None допускается как значение для сброса к глобальной настройке)
     if 'traffic_reset_mode' in request.model_fields_set:
-        updates["traffic_reset_mode"] = request.traffic_reset_mode
+        updates['traffic_reset_mode'] = request.traffic_reset_mode
 
     if updates:
         await update_tariff(db, tariff, **updates)
@@ -369,7 +373,7 @@ async def update_existing_tariff(
     if request.promo_group_ids is not None:
         await set_tariff_promo_groups(db, tariff_id, request.promo_group_ids)
 
-    logger.info(f"Admin {admin.id} updated tariff {tariff_id}")
+    logger.info(f'Admin {admin.id} updated tariff {tariff_id}')
 
     # Перезагружаем периоды из БД для синхронизации с ботом
     await load_period_prices_from_db(db)
@@ -377,7 +381,7 @@ async def update_existing_tariff(
     return await get_tariff(tariff_id, admin, db)
 
 
-@router.delete("/{tariff_id}")
+@router.delete('/{tariff_id}')
 async def delete_existing_tariff(
     tariff_id: int,
     admin: User = Depends(get_current_admin_user),
@@ -388,7 +392,7 @@ async def delete_existing_tariff(
     if not tariff:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Tariff not found",
+            detail='Tariff not found',
         )
 
     # Check if tariff has subscriptions
@@ -396,19 +400,19 @@ async def delete_existing_tariff(
     if subs_count > 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot delete tariff with {subs_count} active subscriptions",
+            detail=f'Cannot delete tariff with {subs_count} active subscriptions',
         )
 
     await delete_tariff(db, tariff)
-    logger.info(f"Admin {admin.id} deleted tariff {tariff_id}: {tariff.name}")
+    logger.info(f'Admin {admin.id} deleted tariff {tariff_id}: {tariff.name}')
 
     # Перезагружаем периоды из БД для синхронизации с ботом
     await load_period_prices_from_db(db)
 
-    return {"message": "Tariff deleted successfully"}
+    return {'message': 'Tariff deleted successfully'}
 
 
-@router.post("/{tariff_id}/toggle", response_model=TariffToggleResponse)
+@router.post('/{tariff_id}/toggle', response_model=TariffToggleResponse)
 async def toggle_tariff(
     tariff_id: int,
     admin: User = Depends(get_current_admin_user),
@@ -419,14 +423,14 @@ async def toggle_tariff(
     if not tariff:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Tariff not found",
+            detail='Tariff not found',
         )
 
     new_status = not tariff.is_active
     await update_tariff(db, tariff, is_active=new_status)
 
-    status_text = "activated" if new_status else "deactivated"
-    logger.info(f"Admin {admin.id} {status_text} tariff {tariff_id}")
+    status_text = 'activated' if new_status else 'deactivated'
+    logger.info(f'Admin {admin.id} {status_text} tariff {tariff_id}')
 
     # Перезагружаем периоды из БД для синхронизации с ботом
     await load_period_prices_from_db(db)
@@ -434,11 +438,11 @@ async def toggle_tariff(
     return TariffToggleResponse(
         id=tariff_id,
         is_active=new_status,
-        message=f"Tariff {status_text}",
+        message=f'Tariff {status_text}',
     )
 
 
-@router.post("/{tariff_id}/trial", response_model=TariffTrialResponse)
+@router.post('/{tariff_id}/trial', response_model=TariffTrialResponse)
 async def toggle_trial_tariff(
     tariff_id: int,
     admin: User = Depends(get_current_admin_user),
@@ -453,7 +457,7 @@ async def toggle_trial_tariff(
     if not tariff:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Tariff not found",
+            detail='Tariff not found',
         )
 
     new_status = not tariff.is_trial_available
@@ -461,26 +465,24 @@ async def toggle_trial_tariff(
     if new_status:
         # При включении триала - снимаем флаг со ВСЕХ тарифов, затем ставим на текущий
         # Это гарантирует, что триальным будет только один тариф
-        await db.execute(
-            Tariff.__table__.update().values(is_trial_available=False)
-        )
+        await db.execute(Tariff.__table__.update().values(is_trial_available=False))
         await db.commit()
         # Обновляем объект тарифа после массового обновления
         await db.refresh(tariff)
 
     await update_tariff(db, tariff, is_trial_available=new_status)
 
-    status_text = "set as trial" if new_status else "removed from trial"
-    logger.info(f"Admin {admin.id} {status_text} tariff {tariff_id}")
+    status_text = 'set as trial' if new_status else 'removed from trial'
+    logger.info(f'Admin {admin.id} {status_text} tariff {tariff_id}')
 
     return TariffTrialResponse(
         id=tariff_id,
         is_trial_available=new_status,
-        message=f"Tariff {status_text}",
+        message=f'Tariff {status_text}',
     )
 
 
-@router.get("/{tariff_id}/stats", response_model=TariffStatsResponse)
+@router.get('/{tariff_id}/stats', response_model=TariffStatsResponse)
 async def get_tariff_stats(
     tariff_id: int,
     admin: User = Depends(get_current_admin_user),
@@ -491,30 +493,25 @@ async def get_tariff_stats(
     if not tariff:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Tariff not found",
+            detail='Tariff not found',
         )
 
     # Count subscriptions
-    total_result = await db.execute(
-        select(func.count(Subscription.id))
-        .where(Subscription.tariff_id == tariff_id)
-    )
+    total_result = await db.execute(select(func.count(Subscription.id)).where(Subscription.tariff_id == tariff_id))
     total_count = total_result.scalar() or 0
 
     # Count active subscriptions
     active_result = await db.execute(
-        select(func.count(Subscription.id))
-        .where(
+        select(func.count(Subscription.id)).where(
             Subscription.tariff_id == tariff_id,
-            Subscription.status == "active",
+            Subscription.status == 'active',
         )
     )
     active_count = active_result.scalar() or 0
 
     # Count trial subscriptions
     trial_result = await db.execute(
-        select(func.count(Subscription.id))
-        .where(
+        select(func.count(Subscription.id)).where(
             Subscription.tariff_id == tariff_id,
             Subscription.is_trial == True,
         )

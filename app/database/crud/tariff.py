@@ -1,22 +1,21 @@
 import logging
-from typing import Dict, List, Optional
 
-from sqlalchemy import func, select, update, delete
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.database.models import Tariff, Subscription, PromoGroup, tariff_promo_groups
+from app.database.models import PromoGroup, Subscription, Tariff
 
 
 logger = logging.getLogger(__name__)
 
 
-def _normalize_period_prices(period_prices: Optional[Dict[int, int]]) -> Dict[str, int]:
+def _normalize_period_prices(period_prices: dict[int, int] | None) -> dict[str, int]:
     """Нормализует цены периодов в формат {str: int}."""
     if not period_prices:
         return {}
 
-    normalized: Dict[str, int] = {}
+    normalized: dict[str, int] = {}
 
     for key, value in period_prices.items():
         try:
@@ -36,8 +35,8 @@ async def get_all_tariffs(
     *,
     include_inactive: bool = False,
     offset: int = 0,
-    limit: Optional[int] = None,
-) -> List[Tariff]:
+    limit: int | None = None,
+) -> list[Tariff]:
     """Получает все тарифы с опциональной фильтрацией по активности."""
     query = select(Tariff).options(selectinload(Tariff.allowed_promo_groups))
 
@@ -60,7 +59,7 @@ async def get_tariff_by_id(
     tariff_id: int,
     *,
     with_promo_groups: bool = True,
-) -> Optional[Tariff]:
+) -> Tariff | None:
     """Получает тариф по ID."""
     query = select(Tariff).where(Tariff.id == tariff_id)
 
@@ -82,7 +81,7 @@ async def count_tariffs(db: AsyncSession, *, include_inactive: bool = False) -> 
     return int(result.scalar_one())
 
 
-async def get_trial_tariff(db: AsyncSession) -> Optional[Tariff]:
+async def get_trial_tariff(db: AsyncSession) -> Tariff | None:
     """Получает тариф, доступный для триала (is_trial_available=True).
 
     Сортируется по updated_at DESC, чтобы вернуть последний установленный
@@ -100,12 +99,10 @@ async def get_trial_tariff(db: AsyncSession) -> Optional[Tariff]:
     return result.scalars().first()
 
 
-async def set_trial_tariff(db: AsyncSession, tariff_id: int) -> Optional[Tariff]:
+async def set_trial_tariff(db: AsyncSession, tariff_id: int) -> Tariff | None:
     """Устанавливает тариф как триальный (снимает флаг с других тарифов)."""
     # Снимаем флаг с всех тарифов
-    await db.execute(
-        Tariff.__table__.update().values(is_trial_available=False)
-    )
+    await db.execute(Tariff.__table__.update().values(is_trial_available=False))
 
     # Устанавливаем флаг на выбранный тариф
     tariff = await get_tariff_by_id(db, tariff_id)
@@ -119,16 +116,14 @@ async def set_trial_tariff(db: AsyncSession, tariff_id: int) -> Optional[Tariff]
 
 async def clear_trial_tariff(db: AsyncSession) -> None:
     """Снимает флаг триала со всех тарифов."""
-    await db.execute(
-        Tariff.__table__.update().values(is_trial_available=False)
-    )
+    await db.execute(Tariff.__table__.update().values(is_trial_available=False))
     await db.commit()
 
 
 async def get_tariffs_for_user(
     db: AsyncSession,
-    promo_group_id: Optional[int] = None,
-) -> List[Tariff]:
+    promo_group_id: int | None = None,
+) -> list[Tariff]:
     """
     Получает тарифы, доступные для пользователя с учетом его промогруппы.
     Если у тарифа нет ограничений по промогруппам - он доступен всем.
@@ -162,22 +157,22 @@ async def create_tariff(
     db: AsyncSession,
     name: str,
     *,
-    description: Optional[str] = None,
+    description: str | None = None,
     display_order: int = 0,
     is_active: bool = True,
     traffic_limit_gb: int = 100,
     device_limit: int = 1,
-    device_price_kopeks: Optional[int] = None,
-    max_device_limit: Optional[int] = None,
-    allowed_squads: Optional[List[str]] = None,
-    server_traffic_limits: Optional[Dict[str, dict]] = None,
-    period_prices: Optional[Dict[int, int]] = None,
+    device_price_kopeks: int | None = None,
+    max_device_limit: int | None = None,
+    allowed_squads: list[str] | None = None,
+    server_traffic_limits: dict[str, dict] | None = None,
+    period_prices: dict[int, int] | None = None,
     tier_level: int = 1,
     is_trial_available: bool = False,
     allow_traffic_topup: bool = True,
-    promo_group_ids: Optional[List[int]] = None,
+    promo_group_ids: list[int] | None = None,
     traffic_topup_enabled: bool = False,
-    traffic_topup_packages: Optional[Dict[str, int]] = None,
+    traffic_topup_packages: dict[str, int] | None = None,
     max_topup_traffic_gb: int = 0,
     is_daily: bool = False,
     daily_price_kopeks: int = 0,
@@ -192,7 +187,7 @@ async def create_tariff(
     min_traffic_gb: int = 1,
     max_traffic_gb: int = 1000,
     # Режим сброса трафика
-    traffic_reset_mode: Optional[str] = None,  # DAY, WEEK, MONTH, NO_RESET, None = глобальная настройка
+    traffic_reset_mode: str | None = None,  # DAY, WEEK, MONTH, NO_RESET, None = глобальная настройка
 ) -> Tariff:
     """Создает новый тариф."""
     normalized_prices = _normalize_period_prices(period_prices)
@@ -236,9 +231,7 @@ async def create_tariff(
 
     # Добавляем промогруппы если указаны
     if promo_group_ids:
-        promo_groups_result = await db.execute(
-            select(PromoGroup).where(PromoGroup.id.in_(promo_group_ids))
-        )
+        promo_groups_result = await db.execute(select(PromoGroup).where(PromoGroup.id.in_(promo_group_ids)))
         promo_groups = promo_groups_result.scalars().all()
         tariff.allowed_promo_groups = list(promo_groups)
 
@@ -262,38 +255,38 @@ async def update_tariff(
     db: AsyncSession,
     tariff: Tariff,
     *,
-    name: Optional[str] = None,
-    description: Optional[str] = None,
-    display_order: Optional[int] = None,
-    is_active: Optional[bool] = None,
-    traffic_limit_gb: Optional[int] = None,
-    device_limit: Optional[int] = None,
-    device_price_kopeks: Optional[int] = ...,  # ... = не передан, None = сбросить
-    max_device_limit: Optional[int] = ...,  # ... = не передан, None = сбросить (без лимита)
-    allowed_squads: Optional[List[str]] = None,
-    server_traffic_limits: Optional[Dict[str, dict]] = None,
-    period_prices: Optional[Dict[int, int]] = None,
-    tier_level: Optional[int] = None,
-    is_trial_available: Optional[bool] = None,
-    allow_traffic_topup: Optional[bool] = None,
-    promo_group_ids: Optional[List[int]] = None,
-    traffic_topup_enabled: Optional[bool] = None,
-    traffic_topup_packages: Optional[Dict[str, int]] = None,
-    max_topup_traffic_gb: Optional[int] = None,
-    is_daily: Optional[bool] = None,
-    daily_price_kopeks: Optional[int] = None,
+    name: str | None = None,
+    description: str | None = None,
+    display_order: int | None = None,
+    is_active: bool | None = None,
+    traffic_limit_gb: int | None = None,
+    device_limit: int | None = None,
+    device_price_kopeks: int | None = ...,  # ... = не передан, None = сбросить
+    max_device_limit: int | None = ...,  # ... = не передан, None = сбросить (без лимита)
+    allowed_squads: list[str] | None = None,
+    server_traffic_limits: dict[str, dict] | None = None,
+    period_prices: dict[int, int] | None = None,
+    tier_level: int | None = None,
+    is_trial_available: bool | None = None,
+    allow_traffic_topup: bool | None = None,
+    promo_group_ids: list[int] | None = None,
+    traffic_topup_enabled: bool | None = None,
+    traffic_topup_packages: dict[str, int] | None = None,
+    max_topup_traffic_gb: int | None = None,
+    is_daily: bool | None = None,
+    daily_price_kopeks: int | None = None,
     # Произвольное количество дней
-    custom_days_enabled: Optional[bool] = None,
-    price_per_day_kopeks: Optional[int] = None,
-    min_days: Optional[int] = None,
-    max_days: Optional[int] = None,
+    custom_days_enabled: bool | None = None,
+    price_per_day_kopeks: int | None = None,
+    min_days: int | None = None,
+    max_days: int | None = None,
     # Произвольный трафик при покупке
-    custom_traffic_enabled: Optional[bool] = None,
-    traffic_price_per_gb_kopeks: Optional[int] = None,
-    min_traffic_gb: Optional[int] = None,
-    max_traffic_gb: Optional[int] = None,
+    custom_traffic_enabled: bool | None = None,
+    traffic_price_per_gb_kopeks: int | None = None,
+    min_traffic_gb: int | None = None,
+    max_traffic_gb: int | None = None,
     # Режим сброса трафика
-    traffic_reset_mode: Optional[str] = ...,  # ... = не передан, None = сбросить к глобальной настройке
+    traffic_reset_mode: str | None = ...,  # ... = не передан, None = сбросить к глобальной настройке
 ) -> Tariff:
     """Обновляет существующий тариф."""
     if name is not None:
@@ -361,9 +354,7 @@ async def update_tariff(
     # Обновляем промогруппы если указаны
     if promo_group_ids is not None:
         if promo_group_ids:
-            promo_groups_result = await db.execute(
-                select(PromoGroup).where(PromoGroup.id.in_(promo_group_ids))
-            )
+            promo_groups_result = await db.execute(select(PromoGroup).where(PromoGroup.id.in_(promo_group_ids)))
             promo_groups = promo_groups_result.scalars().all()
             tariff.allowed_promo_groups = list(promo_groups)
         else:
@@ -411,22 +402,18 @@ async def delete_tariff(db: AsyncSession, tariff: Tariff) -> bool:
 
 async def get_tariff_subscriptions_count(db: AsyncSession, tariff_id: int) -> int:
     """Подсчитывает количество подписок на тарифе."""
-    result = await db.execute(
-        select(func.count(Subscription.id)).where(Subscription.tariff_id == tariff_id)
-    )
+    result = await db.execute(select(func.count(Subscription.id)).where(Subscription.tariff_id == tariff_id))
     return int(result.scalar_one())
 
 
 async def set_tariff_promo_groups(
     db: AsyncSession,
     tariff: Tariff,
-    promo_group_ids: List[int],
+    promo_group_ids: list[int],
 ) -> Tariff:
     """Устанавливает промогруппы для тарифа."""
     if promo_group_ids:
-        promo_groups_result = await db.execute(
-            select(PromoGroup).where(PromoGroup.id.in_(promo_group_ids))
-        )
+        promo_groups_result = await db.execute(select(PromoGroup).where(PromoGroup.id.in_(promo_group_ids)))
         promo_groups = promo_groups_result.scalars().all()
         tariff.allowed_promo_groups = list(promo_groups)
     else:
@@ -473,7 +460,7 @@ async def get_tariffs_with_subscriptions_count(
     db: AsyncSession,
     *,
     include_inactive: bool = False,
-) -> List[tuple]:
+) -> list[tuple]:
     """Получает тарифы с количеством подписок."""
     query = (
         select(Tariff, func.count(Subscription.id))
@@ -491,22 +478,18 @@ async def get_tariffs_with_subscriptions_count(
 
 async def reorder_tariffs(
     db: AsyncSession,
-    tariff_order: List[int],
+    tariff_order: list[int],
 ) -> None:
     """Изменяет порядок отображения тарифов."""
     for order, tariff_id in enumerate(tariff_order):
-        await db.execute(
-            update(Tariff)
-            .where(Tariff.id == tariff_id)
-            .values(display_order=order)
-        )
+        await db.execute(update(Tariff).where(Tariff.id == tariff_id).values(display_order=order))
 
     await db.commit()
 
-    logger.info("Изменен порядок тарифов: %s", tariff_order)
+    logger.info('Изменен порядок тарифов: %s', tariff_order)
 
 
-async def sync_default_tariff_from_config(db: AsyncSession) -> Optional[Tariff]:
+async def sync_default_tariff_from_config(db: AsyncSession) -> Tariff | None:
     """
     Синхронизирует дефолтный тариф из конфига (.env) в БД.
     Создаёт тариф "Стандартный" если в БД нет тарифов.
@@ -515,7 +498,7 @@ async def sync_default_tariff_from_config(db: AsyncSession) -> Optional[Tariff]:
     Returns:
         Tariff или None если не требуется синхронизация
     """
-    from app.config import settings, PERIOD_PRICES
+    from app.config import PERIOD_PRICES, settings
 
     # Проверяем есть ли тарифы в БД
     result = await db.execute(select(func.count(Tariff.id)))
@@ -528,13 +511,11 @@ async def sync_default_tariff_from_config(db: AsyncSession) -> Optional[Tariff]:
             period_prices[str(period)] = price
 
     if not period_prices:
-        logger.warning("Нет цен в конфиге для создания дефолтного тарифа")
+        logger.warning('Нет цен в конфиге для создания дефолтного тарифа')
         return None
 
     # Ищем тариф с именем "Стандартный" или первый тариф
-    result = await db.execute(
-        select(Tariff).where(Tariff.name == "Стандартный").limit(1)
-    )
+    result = await db.execute(select(Tariff).where(Tariff.name == 'Стандартный').limit(1))
     existing_tariff = result.scalar_one_or_none()
 
     if existing_tariff:
@@ -550,8 +531,8 @@ async def sync_default_tariff_from_config(db: AsyncSession) -> Optional[Tariff]:
     if tariff_count == 0:
         # Создаём новый дефолтный тариф
         new_tariff = Tariff(
-            name="Стандартный",
-            description="Базовый тарифный план",
+            name='Стандартный',
+            description='Базовый тарифный план',
             is_active=True,
             is_trial_available=True,
             traffic_limit_gb=settings.DEFAULT_TRAFFIC_LIMIT_GB,
@@ -580,41 +561,34 @@ async def load_period_prices_from_db(db: AsyncSession) -> None:
 
     # В режиме classic НЕ загружаем цены из тарифов - используем .env
     if settings.is_classic_mode():
-        logger.info("Режим classic: цены периодов берутся из .env, тарифы игнорируются")
+        logger.info('Режим classic: цены периодов берутся из .env, тарифы игнорируются')
         return
 
     try:
         # Ищем тариф "Стандартный" или первый активный тариф
         result = await db.execute(
-            select(Tariff)
-            .where(Tariff.is_active.is_(True))
-            .order_by(Tariff.display_order, Tariff.id)
-            .limit(1)
+            select(Tariff).where(Tariff.is_active.is_(True)).order_by(Tariff.display_order, Tariff.id).limit(1)
         )
         tariff = result.scalar_one_or_none()
 
         if tariff and tariff.period_prices:
             # Преобразуем строковые ключи в int
-            period_prices = {
-                int(days): int(price)
-                for days, price in tariff.period_prices.items()
-                if int(price) > 0
-            }
+            period_prices = {int(days): int(price) for days, price in tariff.period_prices.items() if int(price) > 0}
 
             if period_prices:
                 set_period_prices_from_db(period_prices)
                 logger.info(
                     "Загружены периоды из тарифа '%s': %s",
                     tariff.name,
-                    {f"{d}д": f"{p//100}₽" for d, p in period_prices.items()}
+                    {f'{d}д': f'{p // 100}₽' for d, p in period_prices.items()},
                 )
             else:
                 logger.warning("Тариф '%s' не имеет активных периодов", tariff.name)
         else:
-            logger.info("Активные тарифы не найдены, используются цены из .env")
+            logger.info('Активные тарифы не найдены, используются цены из .env')
 
     except Exception as e:
-        logger.error("Ошибка загрузки периодов из БД: %s", e)
+        logger.error('Ошибка загрузки периодов из БД: %s', e)
 
 
 async def ensure_tariffs_synced(db: AsyncSession) -> None:
@@ -627,4 +601,4 @@ async def ensure_tariffs_synced(db: AsyncSession) -> None:
         # Загружаем периоды из БД в PERIOD_PRICES
         await load_period_prices_from_db(db)
     except Exception as e:
-        logger.error("Ошибка синхронизации тарифов: %s", e)
+        logger.error('Ошибка синхронизации тарифов: %s', e)

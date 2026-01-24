@@ -1,25 +1,25 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field
 
 
 class WebhookCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     url: str = Field(..., min_length=1)
     event_type: str = Field(..., min_length=1, max_length=50)
-    secret: Optional[str] = Field(default=None, max_length=128)
-    description: Optional[str] = Field(default=None)
+    secret: str | None = Field(default=None, max_length=128)
+    description: str | None = Field(default=None)
 
 
 class WebhookUpdateRequest(BaseModel):
-    name: Optional[str] = Field(default=None, min_length=1, max_length=255)
-    url: Optional[str] = Field(default=None, min_length=1)
-    secret: Optional[str] = Field(default=None, max_length=128)
-    description: Optional[str] = None
-    is_active: Optional[bool] = None
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    url: str | None = Field(default=None, min_length=1)
+    secret: str | None = Field(default=None, max_length=128)
+    description: str | None = None
+    is_active: bool | None = None
 
 
 class WebhookResponse(BaseModel):
@@ -28,10 +28,10 @@ class WebhookResponse(BaseModel):
     url: str
     event_type: str
     is_active: bool
-    description: Optional[str]
+    description: str | None
     created_at: datetime
     updated_at: datetime
-    last_triggered_at: Optional[datetime]
+    last_triggered_at: datetime | None
     failure_count: int
     success_count: int
 
@@ -51,14 +51,14 @@ class WebhookDeliveryResponse(BaseModel):
     webhook_id: int
     event_type: str
     payload: dict[str, Any]
-    response_status: Optional[int]
-    response_body: Optional[str]
+    response_status: int | None
+    response_body: str | None
     status: str
-    error_message: Optional[str]
+    error_message: str | None
     attempt_number: int
     created_at: datetime
-    delivered_at: Optional[datetime]
-    next_retry_at: Optional[datetime]
+    delivered_at: datetime | None
+    next_retry_at: datetime | None
 
     class Config:
         from_attributes = True
@@ -78,4 +78,3 @@ class WebhookStatsResponse(BaseModel):
     successful_deliveries: int
     failed_deliveries: int
     success_rate: float
-

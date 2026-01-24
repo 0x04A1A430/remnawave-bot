@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Security, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,6 +19,7 @@ from ..schemas.config import (
     SettingUpdateRequest,
 )
 
+
 router = APIRouter()
 
 
@@ -28,7 +29,7 @@ def _coerce_value(key: str, value: Any) -> Any:
     if value is None:
         if definition.is_optional:
             return None
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Value is required")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Value is required')
 
     python_type = definition.python_type
 
@@ -38,14 +39,14 @@ def _coerce_value(key: str, value: Any) -> Any:
                 normalized = value
             elif isinstance(value, str):
                 lowered = value.strip().lower()
-                if lowered in {"true", "1", "yes", "on", "да"}:
+                if lowered in {'true', '1', 'yes', 'on', 'да'}:
                     normalized = True
-                elif lowered in {"false", "0", "no", "off", "нет"}:
+                elif lowered in {'false', '0', 'no', 'off', 'нет'}:
                     normalized = False
                 else:
-                    raise ValueError("invalid bool")
+                    raise ValueError('invalid bool')
             else:
-                raise ValueError("invalid bool")
+                raise ValueError('invalid bool')
 
         elif python_type is int:
             normalized = int(value)
@@ -54,16 +55,16 @@ def _coerce_value(key: str, value: Any) -> Any:
         else:
             normalized = str(value)
     except ValueError:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid value type") from None
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Invalid value type') from None
 
     choices = bot_configuration_service.get_choice_options(key)
     if choices:
         allowed_values = {option.value for option in choices}
         if normalized not in allowed_values:
-            readable = ", ".join(bot_configuration_service.format_value(opt.value) for opt in choices)
+            readable = ', '.join(bot_configuration_service.format_value(opt.value) for opt in choices)
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                detail=f"Value must be one of: {readable}",
+                detail=f'Value must be one of: {readable}',
             )
 
     return normalized
@@ -102,21 +103,18 @@ def _serialize_definition(definition, include_choices: bool = True) -> SettingDe
     )
 
 
-@router.get("/categories", response_model=list[SettingCategorySummary])
+@router.get('/categories', response_model=list[SettingCategorySummary])
 async def list_categories(
     _: object = Security(require_api_token),
 ) -> list[SettingCategorySummary]:
     categories = bot_configuration_service.get_categories()
-    return [
-        SettingCategorySummary(key=key, label=label, items=count)
-        for key, label, count in categories
-    ]
+    return [SettingCategorySummary(key=key, label=label, items=count) for key, label, count in categories]
 
 
-@router.get("", response_model=list[SettingDefinition])
+@router.get('', response_model=list[SettingDefinition])
 async def list_settings(
     _: object = Security(require_api_token),
-    category: Optional[str] = Query(default=None, alias="category_key"),
+    category: str | None = Query(default=None, alias='category_key'),
 ) -> list[SettingDefinition]:
     items: list[SettingDefinition] = []
     if category:
@@ -131,7 +129,7 @@ async def list_settings(
     return items
 
 
-@router.get("/{key}", response_model=SettingDefinition)
+@router.get('/{key}', response_model=SettingDefinition)
 async def get_setting(
     key: str,
     _: object = Security(require_api_token),
@@ -139,12 +137,12 @@ async def get_setting(
     try:
         definition = bot_configuration_service.get_definition(key)
     except KeyError as error:  # pragma: no cover - защита от некорректного ключа
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Setting not found") from error
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Setting not found') from error
 
     return _serialize_definition(definition)
 
 
-@router.put("/{key}", response_model=SettingDefinition)
+@router.put('/{key}', response_model=SettingDefinition)
 async def update_setting(
     key: str,
     payload: SettingUpdateRequest,
@@ -154,7 +152,7 @@ async def update_setting(
     try:
         definition = bot_configuration_service.get_definition(key)
     except KeyError as error:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Setting not found") from error
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Setting not found') from error
 
     value = _coerce_value(key, payload.value)
     try:
@@ -166,7 +164,7 @@ async def update_setting(
     return _serialize_definition(definition)
 
 
-@router.delete("/{key}", response_model=SettingDefinition)
+@router.delete('/{key}', response_model=SettingDefinition)
 async def reset_setting(
     key: str,
     _: object = Security(require_api_token),
@@ -175,7 +173,7 @@ async def reset_setting(
     try:
         definition = bot_configuration_service.get_definition(key)
     except KeyError as error:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Setting not found") from error
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Setting not found') from error
 
     try:
         await bot_configuration_service.reset_value(db, key)

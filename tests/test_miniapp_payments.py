@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+
 ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
@@ -17,8 +18,8 @@ BACKUP_DIR.mkdir(parents=True, exist_ok=True)
 os.environ.setdefault('BOT_TOKEN', 'test-token')
 
 from app.config import settings
-from app.webapi.routes import miniapp
 from app.database.models import PaymentMethod
+from app.services.payment.cryptobot import CryptoBotPaymentMixin
 from app.services.subscription_renewal_service import (
     SubscriptionRenewalPricing,
     SubscriptionRenewalResult,
@@ -26,7 +27,7 @@ from app.services.subscription_renewal_service import (
     decode_payment_payload,
     encode_payment_payload,
 )
-from app.services.payment.cryptobot import CryptoBotPaymentMixin
+from app.webapi.routes import miniapp
 from app.webapi.schemas.miniapp import (
     MiniAppPaymentCreateRequest,
     MiniAppPaymentIntegrationType,
@@ -88,7 +89,7 @@ def test_encode_decode_renewal_payload_preserves_snapshot():
     assert decoded.pricing_snapshot.get('server_ids') == [1, 2]
 
 
-@pytest.mark.anyio("asyncio")
+@pytest.mark.anyio('asyncio')
 async def test_submit_subscription_renewal_uses_balance_when_sufficient(monkeypatch):
     monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False, raising=False)
     monkeypatch.setattr(settings, 'BOT_TOKEN', 'token', raising=False)
@@ -122,18 +123,18 @@ async def test_submit_subscription_renewal_uses_balance_when_sufficient(monkeypa
         details={},
     )
 
-    async def fake_authorize(init_data, db):  # noqa: ARG001
+    async def fake_authorize(init_data, db):
         return user
 
-    def fake_ensure(subscription_user, allowed_statuses=None):  # noqa: ARG001
+    def fake_ensure(subscription_user, allowed_statuses=None):
         return subscription
 
-    async def fake_calculate(db, u, sub, period):  # noqa: ARG001
+    async def fake_calculate(db, u, sub, period):
         return pricing_model
 
     captured: dict[str, Any] = {}
 
-    async def fake_finalize(db, u, sub, pricing, *, charge_balance_amount=None, description=None, payment_method=None):  # noqa: ARG001
+    async def fake_finalize(db, u, sub, pricing, *, charge_balance_amount=None, description=None, payment_method=None):
         charge = charge_balance_amount if charge_balance_amount is not None else pricing.final_total
         captured['charge'] = charge
         captured['description'] = description
@@ -167,7 +168,7 @@ async def test_submit_subscription_renewal_uses_balance_when_sufficient(monkeypa
     assert captured['charge'] == 10000
 
 
-@pytest.mark.anyio("asyncio")
+@pytest.mark.anyio('asyncio')
 async def test_submit_subscription_renewal_returns_cryptobot_invoice(monkeypatch):
     monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False, raising=False)
     monkeypatch.setattr(settings, 'BOT_TOKEN', 'token', raising=False)
@@ -202,13 +203,13 @@ async def test_submit_subscription_renewal_returns_cryptobot_invoice(monkeypatch
         details={},
     )
 
-    async def fake_authorize(init_data, db):  # noqa: ARG001
+    async def fake_authorize(init_data, db):
         return user
 
-    def fake_ensure(subscription_user, allowed_statuses=None):  # noqa: ARG001
+    def fake_ensure(subscription_user, allowed_statuses=None):
         return subscription
 
-    async def fake_calculate(db, u, sub, period):  # noqa: ARG001
+    async def fake_calculate(db, u, sub, period):
         return pricing_model
 
     created_calls: dict[str, Any] = {}
@@ -258,7 +259,7 @@ async def test_submit_subscription_renewal_returns_cryptobot_invoice(monkeypatch
     assert created_calls.get('description') == 'Продление подписки на 30 дней'
 
 
-@pytest.mark.anyio("asyncio")
+@pytest.mark.anyio('asyncio')
 async def test_submit_subscription_renewal_rounds_up_cryptobot_amount(monkeypatch):
     monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False, raising=False)
     monkeypatch.setattr(settings, 'BOT_TOKEN', 'token', raising=False)
@@ -293,13 +294,13 @@ async def test_submit_subscription_renewal_rounds_up_cryptobot_amount(monkeypatc
         details={},
     )
 
-    async def fake_authorize(init_data, db):  # noqa: ARG001
+    async def fake_authorize(init_data, db):
         return user
 
-    def fake_ensure(subscription_user, allowed_statuses=None):  # noqa: ARG001
+    def fake_ensure(subscription_user, allowed_statuses=None):
         return subscription
 
-    async def fake_calculate(db, u, sub, period):  # noqa: ARG001
+    async def fake_calculate(db, u, sub, period):
         return pricing_model
 
     captured: dict[str, Any] = {}
@@ -342,7 +343,7 @@ async def test_submit_subscription_renewal_rounds_up_cryptobot_amount(monkeypatc
     assert response.payment_amount_kopeks == 9512
 
 
-@pytest.mark.anyio("asyncio")
+@pytest.mark.anyio('asyncio')
 async def test_cryptobot_renewal_uses_pricing_snapshot(monkeypatch):
     module = sys.modules['app.services.payment.cryptobot']
     mixin = CryptoBotPaymentMixin()
@@ -376,19 +377,21 @@ async def test_cryptobot_renewal_uses_pricing_snapshot(monkeypatch):
 
     payment = types.SimpleNamespace(invoice_id='INV-1', user_id=5)
 
-    async def fake_get_user_by_id(db, user_id):  # noqa: ARG001
+    async def fake_get_user_by_id(db, user_id):
         return user if user_id == 5 else None
 
-    monkeypatch.setitem(sys.modules, 'app.services.payment_service', types.SimpleNamespace(get_user_by_id=fake_get_user_by_id))
+    monkeypatch.setitem(
+        sys.modules, 'app.services.payment_service', types.SimpleNamespace(get_user_by_id=fake_get_user_by_id)
+    )
 
-    async def fail_calculate(*args, **kwargs):  # noqa: ARG001
+    async def fail_calculate(*args, **kwargs):
         raise AssertionError('calculate_pricing should not be called when snapshot is present')
 
     monkeypatch.setattr(module.renewal_service, 'calculate_pricing', fail_calculate)
 
     captured: dict[str, Any] = {}
 
-    async def fake_finalize(db, u, sub, pricing, *, charge_balance_amount=None, description=None, payment_method=None):  # noqa: ARG001
+    async def fake_finalize(db, u, sub, pricing, *, charge_balance_amount=None, description=None, payment_method=None):
         captured['pricing'] = pricing
         captured['charge'] = charge_balance_amount
         captured['description'] = description
@@ -403,7 +406,7 @@ async def test_cryptobot_renewal_uses_pricing_snapshot(monkeypatch):
 
     monkeypatch.setattr(module.renewal_service, 'finalize', fake_finalize)
 
-    async def fake_link(db, invoice_id, transaction_id):  # noqa: ARG001
+    async def fake_link(db, invoice_id, transaction_id):
         captured['linked'] = (invoice_id, transaction_id)
 
     cryptobot_crud = types.SimpleNamespace(link_cryptobot_payment_to_transaction=fake_link)
@@ -423,7 +426,7 @@ async def test_cryptobot_renewal_uses_pricing_snapshot(monkeypatch):
     assert captured['linked'] == ('INV-1', 999)
 
 
-@pytest.mark.anyio("asyncio")
+@pytest.mark.anyio('asyncio')
 async def test_cryptobot_renewal_accepts_changed_pricing_without_snapshot(monkeypatch):
     module = sys.modules['app.services.payment.cryptobot']
     mixin = CryptoBotPaymentMixin()
@@ -441,10 +444,12 @@ async def test_cryptobot_renewal_accepts_changed_pricing_without_snapshot(monkey
 
     payment = types.SimpleNamespace(invoice_id='INV-2', user_id=8)
 
-    async def fake_get_user_by_id(db, user_id):  # noqa: ARG001
+    async def fake_get_user_by_id(db, user_id):
         return user if user_id == 8 else None
 
-    monkeypatch.setitem(sys.modules, 'app.services.payment_service', types.SimpleNamespace(get_user_by_id=fake_get_user_by_id))
+    monkeypatch.setitem(
+        sys.modules, 'app.services.payment_service', types.SimpleNamespace(get_user_by_id=fake_get_user_by_id)
+    )
 
     recalculated_pricing = SubscriptionRenewalPricing(
         period_days=30,
@@ -461,14 +466,14 @@ async def test_cryptobot_renewal_accepts_changed_pricing_without_snapshot(monkey
         details={},
     )
 
-    async def fake_calculate(db, u, sub, period):  # noqa: ARG001
+    async def fake_calculate(db, u, sub, period):
         return recalculated_pricing
 
     monkeypatch.setattr(module.renewal_service, 'calculate_pricing', fake_calculate)
 
     captured: dict[str, Any] = {}
 
-    async def fake_finalize(db, u, sub, pricing, *, charge_balance_amount=None, description=None, payment_method=None):  # noqa: ARG001
+    async def fake_finalize(db, u, sub, pricing, *, charge_balance_amount=None, description=None, payment_method=None):
         captured['pricing'] = pricing
         captured['charge'] = charge_balance_amount
         return SubscriptionRenewalResult(
@@ -498,7 +503,7 @@ async def test_cryptobot_renewal_accepts_changed_pricing_without_snapshot(monkey
     assert captured['charge'] == 4000
 
 
-@pytest.mark.anyio("asyncio")
+@pytest.mark.anyio('asyncio')
 async def test_cryptobot_webhook_uses_inline_payload_when_db_missing(monkeypatch):
     module = sys.modules['app.services.payment.cryptobot']
     mixin = CryptoBotPaymentMixin()
@@ -545,7 +550,7 @@ async def test_cryptobot_webhook_uses_inline_payload_when_db_missing(monkeypatch
         description='Продление подписки',
     )
 
-    async def fake_get_user_by_id(db, user_id):  # noqa: ARG001
+    async def fake_get_user_by_id(db, user_id):
         return user if user_id == 21 else None
 
     monkeypatch.setitem(
@@ -554,14 +559,14 @@ async def test_cryptobot_webhook_uses_inline_payload_when_db_missing(monkeypatch
         types.SimpleNamespace(get_user_by_id=fake_get_user_by_id),
     )
 
-    async def fail_calculate(*args, **kwargs):  # noqa: ARG001
+    async def fail_calculate(*args, **kwargs):
         raise AssertionError('calculate_pricing should not be called')
 
     monkeypatch.setattr(module.renewal_service, 'calculate_pricing', fail_calculate)
 
     captured: dict[str, Any] = {}
 
-    async def fake_finalize(db, u, sub, pricing, *, charge_balance_amount=None, description=None, payment_method=None):  # noqa: ARG001
+    async def fake_finalize(db, u, sub, pricing, *, charge_balance_amount=None, description=None, payment_method=None):
         captured['pricing'] = pricing
         captured['charge'] = charge_balance_amount
         captured['description'] = description
@@ -578,16 +583,16 @@ async def test_cryptobot_webhook_uses_inline_payload_when_db_missing(monkeypatch
 
     linked: dict[str, Any] = {}
 
-    async def fake_get(db, invoice_id):  # noqa: ARG001
+    async def fake_get(db, invoice_id):
         return payment if invoice_id == payment.invoice_id else None
 
-    async def fake_update(db, invoice_id, status, paid_at):  # noqa: ARG001
+    async def fake_update(db, invoice_id, status, paid_at):
         if invoice_id == payment.invoice_id:
             payment.status = status
             payment.paid_at = paid_at
         return payment
 
-    async def fake_link(db, invoice_id, transaction_id):  # noqa: ARG001
+    async def fake_link(db, invoice_id, transaction_id):
         linked['value'] = (invoice_id, transaction_id)
         return payment
 
@@ -619,7 +624,7 @@ async def test_cryptobot_webhook_uses_inline_payload_when_db_missing(monkeypatch
     assert linked['value'] == (payment.invoice_id, 1234)
 
 
-@pytest.mark.anyio("asyncio")
+@pytest.mark.anyio('asyncio')
 async def test_create_payment_link_pal24_uses_selected_option(monkeypatch):
     monkeypatch.setattr(settings, 'PAL24_ENABLED', True, raising=False)
     monkeypatch.setattr(settings, 'PAL24_API_TOKEN', 'token', raising=False)
@@ -666,7 +671,7 @@ async def test_create_payment_link_pal24_uses_selected_option(monkeypatch):
     assert captured_calls and captured_calls[0]['payment_method'] == 'card'
 
 
-@pytest.mark.anyio("asyncio")
+@pytest.mark.anyio('asyncio')
 async def test_create_payment_link_wata_returns_payload(monkeypatch):
     monkeypatch.setattr(settings, 'WATA_ENABLED', True, raising=False)
     monkeypatch.setattr(settings, 'WATA_ACCESS_TOKEN', 'token', raising=False)
@@ -717,7 +722,7 @@ async def test_create_payment_link_wata_returns_payload(monkeypatch):
     assert captured_call.get('description')
 
 
-@pytest.mark.anyio("asyncio")
+@pytest.mark.anyio('asyncio')
 async def test_resolve_yookassa_status_includes_identifiers(monkeypatch):
     payment = types.SimpleNamespace(
         id=55,
@@ -764,7 +769,7 @@ async def test_resolve_yookassa_status_includes_identifiers(monkeypatch):
     assert result.extra['started_at'] == '2024-01-01T00:00:00Z'
 
 
-@pytest.mark.anyio("asyncio")
+@pytest.mark.anyio('asyncio')
 async def test_resolve_payment_status_supports_yookassa_sbp(monkeypatch):
     payment = types.SimpleNamespace(
         id=77,
@@ -780,10 +785,10 @@ async def test_resolve_payment_status_supports_yookassa_sbp(monkeypatch):
         yookassa_payment_id='yk_sbp_1',
     )
 
-    async def fake_get_by_local_id(db, local_id):  # noqa: ARG001
+    async def fake_get_by_local_id(db, local_id):
         return payment if local_id == 77 else None
 
-    async def fake_get_by_id(db, payment_id):  # noqa: ARG001
+    async def fake_get_by_id(db, payment_id):
         return None
 
     stub_module = types.SimpleNamespace(
@@ -816,7 +821,7 @@ async def test_resolve_payment_status_supports_yookassa_sbp(monkeypatch):
     assert result.extra['started_at'] == '2024-05-01T10:00:00Z'
 
 
-@pytest.mark.anyio("asyncio")
+@pytest.mark.anyio('asyncio')
 async def test_resolve_pal24_status_includes_identifiers(monkeypatch):
     async def fake_get_pal24_payment_by_bill_id(db, bill_id):
         return None
@@ -879,7 +884,7 @@ async def test_resolve_pal24_status_includes_identifiers(monkeypatch):
     assert result.extra['remote_status'] == 'PAID'
 
 
-@pytest.mark.anyio("asyncio")
+@pytest.mark.anyio('asyncio')
 async def test_resolve_wata_payment_status_success():
     paid_at = datetime.utcnow()
     payment = types.SimpleNamespace(
@@ -898,7 +903,7 @@ async def test_resolve_wata_payment_status_success():
     )
 
     class StubWataService:
-        async def get_wata_payment_status(self, db, local_payment_id):  # noqa: ARG002
+        async def get_wata_payment_status(self, db, local_payment_id):
             assert local_payment_id == 404
             return {
                 'payment': payment,
@@ -931,7 +936,7 @@ async def test_resolve_wata_payment_status_success():
     assert result.extra['started_at'] == '2024-06-01T12:00:00Z'
 
 
-@pytest.mark.anyio("asyncio")
+@pytest.mark.anyio('asyncio')
 async def test_resolve_wata_payment_status_uses_payment_link_lookup(monkeypatch):
     created_at = datetime.utcnow()
     payment = types.SimpleNamespace(
@@ -949,14 +954,14 @@ async def test_resolve_wata_payment_status_uses_payment_link_lookup(monkeypatch)
         created_at=created_at,
     )
 
-    async def fake_get_wata_payment_by_link_id(db, link_id):  # noqa: ARG001
+    async def fake_get_wata_payment_by_link_id(db, link_id):
         assert link_id == 'wata_lookup'
         return payment
 
     monkeypatch.setattr(miniapp, 'get_wata_payment_by_link_id', fake_get_wata_payment_by_link_id)
 
     class StubWataService:
-        async def get_wata_payment_status(self, db, local_payment_id):  # noqa: ARG002
+        async def get_wata_payment_status(self, db, local_payment_id):
             assert local_payment_id == 505
             return {
                 'payment': payment,
@@ -985,7 +990,7 @@ async def test_resolve_wata_payment_status_uses_payment_link_lookup(monkeypatch)
     assert 'transaction' not in result.extra
 
 
-@pytest.mark.anyio("asyncio")
+@pytest.mark.anyio('asyncio')
 async def test_create_payment_link_stars_normalizes_amount(monkeypatch):
     monkeypatch.setattr(settings, 'TELEGRAM_STARS_ENABLED', True, raising=False)
     monkeypatch.setattr(settings, 'TELEGRAM_STARS_RATE_RUB', 1000.0, raising=False)
@@ -1049,7 +1054,7 @@ async def test_create_payment_link_stars_normalizes_amount(monkeypatch):
     assert captured.get('session_closed') is True
 
 
-@pytest.mark.anyio("asyncio")
+@pytest.mark.anyio('asyncio')
 async def test_get_payment_methods_exposes_stars_min_amount(monkeypatch):
     monkeypatch.setattr(settings, 'TELEGRAM_STARS_ENABLED', True, raising=False)
     monkeypatch.setattr(settings, 'TELEGRAM_STARS_RATE_RUB', 999.99, raising=False)
@@ -1071,7 +1076,7 @@ async def test_get_payment_methods_exposes_stars_min_amount(monkeypatch):
     assert stars_method.iframe_config is None
 
 
-@pytest.mark.anyio("asyncio")
+@pytest.mark.anyio('asyncio')
 async def test_get_payment_methods_includes_wata(monkeypatch):
     monkeypatch.setattr(settings, 'WATA_ENABLED', True, raising=False)
     monkeypatch.setattr(settings, 'WATA_ACCESS_TOKEN', 'token', raising=False)
@@ -1097,7 +1102,7 @@ async def test_get_payment_methods_includes_wata(monkeypatch):
     assert wata_method.iframe_config is None
 
 
-@pytest.mark.anyio("asyncio")
+@pytest.mark.anyio('asyncio')
 async def test_get_payment_methods_marks_mulenpay_iframe(monkeypatch):
     monkeypatch.setattr(settings, 'MULENPAY_ENABLED', True, raising=False)
     monkeypatch.setattr(settings, 'MULENPAY_API_KEY', 'api-key', raising=False)
@@ -1119,7 +1124,9 @@ async def test_get_payment_methods_marks_mulenpay_iframe(monkeypatch):
     assert mulenpay_method.integration_type == MiniAppPaymentIntegrationType.IFRAME
     assert mulenpay_method.iframe_config is not None
     assert str(mulenpay_method.iframe_config.expected_origin) == 'https://checkout.example'
-@pytest.mark.anyio("asyncio")
+
+
+@pytest.mark.anyio('asyncio')
 async def test_find_recent_deposit_ignores_transactions_before_attempt():
     started_at = datetime(2024, 5, 1, 12, 0, 0)
 
@@ -1141,7 +1148,7 @@ async def test_find_recent_deposit_ignores_transactions_before_attempt():
         def __init__(self, value):
             self._value = value
 
-        async def execute(self, query):  # noqa: ARG002
+        async def execute(self, query):
             return DummyResult(self._value)
 
     result = await miniapp._find_recent_deposit(
@@ -1155,7 +1162,7 @@ async def test_find_recent_deposit_ignores_transactions_before_attempt():
     assert result is None
 
 
-@pytest.mark.anyio("asyncio")
+@pytest.mark.anyio('asyncio')
 async def test_find_recent_deposit_accepts_recent_transactions():
     started_at = datetime(2024, 5, 1, 12, 0, 0)
 
@@ -1177,7 +1184,7 @@ async def test_find_recent_deposit_accepts_recent_transactions():
         def __init__(self, value):
             self._value = value
 
-        async def execute(self, query):  # noqa: ARG002
+        async def execute(self, query):
             return DummyResult(self._value)
 
     result = await miniapp._find_recent_deposit(

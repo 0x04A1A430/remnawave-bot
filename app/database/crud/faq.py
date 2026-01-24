@@ -1,19 +1,18 @@
 import logging
+from collections.abc import Iterable
 from datetime import datetime
-from typing import Iterable, Optional
 
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import FaqPage, FaqSetting
 
+
 logger = logging.getLogger(__name__)
 
 
-async def get_faq_setting(db: AsyncSession, language: str) -> Optional[FaqSetting]:
-    result = await db.execute(
-        select(FaqSetting).where(FaqSetting.language == language)
-    )
+async def get_faq_setting(db: AsyncSession, language: str) -> FaqSetting | None:
+    result = await db.execute(select(FaqSetting).where(FaqSetting.language == language))
     return result.scalar_one_or_none()
 
 
@@ -34,9 +33,9 @@ async def set_faq_enabled(db: AsyncSession, language: str, enabled: bool) -> Faq
     await db.refresh(setting)
 
     logger.info(
-        "✅ Статус FAQ для языка %s обновлен: %s",
+        '✅ Статус FAQ для языка %s обновлен: %s',
         language,
-        "enabled" if setting.is_enabled else "disabled",
+        'enabled' if setting.is_enabled else 'disabled',
     )
 
     return setting
@@ -64,7 +63,7 @@ async def get_faq_pages(
     return pages
 
 
-async def get_faq_page_by_id(db: AsyncSession, page_id: int) -> Optional[FaqPage]:
+async def get_faq_page_by_id(db: AsyncSession, page_id: int) -> FaqPage | None:
     result = await db.execute(select(FaqPage).where(FaqPage.id == page_id))
     return result.scalar_one_or_none()
 
@@ -75,13 +74,11 @@ async def create_faq_page(
     language: str,
     title: str,
     content: str,
-    display_order: Optional[int] = None,
+    display_order: int | None = None,
     is_active: bool = True,
 ) -> FaqPage:
     if display_order is None:
-        result = await db.execute(
-            select(func.max(FaqPage.display_order)).where(FaqPage.language == language)
-        )
+        result = await db.execute(select(func.max(FaqPage.display_order)).where(FaqPage.language == language))
         max_order = result.scalar() or 0
         display_order = max_order + 1
 
@@ -97,7 +94,7 @@ async def create_faq_page(
     await db.commit()
     await db.refresh(page)
 
-    logger.info("✅ Создана страница FAQ %s для языка %s", page.id, language)
+    logger.info('✅ Создана страница FAQ %s для языка %s', page.id, language)
 
     return page
 
@@ -106,10 +103,10 @@ async def update_faq_page(
     db: AsyncSession,
     page: FaqPage,
     *,
-    title: Optional[str] = None,
-    content: Optional[str] = None,
-    display_order: Optional[int] = None,
-    is_active: Optional[bool] = None,
+    title: str | None = None,
+    content: str | None = None,
+    display_order: int | None = None,
+    is_active: bool | None = None,
 ) -> FaqPage:
     if title is not None:
         page.title = title
@@ -125,7 +122,7 @@ async def update_faq_page(
     await db.commit()
     await db.refresh(page)
 
-    logger.info("✅ Страница FAQ %s обновлена", page.id)
+    logger.info('✅ Страница FAQ %s обновлена', page.id)
 
     return page
 
@@ -133,7 +130,7 @@ async def update_faq_page(
 async def delete_faq_page(db: AsyncSession, page_id: int) -> None:
     await db.execute(delete(FaqPage).where(FaqPage.id == page_id))
     await db.commit()
-    logger.info("🗑️ Страница FAQ %s удалена", page_id)
+    logger.info('🗑️ Страница FAQ %s удалена', page_id)
 
 
 async def bulk_update_order(
@@ -142,9 +139,6 @@ async def bulk_update_order(
 ) -> None:
     for page_id, order in pages:
         await db.execute(
-            update(FaqPage)
-            .where(FaqPage.id == page_id)
-            .values(display_order=order, updated_at=datetime.utcnow())
+            update(FaqPage).where(FaqPage.id == page_id).values(display_order=order, updated_at=datetime.utcnow())
         )
     await db.commit()
-

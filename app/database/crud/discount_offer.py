@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta
-from typing import List, Optional
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,6 +10,7 @@ from sqlalchemy.orm import selectinload
 from app.database.crud.promo_offer_log import log_promo_offer_action
 from app.database.models import DiscountOffer
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -18,13 +18,13 @@ async def upsert_discount_offer(
     db: AsyncSession,
     *,
     user_id: int,
-    subscription_id: Optional[int],
+    subscription_id: int | None,
     notification_type: str,
     discount_percent: int,
     bonus_amount_kopeks: int,
     valid_hours: int,
-    effect_type: str = "percent_discount",
-    extra_data: Optional[dict] = None,
+    effect_type: str = 'percent_discount',
+    extra_data: dict | None = None,
 ) -> DiscountOffer:
     """Create or refresh a discount offer for a user."""
 
@@ -35,7 +35,7 @@ async def upsert_discount_offer(
         .where(
             DiscountOffer.user_id == user_id,
             DiscountOffer.notification_type == notification_type,
-            DiscountOffer.is_active == True,  # noqa: E712
+            DiscountOffer.is_active == True,
         )
         .order_by(DiscountOffer.created_at.desc())
     )
@@ -67,7 +67,7 @@ async def upsert_discount_offer(
     return offer
 
 
-async def get_offer_by_id(db: AsyncSession, offer_id: int) -> Optional[DiscountOffer]:
+async def get_offer_by_id(db: AsyncSession, offer_id: int) -> DiscountOffer | None:
     result = await db.execute(
         select(DiscountOffer)
         .options(
@@ -84,10 +84,10 @@ async def list_discount_offers(
     *,
     offset: int = 0,
     limit: int = 50,
-    user_id: Optional[int] = None,
-    notification_type: Optional[str] = None,
-    is_active: Optional[bool] = None,
-) -> List[DiscountOffer]:
+    user_id: int | None = None,
+    notification_type: str | None = None,
+    is_active: bool | None = None,
+) -> list[DiscountOffer]:
     stmt = (
         select(DiscountOffer)
         .options(
@@ -113,7 +113,7 @@ async def list_discount_offers(
 async def list_active_discount_offers_for_user(
     db: AsyncSession,
     user_id: int,
-) -> List[DiscountOffer]:
+) -> list[DiscountOffer]:
     """Return active (not yet claimed) offers for a user."""
 
     now = datetime.utcnow()
@@ -125,7 +125,7 @@ async def list_active_discount_offers_for_user(
         )
         .where(
             DiscountOffer.user_id == user_id,
-            DiscountOffer.is_active == True,  # noqa: E712
+            DiscountOffer.is_active == True,
             DiscountOffer.expires_at > now,
         )
         .order_by(DiscountOffer.expires_at.asc())
@@ -138,9 +138,9 @@ async def list_active_discount_offers_for_user(
 async def count_discount_offers(
     db: AsyncSession,
     *,
-    user_id: Optional[int] = None,
-    notification_type: Optional[str] = None,
-    is_active: Optional[bool] = None,
+    user_id: int | None = None,
+    notification_type: str | None = None,
+    is_active: bool | None = None,
 ) -> int:
     stmt = select(func.count(DiscountOffer.id))
 
@@ -159,7 +159,7 @@ async def mark_offer_claimed(
     db: AsyncSession,
     offer: DiscountOffer,
     *,
-    details: Optional[dict] = None,
+    details: dict | None = None,
 ) -> DiscountOffer:
     offer.claimed_at = datetime.utcnow()
     offer.is_active = False
@@ -171,7 +171,7 @@ async def mark_offer_claimed(
             db,
             user_id=offer.user_id,
             offer_id=offer.id,
-            action="claimed",
+            action='claimed',
             source=offer.notification_type,
             percent=offer.discount_percent,
             effect_type=offer.effect_type,
@@ -179,7 +179,7 @@ async def mark_offer_claimed(
         )
     except Exception as exc:  # pragma: no cover - defensive logging
         logger.warning(
-            "Failed to record promo offer claim log for offer %s: %s",
+            'Failed to record promo offer claim log for offer %s: %s',
             offer.id,
             exc,
         )
@@ -187,7 +187,7 @@ async def mark_offer_claimed(
             await db.rollback()
         except Exception as rollback_error:  # pragma: no cover - defensive logging
             logger.warning(
-                "Failed to rollback session after promo offer claim log failure: %s",
+                'Failed to rollback session after promo offer claim log failure: %s',
                 rollback_error,
             )
 
@@ -198,7 +198,7 @@ async def deactivate_expired_offers(db: AsyncSession) -> int:
     now = datetime.utcnow()
     result = await db.execute(
         select(DiscountOffer).where(
-            DiscountOffer.is_active == True,  # noqa: E712
+            DiscountOffer.is_active == True,
             DiscountOffer.expires_at < now,
         )
     )
@@ -213,41 +213,41 @@ async def deactivate_expired_offers(db: AsyncSession) -> int:
         count += 1
         log_payloads.append(
             {
-                "user_id": offer.user_id,
-                "offer_id": offer.id,
-                "source": offer.notification_type,
-                "percent": offer.discount_percent,
-                "effect_type": offer.effect_type,
+                'user_id': offer.user_id,
+                'offer_id': offer.id,
+                'source': offer.notification_type,
+                'percent': offer.discount_percent,
+                'effect_type': offer.effect_type,
             }
         )
 
     await db.commit()
 
     for payload in log_payloads:
-        if not payload.get("user_id"):
+        if not payload.get('user_id'):
             continue
         try:
             await log_promo_offer_action(
                 db,
-                user_id=payload["user_id"],
-                offer_id=payload["offer_id"],
-                action="disabled",
-                source=payload.get("source"),
-                percent=payload.get("percent"),
-                effect_type=payload.get("effect_type"),
-                details={"reason": "offer_expired"},
+                user_id=payload['user_id'],
+                offer_id=payload['offer_id'],
+                action='disabled',
+                source=payload.get('source'),
+                percent=payload.get('percent'),
+                effect_type=payload.get('effect_type'),
+                details={'reason': 'offer_expired'},
             )
         except Exception as exc:  # pragma: no cover - defensive logging
             logger.warning(
-                "Failed to record promo offer disable log for offer %s: %s",
-                payload.get("offer_id"),
+                'Failed to record promo offer disable log for offer %s: %s',
+                payload.get('offer_id'),
                 exc,
             )
             try:
                 await db.rollback()
             except Exception as rollback_error:  # pragma: no cover - defensive logging
                 logger.warning(
-                    "Failed to rollback session after promo offer disable log failure: %s",
+                    'Failed to rollback session after promo offer disable log failure: %s',
                     rollback_error,
                 )
 
@@ -257,8 +257,8 @@ async def deactivate_expired_offers(db: AsyncSession) -> int:
 async def get_latest_claimed_offer_for_user(
     db: AsyncSession,
     user_id: int,
-    source: Optional[str] = None,
-) -> Optional[DiscountOffer]:
+    source: str | None = None,
+) -> DiscountOffer | None:
     stmt = (
         select(DiscountOffer)
         .where(

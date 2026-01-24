@@ -1,29 +1,28 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
 
 class BackupCreateResponse(BaseModel):
     task_id: str
-    status: str = Field(..., description="Текущий статус задачи")
+    status: str = Field(..., description='Текущий статус задачи')
 
 
 class BackupInfo(BaseModel):
     filename: str
     filepath: str
-    timestamp: Optional[datetime] = None
-    tables_count: Optional[int] = None
-    total_records: Optional[int] = None
+    timestamp: datetime | None = None
+    tables_count: int | None = None
+    total_records: int | None = None
     compressed: bool
     file_size_bytes: int
     file_size_mb: float
-    created_by: Optional[int] = None
-    database_type: Optional[str] = None
-    version: Optional[str] = None
-    error: Optional[str] = None
+    created_by: int | None = None
+    database_type: str | None = None
+    version: str | None = None
+    error: str | None = None
 
 
 class BackupListResponse(BaseModel):
@@ -36,12 +35,12 @@ class BackupListResponse(BaseModel):
 class BackupStatusResponse(BaseModel):
     task_id: str
     status: str
-    message: Optional[str] = None
-    file_path: Optional[str] = Field(
+    message: str | None = None
+    file_path: str | None = Field(
         default=None,
-        description="Полный путь до созданного бекапа, если задача завершена",
+        description='Полный путь до созданного бекапа, если задача завершена',
     )
-    created_by: Optional[int] = None
+    created_by: int | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -56,17 +55,14 @@ class BackupTaskListResponse(BaseModel):
 
 
 class BackupRestoreRequest(BaseModel):
-    clear_existing: bool = Field(
-        default=False,
-        description="Очистить существующие данные перед восстановлением"
-    )
+    clear_existing: bool = Field(default=False, description='Очистить существующие данные перед восстановлением')
 
 
 class BackupRestoreResponse(BaseModel):
     success: bool
     message: str
-    tables_restored: Optional[int] = None
-    records_restored: Optional[int] = None
+    tables_restored: int | None = None
+    records_restored: int | None = None
 
 
 class BackupDeleteResponse(BaseModel):

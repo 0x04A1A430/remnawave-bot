@@ -1,20 +1,12 @@
 """Admin routes for managing advertising campaigns in cabinet."""
 
 import logging
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
 
 from app.config import settings
-from app.database.models import (
-    User,
-    AdvertisingCampaign,
-    AdvertisingCampaignRegistration,
-    Subscription,
-    Tariff,
-)
 from app.database.crud.campaign import (
     create_campaign,
     delete_campaign,
@@ -28,38 +20,45 @@ from app.database.crud.campaign import (
 )
 from app.database.crud.server_squad import get_all_server_squads
 from app.database.crud.tariff import get_all_tariffs
+from app.database.models import (
+    AdvertisingCampaignRegistration,
+    Subscription,
+    Tariff,
+    User,
+)
 
 from ..dependencies import get_cabinet_db, get_current_admin_user
 from ..schemas.campaigns import (
-    CampaignListResponse,
-    CampaignListItem,
-    CampaignDetailResponse,
     CampaignCreateRequest,
-    CampaignUpdateRequest,
-    CampaignToggleResponse,
-    CampaignStatisticsResponse,
+    CampaignDetailResponse,
+    CampaignListItem,
+    CampaignListResponse,
     CampaignRegistrationItem,
     CampaignRegistrationsResponse,
     CampaignsOverviewResponse,
-    TariffInfo,
+    CampaignStatisticsResponse,
+    CampaignToggleResponse,
+    CampaignUpdateRequest,
     ServerSquadInfo,
+    TariffInfo,
 )
 from ..schemas.tariffs import TariffListItem
 
+
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/admin/campaigns", tags=["Cabinet Admin Campaigns"])
+router = APIRouter(prefix='/admin/campaigns', tags=['Cabinet Admin Campaigns'])
 
 
 def _get_deep_link(start_parameter: str) -> str:
     """Generate deep link for campaign."""
     bot_username = settings.get_bot_username()
     if bot_username:
-        return f"https://t.me/{bot_username}?start={start_parameter}"
-    return f"?start={start_parameter}"
+        return f'https://t.me/{bot_username}?start={start_parameter}'
+    return f'?start={start_parameter}'
 
 
-@router.get("/overview", response_model=CampaignsOverviewResponse)
+@router.get('/overview', response_model=CampaignsOverviewResponse)
 async def get_overview(
     admin: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_cabinet_db),
@@ -70,24 +69,24 @@ async def get_overview(
     # Count tariff bonuses
     tariff_result = await db.execute(
         select(func.count(AdvertisingCampaignRegistration.id)).where(
-            AdvertisingCampaignRegistration.bonus_type == "tariff"
+            AdvertisingCampaignRegistration.bonus_type == 'tariff'
         )
     )
     tariff_count = tariff_result.scalar() or 0
 
     return CampaignsOverviewResponse(
-        total=overview["total"],
-        active=overview["active"],
-        inactive=overview["inactive"],
-        total_registrations=overview["registrations"],
-        total_balance_issued_kopeks=overview["balance_total"],
-        total_balance_issued_rubles=overview["balance_total"] / 100,
-        total_subscription_issued=overview["subscription_total"],
+        total=overview['total'],
+        active=overview['active'],
+        inactive=overview['inactive'],
+        total_registrations=overview['registrations'],
+        total_balance_issued_kopeks=overview['balance_total'],
+        total_balance_issued_rubles=overview['balance_total'] / 100,
+        total_subscription_issued=overview['subscription_total'],
         total_tariff_issued=tariff_count,
     )
 
 
-@router.get("/available-servers", response_model=List[ServerSquadInfo])
+@router.get('/available-servers', response_model=list[ServerSquadInfo])
 async def get_available_servers(
     admin: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_cabinet_db),
@@ -105,7 +104,7 @@ async def get_available_servers(
     ]
 
 
-@router.get("/available-tariffs", response_model=List[TariffListItem])
+@router.get('/available-tariffs', response_model=list[TariffListItem])
 async def get_available_tariffs(
     admin: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_cabinet_db),
@@ -134,7 +133,7 @@ async def get_available_tariffs(
     ]
 
 
-@router.get("", response_model=CampaignListResponse)
+@router.get('', response_model=CampaignListResponse)
 async def list_campaigns(
     include_inactive: bool = True,
     offset: int = Query(0, ge=0),
@@ -143,31 +142,31 @@ async def list_campaigns(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get list of all campaigns."""
-    campaigns = await get_campaigns_list(
-        db, offset=offset, limit=limit, include_inactive=include_inactive
-    )
+    campaigns = await get_campaigns_list(db, offset=offset, limit=limit, include_inactive=include_inactive)
     total = await get_campaigns_count(db)
 
     items = []
     for campaign in campaigns:
         # Get quick stats
         stats = await get_campaign_statistics(db, campaign.id)
-        items.append(CampaignListItem(
-            id=campaign.id,
-            name=campaign.name,
-            start_parameter=campaign.start_parameter,
-            bonus_type=campaign.bonus_type,
-            is_active=campaign.is_active,
-            registrations_count=stats["registrations"],
-            total_revenue_kopeks=stats["total_revenue_kopeks"],
-            conversion_rate=stats["conversion_rate"],
-            created_at=campaign.created_at,
-        ))
+        items.append(
+            CampaignListItem(
+                id=campaign.id,
+                name=campaign.name,
+                start_parameter=campaign.start_parameter,
+                bonus_type=campaign.bonus_type,
+                is_active=campaign.is_active,
+                registrations_count=stats['registrations'],
+                total_revenue_kopeks=stats['total_revenue_kopeks'],
+                conversion_rate=stats['conversion_rate'],
+                created_at=campaign.created_at,
+            )
+        )
 
     return CampaignListResponse(campaigns=items, total=total)
 
 
-@router.get("/{campaign_id}", response_model=CampaignDetailResponse)
+@router.get('/{campaign_id}', response_model=CampaignDetailResponse)
 async def get_campaign(
     campaign_id: int,
     admin: User = Depends(get_current_admin_user),
@@ -178,7 +177,7 @@ async def get_campaign(
     if not campaign:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Campaign not found",
+            detail='Campaign not found',
         )
 
     tariff_info = None
@@ -210,7 +209,7 @@ async def get_campaign(
     )
 
 
-@router.get("/{campaign_id}/stats", response_model=CampaignStatisticsResponse)
+@router.get('/{campaign_id}/stats', response_model=CampaignStatisticsResponse)
 async def get_campaign_stats(
     campaign_id: int,
     admin: User = Depends(get_current_admin_user),
@@ -221,7 +220,7 @@ async def get_campaign_stats(
     if not campaign:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Campaign not found",
+            detail='Campaign not found',
         )
 
     stats = await get_campaign_statistics(db, campaign_id)
@@ -232,28 +231,28 @@ async def get_campaign_stats(
         start_parameter=campaign.start_parameter,
         bonus_type=campaign.bonus_type,
         is_active=campaign.is_active,
-        registrations=stats["registrations"],
-        balance_issued_kopeks=stats["balance_issued"],
-        balance_issued_rubles=stats["balance_issued"] / 100,
-        subscription_issued=stats["subscription_issued"],
-        last_registration=stats["last_registration"],
-        total_revenue_kopeks=stats["total_revenue_kopeks"],
-        total_revenue_rubles=stats["total_revenue_kopeks"] / 100,
-        avg_revenue_per_user_kopeks=stats["avg_revenue_per_user_kopeks"],
-        avg_revenue_per_user_rubles=stats["avg_revenue_per_user_kopeks"] / 100,
-        avg_first_payment_kopeks=stats["avg_first_payment_kopeks"],
-        avg_first_payment_rubles=stats["avg_first_payment_kopeks"] / 100,
-        trial_users_count=stats["trial_users_count"],
-        active_trials_count=stats["active_trials_count"],
-        conversion_count=stats["conversion_count"],
-        paid_users_count=stats["paid_users_count"],
-        conversion_rate=stats["conversion_rate"],
-        trial_conversion_rate=stats["trial_conversion_rate"],
+        registrations=stats['registrations'],
+        balance_issued_kopeks=stats['balance_issued'],
+        balance_issued_rubles=stats['balance_issued'] / 100,
+        subscription_issued=stats['subscription_issued'],
+        last_registration=stats['last_registration'],
+        total_revenue_kopeks=stats['total_revenue_kopeks'],
+        total_revenue_rubles=stats['total_revenue_kopeks'] / 100,
+        avg_revenue_per_user_kopeks=stats['avg_revenue_per_user_kopeks'],
+        avg_revenue_per_user_rubles=stats['avg_revenue_per_user_kopeks'] / 100,
+        avg_first_payment_kopeks=stats['avg_first_payment_kopeks'],
+        avg_first_payment_rubles=stats['avg_first_payment_kopeks'] / 100,
+        trial_users_count=stats['trial_users_count'],
+        active_trials_count=stats['active_trials_count'],
+        conversion_count=stats['conversion_count'],
+        paid_users_count=stats['paid_users_count'],
+        conversion_rate=stats['conversion_rate'],
+        trial_conversion_rate=stats['trial_conversion_rate'],
         deep_link=_get_deep_link(campaign.start_parameter),
     )
 
 
-@router.get("/{campaign_id}/registrations", response_model=CampaignRegistrationsResponse)
+@router.get('/{campaign_id}/registrations', response_model=CampaignRegistrationsResponse)
 async def get_campaign_registrations(
     campaign_id: int,
     page: int = Query(1, ge=1),
@@ -266,7 +265,7 @@ async def get_campaign_registrations(
     if not campaign:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Campaign not found",
+            detail='Campaign not found',
         )
 
     offset = (page - 1) * per_page
@@ -284,8 +283,9 @@ async def get_campaign_registrations(
 
     # Count total
     count_result = await db.execute(
-        select(func.count(AdvertisingCampaignRegistration.id))
-        .where(AdvertisingCampaignRegistration.campaign_id == campaign_id)
+        select(func.count(AdvertisingCampaignRegistration.id)).where(
+            AdvertisingCampaignRegistration.campaign_id == campaign_id
+        )
     )
     total = count_result.scalar() or 0
 
@@ -296,28 +296,30 @@ async def get_campaign_registrations(
             select(Subscription)
             .where(
                 Subscription.user_id == user.id,
-                Subscription.status == "active",
+                Subscription.status == 'active',
             )
             .limit(1)
         )
         has_sub = sub_result.scalar_one_or_none() is not None
 
-        items.append(CampaignRegistrationItem(
-            id=reg.id,
-            user_id=user.id,
-            telegram_id=user.telegram_id,
-            username=user.username,
-            first_name=user.first_name,
-            bonus_type=reg.bonus_type,
-            balance_bonus_kopeks=reg.balance_bonus_kopeks or 0,
-            subscription_duration_days=reg.subscription_duration_days,
-            tariff_id=reg.tariff_id,
-            tariff_duration_days=reg.tariff_duration_days,
-            created_at=reg.created_at,
-            user_balance_kopeks=user.balance_kopeks or 0,
-            has_subscription=has_sub,
-            has_paid=user.has_had_paid_subscription or False,
-        ))
+        items.append(
+            CampaignRegistrationItem(
+                id=reg.id,
+                user_id=user.id,
+                telegram_id=user.telegram_id,
+                username=user.username,
+                first_name=user.first_name,
+                bonus_type=reg.bonus_type,
+                balance_bonus_kopeks=reg.balance_bonus_kopeks or 0,
+                subscription_duration_days=reg.subscription_duration_days,
+                tariff_id=reg.tariff_id,
+                tariff_duration_days=reg.tariff_duration_days,
+                created_at=reg.created_at,
+                user_balance_kopeks=user.balance_kopeks or 0,
+                has_subscription=has_sub,
+                has_paid=user.has_had_paid_subscription or False,
+            )
+        )
 
     return CampaignRegistrationsResponse(
         registrations=items,
@@ -327,7 +329,7 @@ async def get_campaign_registrations(
     )
 
 
-@router.post("", response_model=CampaignDetailResponse)
+@router.post('', response_model=CampaignDetailResponse)
 async def create_new_campaign(
     request: CampaignCreateRequest,
     admin: User = Depends(get_current_admin_user),
@@ -343,20 +345,18 @@ async def create_new_campaign(
         )
 
     # Validate tariff exists if tariff bonus type
-    if request.bonus_type == "tariff":
+    if request.bonus_type == 'tariff':
         if not request.tariff_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Tariff ID is required for tariff bonus type",
+                detail='Tariff ID is required for tariff bonus type',
             )
-        tariff_result = await db.execute(
-            select(Tariff).where(Tariff.id == request.tariff_id)
-        )
+        tariff_result = await db.execute(select(Tariff).where(Tariff.id == request.tariff_id))
         tariff = tariff_result.scalar_one_or_none()
         if not tariff:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Tariff not found",
+                detail='Tariff not found',
             )
 
     campaign = await create_campaign(
@@ -378,12 +378,12 @@ async def create_new_campaign(
     # Reload to get tariff relationship
     campaign = await get_campaign_by_id(db, campaign.id)
 
-    logger.info(f"Admin {admin.id} created campaign {campaign.id}: {campaign.name}")
+    logger.info(f'Admin {admin.id} created campaign {campaign.id}: {campaign.name}')
 
     return await get_campaign(campaign.id, admin, db)
 
 
-@router.put("/{campaign_id}", response_model=CampaignDetailResponse)
+@router.put('/{campaign_id}', response_model=CampaignDetailResponse)
 async def update_existing_campaign(
     campaign_id: int,
     request: CampaignUpdateRequest,
@@ -395,7 +395,7 @@ async def update_existing_campaign(
     if not campaign:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Campaign not found",
+            detail='Campaign not found',
         )
 
     # Check if start_parameter is unique (if changing)
@@ -408,53 +408,51 @@ async def update_existing_campaign(
             )
 
     # Validate tariff if changing to tariff bonus type
-    if request.bonus_type == "tariff" or (campaign.bonus_type == "tariff" and request.tariff_id):
+    if request.bonus_type == 'tariff' or (campaign.bonus_type == 'tariff' and request.tariff_id):
         tariff_id = request.tariff_id or campaign.tariff_id
         if tariff_id:
-            tariff_result = await db.execute(
-                select(Tariff).where(Tariff.id == tariff_id)
-            )
+            tariff_result = await db.execute(select(Tariff).where(Tariff.id == tariff_id))
             tariff = tariff_result.scalar_one_or_none()
             if not tariff:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Tariff not found",
+                    detail='Tariff not found',
                 )
 
     # Build updates
     updates = {}
     if request.name is not None:
-        updates["name"] = request.name
+        updates['name'] = request.name
     if request.start_parameter is not None:
-        updates["start_parameter"] = request.start_parameter
+        updates['start_parameter'] = request.start_parameter
     if request.bonus_type is not None:
-        updates["bonus_type"] = request.bonus_type
+        updates['bonus_type'] = request.bonus_type
     if request.is_active is not None:
-        updates["is_active"] = request.is_active
+        updates['is_active'] = request.is_active
     if request.balance_bonus_kopeks is not None:
-        updates["balance_bonus_kopeks"] = request.balance_bonus_kopeks
+        updates['balance_bonus_kopeks'] = request.balance_bonus_kopeks
     if request.subscription_duration_days is not None:
-        updates["subscription_duration_days"] = request.subscription_duration_days
+        updates['subscription_duration_days'] = request.subscription_duration_days
     if request.subscription_traffic_gb is not None:
-        updates["subscription_traffic_gb"] = request.subscription_traffic_gb
+        updates['subscription_traffic_gb'] = request.subscription_traffic_gb
     if request.subscription_device_limit is not None:
-        updates["subscription_device_limit"] = request.subscription_device_limit
+        updates['subscription_device_limit'] = request.subscription_device_limit
     if request.subscription_squads is not None:
-        updates["subscription_squads"] = request.subscription_squads
+        updates['subscription_squads'] = request.subscription_squads
     if request.tariff_id is not None:
-        updates["tariff_id"] = request.tariff_id
+        updates['tariff_id'] = request.tariff_id
     if request.tariff_duration_days is not None:
-        updates["tariff_duration_days"] = request.tariff_duration_days
+        updates['tariff_duration_days'] = request.tariff_duration_days
 
     if updates:
         await update_campaign(db, campaign, **updates)
 
-    logger.info(f"Admin {admin.id} updated campaign {campaign_id}")
+    logger.info(f'Admin {admin.id} updated campaign {campaign_id}')
 
     return await get_campaign(campaign_id, admin, db)
 
 
-@router.delete("/{campaign_id}")
+@router.delete('/{campaign_id}')
 async def delete_existing_campaign(
     campaign_id: int,
     admin: User = Depends(get_current_admin_user),
@@ -465,7 +463,7 @@ async def delete_existing_campaign(
     if not campaign:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Campaign not found",
+            detail='Campaign not found',
         )
 
     # Check if campaign has registrations
@@ -473,16 +471,16 @@ async def delete_existing_campaign(
     if reg_count > 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot delete campaign with {reg_count} registrations. Deactivate it instead.",
+            detail=f'Cannot delete campaign with {reg_count} registrations. Deactivate it instead.',
         )
 
     await delete_campaign(db, campaign)
-    logger.info(f"Admin {admin.id} deleted campaign {campaign_id}: {campaign.name}")
+    logger.info(f'Admin {admin.id} deleted campaign {campaign_id}: {campaign.name}')
 
-    return {"message": "Campaign deleted successfully"}
+    return {'message': 'Campaign deleted successfully'}
 
 
-@router.post("/{campaign_id}/toggle", response_model=CampaignToggleResponse)
+@router.post('/{campaign_id}/toggle', response_model=CampaignToggleResponse)
 async def toggle_campaign(
     campaign_id: int,
     admin: User = Depends(get_current_admin_user),
@@ -493,17 +491,17 @@ async def toggle_campaign(
     if not campaign:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Campaign not found",
+            detail='Campaign not found',
         )
 
     new_status = not campaign.is_active
     await update_campaign(db, campaign, is_active=new_status)
 
-    status_text = "activated" if new_status else "deactivated"
-    logger.info(f"Admin {admin.id} {status_text} campaign {campaign_id}")
+    status_text = 'activated' if new_status else 'deactivated'
+    logger.info(f'Admin {admin.id} {status_text} campaign {campaign_id}')
 
     return CampaignToggleResponse(
         id=campaign_id,
         is_active=new_status,
-        message=f"Campaign {status_text}",
+        message=f'Campaign {status_text}',
     )
