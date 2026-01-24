@@ -80,7 +80,8 @@ SUPPORTED_AUTO_CHECK_METHODS: frozenset[PaymentMethod] = frozenset(
         PaymentMethod.WATA,
         PaymentMethod.CRYPTOBOT,
         PaymentMethod.PLATEGA,
-        PaymentMethod.CLOUDPAYMENTS,
+        # CloudPayments removed - API returns "Completed" during authorization
+        # before final result, causing premature balance credits. Webhooks work correctly.
         PaymentMethod.FREEKASSA,
     }
 )
