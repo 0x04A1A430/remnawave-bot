@@ -201,6 +201,10 @@ class CloudPaymentsPaymentMixin:
             logger.info("CloudPayments платёж уже обработан: invoice=%s", invoice_id)
             return True
 
+        # Note: Check notifications are now filtered at webhook handler level
+        # by checking for presence of Reason or AuthCode fields.
+        # This handler only receives Pay notifications (confirmed payments).
+
         # Update payment record
         payment.transaction_id_cp = transaction_id_cp
         payment.status = "completed"
