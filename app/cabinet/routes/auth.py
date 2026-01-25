@@ -136,12 +136,14 @@ async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -
 
         async with service.get_api_client() as api:
             # Try to find user by email in panel
-            panel_user = await api.get_user_by_email(user.email)
+            panel_users = await api.get_user_by_email(user.email)
 
-            if not panel_user:
+            if not panel_users:
                 logger.debug(f'No subscription found in panel for email: {user.email}')
                 return
 
+            # Take first user if multiple found
+            panel_user = panel_users[0]
             logger.info(f'Found subscription in panel for email {user.email}: {panel_user.uuid}')
 
             # Link user to panel
