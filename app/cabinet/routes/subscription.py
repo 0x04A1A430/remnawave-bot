@@ -23,6 +23,10 @@ from app.database.crud.tariff import get_tariff_by_id, get_tariffs_for_user
 from app.database.crud.transaction import create_transaction
 from app.database.crud.user import subtract_user_balance
 from app.database.models import ServerSquad, Subscription, Tariff, TransactionType, User
+from app.services.notification_delivery_service import (
+    NotificationType,
+    notification_delivery_service,
+)
 from app.services.remnawave_service import RemnaWaveService
 from app.services.subscription_purchase_service import (
     MiniAppSubscriptionPurchaseService,
@@ -1246,6 +1250,31 @@ async def submit_purchase(
 
         subscription = result['subscription']
 
+        # Send email notification for email-only users
+        if not user.telegram_id and user.email and user.email_verified:
+            try:
+                is_new_subscription = result.get('was_trial_conversion') or not context.subscription
+                notification_type = (
+                    NotificationType.SUBSCRIPTION_ACTIVATED
+                    if is_new_subscription
+                    else NotificationType.SUBSCRIPTION_RENEWED
+                )
+                end_date_str = subscription.end_date.strftime('%d.%m.%Y') if subscription.end_date else ''
+                await notification_delivery_service.send_notification(
+                    user=user,
+                    notification_type=notification_type,
+                    context={
+                        'subscription': subscription,
+                        'expires_at': end_date_str,  # for SUBSCRIPTION_ACTIVATED
+                        'new_expires_at': end_date_str,  # for SUBSCRIPTION_RENEWED
+                        'traffic_limit_gb': subscription.traffic_limit_gb,
+                        'device_limit': subscription.device_limit,
+                    },
+                    bot=None,
+                )
+            except Exception as notif_error:
+                logger.warning(f'Failed to send subscription notification to {user.email}: {notif_error}')
+
         return {
             'success': True,
             'message': result['message'],
@@ -1608,6 +1637,35 @@ async def purchase_tariff(
             response['promo_offer_discount_amount_kopeks'] = promo_offer_discount_value
             response['promo_offer_discount_label'] = settings.format_price(promo_offer_discount_value)
             response['price_before_promo_offer_kopeks'] = price_before_promo_offer
+
+        # Send email notification for email-only users
+        if not user.telegram_id and user.email and user.email_verified:
+            try:
+                # Determine if this is a new subscription or extension
+                was_new_subscription = subscription.start_date and (
+                    datetime.utcnow() - subscription.start_date
+                ).total_seconds() < 60
+                notification_type = (
+                    NotificationType.SUBSCRIPTION_ACTIVATED
+                    if was_new_subscription
+                    else NotificationType.SUBSCRIPTION_RENEWED
+                )
+                end_date_str = subscription.end_date.strftime('%d.%m.%Y') if subscription.end_date else ''
+                await notification_delivery_service.send_notification(
+                    user=user,
+                    notification_type=notification_type,
+                    context={
+                        'subscription': subscription,
+                        'expires_at': end_date_str,  # for SUBSCRIPTION_ACTIVATED
+                        'new_expires_at': end_date_str,  # for SUBSCRIPTION_RENEWED
+                        'traffic_limit_gb': subscription.traffic_limit_gb,
+                        'device_limit': subscription.device_limit,
+                        'tariff_name': tariff.name,
+                    },
+                    bot=None,
+                )
+            except Exception as notif_error:
+                logger.warning(f'Failed to send subscription notification to {user.email}: {notif_error}')
 
         return response
 

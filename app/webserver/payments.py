@@ -816,26 +816,45 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                     # Может быть это Check уведомление - просто разрешаем
                     return JSONResponse({'code': 0})
 
-                # Определяем тип webhook по статусу
+                # Определяем тип webhook по статусу и наличию полей
                 status_value = webhook_data.get('status', '')
+                reason = webhook_data.get('reason')
+                auth_code = webhook_data.get('auth_code')
 
-                if status_value in ('Completed', 'Authorized'):
-                    # Успешная оплата
-                    await _process_payment_service_callback(
-                        payment_service,
-                        webhook_data,
-                        'process_cloudpayments_pay_webhook',
-                    )
-                elif status_value in ('Declined', 'Cancelled'):
-                    # Неуспешная оплата
+                # Pay notification имеет Reason="Approved" или AuthCode
+                # Check notification НЕ имеет этих полей
+                is_pay_notification = bool(reason or auth_code)
+
+                if status_value in ('Declined', 'Cancelled'):
+                    # Неуспешная оплата (Fail notification)
                     await _process_payment_service_callback(
                         payment_service,
                         webhook_data,
                         'process_cloudpayments_fail_webhook',
                     )
+                elif status_value in ('Completed', 'Authorized') and is_pay_notification:
+                    # Успешная оплата (Pay notification) - есть Reason или AuthCode
+                    logger.info(
+                        'CloudPayments Pay notification: invoice=%s, reason=%s, auth_code=%s',
+                        webhook_data.get('invoice_id'),
+                        reason,
+                        auth_code,
+                    )
+                    await _process_payment_service_callback(
+                        payment_service,
+                        webhook_data,
+                        'process_cloudpayments_pay_webhook',
+                    )
                 else:
-                    # Check или другой тип уведомления - просто разрешаем
-                    logger.info('CloudPayments webhook: status=%s, allowing (code=0)', status_value)
+                    # Check notification или другой тип - просто разрешаем (code=0)
+                    # Check приходит ДО оплаты для валидации, не зачисляем баланс
+                    logger.info(
+                        'CloudPayments Check/other notification: status=%s, reason=%s, '
+                        'auth_code=%s - allowing (code=0), NOT crediting balance',
+                        status_value,
+                        reason,
+                        auth_code,
+                    )
 
                 return JSONResponse({'code': 0})
             except Exception as e:
