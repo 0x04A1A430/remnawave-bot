@@ -141,7 +141,6 @@ class UserService:
             message = (
                 f'{emoji} <b>Баланс пополнен!</b>\n\n'
                 f'💵 <b>Сумма:</b> {amount_text}\n'
-                f'👤 <b>Администратор:</b> {admin_name}\n'
                 f'💳 <b>Текущий баланс:</b> {settings.format_price(user.balance_kopeks)}\n\n'
                 f'Спасибо за использование нашего сервиса! 🎉'
             )
@@ -152,7 +151,6 @@ class UserService:
             message = (
                 f'{emoji} <b>Средства списаны с баланса</b>\n\n'
                 f'💵 <b>Сумма:</b> {amount_text}\n'
-                f'👤 <b>Администратор:</b> {admin_name}\n'
                 f'💳 <b>Текущий баланс:</b> {settings.format_price(user.balance_kopeks)}\n\n'
                 f'Если у вас есть вопросы, обратитесь в поддержку.'
             )
@@ -177,8 +175,12 @@ class UserService:
         # Use unified notification delivery service
         context = {
             'amount_kopeks': amount_kopeks,
+            'amount_rubles': amount_kopeks / 100,
             'new_balance_kopeks': user.balance_kopeks,
-            'description': f'Администратор: {admin_name}',
+            'new_balance_rubles': user.balance_kopeks / 100,
+            'formatted_amount': settings.format_price(amount_kopeks),
+            'formatted_balance': settings.format_price(user.balance_kopeks),
+            # No description - don't expose admin name to user
         }
 
         return await notification_delivery_service.send_notification(
