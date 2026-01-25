@@ -165,6 +165,9 @@ async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -
                 s.get('uuid', '') for s in (panel_user.active_internal_squads or []) if s.get('uuid')
             ]
 
+            # Device limit from panel
+            device_limit = panel_user.hwid_device_limit or 1
+
             # Determine status - use timezone-aware datetime for comparison
             current_time = datetime.now(timezone.utc)
             # Make expire_at timezone-aware if it's naive
@@ -190,8 +193,9 @@ async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -
                 existing_sub.subscription_url = panel_user.subscription_url
                 existing_sub.subscription_crypto_link = panel_user.happ_crypto_link
                 existing_sub.connected_squads = connected_squads
+                existing_sub.device_limit = device_limit
                 existing_sub.is_trial = False  # Panel subscription is not trial
-                logger.info(f'Updated subscription for email user {user.email}, squads: {connected_squads}')
+                logger.info(f'Updated subscription for email user {user.email}, squads: {connected_squads}, devices: {device_limit}')
             else:
                 # Create new subscription
                 # Convert current_time to naive for database storage if needed
@@ -209,9 +213,10 @@ async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -
                     subscription_url=panel_user.subscription_url,
                     subscription_crypto_link=panel_user.happ_crypto_link,
                     connected_squads=connected_squads,
+                    device_limit=device_limit,
                 )
                 db.add(new_sub)
-                logger.info(f'Created subscription for email user {user.email}, squads: {connected_squads}')
+                logger.info(f'Created subscription for email user {user.email}, squads: {connected_squads}, devices: {device_limit}')
 
             await db.commit()
 
