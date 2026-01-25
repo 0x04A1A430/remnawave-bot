@@ -10,7 +10,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database.crud.user import create_user, create_user_by_email, get_user_by_id, get_user_by_telegram_id
+from app.database.crud.user import create_user, create_user_by_email, get_user_by_id, get_user_by_referral_code, get_user_by_telegram_id
+from app.services.referral_service import process_referral_registration
 from app.database.models import CabinetRefreshToken, User
 
 from ..auth import (
@@ -350,6 +351,13 @@ async def register_email_standalone(
     # Хешировать пароль
     password_hash = hash_password(request.password)
 
+    # Найти реферера по коду (если указан)
+    referrer = None
+    if request.referral_code:
+        referrer = await get_user_by_referral_code(db, request.referral_code)
+        if referrer:
+            logger.info(f'Found referrer for email registration: referrer_id={referrer.id}, code={request.referral_code}')
+
     # Создать пользователя
     user = await create_user_by_email(
         db=db,
@@ -357,6 +365,7 @@ async def register_email_standalone(
         password_hash=password_hash,
         first_name=request.first_name,
         language=request.language,
+        referred_by_id=referrer.id if referrer else None,
     )
 
     # Для тестового email - автоматически верифицировать
@@ -385,6 +394,15 @@ async def register_email_standalone(
                 verification_url=verification_url,
                 username=user.first_name or 'User',
             )
+
+    # Обработать реферальную регистрацию (если есть реферер)
+    if referrer:
+        try:
+            await process_referral_registration(db, user.id, referrer.id, bot=None)
+            logger.info(f'Processed referral registration: user_id={user.id}, referrer_id={referrer.id}')
+        except Exception as e:
+            logger.error(f'Failed to process referral registration: {e}')
+            # Не прерываем регистрацию из-за ошибки реферальной системы
 
     # Создать токены и вернуть ответ
     response = _create_auth_response(user)
