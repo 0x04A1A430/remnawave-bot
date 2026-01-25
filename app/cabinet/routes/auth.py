@@ -158,7 +158,7 @@ async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -
             # Parse panel data
             expire_at = panel_user.expire_at
             traffic_limit_gb = panel_user.traffic_limit_bytes // (1024**3) if panel_user.traffic_limit_bytes > 0 else 0
-            used_traffic_gb = panel_user.used_traffic_bytes / (1024**3) if panel_user.used_traffic_bytes > 0 else 0
+            traffic_used_gb = panel_user.used_traffic_bytes / (1024**3) if panel_user.used_traffic_bytes > 0 else 0
 
             # Determine status - use timezone-aware datetime for comparison
             current_time = datetime.now(timezone.utc)
@@ -179,7 +179,7 @@ async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -
                 end_date_naive = expire_at.replace(tzinfo=None) if expire_at.tzinfo else expire_at
                 existing_sub.end_date = end_date_naive
                 existing_sub.traffic_limit_gb = traffic_limit_gb
-                existing_sub.used_traffic_gb = used_traffic_gb
+                existing_sub.traffic_used_gb = traffic_used_gb
                 existing_sub.status = sub_status.value
                 existing_sub.remnawave_short_uuid = panel_user.short_uuid
                 existing_sub.subscription_url = panel_user.subscription_url
@@ -196,7 +196,7 @@ async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -
                     start_date=start_date_naive,
                     end_date=end_date_naive,
                     traffic_limit_gb=traffic_limit_gb,
-                    used_traffic_gb=used_traffic_gb,
+                    traffic_used_gb=traffic_used_gb,
                     status=sub_status.value,
                     is_trial=False,
                     remnawave_short_uuid=panel_user.short_uuid,
