@@ -41,6 +41,7 @@ from ..schemas.auth import (
     PasswordForgotRequest,
     PasswordResetRequest,
     RefreshTokenRequest,
+    RegisterResponse,
     TelegramAuthRequest,
     TelegramWidgetAuthRequest,
     TokenResponse,
@@ -312,7 +313,7 @@ async def register_email(
     }
 
 
-@router.post('/email/register/standalone', response_model=AuthResponse)
+@router.post('/email/register/standalone', response_model=RegisterResponse)
 async def register_email_standalone(
     request: EmailRegisterStandaloneRequest,
     db: AsyncSession = Depends(get_cabinet_db),
@@ -323,8 +324,7 @@ async def register_email_standalone(
     This endpoint creates a new user WITHOUT requiring Telegram authentication.
     An email verification link will be sent to confirm the email address.
 
-    The user can login immediately but some features may be restricted
-    until email is verified.
+    User must verify email before they can login.
 
     If TEST_EMAIL is configured, test email accounts are auto-verified.
     """
@@ -356,7 +356,12 @@ async def register_email_standalone(
     if request.referral_code:
         referrer = await get_user_by_referral_code(db, request.referral_code)
         if referrer:
-            logger.info(f'Found referrer for email registration: referrer_id={referrer.id}, code={request.referral_code}')
+            # Защита от самореферала - нельзя регистрироваться по своему же коду
+            if referrer.email and referrer.email.lower() == request.email.lower():
+                logger.warning(f'Self-referral attempt blocked: email={request.email}, code={request.referral_code}')
+                referrer = None
+            else:
+                logger.info(f'Found referrer for email registration: referrer_id={referrer.id}, code={request.referral_code}')
 
     # Создать пользователя
     user = await create_user_by_email(
@@ -404,19 +409,21 @@ async def register_email_standalone(
             logger.error(f'Failed to process referral registration: {e}')
             # Не прерываем регистрацию из-за ошибки реферальной системы
 
-    # Создать токены и вернуть ответ
-    response = _create_auth_response(user)
-    await _store_refresh_token(db, user.id, response.refresh_token)
+    # Для тестового email - сразу можно логиниться (уже verified)
+    # Для обычного email - требуется верификация
+    return RegisterResponse(
+        message='Verification email sent. Please check your inbox.',
+        email=request.email,
+        requires_verification=not is_test_email,
+    )
 
-    return response
 
-
-@router.post('/email/verify')
+@router.post('/email/verify', response_model=AuthResponse)
 async def verify_email(
     request: EmailVerifyRequest,
     db: AsyncSession = Depends(get_cabinet_db),
 ):
-    """Verify email with token."""
+    """Verify email with token and return auth tokens."""
     # Find user with this token
     result = await db.execute(select(User).where(User.email_verification_token == request.token))
     user = result.scalar_one_or_none()
@@ -438,10 +445,15 @@ async def verify_email(
     user.email_verified_at = datetime.utcnow()
     user.email_verification_token = None
     user.email_verification_expires = None
+    user.cabinet_last_login = datetime.utcnow()
 
     await db.commit()
 
-    return {'message': 'Email verified successfully'}
+    # Return auth tokens so user is logged in after verification
+    response = _create_auth_response(user)
+    await _store_refresh_token(db, user.id, response.refresh_token)
+
+    return response
 
 
 @router.post('/email/resend')
