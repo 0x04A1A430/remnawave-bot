@@ -412,6 +412,7 @@ async def register_email(
             verification_token=verification_token,
             verification_url=verification_url,
             username=user.first_name,
+            language=user.language or 'ru',
         )
 
     return {
@@ -505,6 +506,7 @@ async def register_email_standalone(
                 verification_token=verification_token,
                 verification_url=verification_url,
                 username=user.first_name or 'User',
+                language=user.language or request.language or 'ru',
             )
 
     # Обработать реферальную регистрацию (если есть реферер)
@@ -603,6 +605,7 @@ async def resend_verification(
             verification_token=verification_token,
             verification_url=verification_url,
             username=user.first_name,
+            language=user.language or 'ru',
         )
     elif not settings.is_cabinet_email_verification_enabled():
         raise HTTPException(
@@ -806,6 +809,7 @@ async def forgot_password(
             reset_token=reset_token,
             reset_url=reset_url,
             username=user.first_name,
+            language=user.language or 'ru',
         )
 
     return {'message': 'If the email exists, a password reset link has been sent'}
