@@ -99,6 +99,7 @@ class EmailRegisterStandaloneRequest(BaseModel):
     password: str = Field(..., min_length=8, max_length=128, description='Password (min 8 chars)')
     first_name: str | None = Field(None, max_length=64, description='First name')
     language: str = Field('ru', description='Preferred language')
+    referral_code: str | None = Field(None, max_length=32, description='Referral code of inviter')
 
 
 class AuthResponse(BaseModel):
