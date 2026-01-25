@@ -351,5 +351,6 @@ class CloudPaymentsService:
             'reason': form_data.get('Reason'),
             'reason_code': int(form_data.get('ReasonCode', 0)) if form_data.get('ReasonCode') else None,
             'card_holder_message': form_data.get('CardHolderMessage'),
+            'auth_code': form_data.get('AuthCode'),  # Auth code present only in Pay notifications
             'data': form_data.get('Data'),  # JSON string with custom data
         }
