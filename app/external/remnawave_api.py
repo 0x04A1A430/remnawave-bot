@@ -462,15 +462,21 @@ class RemnaWaveAPI:
                 return None
             raise
 
-    async def get_user_by_email(self, email: str) -> RemnaWaveUser | None:
-        """Get user by email address."""
+    async def get_user_by_email(self, email: str) -> list[RemnaWaveUser]:
+        """Get users by email address."""
         try:
             response = await self._make_request('GET', f'/api/users/by-email/{email}')
-            user = self._parse_user(response['response'])
-            return await self.enrich_user_with_happ_link(user)
+            users_data = response.get('response', [])
+            if not users_data:
+                return []
+            # Handle both single object and array responses
+            if isinstance(users_data, dict):
+                users_data = [users_data]
+            users = [self._parse_user(user) for user in users_data]
+            return [await self.enrich_user_with_happ_link(u) for u in users]
         except RemnaWaveAPIError as e:
             if e.status_code == 404:
-                return None
+                return []
             raise
 
     async def update_user(
