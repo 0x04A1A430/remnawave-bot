@@ -63,8 +63,16 @@ class EmailNotificationTemplates:
 
         return template_func(language, context)
 
-    def _get_base_template(self, content: str) -> str:
+    def _get_base_template(self, content: str, language: str = 'ru') -> str:
         """Wrap content in base HTML template."""
+        footer_texts = {
+            'ru': 'Это автоматическое сообщение. Пожалуйста, не отвечайте на это письмо.',
+            'en': 'This is an automated message. Please do not reply to this email.',
+            'zh': '这是一封自动发送的邮件，请勿回复。',
+            'ua': 'Це автоматичне повідомлення. Будь ласка, не відповідайте на цей лист.',
+        }
+        footer_text = footer_texts.get(language, footer_texts['ru'])
+
         return f"""
 <!DOCTYPE html>
 <html>
@@ -154,8 +162,8 @@ class EmailNotificationTemplates:
             {content}
         </div>
         <div class="footer">
-            <p>&copy; {self.service_name}. All rights reserved.</p>
-            <p>This is an automated message. Please do not reply to this email.</p>
+            <p>&copy; {self.service_name}</p>
+            <p>{footer_text}</p>
         </div>
     </div>
 </body>
@@ -233,15 +241,14 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['en']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['en'])),
+            'subject': subjects.get(language, subjects['ru']),
+            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
         }
 
     def _balance_change_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
         """Template for balance change notification."""
         amount = context.get('formatted_amount', f'{context.get("amount_rubles", 0):.2f} ₽')
         balance = context.get('formatted_balance', f'{context.get("new_balance_rubles", 0):.2f} ₽')
-        description = context.get('description', '')
 
         subjects = {
             'ru': 'Изменение баланса',
@@ -256,7 +263,6 @@ class EmailNotificationTemplates:
                 <div class="highlight">
                     <p>Сумма: <strong>{amount}</strong></p>
                     <p>Текущий баланс: <strong>{balance}</strong></p>
-                    {f'<p>Описание: {description}</p>' if description else ''}
                 </div>
                 {self._get_cabinet_button(language)}
             """,
@@ -265,15 +271,30 @@ class EmailNotificationTemplates:
                 <div class="highlight">
                     <p>Amount: <strong>{amount}</strong></p>
                     <p>Current balance: <strong>{balance}</strong></p>
-                    {f'<p>Description: {description}</p>' if description else ''}
+                </div>
+                {self._get_cabinet_button(language)}
+            """,
+            'zh': f"""
+                <h2>余额变动</h2>
+                <div class="highlight">
+                    <p>金额: <strong>{amount}</strong></p>
+                    <p>当前余额: <strong>{balance}</strong></p>
+                </div>
+                {self._get_cabinet_button(language)}
+            """,
+            'ua': f"""
+                <h2>Зміна балансу</h2>
+                <div class="highlight">
+                    <p>Сума: <strong>{amount}</strong></p>
+                    <p>Поточний баланс: <strong>{balance}</strong></p>
                 </div>
                 {self._get_cabinet_button(language)}
             """,
         }
 
         return {
-            'subject': subjects.get(language, subjects['en']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['en'])),
+            'subject': subjects.get(language, subjects['ru']),
+            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
         }
 
     # ============================================================================
@@ -332,8 +353,8 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['en']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['en'])),
+            'subject': subjects.get(language, subjects['ru']),
+            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
         }
 
     def _subscription_expired_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
@@ -381,8 +402,8 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['en']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['en'])),
+            'subject': subjects.get(language, subjects['ru']),
+            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
         }
 
     def _subscription_renewed_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
@@ -418,8 +439,8 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['en']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['en'])),
+            'subject': subjects.get(language, subjects['ru']),
+            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
         }
 
     def _subscription_activated_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
@@ -455,8 +476,8 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['en']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['en'])),
+            'subject': subjects.get(language, subjects['ru']),
+            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
         }
 
     # ============================================================================
@@ -497,8 +518,8 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['en']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['en'])),
+            'subject': subjects.get(language, subjects['ru']),
+            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
         }
 
     def _autopay_failed_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
@@ -534,8 +555,8 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['en']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['en'])),
+            'subject': subjects.get(language, subjects['ru']),
+            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
         }
 
     def _autopay_insufficient_funds_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
@@ -574,8 +595,8 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['en']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['en'])),
+            'subject': subjects.get(language, subjects['ru']),
+            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
         }
 
     # ============================================================================
@@ -614,8 +635,8 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['en']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['en'])),
+            'subject': subjects.get(language, subjects['ru']),
+            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
         }
 
     def _daily_insufficient_funds_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
@@ -649,8 +670,8 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['en']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['en'])),
+            'subject': subjects.get(language, subjects['ru']),
+            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
         }
 
     def _traffic_reset_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
@@ -680,8 +701,8 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['en']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['en'])),
+            'subject': subjects.get(language, subjects['ru']),
+            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
         }
 
     # ============================================================================
@@ -719,8 +740,8 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['en']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['en'])),
+            'subject': subjects.get(language, subjects['ru']),
+            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
         }
 
     def _unban_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
@@ -752,8 +773,8 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['en']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['en'])),
+            'subject': subjects.get(language, subjects['ru']),
+            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
         }
 
     def _warning_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
@@ -783,8 +804,8 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['en']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['en'])),
+            'subject': subjects.get(language, subjects['ru']),
+            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
         }
 
     # ============================================================================
@@ -825,8 +846,8 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['en']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['en'])),
+            'subject': subjects.get(language, subjects['ru']),
+            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
         }
 
     def _referral_registered_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
@@ -860,8 +881,8 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['en']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['en'])),
+            'subject': subjects.get(language, subjects['ru']),
+            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
         }
 
     # ============================================================================
@@ -902,8 +923,8 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['en']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['en'])),
+            'subject': subjects.get(language, subjects['ru']),
+            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
         }
 
 

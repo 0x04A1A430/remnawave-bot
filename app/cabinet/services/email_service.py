@@ -102,6 +102,7 @@ class EmailService:
         verification_token: str,
         verification_url: str,
         username: str | None = None,
+        language: str = 'ru',
     ) -> bool:
         """
         Send email verification email.
@@ -111,14 +112,61 @@ class EmailService:
             verification_token: Verification token
             verification_url: Base URL for verification (token will be appended)
             username: User's name for personalization
+            language: Language code (ru, en, zh, ua)
 
         Returns:
             True if email was sent successfully, False otherwise
         """
         full_url = f'{verification_url}?token={verification_token}'
-        greeting = f'Hello{", " + username if username else ""}!'
+        expire_hours = settings.get_cabinet_email_verification_expire_hours()
 
-        subject = 'Verify your email address'
+        # Localized content
+        texts = {
+            'ru': {
+                'greeting': f'Здравствуйте{", " + username if username else ""}!',
+                'subject': 'Подтверждение email адреса',
+                'intro': 'Спасибо за регистрацию! Пожалуйста, подтвердите ваш email адрес, нажав на кнопку ниже:',
+                'button': 'Подтвердить email',
+                'or_copy': 'Или скопируйте и вставьте эту ссылку в браузер:',
+                'expires': f'Ссылка действительна в течение {expire_hours} часов.',
+                'ignore': 'Если вы не создавали аккаунт, просто проигнорируйте это письмо.',
+                'regards': 'С уважением,',
+            },
+            'en': {
+                'greeting': f'Hello{", " + username if username else ""}!',
+                'subject': 'Verify your email address',
+                'intro': 'Thank you for registering! Please verify your email address by clicking the button below:',
+                'button': 'Verify Email',
+                'or_copy': 'Or copy and paste this link in your browser:',
+                'expires': f'This link will expire in {expire_hours} hours.',
+                'ignore': "If you didn't create an account, you can safely ignore this email.",
+                'regards': 'Best regards,',
+            },
+            'zh': {
+                'greeting': f'您好{", " + username if username else ""}!',
+                'subject': '验证您的邮箱地址',
+                'intro': '感谢您的注册！请点击下方按钮验证您的邮箱地址：',
+                'button': '验证邮箱',
+                'or_copy': '或将此链接复制并粘贴到浏览器中：',
+                'expires': f'此链接将在 {expire_hours} 小时后过期。',
+                'ignore': '如果您没有创建账户，请忽略此邮件。',
+                'regards': '此致,',
+            },
+            'ua': {
+                'greeting': f'Вітаємо{", " + username if username else ""}!',
+                'subject': 'Підтвердження email адреси',
+                'intro': 'Дякуємо за реєстрацію! Будь ласка, підтвердіть вашу email адресу, натиснувши на кнопку нижче:',
+                'button': 'Підтвердити email',
+                'or_copy': 'Або скопіюйте та вставте це посилання в браузер:',
+                'expires': f'Посилання дійсне протягом {expire_hours} годин.',
+                'ignore': 'Якщо ви не створювали акаунт, просто проігноруйте цей лист.',
+                'regards': 'З повагою,',
+            },
+        }
+
+        t = texts.get(language, texts['ru'])
+
+        subject = t['subject']
         body_html = f"""
         <!DOCTYPE html>
         <html>
@@ -141,15 +189,15 @@ class EmailService:
         </head>
         <body>
             <div class="container">
-                <h2>{greeting}</h2>
-                <p>Thank you for registering! Please verify your email address by clicking the button below:</p>
-                <a href="{full_url}" class="button">Verify Email</a>
-                <p>Or copy and paste this link in your browser:</p>
+                <h2>{t['greeting']}</h2>
+                <p>{t['intro']}</p>
+                <a href="{full_url}" class="button">{t['button']}</a>
+                <p>{t['or_copy']}</p>
                 <p><a href="{full_url}">{full_url}</a></p>
-                <p>This link will expire in {settings.get_cabinet_email_verification_expire_hours()} hours.</p>
-                <p>If you didn't create an account, you can safely ignore this email.</p>
+                <p>{t['expires']}</p>
+                <p>{t['ignore']}</p>
                 <div class="footer">
-                    <p>Best regards,<br>{self.from_name}</p>
+                    <p>{t['regards']}<br>{self.from_name}</p>
                 </div>
             </div>
         </body>
@@ -164,6 +212,7 @@ class EmailService:
         reset_token: str,
         reset_url: str,
         username: str | None = None,
+        language: str = 'ru',
     ) -> bool:
         """
         Send password reset email.
@@ -173,14 +222,61 @@ class EmailService:
             reset_token: Password reset token
             reset_url: Base URL for password reset (token will be appended)
             username: User's name for personalization
+            language: Language code (ru, en, zh, ua)
 
         Returns:
             True if email was sent successfully, False otherwise
         """
         full_url = f'{reset_url}?token={reset_token}'
-        greeting = f'Hello{", " + username if username else ""}!'
+        expire_hours = settings.get_cabinet_password_reset_expire_hours()
 
-        subject = 'Reset your password'
+        # Localized content
+        texts = {
+            'ru': {
+                'greeting': f'Здравствуйте{", " + username if username else ""}!',
+                'subject': 'Сброс пароля',
+                'intro': 'Мы получили запрос на сброс вашего пароля. Нажмите на кнопку ниже, чтобы установить новый пароль:',
+                'button': 'Сбросить пароль',
+                'or_copy': 'Или скопируйте и вставьте эту ссылку в браузер:',
+                'expires': f'Ссылка действительна в течение {expire_hours} часов.',
+                'warning': 'Если вы не запрашивали сброс пароля, проигнорируйте это письмо или свяжитесь с поддержкой.',
+                'regards': 'С уважением,',
+            },
+            'en': {
+                'greeting': f'Hello{", " + username if username else ""}!',
+                'subject': 'Reset your password',
+                'intro': 'We received a request to reset your password. Click the button below to set a new password:',
+                'button': 'Reset Password',
+                'or_copy': 'Or copy and paste this link in your browser:',
+                'expires': f'This link will expire in {expire_hours} hour(s).',
+                'warning': "If you didn't request a password reset, please ignore this email or contact support if you're concerned.",
+                'regards': 'Best regards,',
+            },
+            'zh': {
+                'greeting': f'您好{", " + username if username else ""}!',
+                'subject': '重置您的密码',
+                'intro': '我们收到了重置您密码的请求。点击下方按钮设置新密码：',
+                'button': '重置密码',
+                'or_copy': '或将此链接复制并粘贴到浏览器中：',
+                'expires': f'此链接将在 {expire_hours} 小时后过期。',
+                'warning': '如果您没有请求重置密码，请忽略此邮件或联系客服。',
+                'regards': '此致,',
+            },
+            'ua': {
+                'greeting': f'Вітаємо{", " + username if username else ""}!',
+                'subject': 'Скидання пароля',
+                'intro': 'Ми отримали запит на скидання вашого пароля. Натисніть на кнопку нижче, щоб встановити новий пароль:',
+                'button': 'Скинути пароль',
+                'or_copy': 'Або скопіюйте та вставте це посилання в браузер:',
+                'expires': f'Посилання дійсне протягом {expire_hours} годин.',
+                'warning': "Якщо ви не запитували скидання пароля, проігноруйте цей лист або зв'яжіться з підтримкою.",
+                'regards': 'З повагою,',
+            },
+        }
+
+        t = texts.get(language, texts['ru'])
+
+        subject = t['subject']
         body_html = f"""
         <!DOCTYPE html>
         <html>
@@ -204,15 +300,15 @@ class EmailService:
         </head>
         <body>
             <div class="container">
-                <h2>{greeting}</h2>
-                <p>We received a request to reset your password. Click the button below to set a new password:</p>
-                <a href="{full_url}" class="button">Reset Password</a>
-                <p>Or copy and paste this link in your browser:</p>
+                <h2>{t['greeting']}</h2>
+                <p>{t['intro']}</p>
+                <a href="{full_url}" class="button">{t['button']}</a>
+                <p>{t['or_copy']}</p>
                 <p><a href="{full_url}">{full_url}</a></p>
-                <p>This link will expire in {settings.get_cabinet_password_reset_expire_hours()} hour(s).</p>
-                <p class="warning">If you didn't request a password reset, please ignore this email or contact support if you're concerned.</p>
+                <p>{t['expires']}</p>
+                <p class="warning">{t['warning']}</p>
                 <div class="footer">
-                    <p>Best regards,<br>{self.from_name}</p>
+                    <p>{t['regards']}<br>{self.from_name}</p>
                 </div>
             </div>
         </body>
