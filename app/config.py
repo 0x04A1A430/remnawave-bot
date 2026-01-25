@@ -691,6 +691,7 @@ class Settings(BaseSettings):
     CABINET_EMAIL_VERIFICATION_ENABLED: bool = True
     CABINET_EMAIL_VERIFICATION_EXPIRE_HOURS: int = 24
     CABINET_PASSWORD_RESET_EXPIRE_HOURS: int = 1
+    CABINET_EMAIL_AUTH_ENABLED: bool = True  # Enable email registration/login in cabinet
 
     # SMTP settings for cabinet email
     SMTP_HOST: str | None = None
@@ -2495,6 +2496,9 @@ class Settings(BaseSettings):
 
     def get_cabinet_password_reset_expire_hours(self) -> int:
         return max(1, self.CABINET_PASSWORD_RESET_EXPIRE_HOURS)
+
+    def is_cabinet_email_auth_enabled(self) -> bool:
+        return bool(self.CABINET_EMAIL_AUTH_ENABLED)
 
     def is_smtp_configured(self) -> bool:
         return bool(self.SMTP_HOST and self.SMTP_USER and self.SMTP_PASSWORD)
