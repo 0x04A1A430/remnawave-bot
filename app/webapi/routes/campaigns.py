@@ -29,8 +29,8 @@ router = APIRouter()
 
 def _serialize_campaign(campaign) -> CampaignResponse:
     registrations_attr = None
-    if isinstance(getattr(campaign, "__dict__", None), dict):
-        registrations_attr = campaign.__dict__.get("registrations")
+    if isinstance(getattr(campaign, '__dict__', None), dict):
+        registrations_attr = campaign.__dict__.get('registrations')
     registrations = registrations_attr or []
     squads = list(campaign.subscription_squads or [])
 
@@ -62,17 +62,17 @@ def _serialize_campaign(campaign) -> CampaignResponse:
 
 
 @router.post(
-    "",
+    '',
     response_model=CampaignResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Создать рекламную кампанию",
+    summary='Создать рекламную кампанию',
 )
 async def create_campaign_endpoint(
     payload: CampaignCreateRequest,
     token: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> CampaignResponse:
-    created_by = getattr(token, "id", None)
+    created_by = getattr(token, 'id', None)
 
     try:
         campaign = await create_campaign(
@@ -94,23 +94,23 @@ async def create_campaign_endpoint(
         await db.rollback()
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            "Campaign with this start_parameter already exists",
+            'Campaign with this start_parameter already exists',
         ) from exc
 
     return _serialize_campaign(campaign)
 
 
 @router.get(
-    "",
+    '',
     response_model=CampaignListResponse,
-    summary="Список рекламных кампаний",
+    summary='Список рекламных кампаний',
 )
 async def list_campaigns(
     _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    include_inactive: bool = Query(True, description="Включать неактивные кампании"),
+    include_inactive: bool = Query(True, description='Включать неактивные кампании'),
 ) -> CampaignListResponse:
     total = await get_campaigns_count(db, is_active=None if include_inactive else True)
     campaigns = await get_campaigns_list(
@@ -129,9 +129,9 @@ async def list_campaigns(
 
 
 @router.delete(
-    "/{campaign_id}",
+    '/{campaign_id}',
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="Удалить рекламную кампанию",
+    summary='Удалить рекламную кампанию',
 )
 async def delete_campaign_endpoint(
     campaign_id: int,
@@ -140,16 +140,15 @@ async def delete_campaign_endpoint(
 ):
     campaign = await get_campaign_by_id(db, campaign_id)
     if not campaign:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Campaign not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Campaign not found')
 
     await delete_campaign(db, campaign)
-    return None
 
 
 @router.patch(
-    "/{campaign_id}",
+    '/{campaign_id}',
     response_model=CampaignResponse,
-    summary="Обновить рекламную кампанию",
+    summary='Обновить рекламную кампанию',
 )
 async def update_campaign_endpoint(
     campaign_id: int,
@@ -159,7 +158,7 @@ async def update_campaign_endpoint(
 ) -> CampaignResponse:
     campaign = await get_campaign_by_id(db, campaign_id)
     if not campaign:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Campaign not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Campaign not found')
 
     update_fields = payload.dict(exclude_unset=True)
     if not update_fields:
@@ -169,10 +168,10 @@ async def update_campaign_endpoint(
         campaign = await update_campaign(db, campaign, **update_fields)
     except IntegrityError as exc:
         await db.rollback()
-        if "start_parameter" in str(exc.orig):
+        if 'start_parameter' in str(exc.orig):
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                "Campaign with this start_parameter already exists",
+                'Campaign with this start_parameter already exists',
             ) from exc
         raise
 

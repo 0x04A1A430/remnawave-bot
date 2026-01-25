@@ -8,7 +8,6 @@ from .autopay import (
     show_autopay_days,
     toggle_autopay,
 )
-
 from .common import (
     build_redirect_link,
     create_deep_link,
@@ -25,7 +24,6 @@ from .common import (
     update_traffic_prices,
     validate_traffic_price,
 )
-
 from .countries import (
     apply_countries_changes,
     confirm_add_countries_to_subscription,
@@ -36,7 +34,6 @@ from .countries import (
     handle_manage_country,
     select_country,
 )
-
 from .devices import (
     confirm_add_devices,
     confirm_change_devices,
@@ -57,35 +54,36 @@ from .devices import (
     show_device_connection_help,
     show_devices_page,
 )
-
 from .happ import (
     handle_happ_download_back,
     handle_happ_download_close,
     handle_happ_download_platform_choice,
     handle_happ_download_request,
 )
-
 from .links import (
     handle_connect_subscription,
     handle_open_subscription_link,
 )
-
+from .modem import (
+    handle_modem_confirm,
+    handle_modem_disable,
+    handle_modem_enable,
+    handle_modem_menu,
+    register_modem_handlers,
+)
 from .notifications import (
     send_extension_notification,
     send_purchase_notification,
     send_trial_notification,
 )
-
 from .pricing import (
     get_subscription_cost,
     get_subscription_info_text,
 )
-
 from .promo import (
     claim_discount_offer,
     handle_promo_offer_close,
 )
-
 from .purchase import (
     activate_trial,
     clear_saved_cart,
@@ -105,7 +103,6 @@ from .purchase import (
     show_trial_offer,
     start_subscription_purchase,
 )
-
 from .traffic import (
     add_traffic,
     confirm_reset_traffic,
@@ -120,13 +117,6 @@ from .traffic import (
     select_traffic,
 )
 
-from .modem import (
-    handle_modem_menu,
-    handle_modem_enable,
-    handle_modem_confirm,
-    handle_modem_disable,
-    register_modem_handlers,
-)
 
 __all__ = [
     'activate_trial',
@@ -182,6 +172,10 @@ __all__ = [
     'handle_happ_download_platform_choice',
     'handle_happ_download_request',
     'handle_manage_country',
+    'handle_modem_confirm',
+    'handle_modem_disable',
+    'handle_modem_enable',
+    'handle_modem_menu',
     'handle_no_traffic_packages',
     'handle_open_subscription_link',
     'handle_promo_offer_close',
@@ -193,14 +187,10 @@ __all__ = [
     'handle_subscription_config_back',
     'handle_subscription_settings',
     'handle_switch_traffic',
-    'handle_modem_menu',
-    'handle_modem_enable',
-    'handle_modem_confirm',
-    'handle_modem_disable',
-    'register_modem_handlers',
     'load_app_config',
     'refresh_traffic_config',
     'register_handlers',
+    'register_modem_handlers',
     'resume_subscription_checkout',
     'return_to_saved_cart',
     'save_cart_and_redirect_to_topup',

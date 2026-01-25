@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import datetime
-from typing import Any, Dict, Iterable, Optional, Tuple
+from typing import Any
 
 from sqlalchemy import and_, func, select
-from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database.models import SubscriptionEvent
 
@@ -15,13 +16,13 @@ async def create_subscription_event(
     *,
     user_id: int,
     event_type: str,
-    subscription_id: Optional[int] = None,
-    transaction_id: Optional[int] = None,
-    amount_kopeks: Optional[int] = None,
-    currency: Optional[str] = None,
-    message: Optional[str] = None,
-    occurred_at: Optional[datetime] = None,
-    extra: Optional[Dict[str, Any]] = None,
+    subscription_id: int | None = None,
+    transaction_id: int | None = None,
+    amount_kopeks: int | None = None,
+    currency: str | None = None,
+    message: str | None = None,
+    occurred_at: datetime | None = None,
+    extra: dict[str, Any] | None = None,
 ) -> SubscriptionEvent:
     event = SubscriptionEvent(
         user_id=user_id,
@@ -45,9 +46,9 @@ async def list_subscription_events(
     *,
     limit: int,
     offset: int,
-    event_types: Optional[Iterable[str]] = None,
-    user_id: Optional[int] = None,
-) -> Tuple[list[SubscriptionEvent], int]:
+    event_types: Iterable[str] | None = None,
+    user_id: int | None = None,
+) -> tuple[list[SubscriptionEvent], int]:
     base_query = select(SubscriptionEvent)
     filters = []
 

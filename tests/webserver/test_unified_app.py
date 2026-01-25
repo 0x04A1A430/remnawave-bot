@@ -9,35 +9,34 @@ from fastapi import FastAPI, status
 from app.config import settings
 from app.services.payment_service import PaymentService
 
+
 # ensure backup directory exists before importing the unified app to avoid side effects during module import
-_backup_dir = Path("data/backups")
+_backup_dir = Path('data/backups')
 _backup_dir.mkdir(parents=True, exist_ok=True)
 
 from app.webserver.unified_app import create_unified_app
 
 
 @pytest.mark.anyio
-async def test_unified_app_health_reports_features(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+async def test_unified_app_health_reports_features(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     bot = AsyncMock()
     dispatcher = SimpleNamespace(feed_update=AsyncMock())
     payment_service = AsyncMock(spec=PaymentService)
 
-    miniapp_static_dir = tmp_path / "miniapp"
+    miniapp_static_dir = tmp_path / 'miniapp'
     miniapp_static_dir.mkdir()
 
-    monkeypatch.setattr(settings, "WEB_API_ENABLED", True, raising=False)
-    monkeypatch.setattr(settings, "TRIBUTE_ENABLED", True, raising=False)
-    monkeypatch.setattr(settings, "WEBHOOK_URL", "https://hooks.example.com", raising=False)
-    monkeypatch.setattr(settings, "WEBHOOK_PATH", "/telegram-webhook", raising=False)
-    monkeypatch.setattr(settings, "WEBHOOK_SECRET_TOKEN", "super-secret", raising=False)
-    monkeypatch.setattr(settings, "BOT_RUN_MODE", "webhook", raising=False)
-    monkeypatch.setattr(settings, "WEBHOOK_MAX_QUEUE_SIZE", 8, raising=False)
-    monkeypatch.setattr(settings, "WEBHOOK_WORKERS", 1, raising=False)
-    monkeypatch.setattr(settings, "WEBHOOK_ENQUEUE_TIMEOUT", 0.0, raising=False)
-    monkeypatch.setattr(settings, "WEBHOOK_WORKER_SHUTDOWN_TIMEOUT", 1.0, raising=False)
-    monkeypatch.setattr(settings, "MINIAPP_STATIC_PATH", str(miniapp_static_dir), raising=False)
+    monkeypatch.setattr(settings, 'WEB_API_ENABLED', True, raising=False)
+    monkeypatch.setattr(settings, 'TRIBUTE_ENABLED', True, raising=False)
+    monkeypatch.setattr(settings, 'WEBHOOK_URL', 'https://hooks.example.com', raising=False)
+    monkeypatch.setattr(settings, 'WEBHOOK_PATH', '/telegram-webhook', raising=False)
+    monkeypatch.setattr(settings, 'WEBHOOK_SECRET_TOKEN', 'super-secret', raising=False)
+    monkeypatch.setattr(settings, 'BOT_RUN_MODE', 'webhook', raising=False)
+    monkeypatch.setattr(settings, 'WEBHOOK_MAX_QUEUE_SIZE', 8, raising=False)
+    monkeypatch.setattr(settings, 'WEBHOOK_WORKERS', 1, raising=False)
+    monkeypatch.setattr(settings, 'WEBHOOK_ENQUEUE_TIMEOUT', 0.0, raising=False)
+    monkeypatch.setattr(settings, 'WEBHOOK_WORKER_SHUTDOWN_TIMEOUT', 1.0, raising=False)
+    monkeypatch.setattr(settings, 'MINIAPP_STATIC_PATH', str(miniapp_static_dir), raising=False)
 
     app = create_unified_app(
         bot,
@@ -49,10 +48,10 @@ async def test_unified_app_health_reports_features(
     health_route = next(
         route
         for route in app.routes
-        if getattr(route, "endpoint", None) and getattr(route.endpoint, "__name__", "") == "unified_health"
+        if getattr(route, 'endpoint', None) and getattr(route.endpoint, '__name__', '') == 'unified_health'
     )
 
-    assert getattr(health_route, "path", None) == "/health/unified"
+    assert getattr(health_route, 'path', None) == '/health/unified'
 
     await app.router.startup()
     try:
@@ -60,19 +59,19 @@ async def test_unified_app_health_reports_features(
     finally:
         await app.router.shutdown()
 
-    payload = json.loads(response.body.decode("utf-8"))  # type: ignore[attr-defined]
+    payload = json.loads(response.body.decode('utf-8'))  # type: ignore[attr-defined]
 
-    assert payload["status"] == "ok"
-    assert payload["web_api_enabled"] is True
-    assert payload["bot_run_mode"] == "webhook"
-    assert payload["telegram_webhook"]["enabled"] is True
-    assert payload["telegram_webhook"]["running"] is True
-    assert payload["telegram_webhook"]["path"] == "/telegram-webhook"
-    assert payload["telegram_webhook"]["secret_configured"] is True
-    assert payload["payment_webhooks"]["enabled"] is True
-    assert payload["payment_webhooks"]["providers"]["tribute"] is True
-    assert payload["miniapp_static"]["mounted"] is True
-    assert payload["miniapp_static"]["path"].endswith("miniapp")
+    assert payload['status'] == 'ok'
+    assert payload['web_api_enabled'] is True
+    assert payload['bot_run_mode'] == 'webhook'
+    assert payload['telegram_webhook']['enabled'] is True
+    assert payload['telegram_webhook']['running'] is True
+    assert payload['telegram_webhook']['path'] == '/telegram-webhook'
+    assert payload['telegram_webhook']['secret_configured'] is True
+    assert payload['payment_webhooks']['enabled'] is True
+    assert payload['payment_webhooks']['providers']['tribute'] is True
+    assert payload['miniapp_static']['mounted'] is True
+    assert payload['miniapp_static']['path'].endswith('miniapp')
 
 
 def _build_unified_app(monkeypatch: pytest.MonkeyPatch, docs_enabled: bool) -> FastAPI:
@@ -80,9 +79,9 @@ def _build_unified_app(monkeypatch: pytest.MonkeyPatch, docs_enabled: bool) -> F
     dispatcher = SimpleNamespace(feed_update=AsyncMock())
     payment_service = AsyncMock(spec=PaymentService)
 
-    monkeypatch.setattr(settings, "WEB_API_ENABLED", False, raising=False)
-    monkeypatch.setattr(settings, "WEB_API_DOCS_ENABLED", docs_enabled, raising=False)
-    monkeypatch.setattr(settings, "MINIAPP_STATIC_PATH", "miniapp", raising=False)
+    monkeypatch.setattr(settings, 'WEB_API_ENABLED', False, raising=False)
+    monkeypatch.setattr(settings, 'WEB_API_DOCS_ENABLED', docs_enabled, raising=False)
+    monkeypatch.setattr(settings, 'MINIAPP_STATIC_PATH', 'miniapp', raising=False)
 
     return create_unified_app(
         bot,
@@ -98,8 +97,8 @@ async def test_unified_app_health_path_without_admin(monkeypatch: pytest.MonkeyP
     dispatcher = SimpleNamespace(feed_update=AsyncMock())
     payment_service = AsyncMock(spec=PaymentService)
 
-    monkeypatch.setattr(settings, "WEB_API_ENABLED", False, raising=False)
-    monkeypatch.setattr(settings, "MINIAPP_STATIC_PATH", "miniapp", raising=False)
+    monkeypatch.setattr(settings, 'WEB_API_ENABLED', False, raising=False)
+    monkeypatch.setattr(settings, 'MINIAPP_STATIC_PATH', 'miniapp', raising=False)
 
     app = create_unified_app(
         bot,
@@ -111,10 +110,10 @@ async def test_unified_app_health_path_without_admin(monkeypatch: pytest.MonkeyP
     health_route = next(
         route
         for route in app.routes
-        if getattr(route, "endpoint", None) and getattr(route.endpoint, "__name__", "") == "unified_health"
+        if getattr(route, 'endpoint', None) and getattr(route.endpoint, '__name__', '') == 'unified_health'
     )
 
-    assert getattr(health_route, "path", None) == "/health"
+    assert getattr(health_route, 'path', None) == '/health'
 
 
 def test_unified_app_docs_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -124,34 +123,34 @@ def test_unified_app_docs_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
     assert app.redoc_url is None
     assert app.openapi_url is None
 
-    registered_paths = {getattr(route, "path", None) for route in app.routes}
-    assert "/doc" not in registered_paths
+    registered_paths = {getattr(route, 'path', None) for route in app.routes}
+    assert '/doc' not in registered_paths
 
 
 @pytest.mark.anyio
 async def test_unified_app_docs_enabled_with_alias(monkeypatch: pytest.MonkeyPatch) -> None:
     app = _build_unified_app(monkeypatch, docs_enabled=True)
 
-    assert app.docs_url == "/docs"
-    assert app.openapi_url == "/openapi.json"
+    assert app.docs_url == '/docs'
+    assert app.openapi_url == '/openapi.json'
 
     alias_route = next(
-        (route for route in app.routes if getattr(route, "path", None) == "/doc"),
+        (route for route in app.routes if getattr(route, 'path', None) == '/doc'),
         None,
     )
     assert alias_route is not None
-    assert getattr(alias_route, "include_in_schema", True) is False
+    assert getattr(alias_route, 'include_in_schema', True) is False
 
     redoc_route = next(
-        (route for route in app.routes if getattr(route, "path", None) == "/redoc"),
+        (route for route in app.routes if getattr(route, 'path', None) == '/redoc'),
         None,
     )
     assert redoc_route is not None
-    assert getattr(redoc_route, "include_in_schema", True) is False
+    assert getattr(redoc_route, 'include_in_schema', True) is False
 
     response = await alias_route.endpoint()  # type: ignore[func-returns-value]
     assert response.status_code == status.HTTP_307_TEMPORARY_REDIRECT
-    assert response.headers["location"] == "/docs"
+    assert response.headers['location'] == '/docs'
 
     redoc_response = await redoc_route.endpoint()  # type: ignore[func-returns-value]
-    assert b"ReDoc" in redoc_response.body  # type: ignore[attr-defined]
+    assert b'ReDoc' in redoc_response.body  # type: ignore[attr-defined]

@@ -25,8 +25,20 @@ reload-follow: ## Перезапустить контейнеры с логам�
 
 .PHONY: test
 test: ## Запустить тесты
-	@echo "🧪 Запускаем тесты..."
-	pytest -v
+	uv run pytest -v
+
+.PHONY: lint
+lint: ## Проверить код (ruff check)
+	uv run ruff check .
+
+.PHONY: format
+format: ## Форматировать код (ruff format)
+	uv run ruff format .
+
+.PHONY: fix
+fix: ## Исправить код (ruff check --fix + format)
+	uv run ruff check . --fix
+	uv run ruff format .
 
 .PHONY: help
 help: ## Показать список доступных команд

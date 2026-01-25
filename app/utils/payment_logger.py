@@ -13,15 +13,15 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
+
 
 # Выделенный логгер для всех платежных операций
-payment_logger = logging.getLogger("app.payments")
+payment_logger = logging.getLogger('app.payments')
 
 
 def configure_payment_logger(
     handler: logging.Handler,
-    formatter: Optional[logging.Formatter] = None,
+    formatter: logging.Formatter | None = None,
     level: int = logging.INFO,
 ) -> None:
     """Настроить payment_logger с указанным хэндлером.

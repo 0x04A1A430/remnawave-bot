@@ -1,14 +1,12 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Security, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-
-from app.services.subscription_service import SubscriptionService
 
 from app.config import settings
 from app.database.crud.server_squad import get_random_trial_squad_uuid
@@ -21,11 +19,11 @@ from app.database.crud.subscription import (
     deactivate_subscription,
     extend_subscription,
     get_subscription_by_user_id,
-    replace_subscription,
     remove_subscription_squad,
+    replace_subscription,
 )
-from app.services.subscription_service import SubscriptionService
 from app.database.models import Subscription, SubscriptionStatus
+from app.services.subscription_service import SubscriptionService
 
 from ..dependencies import get_db_session, require_api_token
 from ..schemas.subscriptions import (
@@ -37,6 +35,7 @@ from ..schemas.subscriptions import (
     SubscriptionSquadRequest,
     SubscriptionTrafficRequest,
 )
+
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +66,7 @@ def _serialize_subscription(subscription: Subscription) -> SubscriptionResponse:
 
 
 async def _choose_trial_squads(
-    db: AsyncSession, requested_squad_uuid: Optional[str], fallback_squads: list[str]
+    db: AsyncSession, requested_squad_uuid: str | None, fallback_squads: list[str]
 ) -> list[str]:
     if requested_squad_uuid:
         return [requested_squad_uuid]
@@ -78,37 +77,35 @@ async def _choose_trial_squads(
     try:
         squad_uuid = await get_random_trial_squad_uuid(db)
     except Exception as error:
-        logger.error("Failed to select trial squad: %s", error)
+        logger.error('Failed to select trial squad: %s', error)
         squad_uuid = None
 
     if not squad_uuid:
         return []
 
-    logger.debug("Selected trial squad %s for subscription replacement", squad_uuid)
+    logger.debug('Selected trial squad %s for subscription replacement', squad_uuid)
     return [squad_uuid]
 
 
 async def _get_subscription(db: AsyncSession, subscription_id: int) -> Subscription:
     result = await db.execute(
-        select(Subscription)
-        .options(selectinload(Subscription.user))
-        .where(Subscription.id == subscription_id)
+        select(Subscription).options(selectinload(Subscription.user)).where(Subscription.id == subscription_id)
     )
     subscription = result.scalar_one_or_none()
     if not subscription:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Subscription not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Subscription not found')
     return subscription
 
 
-@router.get("", response_model=list[SubscriptionResponse])
+@router.get('', response_model=list[SubscriptionResponse])
 async def list_subscriptions(
     _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    status_filter: Optional[SubscriptionStatus] = Query(default=None, alias="status"),
-    user_id: Optional[int] = Query(default=None),
-    is_trial: Optional[bool] = Query(default=None),
+    status_filter: SubscriptionStatus | None = Query(default=None, alias='status'),
+    user_id: int | None = Query(default=None),
+    is_trial: bool | None = Query(default=None),
 ) -> list[SubscriptionResponse]:
     query = select(Subscription).options(selectinload(Subscription.user))
 
@@ -125,7 +122,7 @@ async def list_subscriptions(
     return [_serialize_subscription(sub) for sub in subscriptions]
 
 
-@router.get("/{subscription_id}", response_model=SubscriptionResponse)
+@router.get('/{subscription_id}', response_model=SubscriptionResponse)
 async def get_subscription(
     subscription_id: int,
     _: Any = Security(require_api_token),
@@ -135,7 +132,7 @@ async def get_subscription(
     return _serialize_subscription(subscription)
 
 
-@router.post("", response_model=SubscriptionResponse, status_code=status.HTTP_201_CREATED)
+@router.post('', response_model=SubscriptionResponse, status_code=status.HTTP_201_CREATED)
 async def create_subscription(
     payload: SubscriptionCreateRequest,
     _: Any = Security(require_api_token),
@@ -143,7 +140,7 @@ async def create_subscription(
 ) -> SubscriptionResponse:
     existing = await get_subscription_by_user_id(db, payload.user_id)
     if existing and not payload.replace_existing:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "User already has a subscription")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'User already has a subscription')
 
     forced_devices = None
     if not settings.is_devices_selection_enabled():
@@ -168,9 +165,7 @@ async def create_subscription(
                     duration_days=duration_days,
                     traffic_limit_gb=traffic_limit_gb,
                     device_limit=(
-                        trial_device_limit
-                        if trial_device_limit is not None
-                        else settings.TRIAL_DEVICE_LIMIT
+                        trial_device_limit if trial_device_limit is not None else settings.TRIAL_DEVICE_LIMIT
                     ),
                     connected_squads=connected_squads,
                     is_trial=True,
@@ -187,7 +182,7 @@ async def create_subscription(
                 )
         else:
             if payload.duration_days is None:
-                raise HTTPException(status.HTTP_400_BAD_REQUEST, "duration_days is required for paid subscriptions")
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, 'duration_days is required for paid subscriptions')
             device_limit = payload.device_limit
             if device_limit is None:
                 if forced_devices is not None:
@@ -217,13 +212,9 @@ async def create_subscription(
                 )
 
         subscription_service = SubscriptionService()
-        rem_user = await subscription_service.create_remnawave_user(
-            db,
-            subscription,
-            reset_traffic=False
-        )
+        rem_user = await subscription_service.create_remnawave_user(db, subscription, reset_traffic=False)
         if not rem_user:
-            raise ValueError("Failed to create/update user in Remnawave")
+            raise ValueError('Failed to create/update user in Remnawave')
 
         await db.refresh(subscription)
 
@@ -233,14 +224,16 @@ async def create_subscription(
         try:
             await db.rollback()
         except Exception:
-            logger.exception("Rollback failed after error: %s", e)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to sync with Remnawave: {str(e)}")
+            logger.exception('Rollback failed after error: %s', e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'Failed to sync with Remnawave: {e!s}'
+        )
 
     subscription = await _get_subscription(db, subscription.id)
     return _serialize_subscription(subscription)
 
 
-@router.post("/{subscription_id}/extend", response_model=SubscriptionResponse)
+@router.post('/{subscription_id}/extend', response_model=SubscriptionResponse)
 async def extend_subscription_endpoint(
     subscription_id: int,
     payload: SubscriptionExtendRequest,
@@ -253,7 +246,7 @@ async def extend_subscription_endpoint(
     return _serialize_subscription(subscription)
 
 
-@router.post("/{subscription_id}/traffic", response_model=SubscriptionResponse)
+@router.post('/{subscription_id}/traffic', response_model=SubscriptionResponse)
 async def add_subscription_traffic_endpoint(
     subscription_id: int,
     payload: SubscriptionTrafficRequest,
@@ -266,7 +259,7 @@ async def add_subscription_traffic_endpoint(
     return _serialize_subscription(subscription)
 
 
-@router.post("/{subscription_id}/devices", response_model=SubscriptionResponse)
+@router.post('/{subscription_id}/devices', response_model=SubscriptionResponse)
 async def add_subscription_devices_endpoint(
     subscription_id: int,
     payload: SubscriptionDevicesRequest,
@@ -279,7 +272,7 @@ async def add_subscription_devices_endpoint(
     return _serialize_subscription(subscription)
 
 
-@router.post("/{subscription_id}/squads", response_model=SubscriptionResponse)
+@router.post('/{subscription_id}/squads', response_model=SubscriptionResponse)
 async def add_subscription_squad_endpoint(
     subscription_id: int,
     payload: SubscriptionSquadRequest,
@@ -287,7 +280,7 @@ async def add_subscription_squad_endpoint(
     db: AsyncSession = Depends(get_db_session),
 ) -> SubscriptionResponse:
     if not payload.squad_uuid:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "squad_uuid is required")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'squad_uuid is required')
 
     subscription = await _get_subscription(db, subscription_id)
     subscription = await add_subscription_squad(db, subscription, payload.squad_uuid)
@@ -295,7 +288,7 @@ async def add_subscription_squad_endpoint(
     return _serialize_subscription(subscription)
 
 
-@router.delete("/{subscription_id}/squads/{squad_uuid}", response_model=SubscriptionResponse)
+@router.delete('/{subscription_id}/squads/{squad_uuid}', response_model=SubscriptionResponse)
 async def remove_subscription_squad_endpoint(
     subscription_id: int,
     squad_uuid: str,
@@ -308,7 +301,7 @@ async def remove_subscription_squad_endpoint(
     return _serialize_subscription(subscription)
 
 
-@router.delete("/{subscription_id}", response_model=SubscriptionResponse)
+@router.delete('/{subscription_id}', response_model=SubscriptionResponse)
 async def delete_subscription(
     subscription_id: int,
     _: Any = Security(require_api_token),
@@ -332,7 +325,7 @@ async def delete_subscription(
     return _serialize_subscription(subscription)
 
 
-@router.post("/{subscription_id}/modem", response_model=SubscriptionResponse)
+@router.post('/{subscription_id}/modem', response_model=SubscriptionResponse)
 async def set_subscription_modem(
     subscription_id: int,
     payload: SubscriptionModemRequest,
@@ -343,10 +336,10 @@ async def set_subscription_modem(
     subscription = await _get_subscription(db, subscription_id)
 
     if subscription.is_trial:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Modem is not available for trial subscriptions")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Modem is not available for trial subscriptions')
 
     if not settings.is_modem_enabled():
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Modem feature is disabled")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Modem feature is disabled')
 
     current_modem = getattr(subscription, 'modem_enabled', False) or False
 

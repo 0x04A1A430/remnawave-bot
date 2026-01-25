@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import logging
 from time import monotonic
+
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import Response
 
 
-logger = logging.getLogger("web_api")
+logger = logging.getLogger('web_api')
 
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
@@ -21,9 +22,9 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             return response
         finally:
             duration_ms = (monotonic() - start) * 1000
-            status = response.status_code if response else "error"
+            status = response.status_code if response else 'error'
             logger.debug(
-                "%s %s -> %s (%.2f ms)",
+                '%s %s -> %s (%.2f ms)',
                 request.method,
                 request.url.path,
                 status,

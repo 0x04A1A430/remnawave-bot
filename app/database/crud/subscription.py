@@ -1,27 +1,30 @@
 import logging
+from collections.abc import Iterable
 from datetime import datetime, timedelta
-from typing import Iterable, Optional, List, Tuple
-from sqlalchemy import select, and_, func, delete
+from typing import Optional
+
+from sqlalchemy import and_, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.config import settings
+from app.database.crud.notification import clear_notifications
 from app.database.models import (
+    PromoGroup,
     Subscription,
+    SubscriptionServer,
     SubscriptionStatus,
     User,
-    SubscriptionServer,
-    PromoGroup,
     UserPromoGroup,
 )
-from app.database.crud.notification import clear_notifications
 from app.utils.pricing_utils import calculate_months_from_days, get_remaining_months
-from app.config import settings
 from app.utils.timezone import format_local_datetime
+
 
 logger = logging.getLogger(__name__)
 
 
-async def get_subscription_by_user_id(db: AsyncSession, user_id: int) -> Optional[Subscription]:
+async def get_subscription_by_user_id(db: AsyncSession, user_id: int) -> Subscription | None:
     result = await db.execute(
         select(Subscription)
         .options(
@@ -33,11 +36,13 @@ async def get_subscription_by_user_id(db: AsyncSession, user_id: int) -> Optiona
         .limit(1)
     )
     subscription = result.scalar_one_or_none()
-    
+
     if subscription:
-        logger.info(f"🔍 Загружена подписка {subscription.id} для пользователя {user_id}, статус: {subscription.status}")
+        logger.info(
+            f'🔍 Загружена подписка {subscription.id} для пользователя {user_id}, статус: {subscription.status}'
+        )
         subscription = await check_and_update_subscription_status(db, subscription)
-    
+
     return subscription
 
 
@@ -46,10 +51,10 @@ async def create_trial_subscription(
     user_id: int,
     duration_days: int = None,
     traffic_limit_gb: int = None,
-    device_limit: Optional[int] = None,
+    device_limit: int | None = None,
     squad_uuid: str = None,
-    connected_squads: List[str] = None,
-    tariff_id: Optional[int] = None,
+    connected_squads: list[str] = None,
+    tariff_id: int | None = None,
 ) -> Subscription:
     """Создает триальную подписку.
 
@@ -77,13 +82,13 @@ async def create_trial_subscription(
             if random_squad:
                 final_squads = [random_squad]
                 logger.debug(
-                    "Выбран сквад %s для триальной подписки пользователя %s",
+                    'Выбран сквад %s для триальной подписки пользователя %s',
                     random_squad,
                     user_id,
                 )
         except Exception as error:
             logger.error(
-                "Не удалось получить сквад для триальной подписки пользователя %s: %s",
+                'Не удалось получить сквад для триальной подписки пользователя %s: %s',
                 user_id,
                 error,
             )
@@ -103,36 +108,37 @@ async def create_trial_subscription(
         autopay_days_before=settings.DEFAULT_AUTOPAY_DAYS_BEFORE,
         tariff_id=tariff_id,
     )
-    
+
     db.add(subscription)
     await db.commit()
     await db.refresh(subscription)
 
-    logger.info(f"🎁 Создана триальная подписка для пользователя {user_id}" +
-                 (f" с тарифом {tariff_id}" if tariff_id else ""))
+    logger.info(
+        f'🎁 Создана триальная подписка для пользователя {user_id}' + (f' с тарифом {tariff_id}' if tariff_id else '')
+    )
 
     if final_squads:
         try:
             from app.database.crud.server_squad import (
-                get_server_ids_by_uuids,
                 add_user_to_servers,
+                get_server_ids_by_uuids,
             )
 
             server_ids = await get_server_ids_by_uuids(db, final_squads)
             if server_ids:
                 await add_user_to_servers(db, server_ids)
                 logger.info(
-                    "📈 Обновлен счетчик пользователей для триальных сквадов %s",
+                    '📈 Обновлен счетчик пользователей для триальных сквадов %s',
                     final_squads,
                 )
             else:
                 logger.warning(
-                    "⚠️ Не удалось найти серверы для обновления счетчика (сквады %s)",
+                    '⚠️ Не удалось найти серверы для обновления счетчика (сквады %s)',
                     final_squads,
                 )
         except Exception as error:
             logger.error(
-                "⚠️ Ошибка обновления счетчика пользователей для триальных сквадов %s: %s",
+                '⚠️ Ошибка обновления счетчика пользователей для триальных сквадов %s: %s',
                 final_squads,
                 error,
             )
@@ -145,13 +151,12 @@ async def create_paid_subscription(
     user_id: int,
     duration_days: int,
     traffic_limit_gb: int = 0,
-    device_limit: Optional[int] = None,
-    connected_squads: List[str] = None,
+    device_limit: int | None = None,
+    connected_squads: list[str] = None,
     update_server_counters: bool = False,
     is_trial: bool = False,
-    tariff_id: Optional[int] = None,
+    tariff_id: int | None = None,
 ) -> Subscription:
-
     end_date = datetime.utcnow() + timedelta(days=duration_days)
 
     if device_limit is None:
@@ -170,38 +175,40 @@ async def create_paid_subscription(
         autopay_days_before=settings.DEFAULT_AUTOPAY_DAYS_BEFORE,
         tariff_id=tariff_id,
     )
-    
+
     db.add(subscription)
     await db.commit()
     await db.refresh(subscription)
-    
-    logger.info(f"💎 Создана платная подписка для пользователя {user_id}, ID: {subscription.id}, статус: {subscription.status}")
+
+    logger.info(
+        f'💎 Создана платная подписка для пользователя {user_id}, ID: {subscription.id}, статус: {subscription.status}'
+    )
 
     squad_uuids = list(connected_squads or [])
     if update_server_counters and squad_uuids:
         try:
             from app.database.crud.server_squad import (
-                get_server_ids_by_uuids,
                 add_user_to_servers,
+                get_server_ids_by_uuids,
             )
 
             server_ids = await get_server_ids_by_uuids(db, squad_uuids)
             if server_ids:
                 await add_user_to_servers(db, server_ids)
                 logger.info(
-                    "📈 Обновлен счетчик пользователей для платной подписки пользователя %s (сквады: %s)",
+                    '📈 Обновлен счетчик пользователей для платной подписки пользователя %s (сквады: %s)',
                     user_id,
                     squad_uuids,
                 )
             else:
                 logger.warning(
-                    "⚠️ Не удалось найти серверы для обновления счетчика платной подписки пользователя %s (сквады: %s)",
+                    '⚠️ Не удалось найти серверы для обновления счетчика платной подписки пользователя %s (сквады: %s)',
                     user_id,
                     squad_uuids,
                 )
         except Exception as error:
             logger.error(
-                "⚠️ Ошибка обновления счетчика пользователей серверов для платной подписки пользователя %s: %s",
+                '⚠️ Ошибка обновления счетчика пользователей серверов для платной подписки пользователя %s: %s',
                 user_id,
                 error,
             )
@@ -216,10 +223,10 @@ async def replace_subscription(
     duration_days: int,
     traffic_limit_gb: int,
     device_limit: int,
-    connected_squads: List[str],
+    connected_squads: list[str],
     is_trial: bool,
-    autopay_enabled: Optional[bool] = None,
-    autopay_days_before: Optional[int] = None,
+    autopay_enabled: bool | None = None,
+    autopay_days_before: int | None = None,
     update_server_counters: bool = False,
 ) -> Subscription:
     """Перезаписывает параметры существующей подписки пользователя."""
@@ -228,16 +235,8 @@ async def replace_subscription(
     old_squads = set(subscription.connected_squads or [])
     new_squads = set(connected_squads or [])
 
-    new_autopay_enabled = (
-        subscription.autopay_enabled
-        if autopay_enabled is None
-        else autopay_enabled
-    )
-    new_autopay_days_before = (
-        subscription.autopay_days_before
-        if autopay_days_before is None
-        else autopay_days_before
-    )
+    new_autopay_enabled = subscription.autopay_enabled if autopay_enabled is None else autopay_enabled
+    new_autopay_days_before = subscription.autopay_days_before if autopay_days_before is None else autopay_days_before
 
     subscription.status = SubscriptionStatus.ACTIVE.value
     subscription.is_trial = is_trial
@@ -281,14 +280,14 @@ async def replace_subscription(
                     await add_user_to_servers(db, sorted(server_ids))
 
             logger.info(
-                "♻️ Обновлены параметры подписки %s: удалено сквадов %s, добавлено %s",
+                '♻️ Обновлены параметры подписки %s: удалено сквадов %s, добавлено %s',
                 subscription.id,
                 len(squads_to_remove),
                 len(squads_to_add),
             )
         except Exception as error:
             logger.error(
-                "⚠️ Ошибка обновления счетчиков серверов при замене подписки %s: %s",
+                '⚠️ Ошибка обновления счетчиков серверов при замене подписки %s: %s',
                 subscription.id,
                 error,
             )
@@ -301,10 +300,10 @@ async def extend_subscription(
     subscription: Subscription,
     days: int,
     *,
-    tariff_id: Optional[int] = None,
-    traffic_limit_gb: Optional[int] = None,
-    device_limit: Optional[int] = None,
-    connected_squads: Optional[List[str]] = None,
+    tariff_id: int | None = None,
+    traffic_limit_gb: int | None = None,
+    device_limit: int | None = None,
+    connected_squads: list[str] | None = None,
 ) -> Subscription:
     """Продлевает подписку на указанное количество дней.
 
@@ -319,18 +318,18 @@ async def extend_subscription(
     """
     current_time = datetime.utcnow()
 
-    logger.info(f"🔄 Продление подписки {subscription.id} на {days} дней")
-    logger.info(f"📊 Текущие параметры: статус={subscription.status}, окончание={subscription.end_date}, тариф={subscription.tariff_id}")
+    logger.info(f'🔄 Продление подписки {subscription.id} на {days} дней')
+    logger.info(
+        f'📊 Текущие параметры: статус={subscription.status}, окончание={subscription.end_date}, тариф={subscription.tariff_id}'
+    )
 
     # Определяем, происходит ли СМЕНА тарифа (а не продление того же)
     is_tariff_change = (
-        tariff_id is not None
-        and subscription.tariff_id is not None
-        and tariff_id != subscription.tariff_id
+        tariff_id is not None and subscription.tariff_id is not None and tariff_id != subscription.tariff_id
     )
 
     if is_tariff_change:
-        logger.info(f"🔄 Обнаружена СМЕНА тарифа: {subscription.tariff_id} → {tariff_id}")
+        logger.info(f'🔄 Обнаружена СМЕНА тарифа: {subscription.tariff_id} → {tariff_id}')
 
     # Бонусные дни от триала - добавляются ТОЛЬКО когда подписка истекла
     # и мы начинаем отсчёт с текущей даты. НЕ начисляются при смене тарифа.
@@ -340,7 +339,7 @@ async def extend_subscription(
     if days < 0:
         subscription.end_date = subscription.end_date + timedelta(days=days)
         logger.info(
-            "📅 Срок подписки уменьшен на %s дней, новая дата окончания: %s",
+            '📅 Срок подписки уменьшен на %s дней, новая дата окончания: %s',
             abs(days),
             subscription.end_date,
         )
@@ -352,19 +351,19 @@ async def extend_subscription(
                 if remaining.total_seconds() > 0:
                     bonus_days = max(0, remaining.days)
                     logger.info(
-                        "🎁 Обнаружен остаток триала: %s дней для подписки %s",
+                        '🎁 Обнаружен остаток триала: %s дней для подписки %s',
                         bonus_days,
                         subscription.id,
                     )
         total_days = days + bonus_days
         subscription.end_date = current_time + timedelta(days=total_days)
         subscription.start_date = current_time
-        logger.info(f"📅 СМЕНА тарифа: срок начинается с текущей даты + {total_days} дней")
+        logger.info(f'📅 СМЕНА тарифа: срок начинается с текущей даты + {total_days} дней')
     elif subscription.end_date > current_time:
         # Подписка активна - просто добавляем дни к текущей дате окончания
         # БЕЗ бонусных дней (они уже учтены в end_date)
         subscription.end_date = subscription.end_date + timedelta(days=days)
-        logger.info(f"📅 Подписка активна, добавляем {days} дней к текущей дате окончания")
+        logger.info(f'📅 Подписка активна, добавляем {days} дней к текущей дате окончания')
     else:
         # Подписка истекла - начинаем с текущей даты + бонус от триала
         if subscription.is_trial and settings.TRIAL_ADD_REMAINING_DAYS_TO_PAID:
@@ -372,14 +371,14 @@ async def extend_subscription(
             pass
         total_days = days + bonus_days
         subscription.end_date = current_time + timedelta(days=total_days)
-        logger.info(f"📅 Подписка истекла, устанавливаем новую дату окончания на {total_days} дней")
+        logger.info(f'📅 Подписка истекла, устанавливаем новую дату окончания на {total_days} дней')
 
     # УДАЛЕНО: Автоматическая конвертация триала по длительности
     # Теперь триал конвертируется ТОЛЬКО после успешного коммита продления
     # и ТОЛЬКО вызывающей функцией (например, _auto_extend_subscription)
 
     # Логируем статус подписки перед проверкой
-    logger.info(f"🔄 Продление подписки {subscription.id}, текущий статус: {subscription.status}, дни: {days}")
+    logger.info(f'🔄 Продление подписки {subscription.id}, текущий статус: {subscription.status}, дни: {days}')
 
     if days > 0 and subscription.status in (
         SubscriptionStatus.EXPIRED.value,
@@ -388,77 +387,79 @@ async def extend_subscription(
         previous_status = subscription.status
         subscription.status = SubscriptionStatus.ACTIVE.value
         logger.info(
-            "🔄 Статус подписки %s изменён с %s на ACTIVE",
+            '🔄 Статус подписки %s изменён с %s на ACTIVE',
             subscription.id,
             previous_status,
         )
     elif days > 0 and subscription.status == SubscriptionStatus.PENDING.value:
-        logger.warning(
-            "⚠️ Попытка продлить PENDING подписку %s, дни: %s",
-            subscription.id,
-            days
-        )
+        logger.warning('⚠️ Попытка продлить PENDING подписку %s, дни: %s', subscription.id, days)
 
     # Обновляем параметры тарифа, если переданы
     if tariff_id is not None:
         old_tariff_id = subscription.tariff_id
         subscription.tariff_id = tariff_id
-        logger.info(f"📦 Обновлен тариф подписки: {old_tariff_id} → {tariff_id}")
+        logger.info(f'📦 Обновлен тариф подписки: {old_tariff_id} → {tariff_id}')
 
         # При покупке тарифа сбрасываем триальный статус
         if subscription.is_trial:
             subscription.is_trial = False
-            logger.info(f"🎓 Подписка {subscription.id} конвертирована из триала в платную")
+            logger.info(f'🎓 Подписка {subscription.id} конвертирована из триала в платную')
 
     if traffic_limit_gb is not None:
         old_traffic = subscription.traffic_limit_gb
         subscription.traffic_limit_gb = traffic_limit_gb
         subscription.traffic_used_gb = 0.0
         # Сбрасываем все докупки трафика при смене тарифа
-        from app.database.models import TrafficPurchase
         from sqlalchemy import delete as sql_delete
+
+        from app.database.models import TrafficPurchase
+
         await db.execute(sql_delete(TrafficPurchase).where(TrafficPurchase.subscription_id == subscription.id))
         subscription.purchased_traffic_gb = 0
         subscription.traffic_reset_at = None  # Сбрасываем дату сброса трафика
-        logger.info(f"📊 Обновлен лимит трафика: {old_traffic} ГБ → {traffic_limit_gb} ГБ (все докупки сброшены)")
+        logger.info(f'📊 Обновлен лимит трафика: {old_traffic} ГБ → {traffic_limit_gb} ГБ (все докупки сброшены)')
     elif settings.RESET_TRAFFIC_ON_PAYMENT:
         subscription.traffic_used_gb = 0.0
         # В режиме тарифов сохраняем докупленный трафик при продлении
         if subscription.tariff_id is None:
             subscription.purchased_traffic_gb = 0
             subscription.traffic_reset_at = None  # Сбрасываем дату сброса трафика
-            logger.info("🔄 Сбрасываем использованный и докупленный трафик согласно настройке RESET_TRAFFIC_ON_PAYMENT")
+            logger.info('🔄 Сбрасываем использованный и докупленный трафик согласно настройке RESET_TRAFFIC_ON_PAYMENT')
         else:
             # При продлении в режиме тарифов - сохраняем purchased_traffic_gb и traffic_reset_at
-            logger.info("🔄 Сбрасываем использованный трафик, докупленный сохранен (режим тарифов)")
+            logger.info('🔄 Сбрасываем использованный трафик, докупленный сохранен (режим тарифов)')
 
     if device_limit is not None:
         old_devices = subscription.device_limit
         subscription.device_limit = device_limit
-        logger.info(f"📱 Обновлен лимит устройств: {old_devices} → {device_limit}")
+        logger.info(f'📱 Обновлен лимит устройств: {old_devices} → {device_limit}')
 
     if connected_squads is not None:
         old_squads = subscription.connected_squads
         subscription.connected_squads = connected_squads
-        logger.info(f"🌍 Обновлены сквады: {old_squads} → {connected_squads}")
+        logger.info(f'🌍 Обновлены сквады: {old_squads} → {connected_squads}')
 
     # Обработка daily полей при смене тарифа
     if is_tariff_change and tariff_id is not None:
         # Получаем информацию о новом тарифе для проверки is_daily
         from app.database.crud.tariff import get_tariff_by_id
+
         new_tariff = await get_tariff_by_id(db, tariff_id)
-        old_was_daily = getattr(subscription, 'is_daily_paused', False) or getattr(subscription, 'last_daily_charge_at', None) is not None
+        old_was_daily = (
+            getattr(subscription, 'is_daily_paused', False)
+            or getattr(subscription, 'last_daily_charge_at', None) is not None
+        )
 
         if new_tariff and getattr(new_tariff, 'is_daily', False):
             # Переход на суточный тариф - сбрасываем флаги
             subscription.is_daily_paused = False
             subscription.last_daily_charge_at = None  # Будет установлено при первом списании
-            logger.info(f"🔄 Переход на суточный тариф: сброшены daily флаги")
+            logger.info('🔄 Переход на суточный тариф: сброшены daily флаги')
         elif old_was_daily:
             # Переход с суточного на обычный тариф - очищаем daily поля
             subscription.is_daily_paused = False
             subscription.last_daily_charge_at = None
-            logger.info(f"🔄 Переход с суточного тарифа: очищены daily флаги")
+            logger.info('🔄 Переход с суточного тарифа: очищены daily флаги')
 
     # В режиме fixed_with_topup при продлении сбрасываем трафик до фиксированного лимита
     # Только если не передан traffic_limit_gb И у подписки нет тарифа (классический режим)
@@ -470,7 +471,7 @@ async def extend_subscription(
             subscription.traffic_limit_gb = fixed_limit
             subscription.purchased_traffic_gb = 0
             subscription.traffic_reset_at = None  # Сбрасываем дату сброса трафика
-            logger.info(f"🔄 Сброс трафика при продлении (fixed_with_topup): {old_limit} ГБ → {fixed_limit} ГБ")
+            logger.info(f'🔄 Сброс трафика при продлении (fixed_with_topup): {old_limit} ГБ → {fixed_limit} ГБ')
 
     subscription.updated_at = current_time
 
@@ -478,32 +479,25 @@ async def extend_subscription(
     await db.refresh(subscription)
     await clear_notifications(db, subscription.id)
 
-    logger.info(f"✅ Подписка продлена до: {subscription.end_date}")
-    logger.info(f"📊 Новые параметры: статус={subscription.status}, окончание={subscription.end_date}")
+    logger.info(f'✅ Подписка продлена до: {subscription.end_date}')
+    logger.info(f'📊 Новые параметры: статус={subscription.status}, окончание={subscription.end_date}')
 
     return subscription
 
 
-async def add_subscription_traffic(
-    db: AsyncSession,
-    subscription: Subscription,
-    gb: int
-) -> Subscription:
-
+async def add_subscription_traffic(db: AsyncSession, subscription: Subscription, gb: int) -> Subscription:
     subscription.add_traffic(gb)
     subscription.updated_at = datetime.utcnow()
 
     # Создаём новую запись докупки с индивидуальной датой истечения (30 дней)
-    from app.database.models import TrafficPurchase
-    from sqlalchemy import select as sql_select
     from datetime import timedelta
 
+    from sqlalchemy import select as sql_select
+
+    from app.database.models import TrafficPurchase
+
     new_expires_at = datetime.utcnow() + timedelta(days=30)
-    new_purchase = TrafficPurchase(
-        subscription_id=subscription.id,
-        traffic_gb=gb,
-        expires_at=new_expires_at
-    )
+    new_purchase = TrafficPurchase(subscription_id=subscription.id, traffic_gb=gb, expires_at=new_expires_at)
     db.add(new_purchase)
 
     # Обновляем общий счетчик докупленного трафика
@@ -532,69 +526,56 @@ async def add_subscription_traffic(
     await db.commit()
     await db.refresh(subscription)
 
-    logger.info(f"📈 К подписке пользователя {subscription.user_id} добавлено {gb} ГБ трафика (истекает {new_expires_at.strftime('%d.%m.%Y')})")
+    logger.info(
+        f'📈 К подписке пользователя {subscription.user_id} добавлено {gb} ГБ трафика (истекает {new_expires_at.strftime("%d.%m.%Y")})'
+    )
     return subscription
 
 
-async def add_subscription_devices(
-    db: AsyncSession,
-    subscription: Subscription,
-    devices: int
-) -> Subscription:
-    
+async def add_subscription_devices(db: AsyncSession, subscription: Subscription, devices: int) -> Subscription:
     subscription.device_limit += devices
     subscription.updated_at = datetime.utcnow()
-    
+
     await db.commit()
     await db.refresh(subscription)
-    
-    logger.info(f"📱 К подписке пользователя {subscription.user_id} добавлено {devices} устройств")
+
+    logger.info(f'📱 К подписке пользователя {subscription.user_id} добавлено {devices} устройств')
     return subscription
 
 
-async def add_subscription_squad(
-    db: AsyncSession,
-    subscription: Subscription,
-    squad_uuid: str
-) -> Subscription:
-    
+async def add_subscription_squad(db: AsyncSession, subscription: Subscription, squad_uuid: str) -> Subscription:
     if squad_uuid not in subscription.connected_squads:
         subscription.connected_squads = subscription.connected_squads + [squad_uuid]
         subscription.updated_at = datetime.utcnow()
-        
+
         await db.commit()
         await db.refresh(subscription)
-        
-        logger.info(f"🌍 К подписке пользователя {subscription.user_id} добавлен сквад {squad_uuid}")
-    
+
+        logger.info(f'🌍 К подписке пользователя {subscription.user_id} добавлен сквад {squad_uuid}')
+
     return subscription
 
 
-async def remove_subscription_squad(
-    db: AsyncSession,
-    subscription: Subscription,
-    squad_uuid: str
-) -> Subscription:
-    
+async def remove_subscription_squad(db: AsyncSession, subscription: Subscription, squad_uuid: str) -> Subscription:
     if squad_uuid in subscription.connected_squads:
         squads = subscription.connected_squads.copy()
         squads.remove(squad_uuid)
         subscription.connected_squads = squads
         subscription.updated_at = datetime.utcnow()
-        
+
         await db.commit()
         await db.refresh(subscription)
-        
-        logger.info(f"🚫 Из подписки пользователя {subscription.user_id} удален сквад {squad_uuid}")
-    
+
+        logger.info(f'🚫 Из подписки пользователя {subscription.user_id} удален сквад {squad_uuid}')
+
     return subscription
 
 
 async def decrement_subscription_server_counts(
     db: AsyncSession,
-    subscription: Optional[Subscription],
+    subscription: Subscription | None,
     *,
-    subscription_servers: Optional[Iterable[SubscriptionServer]] = None,
+    subscription_servers: Iterable[SubscriptionServer] | None = None,
 ) -> None:
     """Decrease server counters linked to the provided subscription."""
 
@@ -613,7 +594,7 @@ async def decrement_subscription_server_counts(
             server_ids.update(ids_from_links)
         except Exception as error:
             logger.error(
-                "⚠️ Не удалось получить серверы подписки %s для уменьшения счетчика: %s",
+                '⚠️ Не удалось получить серверы подписки %s для уменьшения счетчика: %s',
                 subscription.id,
                 error,
             )
@@ -627,7 +608,7 @@ async def decrement_subscription_server_counts(
             server_ids.update(squad_server_ids)
         except Exception as error:
             logger.error(
-                "⚠️ Не удалось сопоставить сквады подписки %s с серверами: %s",
+                '⚠️ Не удалось сопоставить сквады подписки %s с серверами: %s',
                 subscription.id,
                 error,
             )
@@ -641,7 +622,7 @@ async def decrement_subscription_server_counts(
         await remove_user_from_servers(db, sorted(server_ids))
     except Exception as error:
         logger.error(
-            "⚠️ Ошибка уменьшения счетчика пользователей серверов %s для подписки %s: %s",
+            '⚠️ Ошибка уменьшения счетчика пользователей серверов %s для подписки %s: %s',
             list(server_ids),
             subscription.id,
             error,
@@ -649,43 +630,32 @@ async def decrement_subscription_server_counts(
 
 
 async def update_subscription_autopay(
-    db: AsyncSession,
-    subscription: Subscription,
-    enabled: bool,
-    days_before: int = 3
+    db: AsyncSession, subscription: Subscription, enabled: bool, days_before: int = 3
 ) -> Subscription:
-    
     subscription.autopay_enabled = enabled
     subscription.autopay_days_before = days_before
     subscription.updated_at = datetime.utcnow()
-    
+
     await db.commit()
     await db.refresh(subscription)
-    
-    status = "включен" if enabled else "выключен"
-    logger.info(f"💳 Автоплатеж для подписки пользователя {subscription.user_id} {status}")
+
+    status = 'включен' if enabled else 'выключен'
+    logger.info(f'💳 Автоплатеж для подписки пользователя {subscription.user_id} {status}')
     return subscription
 
 
-async def deactivate_subscription(
-    db: AsyncSession,
-    subscription: Subscription
-) -> Subscription:
-    
+async def deactivate_subscription(db: AsyncSession, subscription: Subscription) -> Subscription:
     subscription.status = SubscriptionStatus.DISABLED.value
     subscription.updated_at = datetime.utcnow()
-    
+
     await db.commit()
     await db.refresh(subscription)
-    
-    logger.info(f"❌ Подписка пользователя {subscription.user_id} деактивирована")
+
+    logger.info(f'❌ Подписка пользователя {subscription.user_id} деактивирована')
     return subscription
 
 
-async def reactivate_subscription(
-    db: AsyncSession,
-    subscription: Subscription
-) -> Subscription:
+async def reactivate_subscription(db: AsyncSession, subscription: Subscription) -> Subscription:
     """Реактивация подписки (например, после повторной подписки на канал).
 
     Активирует только если подписка была DISABLED и ещё не истекла.
@@ -709,13 +679,9 @@ async def reactivate_subscription(
     return subscription
 
 
-async def get_expiring_subscriptions(
-    db: AsyncSession,
-    days_before: int = 3
-) -> List[Subscription]:
-    
+async def get_expiring_subscriptions(db: AsyncSession, days_before: int = 3) -> list[Subscription]:
     threshold_date = datetime.utcnow() + timedelta(days=days_before)
-    
+
     result = await db.execute(
         select(Subscription)
         .options(selectinload(Subscription.user))
@@ -723,31 +689,25 @@ async def get_expiring_subscriptions(
             and_(
                 Subscription.status == SubscriptionStatus.ACTIVE.value,
                 Subscription.end_date <= threshold_date,
-                Subscription.end_date > datetime.utcnow()
+                Subscription.end_date > datetime.utcnow(),
             )
         )
     )
     return result.scalars().all()
 
 
-async def get_expired_subscriptions(db: AsyncSession) -> List[Subscription]:
-    
+async def get_expired_subscriptions(db: AsyncSession) -> list[Subscription]:
     result = await db.execute(
         select(Subscription)
         .options(selectinload(Subscription.user))
-        .where(
-            and_(
-                Subscription.status == SubscriptionStatus.ACTIVE.value,
-                Subscription.end_date <= datetime.utcnow()
-            )
-        )
+        .where(and_(Subscription.status == SubscriptionStatus.ACTIVE.value, Subscription.end_date <= datetime.utcnow()))
     )
     return result.scalars().all()
 
 
-async def get_subscriptions_for_autopay(db: AsyncSession) -> List[Subscription]:
+async def get_subscriptions_for_autopay(db: AsyncSession) -> list[Subscription]:
     current_time = datetime.utcnow()
-    
+
     result = await db.execute(
         select(Subscription)
         .options(selectinload(Subscription.user))
@@ -755,141 +715,119 @@ async def get_subscriptions_for_autopay(db: AsyncSession) -> List[Subscription]:
             and_(
                 Subscription.status == SubscriptionStatus.ACTIVE.value,
                 Subscription.autopay_enabled == True,
-                Subscription.is_trial == False 
+                Subscription.is_trial == False,
             )
         )
     )
     all_autopay_subscriptions = result.scalars().all()
-    
+
     ready_for_autopay = []
     for subscription in all_autopay_subscriptions:
         days_until_expiry = (subscription.end_date - current_time).days
-        
+
         if days_until_expiry <= subscription.autopay_days_before and subscription.end_date > current_time:
             ready_for_autopay.append(subscription)
-    
+
     return ready_for_autopay
 
 
 async def get_subscriptions_statistics(db: AsyncSession) -> dict:
-    
     total_result = await db.execute(select(func.count(Subscription.id)))
     total_subscriptions = total_result.scalar()
-    
+
     active_result = await db.execute(
-        select(func.count(Subscription.id))
-        .where(Subscription.status == SubscriptionStatus.ACTIVE.value)
+        select(func.count(Subscription.id)).where(Subscription.status == SubscriptionStatus.ACTIVE.value)
     )
     active_subscriptions = active_result.scalar()
-    
+
     trial_result = await db.execute(
-        select(func.count(Subscription.id))
-        .where(
-            and_(
-                Subscription.is_trial == True,
-                Subscription.status == SubscriptionStatus.ACTIVE.value
-            )
+        select(func.count(Subscription.id)).where(
+            and_(Subscription.is_trial == True, Subscription.status == SubscriptionStatus.ACTIVE.value)
         )
     )
     trial_subscriptions = trial_result.scalar()
-    
+
     paid_subscriptions = active_subscriptions - trial_subscriptions
-    
+
     today = datetime.utcnow().date()
     today_result = await db.execute(
-        select(func.count(Subscription.id))
-        .where(
-            and_(
-                Subscription.created_at >= today,
-                Subscription.is_trial == False
-            )
+        select(func.count(Subscription.id)).where(
+            and_(Subscription.created_at >= today, Subscription.is_trial == False)
         )
     )
     purchased_today = today_result.scalar()
-    
+
     week_ago = datetime.utcnow() - timedelta(days=7)
     week_result = await db.execute(
-        select(func.count(Subscription.id))
-        .where(
-            and_(
-                Subscription.created_at >= week_ago,
-                Subscription.is_trial == False
-            )
+        select(func.count(Subscription.id)).where(
+            and_(Subscription.created_at >= week_ago, Subscription.is_trial == False)
         )
     )
     purchased_week = week_result.scalar()
-    
+
     month_ago = datetime.utcnow() - timedelta(days=30)
     month_result = await db.execute(
-        select(func.count(Subscription.id))
-        .where(
-            and_(
-                Subscription.created_at >= month_ago,
-                Subscription.is_trial == False
-            )
+        select(func.count(Subscription.id)).where(
+            and_(Subscription.created_at >= month_ago, Subscription.is_trial == False)
         )
     )
     purchased_month = month_result.scalar()
-    
+
     try:
         from app.database.crud.subscription_conversion import get_conversion_statistics
+
         conversion_stats = await get_conversion_statistics(db)
-        
-        trial_to_paid_conversion = conversion_stats.get("conversion_rate", 0)
-        renewals_count = conversion_stats.get("month_conversions", 0)
-        
-        logger.info(f"📊 Статистика конверсии из таблицы conversions:")
-        logger.info(f"   Общее количество конверсий: {conversion_stats.get('total_conversions', 0)}")
-        logger.info(f"   Процент конверсии: {trial_to_paid_conversion}%")
-        logger.info(f"   Конверсий за месяц: {renewals_count}")
-        
+
+        trial_to_paid_conversion = conversion_stats.get('conversion_rate', 0)
+        renewals_count = conversion_stats.get('month_conversions', 0)
+
+        logger.info('📊 Статистика конверсии из таблицы conversions:')
+        logger.info(f'   Общее количество конверсий: {conversion_stats.get("total_conversions", 0)}')
+        logger.info(f'   Процент конверсии: {trial_to_paid_conversion}%')
+        logger.info(f'   Конверсий за месяц: {renewals_count}')
+
     except ImportError:
-        logger.warning("⚠️ Таблица subscription_conversions не найдена, используем старую логику")
-        
+        logger.warning('⚠️ Таблица subscription_conversions не найдена, используем старую логику')
+
         users_with_paid_result = await db.execute(
-            select(func.count(User.id))
-            .where(User.has_had_paid_subscription == True)
+            select(func.count(User.id)).where(User.has_had_paid_subscription == True)
         )
         users_with_paid = users_with_paid_result.scalar()
-        
+
         total_users_result = await db.execute(select(func.count(User.id)))
         total_users = total_users_result.scalar()
-        
+
         if total_users > 0:
             trial_to_paid_conversion = round((users_with_paid / total_users) * 100, 1)
         else:
             trial_to_paid_conversion = 0
-            
+
         renewals_count = 0
-    
+
     return {
-        "total_subscriptions": total_subscriptions,
-        "active_subscriptions": active_subscriptions,
-        "trial_subscriptions": trial_subscriptions,
-        "paid_subscriptions": paid_subscriptions,
-        "purchased_today": purchased_today,
-        "purchased_week": purchased_week,
-        "purchased_month": purchased_month,
-        "trial_to_paid_conversion": trial_to_paid_conversion,
-        "renewals_count": renewals_count
+        'total_subscriptions': total_subscriptions,
+        'active_subscriptions': active_subscriptions,
+        'trial_subscriptions': trial_subscriptions,
+        'paid_subscriptions': paid_subscriptions,
+        'purchased_today': purchased_today,
+        'purchased_week': purchased_week,
+        'purchased_month': purchased_month,
+        'trial_to_paid_conversion': trial_to_paid_conversion,
+        'renewals_count': renewals_count,
     }
 
 
 async def get_trial_statistics(db: AsyncSession) -> dict:
     now = datetime.utcnow()
 
-    total_trials_result = await db.execute(
-        select(func.count(Subscription.id)).where(Subscription.is_trial.is_(True))
-    )
+    total_trials_result = await db.execute(select(func.count(Subscription.id)).where(Subscription.is_trial.is_(True)))
     total_trials = total_trials_result.scalar() or 0
 
     active_trials_result = await db.execute(
         select(func.count(Subscription.id)).where(
             Subscription.is_trial.is_(True),
             Subscription.end_date > now,
-            Subscription.status.in_(
-                [SubscriptionStatus.TRIAL.value, SubscriptionStatus.ACTIVE.value]
-            ),
+            Subscription.status.in_([SubscriptionStatus.TRIAL.value, SubscriptionStatus.ACTIVE.value]),
         )
     )
     active_trials = active_trials_result.scalar() or 0
@@ -906,9 +844,9 @@ async def get_trial_statistics(db: AsyncSession) -> dict:
     resettable_trials = resettable_trials_result.scalar() or 0
 
     return {
-        "used_trials": total_trials,
-        "active_trials": active_trials,
-        "resettable_trials": resettable_trials,
+        'used_trials': total_trials,
+        'active_trials': active_trials,
+        'resettable_trials': resettable_trials,
     }
 
 
@@ -943,7 +881,7 @@ async def reset_trials_for_users_without_paid_subscription(db: AsyncSession) -> 
             )
         except Exception as error:  # pragma: no cover - defensive logging
             logger.error(
-                "Не удалось обновить счётчики серверов при сбросе триала %s: %s",
+                'Не удалось обновить счётчики серверов при сбросе триала %s: %s',
                 subscription.id,
                 error,
             )
@@ -952,14 +890,10 @@ async def reset_trials_for_users_without_paid_subscription(db: AsyncSession) -> 
 
     if subscription_ids:
         try:
-            await db.execute(
-                delete(SubscriptionServer).where(
-                    SubscriptionServer.subscription_id.in_(subscription_ids)
-                )
-            )
+            await db.execute(delete(SubscriptionServer).where(SubscriptionServer.subscription_id.in_(subscription_ids)))
         except Exception as error:  # pragma: no cover - defensive logging
             logger.error(
-                "Ошибка удаления серверных связей триалов %s: %s",
+                'Ошибка удаления серверных связей триалов %s: %s',
                 subscription_ids,
                 error,
             )
@@ -971,33 +905,25 @@ async def reset_trials_for_users_without_paid_subscription(db: AsyncSession) -> 
         await db.commit()
     except Exception as error:  # pragma: no cover - defensive logging
         await db.rollback()
-        logger.error("Ошибка сохранения сброса триалов: %s", error)
+        logger.error('Ошибка сохранения сброса триалов: %s', error)
         raise
 
-    logger.info("♻️ Сброшено триальных подписок: %s", reset_count)
+    logger.info('♻️ Сброшено триальных подписок: %s', reset_count)
     return reset_count
 
-async def update_subscription_usage(
-    db: AsyncSession,
-    subscription: Subscription,
-    used_gb: float
-) -> Subscription:
+
+async def update_subscription_usage(db: AsyncSession, subscription: Subscription, used_gb: float) -> Subscription:
     subscription.traffic_used_gb = used_gb
     subscription.updated_at = datetime.utcnow()
-    
+
     await db.commit()
     await db.refresh(subscription)
-    
+
     return subscription
 
-async def get_all_subscriptions(
-    db: AsyncSession,
-    page: int = 1,
-    limit: int = 10
-) -> Tuple[List[Subscription], int]:
-    count_result = await db.execute(
-        select(func.count(Subscription.id))
-    )
+
+async def get_all_subscriptions(db: AsyncSession, page: int = 1, limit: int = 10) -> tuple[list[Subscription], int]:
+    count_result = await db.execute(select(func.count(Subscription.id)))
     total_count = count_result.scalar()
 
     offset = (page - 1) * limit
@@ -1019,7 +945,7 @@ async def get_subscriptions_batch(
     db: AsyncSession,
     offset: int = 0,
     limit: int = 500,
-) -> List[Subscription]:
+) -> list[Subscription]:
     """Получает подписки пачками для синхронизации. Загружает связанных пользователей."""
     result = await db.execute(
         select(Subscription)
@@ -1030,64 +956,56 @@ async def get_subscriptions_batch(
     )
     return list(result.scalars().all())
 
+
 async def add_subscription_servers(
-    db: AsyncSession,
-    subscription: Subscription,
-    server_squad_ids: List[int],
-    paid_prices: List[int] = None
+    db: AsyncSession, subscription: Subscription, server_squad_ids: list[int], paid_prices: list[int] = None
 ) -> Subscription:
     await db.refresh(subscription)
-    
+
     if paid_prices is None:
         months_remaining = get_remaining_months(subscription.end_date)
         paid_prices = []
-        
+
         from app.database.models import ServerSquad
+
         for server_id in server_squad_ids:
-            result = await db.execute(
-                select(ServerSquad.price_kopeks)
-                .where(ServerSquad.id == server_id)
-            )
+            result = await db.execute(select(ServerSquad.price_kopeks).where(ServerSquad.id == server_id))
             server_price_per_month = result.scalar() or 0
             total_price_for_period = server_price_per_month * months_remaining
             paid_prices.append(total_price_for_period)
-    
+
     for i, server_id in enumerate(server_squad_ids):
         subscription_server = SubscriptionServer(
-            subscription_id=subscription.id,  
+            subscription_id=subscription.id,
             server_squad_id=server_id,
-            paid_price_kopeks=paid_prices[i] if i < len(paid_prices) else 0
+            paid_price_kopeks=paid_prices[i] if i < len(paid_prices) else 0,
         )
         db.add(subscription_server)
-    
+
     await db.commit()
     await db.refresh(subscription)
-    
-    logger.info(f"🌐 К подписке {subscription.id} добавлено {len(server_squad_ids)} серверов с ценами: {paid_prices}")
+
+    logger.info(f'🌐 К подписке {subscription.id} добавлено {len(server_squad_ids)} серверов с ценами: {paid_prices}')
     return subscription
 
-async def get_server_monthly_price(
-    db: AsyncSession,
-    server_squad_id: int
-) -> int:
+
+async def get_server_monthly_price(db: AsyncSession, server_squad_id: int) -> int:
     from app.database.models import ServerSquad
-    
-    result = await db.execute(
-        select(ServerSquad.price_kopeks)
-        .where(ServerSquad.id == server_squad_id)
-    )
+
+    result = await db.execute(select(ServerSquad.price_kopeks).where(ServerSquad.id == server_squad_id))
     return result.scalar() or 0
 
 
 async def get_servers_monthly_prices(
     db: AsyncSession,
-    server_squad_ids: List[int],
+    server_squad_ids: list[int],
     *,
-    user: Optional["User"] = None,
-) -> List[int]:
+    user: Optional['User'] = None,
+) -> list[int]:
     """Получает месячные цены серверов с проверкой доступности для промогруппы пользователя."""
-    from app.database.models import ServerSquad
     from sqlalchemy.orm import selectinload
+
+    from app.database.models import ServerSquad
 
     prices = []
 
@@ -1097,14 +1015,14 @@ async def get_servers_monthly_prices(
     if user:
         try:
             # Пробуем загрузить промогруппы если ещё не загружены
-            await db.refresh(user, ["user_promo_groups", "promo_group"])
+            await db.refresh(user, ['user_promo_groups', 'promo_group'])
         except Exception:
             pass
         try:
             user_promo_group = user.get_primary_promo_group()
             user_promo_group_id = user_promo_group.id if user_promo_group else None
         except Exception as e:
-            logger.warning(f"Не удалось получить промогруппу пользователя: {e}")
+            logger.warning(f'Не удалось получить промогруппу пользователя: {e}')
 
     for server_id in server_squad_ids:
         # Загружаем сервер с промогруппами
@@ -1130,20 +1048,21 @@ async def get_servers_monthly_prices(
         else:
             # Сервер недоступен для промогруппы пользователя
             logger.warning(
-                f"⚠️ Сервер {server.display_name} (id={server_id}) недоступен для "
-                f"промогруппы пользователя (promo_group_id={user_promo_group_id}), "
-                f"allowed_promo_groups={[pg.id for pg in server.allowed_promo_groups] if server.allowed_promo_groups else []}"
+                f'⚠️ Сервер {server.display_name} (id={server_id}) недоступен для '
+                f'промогруппы пользователя (promo_group_id={user_promo_group_id}), '
+                f'allowed_promo_groups={[pg.id for pg in server.allowed_promo_groups] if server.allowed_promo_groups else []}'
             )
             prices.append(server.price_kopeks)  # Всё равно берём реальную цену
 
     return prices
 
+
 def _get_discount_percent(
-    user: Optional[User],
-    promo_group: Optional[PromoGroup],
+    user: User | None,
+    promo_group: PromoGroup | None,
     category: str,
     *,
-    period_days: Optional[int] = None,
+    period_days: int | None = None,
 ) -> int:
     if user is not None:
         try:
@@ -1161,33 +1080,33 @@ async def calculate_subscription_total_cost(
     db: AsyncSession,
     period_days: int,
     traffic_gb: int,
-    server_squad_ids: List[int],
+    server_squad_ids: list[int],
     devices: int,
     *,
-    user: Optional[User] = None,
-    promo_group: Optional[PromoGroup] = None,
-) -> Tuple[int, dict]:
+    user: User | None = None,
+    promo_group: PromoGroup | None = None,
+) -> tuple[int, dict]:
     from app.config import PERIOD_PRICES
-    
+
     months_in_period = calculate_months_from_days(period_days)
-    
+
     base_price_original = PERIOD_PRICES.get(period_days, 0)
     period_discount_percent = _get_discount_percent(
         user,
         promo_group,
-        "period",
+        'period',
         period_days=period_days,
     )
     base_discount_total = base_price_original * period_discount_percent // 100
     base_price = base_price_original - base_discount_total
-    
+
     promo_group = promo_group or (user.promo_group if user else None)
 
     traffic_price_per_month = settings.get_traffic_price(traffic_gb)
     traffic_discount_percent = _get_discount_percent(
         user,
         promo_group,
-        "traffic",
+        'traffic',
         period_days=period_days,
     )
     traffic_discount_per_month = traffic_price_per_month * traffic_discount_percent // 100
@@ -1200,7 +1119,7 @@ async def calculate_subscription_total_cost(
     servers_discount_percent = _get_discount_percent(
         user,
         promo_group,
-        "servers",
+        'servers',
         period_days=period_days,
     )
     servers_discount_per_month = servers_price_per_month * servers_discount_percent // 100
@@ -1213,7 +1132,7 @@ async def calculate_subscription_total_cost(
     devices_discount_percent = _get_discount_percent(
         user,
         promo_group,
-        "devices",
+        'devices',
         period_days=period_days,
     )
     devices_discount_per_month = devices_price_per_month * devices_discount_percent // 100
@@ -1242,106 +1161,88 @@ async def calculate_subscription_total_cost(
         'total_devices_price': total_devices_price,
         'months_in_period': months_in_period,
         'servers_individual_prices': [
-            (price - (price * servers_discount_percent // 100)) * months_in_period
-            for price in servers_prices
-        ]
+            (price - (price * servers_discount_percent // 100)) * months_in_period for price in servers_prices
+        ],
     }
 
-    logger.debug(f"📊 Расчет стоимости подписки на {period_days} дней ({months_in_period} мес):")
-    logger.debug(f"   Базовый период: {base_price/100}₽")
+    logger.debug(f'📊 Расчет стоимости подписки на {period_days} дней ({months_in_period} мес):')
+    logger.debug(f'   Базовый период: {base_price / 100}₽')
     if total_traffic_price > 0:
-        message = (
-            f"   Трафик: {traffic_price_per_month/100}₽/мес × {months_in_period} = {total_traffic_price/100}₽"
-        )
+        message = f'   Трафик: {traffic_price_per_month / 100}₽/мес × {months_in_period} = {total_traffic_price / 100}₽'
         if total_traffic_discount > 0:
-            message += (
-                f" (скидка {traffic_discount_percent}%: -{total_traffic_discount/100}₽)"
-            )
+            message += f' (скидка {traffic_discount_percent}%: -{total_traffic_discount / 100}₽)'
         logger.debug(message)
     if total_servers_price > 0:
         message = (
-            f"   Серверы: {servers_price_per_month/100}₽/мес × {months_in_period} = {total_servers_price/100}₽"
+            f'   Серверы: {servers_price_per_month / 100}₽/мес × {months_in_period} = {total_servers_price / 100}₽'
         )
         if total_servers_discount > 0:
-            message += (
-                f" (скидка {servers_discount_percent}%: -{total_servers_discount/100}₽)"
-            )
+            message += f' (скидка {servers_discount_percent}%: -{total_servers_discount / 100}₽)'
         logger.debug(message)
     if total_devices_price > 0:
         message = (
-            f"   Устройства: {devices_price_per_month/100}₽/мес × {months_in_period} = {total_devices_price/100}₽"
+            f'   Устройства: {devices_price_per_month / 100}₽/мес × {months_in_period} = {total_devices_price / 100}₽'
         )
         if total_devices_discount > 0:
-            message += (
-                f" (скидка {devices_discount_percent}%: -{total_devices_discount/100}₽)"
-            )
+            message += f' (скидка {devices_discount_percent}%: -{total_devices_discount / 100}₽)'
         logger.debug(message)
-    logger.debug(f"   ИТОГО: {total_cost/100}₽")
-    
+    logger.debug(f'   ИТОГО: {total_cost / 100}₽')
+
     return total_cost, details
-    
-async def get_subscription_server_ids(
-    db: AsyncSession,
-    subscription_id: int
-) -> List[int]:
-    
+
+
+async def get_subscription_server_ids(db: AsyncSession, subscription_id: int) -> list[int]:
     result = await db.execute(
-        select(SubscriptionServer.server_squad_id)
-        .where(SubscriptionServer.subscription_id == subscription_id)
+        select(SubscriptionServer.server_squad_id).where(SubscriptionServer.subscription_id == subscription_id)
     )
     return [row[0] for row in result.fetchall()]
 
 
-async def get_subscription_servers(
-    db: AsyncSession,
-    subscription_id: int
-) -> List[dict]:
-    
+async def get_subscription_servers(db: AsyncSession, subscription_id: int) -> list[dict]:
     from app.database.models import ServerSquad
-    
+
     result = await db.execute(
         select(SubscriptionServer, ServerSquad)
         .join(ServerSquad, SubscriptionServer.server_squad_id == ServerSquad.id)
         .where(SubscriptionServer.subscription_id == subscription_id)
     )
-    
+
     servers_info = []
     for sub_server, server_squad in result.fetchall():
-        servers_info.append({
-            'server_id': server_squad.id,
-            'squad_uuid': server_squad.squad_uuid,
-            'display_name': server_squad.display_name,
-            'country_code': server_squad.country_code,
-            'paid_price_kopeks': sub_server.paid_price_kopeks,
-            'connected_at': sub_server.connected_at,
-            'is_available': server_squad.is_available
-        })
-    
+        servers_info.append(
+            {
+                'server_id': server_squad.id,
+                'squad_uuid': server_squad.squad_uuid,
+                'display_name': server_squad.display_name,
+                'country_code': server_squad.country_code,
+                'paid_price_kopeks': sub_server.paid_price_kopeks,
+                'connected_at': sub_server.connected_at,
+                'is_available': server_squad.is_available,
+            }
+        )
+
     return servers_info
 
-async def remove_subscription_servers(
-    db: AsyncSession,
-    subscription_id: int,
-    server_squad_ids: List[int]
-) -> bool:
+
+async def remove_subscription_servers(db: AsyncSession, subscription_id: int, server_squad_ids: list[int]) -> bool:
     try:
-        from app.database.models import SubscriptionServer
         from sqlalchemy import delete
-        
+
+        from app.database.models import SubscriptionServer
+
         await db.execute(
-            delete(SubscriptionServer)
-            .where(
+            delete(SubscriptionServer).where(
                 SubscriptionServer.subscription_id == subscription_id,
-                SubscriptionServer.server_squad_id.in_(server_squad_ids)
+                SubscriptionServer.server_squad_id.in_(server_squad_ids),
             )
         )
-        
+
         await db.commit()
-        logger.info(f"🗑️ Удалены серверы {server_squad_ids} из подписки {subscription_id}")
+        logger.info(f'🗑️ Удалены серверы {server_squad_ids} из подписки {subscription_id}')
         return True
-        
+
     except Exception as e:
-        logger.error(f"Ошибка удаления серверов из подписки: {e}")
+        logger.error(f'Ошибка удаления серверов из подписки: {e}')
         await db.rollback()
         return False
 
@@ -1351,8 +1252,8 @@ async def get_subscription_renewal_cost(
     subscription_id: int,
     period_days: int,
     *,
-    user: Optional[User] = None,
-    promo_group: Optional[PromoGroup] = None,
+    user: User | None = None,
+    promo_group: PromoGroup | None = None,
 ) -> int:
     try:
         from app.config import PERIOD_PRICES
@@ -1364,7 +1265,9 @@ async def get_subscription_renewal_cost(
         result = await db.execute(
             select(Subscription)
             .options(
-                selectinload(Subscription.user).selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
+                selectinload(Subscription.user)
+                .selectinload(User.user_promo_groups)
+                .selectinload(UserPromoGroup.promo_group),
             )
             .where(Subscription.id == subscription_id)
         )
@@ -1380,9 +1283,9 @@ async def get_subscription_renewal_cost(
         servers_price_per_month = 0
         for server_info in servers_info:
             from app.database.models import ServerSquad
+
             result = await db.execute(
-                select(ServerSquad.price_kopeks)
-                .where(ServerSquad.id == server_info['server_id'])
+                select(ServerSquad.price_kopeks).where(ServerSquad.id == server_info['server_id'])
             )
             current_server_price = result.scalar() or 0
             servers_price_per_month += current_server_price
@@ -1390,7 +1293,7 @@ async def get_subscription_renewal_cost(
         servers_discount_percent = _get_discount_percent(
             user,
             promo_group,
-            "servers",
+            'servers',
             period_days=period_days,
         )
         servers_discount_per_month = servers_price_per_month * servers_discount_percent // 100
@@ -1407,7 +1310,7 @@ async def get_subscription_renewal_cost(
         traffic_discount_percent = _get_discount_percent(
             user,
             promo_group,
-            "traffic",
+            'traffic',
             period_days=period_days,
         )
         traffic_discount_per_month = traffic_price_per_month * traffic_discount_percent // 100
@@ -1420,7 +1323,7 @@ async def get_subscription_renewal_cost(
         devices_discount_percent = _get_discount_percent(
             user,
             promo_group,
-            "devices",
+            'devices',
             period_days=period_days,
         )
         devices_discount_per_month = devices_price_per_month * devices_discount_percent // 100
@@ -1430,53 +1333,45 @@ async def get_subscription_renewal_cost(
 
         total_cost = base_price + total_servers_cost + total_traffic_cost + total_devices_cost
 
-        logger.info(f"💰 Расчет продления подписки {subscription_id} на {period_days} дней ({months_in_period} мес):")
-        logger.info(f"   📅 Период: {base_price/100}₽")
+        logger.info(f'💰 Расчет продления подписки {subscription_id} на {period_days} дней ({months_in_period} мес):')
+        logger.info(f'   📅 Период: {base_price / 100}₽')
         if total_servers_cost > 0:
-            message = (
-                f"   🌍 Серверы: {servers_price_per_month/100}₽/мес × {months_in_period} = {total_servers_cost/100}₽"
-            )
+            message = f'   🌍 Серверы: {servers_price_per_month / 100}₽/мес × {months_in_period} = {total_servers_cost / 100}₽'
             if total_servers_discount > 0:
-                message += (
-                    f" (скидка {servers_discount_percent}%: -{total_servers_discount/100}₽)"
-                )
+                message += f' (скидка {servers_discount_percent}%: -{total_servers_discount / 100}₽)'
             logger.info(message)
         if total_traffic_cost > 0:
             message = (
-                f"   📊 Трафик: {traffic_price_per_month/100}₽/мес × {months_in_period} = {total_traffic_cost/100}₽"
+                f'   📊 Трафик: {traffic_price_per_month / 100}₽/мес × {months_in_period} = {total_traffic_cost / 100}₽'
             )
             if total_traffic_discount > 0:
-                message += (
-                    f" (скидка {traffic_discount_percent}%: -{total_traffic_discount/100}₽)"
-                )
+                message += f' (скидка {traffic_discount_percent}%: -{total_traffic_discount / 100}₽)'
             logger.info(message)
         if total_devices_cost > 0:
-            message = (
-                f"   📱 Устройства: {devices_price_per_month/100}₽/мес × {months_in_period} = {total_devices_cost/100}₽"
-            )
+            message = f'   📱 Устройства: {devices_price_per_month / 100}₽/мес × {months_in_period} = {total_devices_cost / 100}₽'
             if total_devices_discount > 0:
-                message += (
-                    f" (скидка {devices_discount_percent}%: -{total_devices_discount/100}₽)"
-                )
+                message += f' (скидка {devices_discount_percent}%: -{total_devices_discount / 100}₽)'
             logger.info(message)
-        logger.info(f"   💎 ИТОГО: {total_cost/100}₽")
-        
+        logger.info(f'   💎 ИТОГО: {total_cost / 100}₽')
+
         return total_cost
-        
+
     except Exception as e:
-        logger.error(f"Ошибка расчета стоимости продления: {e}")
+        logger.error(f'Ошибка расчета стоимости продления: {e}')
         from app.config import PERIOD_PRICES
+
         return PERIOD_PRICES.get(period_days, 0)
+
 
 async def calculate_addon_cost_for_remaining_period(
     db: AsyncSession,
     subscription: Subscription,
     additional_traffic_gb: int = 0,
     additional_devices: int = 0,
-    additional_server_ids: List[int] = None,
+    additional_server_ids: list[int] = None,
     *,
-    user: Optional[User] = None,
-    promo_group: Optional[PromoGroup] = None,
+    user: User | None = None,
+    promo_group: PromoGroup | None = None,
 ) -> int:
     if additional_server_ids is None:
         additional_server_ids = []
@@ -1487,7 +1382,7 @@ async def calculate_addon_cost_for_remaining_period(
     total_cost = 0
 
     if user is None:
-        user = getattr(subscription, "user", None)
+        user = getattr(subscription, 'user', None)
     promo_group = promo_group or (user.promo_group if user else None)
 
     if additional_traffic_gb > 0:
@@ -1495,20 +1390,16 @@ async def calculate_addon_cost_for_remaining_period(
         traffic_discount_percent = _get_discount_percent(
             user,
             promo_group,
-            "traffic",
+            'traffic',
             period_days=period_hint_days,
         )
         traffic_discount_per_month = traffic_price_per_month * traffic_discount_percent // 100
         discounted_traffic_per_month = traffic_price_per_month - traffic_discount_per_month
         traffic_total_cost = discounted_traffic_per_month * months_to_pay
         total_cost += traffic_total_cost
-        message = (
-            f"Трафик +{additional_traffic_gb}ГБ: {traffic_price_per_month/100}₽/мес × {months_to_pay} = {traffic_total_cost/100}₽"
-        )
+        message = f'Трафик +{additional_traffic_gb}ГБ: {traffic_price_per_month / 100}₽/мес × {months_to_pay} = {traffic_total_cost / 100}₽'
         if traffic_discount_per_month > 0:
-            message += (
-                f" (скидка {traffic_discount_percent}%: -{traffic_discount_per_month * months_to_pay/100}₽)"
-            )
+            message += f' (скидка {traffic_discount_percent}%: -{traffic_discount_per_month * months_to_pay / 100}₽)'
         logger.info(message)
 
     if additional_devices > 0:
@@ -1516,28 +1407,24 @@ async def calculate_addon_cost_for_remaining_period(
         devices_discount_percent = _get_discount_percent(
             user,
             promo_group,
-            "devices",
+            'devices',
             period_days=period_hint_days,
         )
         devices_discount_per_month = devices_price_per_month * devices_discount_percent // 100
         discounted_devices_per_month = devices_price_per_month - devices_discount_per_month
         devices_total_cost = discounted_devices_per_month * months_to_pay
         total_cost += devices_total_cost
-        message = (
-            f"Устройства +{additional_devices}: {devices_price_per_month/100}₽/мес × {months_to_pay} = {devices_total_cost/100}₽"
-        )
+        message = f'Устройства +{additional_devices}: {devices_price_per_month / 100}₽/мес × {months_to_pay} = {devices_total_cost / 100}₽'
         if devices_discount_per_month > 0:
-            message += (
-                f" (скидка {devices_discount_percent}%: -{devices_discount_per_month * months_to_pay/100}₽)"
-            )
+            message += f' (скидка {devices_discount_percent}%: -{devices_discount_per_month * months_to_pay / 100}₽)'
         logger.info(message)
 
     if additional_server_ids:
         from app.database.models import ServerSquad
+
         for server_id in additional_server_ids:
             result = await db.execute(
-                select(ServerSquad.price_kopeks, ServerSquad.display_name)
-                .where(ServerSquad.id == server_id)
+                select(ServerSquad.price_kopeks, ServerSquad.display_name).where(ServerSquad.id == server_id)
             )
             server_data = result.first()
             if server_data:
@@ -1545,49 +1432,40 @@ async def calculate_addon_cost_for_remaining_period(
                 servers_discount_percent = _get_discount_percent(
                     user,
                     promo_group,
-                    "servers",
+                    'servers',
                     period_days=period_hint_days,
                 )
                 server_discount_per_month = server_price_per_month * servers_discount_percent // 100
                 discounted_server_per_month = server_price_per_month - server_discount_per_month
                 server_total_cost = discounted_server_per_month * months_to_pay
                 total_cost += server_total_cost
-                message = (
-                    f"Сервер {server_name}: {server_price_per_month/100}₽/мес × {months_to_pay} = {server_total_cost/100}₽"
-                )
+                message = f'Сервер {server_name}: {server_price_per_month / 100}₽/мес × {months_to_pay} = {server_total_cost / 100}₽'
                 if server_discount_per_month > 0:
                     message += (
-                        f" (скидка {servers_discount_percent}%: -{server_discount_per_month * months_to_pay/100}₽)"
+                        f' (скидка {servers_discount_percent}%: -{server_discount_per_month * months_to_pay / 100}₽)'
                     )
                 logger.info(message)
-    
-    logger.info(f"💰 Итого доплата за {months_to_pay} мес: {total_cost/100}₽")
+
+    logger.info(f'💰 Итого доплата за {months_to_pay} мес: {total_cost / 100}₽')
     return total_cost
 
-async def expire_subscription(
-    db: AsyncSession,
-    subscription: Subscription
-) -> Subscription:
-    
+
+async def expire_subscription(db: AsyncSession, subscription: Subscription) -> Subscription:
     subscription.status = SubscriptionStatus.EXPIRED.value
     subscription.updated_at = datetime.utcnow()
-    
+
     await db.commit()
     await db.refresh(subscription)
-    
-    logger.info(f"⏰ Подписка пользователя {subscription.user_id} помечена как истёкшая")
+
+    logger.info(f'⏰ Подписка пользователя {subscription.user_id} помечена как истёкшая')
     return subscription
 
 
-async def check_and_update_subscription_status(
-    db: AsyncSession,
-    subscription: Subscription
-) -> Subscription:
-
+async def check_and_update_subscription_status(db: AsyncSession, subscription: Subscription) -> Subscription:
     current_time = datetime.utcnow()
 
     logger.info(
-        "🔍 Проверка статуса подписки %s, текущий статус: %s, дата окончания: %s, текущее время: %s",
+        '🔍 Проверка статуса подписки %s, текущий статус: %s, дата окончания: %s, текущее время: %s',
         subscription.id,
         subscription.status,
         format_local_datetime(subscription.end_date),
@@ -1598,21 +1476,17 @@ async def check_and_update_subscription_status(
     # (время "заморожено" пока пользователь на паузе)
     is_daily_paused = getattr(subscription, 'is_daily_paused', False)
     if is_daily_paused:
-        logger.info(
-            f"⏸️ Суточная подписка {subscription.id} на паузе, пропускаем проверку истечения"
-        )
+        logger.info(f'⏸️ Суточная подписка {subscription.id} на паузе, пропускаем проверку истечения')
         return subscription
 
-    if (subscription.status == SubscriptionStatus.ACTIVE.value and
-        subscription.end_date <= current_time):
-
+    if subscription.status == SubscriptionStatus.ACTIVE.value and subscription.end_date <= current_time:
         # Детальное логирование для отладки проблемы с деактивацией
         time_diff = current_time - subscription.end_date
         logger.warning(
-            f"⏰ DEACTIVATION: подписка {subscription.id} (user_id={subscription.user_id}) "
-            f"деактивируется в check_and_update_subscription_status. "
-            f"end_date={subscription.end_date}, current_time={current_time}, "
-            f"просрочена на {time_diff}"
+            f'⏰ DEACTIVATION: подписка {subscription.id} (user_id={subscription.user_id}) '
+            f'деактивируется в check_and_update_subscription_status. '
+            f'end_date={subscription.end_date}, current_time={current_time}, '
+            f'просрочена на {time_diff}'
         )
 
         subscription.status = SubscriptionStatus.EXPIRED.value
@@ -1623,14 +1497,15 @@ async def check_and_update_subscription_status(
 
         logger.info(f"⏰ Статус подписки пользователя {subscription.user_id} изменен на 'expired'")
     elif subscription.status == SubscriptionStatus.PENDING.value:
-        logger.info(f"ℹ️ Проверка PENDING подписки {subscription.id}, статус остается без изменений")
+        logger.info(f'ℹ️ Проверка PENDING подписки {subscription.id}, статус остается без изменений')
 
     return subscription
+
 
 async def create_subscription_no_commit(
     db: AsyncSession,
     user_id: int,
-    status: str = "trial",
+    status: str = 'trial',
     is_trial: bool = True,
     end_date: datetime = None,
     traffic_limit_gb: int = 10,
@@ -1638,21 +1513,21 @@ async def create_subscription_no_commit(
     device_limit: int = 1,
     connected_squads: list = None,
     remnawave_short_uuid: str = None,
-    subscription_url: str = "",
-    subscription_crypto_link: str = "",
-    autopay_enabled: Optional[bool] = None,
-    autopay_days_before: Optional[int] = None,
+    subscription_url: str = '',
+    subscription_crypto_link: str = '',
+    autopay_enabled: bool | None = None,
+    autopay_days_before: int | None = None,
 ) -> Subscription:
     """
     Создает подписку без немедленного коммита для пакетной обработки
     """
-    
+
     if end_date is None:
         end_date = datetime.utcnow() + timedelta(days=3)
-    
+
     if connected_squads is None:
         connected_squads = []
-    
+
     subscription = Subscription(
         user_id=user_id,
         status=status,
@@ -1665,32 +1540,26 @@ async def create_subscription_no_commit(
         remnawave_short_uuid=remnawave_short_uuid,
         subscription_url=subscription_url,
         subscription_crypto_link=subscription_crypto_link,
-        autopay_enabled=(
-            settings.is_autopay_enabled_by_default()
-            if autopay_enabled is None
-            else autopay_enabled
-        ),
+        autopay_enabled=(settings.is_autopay_enabled_by_default() if autopay_enabled is None else autopay_enabled),
         autopay_days_before=(
-            settings.DEFAULT_AUTOPAY_DAYS_BEFORE
-            if autopay_days_before is None
-            else autopay_days_before
+            settings.DEFAULT_AUTOPAY_DAYS_BEFORE if autopay_days_before is None else autopay_days_before
         ),
     )
-    
+
     db.add(subscription)
 
     # Выполняем flush, чтобы получить присвоенный первичный ключ
     await db.flush()
 
     # Не коммитим сразу, оставляем для пакетной обработки
-    logger.info(f"✅ Подготовлена подписка для пользователя {user_id} (ожидает коммита)")
+    logger.info(f'✅ Подготовлена подписка для пользователя {user_id} (ожидает коммита)')
     return subscription
 
 
 async def create_subscription(
     db: AsyncSession,
     user_id: int,
-    status: str = "trial",
+    status: str = 'trial',
     is_trial: bool = True,
     end_date: datetime = None,
     traffic_limit_gb: int = 10,
@@ -1698,18 +1567,17 @@ async def create_subscription(
     device_limit: int = 1,
     connected_squads: list = None,
     remnawave_short_uuid: str = None,
-    subscription_url: str = "",
-    subscription_crypto_link: str = "",
-    autopay_enabled: Optional[bool] = None,
-    autopay_days_before: Optional[int] = None,
+    subscription_url: str = '',
+    subscription_crypto_link: str = '',
+    autopay_enabled: bool | None = None,
+    autopay_days_before: int | None = None,
 ) -> Subscription:
-    
     if end_date is None:
         end_date = datetime.utcnow() + timedelta(days=3)
-    
+
     if connected_squads is None:
         connected_squads = []
-    
+
     subscription = Subscription(
         user_id=user_id,
         status=status,
@@ -1722,23 +1590,17 @@ async def create_subscription(
         remnawave_short_uuid=remnawave_short_uuid,
         subscription_url=subscription_url,
         subscription_crypto_link=subscription_crypto_link,
-        autopay_enabled=(
-            settings.is_autopay_enabled_by_default()
-            if autopay_enabled is None
-            else autopay_enabled
-        ),
+        autopay_enabled=(settings.is_autopay_enabled_by_default() if autopay_enabled is None else autopay_enabled),
         autopay_days_before=(
-            settings.DEFAULT_AUTOPAY_DAYS_BEFORE
-            if autopay_days_before is None
-            else autopay_days_before
+            settings.DEFAULT_AUTOPAY_DAYS_BEFORE if autopay_days_before is None else autopay_days_before
         ),
     )
-    
+
     db.add(subscription)
     await db.commit()
     await db.refresh(subscription)
-    
-    logger.info(f"✅ Создана подписка для пользователя {user_id}")
+
+    logger.info(f'✅ Создана подписка для пользователя {user_id}')
     return subscription
 
 
@@ -1748,8 +1610,8 @@ async def create_pending_subscription(
     duration_days: int,
     traffic_limit_gb: int = 0,
     device_limit: int = 1,
-    connected_squads: List[str] = None,
-    payment_method: str = "pending",
+    connected_squads: list[str] = None,
+    payment_method: str = 'pending',
     total_price_kopeks: int = 0,
     is_trial: bool = False,
 ) -> Subscription:
@@ -1758,7 +1620,7 @@ async def create_pending_subscription(
     Args:
         is_trial: If True, marks the subscription as a trial subscription.
     """
-    trial_label = "триальная " if is_trial else ""
+    trial_label = 'триальная ' if is_trial else ''
     current_time = datetime.utcnow()
     end_date = current_time + timedelta(days=duration_days)
 
@@ -1770,7 +1632,7 @@ async def create_pending_subscription(
             and existing_subscription.end_date > current_time
         ):
             logger.warning(
-                "⚠️ Попытка создать pending %sподписку для активного пользователя %s. Возвращаем существующую запись.",
+                '⚠️ Попытка создать pending %sподписку для активного пользователя %s. Возвращаем существующую запись.',
                 trial_label,
                 user_id,
             )
@@ -1790,7 +1652,7 @@ async def create_pending_subscription(
         await db.refresh(existing_subscription)
 
         logger.info(
-            "♻️ Обновлена ожидающая %sподписка пользователя %s, ID: %s, метод оплаты: %s",
+            '♻️ Обновлена ожидающая %sподписка пользователя %s, ID: %s, метод оплаты: %s',
             trial_label,
             user_id,
             existing_subscription.id,
@@ -1816,7 +1678,7 @@ async def create_pending_subscription(
     await db.refresh(subscription)
 
     logger.info(
-        "💳 Создана ожидающая %sподписка для пользователя %s, ID: %s, метод оплаты: %s",
+        '💳 Создана ожидающая %sподписка для пользователя %s, ID: %s, метод оплаты: %s',
         trial_label,
         user_id,
         subscription.id,
@@ -1833,8 +1695,8 @@ async def create_pending_trial_subscription(
     duration_days: int,
     traffic_limit_gb: int = 0,
     device_limit: int = 1,
-    connected_squads: List[str] = None,
-    payment_method: str = "pending",
+    connected_squads: list[str] = None,
+    payment_method: str = 'pending',
     total_price_kopeks: int = 0,
 ) -> Subscription:
     """Creates a pending trial subscription. Wrapper for create_pending_subscription with is_trial=True."""
@@ -1851,51 +1713,44 @@ async def create_pending_trial_subscription(
     )
 
 
-async def activate_pending_subscription(
-    db: AsyncSession,
-    user_id: int,
-    period_days: int = None
-) -> Optional[Subscription]:
+async def activate_pending_subscription(db: AsyncSession, user_id: int, period_days: int = None) -> Subscription | None:
     """Активирует pending подписку пользователя, меняя её статус на ACTIVE."""
-    logger.info(f"Активация pending подписки: пользователь {user_id}, период {period_days} дней")
-    
+    logger.info(f'Активация pending подписки: пользователь {user_id}, период {period_days} дней')
+
     # Находим pending подписку пользователя
     result = await db.execute(
-        select(Subscription)
-        .where(
-            and_(
-                Subscription.user_id == user_id,
-                Subscription.status == SubscriptionStatus.PENDING.value
-            )
+        select(Subscription).where(
+            and_(Subscription.user_id == user_id, Subscription.status == SubscriptionStatus.PENDING.value)
         )
     )
     pending_subscription = result.scalar_one_or_none()
-    
+
     if not pending_subscription:
-        logger.warning(f"Не найдена pending подписка для пользователя {user_id}")
+        logger.warning(f'Не найдена pending подписка для пользователя {user_id}')
         return None
-    
-    logger.info(f"Найдена pending подписка {pending_subscription.id} для пользователя {user_id}, статус: {pending_subscription.status}")
-    
+
+    logger.info(
+        f'Найдена pending подписка {pending_subscription.id} для пользователя {user_id}, статус: {pending_subscription.status}'
+    )
+
     # Обновляем статус подписки на ACTIVE
     current_time = datetime.utcnow()
     pending_subscription.status = SubscriptionStatus.ACTIVE.value
-    
+
     # Если указан период, обновляем дату окончания
     if period_days is not None:
         effective_start = pending_subscription.start_date or current_time
-        if effective_start < current_time:
-            effective_start = current_time
+        effective_start = max(effective_start, current_time)
         pending_subscription.end_date = effective_start + timedelta(days=period_days)
-    
+
     # Обновляем дату начала, если она не установлена или в прошлом
     if not pending_subscription.start_date or pending_subscription.start_date < current_time:
         pending_subscription.start_date = current_time
-    
+
     await db.commit()
     await db.refresh(pending_subscription)
 
-    logger.info(f"Подписка пользователя {user_id} активирована, ID: {pending_subscription.id}")
+    logger.info(f'Подписка пользователя {user_id} активирована, ID: {pending_subscription.id}')
 
     return pending_subscription
 
@@ -1904,29 +1759,28 @@ async def activate_pending_trial_subscription(
     db: AsyncSession,
     subscription_id: int,
     user_id: int,
-) -> Optional[Subscription]:
+) -> Subscription | None:
     """Активирует pending триальную подписку по её ID после оплаты."""
-    logger.info(f"Активация pending триальной подписки: subscription_id={subscription_id}, user_id={user_id}")
+    logger.info(f'Активация pending триальной подписки: subscription_id={subscription_id}, user_id={user_id}')
 
     # Находим pending подписку по ID
     result = await db.execute(
-        select(Subscription)
-        .where(
+        select(Subscription).where(
             and_(
                 Subscription.id == subscription_id,
                 Subscription.user_id == user_id,
                 Subscription.status == SubscriptionStatus.PENDING.value,
-                Subscription.is_trial == True
+                Subscription.is_trial == True,
             )
         )
     )
     pending_subscription = result.scalar_one_or_none()
 
     if not pending_subscription:
-        logger.warning(f"Не найдена pending триальная подписка {subscription_id} для пользователя {user_id}")
+        logger.warning(f'Не найдена pending триальная подписка {subscription_id} для пользователя {user_id}')
         return None
 
-    logger.info(f"Найдена pending триальная подписка {pending_subscription.id}, статус: {pending_subscription.status}")
+    logger.info(f'Найдена pending триальная подписка {pending_subscription.id}, статус: {pending_subscription.status}')
 
     # Обновляем статус подписки на ACTIVE
     current_time = datetime.utcnow()
@@ -1943,12 +1797,13 @@ async def activate_pending_trial_subscription(
     elif pending_subscription.end_date and pending_subscription.end_date < current_time:
         # Если end_date в прошлом, пересчитываем
         from app.config import settings
+
         pending_subscription.end_date = current_time + timedelta(days=settings.TRIAL_DURATION_DAYS)
 
     await db.commit()
     await db.refresh(pending_subscription)
 
-    logger.info(f"Триальная подписка {pending_subscription.id} активирована для пользователя {user_id}")
+    logger.info(f'Триальная подписка {pending_subscription.id} активирована для пользователя {user_id}')
 
     return pending_subscription
 
@@ -1956,7 +1811,7 @@ async def activate_pending_trial_subscription(
 # ==================== СУТОЧНЫЕ ПОДПИСКИ ====================
 
 
-async def get_daily_subscriptions_for_charge(db: AsyncSession) -> List[Subscription]:
+async def get_daily_subscriptions_for_charge(db: AsyncSession) -> list[Subscription]:
     """
     Получает все суточные подписки, которые нужно обработать для списания.
 
@@ -1986,10 +1841,7 @@ async def get_daily_subscriptions_for_charge(db: AsyncSession) -> List[Subscript
                 Subscription.is_daily_paused.is_(False),
                 Subscription.is_trial.is_(False),  # Не списываем с триальных подписок
                 # Списания ещё не было ИЛИ прошло более 24 часов
-                (
-                    (Subscription.last_daily_charge_at.is_(None)) |
-                    (Subscription.last_daily_charge_at < one_day_ago)
-                ),
+                ((Subscription.last_daily_charge_at.is_(None)) | (Subscription.last_daily_charge_at < one_day_ago)),
             )
         )
     )
@@ -1997,9 +1849,7 @@ async def get_daily_subscriptions_for_charge(db: AsyncSession) -> List[Subscript
     result = await db.execute(query)
     subscriptions = result.scalars().all()
 
-    logger.info(
-        f"🔍 Найдено {len(subscriptions)} суточных подписок для списания"
-    )
+    logger.info(f'🔍 Найдено {len(subscriptions)} суточных подписок для списания')
 
     return list(subscriptions)
 
@@ -2049,18 +1899,14 @@ async def pause_daily_subscription(
 ) -> Subscription:
     """Приостанавливает суточную подписку (списание не будет происходить)."""
     if not subscription.is_daily_tariff:
-        logger.warning(
-            f"Попытка приостановить не-суточную подписку {subscription.id}"
-        )
+        logger.warning(f'Попытка приостановить не-суточную подписку {subscription.id}')
         return subscription
 
     subscription.is_daily_paused = True
     await db.commit()
     await db.refresh(subscription)
 
-    logger.info(
-        f"⏸️ Суточная подписка {subscription.id} приостановлена пользователем {subscription.user_id}"
-    )
+    logger.info(f'⏸️ Суточная подписка {subscription.id} приостановлена пользователем {subscription.user_id}')
 
     return subscription
 
@@ -2071,9 +1917,7 @@ async def resume_daily_subscription(
 ) -> Subscription:
     """Возобновляет суточную подписку (списание продолжится)."""
     if not subscription.is_daily_tariff:
-        logger.warning(
-            f"Попытка возобновить не-суточную подписку {subscription.id}"
-        )
+        logger.warning(f'Попытка возобновить не-суточную подписку {subscription.id}')
         return subscription
 
     subscription.is_daily_paused = False
@@ -2084,16 +1928,12 @@ async def resume_daily_subscription(
         # Обновляем время последнего списания для корректного расчёта следующего
         subscription.last_daily_charge_at = datetime.utcnow()
         subscription.end_date = datetime.utcnow() + timedelta(days=1)
-        logger.info(
-            f"✅ Суточная подписка {subscription.id} восстановлена из DISABLED в ACTIVE"
-        )
+        logger.info(f'✅ Суточная подписка {subscription.id} восстановлена из DISABLED в ACTIVE')
 
     await db.commit()
     await db.refresh(subscription)
 
-    logger.info(
-        f"▶️ Суточная подписка {subscription.id} возобновлена пользователем {subscription.user_id}"
-    )
+    logger.info(f'▶️ Суточная подписка {subscription.id} возобновлена пользователем {subscription.user_id}')
 
     return subscription
 
@@ -2111,7 +1951,7 @@ async def update_daily_charge_time(
     new_end_date = now + timedelta(days=1)
     if subscription.end_date is None or subscription.end_date < new_end_date:
         subscription.end_date = new_end_date
-        logger.info(f"📅 Продлена подписка {subscription.id} до {new_end_date}")
+        logger.info(f'📅 Продлена подписка {subscription.id} до {new_end_date}')
 
     await db.commit()
     await db.refresh(subscription)
@@ -2132,7 +1972,7 @@ async def suspend_daily_subscription_insufficient_balance(
     await db.refresh(subscription)
 
     logger.info(
-        f"⚠️ Суточная подписка {subscription.id} приостановлена: недостаточно средств (user_id={subscription.user_id})"
+        f'⚠️ Суточная подписка {subscription.id} приостановлена: недостаточно средств (user_id={subscription.user_id})'
     )
 
     return subscription
@@ -2141,7 +1981,7 @@ async def suspend_daily_subscription_insufficient_balance(
 async def get_subscription_with_tariff(
     db: AsyncSession,
     user_id: int,
-) -> Optional[Subscription]:
+) -> Subscription | None:
     """Получает подписку пользователя с загруженным тарифом."""
     result = await db.execute(
         select(Subscription)
@@ -2168,5 +2008,4 @@ async def toggle_daily_subscription_pause(
     """Переключает состояние паузы суточной подписки."""
     if subscription.is_daily_paused:
         return await resume_daily_subscription(db, subscription)
-    else:
-        return await pause_daily_subscription(db, subscription)
+    return await pause_daily_subscription(db, subscription)

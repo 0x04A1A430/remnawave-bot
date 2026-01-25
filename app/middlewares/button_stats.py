@@ -2,7 +2,8 @@
 
 import asyncio
 import logging
-from typing import Callable, Dict, Any, Awaitable, Set
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery, TelegramObject
@@ -10,76 +11,77 @@ from aiogram.types import CallbackQuery, TelegramObject
 from app.config import settings
 from app.database.database import AsyncSessionLocal
 
+
 logger = logging.getLogger(__name__)
 
 # Известные builtin callback_data из меню
-BUILTIN_CALLBACKS: Set[str] = {
+BUILTIN_CALLBACKS: set[str] = {
     # Основные кнопки меню
-    "subscription_connect",
-    "subscription_happ_download",
-    "menu_subscription",
-    "buy_traffic",
-    "menu_balance",
-    "menu_trial",
-    "menu_buy",
-    "simple_subscription_purchase",
-    "return_to_saved_cart",
-    "menu_promocode",
-    "menu_referrals",
-    "contests_menu",
-    "menu_support",
-    "menu_info",
-    "menu_language",
-    "admin_panel",
-    "moderator_panel",
+    'subscription_connect',
+    'subscription_happ_download',
+    'menu_subscription',
+    'buy_traffic',
+    'menu_balance',
+    'menu_trial',
+    'menu_buy',
+    'simple_subscription_purchase',
+    'return_to_saved_cart',
+    'menu_promocode',
+    'menu_referrals',
+    'contests_menu',
+    'menu_support',
+    'menu_info',
+    'menu_language',
+    'admin_panel',
+    'moderator_panel',
     # Навигация
-    "back_to_menu",
-    "menu_faq",
-    "menu_info_promo_groups",
-    "menu_privacy_policy",
-    "menu_public_offer",
-    "menu_rules",
-    "menu_server_status",
+    'back_to_menu',
+    'menu_faq',
+    'menu_info_promo_groups',
+    'menu_privacy_policy',
+    'menu_public_offer',
+    'menu_rules',
+    'menu_server_status',
     # Баланс
-    "balance_history",
-    "balance_topup",
+    'balance_history',
+    'balance_topup',
     # Подписка
-    "subscription_extend",
-    "subscription_autopay",
-    "subscription_settings",
-    "open_subscription_link",
-    "subscription_add_countries",
-    "subscription_reset_traffic",
-    "subscription_switch_traffic",
-    "subscription_change_devices",
-    "subscription_manage_devices",
-    "subscription_upgrade",
+    'subscription_extend',
+    'subscription_autopay',
+    'subscription_settings',
+    'open_subscription_link',
+    'subscription_add_countries',
+    'subscription_reset_traffic',
+    'subscription_switch_traffic',
+    'subscription_change_devices',
+    'subscription_manage_devices',
+    'subscription_upgrade',
     # Устройства
-    "device_guide_ios",
-    "device_guide_android",
-    "device_guide_windows",
-    "device_guide_mac",
-    "device_guide_tv",
-    "device_guide_appletv",
+    'device_guide_ios',
+    'device_guide_android',
+    'device_guide_windows',
+    'device_guide_mac',
+    'device_guide_tv',
+    'device_guide_appletv',
     # Happ
-    "happ_download_ios",
-    "happ_download_android",
-    "happ_download_macos",
-    "happ_download_windows",
+    'happ_download_ios',
+    'happ_download_android',
+    'happ_download_macos',
+    'happ_download_windows',
     # Рефералы
-    "referral_create_invite",
-    "referral_show_qr",
-    "referral_list",
-    "referral_analytics",
+    'referral_create_invite',
+    'referral_show_qr',
+    'referral_list',
+    'referral_analytics',
     # Поддержка
-    "create_ticket",
-    "my_tickets",
+    'create_ticket',
+    'my_tickets',
     # Триал
-    "trial_activate",
+    'trial_activate',
     # Покупка
-    "clear_saved_cart",
-    "subscription_confirm",
-    "subscription_cancel",
+    'clear_saved_cart',
+    'subscription_confirm',
+    'subscription_cancel',
 }
 
 
@@ -88,9 +90,9 @@ class ButtonStatsMiddleware(BaseMiddleware):
 
     async def __call__(
         self,
-        handler: Callable[[TelegramObject, Dict[str, Any]], Awaitable[Any]],
+        handler: Callable[[TelegramObject, dict[str, Any]], Awaitable[Any]],
         event: TelegramObject,
-        data: Dict[str, Any]
+        data: dict[str, Any],
     ) -> Any:
         """Перехватывает CallbackQuery и логирует клики по кнопкам."""
 
@@ -127,16 +129,16 @@ class ButtonStatsMiddleware(BaseMiddleware):
                     user_id=user_id,
                     callback_data=callback_data,
                     button_type=button_type,
-                    button_text=button_text
+                    button_text=button_text,
                 )
             )
         except Exception as e:
             # Не прерываем обработку при ошибке логирования
-            logger.error(f"Ошибка логирования клика по кнопке: {e}", exc_info=True)
-        
+            logger.error(f'Ошибка логирования клика по кнопке: {e}', exc_info=True)
+
         # Продолжаем обработку
         return await handler(event, data)
-    
+
     def _determine_button_type(self, callback_data: str) -> str:
         """Определяет тип кнопки по callback_data.
 
@@ -146,30 +148,30 @@ class ButtonStatsMiddleware(BaseMiddleware):
         """
         # Проверяем по известному списку builtin кнопок
         if callback_data in BUILTIN_CALLBACKS:
-            return "builtin"
+            return 'builtin'
 
         # Дополнительная проверка по префиксам для динамических callback_data
         builtin_prefixes = (
-            "menu_",
-            "admin_",
-            "subscription_",
-            "balance_",
-            "referral_",
-            "device_guide_",
-            "happ_download_",
+            'menu_',
+            'admin_',
+            'subscription_',
+            'balance_',
+            'referral_',
+            'device_guide_',
+            'happ_download_',
         )
         if callback_data.startswith(builtin_prefixes):
-            return "builtin"
+            return 'builtin'
 
         # Всё остальное - кастомные callback кнопки
-        return "callback"
-    
+        return 'callback'
+
     def _extract_button_text(self, reply_markup, callback_data: str) -> str:
         """Извлекает текст кнопки из клавиатуры."""
         try:
             if not reply_markup or not hasattr(reply_markup, 'inline_keyboard'):
                 return None
-            
+
             for row in reply_markup.inline_keyboard:
                 for button in row:
                     if hasattr(button, 'callback_data') and button.callback_data == callback_data:
@@ -178,14 +180,14 @@ class ButtonStatsMiddleware(BaseMiddleware):
         except Exception:
             pass
         return None
-    
+
     async def _log_button_click_async(
         self,
         button_id: str,
         user_id: int = None,
         callback_data: str = None,
         button_type: str = None,
-        button_text: str = None
+        button_text: str = None,
     ):
         """Асинхронно логирует клик по кнопке."""
         try:
@@ -199,10 +201,9 @@ class ButtonStatsMiddleware(BaseMiddleware):
                         user_id=user_id,
                         callback_data=callback_data,
                         button_type=button_type,
-                        button_text=button_text
+                        button_text=button_text,
                     )
                 except Exception as e:
-                    logger.debug(f"Ошибка записи клика в БД {button_id}: {e}")
+                    logger.debug(f'Ошибка записи клика в БД {button_id}: {e}')
         except Exception as e:
-            logger.debug(f"Ошибка создания сессии БД для логирования клика: {e}")
-
+            logger.debug(f'Ошибка создания сессии БД для логирования клика: {e}')

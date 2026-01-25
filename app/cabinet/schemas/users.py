@@ -1,51 +1,57 @@
 """Schemas for Admin Users management in cabinet."""
 
 from datetime import datetime
-from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field
 from enum import Enum
+from typing import Any
+
+from pydantic import BaseModel, Field
 
 
 class UserStatusEnum(str, Enum):
     """User status enum."""
-    ACTIVE = "active"
-    BLOCKED = "blocked"
-    DELETED = "deleted"
+
+    ACTIVE = 'active'
+    BLOCKED = 'blocked'
+    DELETED = 'deleted'
 
 
 class SubscriptionStatusEnum(str, Enum):
     """Subscription status enum."""
-    TRIAL = "trial"
-    ACTIVE = "active"
-    EXPIRED = "expired"
-    DISABLED = "disabled"
-    PENDING = "pending"
+
+    TRIAL = 'trial'
+    ACTIVE = 'active'
+    EXPIRED = 'expired'
+    DISABLED = 'disabled'
+    PENDING = 'pending'
 
 
 class SortByEnum(str, Enum):
     """Sort options for users list."""
-    CREATED_AT = "created_at"
-    BALANCE = "balance"
-    TRAFFIC = "traffic"
-    LAST_ACTIVITY = "last_activity"
-    TOTAL_SPENT = "total_spent"
-    PURCHASE_COUNT = "purchase_count"
+
+    CREATED_AT = 'created_at'
+    BALANCE = 'balance'
+    TRAFFIC = 'traffic'
+    LAST_ACTIVITY = 'last_activity'
+    TOTAL_SPENT = 'total_spent'
+    PURCHASE_COUNT = 'purchase_count'
 
 
 # === User Subscription Info ===
 
+
 class UserSubscriptionInfo(BaseModel):
     """User subscription information."""
+
     id: int
     status: str
     is_trial: bool
-    start_date: Optional[datetime] = None
-    end_date: Optional[datetime] = None
+    start_date: datetime | None = None
+    end_date: datetime | None = None
     traffic_limit_gb: int = 0
     traffic_used_gb: float = 0.0
     device_limit: int = 1
-    tariff_id: Optional[int] = None
-    tariff_name: Optional[str] = None
+    tariff_id: int | None = None
+    tariff_name: str | None = None
     autopay_enabled: bool = False
     is_active: bool = False
     days_remaining: int = 0
@@ -53,6 +59,7 @@ class UserSubscriptionInfo(BaseModel):
 
 class UserPromoGroupInfo(BaseModel):
     """User promo group info."""
+
     id: int
     name: str
     is_default: bool = False
@@ -60,29 +67,31 @@ class UserPromoGroupInfo(BaseModel):
 
 # === User List ===
 
+
 class UserListItem(BaseModel):
     """User item in list."""
+
     id: int
-    telegram_id: int
-    username: Optional[str] = None
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
+    telegram_id: int | None = None
+    username: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
     full_name: str
     status: str
     balance_kopeks: int
     balance_rubles: float
     created_at: datetime
-    last_activity: Optional[datetime] = None
+    last_activity: datetime | None = None
 
     # Subscription summary
     has_subscription: bool = False
-    subscription_status: Optional[str] = None
+    subscription_status: str | None = None
     subscription_is_trial: bool = False
-    subscription_end_date: Optional[datetime] = None
+    subscription_end_date: datetime | None = None
 
     # Promo group
-    promo_group_id: Optional[int] = None
-    promo_group_name: Optional[str] = None
+    promo_group_id: int | None = None
+    promo_group_name: str | None = None
 
     # Stats
     total_spent_kopeks: int = 0
@@ -96,7 +105,8 @@ class UserListItem(BaseModel):
 
 class UsersListResponse(BaseModel):
     """Paginated list of users."""
-    users: List[UserListItem]
+
+    users: list[UserListItem]
     total: int
     offset: int = 0
     limit: int = 50
@@ -104,35 +114,39 @@ class UsersListResponse(BaseModel):
 
 # === User Detail ===
 
+
 class UserTransactionItem(BaseModel):
     """User transaction."""
+
     id: int
     type: str
     amount_kopeks: int
     amount_rubles: float
-    description: Optional[str] = None
-    payment_method: Optional[str] = None
+    description: str | None = None
+    payment_method: str | None = None
     is_completed: bool = True
     created_at: datetime
 
 
 class UserReferralInfo(BaseModel):
     """User referral info."""
+
     referral_code: str
     referrals_count: int = 0
     total_earnings_kopeks: int = 0
-    commission_percent: Optional[int] = None
-    referred_by_id: Optional[int] = None
-    referred_by_username: Optional[str] = None
+    commission_percent: int | None = None
+    referred_by_id: int | None = None
+    referred_by_username: str | None = None
 
 
 class UserDetailResponse(BaseModel):
     """Detailed user information."""
+
     id: int
-    telegram_id: int
-    username: Optional[str] = None
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
+    telegram_id: int | None = None
+    username: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
     full_name: str
     status: str
     language: str
@@ -140,20 +154,20 @@ class UserDetailResponse(BaseModel):
     balance_rubles: float
 
     # Email (cabinet)
-    email: Optional[str] = None
+    email: str | None = None
     email_verified: bool = False
 
     # Dates
     created_at: datetime
-    updated_at: Optional[datetime] = None
-    last_activity: Optional[datetime] = None
-    cabinet_last_login: Optional[datetime] = None
+    updated_at: datetime | None = None
+    last_activity: datetime | None = None
+    cabinet_last_login: datetime | None = None
 
     # Subscription
-    subscription: Optional[UserSubscriptionInfo] = None
+    subscription: UserSubscriptionInfo | None = None
 
     # Promo group
-    promo_group: Optional[UserPromoGroupInfo] = None
+    promo_group: UserPromoGroupInfo | None = None
 
     # Referral
     referral: UserReferralInfo
@@ -168,28 +182,31 @@ class UserDetailResponse(BaseModel):
     # Restrictions
     restriction_topup: bool = False
     restriction_subscription: bool = False
-    restriction_reason: Optional[str] = None
+    restriction_reason: str | None = None
 
     # Promo offer
     promo_offer_discount_percent: int = 0
-    promo_offer_discount_source: Optional[str] = None
-    promo_offer_discount_expires_at: Optional[datetime] = None
+    promo_offer_discount_source: str | None = None
+    promo_offer_discount_expires_at: datetime | None = None
 
     # Recent transactions
-    recent_transactions: List[UserTransactionItem] = []
+    recent_transactions: list[UserTransactionItem] = []
 
 
 # === User Actions ===
 
+
 class UpdateBalanceRequest(BaseModel):
     """Request to update user balance."""
-    amount_kopeks: int = Field(..., description="Amount in kopeks (positive to add, negative to subtract)")
-    description: str = Field(default="Admin balance adjustment", max_length=500)
-    create_transaction: bool = Field(default=True, description="Create transaction record")
+
+    amount_kopeks: int = Field(..., description='Amount in kopeks (positive to add, negative to subtract)')
+    description: str = Field(default='Admin balance adjustment', max_length=500)
+    create_transaction: bool = Field(default=True, description='Create transaction record')
 
 
 class UpdateBalanceResponse(BaseModel):
     """Response after balance update."""
+
     success: bool
     old_balance_kopeks: int
     new_balance_kopeks: int
@@ -198,44 +215,50 @@ class UpdateBalanceResponse(BaseModel):
 
 class UpdateSubscriptionRequest(BaseModel):
     """Request to update user subscription."""
-    action: str = Field(..., description="Action: extend, set_end_date, change_tariff, set_traffic, toggle_autopay, cancel")
+
+    action: str = Field(
+        ..., description='Action: extend, set_end_date, change_tariff, set_traffic, toggle_autopay, cancel'
+    )
 
     # For extend action
-    days: Optional[int] = Field(None, ge=1, le=3650, description="Days to extend")
+    days: int | None = Field(None, ge=1, le=3650, description='Days to extend')
 
     # For set_end_date action
-    end_date: Optional[datetime] = Field(None, description="New end date")
+    end_date: datetime | None = Field(None, description='New end date')
 
     # For change_tariff action
-    tariff_id: Optional[int] = Field(None, description="New tariff ID")
+    tariff_id: int | None = Field(None, description='New tariff ID')
 
     # For set_traffic action
-    traffic_limit_gb: Optional[int] = Field(None, ge=0, description="New traffic limit in GB")
-    traffic_used_gb: Optional[float] = Field(None, ge=0, description="Set traffic used in GB")
+    traffic_limit_gb: int | None = Field(None, ge=0, description='New traffic limit in GB')
+    traffic_used_gb: float | None = Field(None, ge=0, description='Set traffic used in GB')
 
     # For toggle_autopay
-    autopay_enabled: Optional[bool] = Field(None, description="Enable/disable autopay")
+    autopay_enabled: bool | None = Field(None, description='Enable/disable autopay')
 
     # For create new subscription
-    is_trial: Optional[bool] = Field(None, description="Is trial subscription")
-    device_limit: Optional[int] = Field(None, ge=1, description="Device limit")
+    is_trial: bool | None = Field(None, description='Is trial subscription')
+    device_limit: int | None = Field(None, ge=1, description='Device limit')
 
 
 class UpdateSubscriptionResponse(BaseModel):
     """Response after subscription update."""
+
     success: bool
     message: str
-    subscription: Optional[UserSubscriptionInfo] = None
+    subscription: UserSubscriptionInfo | None = None
 
 
 class UpdateUserStatusRequest(BaseModel):
     """Request to update user status."""
+
     status: UserStatusEnum
-    reason: Optional[str] = Field(None, max_length=500, description="Reason for status change")
+    reason: str | None = Field(None, max_length=500, description='Reason for status change')
 
 
 class UpdateUserStatusResponse(BaseModel):
     """Response after status update."""
+
     success: bool
     old_status: str
     new_status: str
@@ -244,50 +267,58 @@ class UpdateUserStatusResponse(BaseModel):
 
 class UpdateRestrictionsRequest(BaseModel):
     """Request to update user restrictions."""
-    restriction_topup: Optional[bool] = Field(None, description="Block balance top-up")
-    restriction_subscription: Optional[bool] = Field(None, description="Block subscription purchase/renewal")
-    restriction_reason: Optional[str] = Field(None, max_length=500, description="Reason for restrictions")
+
+    restriction_topup: bool | None = Field(None, description='Block balance top-up')
+    restriction_subscription: bool | None = Field(None, description='Block subscription purchase/renewal')
+    restriction_reason: str | None = Field(None, max_length=500, description='Reason for restrictions')
 
 
 class UpdateRestrictionsResponse(BaseModel):
     """Response after restrictions update."""
+
     success: bool
     restriction_topup: bool
     restriction_subscription: bool
-    restriction_reason: Optional[str] = None
+    restriction_reason: str | None = None
     message: str
 
 
 class UpdatePromoGroupRequest(BaseModel):
     """Request to update user promo group."""
-    promo_group_id: Optional[int] = Field(None, description="New promo group ID (null to remove)")
+
+    promo_group_id: int | None = Field(None, description='New promo group ID (null to remove)')
 
 
 class UpdatePromoGroupResponse(BaseModel):
     """Response after promo group update."""
+
     success: bool
-    old_promo_group_id: Optional[int] = None
-    new_promo_group_id: Optional[int] = None
-    promo_group_name: Optional[str] = None
+    old_promo_group_id: int | None = None
+    new_promo_group_id: int | None = None
+    promo_group_name: str | None = None
     message: str
 
 
 class DeleteUserRequest(BaseModel):
     """Request to delete user."""
-    soft_delete: bool = Field(default=True, description="Soft delete (mark as deleted) or hard delete")
-    reason: Optional[str] = Field(None, max_length=500, description="Reason for deletion")
+
+    soft_delete: bool = Field(default=True, description='Soft delete (mark as deleted) or hard delete')
+    reason: str | None = Field(None, max_length=500, description='Reason for deletion')
 
 
 class DeleteUserResponse(BaseModel):
     """Response after user deletion."""
+
     success: bool
     message: str
 
 
 # === Statistics ===
 
+
 class UsersStatsResponse(BaseModel):
     """Users statistics."""
+
     total_users: int = 0
     active_users: int = 0
     blocked_users: int = 0
@@ -315,20 +346,23 @@ class UsersStatsResponse(BaseModel):
 
 # === Search ===
 
+
 class UserSearchRequest(BaseModel):
     """Request for user search."""
+
     query: str = Field(..., min_length=1, max_length=255)
-    search_by: List[str] = Field(
-        default=["telegram_id", "username", "first_name", "last_name", "email"],
-        description="Fields to search in"
+    search_by: list[str] = Field(
+        default=['telegram_id', 'username', 'first_name', 'last_name', 'email'], description='Fields to search in'
     )
     limit: int = Field(default=20, ge=1, le=100)
 
 
 # === Tariffs for User ===
 
+
 class PeriodPriceInfo(BaseModel):
     """Period price info."""
+
     days: int
     price_kopeks: int
     price_rubles: float
@@ -336,9 +370,10 @@ class PeriodPriceInfo(BaseModel):
 
 class UserAvailableTariffItem(BaseModel):
     """Tariff available for user."""
+
     id: int
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     is_active: bool = True
     is_trial_available: bool = False
     traffic_limit_gb: int = 0
@@ -347,7 +382,7 @@ class UserAvailableTariffItem(BaseModel):
     display_order: int = 0
 
     # Pricing
-    period_prices: List[PeriodPriceInfo] = []
+    period_prices: list[PeriodPriceInfo] = []
     is_daily: bool = False
     daily_price_kopeks: int = 0
 
@@ -364,92 +399,102 @@ class UserAvailableTariffItem(BaseModel):
 
 class UserAvailableTariffsResponse(BaseModel):
     """List of tariffs available for user."""
+
     user_id: int
-    promo_group_id: Optional[int] = None
-    promo_group_name: Optional[str] = None
-    tariffs: List[UserAvailableTariffItem] = []
+    promo_group_id: int | None = None
+    promo_group_name: str | None = None
+    tariffs: list[UserAvailableTariffItem] = []
     total: int = 0
 
     # Current subscription tariff
-    current_tariff_id: Optional[int] = None
-    current_tariff_name: Optional[str] = None
+    current_tariff_id: int | None = None
+    current_tariff_name: str | None = None
 
 
 # === Panel Sync ===
 
+
 class PanelUserInfo(BaseModel):
     """User info from panel."""
-    uuid: Optional[str] = None
-    short_uuid: Optional[str] = None
-    username: Optional[str] = None
-    status: Optional[str] = None
-    expire_at: Optional[datetime] = None
+
+    uuid: str | None = None
+    short_uuid: str | None = None
+    username: str | None = None
+    status: str | None = None
+    expire_at: datetime | None = None
     traffic_limit_gb: float = 0
     traffic_used_gb: float = 0
     device_limit: int = 1
-    subscription_url: Optional[str] = None
-    active_squads: List[str] = []
+    subscription_url: str | None = None
+    active_squads: list[str] = []
 
 
 class SyncFromPanelRequest(BaseModel):
     """Request to sync user from panel."""
-    update_subscription: bool = Field(default=True, description="Update subscription data")
-    update_traffic: bool = Field(default=True, description="Update traffic usage")
-    create_if_missing: bool = Field(default=False, description="Create subscription if user exists in panel but not in bot")
+
+    update_subscription: bool = Field(default=True, description='Update subscription data')
+    update_traffic: bool = Field(default=True, description='Update traffic usage')
+    create_if_missing: bool = Field(
+        default=False, description='Create subscription if user exists in panel but not in bot'
+    )
 
 
 class SyncFromPanelResponse(BaseModel):
     """Response after syncing from panel."""
+
     success: bool
     message: str
-    panel_user: Optional[PanelUserInfo] = None
-    changes: Dict[str, Any] = {}
-    errors: List[str] = []
+    panel_user: PanelUserInfo | None = None
+    changes: dict[str, Any] = {}
+    errors: list[str] = []
 
 
 class SyncToPanelRequest(BaseModel):
     """Request to sync user to panel."""
-    create_if_missing: bool = Field(default=True, description="Create user in panel if not exists")
-    update_status: bool = Field(default=True, description="Update user status in panel")
-    update_traffic_limit: bool = Field(default=True, description="Update traffic limit in panel")
-    update_expire_date: bool = Field(default=True, description="Update expire date in panel")
-    update_squads: bool = Field(default=True, description="Update connected squads in panel")
+
+    create_if_missing: bool = Field(default=True, description='Create user in panel if not exists')
+    update_status: bool = Field(default=True, description='Update user status in panel')
+    update_traffic_limit: bool = Field(default=True, description='Update traffic limit in panel')
+    update_expire_date: bool = Field(default=True, description='Update expire date in panel')
+    update_squads: bool = Field(default=True, description='Update connected squads in panel')
 
 
 class SyncToPanelResponse(BaseModel):
     """Response after syncing to panel."""
+
     success: bool
     message: str
-    action: str = ""  # created, updated, no_changes
-    panel_uuid: Optional[str] = None
-    changes: Dict[str, Any] = {}
-    errors: List[str] = []
+    action: str = ''  # created, updated, no_changes
+    panel_uuid: str | None = None
+    changes: dict[str, Any] = {}
+    errors: list[str] = []
 
 
 class PanelSyncStatusResponse(BaseModel):
     """Panel sync status for user."""
+
     user_id: int
-    telegram_id: int
-    remnawave_uuid: Optional[str] = None
-    last_sync: Optional[datetime] = None
+    telegram_id: int | None = None
+    remnawave_uuid: str | None = None
+    last_sync: datetime | None = None
 
     # Bot data
-    bot_subscription_status: Optional[str] = None
-    bot_subscription_end_date: Optional[datetime] = None
+    bot_subscription_status: str | None = None
+    bot_subscription_end_date: datetime | None = None
     bot_traffic_limit_gb: int = 0
     bot_traffic_used_gb: float = 0
     bot_device_limit: int = 0
-    bot_squads: List[str] = []
+    bot_squads: list[str] = []
 
     # Panel data (if available)
     panel_found: bool = False
-    panel_status: Optional[str] = None
-    panel_expire_at: Optional[datetime] = None
+    panel_status: str | None = None
+    panel_expire_at: datetime | None = None
     panel_traffic_limit_gb: float = 0
     panel_traffic_used_gb: float = 0
     panel_device_limit: int = 0
-    panel_squads: List[str] = []
+    panel_squads: list[str] = []
 
     # Differences
     has_differences: bool = False
-    differences: List[str] = []
+    differences: list[str] = []

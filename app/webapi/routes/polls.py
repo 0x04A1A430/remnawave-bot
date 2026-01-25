@@ -40,12 +40,13 @@ from ..schemas.polls import (
     PollQuestionResponse,
     PollQuestionStats,
     PollResponsesListResponse,
+    PollSendRequest,
+    PollSendResponse,
     PollStatisticsResponse,
     PollSummaryResponse,
     PollUserResponse,
-    PollSendRequest,
-    PollSendResponse,
 )
+
 
 router = APIRouter()
 
@@ -63,10 +64,7 @@ def _serialize_option(option: PollOption) -> PollQuestionOptionResponse:
 
 
 def _serialize_question(question: PollQuestion) -> PollQuestionResponse:
-    options = [
-        _serialize_option(option)
-        for option in sorted(question.options, key=lambda item: item.order)
-    ]
+    options = [_serialize_option(option) for option in sorted(question.options, key=lambda item: item.order)]
     return PollQuestionResponse(
         id=question.id,
         text=question.text,
@@ -79,9 +77,9 @@ def _serialize_poll_summary(
     poll: Poll,
     responses_count: int | None = None,
 ) -> PollSummaryResponse:
-    questions = getattr(poll, "questions", [])
+    questions = getattr(poll, 'questions', [])
     if responses_count is None:
-        responses = getattr(poll, "responses", [])
+        responses = getattr(poll, 'responses', [])
         responses_count = len(responses)
     return PollSummaryResponse(
         id=poll.id,
@@ -98,10 +96,7 @@ def _serialize_poll_summary(
 
 
 def _serialize_poll_detail(poll: Poll) -> PollDetailResponse:
-    questions = [
-        _serialize_question(question)
-        for question in sorted(poll.questions, key=lambda item: item.order)
-    ]
+    questions = [_serialize_question(question) for question in sorted(poll.questions, key=lambda item: item.order)]
     return PollDetailResponse(
         id=poll.id,
         title=poll.title,
@@ -116,8 +111,8 @@ def _serialize_poll_detail(poll: Poll) -> PollDetailResponse:
 
 
 def _serialize_answer(answer: PollAnswer) -> PollAnswerResponse:
-    question = getattr(answer, "question", None)
-    option = getattr(answer, "option", None)
+    question = getattr(answer, 'question', None)
+    option = getattr(answer, 'option', None)
     return PollAnswerResponse(
         question_id=question.id if question else answer.question_id,
         question_text=question.text if question else None,
@@ -128,16 +123,13 @@ def _serialize_answer(answer: PollAnswer) -> PollAnswerResponse:
 
 
 def _serialize_user_response(response: PollResponse) -> PollUserResponse:
-    user = getattr(response, "user", None)
-    answers = [
-        _serialize_answer(answer)
-        for answer in sorted(response.answers, key=lambda item: item.created_at)
-    ]
+    user = getattr(response, 'user', None)
+    answers = [_serialize_answer(answer) for answer in sorted(response.answers, key=lambda item: item.created_at)]
     return PollUserResponse(
         id=response.id,
-        user_id=getattr(user, "id", None),
-        user_telegram_id=getattr(user, "telegram_id", None),
-        user_username=getattr(user, "username", None),
+        user_id=getattr(user, 'id', None),
+        user_telegram_id=getattr(user, 'telegram_id', None),
+        user_username=getattr(user, 'username', None),
         sent_at=response.sent_at,
         started_at=response.started_at,
         completed_at=response.completed_at,
@@ -148,7 +140,7 @@ def _serialize_user_response(response: PollResponse) -> PollUserResponse:
     )
 
 
-@router.get("", response_model=PollListResponse)
+@router.get('', response_model=PollListResponse)
 async def list_polls(
     _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
@@ -162,11 +154,7 @@ async def list_polls(
         return PollListResponse(items=[], total=0, limit=limit, offset=offset)
 
     result = await db.execute(
-        select(Poll)
-        .options(selectinload(Poll.questions))
-        .order_by(Poll.created_at.desc())
-        .offset(offset)
-        .limit(limit)
+        select(Poll).options(selectinload(Poll.questions)).order_by(Poll.created_at.desc()).offset(offset).limit(limit)
     )
     polls = result.scalars().unique().all()
 
@@ -182,19 +170,14 @@ async def list_polls(
     responses_counts = {poll_id: count for poll_id, count in counts_result.all()}
 
     return PollListResponse(
-        items=[
-            _serialize_poll_summary(
-                poll, responses_counts.get(poll.id, 0)
-            )
-            for poll in polls
-        ],
+        items=[_serialize_poll_summary(poll, responses_counts.get(poll.id, 0)) for poll in polls],
         total=total,
         limit=limit,
         offset=offset,
     )
 
 
-@router.get("/{poll_id}", response_model=PollDetailResponse)
+@router.get('/{poll_id}', response_model=PollDetailResponse)
 async def get_poll(
     poll_id: int,
     _: Any = Security(require_api_token),
@@ -202,12 +185,12 @@ async def get_poll(
 ) -> PollDetailResponse:
     poll = await get_poll_by_id(db, poll_id)
     if not poll:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Poll not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Poll not found')
 
     return _serialize_poll_detail(poll)
 
 
-@router.post("", response_model=PollDetailResponse, status_code=status.HTTP_201_CREATED)
+@router.post('', response_model=PollDetailResponse, status_code=status.HTTP_201_CREATED)
 async def create_poll_endpoint(
     payload: PollCreateRequest,
     _: Any = Security(require_api_token),
@@ -222,8 +205,8 @@ async def create_poll_endpoint(
         created_by=None,
         questions=[
             {
-                "text": question.text,
-                "options": [option.text for option in question.options],
+                'text': question.text,
+                'options': [option.text for option in question.options],
             }
             for question in payload.questions
         ],
@@ -233,7 +216,7 @@ async def create_poll_endpoint(
     return _serialize_poll_detail(poll)
 
 
-@router.delete("/{poll_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete('/{poll_id}', status_code=status.HTTP_204_NO_CONTENT)
 async def delete_poll(
     poll_id: int,
     _: Any = Security(require_api_token),
@@ -241,12 +224,12 @@ async def delete_poll(
 ) -> Response:
     success = await delete_poll_record(db, poll_id)
     if not success:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Poll not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Poll not found')
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.get("/{poll_id}/stats", response_model=PollStatisticsResponse)
+@router.get('/{poll_id}/stats', response_model=PollStatisticsResponse)
 async def get_poll_stats(
     poll_id: int,
     _: Any = Security(require_api_token),
@@ -254,39 +237,39 @@ async def get_poll_stats(
 ) -> PollStatisticsResponse:
     poll = await db.get(Poll, poll_id)
     if not poll:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Poll not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Poll not found')
 
     stats = await get_poll_statistics(db, poll_id)
 
     formatted_questions = [
         PollQuestionStats(
-            id=question_data["id"],
-            text=question_data["text"],
-            order=question_data["order"],
+            id=question_data['id'],
+            text=question_data['text'],
+            order=question_data['order'],
             options=[
                 PollOptionStats(
-                    id=option_data["id"],
-                    text=option_data["text"],
-                    count=option_data["count"],
+                    id=option_data['id'],
+                    text=option_data['text'],
+                    count=option_data['count'],
                 )
-                for option_data in question_data.get("options", [])
+                for option_data in question_data.get('options', [])
             ],
         )
-        for question_data in stats.get("questions", [])
+        for question_data in stats.get('questions', [])
     ]
 
     return PollStatisticsResponse(
         poll_id=poll.id,
         poll_title=poll.title,
-        total_responses=stats.get("total_responses", 0),
-        completed_responses=stats.get("completed_responses", 0),
-        reward_sum_kopeks=stats.get("reward_sum_kopeks", 0),
-        reward_sum_rubles=_format_price(stats.get("reward_sum_kopeks", 0)),
+        total_responses=stats.get('total_responses', 0),
+        completed_responses=stats.get('completed_responses', 0),
+        reward_sum_kopeks=stats.get('reward_sum_kopeks', 0),
+        reward_sum_rubles=_format_price(stats.get('reward_sum_kopeks', 0)),
         questions=formatted_questions,
     )
 
 
-@router.get("/{poll_id}/responses", response_model=PollResponsesListResponse)
+@router.get('/{poll_id}/responses', response_model=PollResponsesListResponse)
 async def get_poll_responses(
     poll_id: int,
     _: Any = Security(require_api_token),
@@ -296,7 +279,7 @@ async def get_poll_responses(
 ) -> PollResponsesListResponse:
     poll_exists = await db.get(Poll, poll_id)
     if not poll_exists:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Poll not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Poll not found')
 
     responses, total = await get_poll_responses_with_answers(
         db,
@@ -315,7 +298,7 @@ async def get_poll_responses(
     )
 
 
-@router.post("/{poll_id}/send", response_model=PollSendResponse)
+@router.post('/{poll_id}/send', response_model=PollSendResponse)
 async def send_poll(
     poll_id: int,
     payload: PollSendRequest,
@@ -324,14 +307,14 @@ async def send_poll(
 ) -> PollSendResponse:
     poll = await get_poll_by_id(db, poll_id)
     if not poll:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Poll not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Poll not found')
 
     target = payload.target.strip()
     if not target:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Target must not be empty")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Target must not be empty')
 
-    if target.startswith("custom_"):
-        users = await get_custom_users(db, target.replace("custom_", ""))
+    if target.startswith('custom_'):
+        users = await get_custom_users(db, target.replace('custom_', ''))
     else:
         users = await get_target_users(db, target)
 
@@ -360,8 +343,8 @@ async def send_poll(
     return PollSendResponse(
         poll_id=poll_id,
         target=target,
-        sent=result.get("sent", 0),
-        failed=result.get("failed", 0),
-        skipped=result.get("skipped", 0),
-        total=result.get("total", 0),
+        sent=result.get('sent', 0),
+        failed=result.get('failed', 0),
+        skipped=result.get('skipped', 0),
+        total=result.get('total', 0),
     )

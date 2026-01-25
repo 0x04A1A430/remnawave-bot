@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Optional, Sequence
+from collections.abc import Sequence
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,8 +20,8 @@ async def count_main_menu_buttons(db: AsyncSession) -> int:
 async def get_main_menu_buttons(
     db: AsyncSession,
     *,
-    limit: Optional[int] = None,
-    offset: Optional[int] = None,
+    limit: int | None = None,
+    offset: int | None = None,
 ) -> list[MainMenuButton]:
     stmt = select(MainMenuButton).order_by(
         MainMenuButton.display_order.asc(),
@@ -37,12 +37,8 @@ async def get_main_menu_buttons(
     return list(result.scalars().all())
 
 
-async def get_main_menu_button_by_id(
-    db: AsyncSession, button_id: int
-) -> MainMenuButton | None:
-    result = await db.execute(
-        select(MainMenuButton).where(MainMenuButton.id == button_id)
-    )
+async def get_main_menu_button_by_id(db: AsyncSession, button_id: int) -> MainMenuButton | None:
+    result = await db.execute(select(MainMenuButton).where(MainMenuButton.id == button_id))
     return result.scalar_one_or_none()
 
 
@@ -68,7 +64,7 @@ async def create_main_menu_button(
     action_value: str,
     visibility: MainMenuButtonVisibility | str = MainMenuButtonVisibility.ALL,
     is_active: bool = True,
-    display_order: Optional[int] = None,
+    display_order: int | None = None,
 ) -> MainMenuButton:
     if display_order is None:
         display_order = await get_next_display_order(db)
@@ -77,8 +73,7 @@ async def create_main_menu_button(
         text=text,
         action_type=_enum_value(action_type, MainMenuButtonActionType),
         action_value=action_value,
-        visibility=_enum_value(visibility, MainMenuButtonVisibility)
-        or MainMenuButtonVisibility.ALL.value,
+        visibility=_enum_value(visibility, MainMenuButtonVisibility) or MainMenuButtonVisibility.ALL.value,
         is_active=bool(is_active),
         display_order=int(display_order),
     )
@@ -93,12 +88,12 @@ async def update_main_menu_button(
     db: AsyncSession,
     button: MainMenuButton,
     *,
-    text: Optional[str] = None,
+    text: str | None = None,
     action_type: MainMenuButtonActionType | str | None = None,
-    action_value: Optional[str] = None,
+    action_value: str | None = None,
     visibility: MainMenuButtonVisibility | str | None = None,
-    is_active: Optional[bool] = None,
-    display_order: Optional[int] = None,
+    is_active: bool | None = None,
+    display_order: int | None = None,
 ) -> MainMenuButton:
     if text is not None:
         button.text = text
@@ -132,9 +127,7 @@ async def reorder_main_menu_buttons(
 
     order_map = {int(button_id): index for index, button_id in enumerate(ordered_ids)}
 
-    result = await db.execute(
-        select(MainMenuButton).where(MainMenuButton.id.in_(order_map.keys()))
-    )
+    result = await db.execute(select(MainMenuButton).where(MainMenuButton.id.in_(order_map.keys())))
     buttons = result.scalars().all()
 
     for button in buttons:

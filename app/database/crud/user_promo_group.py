@@ -1,13 +1,14 @@
 """CRUD операции для связи пользователей с промогруппами (Many-to-Many)."""
+
 import logging
 from datetime import datetime
-from typing import List, Optional
 
-from sqlalchemy import select, and_, desc
+from sqlalchemy import and_, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.database.models import UserPromoGroup, PromoGroup, User
+from app.database.models import PromoGroup, User, UserPromoGroup
+
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +40,7 @@ async def _sync_user_primary_promo_group(
 
     except Exception as error:
         logger.error(
-            "Ошибка синхронизации primary промогруппы пользователя %s: %s",
+            'Ошибка синхронизации primary промогруппы пользователя %s: %s',
             user_id,
             error,
         )
@@ -55,11 +56,8 @@ async def sync_user_primary_promo_group(
 
 
 async def add_user_to_promo_group(
-    db: AsyncSession,
-    user_id: int,
-    promo_group_id: int,
-    assigned_by: str = "admin"
-) -> Optional[UserPromoGroup]:
+    db: AsyncSession, user_id: int, promo_group_id: int, assigned_by: str = 'admin'
+) -> UserPromoGroup | None:
     """
     Добавляет пользователю промогруппу.
 
@@ -76,7 +74,7 @@ async def add_user_to_promo_group(
         # Проверяем существование связи
         existing = await has_user_promo_group(db, user_id, promo_group_id)
         if existing:
-            logger.info(f"Пользователь {user_id} уже имеет промогруппу {promo_group_id}")
+            logger.info(f'Пользователь {user_id} уже имеет промогруппу {promo_group_id}')
             return None
 
         # Создаем новую связь
@@ -93,20 +91,16 @@ async def add_user_to_promo_group(
         await db.commit()
         await db.refresh(user_promo_group)
 
-        logger.info(f"Пользователю {user_id} добавлена промогруппа {promo_group_id} ({assigned_by})")
+        logger.info(f'Пользователю {user_id} добавлена промогруппа {promo_group_id} ({assigned_by})')
         return user_promo_group
 
     except Exception as error:
-        logger.error(f"Ошибка добавления промогруппы пользователю: {error}")
+        logger.error(f'Ошибка добавления промогруппы пользователю: {error}')
         await db.rollback()
         return None
 
 
-async def remove_user_from_promo_group(
-    db: AsyncSession,
-    user_id: int,
-    promo_group_id: int
-) -> bool:
+async def remove_user_from_promo_group(db: AsyncSession, user_id: int, promo_group_id: int) -> bool:
     """
     Удаляет промогруппу у пользователя.
 
@@ -121,16 +115,13 @@ async def remove_user_from_promo_group(
     try:
         result = await db.execute(
             select(UserPromoGroup).where(
-                and_(
-                    UserPromoGroup.user_id == user_id,
-                    UserPromoGroup.promo_group_id == promo_group_id
-                )
+                and_(UserPromoGroup.user_id == user_id, UserPromoGroup.promo_group_id == promo_group_id)
             )
         )
         user_promo_group = result.scalar_one_or_none()
 
         if not user_promo_group:
-            logger.warning(f"Связь пользователя {user_id} с промогруппой {promo_group_id} не найдена")
+            logger.warning(f'Связь пользователя {user_id} с промогруппой {promo_group_id} не найдена')
             return False
 
         await db.delete(user_promo_group)
@@ -140,19 +131,16 @@ async def remove_user_from_promo_group(
 
         await db.commit()
 
-        logger.info(f"У пользователя {user_id} удалена промогруппа {promo_group_id}")
+        logger.info(f'У пользователя {user_id} удалена промогруппа {promo_group_id}')
         return True
 
     except Exception as error:
-        logger.error(f"Ошибка удаления промогруппы у пользователя: {error}")
+        logger.error(f'Ошибка удаления промогруппы у пользователя: {error}')
         await db.rollback()
         return False
 
 
-async def get_user_promo_groups(
-    db: AsyncSession,
-    user_id: int
-) -> List[UserPromoGroup]:
+async def get_user_promo_groups(db: AsyncSession, user_id: int) -> list[UserPromoGroup]:
     """
     Получает все промогруппы пользователя, отсортированные по приоритету.
 
@@ -174,14 +162,11 @@ async def get_user_promo_groups(
         return list(result.scalars().all())
 
     except Exception as error:
-        logger.error(f"Ошибка получения промогрупп пользователя {user_id}: {error}")
+        logger.error(f'Ошибка получения промогрупп пользователя {user_id}: {error}')
         return []
 
 
-async def get_primary_user_promo_group(
-    db: AsyncSession,
-    user_id: int
-) -> Optional[PromoGroup]:
+async def get_primary_user_promo_group(db: AsyncSession, user_id: int) -> PromoGroup | None:
     """
     Получает промогруппу пользователя с максимальным приоритетом.
 
@@ -202,15 +187,11 @@ async def get_primary_user_promo_group(
         return user_promo_groups[0].promo_group if user_promo_groups[0].promo_group else None
 
     except Exception as error:
-        logger.error(f"Ошибка получения primary промогруппы пользователя {user_id}: {error}")
+        logger.error(f'Ошибка получения primary промогруппы пользователя {user_id}: {error}')
         return None
 
 
-async def has_user_promo_group(
-    db: AsyncSession,
-    user_id: int,
-    promo_group_id: int
-) -> bool:
+async def has_user_promo_group(db: AsyncSession, user_id: int, promo_group_id: int) -> bool:
     """
     Проверяет наличие промогруппы у пользователя.
 
@@ -225,23 +206,17 @@ async def has_user_promo_group(
     try:
         result = await db.execute(
             select(UserPromoGroup).where(
-                and_(
-                    UserPromoGroup.user_id == user_id,
-                    UserPromoGroup.promo_group_id == promo_group_id
-                )
+                and_(UserPromoGroup.user_id == user_id, UserPromoGroup.promo_group_id == promo_group_id)
             )
         )
         return result.scalar_one_or_none() is not None
 
     except Exception as error:
-        logger.error(f"Ошибка проверки промогруппы пользователя: {error}")
+        logger.error(f'Ошибка проверки промогруппы пользователя: {error}')
         return False
 
 
-async def count_user_promo_groups(
-    db: AsyncSession,
-    user_id: int
-) -> int:
+async def count_user_promo_groups(db: AsyncSession, user_id: int) -> int:
     """
     Подсчитывает количество промогрупп у пользователя.
 
@@ -253,21 +228,16 @@ async def count_user_promo_groups(
         Количество промогрупп
     """
     try:
-        result = await db.execute(
-            select(UserPromoGroup).where(UserPromoGroup.user_id == user_id)
-        )
+        result = await db.execute(select(UserPromoGroup).where(UserPromoGroup.user_id == user_id))
         return len(list(result.scalars().all()))
 
     except Exception as error:
-        logger.error(f"Ошибка подсчета промогрупп пользователя: {error}")
+        logger.error(f'Ошибка подсчета промогрупп пользователя: {error}')
         return 0
 
 
 async def replace_user_promo_groups(
-    db: AsyncSession,
-    user_id: int,
-    promo_group_ids: List[int],
-    assigned_by: str = "admin"
+    db: AsyncSession, user_id: int, promo_group_ids: list[int], assigned_by: str = 'admin'
 ) -> bool:
     """
     Заменяет все промогруппы пользователя на новый список.
@@ -283,29 +253,21 @@ async def replace_user_promo_groups(
     """
     try:
         # Удаляем все текущие промогруппы
-        await db.execute(
-            select(UserPromoGroup).where(UserPromoGroup.user_id == user_id)
-        )
-        result = await db.execute(
-            select(UserPromoGroup).where(UserPromoGroup.user_id == user_id)
-        )
+        await db.execute(select(UserPromoGroup).where(UserPromoGroup.user_id == user_id))
+        result = await db.execute(select(UserPromoGroup).where(UserPromoGroup.user_id == user_id))
         for upg in result.scalars().all():
             await db.delete(upg)
 
         # Добавляем новые
         for promo_group_id in promo_group_ids:
-            user_promo_group = UserPromoGroup(
-                user_id=user_id,
-                promo_group_id=promo_group_id,
-                assigned_by=assigned_by
-            )
+            user_promo_group = UserPromoGroup(user_id=user_id, promo_group_id=promo_group_id, assigned_by=assigned_by)
             db.add(user_promo_group)
 
         await db.commit()
-        logger.info(f"Промогруппы пользователя {user_id} заменены на {promo_group_ids}")
+        logger.info(f'Промогруппы пользователя {user_id} заменены на {promo_group_ids}')
         return True
 
     except Exception as error:
-        logger.error(f"Ошибка замены промогрупп пользователя: {error}")
+        logger.error(f'Ошибка замены промогрупп пользователя: {error}')
         await db.rollback()
         return False

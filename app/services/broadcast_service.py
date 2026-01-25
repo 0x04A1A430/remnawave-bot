@@ -4,7 +4,6 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
 
 from aiogram import Bot
 from aiogram.types import InlineKeyboardMarkup
@@ -22,7 +21,7 @@ from app.handlers.admin.messages import (
 logger = logging.getLogger(__name__)
 
 
-VALID_MEDIA_TYPES = {"photo", "video", "document"}
+VALID_MEDIA_TYPES = {'photo', 'video', 'document'}
 LARGE_BROADCAST_THRESHOLD = 20_000
 PROGRESS_UPDATE_STEP = 5_000
 
@@ -31,7 +30,7 @@ PROGRESS_UPDATE_STEP = 5_000
 class BroadcastMediaConfig:
     type: str
     file_id: str
-    caption: Optional[str] = None
+    caption: str | None = None
 
 
 @dataclass(slots=True)
@@ -39,8 +38,8 @@ class BroadcastConfig:
     target: str
     message_text: str
     selected_buttons: list[str]
-    media: Optional[BroadcastMediaConfig] = None
-    initiator_name: Optional[str] = None
+    media: BroadcastMediaConfig | None = None
+    initiator_name: str | None = None
 
 
 @dataclass(slots=True)
@@ -53,7 +52,7 @@ class BroadcastService:
     """Handles broadcast execution triggered from the admin web API."""
 
     def __init__(self) -> None:
-        self._bot: Optional[Bot] = None
+        self._bot: Bot | None = None
         self._tasks: dict[int, _BroadcastTask] = {}
         self._lock = asyncio.Lock()
 
@@ -66,7 +65,7 @@ class BroadcastService:
 
     async def start_broadcast(self, broadcast_id: int, config: BroadcastConfig) -> None:
         if self._bot is None:
-            logger.error("Невозможно запустить рассылку %s: бот не инициализирован", broadcast_id)
+            logger.error('Невозможно запустить рассылку %s: бот не инициализирован', broadcast_id)
             await self._mark_failed(broadcast_id)
             return
 
@@ -74,12 +73,12 @@ class BroadcastService:
 
         async with self._lock:
             if broadcast_id in self._tasks and not self._tasks[broadcast_id].task.done():
-                logger.warning("Рассылка %s уже запущена", broadcast_id)
+                logger.warning('Рассылка %s уже запущена', broadcast_id)
                 return
 
             task = asyncio.create_task(
                 self._run_broadcast(broadcast_id, config, cancel_event),
-                name=f"broadcast-{broadcast_id}",
+                name=f'broadcast-{broadcast_id}',
             )
             self._tasks[broadcast_id] = _BroadcastTask(task=task, cancel_event=cancel_event)
             task.add_done_callback(lambda _: self._tasks.pop(broadcast_id, None))
@@ -110,10 +109,10 @@ class BroadcastService:
             async with AsyncSessionLocal() as session:
                 broadcast = await session.get(BroadcastHistory, broadcast_id)
                 if not broadcast:
-                    logger.error("Запись рассылки %s не найдена в БД", broadcast_id)
+                    logger.error('Запись рассылки %s не найдена в БД', broadcast_id)
                     return
 
-                broadcast.status = "in_progress"
+                broadcast.status = 'in_progress'
                 broadcast.sent_count = 0
                 broadcast.failed_count = 0
                 await session.commit()
@@ -123,7 +122,7 @@ class BroadcastService:
             async with AsyncSessionLocal() as session:
                 broadcast = await session.get(BroadcastHistory, broadcast_id)
                 if not broadcast:
-                    logger.error("Запись рассылки %s удалена до запуска", broadcast_id)
+                    logger.error('Запись рассылки %s удалена до запуска', broadcast_id)
                     return
 
                 broadcast.total_count = len(recipients)
@@ -134,16 +133,14 @@ class BroadcastService:
                 return
 
             if not recipients:
-                logger.info("Рассылка %s: получатели не найдены", broadcast_id)
+                logger.info('Рассылка %s: получатели не найдены', broadcast_id)
                 await self._mark_finished(broadcast_id, sent_count, failed_count, cancelled=False)
                 return
 
             keyboard = self._build_keyboard(config.selected_buttons)
 
             if len(recipients) > LARGE_BROADCAST_THRESHOLD:
-                logger.info(
-                    "Запускаем стабильный режим рассылки для %s получателей", len(recipients)
-                )
+                logger.info('Запускаем стабильный режим рассылки для %s получателей', len(recipients))
                 (
                     sent_count,
                     failed_count,
@@ -170,14 +167,14 @@ class BroadcastService:
 
             if cancelled_during_run:
                 logger.info(
-                    "Рассылка %s была отменена во время выполнения, финальный статус уже установлен",
+                    'Рассылка %s была отменена во время выполнения, финальный статус уже установлен',
                     broadcast_id,
                 )
                 return
 
             if cancel_event.is_set():
                 logger.info(
-                    "Запрос на отмену рассылки %s пришел после завершения отправки, фиксируем итоговый статус",
+                    'Запрос на отмену рассылки %s пришел после завершения отправки, фиксируем итоговый статус',
                     broadcast_id,
                 )
 
@@ -191,14 +188,14 @@ class BroadcastService:
         except asyncio.CancelledError:
             await self._mark_cancelled(broadcast_id, sent_count, failed_count)
             raise
-        except Exception as exc:  # noqa: BLE001
-            logger.exception("Критическая ошибка при выполнении рассылки %s: %s", broadcast_id, exc)
+        except Exception as exc:
+            logger.exception('Критическая ошибка при выполнении рассылки %s: %s', broadcast_id, exc)
             await self._mark_failed(broadcast_id, sent_count, failed_count)
 
     async def _fetch_recipients(self, target: str):
         async with AsyncSessionLocal() as session:
-            if target.startswith("custom_"):
-                criteria = target[len("custom_"):]
+            if target.startswith('custom_'):
+                criteria = target[len('custom_') :]
                 return await get_custom_users(session, criteria)
             return await get_target_users(session, target)
 
@@ -207,7 +204,7 @@ class BroadcastService:
         broadcast_id: int,
         recipients: list,
         config: BroadcastConfig,
-        keyboard: Optional[InlineKeyboardMarkup],
+        keyboard: InlineKeyboardMarkup | None,
         cancel_event: asyncio.Event,
     ) -> tuple[int, int, bool]:
         """Базовый режим рассылки для небольших списков."""
@@ -224,16 +221,17 @@ class BroadcastService:
                 if cancel_event.is_set():
                     return False
 
-                telegram_id = getattr(user, "telegram_id", None)
+                telegram_id = getattr(user, 'telegram_id', None)
                 if telegram_id is None:
-                    return False
+                    # Email-пользователи без telegram_id - пропускаем (не считаем ошибкой)
+                    return None
 
                 try:
                     await self._deliver_message(telegram_id, config, keyboard)
                     return True
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     logger.error(
-                        "Ошибка отправки рассылки %s пользователю %s: %s",
+                        'Ошибка отправки рассылки %s пользователю %s: %s',
                         broadcast_id,
                         telegram_id,
                         exc,
@@ -242,18 +240,22 @@ class BroadcastService:
 
         # Отправляем сообщения пакетами для эффективности
         batch_size = 100
+        skipped_count = 0
         for i in range(0, len(recipients), batch_size):
             if cancel_event.is_set():
                 await self._mark_cancelled(broadcast_id, sent_count, failed_count)
                 return sent_count, failed_count, True
 
-            batch = recipients[i:i + batch_size]
+            batch = recipients[i : i + batch_size]
             tasks = [send_single_message(user) for user in batch]
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
             for result in results:
                 if result is True:
                     sent_count += 1
+                elif result is None:
+                    # Email-пользователи - пропускаем без ошибки
+                    skipped_count += 1
                 else:
                     failed_count += 1
 
@@ -267,7 +269,7 @@ class BroadcastService:
         broadcast_id: int,
         recipients: list,
         config: BroadcastConfig,
-        keyboard: Optional[InlineKeyboardMarkup],
+        keyboard: InlineKeyboardMarkup | None,
         cancel_event: asyncio.Event,
     ) -> tuple[int, int, bool]:
         """Режим рассылки с периодическим обновлением статуса для больших списков."""
@@ -283,16 +285,17 @@ class BroadcastService:
                 if cancel_event.is_set():
                     return False
 
-                telegram_id = getattr(user, "telegram_id", None)
+                telegram_id = getattr(user, 'telegram_id', None)
                 if telegram_id is None:
-                    return False
+                    # Email-пользователи без telegram_id - пропускаем (не считаем ошибкой)
+                    return None
 
                 try:
                     await self._deliver_message(telegram_id, config, keyboard)
                     return True
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     logger.error(
-                        "Ошибка отправки рассылки %s пользователю %s: %s",
+                        'Ошибка отправки рассылки %s пользователю %s: %s',
                         broadcast_id,
                         telegram_id,
                         exc,
@@ -305,13 +308,16 @@ class BroadcastService:
                 await self._mark_cancelled(broadcast_id, sent_count, failed_count)
                 return sent_count, failed_count, True
 
-            batch = recipients[i:i + batch_size]
+            batch = recipients[i : i + batch_size]
             tasks = [send_single_message(user) for user in batch]
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
             for result in results:
                 if result is True:
                     sent_count += 1
+                elif result is None:
+                    # Email-пользователи - пропускаем без ошибки
+                    pass
                 else:
                     failed_count += 1
 
@@ -323,7 +329,7 @@ class BroadcastService:
 
         return sent_count, failed_count, False
 
-    def _build_keyboard(self, selected_buttons: Optional[list[str]]) -> Optional[InlineKeyboardMarkup]:
+    def _build_keyboard(self, selected_buttons: list[str] | None) -> InlineKeyboardMarkup | None:
         if selected_buttons is None:
             selected_buttons = []
         return create_broadcast_keyboard(selected_buttons)
@@ -332,28 +338,28 @@ class BroadcastService:
         self,
         telegram_id: int,
         config: BroadcastConfig,
-        keyboard: Optional[InlineKeyboardMarkup],
+        keyboard: InlineKeyboardMarkup | None,
     ) -> None:
         if not self._bot:
-            raise RuntimeError("Телеграм-бот не инициализирован")
+            raise RuntimeError('Телеграм-бот не инициализирован')
 
         if config.media and config.media.type in VALID_MEDIA_TYPES:
             caption = config.media.caption or config.message_text
-            if config.media.type == "photo":
+            if config.media.type == 'photo':
                 await self._bot.send_photo(
                     chat_id=telegram_id,
                     photo=config.media.file_id,
                     caption=caption,
                     reply_markup=keyboard,
                 )
-            elif config.media.type == "video":
+            elif config.media.type == 'video':
                 await self._bot.send_video(
                     chat_id=telegram_id,
                     video=config.media.file_id,
                     caption=caption,
                     reply_markup=keyboard,
                 )
-            elif config.media.type == "document":
+            elif config.media.type == 'document':
                 await self._bot.send_document(
                     chat_id=telegram_id,
                     document=config.media.file_id,
@@ -380,9 +386,7 @@ class BroadcastService:
             broadcast_id,
             sent_count,
             failed_count,
-            status="cancelled" if cancelled else (
-                "completed" if failed_count == 0 else "partial"
-            ),
+            status='cancelled' if cancelled else ('completed' if failed_count == 0 else 'partial'),
         )
 
     async def _mark_cancelled(
@@ -408,7 +412,7 @@ class BroadcastService:
             broadcast_id,
             sent_count,
             failed_count,
-            status="failed",
+            status='failed',
         )
 
     async def _update_progress(
@@ -423,7 +427,7 @@ class BroadcastService:
             broadcast_id,
             sent_count,
             failed_count,
-            status="in_progress",
+            status='in_progress',
             update_completed_at=False,
         )
 
@@ -457,18 +461,15 @@ class BroadcastService:
             except InterfaceError as exc:
                 attempts += 1
                 logger.warning(
-                    "Проблемы с соединением при обновлении статуса рассылки %s: %s. Повтор %s/2",
+                    'Проблемы с соединением при обновлении статуса рассылки %s: %s. Повтор %s/2',
                     broadcast_id,
                     exc,
                     attempts,
                 )
                 await asyncio.sleep(0.2)
             except SQLAlchemyError:
-                logger.exception(
-                    "Не удалось обновить статус рассылки %s", broadcast_id
-                )
+                logger.exception('Не удалось обновить статус рассылки %s', broadcast_id)
                 return
 
 
 broadcast_service = BroadcastService()
-

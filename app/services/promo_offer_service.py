@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Sequence, Tuple
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.database.crud.promo_offer_log import log_promo_offer_action
 from app.database.models import (
     DiscountOffer,
     Subscription,
@@ -15,7 +16,7 @@ from app.database.models import (
     User,
 )
 from app.services.subscription_service import SubscriptionService
-from app.database.crud.promo_offer_log import log_promo_offer_action
+
 
 logger = logging.getLogger(__name__)
 
@@ -29,13 +30,13 @@ class PromoOfferService:
         db: AsyncSession,
         user: User,
         offer: DiscountOffer,
-    ) -> Tuple[bool, Optional[List[str]], Optional[datetime], str]:
-        subscription = getattr(user, "subscription", None)
+    ) -> tuple[bool, list[str] | None, datetime | None, str]:
+        subscription = getattr(user, 'subscription', None)
         if not subscription:
-            return False, None, None, "subscription_missing"
+            return False, None, None, 'subscription_missing'
 
         payload = offer.extra_data or {}
-        raw_squads = payload.get("test_squad_uuids") or payload.get("squads") or []
+        raw_squads = payload.get('test_squad_uuids') or payload.get('squads') or []
         if isinstance(raw_squads, str):
             candidates = [raw_squads]
         else:
@@ -46,16 +47,16 @@ class PromoOfferService:
 
         squad_uuids: Sequence[str] = [str(item) for item in candidates if item]
         if not squad_uuids:
-            return False, None, None, "squads_missing"
+            return False, None, None, 'squads_missing'
 
         squad_uuids = list(dict.fromkeys(squad_uuids))
 
         connected = {str(item) for item in subscription.connected_squads or []}
         if squad_uuids and set(squad_uuids).issubset(connected):
-            return False, None, None, "already_connected"
+            return False, None, None, 'already_connected'
 
         try:
-            duration_hours = int(payload.get("test_duration_hours") or payload.get("duration_hours") or 24)
+            duration_hours = int(payload.get('test_duration_hours') or payload.get('duration_hours') or 24)
         except (TypeError, ValueError):
             duration_hours = 24
 
@@ -66,7 +67,7 @@ class PromoOfferService:
         expires_at = now + timedelta(hours=duration_hours)
 
         original_connected = set(connected)
-        newly_added: List[str] = []
+        newly_added: list[str] = []
         changes_made = False
 
         for squad_uuid in squad_uuids:
@@ -119,17 +120,17 @@ class PromoOfferService:
                 await db.rollback()
                 await db.refresh(subscription)
                 logger.error(
-                    "Не удалось синхронизировать временный доступ подписки %s с RemnaWave",
+                    'Не удалось синхронизировать временный доступ подписки %s с RemnaWave',
                     subscription.id,
                 )
-                return False, None, None, "remnawave_sync_failed"
+                return False, None, None, 'remnawave_sync_failed'
 
             await db.refresh(subscription)
         elif changes_made:
             await db.commit()
             await db.refresh(subscription)
 
-        return True, newly_added, expires_at, "ok"
+        return True, newly_added, expires_at, 'ok'
 
     async def cleanup_expired_test_access(self, db: AsyncSession) -> int:
         now = datetime.utcnow()
@@ -140,7 +141,7 @@ class PromoOfferService:
                 selectinload(SubscriptionTemporaryAccess.offer),
             )
             .where(
-                SubscriptionTemporaryAccess.is_active == True,  # noqa: E712
+                SubscriptionTemporaryAccess.is_active == True,
                 SubscriptionTemporaryAccess.expires_at <= now,
             )
         )
@@ -148,8 +149,8 @@ class PromoOfferService:
         if not entries:
             return 0
 
-        subscriptions_updates: dict[int, Tuple[Subscription, set[str]]] = {}
-        log_payloads: List[Dict[str, object]] = []
+        subscriptions_updates: dict[int, tuple[Subscription, set[str]]] = {}
+        log_payloads: list[dict[str, object]] = []
 
         for entry in entries:
             entry.is_active = False
@@ -167,14 +168,14 @@ class PromoOfferService:
                 offer = entry.offer
                 log_payloads.append(
                     {
-                        "user_id": user_id,
-                        "offer_id": entry.offer_id,
-                        "source": getattr(offer, "notification_type", None),
-                        "percent": getattr(offer, "discount_percent", None),
-                        "effect_type": getattr(offer, "effect_type", "test_access"),
-                        "details": {
-                            "reason": "test_access_expired",
-                            "squad_uuid": entry.squad_uuid,
+                        'user_id': user_id,
+                        'offer_id': entry.offer_id,
+                        'source': getattr(offer, 'notification_type', None),
+                        'percent': getattr(offer, 'discount_percent', None),
+                        'effect_type': getattr(offer, 'effect_type', 'test_access'),
+                        'details': {
+                            'reason': 'test_access_expired',
+                            'squad_uuid': entry.squad_uuid,
                         },
                     }
                 )
@@ -191,7 +192,7 @@ class PromoOfferService:
                     await self.subscription_service.update_remnawave_user(db, subscription)
                 except Exception as exc:  # pragma: no cover - defensive logging
                     logger.error(
-                        "Ошибка обновления Remnawave при отзыве тестового доступа подписки %s: %s",
+                        'Ошибка обновления Remnawave при отзыве тестового доступа подписки %s: %s',
                         subscription.id,
                         exc,
                     )
@@ -201,25 +202,25 @@ class PromoOfferService:
             try:
                 await log_promo_offer_action(
                     db,
-                    user_id=payload["user_id"],
-                    offer_id=payload.get("offer_id"),
-                    action="disabled",
-                    source=payload.get("source"),
-                    percent=payload.get("percent"),
-                    effect_type=payload.get("effect_type"),
-                    details=payload.get("details"),
+                    user_id=payload['user_id'],
+                    offer_id=payload.get('offer_id'),
+                    action='disabled',
+                    source=payload.get('source'),
+                    percent=payload.get('percent'),
+                    effect_type=payload.get('effect_type'),
+                    details=payload.get('details'),
                 )
             except Exception as exc:  # pragma: no cover - defensive logging
                 logger.warning(
-                    "Failed to record promo offer test access disable log for user %s: %s",
-                    payload.get("user_id"),
+                    'Failed to record promo offer test access disable log for user %s: %s',
+                    payload.get('user_id'),
                     exc,
                 )
                 try:
                     await db.rollback()
                 except Exception as rollback_error:  # pragma: no cover - defensive logging
                     logger.warning(
-                        "Failed to rollback session after promo offer test access log failure: %s",
+                        'Failed to rollback session after promo offer test access log failure: %s',
                         rollback_error,
                     )
         return len(entries)

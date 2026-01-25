@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
 from importlib import import_module
-import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,8 +16,8 @@ from app.services.subscription_auto_purchase_service import (
     auto_activate_subscription_after_topup,
     auto_purchase_saved_cart_after_topup,
 )
-from app.utils.user_utils import format_referrer_info
 from app.utils.payment_logger import payment_logger as logger
+from app.utils.user_utils import format_referrer_info
 
 
 class Pal24PaymentMixin:
@@ -31,19 +31,19 @@ class Pal24PaymentMixin:
         amount_kopeks: int,
         description: str,
         language: str,
-        ttl_seconds: Optional[int] = None,
-        payer_email: Optional[str] = None,
-        payment_method: Optional[str] = None,
-    ) -> Optional[Dict[str, Any]]:
+        ttl_seconds: int | None = None,
+        payer_email: str | None = None,
+        payment_method: str | None = None,
+    ) -> dict[str, Any] | None:
         """Создаёт счёт в Pal24 и сохраняет локальную запись."""
-        service = getattr(self, "pal24_service", None)
+        service = getattr(self, 'pal24_service', None)
         if not service or not service.is_configured:
-            logger.error("Pal24 сервис не инициализирован")
+            logger.error('Pal24 сервис не инициализирован')
             return None
 
         if amount_kopeks < settings.PAL24_MIN_AMOUNT_KOPEKS:
             logger.warning(
-                "Сумма Pal24 меньше минимальной: %s < %s",
+                'Сумма Pal24 меньше минимальной: %s < %s',
                 amount_kopeks,
                 settings.PAL24_MIN_AMOUNT_KOPEKS,
             )
@@ -51,24 +51,24 @@ class Pal24PaymentMixin:
 
         if amount_kopeks > settings.PAL24_MAX_AMOUNT_KOPEKS:
             logger.warning(
-                "Сумма Pal24 больше максимальной: %s > %s",
+                'Сумма Pal24 больше максимальной: %s > %s',
                 amount_kopeks,
                 settings.PAL24_MAX_AMOUNT_KOPEKS,
             )
             return None
 
-        order_id = f"pal24_{user_id}_{uuid.uuid4().hex}"
+        order_id = f'pal24_{user_id}_{uuid.uuid4().hex}'
 
         custom_payload = {
-            "user_id": user_id,
-            "amount_kopeks": amount_kopeks,
-            "language": language,
+            'user_id': user_id,
+            'amount_kopeks': amount_kopeks,
+            'language': language,
         }
 
         normalized_payment_method = self._normalize_payment_method(payment_method)
         api_payment_method = self._map_api_payment_method(normalized_payment_method)
 
-        payment_module = import_module("app.services.payment_service")
+        payment_module = import_module('app.services.payment_service')
 
         try:
             response = await service.create_bill(
@@ -82,19 +82,19 @@ class Pal24PaymentMixin:
                 payment_method=api_payment_method,
             )
         except Pal24APIError as error:
-            logger.error("Ошибка Pal24 API при создании счета: %s", error)
+            logger.error('Ошибка Pal24 API при создании счета: %s', error)
             return None
 
-        if not response.get("success", True):
-            logger.error("Pal24 вернул ошибку при создании счета: %s", response)
+        if not response.get('success', True):
+            logger.error('Pal24 вернул ошибку при создании счета: %s', response)
             return None
 
-        bill_id = response.get("bill_id")
+        bill_id = response.get('bill_id')
         if not bill_id:
-            logger.error("Pal24 не вернул bill_id: %s", response)
+            logger.error('Pal24 не вернул bill_id: %s', response)
             return None
 
-        def _pick_url(*keys: str) -> Optional[str]:
+        def _pick_url(*keys: str) -> str | None:
             for key in keys:
                 value = response.get(key)
                 if value:
@@ -102,33 +102,33 @@ class Pal24PaymentMixin:
             return None
 
         transfer_url = _pick_url(
-            "transfer_url",
-            "transferUrl",
-            "transfer_link",
-            "transferLink",
-            "transfer",
-            "sbp_url",
-            "sbpUrl",
-            "sbp_link",
-            "sbpLink",
+            'transfer_url',
+            'transferUrl',
+            'transfer_link',
+            'transferLink',
+            'transfer',
+            'sbp_url',
+            'sbpUrl',
+            'sbp_link',
+            'sbpLink',
         )
         card_url = _pick_url(
-            "link_url",
-            "linkUrl",
-            "link",
-            "card_url",
-            "cardUrl",
-            "card_link",
-            "cardLink",
-            "payment_url",
-            "paymentUrl",
-            "url",
+            'link_url',
+            'linkUrl',
+            'link',
+            'card_url',
+            'cardUrl',
+            'card_link',
+            'cardLink',
+            'payment_url',
+            'paymentUrl',
+            'url',
         )
         link_page_url = _pick_url(
-            "link_page_url",
-            "linkPageUrl",
-            "page_url",
-            "pageUrl",
+            'link_page_url',
+            'linkPageUrl',
+            'page_url',
+            'pageUrl',
         )
 
         primary_link = transfer_url or link_page_url or card_url
@@ -137,20 +137,20 @@ class Pal24PaymentMixin:
         metadata_links = {
             key: value
             for key, value in {
-                "sbp": transfer_url,
-                "card": card_url,
-                "page": link_page_url,
+                'sbp': transfer_url,
+                'card': card_url,
+                'page': link_page_url,
             }.items()
             if value
         }
 
         metadata_payload = {
-            "user_id": user_id,
-            "amount_kopeks": amount_kopeks,
-            "description": description,
-            "links": metadata_links,
-            "raw_response": response,
-            "selected_method": normalized_payment_method,
+            'user_id': user_id,
+            'amount_kopeks': amount_kopeks,
+            'description': description,
+            'links': metadata_links,
+            'raw_response': response,
+            'selected_method': normalized_payment_method,
         }
 
         payment = await payment_module.create_pal24_payment(
@@ -159,9 +159,9 @@ class Pal24PaymentMixin:
             bill_id=bill_id,
             amount_kopeks=amount_kopeks,
             description=description,
-            status=response.get("status", "NEW"),
-            type_=response.get("type", "normal"),
-            currency=response.get("currency", "RUB"),
+            status=response.get('status', 'NEW'),
+            type_=response.get('type', 'normal'),
+            currency=response.get('currency', 'RUB'),
             link_url=transfer_url or card_url,
             link_page_url=link_page_url or primary_link,
             order_id=order_id,
@@ -170,68 +170,68 @@ class Pal24PaymentMixin:
         )
 
         logger.info(
-            "Создан Pal24 счет %s для пользователя %s (%s₽)",
+            'Создан Pal24 счет %s для пользователя %s (%s₽)',
             bill_id,
             user_id,
             amount_kopeks / 100,
         )
 
-        payment_status = getattr(payment, "status", response.get("status", "NEW"))
+        payment_status = getattr(payment, 'status', response.get('status', 'NEW'))
 
         return {
-            "local_payment_id": payment.id,
-            "bill_id": bill_id,
-            "order_id": order_id,
-            "amount_kopeks": amount_kopeks,
-            "primary_url": primary_link,
-            "secondary_url": secondary_link,
-            "link_url": transfer_url,
-            "card_url": card_url,
-            "payment_method": normalized_payment_method,
-            "metadata_links": metadata_links,
-            "status": payment_status,
-            "sbp_url": transfer_url,
-            "transfer_url": transfer_url,
-            "link_page_url": link_page_url,
-            "payment_url": primary_link,
+            'local_payment_id': payment.id,
+            'bill_id': bill_id,
+            'order_id': order_id,
+            'amount_kopeks': amount_kopeks,
+            'primary_url': primary_link,
+            'secondary_url': secondary_link,
+            'link_url': transfer_url,
+            'card_url': card_url,
+            'payment_method': normalized_payment_method,
+            'metadata_links': metadata_links,
+            'status': payment_status,
+            'sbp_url': transfer_url,
+            'transfer_url': transfer_url,
+            'link_page_url': link_page_url,
+            'payment_url': primary_link,
         }
 
     async def process_pal24_callback(
         self,
         db: AsyncSession,
-        callback: Dict[str, Any],
+        callback: dict[str, Any],
     ) -> bool:
         """Обрабатывает callback от Pal24 и начисляет баланс при успехе."""
         try:
-            payment_module = import_module("app.services.payment_service")
+            payment_module = import_module('app.services.payment_service')
 
-            def _first_non_empty(*values: Optional[str]) -> Optional[str]:
+            def _first_non_empty(*values: str | None) -> str | None:
                 for value in values:
                     if value:
                         return value
                 return None
 
             payment_id = _first_non_empty(
-                callback.get("id"),
-                callback.get("TrsId"),
-                callback.get("TrsID"),
+                callback.get('id'),
+                callback.get('TrsId'),
+                callback.get('TrsID'),
             )
             bill_id = _first_non_empty(
-                callback.get("bill_id"),
-                callback.get("billId"),
-                callback.get("BillId"),
-                callback.get("BillID"),
+                callback.get('bill_id'),
+                callback.get('billId'),
+                callback.get('BillId'),
+                callback.get('BillID'),
             )
             order_id = _first_non_empty(
-                callback.get("order_id"),
-                callback.get("orderId"),
-                callback.get("InvId"),
-                callback.get("InvID"),
+                callback.get('order_id'),
+                callback.get('orderId'),
+                callback.get('InvId'),
+                callback.get('InvID'),
             )
-            status = (callback.get("status") or callback.get("Status") or "").upper()
+            status = (callback.get('status') or callback.get('Status') or '').upper()
 
             if not bill_id and not order_id:
-                logger.error("Pal24 callback без идентификаторов: %s", callback)
+                logger.error('Pal24 callback без идентификаторов: %s', callback)
                 return False
 
             payment = None
@@ -241,15 +241,15 @@ class Pal24PaymentMixin:
                 payment = await payment_module.get_pal24_payment_by_order_id(db, order_id)
 
             if not payment:
-                logger.error("Pal24 платеж не найден: %s / %s", bill_id, order_id)
+                logger.error('Pal24 платеж не найден: %s / %s', bill_id, order_id)
                 return False
 
             if payment.is_paid:
-                logger.info("Pal24 платеж %s уже обработан", payment.bill_id)
+                logger.info('Pal24 платеж %s уже обработан', payment.bill_id)
                 return True
 
-            if status in {"PAID", "SUCCESS", "OVERPAID"}:
-                metadata = getattr(payment, "metadata_json", {}) or {}
+            if status in {'PAID', 'SUCCESS', 'OVERPAID'}:
+                metadata = getattr(payment, 'metadata_json', {}) or {}
                 if not isinstance(metadata, dict):
                     metadata = {}
 
@@ -261,63 +261,55 @@ class Pal24PaymentMixin:
                     paid_at=datetime.utcnow(),
                     callback_payload=callback,
                     payment_id=payment_id,
-                    payment_status=callback.get("Status") or status,
+                    payment_status=callback.get('Status') or status,
                     payment_method=(
-                        callback.get("payment_method")
-                        or callback.get("PaymentMethod")
-                        or metadata.get("selected_method")
-                        or getattr(payment, "payment_method", None)
+                        callback.get('payment_method')
+                        or callback.get('PaymentMethod')
+                        or metadata.get('selected_method')
+                        or getattr(payment, 'payment_method', None)
                     ),
-                    balance_amount=callback.get("BalanceAmount")
-                    or callback.get("balance_amount"),
-                    balance_currency=callback.get("BalanceCurrency")
-                    or callback.get("balance_currency"),
-                    payer_account=callback.get("AccountNumber")
-                    or callback.get("account")
-                    or callback.get("Account"),
+                    balance_amount=callback.get('BalanceAmount') or callback.get('balance_amount'),
+                    balance_currency=callback.get('BalanceCurrency') or callback.get('balance_currency'),
+                    payer_account=callback.get('AccountNumber') or callback.get('account') or callback.get('Account'),
                 )
 
                 return await self._finalize_pal24_payment(
                     db,
                     payment,
                     payment_id=payment_id,
-                    trigger="callback",
+                    trigger='callback',
                 )
 
-            metadata = getattr(payment, "metadata_json", {}) or {}
+            metadata = getattr(payment, 'metadata_json', {}) or {}
             if not isinstance(metadata, dict):
                 metadata = {}
 
             await payment_module.update_pal24_payment_status(
                 db,
                 payment,
-                status=status or "UNKNOWN",
+                status=status or 'UNKNOWN',
                 is_paid=False,
                 callback_payload=callback,
                 payment_id=payment_id,
-                payment_status=callback.get("Status") or status,
+                payment_status=callback.get('Status') or status,
                 payment_method=(
-                    callback.get("payment_method")
-                    or callback.get("PaymentMethod")
-                    or getattr(payment, "payment_method", None)
+                    callback.get('payment_method')
+                    or callback.get('PaymentMethod')
+                    or getattr(payment, 'payment_method', None)
                 ),
-                balance_amount=callback.get("BalanceAmount")
-                or callback.get("balance_amount"),
-                balance_currency=callback.get("BalanceCurrency")
-                or callback.get("balance_currency"),
-                payer_account=callback.get("AccountNumber")
-                or callback.get("account")
-                or callback.get("Account"),
+                balance_amount=callback.get('BalanceAmount') or callback.get('balance_amount'),
+                balance_currency=callback.get('BalanceCurrency') or callback.get('balance_currency'),
+                payer_account=callback.get('AccountNumber') or callback.get('account') or callback.get('Account'),
             )
             logger.info(
-                "Обновили Pal24 платеж %s до статуса %s",
+                'Обновили Pal24 платеж %s до статуса %s',
                 payment.bill_id,
                 status,
             )
             return True
 
         except Exception as error:
-            logger.error("Ошибка обработки Pal24 callback: %s", error, exc_info=True)
+            logger.error('Ошибка обработки Pal24 callback: %s', error, exc_info=True)
             return False
 
     async def _finalize_pal24_payment(
@@ -325,31 +317,31 @@ class Pal24PaymentMixin:
         db: AsyncSession,
         payment: Any,
         *,
-        payment_id: Optional[str],
+        payment_id: str | None,
         trigger: str,
     ) -> bool:
         """Создаёт транзакцию, начисляет баланс и отправляет уведомления."""
 
-        payment_module = import_module("app.services.payment_service")
+        payment_module = import_module('app.services.payment_service')
 
-        metadata = dict(getattr(payment, "metadata_json", {}) or {})
-        invoice_message = metadata.get("invoice_message") or {}
+        metadata = dict(getattr(payment, 'metadata_json', {}) or {})
+        invoice_message = metadata.get('invoice_message') or {}
         invoice_message_removed = False
 
-        if getattr(self, "bot", None) and invoice_message:
-            chat_id = invoice_message.get("chat_id")
-            message_id = invoice_message.get("message_id")
+        if getattr(self, 'bot', None) and invoice_message:
+            chat_id = invoice_message.get('chat_id')
+            message_id = invoice_message.get('message_id')
             if chat_id and message_id:
                 try:
                     await self.bot.delete_message(chat_id, message_id)
                 except Exception as delete_error:  # pragma: no cover - depends on rights
                     logger.warning(
-                        "Не удалось удалить счёт PayPalych %s: %s",
+                        'Не удалось удалить счёт PayPalych %s: %s',
                         message_id,
                         delete_error,
                     )
                 else:
-                    metadata.pop("invoice_message", None)
+                    metadata.pop('invoice_message', None)
                     invoice_message_removed = True
 
         if invoice_message_removed:
@@ -363,13 +355,13 @@ class Pal24PaymentMixin:
                 payment.metadata_json = metadata
             except Exception as error:  # pragma: no cover - diagnostics
                 logger.warning(
-                    "Не удалось обновить метаданные PayPalych после удаления счёта: %s",
+                    'Не удалось обновить метаданные PayPalych после удаления счёта: %s',
                     error,
                 )
 
         if payment.transaction_id:
             logger.info(
-                "Pal24 платеж %s уже привязан к транзакции (trigger=%s)",
+                'Pal24 платеж %s уже привязан к транзакции (trigger=%s)',
                 payment.bill_id,
                 trigger,
             )
@@ -378,7 +370,7 @@ class Pal24PaymentMixin:
         user = await payment_module.get_user_by_id(db, payment.user_id)
         if not user:
             logger.error(
-                "Пользователь %s не найден для Pal24 платежа %s (trigger=%s)",
+                'Пользователь %s не найден для Pal24 платежа %s (trigger=%s)',
                 payment.user_id,
                 payment.bill_id,
                 trigger,
@@ -390,7 +382,7 @@ class Pal24PaymentMixin:
             user_id=payment.user_id,
             type=TransactionType.DEPOSIT,
             amount_kopeks=payment.amount_kopeks,
-            description=f"Пополнение через Pal24 ({payment_id or payment.bill_id})",
+            description=f'Пополнение через Pal24 ({payment_id or payment.bill_id})',
             payment_method=PaymentMethod.PAL24,
             external_id=str(payment_id) if payment_id else payment.bill_id,
             is_completed=True,
@@ -405,21 +397,19 @@ class Pal24PaymentMixin:
         user.updated_at = datetime.utcnow()
 
         promo_group = user.get_primary_promo_group()
-        subscription = getattr(user, "subscription", None)
+        subscription = getattr(user, 'subscription', None)
         referrer_info = format_referrer_info(user)
-        topup_status = "🆕 Первое пополнение" if was_first_topup else "🔄 Пополнение"
+        topup_status = '🆕 Первое пополнение' if was_first_topup else '🔄 Пополнение'
 
         await db.commit()
 
         try:
             from app.services.referral_service import process_referral_topup
 
-            await process_referral_topup(
-                db, user.id, payment.amount_kopeks, getattr(self, "bot", None)
-            )
+            await process_referral_topup(db, user.id, payment.amount_kopeks, getattr(self, 'bot', None))
         except Exception as error:
             logger.error(
-                "Ошибка обработки реферального пополнения Pal24: %s",
+                'Ошибка обработки реферального пополнения Pal24: %s',
                 error,
             )
 
@@ -430,7 +420,7 @@ class Pal24PaymentMixin:
         await db.refresh(user)
         await db.refresh(payment)
 
-        if getattr(self, "bot", None):
+        if getattr(self, 'bot', None):
             try:
                 from app.services.admin_notification_service import (
                     AdminNotificationService,
@@ -449,34 +439,35 @@ class Pal24PaymentMixin:
                 )
             except Exception as error:
                 logger.error(
-                    "Ошибка отправки админ уведомления Pal24: %s",
+                    'Ошибка отправки админ уведомления Pal24: %s',
                     error,
                 )
 
-        if getattr(self, "bot", None):
+        if getattr(self, 'bot', None) and user.telegram_id:
             try:
                 keyboard = await self.build_topup_success_keyboard(user)
                 await self.bot.send_message(
                     user.telegram_id,
                     (
-                        "✅ <b>Пополнение успешно!</b>\n\n"
-                        f"💰 Сумма: {settings.format_price(payment.amount_kopeks)}\n"
-                        "🦊 Способ: PayPalych\n"
-                        f"🆔 Транзакция: {transaction.id}\n\n"
-                        "Баланс пополнен автоматически!"
+                        '✅ <b>Пополнение успешно!</b>\n\n'
+                        f'💰 Сумма: {settings.format_price(payment.amount_kopeks)}\n'
+                        '🦊 Способ: PayPalych\n'
+                        f'🆔 Транзакция: {transaction.id}\n\n'
+                        'Баланс пополнен автоматически!'
                     ),
-                    parse_mode="HTML",
+                    parse_mode='HTML',
                     reply_markup=keyboard,
                 )
             except Exception as error:
                 logger.error(
-                    "Ошибка отправки уведомления пользователю Pal24: %s",
+                    'Ошибка отправки уведомления пользователю Pal24: %s',
                     error,
                 )
 
         try:
-            from app.services.user_cart_service import user_cart_service
             from aiogram import types
+
+            from app.services.user_cart_service import user_cart_service
 
             has_saved_cart = await user_cart_service.has_user_cart(user.id)
             auto_purchase_success = False
@@ -485,11 +476,11 @@ class Pal24PaymentMixin:
                     auto_purchase_success = await auto_purchase_saved_cart_after_topup(
                         db,
                         user,
-                        bot=getattr(self, "bot", None),
+                        bot=getattr(self, 'bot', None),
                     )
                 except Exception as auto_error:
                     logger.error(
-                        "Ошибка автоматической покупки подписки для пользователя %s: %s",
+                        'Ошибка автоматической покупки подписки для пользователя %s: %s',
                         user.id,
                         auto_error,
                         exc_info=True,
@@ -503,24 +494,24 @@ class Pal24PaymentMixin:
             if not auto_purchase_success:
                 try:
                     _, activation_notification_sent = await auto_activate_subscription_after_topup(
-                        db, user, bot=getattr(self, "bot", None), topup_amount=payment.amount_kopeks
+                        db, user, bot=getattr(self, 'bot', None), topup_amount=payment.amount_kopeks
                     )
                 except Exception as auto_activate_error:
                     logger.error(
-                        "Ошибка умной автоактивации для пользователя %s: %s",
+                        'Ошибка умной автоактивации для пользователя %s: %s',
                         user.id,
                         auto_activate_error,
                         exc_info=True,
                     )
 
             # Отправляем уведомление только если его ещё не отправили
-            if has_saved_cart and getattr(self, "bot", None) and not activation_notification_sent:
+            if has_saved_cart and getattr(self, 'bot', None) and not activation_notification_sent and user.telegram_id:
                 from app.localization.texts import get_texts
 
                 texts = get_texts(user.language)
                 cart_message = texts.t(
-                    "BALANCE_TOPUP_CART_REMINDER",
-                    "У вас есть незавершенное оформление подписки. Вернуться?",
+                    'BALANCE_TOPUP_CART_REMINDER',
+                    'У вас есть незавершенное оформление подписки. Вернуться?',
                 )
 
                 keyboard = types.InlineKeyboardMarkup(
@@ -528,16 +519,16 @@ class Pal24PaymentMixin:
                         [
                             types.InlineKeyboardButton(
                                 text=texts.t(
-                                    "BALANCE_TOPUP_CART_BUTTON",
-                                    "🛒 Продолжить оформление",
+                                    'BALANCE_TOPUP_CART_BUTTON',
+                                    '🛒 Продолжить оформление',
                                 ),
-                                callback_data="return_to_saved_cart",
+                                callback_data='return_to_saved_cart',
                             )
                         ],
                         [
                             types.InlineKeyboardButton(
-                                text="🏠 Главное меню",
-                                callback_data="back_to_menu",
+                                text='🏠 Главное меню',
+                                callback_data='back_to_menu',
                             )
                         ],
                     ]
@@ -546,34 +537,34 @@ class Pal24PaymentMixin:
                 await self.bot.send_message(
                     chat_id=user.telegram_id,
                     text=(
-                        "✅ Баланс пополнен на "
-                        f"{settings.format_price(payment.amount_kopeks)}!\n\n"
-                        f"⚠️ <b>Важно:</b> Пополнение баланса не активирует подписку автоматически. "
-                        f"Обязательно активируйте подписку отдельно!\n\n"
-                        f"🔄 При наличии сохранённой корзины подписки и включенной автопокупке, "
-                        f"подписка будет приобретена автоматически после пополнения баланса.\n\n{cart_message}"
+                        '✅ Баланс пополнен на '
+                        f'{settings.format_price(payment.amount_kopeks)}!\n\n'
+                        f'⚠️ <b>Важно:</b> Пополнение баланса не активирует подписку автоматически. '
+                        f'Обязательно активируйте подписку отдельно!\n\n'
+                        f'🔄 При наличии сохранённой корзины подписки и включенной автопокупке, '
+                        f'подписка будет приобретена автоматически после пополнения баланса.\n\n{cart_message}'
                     ),
                     reply_markup=keyboard,
                 )
                 logger.info(
-                    "Отправлено уведомление с кнопкой возврата к оформлению подписки пользователю %s",
+                    'Отправлено уведомление с кнопкой возврата к оформлению подписки пользователю %s',
                     user.id,
                 )
             else:
                 logger.info(
-                    "У пользователя %s нет сохраненной корзины или автопокупка выполнена",
+                    'У пользователя %s нет сохраненной корзины или автопокупка выполнена',
                     user.id,
                 )
         except Exception as error:
             logger.error(
-                "Ошибка при работе с сохраненной корзиной для пользователя %s: %s",
+                'Ошибка при работе с сохраненной корзиной для пользователя %s: %s',
                 user.id,
                 error,
                 exc_info=True,
             )
 
         logger.info(
-            "✅ Обработан Pal24 платеж %s для пользователя %s (trigger=%s)",
+            '✅ Обработан Pal24 платеж %s для пользователя %s (trigger=%s)',
             payment.bill_id,
             payment.user_id,
             trigger,
@@ -581,35 +572,34 @@ class Pal24PaymentMixin:
 
         return True
 
-
     async def get_pal24_payment_status(
         self,
         db: AsyncSession,
         local_payment_id: int,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """Запрашивает актуальный статус платежа у Pal24 и синхронизирует локальную запись."""
         try:
-            payment_module = import_module("app.services.payment_service")
+            payment_module = import_module('app.services.payment_service')
 
             payment = await payment_module.get_pal24_payment_by_id(db, local_payment_id)
             if not payment:
                 return None
 
-            remote_status: Optional[str] = None
-            remote_payloads: Dict[str, Any] = {}
-            payment_info_candidates: List[Dict[str, Optional[str]]] = []
+            remote_status: str | None = None
+            remote_payloads: dict[str, Any] = {}
+            payment_info_candidates: list[dict[str, str | None]] = []
 
-            service = getattr(self, "pal24_service", None)
+            service = getattr(self, 'pal24_service', None)
             if service and payment.bill_id:
                 bill_id_str = str(payment.bill_id)
                 try:
                     response = await service.get_bill_status(bill_id_str)
                 except Pal24APIError as error:
-                    logger.error("Ошибка Pal24 API при получении статуса счёта: %s", error)
+                    logger.error('Ошибка Pal24 API при получении статуса счёта: %s', error)
                 else:
                     if response:
-                        remote_payloads["bill_status"] = response
-                        status_value = response.get("status") or (response.get("bill") or {}).get("status")
+                        remote_payloads['bill_status'] = response
+                        status_value = response.get('status') or (response.get('bill') or {}).get('status')
                         if status_value:
                             remote_status = str(status_value).upper()
                         extracted = self._extract_remote_payment_info(response)
@@ -621,10 +611,10 @@ class Pal24PaymentMixin:
                     try:
                         payment_response = await service.get_payment_status(payment_id_str)
                     except Pal24APIError as error:
-                        logger.error("Ошибка Pal24 API при получении статуса платежа: %s", error)
+                        logger.error('Ошибка Pal24 API при получении статуса платежа: %s', error)
                     else:
                         if payment_response:
-                            remote_payloads["payment_status"] = payment_response
+                            remote_payloads['payment_status'] = payment_response
                             extracted = self._extract_remote_payment_info(payment_response)
                             if extracted:
                                 payment_info_candidates.append(extracted)
@@ -632,10 +622,10 @@ class Pal24PaymentMixin:
                 try:
                     payments_response = await service.get_bill_payments(bill_id_str)
                 except Pal24APIError as error:
-                    logger.error("Ошибка Pal24 API при получении списка платежей: %s", error)
+                    logger.error('Ошибка Pal24 API при получении списка платежей: %s', error)
                 else:
                     if payments_response:
-                        remote_payloads["bill_payments"] = payments_response
+                        remote_payloads['bill_payments'] = payments_response
                         for candidate in self._collect_payment_candidates(payments_response):
                             extracted = self._extract_remote_payment_info(candidate)
                             if extracted:
@@ -643,76 +633,76 @@ class Pal24PaymentMixin:
 
             payment_info = self._select_best_payment_info(payment, payment_info_candidates)
             if payment_info:
-                remote_payloads.setdefault("selected_payment", payment_info)
+                remote_payloads.setdefault('selected_payment', payment_info)
 
-            bill_success = getattr(service, "BILL_SUCCESS_STATES", {"SUCCESS"}) if service else {"SUCCESS"}
-            bill_failed = getattr(service, "BILL_FAILED_STATES", {"FAIL"}) if service else {"FAIL"}
-            bill_pending = getattr(service, "BILL_PENDING_STATES", {"NEW", "PROCESS"}) if service else {"NEW", "PROCESS"}
+            bill_success = getattr(service, 'BILL_SUCCESS_STATES', {'SUCCESS'}) if service else {'SUCCESS'}
+            bill_failed = getattr(service, 'BILL_FAILED_STATES', {'FAIL'}) if service else {'FAIL'}
+            bill_pending = (
+                getattr(service, 'BILL_PENDING_STATES', {'NEW', 'PROCESS'}) if service else {'NEW', 'PROCESS'}
+            )
 
-            update_status = payment.status or "NEW"
-            update_kwargs: Dict[str, Any] = {}
-            is_paid_update: Optional[bool] = None
+            update_status = payment.status or 'NEW'
+            update_kwargs: dict[str, Any] = {}
+            is_paid_update: bool | None = None
 
             if remote_status:
                 update_status = remote_status
                 if remote_status in bill_success:
                     is_paid_update = True
-                elif remote_status in bill_failed:
-                    is_paid_update = False
-                elif remote_status in bill_pending and is_paid_update is None:
+                elif remote_status in bill_failed or (remote_status in bill_pending and is_paid_update is None):
                     is_paid_update = False
 
-            payment_status_code: Optional[str] = None
+            payment_status_code: str | None = None
             if payment_info:
-                payment_status_code = (payment_info.get("status") or "").upper() or None
+                payment_status_code = (payment_info.get('status') or '').upper() or None
                 if payment_status_code:
-                    existing_status = (getattr(payment, "payment_status", "") or "").upper()
+                    existing_status = (getattr(payment, 'payment_status', '') or '').upper()
                     if payment_status_code != existing_status:
-                        update_kwargs["payment_status"] = payment_status_code
+                        update_kwargs['payment_status'] = payment_status_code
 
-                payment_id_value = payment_info.get("id")
-                if payment_id_value and payment_id_value != (payment.payment_id or ""):
-                    update_kwargs["payment_id"] = payment_id_value
+                payment_id_value = payment_info.get('id')
+                if payment_id_value and payment_id_value != (payment.payment_id or ''):
+                    update_kwargs['payment_id'] = payment_id_value
 
-                method_value = payment_info.get("method")
+                method_value = payment_info.get('method')
                 if method_value:
                     normalized_method = self._normalize_payment_method(method_value)
-                    if normalized_method != (payment.payment_method or ""):
-                        update_kwargs["payment_method"] = normalized_method
+                    if normalized_method != (payment.payment_method or ''):
+                        update_kwargs['payment_method'] = normalized_method
 
-                balance_amount = payment_info.get("balance_amount")
-                if balance_amount and balance_amount != (payment.balance_amount or ""):
-                    update_kwargs["balance_amount"] = balance_amount
+                balance_amount = payment_info.get('balance_amount')
+                if balance_amount and balance_amount != (payment.balance_amount or ''):
+                    update_kwargs['balance_amount'] = balance_amount
 
-                balance_currency = payment_info.get("balance_currency")
-                if balance_currency and balance_currency != (payment.balance_currency or ""):
-                    update_kwargs["balance_currency"] = balance_currency
+                balance_currency = payment_info.get('balance_currency')
+                if balance_currency and balance_currency != (payment.balance_currency or ''):
+                    update_kwargs['balance_currency'] = balance_currency
 
-                payer_account = payment_info.get("account")
-                if payer_account and payer_account != (payment.payer_account or ""):
-                    update_kwargs["payer_account"] = payer_account
+                payer_account = payment_info.get('account')
+                if payer_account and payer_account != (payment.payer_account or ''):
+                    update_kwargs['payer_account'] = payer_account
 
                 if payment_status_code:
-                    success_states = {"SUCCESS", "OVERPAID"}
-                    failed_states = {"FAIL"}
-                    pending_states = {"NEW", "PROCESS", "UNDERPAID"}
+                    success_states = {'SUCCESS', 'OVERPAID'}
+                    failed_states = {'FAIL'}
+                    pending_states = {'NEW', 'PROCESS', 'UNDERPAID'}
                     if payment_status_code in success_states:
                         is_paid_update = True
-                    elif payment_status_code in failed_states and is_paid_update is not True:
-                        is_paid_update = False
-                    elif payment_status_code in pending_states and is_paid_update is None:
+                    elif (payment_status_code in failed_states and is_paid_update is not True) or (
+                        payment_status_code in pending_states and is_paid_update is None
+                    ):
                         is_paid_update = False
 
             if not remote_status and payment_status_code:
                 update_status = payment_status_code
 
             if is_paid_update is not None and is_paid_update != bool(payment.is_paid):
-                update_kwargs["is_paid"] = is_paid_update
+                update_kwargs['is_paid'] = is_paid_update
                 if is_paid_update and not payment.paid_at:
-                    update_kwargs.setdefault("paid_at", datetime.utcnow())
+                    update_kwargs.setdefault('paid_at', datetime.utcnow())
 
-            current_status = payment.status or ""
-            effective_status = update_status or current_status or "NEW"
+            current_status = payment.status or ''
+            effective_status = update_status or current_status or 'NEW'
             needs_update = bool(update_kwargs) or effective_status != current_status
 
             if needs_update:
@@ -731,58 +721,49 @@ class Pal24PaymentMixin:
                     finalized = await self._finalize_pal24_payment(
                         db,
                         payment,
-                        payment_id=getattr(payment, "payment_id", None),
-                        trigger="status_check",
+                        payment_id=getattr(payment, 'payment_id', None),
+                        trigger='status_check',
                     )
                     if finalized:
                         payment = await payment_module.get_pal24_payment_by_id(db, local_payment_id)
                 except Exception as error:
                     logger.error(
-                        "Ошибка автоматического начисления по Pal24 статусу: %s",
+                        'Ошибка автоматического начисления по Pal24 статусу: %s',
                         error,
                         exc_info=True,
                     )
 
             links_map, selected_method = self._build_links_map(payment, remote_payloads)
             primary_url = (
-                links_map.get(selected_method)
-                or links_map.get("sbp")
-                or links_map.get("page")
-                or links_map.get("card")
+                links_map.get(selected_method) or links_map.get('sbp') or links_map.get('page') or links_map.get('card')
             )
-            secondary_url = (
-                links_map.get("page")
-                or links_map.get("card")
-                or links_map.get("sbp")
-            )
+            secondary_url = links_map.get('page') or links_map.get('card') or links_map.get('sbp')
 
             return {
-                "payment": payment,
-                "status": payment.status,
-                "is_paid": payment.is_paid,
-                "remote_status": remote_status_for_return,
-                "remote_data": remote_data,
-                "links": links_map or None,
-                "primary_url": primary_url,
-                "secondary_url": secondary_url,
-                "sbp_url": links_map.get("sbp"),
-                "card_url": links_map.get("card"),
-                "link_page_url": links_map.get("page")
-                or getattr(payment, "link_page_url", None),
-                "link_url": getattr(payment, "link_url", None),
-                "selected_method": selected_method,
+                'payment': payment,
+                'status': payment.status,
+                'is_paid': payment.is_paid,
+                'remote_status': remote_status_for_return,
+                'remote_data': remote_data,
+                'links': links_map or None,
+                'primary_url': primary_url,
+                'secondary_url': secondary_url,
+                'sbp_url': links_map.get('sbp'),
+                'card_url': links_map.get('card'),
+                'link_page_url': links_map.get('page') or getattr(payment, 'link_page_url', None),
+                'link_url': getattr(payment, 'link_url', None),
+                'selected_method': selected_method,
             }
 
         except Exception as error:
-            logger.error("Ошибка получения статуса Pal24: %s", error, exc_info=True)
+            logger.error('Ошибка получения статуса Pal24: %s', error, exc_info=True)
             return None
 
-
     @staticmethod
-    def _extract_remote_payment_info(remote_data: Any) -> Dict[str, Optional[str]]:
+    def _extract_remote_payment_info(remote_data: Any) -> dict[str, str | None]:
         """Извлекает данные о платеже из ответа Pal24."""
 
-        def _pick_candidate(value: Any) -> Optional[Dict[str, Any]]:
+        def _pick_candidate(value: Any) -> dict[str, Any] | None:
             if isinstance(value, dict):
                 return value
             if isinstance(value, list):
@@ -791,65 +772,55 @@ class Pal24PaymentMixin:
                         return item
             return None
 
-        def _normalize(candidate: Dict[str, Any]) -> Dict[str, Optional[str]]:
-            def _stringify(value: Any) -> Optional[str]:
+        def _normalize(candidate: dict[str, Any]) -> dict[str, str | None]:
+            def _stringify(value: Any) -> str | None:
                 if value is None:
                     return None
                 return str(value)
 
             return {
-                "id": _stringify(candidate.get("id") or candidate.get("payment_id")),
-                "status": _stringify(candidate.get("status")),
-                "method": _stringify(candidate.get("method") or candidate.get("payment_method")),
-                "balance_amount": _stringify(
-                    candidate.get("balance_amount")
-                    or candidate.get("amount")
-                    or candidate.get("BalanceAmount")
+                'id': _stringify(candidate.get('id') or candidate.get('payment_id')),
+                'status': _stringify(candidate.get('status')),
+                'method': _stringify(candidate.get('method') or candidate.get('payment_method')),
+                'balance_amount': _stringify(
+                    candidate.get('balance_amount') or candidate.get('amount') or candidate.get('BalanceAmount')
                 ),
-                "balance_currency": _stringify(
-                    candidate.get("balance_currency") or candidate.get("BalanceCurrency")
+                'balance_currency': _stringify(candidate.get('balance_currency') or candidate.get('BalanceCurrency')),
+                'account': _stringify(
+                    candidate.get('account') or candidate.get('payer_account') or candidate.get('AccountNumber')
                 ),
-                "account": _stringify(
-                    candidate.get("account")
-                    or candidate.get("payer_account")
-                    or candidate.get("AccountNumber")
-                ),
-                "bill_id": _stringify(
-                    candidate.get("bill_id")
-                    or candidate.get("BillId")
-                    or candidate.get("billId")
-                ),
+                'bill_id': _stringify(candidate.get('bill_id') or candidate.get('BillId') or candidate.get('billId')),
             }
 
         if not isinstance(remote_data, dict):
             return {}
 
         lower_keys = {str(key).lower() for key in remote_data.keys()}
-        has_status = any(key in lower_keys for key in ("status", "payment_status"))
-        has_identifier = any(
-            key in lower_keys
-            for key in ("payment_id", "from_card", "account_amount", "id")
-        ) or "bill_id" in lower_keys
+        has_status = any(key in lower_keys for key in ('status', 'payment_status'))
+        has_identifier = (
+            any(key in lower_keys for key in ('payment_id', 'from_card', 'account_amount', 'id'))
+            or 'bill_id' in lower_keys
+        )
 
-        if has_status and has_identifier and "bill" not in lower_keys:
+        if has_status and has_identifier and 'bill' not in lower_keys:
             return _normalize(remote_data)
 
         search_spaces = [remote_data]
-        bill_section = remote_data.get("bill") or remote_data.get("Bill")
+        bill_section = remote_data.get('bill') or remote_data.get('Bill')
         if isinstance(bill_section, dict):
             search_spaces.append(bill_section)
 
         for space in search_spaces:
-            for key in ("payment", "Payment", "payment_info", "PaymentInfo"):
+            for key in ('payment', 'Payment', 'payment_info', 'PaymentInfo'):
                 candidate = _pick_candidate(space.get(key))
                 if candidate:
                     return _normalize(candidate)
-            for key in ("payments", "Payments"):
+            for key in ('payments', 'Payments'):
                 candidate = _pick_candidate(space.get(key))
                 if candidate:
                     return _normalize(candidate)
 
-        data_section = remote_data.get("data") or remote_data.get("Data")
+        data_section = remote_data.get('data') or remote_data.get('Data')
         candidate = _pick_candidate(data_section)
         if candidate:
             return _normalize(candidate)
@@ -857,16 +828,15 @@ class Pal24PaymentMixin:
         return {}
 
     @staticmethod
-    def _collect_payment_candidates(remote_data: Any) -> List[Dict[str, Any]]:
-        candidates: List[Dict[str, Any]] = []
+    def _collect_payment_candidates(remote_data: Any) -> list[dict[str, Any]]:
+        candidates: list[dict[str, Any]] = []
 
         def _visit(value: Any) -> None:
             if isinstance(value, dict):
                 lower_keys = {str(key).lower() for key in value.keys()}
-                has_status = any(key in lower_keys for key in ("status", "payment_status"))
+                has_status = any(key in lower_keys for key in ('status', 'payment_status'))
                 has_identifier = any(
-                    key in lower_keys
-                    for key in ("id", "payment_id", "bill_id", "from_card", "account_amount")
+                    key in lower_keys for key in ('id', 'payment_id', 'bill_id', 'from_card', 'account_amount')
                 )
                 if has_status and has_identifier and value not in candidates:
                     candidates.append(value)
@@ -882,47 +852,47 @@ class Pal24PaymentMixin:
     @staticmethod
     def _select_best_payment_info(
         payment: Any,
-        candidates: List[Dict[str, Optional[str]]],
-    ) -> Dict[str, Optional[str]]:
+        candidates: list[dict[str, str | None]],
+    ) -> dict[str, str | None]:
         if not candidates:
             return {}
 
-        payment_id = str(getattr(payment, "payment_id", "") or "")
-        bill_id = str(getattr(payment, "bill_id", "") or "")
+        payment_id = str(getattr(payment, 'payment_id', '') or '')
+        bill_id = str(getattr(payment, 'bill_id', '') or '')
 
         for candidate in candidates:
-            candidate_id = str(candidate.get("id") or "")
+            candidate_id = str(candidate.get('id') or '')
             if payment_id and candidate_id == payment_id:
                 return candidate
 
         for candidate in candidates:
-            candidate_bill = str(candidate.get("bill_id") or "")
+            candidate_bill = str(candidate.get('bill_id') or '')
             if bill_id and candidate_bill == bill_id:
                 return candidate
 
         return candidates[0]
 
     @staticmethod
-    def _normalize_payment_method(payment_method: Optional[str]) -> str:
+    def _normalize_payment_method(payment_method: str | None) -> str:
         mapping = {
-            "sbp": "sbp",
-            "fast": "sbp",
-            "fastpay": "sbp",
-            "fast_payment": "sbp",
-            "card": "card",
-            "bank_card": "card",
-            "bankcard": "card",
-            "bank-card": "card",
+            'sbp': 'sbp',
+            'fast': 'sbp',
+            'fastpay': 'sbp',
+            'fast_payment': 'sbp',
+            'card': 'card',
+            'bank_card': 'card',
+            'bankcard': 'card',
+            'bank-card': 'card',
         }
 
         if not payment_method:
-            return "sbp"
+            return 'sbp'
 
         normalized = payment_method.strip().lower()
-        return mapping.get(normalized, "sbp")
+        return mapping.get(normalized, 'sbp')
 
     @staticmethod
-    def _pick_first(mapping: Dict[str, Any], *keys: str) -> Optional[str]:
+    def _pick_first(mapping: dict[str, Any], *keys: str) -> str | None:
         for key in keys:
             value = mapping.get(key)
             if value:
@@ -933,29 +903,29 @@ class Pal24PaymentMixin:
     def _build_links_map(
         cls,
         payment: Any,
-        remote_payloads: Dict[str, Any],
-    ) -> tuple[Dict[str, str], str]:
-        links: Dict[str, str] = {}
+        remote_payloads: dict[str, Any],
+    ) -> tuple[dict[str, str], str]:
+        links: dict[str, str] = {}
 
-        metadata = getattr(payment, "metadata_json", {}) or {}
+        metadata = getattr(payment, 'metadata_json', {}) or {}
         if not isinstance(metadata, dict):
             metadata = {}
 
         if metadata:
-            links_meta = metadata.get("links")
+            links_meta = metadata.get('links')
             if isinstance(links_meta, dict):
                 for key, value in links_meta.items():
                     if value:
                         links[key] = str(value)
 
         selected_method = cls._normalize_payment_method(
-            (metadata.get("selected_method") if isinstance(metadata, dict) else None)
-            or getattr(payment, "payment_method", None)
+            (metadata.get('selected_method') if isinstance(metadata, dict) else None)
+            or getattr(payment, 'payment_method', None)
         )
 
-        def _visit(value: Any) -> List[Dict[str, Any]]:
-            stack: List[Any] = [value]
-            result: List[Dict[str, Any]] = []
+        def _visit(value: Any) -> list[dict[str, Any]]:
+            stack: list[Any] = [value]
+            result: list[dict[str, Any]] = []
             while stack:
                 current = stack.pop()
                 if isinstance(current, dict):
@@ -965,40 +935,40 @@ class Pal24PaymentMixin:
                     stack.extend(current)
             return result
 
-        payload_sources: List[Any] = []
+        payload_sources: list[Any] = []
         if metadata:
-            payload_sources.append(metadata.get("raw_response"))
-        payload_sources.append(getattr(payment, "callback_payload", None))
+            payload_sources.append(metadata.get('raw_response'))
+        payload_sources.append(getattr(payment, 'callback_payload', None))
         payload_sources.extend(remote_payloads.values())
 
         sbp_keys = (
-            "transfer_url",
-            "transferUrl",
-            "transfer_link",
-            "transferLink",
-            "transfer",
-            "sbp_url",
-            "sbpUrl",
-            "sbp_link",
-            "sbpLink",
+            'transfer_url',
+            'transferUrl',
+            'transfer_link',
+            'transferLink',
+            'transfer',
+            'sbp_url',
+            'sbpUrl',
+            'sbp_link',
+            'sbpLink',
         )
         card_keys = (
-            "link_url",
-            "linkUrl",
-            "link",
-            "card_url",
-            "cardUrl",
-            "card_link",
-            "cardLink",
-            "payment_url",
-            "paymentUrl",
-            "url",
+            'link_url',
+            'linkUrl',
+            'link',
+            'card_url',
+            'cardUrl',
+            'card_link',
+            'cardLink',
+            'payment_url',
+            'paymentUrl',
+            'url',
         )
         page_keys = (
-            "link_page_url",
-            "linkPageUrl",
-            "page_url",
-            "pageUrl",
+            'link_page_url',
+            'linkPageUrl',
+            'page_url',
+            'pageUrl',
         )
 
         for source in payload_sources:
@@ -1006,34 +976,34 @@ class Pal24PaymentMixin:
                 continue
             for candidate in _visit(source):
                 sbp_url = cls._pick_first(candidate, *sbp_keys)
-                if sbp_url and "sbp" not in links:
-                    links["sbp"] = sbp_url
+                if sbp_url and 'sbp' not in links:
+                    links['sbp'] = sbp_url
                 card_url = cls._pick_first(candidate, *card_keys)
-                if card_url and "card" not in links:
-                    links["card"] = card_url
+                if card_url and 'card' not in links:
+                    links['card'] = card_url
                 page_url = cls._pick_first(candidate, *page_keys)
-                if page_url and "page" not in links:
-                    links["page"] = page_url
+                if page_url and 'page' not in links:
+                    links['page'] = page_url
 
-        if getattr(payment, "link_page_url", None):
-            links.setdefault("page", str(payment.link_page_url))
+        if getattr(payment, 'link_page_url', None):
+            links.setdefault('page', str(payment.link_page_url))
 
-        if getattr(payment, "link_url", None):
+        if getattr(payment, 'link_url', None):
             link_url_value = str(payment.link_url)
-            if selected_method == "card":
-                links.setdefault("card", link_url_value)
+            if selected_method == 'card':
+                links.setdefault('card', link_url_value)
             else:
-                links.setdefault("sbp", link_url_value)
+                links.setdefault('sbp', link_url_value)
 
         return links, selected_method
 
     @staticmethod
-    def _map_api_payment_method(normalized_payment_method: str) -> Optional[str]:
+    def _map_api_payment_method(normalized_payment_method: str) -> str | None:
         """Преобразует нормализованный метод оплаты в значение для Pal24 API."""
 
         api_mapping = {
-            "sbp": "SBP",
-            "card": "BANK_CARD",
+            'sbp': 'SBP',
+            'card': 'BANK_CARD',
         }
 
         return api_mapping.get(normalized_payment_method)

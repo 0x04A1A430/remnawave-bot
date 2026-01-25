@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Security, status
 from sqlalchemy import func, or_, select
@@ -39,10 +39,11 @@ from ..schemas.users import (
     UserUpdateRequest,
 )
 
+
 router = APIRouter()
 
 
-def _serialize_promo_group(group: Optional[PromoGroup]) -> Optional[PromoGroupSummary]:
+def _serialize_promo_group(group: PromoGroup | None) -> PromoGroupSummary | None:
     if not group:
         return None
     return PromoGroupSummary(
@@ -51,11 +52,11 @@ def _serialize_promo_group(group: Optional[PromoGroup]) -> Optional[PromoGroupSu
         server_discount_percent=group.server_discount_percent,
         traffic_discount_percent=group.traffic_discount_percent,
         device_discount_percent=group.device_discount_percent,
-        apply_discounts_to_addons=getattr(group, "apply_discounts_to_addons", True),
+        apply_discounts_to_addons=getattr(group, 'apply_discounts_to_addons', True),
     )
 
 
-def _serialize_subscription(subscription: Optional[Subscription]) -> Optional[SubscriptionSummary]:
+def _serialize_subscription(subscription: Subscription | None) -> SubscriptionSummary | None:
     if not subscription:
         return None
 
@@ -79,8 +80,8 @@ def _serialize_subscription(subscription: Optional[Subscription]) -> Optional[Su
 
 
 def _serialize_user(user: User) -> UserResponse:
-    subscription = getattr(user, "subscription", None)
-    promo_group = getattr(user, "promo_group", None)
+    subscription = getattr(user, 'subscription', None)
+    promo_group = getattr(user, 'promo_group', None)
 
     return UserResponse(
         id=user.id,
@@ -105,7 +106,7 @@ def _serialize_user(user: User) -> UserResponse:
 
 
 def _apply_search_filter(query, search: str):
-    search_lower = f"%{search.lower()}%"
+    search_lower = f'%{search.lower()}%'
     conditions = [
         func.lower(User.username).like(search_lower),
         func.lower(User.first_name).like(search_lower),
@@ -120,22 +121,19 @@ def _apply_search_filter(query, search: str):
     return query.where(or_(*conditions))
 
 
-@router.get("", response_model=UserListResponse)
+@router.get('', response_model=UserListResponse)
 async def list_users(
     _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    status_filter: Optional[UserStatus] = Query(default=None, alias="status"),
-    promo_group_id: Optional[int] = Query(default=None),
-    search: Optional[str] = Query(default=None),
+    status_filter: UserStatus | None = Query(default=None, alias='status'),
+    promo_group_id: int | None = Query(default=None),
+    search: str | None = Query(default=None),
 ) -> UserListResponse:
-    base_query = (
-        select(User)
-        .options(
-            selectinload(User.subscription),
-            selectinload(User.promo_group),
-        )
+    base_query = select(User).options(
+        selectinload(User.subscription),
+        selectinload(User.promo_group),
     )
 
     if status_filter:
@@ -150,9 +148,7 @@ async def list_users(
     total_query = base_query.with_only_columns(func.count()).order_by(None)
     total = await db.scalar(total_query) or 0
 
-    result = await db.execute(
-        base_query.order_by(User.created_at.desc()).offset(offset).limit(limit)
-    )
+    result = await db.execute(base_query.order_by(User.created_at.desc()).offset(offset).limit(limit))
     users = result.scalars().unique().all()
 
     return UserListResponse(
@@ -163,7 +159,7 @@ async def list_users(
     )
 
 
-@router.get("/{user_id}", response_model=UserResponse)
+@router.get('/{user_id}', response_model=UserResponse)
 async def get_user(
     user_id: int,
     _: Any = Security(require_api_token),
@@ -173,16 +169,16 @@ async def get_user(
     user = await get_user_by_telegram_id(db, user_id)
     if user:
         return _serialize_user(user)
-    
+
     # If not found as telegram_id, check as internal user ID
     user = await get_user_by_id(db, user_id)
     if not user:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'User not found')
 
     return _serialize_user(user)
 
 
-@router.get("/by-telegram-id/{telegram_id}", response_model=UserResponse)
+@router.get('/by-telegram-id/{telegram_id}', response_model=UserResponse)
 async def get_user_by_telegram_id_endpoint(
     telegram_id: int,
     _: Any = Security(require_api_token),
@@ -193,20 +189,22 @@ async def get_user_by_telegram_id_endpoint(
     """
     user = await get_user_by_telegram_id(db, telegram_id)
     if not user:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
-    
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'User not found')
+
     return _serialize_user(user)
 
 
-@router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post('', response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def create_user_endpoint(
     payload: UserCreateRequest,
     _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> UserResponse:
-    existing = await get_user_by_telegram_id(db, payload.telegram_id)
-    if existing:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "User with this telegram_id already exists")
+    # Check for duplicate telegram_id only if provided (skip for email-only users)
+    if payload.telegram_id is not None:
+        existing = await get_user_by_telegram_id(db, payload.telegram_id)
+        if existing:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, 'User with this telegram_id already exists')
 
     user = await create_user(
         db,
@@ -221,14 +219,14 @@ async def create_user_endpoint(
     if payload.promo_group_id and payload.promo_group_id != user.promo_group_id:
         promo_group = await get_promo_group_by_id(db, payload.promo_group_id)
         if not promo_group:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Promo group not found")
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Promo group not found')
         user = await update_user(db, user, promo_group_id=promo_group.id)
 
     user = await get_user_by_id(db, user.id)
     return _serialize_user(user)
 
 
-@router.patch("/{user_id}", response_model=UserResponse)
+@router.patch('/{user_id}', response_model=UserResponse)
 async def update_user_endpoint(
     user_id: int,
     payload: UserUpdateRequest,
@@ -242,43 +240,43 @@ async def update_user_endpoint(
     else:
         # If not found as telegram_id, check as internal user ID
         found_user = await get_user_by_id(db, user_id)
-    
+
     if not found_user:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'User not found')
 
     updates: dict[str, Any] = {}
 
     if payload.username is not None:
-        updates["username"] = payload.username
+        updates['username'] = payload.username
     if payload.first_name is not None:
-        updates["first_name"] = payload.first_name
+        updates['first_name'] = payload.first_name
     if payload.last_name is not None:
-        updates["last_name"] = payload.last_name
+        updates['last_name'] = payload.last_name
     if payload.language is not None:
-        updates["language"] = payload.language
+        updates['language'] = payload.language
     if payload.has_had_paid_subscription is not None:
-        updates["has_had_paid_subscription"] = payload.has_had_paid_subscription
+        updates['has_had_paid_subscription'] = payload.has_had_paid_subscription
     if payload.has_made_first_topup is not None:
-        updates["has_made_first_topup"] = payload.has_made_first_topup
+        updates['has_made_first_topup'] = payload.has_made_first_topup
 
     if payload.status is not None:
         try:
             status_value = UserStatus(payload.status).value
         except ValueError as error:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid status") from error
-        updates["status"] = status_value
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Invalid status') from error
+        updates['status'] = status_value
 
     if payload.promo_group_id is not None:
         promo_group = await get_promo_group_by_id(db, payload.promo_group_id)
         if not promo_group:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Promo group not found")
-        updates["promo_group_id"] = promo_group.id
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Promo group not found')
+        updates['promo_group_id'] = promo_group.id
 
     if payload.referral_code is not None and payload.referral_code != found_user.referral_code:
         existing_code_owner = await get_user_by_referral_code(db, payload.referral_code)
         if existing_code_owner and existing_code_owner.id != found_user.id:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Referral code already in use")
-        updates["referral_code"] = payload.referral_code
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Referral code already in use')
+        updates['referral_code'] = payload.referral_code
 
     if not updates:
         return _serialize_user(found_user)
@@ -289,11 +287,11 @@ async def update_user_endpoint(
         found_user = await get_user_by_telegram_id(db, user_id)
     else:
         found_user = await get_user_by_id(db, found_user.id)
-        
+
     return _serialize_user(found_user)
 
 
-@router.post("/{user_id}/balance", response_model=UserResponse)
+@router.post('/{user_id}/balance', response_model=UserResponse)
 async def update_balance(
     user_id: int,
     payload: BalanceUpdateRequest,
@@ -301,7 +299,7 @@ async def update_balance(
     db: AsyncSession = Depends(get_db_session),
 ) -> UserResponse:
     if payload.amount_kopeks == 0:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Amount must be non-zero")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Amount must be non-zero')
 
     # First check if the provided ID is a telegram_id
     user = await get_user_by_telegram_id(db, user_id)
@@ -310,27 +308,27 @@ async def update_balance(
     else:
         # If not found as telegram_id, check as internal user ID
         found_user = await get_user_by_id(db, user_id)
-    
+
     if not found_user:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'User not found')
 
     success = await add_user_balance(
         db,
         found_user,
         amount_kopeks=payload.amount_kopeks,
-        description=payload.description or "Корректировка через веб-API",
+        description=payload.description or 'Корректировка через веб-API',
         create_transaction=payload.create_transaction,
     )
 
     if not success:
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Failed to update balance")
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, 'Failed to update balance')
 
     # Reload the user to ensure we have the latest data
     if found_user.telegram_id == user_id:
         found_user = await get_user_by_telegram_id(db, user_id)
     else:
         found_user = await get_user_by_id(db, found_user.id)
-        
+
     return _serialize_user(found_user)
 
 
@@ -339,14 +337,14 @@ async def _get_user_by_id_or_telegram_id(db: AsyncSession, user_id: int) -> User
     user = await get_user_by_telegram_id(db, user_id)
     if user:
         return user
-    
+
     user = await get_user_by_id(db, user_id)
     if not user:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'User not found')
     return user
 
 
-@router.post("/{user_id}/subscription", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post('/{user_id}/subscription', response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def create_user_subscription(
     user_id: int,
     payload: UserSubscriptionCreateRequest,
@@ -358,12 +356,11 @@ async def create_user_subscription(
     Поддерживает создание как триальных, так и платных подписок.
     """
     user = await _get_user_by_id_or_telegram_id(db, user_id)
-    
+
     existing = await get_subscription_by_user_id(db, user.id)
     if existing and not payload.replace_existing:
         raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            "User already has a subscription. Use replace_existing=true to replace it"
+            status.HTTP_400_BAD_REQUEST, 'User already has a subscription. Use replace_existing=true to replace it'
         )
 
     forced_devices = None
@@ -384,17 +381,13 @@ async def create_user_subscription(
                 connected_squads = [payload.squad_uuid]
             elif payload.connected_squads:
                 connected_squads = payload.connected_squads
-            
+
             subscription = await replace_subscription(
                 db,
                 existing,
                 duration_days=duration_days,
                 traffic_limit_gb=traffic_limit_gb,
-                device_limit=(
-                    trial_device_limit
-                    if trial_device_limit is not None
-                    else settings.TRIAL_DEVICE_LIMIT
-                ),
+                device_limit=(trial_device_limit if trial_device_limit is not None else settings.TRIAL_DEVICE_LIMIT),
                 connected_squads=connected_squads,
                 is_trial=True,
                 update_server_counters=True,
@@ -410,17 +403,14 @@ async def create_user_subscription(
             )
     else:
         if payload.duration_days is None:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                "duration_days is required for paid subscriptions"
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, 'duration_days is required for paid subscriptions')
         device_limit = payload.device_limit
         if device_limit is None:
             if forced_devices is not None:
                 device_limit = forced_devices
             else:
                 device_limit = settings.DEFAULT_DEVICE_LIMIT
-        
+
         if existing:
             subscription = await replace_subscription(
                 db,
@@ -442,7 +432,7 @@ async def create_user_subscription(
                 connected_squads=payload.connected_squads or [],
                 update_server_counters=True,
             )
-        
+
         # Создаем пользователя в RemnaWave для платных подписок
         subscription_service = SubscriptionService()
         await subscription_service.create_remnawave_user(db, subscription)
@@ -452,7 +442,7 @@ async def create_user_subscription(
     return _serialize_user(user)
 
 
-@router.delete("/{user_id}/subscription", response_model=UserResponse)
+@router.delete('/{user_id}/subscription', response_model=UserResponse)
 async def delete_user_subscription(
     user_id: int,
     _: Any = Security(require_api_token),
@@ -463,10 +453,10 @@ async def delete_user_subscription(
     Подписка не удаляется физически, а помечается как DISABLED.
     """
     user = await _get_user_by_id_or_telegram_id(db, user_id)
-    
+
     subscription = await get_subscription_by_user_id(db, user.id)
     if not subscription:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "User has no subscription")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'User has no subscription')
 
     await deactivate_subscription(db, subscription)
 

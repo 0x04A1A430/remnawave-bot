@@ -8,6 +8,7 @@ import pytest
 from aiogram.types import InlineKeyboardMarkup
 from sqlalchemy.exc import MissingGreenlet
 
+
 ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
@@ -17,7 +18,7 @@ from app.services.payment.common import PaymentCommonMixin
 
 @pytest.fixture
 def anyio_backend() -> str:
-    return "asyncio"
+    return 'asyncio'
 
 
 class _FakeBot:
@@ -31,11 +32,11 @@ class _FakeBot:
 class _LazyUser:
     id = 99
     telegram_id = 555
-    language = "ru"
+    language = 'ru'
 
     @property
     def subscription(self):  # type: ignore[no-untyped-def]
-        raise MissingGreenlet("lazy load is not available")
+        raise MissingGreenlet('lazy load is not available')
 
 
 class _PaymentServiceStub(PaymentCommonMixin):
@@ -60,7 +61,7 @@ async def test_send_payment_success_notification_recovers_missing_greenlet(monke
         subscription=SimpleNamespace(
             is_trial=False,
             is_active=True,
-            actual_status="active",
+            actual_status='active',
         ),
     )
 
@@ -75,11 +76,11 @@ async def test_send_payment_success_notification_recovers_missing_greenlet(monke
         yield object()
 
     monkeypatch.setattr(
-        "app.services.payment.common.get_user_by_telegram_id",
+        'app.services.payment.common.get_user_by_telegram_id',
         fake_get_user_by_telegram_id,
     )
     monkeypatch.setattr(
-        "app.services.payment.common.get_db",
+        'app.services.payment.common.get_db',
         fake_get_db,
     )
     await service._send_payment_success_notification(
@@ -87,11 +88,11 @@ async def test_send_payment_success_notification_recovers_missing_greenlet(monke
         12300,
         user=lazy_user,
         db=sentinel_db,
-        payment_method_title="Тестовый метод",
+        payment_method_title='Тестовый метод',
     )
 
-    assert service.bot.messages, "Ожидалось, что уведомление будет отправлено"
+    assert service.bot.messages, 'Ожидалось, что уведомление будет отправлено'
     message = service.bot.messages[0]
-    assert "Тестовый метод" in message["text"]
+    assert 'Тестовый метод' in message['text']
     assert service.keyboard_user is not None
     assert isinstance(service.keyboard_user, SimpleNamespace)

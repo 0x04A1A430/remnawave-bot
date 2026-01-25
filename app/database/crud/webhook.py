@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import Webhook, WebhookDelivery
@@ -14,8 +13,8 @@ async def create_webhook(
     name: str,
     url: str,
     event_type: str,
-    secret: Optional[str] = None,
-    description: Optional[str] = None,
+    secret: str | None = None,
+    description: str | None = None,
 ) -> Webhook:
     """Создать новый webhook."""
     webhook = Webhook(
@@ -32,7 +31,7 @@ async def create_webhook(
     return webhook
 
 
-async def get_webhook_by_id(db: AsyncSession, webhook_id: int) -> Optional[Webhook]:
+async def get_webhook_by_id(db: AsyncSession, webhook_id: int) -> Webhook | None:
     """Получить webhook по ID."""
     result = await db.execute(select(Webhook).where(Webhook.id == webhook_id))
     return result.scalar_one_or_none()
@@ -40,8 +39,8 @@ async def get_webhook_by_id(db: AsyncSession, webhook_id: int) -> Optional[Webho
 
 async def list_webhooks(
     db: AsyncSession,
-    event_type: Optional[str] = None,
-    is_active: Optional[bool] = None,
+    event_type: str | None = None,
+    is_active: bool | None = None,
     limit: int = 100,
     offset: int = 0,
 ) -> tuple[list[Webhook], int]:
@@ -70,22 +69,18 @@ async def get_active_webhooks_for_event(
     event_type: str,
 ) -> list[Webhook]:
     """Получить все активные webhooks для конкретного события."""
-    result = await db.execute(
-        select(Webhook)
-        .where(Webhook.event_type == event_type)
-        .where(Webhook.is_active == True)
-    )
+    result = await db.execute(select(Webhook).where(Webhook.event_type == event_type).where(Webhook.is_active == True))
     return list(result.scalars().all())
 
 
 async def update_webhook(
     db: AsyncSession,
     webhook: Webhook,
-    name: Optional[str] = None,
-    url: Optional[str] = None,
-    secret: Optional[str] = None,
-    description: Optional[str] = None,
-    is_active: Optional[bool] = None,
+    name: str | None = None,
+    url: str | None = None,
+    secret: str | None = None,
+    description: str | None = None,
+    is_active: bool | None = None,
 ) -> Webhook:
     """Обновить webhook."""
     if name is not None:
@@ -117,9 +112,9 @@ async def record_webhook_delivery(
     event_type: str,
     payload: dict,
     status: str,
-    response_status: Optional[int] = None,
-    response_body: Optional[str] = None,
-    error_message: Optional[str] = None,
+    response_status: int | None = None,
+    response_body: str | None = None,
+    error_message: str | None = None,
     attempt_number: int = 1,
 ) -> WebhookDelivery:
     """Записать попытку доставки webhook."""
@@ -132,7 +127,7 @@ async def record_webhook_delivery(
         response_body=response_body,
         error_message=error_message,
         attempt_number=attempt_number,
-        delivered_at=datetime.utcnow() if status == "success" else None,
+        delivered_at=datetime.utcnow() if status == 'success' else None,
     )
     db.add(delivery)
     await db.commit()
@@ -154,4 +149,3 @@ async def update_webhook_stats(
     await db.commit()
     await db.refresh(webhook)
     return webhook
-

@@ -9,43 +9,46 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Optional, Tuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database.models import Subscription, User, TransactionType
 from app.database.crud.transaction import create_transaction
 from app.database.crud.user import subtract_user_balance
+from app.database.models import Subscription, TransactionType, User
 from app.services.subscription_service import SubscriptionService
-from app.utils.pricing_utils import get_remaining_months, calculate_prorated_price
+from app.utils.pricing_utils import calculate_prorated_price
+
 
 logger = logging.getLogger(__name__)
 
 
 class ModemError(Enum):
     """Типы ошибок при работе с модемом."""
-    NO_SUBSCRIPTION = "no_subscription"
-    TRIAL_SUBSCRIPTION = "trial_subscription"
-    MODEM_DISABLED = "modem_disabled"
-    ALREADY_ENABLED = "already_enabled"
-    NOT_ENABLED = "not_enabled"
-    INSUFFICIENT_FUNDS = "insufficient_funds"
-    CHARGE_ERROR = "charge_error"
-    UPDATE_ERROR = "update_error"
+
+    NO_SUBSCRIPTION = 'no_subscription'
+    TRIAL_SUBSCRIPTION = 'trial_subscription'
+    MODEM_DISABLED = 'modem_disabled'
+    ALREADY_ENABLED = 'already_enabled'
+    NOT_ENABLED = 'not_enabled'
+    INSUFFICIENT_FUNDS = 'insufficient_funds'
+    CHARGE_ERROR = 'charge_error'
+    UPDATE_ERROR = 'update_error'
 
 
 @dataclass
 class ModemAvailabilityResult:
     """Результат проверки доступности модема."""
+
     available: bool
-    error: Optional[ModemError] = None
+    error: ModemError | None = None
     modem_enabled: bool = False
 
 
 @dataclass
 class ModemPriceResult:
     """Результат расчёта цены модема."""
+
     base_price: int
     final_price: int
     discount_percent: int
@@ -62,8 +65,9 @@ class ModemPriceResult:
 @dataclass
 class ModemEnableResult:
     """Результат подключения модема."""
+
     success: bool
-    error: Optional[ModemError] = None
+    error: ModemError | None = None
     charged_amount: int = 0
     new_device_limit: int = 0
 
@@ -71,8 +75,9 @@ class ModemEnableResult:
 @dataclass
 class ModemDisableResult:
     """Результат отключения модема."""
+
     success: bool
-    error: Optional[ModemError] = None
+    error: ModemError | None = None
     new_device_limit: int = 0
 
 
@@ -101,17 +106,14 @@ class ModemService:
         return settings.is_modem_enabled()
 
     @staticmethod
-    def get_modem_enabled(subscription: Optional[Subscription]) -> bool:
+    def get_modem_enabled(subscription: Subscription | None) -> bool:
         """Безопасно получает статус модема из подписки."""
         if subscription is None:
             return False
         return getattr(subscription, 'modem_enabled', False) or False
 
     def check_availability(
-        self,
-        user: User,
-        for_enable: bool = False,
-        for_disable: bool = False
+        self, user: User, for_enable: bool = False, for_disable: bool = False
     ) -> ModemAvailabilityResult:
         """
         Проверяет доступность модема для пользователя.
@@ -129,43 +131,28 @@ class ModemService:
 
         if not subscription:
             return ModemAvailabilityResult(
-                available=False,
-                error=ModemError.NO_SUBSCRIPTION,
-                modem_enabled=modem_enabled
+                available=False, error=ModemError.NO_SUBSCRIPTION, modem_enabled=modem_enabled
             )
 
         if subscription.is_trial:
             return ModemAvailabilityResult(
-                available=False,
-                error=ModemError.TRIAL_SUBSCRIPTION,
-                modem_enabled=modem_enabled
+                available=False, error=ModemError.TRIAL_SUBSCRIPTION, modem_enabled=modem_enabled
             )
 
         if not self.is_modem_feature_enabled():
             return ModemAvailabilityResult(
-                available=False,
-                error=ModemError.MODEM_DISABLED,
-                modem_enabled=modem_enabled
+                available=False, error=ModemError.MODEM_DISABLED, modem_enabled=modem_enabled
             )
 
         if for_enable and modem_enabled:
             return ModemAvailabilityResult(
-                available=False,
-                error=ModemError.ALREADY_ENABLED,
-                modem_enabled=modem_enabled
+                available=False, error=ModemError.ALREADY_ENABLED, modem_enabled=modem_enabled
             )
 
         if for_disable and not modem_enabled:
-            return ModemAvailabilityResult(
-                available=False,
-                error=ModemError.NOT_ENABLED,
-                modem_enabled=modem_enabled
-            )
+            return ModemAvailabilityResult(available=False, error=ModemError.NOT_ENABLED, modem_enabled=modem_enabled)
 
-        return ModemAvailabilityResult(
-            available=True,
-            modem_enabled=modem_enabled
-        )
+        return ModemAvailabilityResult(available=True, modem_enabled=modem_enabled)
 
     def calculate_price(self, subscription: Subscription) -> ModemPriceResult:
         """
@@ -205,10 +192,10 @@ class ModemService:
             discount_amount=discount_amount,
             charged_months=charged_months,
             remaining_days=remaining_days,
-            end_date=subscription.end_date
+            end_date=subscription.end_date,
         )
 
-    def check_balance(self, user: User, price: int) -> Tuple[bool, int]:
+    def check_balance(self, user: User, price: int) -> tuple[bool, int]:
         """
         Проверяет достаточность баланса.
 
@@ -228,12 +215,7 @@ class ModemService:
         missing = price - user.balance_kopeks
         return False, missing
 
-    async def enable_modem(
-        self,
-        db: AsyncSession,
-        user: User,
-        subscription: Subscription
-    ) -> ModemEnableResult:
+    async def enable_modem(self, db: AsyncSession, user: User, subscription: Subscription) -> ModemEnableResult:
         """
         Подключает модем к подписке.
 
@@ -258,30 +240,21 @@ class ModemService:
 
         has_funds, _ = self.check_balance(user, price)
         if not has_funds:
-            return ModemEnableResult(
-                success=False,
-                error=ModemError.INSUFFICIENT_FUNDS
-            )
+            return ModemEnableResult(success=False, error=ModemError.INSUFFICIENT_FUNDS)
 
         try:
             if price > 0:
-                success = await subtract_user_balance(
-                    db, user, price,
-                    "Подключение модема"
-                )
+                success = await subtract_user_balance(db, user, price, 'Подключение модема')
 
                 if not success:
-                    return ModemEnableResult(
-                        success=False,
-                        error=ModemError.CHARGE_ERROR
-                    )
+                    return ModemEnableResult(success=False, error=ModemError.CHARGE_ERROR)
 
                 await create_transaction(
                     db=db,
                     user_id=user.id,
                     type=TransactionType.SUBSCRIPTION_PAYMENT,
                     amount_kopeks=price,
-                    description=f"Подключение модема на {price_info.charged_months} мес"
+                    description=f'Подключение модема на {price_info.charged_months} мес',
                 )
 
             subscription.modem_enabled = True
@@ -295,30 +268,18 @@ class ModemService:
             await db.refresh(user)
             await db.refresh(subscription)
 
-            logger.info(
-                f"Пользователь {user.telegram_id} подключил модем, списано: {price / 100}₽"
-            )
+            user_id_display = user.telegram_id or user.email or f'#{user.id}'
+            logger.info(f'Пользователь {user_id_display} подключил модем, списано: {price / 100}₽')
 
-            return ModemEnableResult(
-                success=True,
-                charged_amount=price,
-                new_device_limit=subscription.device_limit
-            )
+            return ModemEnableResult(success=True, charged_amount=price, new_device_limit=subscription.device_limit)
 
         except Exception as e:
-            logger.error(f"Ошибка подключения модема для пользователя {user.telegram_id}: {e}")
+            user_id_display = user.telegram_id or user.email or f'#{user.id}'
+            logger.error(f'Ошибка подключения модема для пользователя {user_id_display}: {e}')
             await db.rollback()
-            return ModemEnableResult(
-                success=False,
-                error=ModemError.UPDATE_ERROR
-            )
+            return ModemEnableResult(success=False, error=ModemError.UPDATE_ERROR)
 
-    async def disable_modem(
-        self,
-        db: AsyncSession,
-        user: User,
-        subscription: Subscription
-    ) -> ModemDisableResult:
+    async def disable_modem(self, db: AsyncSession, user: User, subscription: Subscription) -> ModemDisableResult:
         """
         Отключает модем от подписки.
 
@@ -345,23 +306,19 @@ class ModemService:
             await db.refresh(user)
             await db.refresh(subscription)
 
-            logger.info(f"Пользователь {user.telegram_id} отключил модем")
+            user_id_display = user.telegram_id or user.email or f'#{user.id}'
+            logger.info(f'Пользователь {user_id_display} отключил модем')
 
-            return ModemDisableResult(
-                success=True,
-                new_device_limit=subscription.device_limit
-            )
+            return ModemDisableResult(success=True, new_device_limit=subscription.device_limit)
 
         except Exception as e:
-            logger.error(f"Ошибка отключения модема для пользователя {user.telegram_id}: {e}")
+            user_id_display = user.telegram_id or user.email or f'#{user.id}'
+            logger.error(f'Ошибка отключения модема для пользователя {user_id_display}: {e}')
             await db.rollback()
-            return ModemDisableResult(
-                success=False,
-                error=ModemError.UPDATE_ERROR
-            )
+            return ModemDisableResult(success=False, error=ModemError.UPDATE_ERROR)
 
     @staticmethod
-    def get_period_warning_level(remaining_days: int) -> Optional[str]:
+    def get_period_warning_level(remaining_days: int) -> str | None:
         """
         Определяет уровень предупреждения о сроке действия.
 
@@ -374,14 +331,14 @@ class ModemService:
             None если больше 30 дней
         """
         if remaining_days <= MODEM_WARNING_DAYS_CRITICAL:
-            return "critical"
+            return 'critical'
         if remaining_days <= MODEM_WARNING_DAYS_INFO:
-            return "info"
+            return 'info'
         return None
 
 
 # Singleton instance для использования в хендлерах
-_modem_service: Optional[ModemService] = None
+_modem_service: ModemService | None = None
 
 
 def get_modem_service() -> ModemService:

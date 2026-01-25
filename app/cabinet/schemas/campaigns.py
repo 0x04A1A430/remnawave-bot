@@ -1,21 +1,24 @@
 """Schemas for advertising campaigns management in cabinet."""
 
 from datetime import datetime
-from typing import List, Optional, Literal
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
-CampaignBonusType = Literal["balance", "subscription", "none", "tariff"]
+CampaignBonusType = Literal['balance', 'subscription', 'none', 'tariff']
 
 
 class TariffInfo(BaseModel):
     """Tariff info for campaign."""
+
     id: int
     name: str
 
 
 class CampaignListItem(BaseModel):
     """Campaign item for list view."""
+
     id: int
     name: str
     start_parameter: str
@@ -32,12 +35,14 @@ class CampaignListItem(BaseModel):
 
 class CampaignListResponse(BaseModel):
     """Response with list of campaigns."""
-    campaigns: List[CampaignListItem]
+
+    campaigns: list[CampaignListItem]
     total: int
 
 
 class CampaignDetailResponse(BaseModel):
     """Detailed campaign response."""
+
     id: int
     name: str
     start_parameter: str
@@ -47,20 +52,20 @@ class CampaignDetailResponse(BaseModel):
     balance_bonus_kopeks: int = 0
     balance_bonus_rubles: float = 0.0
     # Subscription bonus
-    subscription_duration_days: Optional[int] = None
-    subscription_traffic_gb: Optional[int] = None
-    subscription_device_limit: Optional[int] = None
-    subscription_squads: List[str] = Field(default_factory=list)
+    subscription_duration_days: int | None = None
+    subscription_traffic_gb: int | None = None
+    subscription_device_limit: int | None = None
+    subscription_squads: list[str] = Field(default_factory=list)
     # Tariff bonus
-    tariff_id: Optional[int] = None
-    tariff_duration_days: Optional[int] = None
-    tariff: Optional[TariffInfo] = None
+    tariff_id: int | None = None
+    tariff_duration_days: int | None = None
+    tariff: TariffInfo | None = None
     # Meta
-    created_by: Optional[int] = None
+    created_by: int | None = None
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
     # Deep link
-    deep_link: Optional[str] = None
+    deep_link: str | None = None
 
     class Config:
         from_attributes = True
@@ -68,42 +73,45 @@ class CampaignDetailResponse(BaseModel):
 
 class CampaignCreateRequest(BaseModel):
     """Request to create a campaign."""
+
     name: str = Field(..., min_length=1, max_length=255)
-    start_parameter: str = Field(..., min_length=1, max_length=100, pattern=r"^[a-zA-Z0-9_-]+$")
+    start_parameter: str = Field(..., min_length=1, max_length=100, pattern=r'^[a-zA-Z0-9_-]+$')
     bonus_type: CampaignBonusType
     is_active: bool = True
     # Balance bonus
     balance_bonus_kopeks: int = Field(0, ge=0)
     # Subscription bonus
-    subscription_duration_days: Optional[int] = Field(None, ge=1)
-    subscription_traffic_gb: Optional[int] = Field(None, ge=0)
-    subscription_device_limit: Optional[int] = Field(None, ge=1)
-    subscription_squads: List[str] = Field(default_factory=list)
+    subscription_duration_days: int | None = Field(None, ge=1)
+    subscription_traffic_gb: int | None = Field(None, ge=0)
+    subscription_device_limit: int | None = Field(None, ge=1)
+    subscription_squads: list[str] = Field(default_factory=list)
     # Tariff bonus
-    tariff_id: Optional[int] = None
-    tariff_duration_days: Optional[int] = Field(None, ge=1)
+    tariff_id: int | None = None
+    tariff_duration_days: int | None = Field(None, ge=1)
 
 
 class CampaignUpdateRequest(BaseModel):
     """Request to update a campaign."""
-    name: Optional[str] = Field(None, min_length=1, max_length=255)
-    start_parameter: Optional[str] = Field(None, min_length=1, max_length=100, pattern=r"^[a-zA-Z0-9_-]+$")
-    bonus_type: Optional[CampaignBonusType] = None
-    is_active: Optional[bool] = None
+
+    name: str | None = Field(None, min_length=1, max_length=255)
+    start_parameter: str | None = Field(None, min_length=1, max_length=100, pattern=r'^[a-zA-Z0-9_-]+$')
+    bonus_type: CampaignBonusType | None = None
+    is_active: bool | None = None
     # Balance bonus
-    balance_bonus_kopeks: Optional[int] = Field(None, ge=0)
+    balance_bonus_kopeks: int | None = Field(None, ge=0)
     # Subscription bonus
-    subscription_duration_days: Optional[int] = Field(None, ge=1)
-    subscription_traffic_gb: Optional[int] = Field(None, ge=0)
-    subscription_device_limit: Optional[int] = Field(None, ge=1)
-    subscription_squads: Optional[List[str]] = None
+    subscription_duration_days: int | None = Field(None, ge=1)
+    subscription_traffic_gb: int | None = Field(None, ge=0)
+    subscription_device_limit: int | None = Field(None, ge=1)
+    subscription_squads: list[str] | None = None
     # Tariff bonus
-    tariff_id: Optional[int] = None
-    tariff_duration_days: Optional[int] = Field(None, ge=1)
+    tariff_id: int | None = None
+    tariff_duration_days: int | None = Field(None, ge=1)
 
 
 class CampaignToggleResponse(BaseModel):
     """Response after toggling campaign."""
+
     id: int
     is_active: bool
     message: str
@@ -111,6 +119,7 @@ class CampaignToggleResponse(BaseModel):
 
 class CampaignStatisticsResponse(BaseModel):
     """Detailed campaign statistics."""
+
     id: int
     name: str
     start_parameter: str
@@ -121,7 +130,7 @@ class CampaignStatisticsResponse(BaseModel):
     balance_issued_kopeks: int = 0
     balance_issued_rubles: float = 0.0
     subscription_issued: int = 0
-    last_registration: Optional[datetime] = None
+    last_registration: datetime | None = None
     # Revenue stats
     total_revenue_kopeks: int = 0
     total_revenue_rubles: float = 0.0
@@ -137,21 +146,22 @@ class CampaignStatisticsResponse(BaseModel):
     conversion_rate: float = 0.0
     trial_conversion_rate: float = 0.0
     # Deep link
-    deep_link: Optional[str] = None
+    deep_link: str | None = None
 
 
 class CampaignRegistrationItem(BaseModel):
     """Campaign registration item."""
+
     id: int
     user_id: int
-    telegram_id: int
-    username: Optional[str] = None
-    first_name: Optional[str] = None
+    telegram_id: int | None = None
+    username: str | None = None
+    first_name: str | None = None
     bonus_type: str
     balance_bonus_kopeks: int = 0
-    subscription_duration_days: Optional[int] = None
-    tariff_id: Optional[int] = None
-    tariff_duration_days: Optional[int] = None
+    subscription_duration_days: int | None = None
+    tariff_id: int | None = None
+    tariff_duration_days: int | None = None
     created_at: datetime
     # User stats
     user_balance_kopeks: int = 0
@@ -164,7 +174,8 @@ class CampaignRegistrationItem(BaseModel):
 
 class CampaignRegistrationsResponse(BaseModel):
     """Response with campaign registrations."""
-    registrations: List[CampaignRegistrationItem]
+
+    registrations: list[CampaignRegistrationItem]
     total: int
     page: int
     per_page: int
@@ -172,6 +183,7 @@ class CampaignRegistrationsResponse(BaseModel):
 
 class CampaignsOverviewResponse(BaseModel):
     """Overview of all campaigns."""
+
     total: int
     active: int
     inactive: int
@@ -184,7 +196,8 @@ class CampaignsOverviewResponse(BaseModel):
 
 class ServerSquadInfo(BaseModel):
     """Server squad info for campaign selection."""
+
     id: int
     squad_uuid: str
     display_name: str
-    country_code: Optional[str] = None
+    country_code: str | None = None

@@ -2,32 +2,32 @@
 
 import logging
 import math
-from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, desc
 from sqlalchemy.orm import selectinload
 
-from app.database.models import User, ReferralEarning
 from app.config import settings
+from app.database.models import ReferralEarning, User
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 from ..schemas.referral import (
+    ReferralEarningResponse,
+    ReferralEarningsListResponse,
     ReferralInfoResponse,
     ReferralItemResponse,
     ReferralListResponse,
-    ReferralEarningResponse,
-    ReferralEarningsListResponse,
     ReferralTermsResponse,
 )
 
+
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/referral", tags=["Cabinet Referral"])
+router = APIRouter(prefix='/referral', tags=['Cabinet Referral'])
 
 
-@router.get("", response_model=ReferralInfoResponse)
+@router.get('', response_model=ReferralInfoResponse)
 async def get_referral_info(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
@@ -49,9 +49,8 @@ async def get_referral_info(
     active_referrals = active_result.scalar() or 0
 
     # Get total earnings
-    earnings_query = (
-        select(func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0))
-        .where(ReferralEarning.user_id == user.id)
+    earnings_query = select(func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0)).where(
+        ReferralEarning.user_id == user.id
     )
     earnings_result = await db.execute(earnings_query)
     total_earnings = earnings_result.scalar() or 0
@@ -62,11 +61,11 @@ async def get_referral_info(
         commission_percent = settings.REFERRAL_COMMISSION_PERCENT
 
     # Build referral link
-    bot_username = settings.get_bot_username() or "bot"
-    referral_link = f"https://t.me/{bot_username}?start={user.referral_code}"
+    bot_username = settings.get_bot_username() or 'bot'
+    referral_link = f'https://t.me/{bot_username}?start={user.referral_code}'
 
     return ReferralInfoResponse(
-        referral_code=user.referral_code or "",
+        referral_code=user.referral_code or '',
         referral_link=referral_link,
         total_referrals=total_referrals,
         active_referrals=active_referrals,
@@ -76,10 +75,10 @@ async def get_referral_info(
     )
 
 
-@router.get("/list", response_model=ReferralListResponse)
+@router.get('/list', response_model=ReferralListResponse)
 async def get_referral_list(
-    page: int = Query(1, ge=1, description="Page number"),
-    per_page: int = Query(20, ge=1, le=100, description="Items per page"),
+    page: int = Query(1, ge=1, description='Page number'),
+    per_page: int = Query(20, ge=1, le=100, description='Items per page'),
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
@@ -122,10 +121,10 @@ async def get_referral_list(
     )
 
 
-@router.get("/earnings", response_model=ReferralEarningsListResponse)
+@router.get('/earnings', response_model=ReferralEarningsListResponse)
 async def get_referral_earnings(
-    page: int = Query(1, ge=1, description="Page number"),
-    per_page: int = Query(20, ge=1, le=100, description="Items per page"),
+    page: int = Query(1, ge=1, description='Page number'),
+    per_page: int = Query(20, ge=1, le=100, description='Items per page'),
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
@@ -138,9 +137,8 @@ async def get_referral_earnings(
     total_result = await db.execute(count_query)
     total = total_result.scalar() or 0
 
-    sum_query = (
-        select(func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0))
-        .where(ReferralEarning.user_id == user.id)
+    sum_query = select(func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0)).where(
+        ReferralEarning.user_id == user.id
     )
     sum_result = await db.execute(sum_query)
     total_amount = sum_result.scalar() or 0
@@ -159,15 +157,17 @@ async def get_referral_earnings(
         referral_result = await db.execute(referral_query)
         referral_user = referral_result.scalar_one_or_none()
 
-        items.append(ReferralEarningResponse(
-            id=e.id,
-            amount_kopeks=e.amount_kopeks,
-            amount_rubles=e.amount_kopeks / 100,
-            reason=e.reason or "Referral commission",
-            referral_username=referral_user.username if referral_user else None,
-            referral_first_name=referral_user.first_name if referral_user else None,
-            created_at=e.created_at,
-        ))
+        items.append(
+            ReferralEarningResponse(
+                id=e.id,
+                amount_kopeks=e.amount_kopeks,
+                amount_rubles=e.amount_kopeks / 100,
+                reason=e.reason or 'Referral commission',
+                referral_username=referral_user.username if referral_user else None,
+                referral_first_name=referral_user.first_name if referral_user else None,
+                created_at=e.created_at,
+            )
+        )
 
     pages = math.ceil(total / per_page) if total > 0 else 1
 
@@ -182,7 +182,7 @@ async def get_referral_earnings(
     )
 
 
-@router.get("/terms", response_model=ReferralTermsResponse)
+@router.get('/terms', response_model=ReferralTermsResponse)
 async def get_referral_terms():
     """Get referral program terms."""
     return ReferralTermsResponse(

@@ -1,9 +1,10 @@
 import logging
-from typing import Optional
+
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
 
 from app.database.models import SentNotification
+
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +14,7 @@ async def notification_sent(
     user_id: int,
     subscription_id: int,
     notification_type: str,
-    days_before: Optional[int] = None,
+    days_before: int | None = None,
 ) -> bool:
     result = await db.execute(
         select(SentNotification).where(
@@ -31,7 +32,7 @@ async def record_notification(
     user_id: int,
     subscription_id: int,
     notification_type: str,
-    days_before: Optional[int] = None,
+    days_before: int | None = None,
 ) -> None:
     notification = SentNotification(
         user_id=user_id,
@@ -44,11 +45,7 @@ async def record_notification(
 
 
 async def clear_notifications(db: AsyncSession, subscription_id: int) -> None:
-    await db.execute(
-        delete(SentNotification).where(
-            SentNotification.subscription_id == subscription_id
-        )
-    )
+    await db.execute(delete(SentNotification).where(SentNotification.subscription_id == subscription_id))
     await db.commit()
 
 

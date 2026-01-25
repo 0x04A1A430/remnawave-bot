@@ -1,31 +1,32 @@
 """Info pages routes for cabinet - FAQ, rules, privacy policy, etc."""
 
 import logging
-from typing import List, Optional, Dict, Any
-from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.models import User
 from app.config import settings
+from app.database.crud.rules import get_current_rules_content, get_rules_by_language
+from app.database.models import User
 from app.services.faq_service import FaqService
 from app.services.privacy_policy_service import PrivacyPolicyService
 from app.services.public_offer_service import PublicOfferService
-from app.database.crud.rules import get_rules_by_language, get_current_rules_content
 
-from ..dependencies import get_cabinet_db, get_current_cabinet_user, get_optional_cabinet_user
+from ..dependencies import get_cabinet_db, get_current_cabinet_user
+
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/info", tags=["Cabinet Info"])
+router = APIRouter(prefix='/info', tags=['Cabinet Info'])
 
 
 # ============ Schemas ============
 
+
 class FaqPageResponse(BaseModel):
     """FAQ page."""
+
     id: int
     title: str
     content: str
@@ -34,44 +35,50 @@ class FaqPageResponse(BaseModel):
 
 class RulesResponse(BaseModel):
     """Service rules."""
+
     content: str
-    updated_at: Optional[str] = None
+    updated_at: str | None = None
 
 
 class PrivacyPolicyResponse(BaseModel):
     """Privacy policy."""
+
     content: str
-    updated_at: Optional[str] = None
+    updated_at: str | None = None
 
 
 class PublicOfferResponse(BaseModel):
     """Public offer."""
+
     content: str
-    updated_at: Optional[str] = None
+    updated_at: str | None = None
 
 
 class ServiceInfoResponse(BaseModel):
     """General service info."""
+
     name: str
-    description: Optional[str] = None
-    support_email: Optional[str] = None
-    support_telegram: Optional[str] = None
-    website: Optional[str] = None
+    description: str | None = None
+    support_email: str | None = None
+    support_telegram: str | None = None
+    website: str | None = None
 
 
 class SupportConfigResponse(BaseModel):
     """Support/tickets configuration for miniapp."""
+
     tickets_enabled: bool
     support_type: str  # "tickets", "profile", "url"
-    support_url: Optional[str] = None
-    support_username: Optional[str] = None
+    support_url: str | None = None
+    support_username: str | None = None
 
 
 # ============ Routes ============
 
-@router.get("/faq", response_model=List[FaqPageResponse])
+
+@router.get('/faq', response_model=list[FaqPageResponse])
 async def get_faq_pages(
-    language: str = Query("ru", min_length=2, max_length=10),
+    language: str = Query('ru', min_length=2, max_length=10),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get list of FAQ pages."""
@@ -87,17 +94,17 @@ async def get_faq_pages(
         FaqPageResponse(
             id=page.id,
             title=page.title,
-            content=page.content or "",
+            content=page.content or '',
             order=page.display_order or 0,
         )
         for page in pages
     ]
 
 
-@router.get("/faq/{page_id}", response_model=FaqPageResponse)
+@router.get('/faq/{page_id}', response_model=FaqPageResponse)
 async def get_faq_page(
     page_id: int,
-    language: str = Query("ru", min_length=2, max_length=10),
+    language: str = Query('ru', min_length=2, max_length=10),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get a specific FAQ page by ID."""
@@ -113,24 +120,24 @@ async def get_faq_page(
     if not page:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="FAQ page not found",
+            detail='FAQ page not found',
         )
 
     return FaqPageResponse(
         id=page.id,
         title=page.title,
-        content=page.content or "",
+        content=page.content or '',
         order=page.display_order or 0,
     )
 
 
-@router.get("/rules", response_model=RulesResponse)
+@router.get('/rules', response_model=RulesResponse)
 async def get_rules(
-    language: str = Query("ru", min_length=2, max_length=10),
+    language: str = Query('ru', min_length=2, max_length=10),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get service rules - uses same function as bot."""
-    requested_lang = language.split("-")[0].lower()
+    requested_lang = language.split('-')[0].lower()
 
     # Use the same function as bot to ensure consistent content
     content = await get_current_rules_content(db, requested_lang)
@@ -144,9 +151,9 @@ async def get_rules(
     return RulesResponse(content=content, updated_at=updated_at)
 
 
-@router.get("/privacy-policy", response_model=PrivacyPolicyResponse)
+@router.get('/privacy-policy', response_model=PrivacyPolicyResponse)
 async def get_privacy_policy(
-    language: str = Query("ru", min_length=2, max_length=10),
+    language: str = Query('ru', min_length=2, max_length=10),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get privacy policy."""
@@ -167,9 +174,9 @@ async def get_privacy_policy(
     )
 
 
-@router.get("/public-offer", response_model=PublicOfferResponse)
+@router.get('/public-offer', response_model=PublicOfferResponse)
 async def get_public_offer(
-    language: str = Query("ru", min_length=2, max_length=10),
+    language: str = Query('ru', min_length=2, max_length=10),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get public offer."""
@@ -190,7 +197,7 @@ async def get_public_offer(
     )
 
 
-@router.get("/service", response_model=ServiceInfoResponse)
+@router.get('/service', response_model=ServiceInfoResponse)
 async def get_service_info():
     """Get general service information."""
     return ServiceInfoResponse(
@@ -202,50 +209,50 @@ async def get_service_info():
     )
 
 
-@router.get("/languages")
+@router.get('/languages')
 async def get_available_languages():
     """Get list of available languages."""
     return {
-        "languages": [
-            {"code": "ru", "name": "Русский", "flag": "🇷🇺"},
-            {"code": "en", "name": "English", "flag": "🇬🇧"},
+        'languages': [
+            {'code': 'ru', 'name': 'Русский', 'flag': '🇷🇺'},
+            {'code': 'en', 'name': 'English', 'flag': '🇬🇧'},
         ],
-        "default": getattr(settings, 'DEFAULT_LANGUAGE', 'ru') or 'ru',
+        'default': getattr(settings, 'DEFAULT_LANGUAGE', 'ru') or 'ru',
     }
 
 
-@router.get("/user/language")
+@router.get('/user/language')
 async def get_user_language(
     user: User = Depends(get_current_cabinet_user),
 ):
     """Get current user's language."""
-    return {"language": user.language or "ru"}
+    return {'language': user.language or 'ru'}
 
 
-@router.patch("/user/language")
+@router.patch('/user/language')
 async def update_user_language(
-    request: Dict[str, str],
+    request: dict[str, str],
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Update user's language preference."""
-    language = request.get("language", "ru")
+    language = request.get('language', 'ru')
 
-    valid_languages = ["ru", "en"]
+    valid_languages = ['ru', 'en']
     if language not in valid_languages:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid language. Supported: {', '.join(valid_languages)}",
+            detail=f'Invalid language. Supported: {", ".join(valid_languages)}',
         )
 
     user.language = language
     await db.commit()
     await db.refresh(user)
 
-    return {"language": user.language}
+    return {'language': user.language}
 
 
-@router.get("/support-config", response_model=SupportConfigResponse)
+@router.get('/support-config', response_model=SupportConfigResponse)
 async def get_support_config():
     """Get support/tickets configuration for cabinet."""
     # Use SUPPORT_SYSTEM_MODE setting (configurable from admin panel)
@@ -255,15 +262,15 @@ async def get_support_config():
     # - "tickets" mode -> tickets only, no contact
     # - "contact" mode -> contact only (profile), no tickets
     # - "both" mode -> tickets enabled, contact available as fallback
-    if support_mode == "tickets":
+    if support_mode == 'tickets':
         tickets_enabled = True
-        support_type = "tickets"
-    elif support_mode == "contact":
+        support_type = 'tickets'
+    elif support_mode == 'contact':
         tickets_enabled = False
-        support_type = "profile"
+        support_type = 'profile'
     else:  # both
         tickets_enabled = True
-        support_type = "tickets"
+        support_type = 'tickets'
 
     return SupportConfigResponse(
         tickets_enabled=tickets_enabled,

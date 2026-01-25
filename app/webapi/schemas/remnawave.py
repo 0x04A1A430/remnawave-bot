@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -9,67 +9,67 @@ from pydantic import BaseModel, Field
 class RemnaWaveConnectionStatus(BaseModel):
     status: str
     message: str
-    api_url: Optional[str] = None
-    status_code: Optional[int] = None
-    system_info: Optional[Dict[str, Any]] = None
+    api_url: str | None = None
+    status_code: int | None = None
+    system_info: dict[str, Any] | None = None
 
 
 class RemnaWaveStatusResponse(BaseModel):
     is_configured: bool
-    configuration_error: Optional[str] = None
-    connection: Optional[RemnaWaveConnectionStatus] = None
+    configuration_error: str | None = None
+    connection: RemnaWaveConnectionStatus | None = None
 
 
 class RemnaWaveNode(BaseModel):
     uuid: str
     name: str
     address: str
-    country_code: Optional[str] = None
+    country_code: str | None = None
     is_connected: bool
     is_disabled: bool
     is_node_online: bool
     is_xray_running: bool
-    users_online: Optional[int] = None
-    traffic_used_bytes: Optional[int] = None
-    traffic_limit_bytes: Optional[int] = None
-    last_status_change: Optional[datetime] = None
-    last_status_message: Optional[str] = None
-    xray_uptime: Optional[str] = None
+    users_online: int | None = None
+    traffic_used_bytes: int | None = None
+    traffic_limit_bytes: int | None = None
+    last_status_change: datetime | None = None
+    last_status_message: str | None = None
+    xray_uptime: str | None = None
     is_traffic_tracking_active: bool = False
-    traffic_reset_day: Optional[int] = None
-    notify_percent: Optional[int] = None
+    traffic_reset_day: int | None = None
+    notify_percent: int | None = None
     consumption_multiplier: float = 1.0
-    cpu_count: Optional[int] = None
-    cpu_model: Optional[str] = None
-    total_ram: Optional[str] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-    provider_uuid: Optional[str] = None
+    cpu_count: int | None = None
+    cpu_model: str | None = None
+    total_ram: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    provider_uuid: str | None = None
 
 
 class RemnaWaveNodeListResponse(BaseModel):
-    items: List[RemnaWaveNode]
+    items: list[RemnaWaveNode]
     total: int
 
 
 class RemnaWaveNodeActionRequest(BaseModel):
-    action: Literal["enable", "disable", "restart"]
+    action: Literal['enable', 'disable', 'restart']
 
 
 class RemnaWaveNodeActionResponse(BaseModel):
     success: bool
-    detail: Optional[str] = None
+    detail: str | None = None
 
 
 class RemnaWaveNodeStatisticsResponse(BaseModel):
     node: RemnaWaveNode
-    realtime: Optional[Dict[str, Any]] = None
-    usage_history: List[Dict[str, Any]] = Field(default_factory=list)
-    last_updated: Optional[datetime] = None
+    realtime: dict[str, Any] | None = None
+    usage_history: list[dict[str, Any]] = Field(default_factory=list)
+    last_updated: datetime | None = None
 
 
 class RemnaWaveNodeUsageResponse(BaseModel):
-    items: List[Dict[str, Any]] = Field(default_factory=list)
+    items: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class RemnaWaveBandwidth(BaseModel):
@@ -81,7 +81,7 @@ class RemnaWaveBandwidth(BaseModel):
 class RemnaWaveTrafficPeriod(BaseModel):
     current: int
     previous: int
-    difference: Optional[str] = None
+    difference: str | None = None
 
 
 class RemnaWaveTrafficPeriods(BaseModel):
@@ -115,13 +115,13 @@ class RemnaWaveServerInfo(BaseModel):
 
 class RemnaWaveSystemStatsResponse(BaseModel):
     system: RemnaWaveSystemSummary
-    users_by_status: Dict[str, int]
+    users_by_status: dict[str, int]
     server_info: RemnaWaveServerInfo
     bandwidth: RemnaWaveBandwidth
     traffic_periods: RemnaWaveTrafficPeriods
-    nodes_realtime: List[Dict[str, Any]] = Field(default_factory=list)
-    nodes_weekly: List[Dict[str, Any]] = Field(default_factory=list)
-    last_updated: Optional[datetime] = None
+    nodes_realtime: list[dict[str, Any]] = Field(default_factory=list)
+    nodes_weekly: list[dict[str, Any]] = Field(default_factory=list)
+    last_updated: datetime | None = None
 
 
 class RemnaWaveSquad(BaseModel):
@@ -129,66 +129,66 @@ class RemnaWaveSquad(BaseModel):
     name: str
     members_count: int
     inbounds_count: int
-    inbounds: List[Dict[str, Any]] = Field(default_factory=list)
+    inbounds: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class RemnaWaveSquadListResponse(BaseModel):
-    items: List[RemnaWaveSquad]
+    items: list[RemnaWaveSquad]
     total: int
 
 
 class RemnaWaveSquadCreateRequest(BaseModel):
     name: str
-    inbound_uuids: List[str] = Field(default_factory=list)
+    inbound_uuids: list[str] = Field(default_factory=list)
 
 
 class RemnaWaveSquadUpdateRequest(BaseModel):
-    name: Optional[str] = None
-    inbound_uuids: Optional[List[str]] = None
+    name: str | None = None
+    inbound_uuids: list[str] | None = None
 
 
 class RemnaWaveSquadActionRequest(BaseModel):
-    action: Literal["add_all_users", "remove_all_users", "delete", "rename", "update_inbounds"]
-    name: Optional[str] = None
-    inbound_uuids: Optional[List[str]] = None
+    action: Literal['add_all_users', 'remove_all_users', 'delete', 'rename', 'update_inbounds']
+    name: str | None = None
+    inbound_uuids: list[str] | None = None
 
 
 class RemnaWaveOperationResponse(BaseModel):
     success: bool
-    detail: Optional[str] = None
-    data: Optional[Dict[str, Any]] = None
+    detail: str | None = None
+    data: dict[str, Any] | None = None
 
 
 class RemnaWaveInboundsResponse(BaseModel):
-    items: List[Dict[str, Any]] = Field(default_factory=list)
+    items: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class RemnaWaveUserTrafficResponse(BaseModel):
-    telegram_id: int
+    telegram_id: int | None = None
     used_traffic_bytes: int
     used_traffic_gb: float
     lifetime_used_traffic_bytes: int
     lifetime_used_traffic_gb: float
     traffic_limit_bytes: int
     traffic_limit_gb: float
-    subscription_url: Optional[str] = None
+    subscription_url: str | None = None
 
 
 class RemnaWaveSyncFromPanelRequest(BaseModel):
-    mode: Literal["all", "new_only", "update_only"] = "all"
+    mode: Literal['all', 'new_only', 'update_only'] = 'all'
 
 
 class RemnaWaveGenericSyncResponse(BaseModel):
     success: bool
-    detail: Optional[str] = None
-    data: Optional[Dict[str, Any]] = None
+    detail: str | None = None
+    data: dict[str, Any] | None = None
 
 
 class RemnaWaveSquadMigrationPreviewResponse(BaseModel):
     squad_uuid: str
     squad_name: str
     current_users: int
-    max_users: Optional[int] = None
+    max_users: int | None = None
     users_to_migrate: int
 
 
@@ -210,6 +210,6 @@ class RemnaWaveSquadMigrationStats(BaseModel):
 
 class RemnaWaveSquadMigrationResponse(BaseModel):
     success: bool
-    detail: Optional[str] = None
-    error: Optional[str] = None
-    data: Optional[RemnaWaveSquadMigrationStats] = None
+    detail: str | None = None
+    error: str | None = None
+    data: RemnaWaveSquadMigrationStats | None = None

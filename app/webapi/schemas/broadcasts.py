@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import ClassVar, Optional
+from typing import ClassVar
 
 from pydantic import BaseModel, Field, validator
 
@@ -9,45 +9,43 @@ from app.keyboards.admin import BROADCAST_BUTTONS, DEFAULT_BROADCAST_BUTTONS
 
 
 class BroadcastMedia(BaseModel):
-    type: str = Field(pattern=r"^(photo|video|document)$")
+    type: str = Field(pattern=r'^(photo|video|document)$')
     file_id: str
-    caption: Optional[str] = None
+    caption: str | None = None
 
 
 class BroadcastCreateRequest(BaseModel):
     target: str
     message_text: str = Field(..., min_length=1, max_length=4000)
-    selected_buttons: list[str] = Field(
-        default_factory=lambda: list(DEFAULT_BROADCAST_BUTTONS)
-    )
-    media: Optional[BroadcastMedia] = None
+    selected_buttons: list[str] = Field(default_factory=lambda: list(DEFAULT_BROADCAST_BUTTONS))
+    media: BroadcastMedia | None = None
 
     _ALLOWED_TARGETS: ClassVar[set[str]] = {
-        "all",
-        "active",
-        "trial",
-        "no",
-        "expiring",
-        "expired",
-        "active_zero",
-        "trial_zero",
-        "zero",
+        'all',
+        'active',
+        'trial',
+        'no',
+        'expiring',
+        'expired',
+        'active_zero',
+        'trial_zero',
+        'zero',
     }
     _CUSTOM_TARGETS: ClassVar[set[str]] = {
-        "today",
-        "week",
-        "month",
-        "active_today",
-        "inactive_week",
-        "inactive_month",
-        "referrals",
-        "direct",
+        'today',
+        'week',
+        'month',
+        'active_today',
+        'inactive_week',
+        'inactive_month',
+        'referrals',
+        'direct',
     }
     _TARGET_ALIASES: ClassVar[dict[str, str]] = {
-        "no_sub": "no",
+        'no_sub': 'no',
     }
 
-    @validator("target")
+    @validator('target')
     def validate_target(cls, value: str) -> str:
         normalized = value.strip().lower()
         normalized = cls._TARGET_ALIASES.get(normalized, normalized)
@@ -55,19 +53,19 @@ class BroadcastCreateRequest(BaseModel):
         if normalized in cls._ALLOWED_TARGETS:
             return normalized
 
-        if normalized.startswith("custom_"):
-            criteria = normalized[len("custom_"):]
+        if normalized.startswith('custom_'):
+            criteria = normalized[len('custom_') :]
             if criteria in cls._CUSTOM_TARGETS:
                 return normalized
 
-        raise ValueError("Unsupported target value")
+        raise ValueError('Unsupported target value')
 
-    @validator("selected_buttons", pre=True)
+    @validator('selected_buttons', pre=True)
     def validate_selected_buttons(cls, value):
         if value is None:
             return []
         if not isinstance(value, (list, tuple)):
-            raise TypeError("selected_buttons must be an array")
+            raise TypeError('selected_buttons must be an array')
 
         seen = set()
         ordered: list[str] = []
@@ -89,17 +87,17 @@ class BroadcastResponse(BaseModel):
     target_type: str
     message_text: str
     has_media: bool
-    media_type: Optional[str] = None
-    media_file_id: Optional[str] = None
-    media_caption: Optional[str] = None
+    media_type: str | None = None
+    media_file_id: str | None = None
+    media_caption: str | None = None
     total_count: int
     sent_count: int
     failed_count: int
     status: str
-    admin_id: Optional[int] = None
-    admin_name: Optional[str] = None
+    admin_id: int | None = None
+    admin_name: str | None = None
     created_at: datetime
-    completed_at: Optional[datetime] = None
+    completed_at: datetime | None = None
 
 
 class BroadcastListResponse(BaseModel):
@@ -107,4 +105,3 @@ class BroadcastListResponse(BaseModel):
     total: int
     limit: int
     offset: int
-

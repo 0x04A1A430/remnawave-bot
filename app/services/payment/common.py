@@ -33,7 +33,7 @@ class PaymentCommonMixin:
     async def build_topup_success_keyboard(self, user: Any) -> InlineKeyboardMarkup:
         """Формирует клавиатуру по завершении платежа, подстраиваясь под пользователя."""
         # Загружаем нужные тексты с учётом выбранного языка пользователя.
-        texts = get_texts(user.language if user else "ru")
+        texts = get_texts(user.language if user else 'ru')
 
         # Определяем статус подписки, чтобы показать подходящую кнопку.
         has_active_subscription = False
@@ -43,32 +43,26 @@ class PaymentCommonMixin:
                 subscription = user.subscription
                 has_active_subscription = bool(
                     subscription
-                    and not getattr(subscription, "is_trial", False)
-                    and getattr(subscription, "is_active", False)
+                    and not getattr(subscription, 'is_trial', False)
+                    and getattr(subscription, 'is_active', False)
                 )
             except MissingGreenlet as error:
                 logger.warning(
-                    "Не удалось лениво загрузить подписку пользователя %s при построении клавиатуры после пополнения: %s",
-                    getattr(user, "id", None),
+                    'Не удалось лениво загрузить подписку пользователя %s при построении клавиатуры после пополнения: %s',
+                    getattr(user, 'id', None),
                     error,
                 )
             except Exception as error:  # pragma: no cover - защитный код
                 logger.error(
-                    "Ошибка загрузки подписки пользователя %s при построении клавиатуры после пополнения: %s",
-                    getattr(user, "id", None),
+                    'Ошибка загрузки подписки пользователя %s при построении клавиатуры после пополнения: %s',
+                    getattr(user, 'id', None),
                     error,
                 )
 
         # Создаем основную кнопку: если есть активная подписка - продлить, иначе купить
         first_button = build_miniapp_or_callback_button(
-            text=(
-                texts.MENU_EXTEND_SUBSCRIPTION
-                if has_active_subscription
-                else texts.MENU_BUY_SUBSCRIPTION
-            ),
-            callback_data=(
-                "subscription_extend" if has_active_subscription else "menu_buy"
-            ),
+            text=(texts.MENU_EXTEND_SUBSCRIPTION if has_active_subscription else texts.MENU_BUY_SUBSCRIPTION),
+            callback_data=('subscription_extend' if has_active_subscription else 'menu_buy'),
         )
 
         keyboard_rows: list[list[InlineKeyboardButton]] = [
@@ -81,48 +75,56 @@ class PaymentCommonMixin:
                 has_saved_cart = await user_cart_service.has_user_cart(user.id)
             except Exception as cart_error:
                 logger.warning(
-                    "Не удалось проверить наличие сохраненной корзины у пользователя %s: %s",
+                    'Не удалось проверить наличие сохраненной корзины у пользователя %s: %s',
                     user.id,
                     cart_error,
                 )
                 has_saved_cart = False
 
             if has_saved_cart:
-                keyboard_rows.append([
-                    build_miniapp_or_callback_button(
-                        text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
-                        callback_data="return_to_saved_cart",
-                    )
-                ])
+                keyboard_rows.append(
+                    [
+                        build_miniapp_or_callback_button(
+                            text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
+                            callback_data='return_to_saved_cart',
+                        )
+                    ]
+                )
             else:
                 draft_exists = await has_subscription_checkout_draft(user.id)
                 if should_offer_checkout_resume(user, draft_exists, subscription=subscription):
-                    keyboard_rows.append([
-                        build_miniapp_or_callback_button(
-                            text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
-                            callback_data="subscription_resume_checkout",
-                        )
-                    ])
+                    keyboard_rows.append(
+                        [
+                            build_miniapp_or_callback_button(
+                                text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
+                                callback_data='subscription_resume_checkout',
+                            )
+                        ]
+                    )
 
         # Стандартные кнопки быстрого доступа к балансу и главному меню.
-        keyboard_rows.append([
-            build_miniapp_or_callback_button(
-                text="💰 Мой баланс",
-                callback_data="menu_balance",
-            )
-        ])
-        keyboard_rows.append([
-            InlineKeyboardButton(
-                text="🏠 Главное меню",
-                callback_data="back_to_menu",
-            )
-        ])
+        keyboard_rows.append(
+            [
+                build_miniapp_or_callback_button(
+                    text='💰 Мой баланс',
+                    callback_data='menu_balance',
+                )
+            ]
+        )
+        keyboard_rows.append(
+            [
+                InlineKeyboardButton(
+                    text='🏠 Главное меню',
+                    callback_data='back_to_menu',
+                )
+            ]
+        )
 
         return InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
 
     async def _send_payment_success_notification(
         self,
-        telegram_id: int,
+        telegram_id: int | None,
         amount_kopeks: int,
         user: Any | None = None,
         *,
@@ -130,8 +132,12 @@ class PaymentCommonMixin:
         payment_method_title: str | None = None,
     ) -> None:
         """Отправляет пользователю уведомление об успешном платеже."""
-        if not getattr(self, "bot", None):
+        if not getattr(self, 'bot', None):
             # Если бот не передан (например, внутри фоновых задач), уведомление пропускаем.
+            return
+
+        # Skip email-only users (no telegram_id)
+        if not telegram_id:
             return
 
         user_snapshot = await self._ensure_user_snapshot(
@@ -141,7 +147,7 @@ class PaymentCommonMixin:
         )
 
         try:
-            payment_method = payment_method_title or "Банковская карта (YooKassa)"
+            payment_method = payment_method_title or 'Банковская карта (YooKassa)'
 
             # Проверяем, нужно ли показывать яркое предупреждение об активации
             if settings.SHOW_ACTIVATION_PROMPT_AFTER_TOPUP:
@@ -152,21 +158,21 @@ class PaymentCommonMixin:
                         subscription = user_snapshot.subscription
                         has_active_subscription = bool(
                             subscription
-                            and not getattr(subscription, "is_trial", False)
-                            and getattr(subscription, "is_active", False)
+                            and not getattr(subscription, 'is_trial', False)
+                            and getattr(subscription, 'is_active', False)
                         )
                     except Exception:
                         pass
 
                 # Яркое сообщение с восклицательными знаками
                 message = (
-                    "✅ <b>Платеж успешно завершен!</b>\n\n"
-                    f"💰 Сумма: {settings.format_price(amount_kopeks)}\n"
-                    f"💳 Способ: {payment_method}\n\n"
-                    "💎 Средства зачислены на ваш баланс!\n\n"
-                    "‼️ <b>ВНИМАНИЕ! ОБЯЗАТЕЛЬНО АКТИВИРУЙТЕ ПОДПИСКУ!</b> ‼️\n\n"
-                    "⚠️ Пополнение баланса <b>НЕ АКТИВИРУЕТ</b> подписку автоматически!\n\n"
-                    "👇 <b>НАЖМИТЕ КНОПКУ НИЖЕ ДЛЯ АКТИВАЦИИ</b> 👇"
+                    '✅ <b>Платеж успешно завершен!</b>\n\n'
+                    f'💰 Сумма: {settings.format_price(amount_kopeks)}\n'
+                    f'💳 Способ: {payment_method}\n\n'
+                    '💎 Средства зачислены на ваш баланс!\n\n'
+                    '‼️ <b>ВНИМАНИЕ! ОБЯЗАТЕЛЬНО АКТИВИРУЙТЕ ПОДПИСКУ!</b> ‼️\n\n'
+                    '⚠️ Пополнение баланса <b>НЕ АКТИВИРУЕТ</b> подписку автоматически!\n\n'
+                    '👇 <b>НАЖМИТЕ КНОПКУ НИЖЕ ДЛЯ АКТИВАЦИИ</b> 👇'
                 )
 
                 # Формируем клавиатуру с кнопками действий
@@ -175,58 +181,64 @@ class PaymentCommonMixin:
                 # Кнопка активации или продления в зависимости от статуса
                 if has_active_subscription:
                     # Активная платная подписка - показываем продление и изменение устройств
-                    keyboard_rows.append([
-                        build_miniapp_or_callback_button(
-                            text="🔄 ПРОДЛИТЬ ПОДПИСКУ",
-                            callback_data="subscription_extend",
-                        )
-                    ])
-                    keyboard_rows.append([
-                        build_miniapp_or_callback_button(
-                            text="📱 Изменить количество устройств",
-                            callback_data="subscription_change_devices",
-                        )
-                    ])
+                    keyboard_rows.append(
+                        [
+                            build_miniapp_or_callback_button(
+                                text='🔄 ПРОДЛИТЬ ПОДПИСКУ',
+                                callback_data='subscription_extend',
+                            )
+                        ]
+                    )
+                    keyboard_rows.append(
+                        [
+                            build_miniapp_or_callback_button(
+                                text='📱 Изменить количество устройств',
+                                callback_data='subscription_change_devices',
+                            )
+                        ]
+                    )
                 else:
                     # Нет подписки или истекла - показываем только активацию
-                    keyboard_rows.append([
-                        build_miniapp_or_callback_button(
-                            text="🔥 АКТИВИРОВАТЬ ПОДПИСКУ",
-                            callback_data="menu_buy",
-                        )
-                    ])
+                    keyboard_rows.append(
+                        [
+                            build_miniapp_or_callback_button(
+                                text='🔥 АКТИВИРОВАТЬ ПОДПИСКУ',
+                                callback_data='menu_buy',
+                            )
+                        ]
+                    )
 
                 keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
             else:
                 # Стандартное сообщение с полной клавиатурой
                 keyboard = await self.build_topup_success_keyboard(user_snapshot)
                 message = (
-                    "✅ <b>Платеж успешно завершен!</b>\n\n"
-                    f"💰 Сумма: {settings.format_price(amount_kopeks)}\n"
-                    f"💳 Способ: {payment_method}\n\n"
-                    "Средства зачислены на ваш баланс!\n\n"
-                    "⚠️ <b>Важно:</b> Пополнение баланса не активирует подписку автоматически. "
-                    "Обязательно активируйте подписку отдельно!\n\n"
-                    f"🔄 При наличии сохранённой корзины подписки и включенной автопокупке, "
-                    f"подписка будет приобретена автоматически после пополнения баланса."
+                    '✅ <b>Платеж успешно завершен!</b>\n\n'
+                    f'💰 Сумма: {settings.format_price(amount_kopeks)}\n'
+                    f'💳 Способ: {payment_method}\n\n'
+                    'Средства зачислены на ваш баланс!\n\n'
+                    '⚠️ <b>Важно:</b> Пополнение баланса не активирует подписку автоматически. '
+                    'Обязательно активируйте подписку отдельно!\n\n'
+                    f'🔄 При наличии сохранённой корзины подписки и включенной автопокупке, '
+                    f'подписка будет приобретена автоматически после пополнения баланса.'
                 )
 
             await self.bot.send_message(
                 chat_id=telegram_id,
                 text=message,
-                parse_mode="HTML",
+                parse_mode='HTML',
                 reply_markup=keyboard,
             )
         except Exception as error:
             logger.error(
-                "Ошибка отправки уведомления пользователю %s: %s",
+                'Ошибка отправки уведомления пользователю %s: %s',
                 telegram_id,
                 error,
             )
 
     async def _ensure_user_snapshot(
         self,
-        telegram_id: int,
+        telegram_id: int | None,
         user: Any | None,
         *,
         db: AsyncSession | None = None,
@@ -237,20 +249,20 @@ class PaymentCommonMixin:
             if source is None:
                 return None
 
-            subscription = getattr(source, "subscription", None)
+            subscription = getattr(source, 'subscription', None)
             subscription_snapshot = None
 
             if subscription is not None:
                 subscription_snapshot = SimpleNamespace(
-                    is_trial=getattr(subscription, "is_trial", False),
-                    is_active=getattr(subscription, "is_active", False),
-                    actual_status=getattr(subscription, "actual_status", None),
+                    is_trial=getattr(subscription, 'is_trial', False),
+                    is_active=getattr(subscription, 'is_active', False),
+                    actual_status=getattr(subscription, 'actual_status', None),
                 )
 
             return SimpleNamespace(
-                id=getattr(source, "id", None),
-                telegram_id=getattr(source, "telegram_id", None),
-                language=getattr(source, "language", "ru"),
+                id=getattr(source, 'id', None),
+                telegram_id=getattr(source, 'telegram_id', None),
+                language=getattr(source, 'language', 'ru'),
                 subscription=subscription_snapshot,
             )
 
@@ -270,7 +282,7 @@ class PaymentCommonMixin:
                 return _build_snapshot(fetched_user)
             except Exception as fetch_error:
                 logger.warning(
-                    "Не удалось обновить пользователя %s из переданной сессии: %s",
+                    'Не удалось обновить пользователя %s из переданной сессии: %s',
                     telegram_id,
                     fetch_error,
                 )
@@ -281,7 +293,7 @@ class PaymentCommonMixin:
                 return _build_snapshot(fetched_user)
         except Exception as fetch_error:
             logger.warning(
-                "Не удалось получить пользователя %s для уведомления: %s",
+                'Не удалось получить пользователя %s для уведомления: %s',
                 telegram_id,
                 fetch_error,
             )
@@ -298,7 +310,7 @@ class PaymentCommonMixin:
         """Общая точка учёта успешных платежей (используется провайдерами при необходимости)."""
         try:
             logger.info(
-                "Обработан успешный платеж: %s, %s₽, пользователь %s, метод %s",
+                'Обработан успешный платеж: %s, %s₽, пользователь %s, метод %s',
                 payment_id,
                 amount_kopeks / 100,
                 user_id,
@@ -306,5 +318,5 @@ class PaymentCommonMixin:
             )
             return True
         except Exception as error:
-            logger.error("Ошибка обработки платежа %s: %s", payment_id, error)
+            logger.error('Ошибка обработки платежа %s: %s', payment_id, error)
             return False

@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import FSInputFile, InaccessibleMessage, InputMediaPhoto, Message
@@ -7,20 +7,21 @@ from aiogram.types import FSInputFile, InaccessibleMessage, InputMediaPhoto, Mes
 from app.config import settings
 from app.localization.texts import get_texts
 
+
 LOGO_PATH = Path(settings.LOGO_FILE)
-_PRIVACY_RESTRICTED_CODE = "BUTTON_USER_PRIVACY_RESTRICTED"
+_PRIVACY_RESTRICTED_CODE = 'BUTTON_USER_PRIVACY_RESTRICTED'
 _TOPIC_REQUIRED_ERRORS = (
-    "topic must be specified",
-    "TOPIC_CLOSED",
-    "TOPIC_DELETED",
-    "FORUM_CLOSED",
+    'topic must be specified',
+    'TOPIC_CLOSED',
+    'TOPIC_DELETED',
+    'FORUM_CLOSED',
 )
 
 
 def is_qr_message(message: Message) -> bool:
     if isinstance(message, InaccessibleMessage):
         return False
-    return bool(message.caption and message.caption.startswith("\U0001F517 Ваша реферальная ссылка"))
+    return bool(message.caption and message.caption.startswith('\U0001f517 Ваша реферальная ссылка'))
 
 
 _original_answer = Message.answer
@@ -30,7 +31,7 @@ _original_edit_text = Message.edit_text
 def _get_language(message: Message) -> str | None:
     try:
         user = message.from_user
-        if user and getattr(user, "language_code", None):
+        if user and getattr(user, 'language_code', None):
             return user.language_code
     except AttributeError:
         pass
@@ -38,22 +39,22 @@ def _get_language(message: Message) -> str | None:
 
 
 def _default_privacy_hint(language: str | None) -> str:
-    if language and language.lower().startswith("en"):
+    if language and language.lower().startswith('en'):
         return (
-            "⚠️ Telegram blocked the contact request button because of your privacy settings. "
-            "Please allow sharing your contact information or send the required details manually."
+            '⚠️ Telegram blocked the contact request button because of your privacy settings. '
+            'Please allow sharing your contact information or send the required details manually.'
         )
     return (
-        "⚠️ Telegram запретил кнопку запроса контакта из-за настроек приватности. "
-        "Разрешите отправку контакта в настройках Telegram или отправьте данные вручную."
+        '⚠️ Telegram запретил кнопку запроса контакта из-за настроек приватности. '
+        'Разрешите отправку контакта в настройках Telegram или отправьте данные вручную.'
     )
 
 
 def append_privacy_hint(text: str | None, language: str | None) -> str:
-    base_text = text or ""
+    base_text = text or ''
     try:
         hint = get_texts(language).t(
-            "PRIVACY_RESTRICTED_BUTTON_HINT",
+            'PRIVACY_RESTRICTED_BUTTON_HINT',
             default=_default_privacy_hint(language),
         )
     except Exception:
@@ -67,13 +68,13 @@ def append_privacy_hint(text: str | None, language: str | None) -> str:
         return base_text
 
     if base_text:
-        return f"{base_text}\n\n{hint}"
+        return f'{base_text}\n\n{hint}'
     return hint
 
 
-def prepare_privacy_safe_kwargs(kwargs: Dict[str, Any] | None = None) -> Dict[str, Any]:
-    safe_kwargs: Dict[str, Any] = dict(kwargs or {})
-    safe_kwargs.pop("reply_markup", None)
+def prepare_privacy_safe_kwargs(kwargs: dict[str, Any] | None = None) -> dict[str, Any]:
+    safe_kwargs: dict[str, Any] = dict(kwargs or {})
+    safe_kwargs.pop('reply_markup', None)
     return safe_kwargs
 
 
@@ -81,7 +82,7 @@ def is_privacy_restricted_error(error: Exception) -> bool:
     if not isinstance(error, TelegramBadRequest):
         return False
 
-    message = getattr(error, "message", "") or ""
+    message = getattr(error, 'message', '') or ''
     description = str(error)
     return _PRIVACY_RESTRICTED_CODE in message or _PRIVACY_RESTRICTED_CODE in description
 
@@ -164,19 +165,19 @@ async def _edit_with_photo(self: Message, text: str, **kwargs):
             pass
         # Всегда используем логотип если включен режим логотипа,
         # кроме специальных случаев (QR сообщения)
-        if settings.ENABLE_LOGO_MODE and LOGO_PATH.exists() and not is_qr_message(self):
-            media = FSInputFile(LOGO_PATH)
-        elif is_qr_message(self) and LOGO_PATH.exists():
+        if (settings.ENABLE_LOGO_MODE and LOGO_PATH.exists() and not is_qr_message(self)) or (
+            is_qr_message(self) and LOGO_PATH.exists()
+        ):
             media = FSInputFile(LOGO_PATH)
         else:
             media = self.photo[-1].file_id
-        media_kwargs = {"media": media, "caption": text}
+        media_kwargs = {'media': media, 'caption': text}
         edit_kwargs = dict(kwargs)
-        if "parse_mode" in edit_kwargs:
-            _pm = edit_kwargs.pop("parse_mode")
-            media_kwargs["parse_mode"] = _pm if _pm is not None else "HTML"
+        if 'parse_mode' in edit_kwargs:
+            _pm = edit_kwargs.pop('parse_mode')
+            media_kwargs['parse_mode'] = _pm if _pm is not None else 'HTML'
         else:
-            media_kwargs["parse_mode"] = "HTML"
+            media_kwargs['parse_mode'] = 'HTML'
         try:
             return await self.edit_media(InputMediaPhoto(**media_kwargs), **edit_kwargs)
         except TelegramBadRequest as error:
@@ -212,7 +213,7 @@ async def _edit_with_photo(self: Message, text: str, **kwargs):
     except TelegramBadRequest as error:
         if is_topic_required_error(error):
             return None
-        if "MESSAGE_ID_INVALID" in str(error) or "message to edit not found" in str(error).lower():
+        if 'MESSAGE_ID_INVALID' in str(error) or 'message to edit not found' in str(error).lower():
             # Сообщение удалено или недоступно — просто игнорируем
             return None
         raise
@@ -223,4 +224,3 @@ def patch_message_methods():
         return
     Message.answer = _answer_with_photo
     Message.edit_text = _edit_with_photo
-

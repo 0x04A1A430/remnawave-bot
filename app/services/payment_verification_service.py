@@ -6,9 +6,10 @@ import asyncio
 import logging
 import re
 from collections import Counter
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,14 +24,15 @@ from app.database.models import (
     HeleketPayment,
     MulenPayPayment,
     Pal24Payment,
-    PlategaPayment,
     PaymentMethod,
+    PlategaPayment,
     Transaction,
     TransactionType,
     User,
     WataPayment,
     YooKassaPayment,
 )
+
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +53,7 @@ class PendingPayment:
     created_at: datetime
     user: User
     payment: Any
-    expires_at: Optional[datetime] = None
+    expires_at: datetime | None = None
 
     def is_recent(self, max_age: timedelta = PENDING_MAX_AGE) -> bool:
         return (datetime.utcnow() - self.created_at) <= max_age
@@ -91,23 +93,23 @@ def method_display_name(method: PaymentMethod) -> str:
     if method == PaymentMethod.MULENPAY:
         return settings.get_mulenpay_display_name()
     if method == PaymentMethod.PAL24:
-        return "PayPalych"
+        return 'PayPalych'
     if method == PaymentMethod.YOOKASSA:
-        return "YooKassa"
+        return 'YooKassa'
     if method == PaymentMethod.WATA:
-        return "WATA"
+        return 'WATA'
     if method == PaymentMethod.PLATEGA:
         return settings.get_platega_display_name()
     if method == PaymentMethod.CRYPTOBOT:
-        return "CryptoBot"
+        return 'CryptoBot'
     if method == PaymentMethod.HELEKET:
-        return "Heleket"
+        return 'Heleket'
     if method == PaymentMethod.CLOUDPAYMENTS:
-        return "CloudPayments"
+        return 'CloudPayments'
     if method == PaymentMethod.FREEKASSA:
-        return "Freekassa"
+        return 'Freekassa'
     if method == PaymentMethod.TELEGRAM_STARS:
-        return "Telegram Stars"
+        return 'Telegram Stars'
     return method.value
 
 
@@ -133,22 +135,18 @@ def _method_is_enabled(method: PaymentMethod) -> bool:
     return False
 
 
-def get_enabled_auto_methods() -> List[PaymentMethod]:
-    return [
-        method
-        for method in SUPPORTED_AUTO_CHECK_METHODS
-        if _method_is_enabled(method)
-    ]
+def get_enabled_auto_methods() -> list[PaymentMethod]:
+    return [method for method in SUPPORTED_AUTO_CHECK_METHODS if _method_is_enabled(method)]
 
 
 class AutoPaymentVerificationService:
     """Background checker that periodically refreshes pending payments."""
 
     def __init__(self) -> None:
-        self._task: Optional[asyncio.Task[None]] = None
-        self._payment_service: Optional["PaymentService"] = None
+        self._task: asyncio.Task[None] | None = None
+        self._payment_service: PaymentService | None = None
 
-    def set_payment_service(self, payment_service: "PaymentService") -> None:
+    def set_payment_service(self, payment_service: PaymentService) -> None:
         self._payment_service = payment_service
 
     def is_running(self) -> bool:
@@ -158,30 +156,24 @@ class AutoPaymentVerificationService:
         await self.stop()
 
         if not settings.is_payment_verification_auto_check_enabled():
-            logger.info("Автопроверка пополнений отключена настройками")
+            logger.info('Автопроверка пополнений отключена настройками')
             return
 
         if not self._payment_service:
-            logger.warning(
-                "Автопроверка пополнений не запущена: PaymentService не инициализирован"
-            )
+            logger.warning('Автопроверка пополнений не запущена: PaymentService не инициализирован')
             return
 
         methods = get_enabled_auto_methods()
         if not methods:
-            logger.info(
-                "Автопроверка пополнений не запущена: нет активных провайдеров"
-            )
+            logger.info('Автопроверка пополнений не запущена: нет активных провайдеров')
             return
 
-        display_names = ", ".join(
-            sorted(method_display_name(method) for method in methods)
-        )
+        display_names = ', '.join(sorted(method_display_name(method) for method in methods))
         interval_minutes = settings.get_payment_verification_auto_check_interval()
 
         self._task = asyncio.create_task(self._auto_check_loop())
         logger.info(
-            "🔄 Автопроверка пополнений запущена (каждые %s мин) для: %s",
+            '🔄 Автопроверка пополнений запущена (каждые %s мин) для: %s',
             interval_minutes,
             display_names,
         )
@@ -200,63 +192,48 @@ class AutoPaymentVerificationService:
             while True:
                 interval_minutes = settings.get_payment_verification_auto_check_interval()
                 try:
-                    if (
-                        settings.is_payment_verification_auto_check_enabled()
-                        and self._payment_service
-                    ):
+                    if settings.is_payment_verification_auto_check_enabled() and self._payment_service:
                         methods = get_enabled_auto_methods()
                         if methods:
                             await self._run_checks(methods)
                         else:
-                            logger.debug(
-                                "Автопроверка пополнений: активных провайдеров нет"
-                            )
+                            logger.debug('Автопроверка пополнений: активных провайдеров нет')
                     else:
-                        logger.debug(
-                            "Автопроверка пополнений: отключена настройками или сервис не готов"
-                        )
+                        logger.debug('Автопроверка пополнений: отключена настройками или сервис не готов')
                 except asyncio.CancelledError:
                     raise
-                except Exception as error:  # noqa: BLE001 - логируем непредвиденные ошибки
+                except Exception as error:
                     logger.error(
-                        "Ошибка автопроверки пополнений: %s",
+                        'Ошибка автопроверки пополнений: %s',
                         error,
                         exc_info=True,
                     )
 
                 await asyncio.sleep(max(1, interval_minutes) * 60)
         except asyncio.CancelledError:
-            logger.info("Автопроверка пополнений остановлена")
+            logger.info('Автопроверка пополнений остановлена')
             raise
 
-    async def _run_checks(self, methods: List[PaymentMethod]) -> None:
+    async def _run_checks(self, methods: list[PaymentMethod]) -> None:
         if not self._payment_service:
             return
 
         async with AsyncSessionLocal() as session:
             try:
                 pending = await list_recent_pending_payments(session)
-                candidates = [
-                    record
-                    for record in pending
-                    if record.method in methods and not record.is_paid
-                ]
+                candidates = [record for record in pending if record.method in methods and not record.is_paid]
 
                 if not candidates:
-                    logger.debug(
-                        "Автопроверка пополнений: подходящих ожидающих платежей нет"
-                    )
+                    logger.debug('Автопроверка пополнений: подходящих ожидающих платежей нет')
                     return
 
                 counts = Counter(record.method for record in candidates)
-                summary = ", ".join(
-                    f"{method_display_name(method)}: {count}"
-                    for method, count in sorted(
-                        counts.items(), key=lambda item: method_display_name(item[0])
-                    )
+                summary = ', '.join(
+                    f'{method_display_name(method)}: {count}'
+                    for method, count in sorted(counts.items(), key=lambda item: method_display_name(item[0]))
                 )
                 logger.info(
-                    "🔄 Автопроверка пополнений: найдено %s инвойсов (%s)",
+                    '🔄 Автопроверка пополнений: найдено %s инвойсов (%s)',
                     len(candidates),
                     summary,
                 )
@@ -271,7 +248,7 @@ class AutoPaymentVerificationService:
 
                     if not refreshed:
                         logger.debug(
-                            "Автопроверка пополнений: не удалось обновить %s %s",
+                            'Автопроверка пополнений: не удалось обновить %s %s',
                             method_display_name(record.method),
                             record.identifier,
                         )
@@ -279,24 +256,24 @@ class AutoPaymentVerificationService:
 
                     if refreshed.is_paid and not record.is_paid:
                         logger.info(
-                            "✅ %s %s отмечен как оплаченный после автопроверки",
+                            '✅ %s %s отмечен как оплаченный после автопроверки',
                             method_display_name(refreshed.method),
                             refreshed.identifier,
                         )
                     elif refreshed.status != record.status:
                         logger.info(
-                            "ℹ️ %s %s обновлён: %s → %s",
+                            'ℹ️ %s %s обновлён: %s → %s',
                             method_display_name(refreshed.method),
                             refreshed.identifier,
-                            record.status or "—",
-                            refreshed.status or "—",
+                            record.status or '—',
+                            refreshed.status or '—',
                         )
                     else:
                         logger.debug(
-                            "Автопроверка пополнений: %s %s без изменений (%s)",
+                            'Автопроверка пополнений: %s %s без изменений (%s)',
                             method_display_name(refreshed.method),
                             refreshed.identifier,
-                            refreshed.status or "—",
+                            refreshed.status or '—',
                         )
 
                 if session.in_transaction():
@@ -309,77 +286,78 @@ class AutoPaymentVerificationService:
 
 auto_payment_verification_service = AutoPaymentVerificationService()
 
+
 def _is_pal24_pending(payment: Pal24Payment) -> bool:
     if payment.is_paid:
         return False
-    status = (payment.status or "").upper()
-    return status in {"NEW", "PROCESS"}
+    status = (payment.status or '').upper()
+    return status in {'NEW', 'PROCESS'}
 
 
 def _is_mulenpay_pending(payment: MulenPayPayment) -> bool:
     if payment.is_paid:
         return False
-    status = (payment.status or "").lower()
-    return status in {"created", "processing", "hold"}
+    status = (payment.status or '').lower()
+    return status in {'created', 'processing', 'hold'}
 
 
 def _is_wata_pending(payment: WataPayment) -> bool:
     if payment.is_paid:
         return False
-    status = (payment.status or "").lower()
+    status = (payment.status or '').lower()
     return status not in {
-        "paid",
-        "closed",
-        "declined",
-        "canceled",
-        "cancelled",
-        "expired",
+        'paid',
+        'closed',
+        'declined',
+        'canceled',
+        'cancelled',
+        'expired',
     }
 
 
 def _is_platega_pending(payment: PlategaPayment) -> bool:
     if payment.is_paid:
         return False
-    status = (payment.status or "").lower()
-    return status in {"pending", "inprogress", "in_progress"}
+    status = (payment.status or '').lower()
+    return status in {'pending', 'inprogress', 'in_progress'}
 
 
 def _is_heleket_pending(payment: HeleketPayment) -> bool:
     if payment.is_paid:
         return False
-    status = (payment.status or "").lower()
-    return status not in {"paid", "paid_over", "cancel", "canceled", "failed", "fail", "expired"}
+    status = (payment.status or '').lower()
+    return status not in {'paid', 'paid_over', 'cancel', 'canceled', 'failed', 'fail', 'expired'}
 
 
 def _is_yookassa_pending(payment: YooKassaPayment) -> bool:
-    if getattr(payment, "is_paid", False) and payment.status == "succeeded":
+    if getattr(payment, 'is_paid', False) and payment.status == 'succeeded':
         return False
-    status = (payment.status or "").lower()
-    return status in {"pending", "waiting_for_capture"}
+    status = (payment.status or '').lower()
+    return status in {'pending', 'waiting_for_capture'}
 
 
 def _is_cryptobot_pending(payment: CryptoBotPayment) -> bool:
-    status = (payment.status or "").lower()
-    return status == "active"
+    status = (payment.status or '').lower()
+    return status == 'active'
 
 
 def _is_cloudpayments_pending(payment: CloudPaymentsPayment) -> bool:
     if payment.is_paid:
         return False
-    status = (payment.status or "").lower()
-    return status in {"pending", "authorized"}
+    status = (payment.status or '').lower()
+    return status in {'pending', 'authorized'}
 
 
 def _is_freekassa_pending(payment: FreekassaPayment) -> bool:
     if payment.is_paid:
         return False
-    status = (payment.status or "").lower()
-    return status in {"pending", "created", "processing"}
+    status = (payment.status or '').lower()
+    return status in {'pending', 'created', 'processing'}
 
 
 def _parse_cryptobot_amount_kopeks(payment: CryptoBotPayment) -> int:
-    payload = payment.payload or ""
-    match = re.search(r"_(\d+)$", payload)
+    payload = payment.payload or ''
+    match = re.search(r'_(\d+)$', payload)
     if match:
         try:
             return int(match.group(1))
@@ -389,26 +367,34 @@ def _parse_cryptobot_amount_kopeks(payment: CryptoBotPayment) -> int:
 
 
 def _metadata_is_balance(payment: YooKassaPayment) -> bool:
-    metadata = getattr(payment, "metadata_json", {}) or {}
-    payment_type = str(metadata.get("type") or metadata.get("payment_type") or "").lower()
-    return payment_type.startswith("balance_topup")
+    metadata = getattr(payment, 'metadata_json', {}) or {}
+    payment_type = str(metadata.get('type') or metadata.get('payment_type') or '').lower()
+    return payment_type.startswith('balance_topup')
 
 
-def _build_record(method: PaymentMethod, payment: Any, *, identifier: str, amount_kopeks: int,
-                  status: str, is_paid: bool, expires_at: Optional[datetime] = None) -> Optional[PendingPayment]:
-    user = getattr(payment, "user", None)
+def _build_record(
+    method: PaymentMethod,
+    payment: Any,
+    *,
+    identifier: str,
+    amount_kopeks: int,
+    status: str,
+    is_paid: bool,
+    expires_at: datetime | None = None,
+) -> PendingPayment | None:
+    user = getattr(payment, 'user', None)
     if user is None:
-        logger.debug("Skipping %s payment %s without linked user", method.value, identifier)
+        logger.debug('Skipping %s payment %s without linked user', method.value, identifier)
         return None
 
-    created_at = getattr(payment, "created_at", None)
+    created_at = getattr(payment, 'created_at', None)
     if not isinstance(created_at, datetime):
-        logger.debug("Skipping %s payment %s without valid created_at", method.value, identifier)
+        logger.debug('Skipping %s payment %s without valid created_at', method.value, identifier)
         return None
 
-    local_id = getattr(payment, "id", None)
+    local_id = getattr(payment, 'id', None)
     if local_id is None:
-        logger.debug("Skipping %s payment without local id", method.value)
+        logger.debug('Skipping %s payment without local id', method.value)
         return None
 
     return PendingPayment(
@@ -425,7 +411,7 @@ def _build_record(method: PaymentMethod, payment: Any, *, identifier: str, amoun
     )
 
 
-async def _fetch_pal24_payments(db: AsyncSession, cutoff: datetime) -> List[PendingPayment]:
+async def _fetch_pal24_payments(db: AsyncSession, cutoff: datetime) -> list[PendingPayment]:
     stmt = (
         select(Pal24Payment)
         .options(selectinload(Pal24Payment.user))
@@ -433,7 +419,7 @@ async def _fetch_pal24_payments(db: AsyncSession, cutoff: datetime) -> List[Pend
         .order_by(desc(Pal24Payment.created_at))
     )
     result = await db.execute(stmt)
-    records: List[PendingPayment] = []
+    records: list[PendingPayment] = []
     for payment in result.scalars().all():
         if not _is_pal24_pending(payment):
             continue
@@ -442,16 +428,16 @@ async def _fetch_pal24_payments(db: AsyncSession, cutoff: datetime) -> List[Pend
             payment,
             identifier=payment.bill_id,
             amount_kopeks=payment.amount_kopeks,
-            status=payment.status or "",
+            status=payment.status or '',
             is_paid=bool(payment.is_paid),
-            expires_at=getattr(payment, "expires_at", None),
+            expires_at=getattr(payment, 'expires_at', None),
         )
         if record:
             records.append(record)
     return records
 
 
-async def _fetch_mulenpay_payments(db: AsyncSession, cutoff: datetime) -> List[PendingPayment]:
+async def _fetch_mulenpay_payments(db: AsyncSession, cutoff: datetime) -> list[PendingPayment]:
     stmt = (
         select(MulenPayPayment)
         .options(selectinload(MulenPayPayment.user))
@@ -459,7 +445,7 @@ async def _fetch_mulenpay_payments(db: AsyncSession, cutoff: datetime) -> List[P
         .order_by(desc(MulenPayPayment.created_at))
     )
     result = await db.execute(stmt)
-    records: List[PendingPayment] = []
+    records: list[PendingPayment] = []
     for payment in result.scalars().all():
         if not _is_mulenpay_pending(payment):
             continue
@@ -468,7 +454,7 @@ async def _fetch_mulenpay_payments(db: AsyncSession, cutoff: datetime) -> List[P
             payment,
             identifier=payment.uuid,
             amount_kopeks=payment.amount_kopeks,
-            status=payment.status or "",
+            status=payment.status or '',
             is_paid=bool(payment.is_paid),
         )
         if record:
@@ -476,7 +462,7 @@ async def _fetch_mulenpay_payments(db: AsyncSession, cutoff: datetime) -> List[P
     return records
 
 
-async def _fetch_wata_payments(db: AsyncSession, cutoff: datetime) -> List[PendingPayment]:
+async def _fetch_wata_payments(db: AsyncSession, cutoff: datetime) -> list[PendingPayment]:
     stmt = (
         select(WataPayment)
         .options(selectinload(WataPayment.user))
@@ -484,7 +470,7 @@ async def _fetch_wata_payments(db: AsyncSession, cutoff: datetime) -> List[Pendi
         .order_by(desc(WataPayment.created_at))
     )
     result = await db.execute(stmt)
-    records: List[PendingPayment] = []
+    records: list[PendingPayment] = []
     for payment in result.scalars().all():
         if not _is_wata_pending(payment):
             continue
@@ -493,16 +479,16 @@ async def _fetch_wata_payments(db: AsyncSession, cutoff: datetime) -> List[Pendi
             payment,
             identifier=payment.payment_link_id,
             amount_kopeks=payment.amount_kopeks,
-            status=payment.status or "",
+            status=payment.status or '',
             is_paid=bool(payment.is_paid),
-            expires_at=getattr(payment, "expires_at", None),
+            expires_at=getattr(payment, 'expires_at', None),
         )
         if record:
             records.append(record)
     return records
 
 
-async def _fetch_platega_payments(db: AsyncSession, cutoff: datetime) -> List[PendingPayment]:
+async def _fetch_platega_payments(db: AsyncSession, cutoff: datetime) -> list[PendingPayment]:
     stmt = (
         select(PlategaPayment)
         .options(selectinload(PlategaPayment.user))
@@ -510,7 +496,7 @@ async def _fetch_platega_payments(db: AsyncSession, cutoff: datetime) -> List[Pe
         .order_by(desc(PlategaPayment.created_at))
     )
     result = await db.execute(stmt)
-    records: List[PendingPayment] = []
+    records: list[PendingPayment] = []
     for payment in result.scalars().all():
         if not _is_platega_pending(payment):
             continue
@@ -520,16 +506,16 @@ async def _fetch_platega_payments(db: AsyncSession, cutoff: datetime) -> List[Pe
             payment,
             identifier=identifier,
             amount_kopeks=payment.amount_kopeks,
-            status=payment.status or "",
+            status=payment.status or '',
             is_paid=bool(payment.is_paid),
-            expires_at=getattr(payment, "expires_at", None),
+            expires_at=getattr(payment, 'expires_at', None),
         )
         if record:
             records.append(record)
     return records
 
 
-async def _fetch_heleket_payments(db: AsyncSession, cutoff: datetime) -> List[PendingPayment]:
+async def _fetch_heleket_payments(db: AsyncSession, cutoff: datetime) -> list[PendingPayment]:
     stmt = (
         select(HeleketPayment)
         .options(selectinload(HeleketPayment.user))
@@ -537,7 +523,7 @@ async def _fetch_heleket_payments(db: AsyncSession, cutoff: datetime) -> List[Pe
         .order_by(desc(HeleketPayment.created_at))
     )
     result = await db.execute(stmt)
-    records: List[PendingPayment] = []
+    records: list[PendingPayment] = []
     for payment in result.scalars().all():
         if not _is_heleket_pending(payment):
             continue
@@ -546,16 +532,16 @@ async def _fetch_heleket_payments(db: AsyncSession, cutoff: datetime) -> List[Pe
             payment,
             identifier=payment.uuid,
             amount_kopeks=payment.amount_kopeks,
-            status=payment.status or "",
+            status=payment.status or '',
             is_paid=bool(payment.is_paid),
-            expires_at=getattr(payment, "expires_at", None),
+            expires_at=getattr(payment, 'expires_at', None),
         )
         if record:
             records.append(record)
     return records
 
 
-async def _fetch_yookassa_payments(db: AsyncSession, cutoff: datetime) -> List[PendingPayment]:
+async def _fetch_yookassa_payments(db: AsyncSession, cutoff: datetime) -> list[PendingPayment]:
     stmt = (
         select(YooKassaPayment)
         .options(selectinload(YooKassaPayment.user))
@@ -563,7 +549,7 @@ async def _fetch_yookassa_payments(db: AsyncSession, cutoff: datetime) -> List[P
         .order_by(desc(YooKassaPayment.created_at))
     )
     result = await db.execute(stmt)
-    records: List[PendingPayment] = []
+    records: list[PendingPayment] = []
     for payment in result.scalars().all():
         if payment.transaction_id:
             continue
@@ -576,15 +562,15 @@ async def _fetch_yookassa_payments(db: AsyncSession, cutoff: datetime) -> List[P
             payment,
             identifier=payment.yookassa_payment_id,
             amount_kopeks=payment.amount_kopeks,
-            status=payment.status or "",
-            is_paid=bool(getattr(payment, "is_paid", False)),
+            status=payment.status or '',
+            is_paid=bool(getattr(payment, 'is_paid', False)),
         )
         if record:
             records.append(record)
     return records
 
 
-async def _fetch_cryptobot_payments(db: AsyncSession, cutoff: datetime) -> List[PendingPayment]:
+async def _fetch_cryptobot_payments(db: AsyncSession, cutoff: datetime) -> list[PendingPayment]:
     stmt = (
         select(CryptoBotPayment)
         .options(selectinload(CryptoBotPayment.user))
@@ -592,10 +578,10 @@ async def _fetch_cryptobot_payments(db: AsyncSession, cutoff: datetime) -> List[
         .order_by(desc(CryptoBotPayment.created_at))
     )
     result = await db.execute(stmt)
-    records: List[PendingPayment] = []
+    records: list[PendingPayment] = []
     for payment in result.scalars().all():
-        status = (payment.status or "").lower()
-        if not _is_cryptobot_pending(payment) and status != "paid":
+        status = (payment.status or '').lower()
+        if not _is_cryptobot_pending(payment) and status != 'paid':
             continue
         amount_kopeks = _parse_cryptobot_amount_kopeks(payment)
         record = _build_record(
@@ -603,7 +589,7 @@ async def _fetch_cryptobot_payments(db: AsyncSession, cutoff: datetime) -> List[
             payment,
             identifier=payment.invoice_id,
             amount_kopeks=amount_kopeks,
-            status=payment.status or "",
+            status=payment.status or '',
             is_paid=bool(payment.is_paid),
         )
         if record:
@@ -611,7 +597,7 @@ async def _fetch_cryptobot_payments(db: AsyncSession, cutoff: datetime) -> List[
     return records
 
 
-async def _fetch_cloudpayments_payments(db: AsyncSession, cutoff: datetime) -> List[PendingPayment]:
+async def _fetch_cloudpayments_payments(db: AsyncSession, cutoff: datetime) -> list[PendingPayment]:
     stmt = (
         select(CloudPaymentsPayment)
         .options(selectinload(CloudPaymentsPayment.user))
@@ -619,7 +605,7 @@ async def _fetch_cloudpayments_payments(db: AsyncSession, cutoff: datetime) -> L
         .order_by(desc(CloudPaymentsPayment.created_at))
     )
     result = await db.execute(stmt)
-    records: List[PendingPayment] = []
+    records: list[PendingPayment] = []
     for payment in result.scalars().all():
         if not _is_cloudpayments_pending(payment):
             continue
@@ -628,7 +614,7 @@ async def _fetch_cloudpayments_payments(db: AsyncSession, cutoff: datetime) -> L
             payment,
             identifier=payment.invoice_id,
             amount_kopeks=payment.amount_kopeks,
-            status=payment.status or "",
+            status=payment.status or '',
             is_paid=bool(payment.is_paid),
         )
         if record:
@@ -636,7 +622,7 @@ async def _fetch_cloudpayments_payments(db: AsyncSession, cutoff: datetime) -> L
     return records
 
 
-async def _fetch_freekassa_payments(db: AsyncSession, cutoff: datetime) -> List[PendingPayment]:
+async def _fetch_freekassa_payments(db: AsyncSession, cutoff: datetime) -> list[PendingPayment]:
     stmt = (
         select(FreekassaPayment)
         .options(selectinload(FreekassaPayment.user))
@@ -644,7 +630,7 @@ async def _fetch_freekassa_payments(db: AsyncSession, cutoff: datetime) -> List[
         .order_by(desc(FreekassaPayment.created_at))
     )
     result = await db.execute(stmt)
-    records: List[PendingPayment] = []
+    records: list[PendingPayment] = []
     for payment in result.scalars().all():
         if not _is_freekassa_pending(payment):
             continue
@@ -653,7 +639,7 @@ async def _fetch_freekassa_payments(db: AsyncSession, cutoff: datetime) -> List[
             payment,
             identifier=payment.order_id,
             amount_kopeks=payment.amount_kopeks,
-            status=payment.status or "",
+            status=payment.status or '',
             is_paid=bool(payment.is_paid),
         )
         if record:
@@ -661,7 +647,7 @@ async def _fetch_freekassa_payments(db: AsyncSession, cutoff: datetime) -> List[
     return records
 
 
-async def _fetch_stars_transactions(db: AsyncSession, cutoff: datetime) -> List[PendingPayment]:
+async def _fetch_stars_transactions(db: AsyncSession, cutoff: datetime) -> list[PendingPayment]:
     stmt = (
         select(Transaction)
         .options(selectinload(Transaction.user))
@@ -673,14 +659,14 @@ async def _fetch_stars_transactions(db: AsyncSession, cutoff: datetime) -> List[
         .order_by(desc(Transaction.created_at))
     )
     result = await db.execute(stmt)
-    records: List[PendingPayment] = []
+    records: list[PendingPayment] = []
     for transaction in result.scalars().all():
         record = _build_record(
             PaymentMethod.TELEGRAM_STARS,
             transaction,
             identifier=transaction.external_id or str(transaction.id),
             amount_kopeks=transaction.amount_kopeks,
-            status="paid" if transaction.is_completed else "pending",
+            status='paid' if transaction.is_completed else 'pending',
             is_paid=bool(transaction.is_completed),
         )
         if record:
@@ -692,12 +678,12 @@ async def list_recent_pending_payments(
     db: AsyncSession,
     *,
     max_age: timedelta = PENDING_MAX_AGE,
-) -> List[PendingPayment]:
+) -> list[PendingPayment]:
     """Return pending payments (top-ups) from supported providers within the age window."""
 
     cutoff = datetime.utcnow() - max_age
 
-    tasks: Iterable[List[PendingPayment]] = (
+    tasks: Iterable[list[PendingPayment]] = (
         await _fetch_yookassa_payments(db, cutoff),
         await _fetch_pal24_payments(db, cutoff),
         await _fetch_mulenpay_payments(db, cutoff),
@@ -710,7 +696,7 @@ async def list_recent_pending_payments(
         await _fetch_stars_transactions(db, cutoff),
     )
 
-    records: List[PendingPayment] = []
+    records: list[PendingPayment] = []
     for batch in tasks:
         records.extend(batch)
 
@@ -722,7 +708,7 @@ async def get_payment_record(
     db: AsyncSession,
     method: PaymentMethod,
     local_payment_id: int,
-) -> Optional[PendingPayment]:
+) -> PendingPayment | None:
     """Load single payment record and normalize it to :class:`PendingPayment`."""
 
     cutoff = datetime.utcnow() - PENDING_MAX_AGE
@@ -731,28 +717,28 @@ async def get_payment_record(
         payment = await db.get(Pal24Payment, local_payment_id)
         if not payment:
             return None
-        await db.refresh(payment, attribute_names=["user"])
+        await db.refresh(payment, attribute_names=['user'])
         return _build_record(
             method,
             payment,
             identifier=payment.bill_id,
             amount_kopeks=payment.amount_kopeks,
-            status=payment.status or "",
+            status=payment.status or '',
             is_paid=bool(payment.is_paid),
-            expires_at=getattr(payment, "expires_at", None),
+            expires_at=getattr(payment, 'expires_at', None),
         )
 
     if method == PaymentMethod.MULENPAY:
         payment = await db.get(MulenPayPayment, local_payment_id)
         if not payment:
             return None
-        await db.refresh(payment, attribute_names=["user"])
+        await db.refresh(payment, attribute_names=['user'])
         return _build_record(
             method,
             payment,
             identifier=payment.uuid,
             amount_kopeks=payment.amount_kopeks,
-            status=payment.status or "",
+            status=payment.status or '',
             is_paid=bool(payment.is_paid),
         )
 
@@ -760,76 +746,76 @@ async def get_payment_record(
         payment = await db.get(WataPayment, local_payment_id)
         if not payment:
             return None
-        await db.refresh(payment, attribute_names=["user"])
+        await db.refresh(payment, attribute_names=['user'])
         return _build_record(
             method,
             payment,
             identifier=payment.payment_link_id,
             amount_kopeks=payment.amount_kopeks,
-            status=payment.status or "",
+            status=payment.status or '',
             is_paid=bool(payment.is_paid),
-            expires_at=getattr(payment, "expires_at", None),
+            expires_at=getattr(payment, 'expires_at', None),
         )
 
     if method == PaymentMethod.PLATEGA:
         payment = await db.get(PlategaPayment, local_payment_id)
         if not payment:
             return None
-        await db.refresh(payment, attribute_names=["user"])
+        await db.refresh(payment, attribute_names=['user'])
         identifier = payment.platega_transaction_id or payment.correlation_id or str(payment.id)
         return _build_record(
             method,
             payment,
             identifier=identifier,
             amount_kopeks=payment.amount_kopeks,
-            status=payment.status or "",
+            status=payment.status or '',
             is_paid=bool(payment.is_paid),
-            expires_at=getattr(payment, "expires_at", None),
+            expires_at=getattr(payment, 'expires_at', None),
         )
 
     if method == PaymentMethod.HELEKET:
         payment = await db.get(HeleketPayment, local_payment_id)
         if not payment:
             return None
-        await db.refresh(payment, attribute_names=["user"])
+        await db.refresh(payment, attribute_names=['user'])
         return _build_record(
             method,
             payment,
             identifier=payment.uuid,
             amount_kopeks=payment.amount_kopeks,
-            status=payment.status or "",
+            status=payment.status or '',
             is_paid=bool(payment.is_paid),
-            expires_at=getattr(payment, "expires_at", None),
+            expires_at=getattr(payment, 'expires_at', None),
         )
 
     if method == PaymentMethod.YOOKASSA:
         payment = await db.get(YooKassaPayment, local_payment_id)
         if not payment:
             return None
-        await db.refresh(payment, attribute_names=["user"])
+        await db.refresh(payment, attribute_names=['user'])
         if payment.created_at < cutoff:
-            logger.debug("YooKassa payment %s is older than cutoff", payment.id)
+            logger.debug('YooKassa payment %s is older than cutoff', payment.id)
         return _build_record(
             method,
             payment,
             identifier=payment.yookassa_payment_id,
             amount_kopeks=payment.amount_kopeks,
-            status=payment.status or "",
-            is_paid=bool(getattr(payment, "is_paid", False)),
+            status=payment.status or '',
+            is_paid=bool(getattr(payment, 'is_paid', False)),
         )
 
     if method == PaymentMethod.CRYPTOBOT:
         payment = await db.get(CryptoBotPayment, local_payment_id)
         if not payment:
             return None
-        await db.refresh(payment, attribute_names=["user"])
+        await db.refresh(payment, attribute_names=['user'])
         amount_kopeks = _parse_cryptobot_amount_kopeks(payment)
         return _build_record(
             method,
             payment,
             identifier=payment.invoice_id,
             amount_kopeks=amount_kopeks,
-            status=payment.status or "",
+            status=payment.status or '',
             is_paid=bool(payment.is_paid),
         )
 
@@ -837,13 +823,13 @@ async def get_payment_record(
         payment = await db.get(CloudPaymentsPayment, local_payment_id)
         if not payment:
             return None
-        await db.refresh(payment, attribute_names=["user"])
+        await db.refresh(payment, attribute_names=['user'])
         return _build_record(
             method,
             payment,
             identifier=payment.invoice_id,
             amount_kopeks=payment.amount_kopeks,
-            status=payment.status or "",
+            status=payment.status or '',
             is_paid=bool(payment.is_paid),
         )
 
@@ -851,13 +837,13 @@ async def get_payment_record(
         payment = await db.get(FreekassaPayment, local_payment_id)
         if not payment:
             return None
-        await db.refresh(payment, attribute_names=["user"])
+        await db.refresh(payment, attribute_names=['user'])
         return _build_record(
             method,
             payment,
             identifier=payment.order_id,
             amount_kopeks=payment.amount_kopeks,
-            status=payment.status or "",
+            status=payment.status or '',
             is_paid=bool(payment.is_paid),
         )
 
@@ -865,7 +851,7 @@ async def get_payment_record(
         transaction = await db.get(Transaction, local_payment_id)
         if not transaction:
             return None
-        await db.refresh(transaction, attribute_names=["user"])
+        await db.refresh(transaction, attribute_names=['user'])
         if transaction.payment_method != PaymentMethod.TELEGRAM_STARS.value:
             return None
         return _build_record(
@@ -873,11 +859,11 @@ async def get_payment_record(
             transaction,
             identifier=transaction.external_id or str(transaction.id),
             amount_kopeks=transaction.amount_kopeks,
-            status="paid" if transaction.is_completed else "pending",
+            status='paid' if transaction.is_completed else 'pending',
             is_paid=bool(transaction.is_completed),
         )
 
-    logger.debug("Unsupported payment method requested: %s", method)
+    logger.debug('Unsupported payment method requested: %s', method)
     return None
 
 
@@ -885,41 +871,39 @@ async def run_manual_check(
     db: AsyncSession,
     method: PaymentMethod,
     local_payment_id: int,
-    payment_service: "PaymentService",
-) -> Optional[PendingPayment]:
+    payment_service: PaymentService,
+) -> PendingPayment | None:
     """Trigger provider specific status refresh and return the updated record."""
 
     try:
         if method == PaymentMethod.PAL24:
             result = await payment_service.get_pal24_payment_status(db, local_payment_id)
-            payment = result.get("payment") if result else None
+            payment = result.get('payment') if result else None
         elif method == PaymentMethod.MULENPAY:
             result = await payment_service.get_mulenpay_payment_status(db, local_payment_id)
-            payment = result.get("payment") if result else None
+            payment = result.get('payment') if result else None
         elif method == PaymentMethod.WATA:
             result = await payment_service.get_wata_payment_status(db, local_payment_id)
-            payment = result.get("payment") if result else None
+            payment = result.get('payment') if result else None
         elif method == PaymentMethod.PLATEGA:
             result = await payment_service.get_platega_payment_status(db, local_payment_id)
-            payment = result.get("payment") if result else None
+            payment = result.get('payment') if result else None
         elif method == PaymentMethod.HELEKET:
-            payment = await payment_service.sync_heleket_payment_status(
-                db, local_payment_id=local_payment_id
-            )
+            payment = await payment_service.sync_heleket_payment_status(db, local_payment_id=local_payment_id)
         elif method == PaymentMethod.YOOKASSA:
             result = await payment_service.get_yookassa_payment_status(db, local_payment_id)
-            payment = result.get("payment") if result else None
+            payment = result.get('payment') if result else None
         elif method == PaymentMethod.CRYPTOBOT:
             result = await payment_service.get_cryptobot_payment_status(db, local_payment_id)
-            payment = result.get("payment") if result else None
+            payment = result.get('payment') if result else None
         elif method == PaymentMethod.CLOUDPAYMENTS:
             result = await payment_service.get_cloudpayments_payment_status(db, local_payment_id)
-            payment = result.get("payment") if result else None
+            payment = result.get('payment') if result else None
         elif method == PaymentMethod.FREEKASSA:
             result = await payment_service.get_freekassa_payment_status(db, local_payment_id)
-            payment = result.get("payment") if result else None
+            payment = result.get('payment') if result else None
         else:
-            logger.warning("Manual check requested for unsupported method %s", method)
+            logger.warning('Manual check requested for unsupported method %s', method)
             return None
 
         if not payment:
@@ -929,7 +913,7 @@ async def run_manual_check(
 
     except Exception as error:  # pragma: no cover - defensive logging
         logger.error(
-            "Manual status check failed for %s payment %s: %s",
+            'Manual status check failed for %s payment %s: %s',
             method.value,
             local_payment_id,
             error,
@@ -940,4 +924,3 @@ async def run_manual_check(
 
 if TYPE_CHECKING:  # pragma: no cover
     from app.services.payment_service import PaymentService
-

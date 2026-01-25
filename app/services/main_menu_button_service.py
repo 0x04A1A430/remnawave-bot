@@ -2,19 +2,18 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import List
 
 from aiogram import types
 from aiogram.types import InlineKeyboardButton
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database.models import (
     MainMenuButton,
     MainMenuButtonActionType,
     MainMenuButtonVisibility,
 )
-from app.config import settings
 
 
 @dataclass(frozen=True)
@@ -28,7 +27,7 @@ class _MainMenuButtonData:
 
 
 class MainMenuButtonService:
-    _cache: List[_MainMenuButtonData] | None = None
+    _cache: list[_MainMenuButtonData] | None = None
     _lock: asyncio.Lock = asyncio.Lock()
 
     @classmethod
@@ -36,7 +35,7 @@ class MainMenuButtonService:
         cls._cache = None
 
     @classmethod
-    async def _load_cache(cls, db: AsyncSession) -> List[_MainMenuButtonData]:
+    async def _load_cache(cls, db: AsyncSession) -> list[_MainMenuButtonData]:
         if cls._cache is not None:
             return cls._cache
 
@@ -51,10 +50,10 @@ class MainMenuButtonService:
                 )
             )
 
-            items: List[_MainMenuButtonData] = []
+            items: list[_MainMenuButtonData] = []
             for record in result.scalars().all():
-                text = (record.text or "").strip()
-                action_value = (record.action_value or "").strip()
+                text = (record.text or '').strip()
+                action_value = (record.action_value or '').strip()
 
                 if not text or not action_value:
                     continue
@@ -107,15 +106,12 @@ class MainMenuButtonService:
                 continue
 
             # Проверка реферальной программы: скрыть кнопки, связанные с рефералами, если программа отключена
-            if (
-                not settings.is_referral_program_enabled()
-                and (
-                    "partner" in item.text.lower()
-                    or "referr" in item.text.lower()
-                    or "партнер" in item.text.lower()
-                    or "реферал" in item.text.lower()
-                    or "referral" in item.action_value.lower()
-                )
+            if not settings.is_referral_program_enabled() and (
+                'partner' in item.text.lower()
+                or 'referr' in item.text.lower()
+                or 'партнер' in item.text.lower()
+                or 'реферал' in item.text.lower()
+                or 'referral' in item.action_value.lower()
             ):
                 continue
 

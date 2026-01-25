@@ -1,19 +1,17 @@
 import logging
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import PrivacyPolicy
 
+
 logger = logging.getLogger(__name__)
 
 
-async def get_privacy_policy(db: AsyncSession, language: str) -> Optional[PrivacyPolicy]:
-    result = await db.execute(
-        select(PrivacyPolicy).where(PrivacyPolicy.language == language)
-    )
+async def get_privacy_policy(db: AsyncSession, language: str) -> PrivacyPolicy | None:
+    result = await db.execute(select(PrivacyPolicy).where(PrivacyPolicy.language == language))
     return result.scalar_one_or_none()
 
 
@@ -27,13 +25,13 @@ async def upsert_privacy_policy(
     policy = await get_privacy_policy(db, language)
 
     if policy:
-        policy.content = content or ""
+        policy.content = content or ''
         policy.updated_at = datetime.utcnow()
     else:
         policy = PrivacyPolicy(
             language=language,
-            content=content or "",
-            is_enabled=True if enable_if_new else False,
+            content=content or '',
+            is_enabled=bool(enable_if_new),
         )
         db.add(policy)
 
@@ -41,7 +39,7 @@ async def upsert_privacy_policy(
     await db.refresh(policy)
 
     logger.info(
-        "✅ Политика конфиденциальности для языка %s обновлена (ID: %s)",
+        '✅ Политика конфиденциальности для языка %s обновлена (ID: %s)',
         language,
         policy.id,
     )
@@ -62,7 +60,7 @@ async def set_privacy_policy_enabled(
     else:
         policy = PrivacyPolicy(
             language=language,
-            content="",
+            content='',
             is_enabled=bool(enabled),
         )
         db.add(policy)
@@ -71,9 +69,9 @@ async def set_privacy_policy_enabled(
     await db.refresh(policy)
 
     logger.info(
-        "✅ Статус политики конфиденциальности для языка %s обновлен: %s",
+        '✅ Статус политики конфиденциальности для языка %s обновлен: %s',
         language,
-        "enabled" if policy.is_enabled else "disabled",
+        'enabled' if policy.is_enabled else 'disabled',
     )
 
     return policy

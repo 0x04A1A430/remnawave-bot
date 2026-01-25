@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
@@ -29,48 +29,51 @@ from app.database.crud.promo_offer_template import (
     list_promo_offer_templates,
     update_promo_offer_template,
 )
-from app.database.crud.user import get_user_by_telegram_id
+from app.database.crud.user import get_user_by_email, get_user_by_telegram_id
 from app.database.models import DiscountOffer, PromoOfferLog, PromoOfferTemplate, User
 from app.handlers.admin.messages import get_custom_users, get_target_users
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button
 
 from ..dependencies import get_cabinet_db, get_current_admin_user
 
+
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/admin/promo-offers", tags=["Admin Promo Offers"])
+router = APIRouter(prefix='/admin/promo-offers', tags=['Admin Promo Offers'])
 
 
 # ============== Schemas ==============
 
+
 class PromoOfferUserInfo(BaseModel):
     id: int
-    telegram_id: int
-    username: Optional[str] = None
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
-    full_name: Optional[str] = None
+    telegram_id: int | None = None  # Can be None for email-only users
+    email: str | None = None
+    username: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
+    full_name: str | None = None
 
 
 class PromoOfferResponse(BaseModel):
     id: int
     user_id: int
-    subscription_id: Optional[int] = None
-    notification_type: Optional[str] = None
-    discount_percent: Optional[int] = None
-    bonus_amount_kopeks: Optional[int] = None
-    expires_at: Optional[datetime] = None
-    claimed_at: Optional[datetime] = None
+    subscription_id: int | None = None
+    notification_type: str | None = None
+    discount_percent: int | None = None
+    bonus_amount_kopeks: int | None = None
+    expires_at: datetime | None = None
+    claimed_at: datetime | None = None
     is_active: bool
-    effect_type: Optional[str] = None
-    extra_data: Dict[str, Any] = Field(default_factory=dict)
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-    user: Optional[PromoOfferUserInfo] = None
+    effect_type: str | None = None
+    extra_data: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    user: PromoOfferUserInfo | None = None
 
 
 class PromoOfferListResponse(BaseModel):
-    items: List[PromoOfferResponse]
+    items: list[PromoOfferResponse]
     total: int
     limit: int
     offset: int
@@ -85,30 +88,30 @@ class PromoOfferTemplateResponse(BaseModel):
     valid_hours: int
     discount_percent: int
     bonus_amount_kopeks: int
-    active_discount_hours: Optional[int] = None
-    test_duration_hours: Optional[int] = None
-    test_squad_uuids: List[str] = Field(default_factory=list)
+    active_discount_hours: int | None = None
+    test_duration_hours: int | None = None
+    test_squad_uuids: list[str] = Field(default_factory=list)
     is_active: bool
-    created_by: Optional[int] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    created_by: int | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 class PromoOfferTemplateListResponse(BaseModel):
-    items: List[PromoOfferTemplateResponse]
+    items: list[PromoOfferTemplateResponse]
 
 
 class PromoOfferTemplateUpdateRequest(BaseModel):
-    name: Optional[str] = None
-    message_text: Optional[str] = None
-    button_text: Optional[str] = None
-    valid_hours: Optional[int] = Field(None, ge=1)
-    discount_percent: Optional[int] = Field(None, ge=0)
-    bonus_amount_kopeks: Optional[int] = Field(None, ge=0)
-    active_discount_hours: Optional[int] = Field(None, ge=1)
-    test_duration_hours: Optional[int] = Field(None, ge=1)
-    test_squad_uuids: Optional[List[str]] = None
-    is_active: Optional[bool] = None
+    name: str | None = None
+    message_text: str | None = None
+    button_text: str | None = None
+    valid_hours: int | None = Field(None, ge=1)
+    discount_percent: int | None = Field(None, ge=0)
+    bonus_amount_kopeks: int | None = Field(None, ge=0)
+    active_discount_hours: int | None = Field(None, ge=1)
+    test_duration_hours: int | None = Field(None, ge=1)
+    test_squad_uuids: list[str] | None = None
+    is_active: bool | None = None
 
 
 class PromoOfferBroadcastRequest(BaseModel):
@@ -116,52 +119,53 @@ class PromoOfferBroadcastRequest(BaseModel):
     valid_hours: int = Field(..., ge=1)
     discount_percent: int = Field(0, ge=0)
     bonus_amount_kopeks: int = Field(0, ge=0)
-    effect_type: str = Field("percent_discount", min_length=1)
-    extra_data: Dict[str, Any] = Field(default_factory=dict)
-    target: Optional[str] = None
-    user_id: Optional[int] = None
-    telegram_id: Optional[int] = None
+    effect_type: str = Field('percent_discount', min_length=1)
+    extra_data: dict[str, Any] = Field(default_factory=dict)
+    target: str | None = None
+    user_id: int | None = None
+    telegram_id: int | None = None
+    email: str | None = Field(None, description='User email (for email-only users)')
     # Telegram notification options
-    send_notification: bool = Field(False, description="Send Telegram notification to users")
-    message_text: Optional[str] = Field(None, description="Custom message text (HTML)")
-    button_text: Optional[str] = Field(None, description="Button text")
+    send_notification: bool = Field(False, description='Send Telegram notification to users')
+    message_text: str | None = Field(None, description='Custom message text (HTML)')
+    button_text: str | None = Field(None, description='Button text')
 
 
 class PromoOfferBroadcastResponse(BaseModel):
     created_offers: int
-    user_ids: List[int]
-    target: Optional[str] = None
+    user_ids: list[int]
+    target: str | None = None
     notifications_sent: int = 0
     notifications_failed: int = 0
 
 
 class PromoOfferLogOfferInfo(BaseModel):
     id: int
-    notification_type: Optional[str] = None
-    discount_percent: Optional[int] = None
-    bonus_amount_kopeks: Optional[int] = None
-    effect_type: Optional[str] = None
-    expires_at: Optional[datetime] = None
-    claimed_at: Optional[datetime] = None
-    is_active: Optional[bool] = None
+    notification_type: str | None = None
+    discount_percent: int | None = None
+    bonus_amount_kopeks: int | None = None
+    effect_type: str | None = None
+    expires_at: datetime | None = None
+    claimed_at: datetime | None = None
+    is_active: bool | None = None
 
 
 class PromoOfferLogResponse(BaseModel):
     id: int
-    user_id: Optional[int] = None
-    offer_id: Optional[int] = None
+    user_id: int | None = None
+    offer_id: int | None = None
     action: str
-    source: Optional[str] = None
-    percent: Optional[int] = None
-    effect_type: Optional[str] = None
-    details: Dict[str, Any] = Field(default_factory=dict)
+    source: str | None = None
+    percent: int | None = None
+    effect_type: str | None = None
+    details: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
-    user: Optional[PromoOfferUserInfo] = None
-    offer: Optional[PromoOfferLogOfferInfo] = None
+    user: PromoOfferUserInfo | None = None
+    offer: PromoOfferLogOfferInfo | None = None
 
 
 class PromoOfferLogListResponse(BaseModel):
-    items: List[PromoOfferLogResponse]
+    items: list[PromoOfferLogResponse]
     total: int
     limit: int
     offset: int
@@ -169,16 +173,18 @@ class PromoOfferLogListResponse(BaseModel):
 
 # ============== Helpers ==============
 
-def _serialize_user(user: Optional[User]) -> Optional[PromoOfferUserInfo]:
+
+def _serialize_user(user: User | None) -> PromoOfferUserInfo | None:
     if not user:
         return None
     return PromoOfferUserInfo(
         id=user.id,
         telegram_id=user.telegram_id,
+        email=user.email,
         username=user.username,
         first_name=user.first_name,
         last_name=user.last_name,
-        full_name=getattr(user, "full_name", None),
+        full_name=getattr(user, 'full_name', None),
     )
 
 
@@ -197,7 +203,7 @@ def _serialize_offer(offer: DiscountOffer) -> PromoOfferResponse:
         extra_data=offer.extra_data or {},
         created_at=offer.created_at,
         updated_at=offer.updated_at,
-        user=_serialize_user(getattr(offer, "user", None)),
+        user=_serialize_user(getattr(offer, 'user', None)),
     )
 
 
@@ -222,10 +228,10 @@ def _serialize_template(template: PromoOfferTemplate) -> PromoOfferTemplateRespo
 
 
 def _serialize_log(entry: PromoOfferLog) -> PromoOfferLogResponse:
-    user_info = _serialize_user(getattr(entry, "user", None))
+    user_info = _serialize_user(getattr(entry, 'user', None))
 
-    offer = getattr(entry, "offer", None)
-    offer_info: Optional[PromoOfferLogOfferInfo] = None
+    offer = getattr(entry, 'offer', None)
+    offer_info: PromoOfferLogOfferInfo | None = None
     if offer:
         offer_info = PromoOfferLogOfferInfo(
             id=offer.id,
@@ -255,15 +261,16 @@ def _serialize_log(entry: PromoOfferLog) -> PromoOfferLogResponse:
 
 async def _resolve_target_users(db: AsyncSession, target: str) -> list[User]:
     normalized = target.strip().lower()
-    if normalized.startswith("custom_"):
-        criteria = normalized[len("custom_"):]
+    if normalized.startswith('custom_'):
+        criteria = normalized[len('custom_') :]
         return await get_custom_users(db, criteria)
     return await get_target_users(db, normalized)
 
 
 # ============== Template Endpoints ==============
 
-@router.get("/templates", response_model=PromoOfferTemplateListResponse)
+
+@router.get('/templates', response_model=PromoOfferTemplateListResponse)
 async def list_templates(
     admin: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_cabinet_db),
@@ -275,12 +282,10 @@ async def list_templates(
     if not templates:
         templates = await ensure_default_templates(db, created_by=admin.id)
 
-    return PromoOfferTemplateListResponse(
-        items=[_serialize_template(template) for template in templates]
-    )
+    return PromoOfferTemplateListResponse(items=[_serialize_template(template) for template in templates])
 
 
-@router.get("/templates/{template_id}", response_model=PromoOfferTemplateResponse)
+@router.get('/templates/{template_id}', response_model=PromoOfferTemplateResponse)
 async def get_template(
     template_id: int,
     admin: User = Depends(get_current_admin_user),
@@ -289,11 +294,11 @@ async def get_template(
     """Get a promo offer template."""
     template = await get_promo_offer_template_by_id(db, template_id)
     if not template:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Template not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Template not found')
     return _serialize_template(template)
 
 
-@router.patch("/templates/{template_id}", response_model=PromoOfferTemplateResponse)
+@router.patch('/templates/{template_id}', response_model=PromoOfferTemplateResponse)
 async def update_template(
     template_id: int,
     payload: PromoOfferTemplateUpdateRequest,
@@ -303,7 +308,7 @@ async def update_template(
     """Update a promo offer template."""
     template = await get_promo_offer_template_by_id(db, template_id)
     if not template:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Template not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Template not found')
 
     if payload.test_squad_uuids is not None:
         normalized_squads = [str(uuid).strip() for uuid in payload.test_squad_uuids if str(uuid).strip()]
@@ -330,14 +335,15 @@ async def update_template(
 
 # ============== Offer Endpoints ==============
 
-@router.get("", response_model=PromoOfferListResponse)
+
+@router.get('', response_model=PromoOfferListResponse)
 async def list_offers(
     admin: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_cabinet_db),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    user_id: Optional[int] = Query(None, ge=1),
-    is_active: Optional[bool] = Query(None),
+    user_id: int | None = Query(None, ge=1),
+    is_active: bool | None = Query(None),
 ) -> PromoOfferListResponse:
     """Get list of promo offers."""
     offers = await list_discount_offers(
@@ -375,24 +381,24 @@ def _build_default_promo_message(
     valid_hours: int,
 ) -> str:
     """Build default promo notification message."""
-    lines = ["🎁 <b>Специальное предложение для вас!</b>\n"]
+    lines = ['🎁 <b>Специальное предложение для вас!</b>\n']
 
     if discount_percent > 0:
-        lines.append(f"🔥 Скидка <b>{discount_percent}%</b> на подписку")
+        lines.append(f'🔥 Скидка <b>{discount_percent}%</b> на подписку')
     if bonus_amount_kopeks > 0:
         bonus_rub = bonus_amount_kopeks / 100
-        lines.append(f"💰 Бонус <b>{bonus_rub:.0f}₽</b> на баланс")
+        lines.append(f'💰 Бонус <b>{bonus_rub:.0f}₽</b> на баланс')
 
-    lines.append(f"\n⏰ Предложение действует <b>{valid_hours} ч.</b>")
-    lines.append("\nНажмите кнопку ниже, чтобы активировать!")
+    lines.append(f'\n⏰ Предложение действует <b>{valid_hours} ч.</b>')
+    lines.append('\nНажмите кнопку ниже, чтобы активировать!')
 
-    return "\n".join(lines)
+    return '\n'.join(lines)
 
 
 async def _send_promo_notifications(
-    offers_to_notify: List[tuple[User, DiscountOffer]],
-    message_text: Optional[str],
-    button_text: Optional[str],
+    offers_to_notify: list[tuple[User, DiscountOffer]],
+    message_text: str | None,
+    button_text: str | None,
     discount_percent: int,
     bonus_amount_kopeks: int,
     valid_hours: int,
@@ -417,11 +423,16 @@ async def _send_promo_notifications(
     )
 
     # Default button text
-    btn_text = button_text or "🎁 Получить"
+    btn_text = button_text or '🎁 Получить'
 
     semaphore = asyncio.Semaphore(20)
 
     async def send_single(user: User, offer: DiscountOffer) -> bool:
+        # Skip email-only users (no telegram_id)
+        if not user.telegram_id:
+            logger.debug(f'Skipping promo notification for email-only user {user.id}')
+            return False
+
         async with semaphore:
             try:
                 keyboard = InlineKeyboardMarkup(
@@ -429,13 +440,13 @@ async def _send_promo_notifications(
                         [
                             build_miniapp_or_callback_button(
                                 text=btn_text,
-                                callback_data=f"claim_discount_{offer.id}",
+                                callback_data=f'claim_discount_{offer.id}',
                             )
                         ],
                         [
                             InlineKeyboardButton(
-                                text="❌ Закрыть",
-                                callback_data="promo_offer_close",
+                                text='❌ Закрыть',
+                                callback_data='promo_offer_close',
                             )
                         ],
                     ]
@@ -449,14 +460,14 @@ async def _send_promo_notifications(
                 return True
             except (TelegramForbiddenError, TelegramBadRequest) as exc:
                 logger.warning(
-                    "Failed to send promo notification to user %s: %s",
+                    'Failed to send promo notification to user %s: %s',
                     user.telegram_id,
                     exc,
                 )
                 return False
             except Exception as exc:
                 logger.error(
-                    "Error sending promo notification to user %s: %s",
+                    'Error sending promo notification to user %s: %s',
                     user.telegram_id,
                     exc,
                 )
@@ -485,7 +496,7 @@ async def _send_promo_notifications(
     return sent, failed
 
 
-@router.post("/broadcast", response_model=PromoOfferBroadcastResponse, status_code=status.HTTP_201_CREATED)
+@router.post('/broadcast', response_model=PromoOfferBroadcastResponse, status_code=status.HTTP_201_CREATED)
 async def broadcast_offer(
     payload: PromoOfferBroadcastRequest,
     admin: User = Depends(get_current_admin_user),
@@ -501,16 +512,28 @@ async def broadcast_offer(
 
     # Resolve specific user
     target_user_id = payload.user_id
-    user: Optional[User] = None
+    user: User | None = None
 
     if payload.telegram_id is not None:
         user = await get_user_by_telegram_id(db, payload.telegram_id)
         if not user:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, 'User not found by telegram_id')
         if target_user_id and target_user_id != user.id:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                "Provided user_id does not match telegram_id",
+                'Provided user_id does not match telegram_id',
+            )
+        target_user_id = user.id
+
+    # Support email lookup for email-only users
+    if payload.email is not None and user is None:
+        user = await get_user_by_email(db, payload.email)
+        if not user:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, 'User not found by email')
+        if target_user_id and target_user_id != user.id:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                'Provided user_id does not match email',
             )
         target_user_id = user.id
 
@@ -518,18 +541,18 @@ async def broadcast_offer(
         if user is None:
             user = await db.get(User, target_user_id)
         if not user:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, 'User not found')
         recipients[target_user_id] = user
 
     if not recipients:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            "No recipients: specify target or user",
+            'No recipients: specify target or user',
         )
 
     # Create offers for all recipients and collect (user, offer) pairs
     created_offers = 0
-    offers_to_notify: List[tuple[User, DiscountOffer]] = []
+    offers_to_notify: list[tuple[User, DiscountOffer]] = []
 
     for recipient in recipients.values():
         offer = await upsert_discount_offer(
@@ -572,14 +595,15 @@ async def broadcast_offer(
 
 # ============== Log Endpoints ==============
 
-@router.get("/logs", response_model=PromoOfferLogListResponse)
+
+@router.get('/logs', response_model=PromoOfferLogListResponse)
 async def get_logs(
     admin: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_cabinet_db),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    user_id: Optional[int] = Query(None, ge=1),
-    action: Optional[str] = Query(None, min_length=1),
+    user_id: int | None = Query(None, ge=1),
+    action: str | None = Query(None, min_length=1),
 ) -> PromoOfferLogListResponse:
     """Get promo offer logs."""
     logs, total = await list_promo_offer_logs(

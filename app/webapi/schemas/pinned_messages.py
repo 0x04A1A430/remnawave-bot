@@ -1,50 +1,49 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
 
 class PinnedMessageMedia(BaseModel):
-    type: str = Field(pattern=r"^(photo|video)$")
+    type: str = Field(pattern=r'^(photo|video)$')
     file_id: str
 
 
 class PinnedMessageBase(BaseModel):
-    content: Optional[str] = Field(None, max_length=4000)
+    content: str | None = Field(None, max_length=4000)
     send_before_menu: bool = True
     send_on_every_start: bool = True
 
 
 class PinnedMessageCreateRequest(PinnedMessageBase):
     content: str = Field(..., min_length=1, max_length=4000)
-    media: Optional[PinnedMessageMedia] = None
+    media: PinnedMessageMedia | None = None
 
 
 class PinnedMessageUpdateRequest(BaseModel):
-    content: Optional[str] = Field(None, max_length=4000)
-    send_before_menu: Optional[bool] = None
-    send_on_every_start: Optional[bool] = None
-    media: Optional[PinnedMessageMedia] = None
+    content: str | None = Field(None, max_length=4000)
+    send_before_menu: bool | None = None
+    send_on_every_start: bool | None = None
+    media: PinnedMessageMedia | None = None
 
 
 class PinnedMessageSettingsRequest(BaseModel):
-    send_before_menu: Optional[bool] = None
-    send_on_every_start: Optional[bool] = None
+    send_before_menu: bool | None = None
+    send_on_every_start: bool | None = None
 
 
 class PinnedMessageResponse(BaseModel):
     id: int
-    content: Optional[str]
-    media_type: Optional[str] = None
-    media_file_id: Optional[str] = None
+    content: str | None
+    media_type: str | None = None
+    media_file_id: str | None = None
     send_before_menu: bool
     send_on_every_start: bool
     is_active: bool
-    created_by: Optional[int] = None
+    created_by: int | None = None
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
 
 class PinnedMessageBroadcastResponse(BaseModel):
