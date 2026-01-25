@@ -41,7 +41,7 @@ else:
     pool_kwargs = {
         'pool_size': 30,  # Увеличен с 20
         'max_overflow': 50,  # Увеличен с 30
-        'pool_timeout': 30,
+        'pool_timeout': 60,  # Увеличен с 30 для обработки пиковых нагрузок
         'pool_recycle': 1800,  # Уменьшен с 3600 до 30 мин для более быстрого recycling
         'pool_pre_ping': True,
         # Агрессивная очистка мертвых соединений
@@ -61,7 +61,7 @@ _pg_connect_args = {
         'idle_in_transaction_session_timeout': '300000',  # 5 минут
     },
     'command_timeout': 60,
-    'timeout': 30,  # Увеличен с 10 до 30 сек для высокой нагрузки
+    'timeout': 60,  # Увеличен с 30 до 60 сек для обработки пиковых нагрузок
 }
 
 engine = create_async_engine(
@@ -94,7 +94,7 @@ AsyncSessionLocal = async_sessionmaker(
 # RETRY LOGIC FOR DATABASE OPERATIONS
 # ============================================================================
 
-RETRYABLE_EXCEPTIONS = (OperationalError, InterfaceError, ConnectionRefusedError, OSError)
+RETRYABLE_EXCEPTIONS = (OperationalError, InterfaceError, ConnectionRefusedError, OSError, TimeoutError)
 DEFAULT_RETRY_ATTEMPTS = 3
 DEFAULT_RETRY_DELAY = 0.5  # секунды
 
