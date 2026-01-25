@@ -191,13 +191,23 @@ class NotificationDeliveryService:
         try:
             from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 
-            await bot.send_message(
-                chat_id=user.telegram_id,
-                text=message,
-                reply_markup=markup,
-                parse_mode='HTML',
+            await asyncio.wait_for(
+                bot.send_message(
+                    chat_id=user.telegram_id,
+                    text=message,
+                    reply_markup=markup,
+                    parse_mode='HTML',
+                ),
+                timeout=15.0,
             )
             return True
+
+        except asyncio.TimeoutError:
+            logger.warning(
+                'Timeout при отправке Telegram уведомления пользователю %s',
+                user.telegram_id,
+            )
+            return False
 
         except TelegramForbiddenError:
             logger.warning(
