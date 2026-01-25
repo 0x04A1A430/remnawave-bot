@@ -3,7 +3,7 @@
 import asyncio
 import hashlib
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -160,8 +160,12 @@ async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -
             traffic_limit_gb = panel_user.traffic_limit_bytes // (1024**3) if panel_user.traffic_limit_bytes > 0 else 0
             used_traffic_gb = panel_user.used_traffic_bytes / (1024**3) if panel_user.used_traffic_bytes > 0 else 0
 
-            # Determine status
-            current_time = datetime.utcnow()
+            # Determine status - use timezone-aware datetime for comparison
+            current_time = datetime.now(timezone.utc)
+            # Make expire_at timezone-aware if it's naive
+            if expire_at.tzinfo is None:
+                expire_at = expire_at.replace(tzinfo=timezone.utc)
+
             if panel_user.status.value == 'ACTIVE' and expire_at > current_time:
                 sub_status = SubscriptionStatus.ACTIVE
             elif expire_at <= current_time:
@@ -171,7 +175,9 @@ async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -
 
             if existing_sub:
                 # Update existing subscription
-                existing_sub.end_date = expire_at
+                # Convert to naive datetime for database storage
+                end_date_naive = expire_at.replace(tzinfo=None) if expire_at.tzinfo else expire_at
+                existing_sub.end_date = end_date_naive
                 existing_sub.traffic_limit_gb = traffic_limit_gb
                 existing_sub.used_traffic_gb = used_traffic_gb
                 existing_sub.status = sub_status.value
@@ -182,10 +188,13 @@ async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -
                 logger.info(f'Updated subscription for email user {user.email}')
             else:
                 # Create new subscription
+                # Convert current_time to naive for database storage if needed
+                start_date_naive = current_time.replace(tzinfo=None)
+                end_date_naive = expire_at.replace(tzinfo=None) if expire_at.tzinfo else expire_at
                 new_sub = Subscription(
                     user_id=user.id,
-                    start_date=current_time,
-                    end_date=expire_at,
+                    start_date=start_date_naive,
+                    end_date=end_date_naive,
                     traffic_limit_gb=traffic_limit_gb,
                     used_traffic_gb=used_traffic_gb,
                     status=sub_status.value,
@@ -201,11 +210,8 @@ async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -
 
     except Exception as e:
         logger.warning(f'Failed to sync subscription from panel for {user.email}: {e}')
-        # Don't fail verification if sync fails
-        try:
-            await db.rollback()
-        except Exception:
-            pass
+        # Don't rollback - it detaches user object and breaks subsequent operations
+        # The sync is non-critical, main verification already succeeded
 
 
 @router.post('/telegram', response_model=AuthResponse)
@@ -780,7 +786,8 @@ async def forgot_password(
 
     # Send reset email asynchronously (smtplib is blocking)
     if email_service.is_configured():
-        reset_url = 'https://example.com/cabinet/reset-password'
+        cabinet_url = settings.CABINET_URL
+        reset_url = f'{cabinet_url}/reset-password'
         await asyncio.to_thread(
             email_service.send_password_reset_email,
             to_email=user.email,
