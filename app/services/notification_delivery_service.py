@@ -202,7 +202,7 @@ class NotificationDeliveryService:
             )
             return True
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning(
                 'Timeout при отправке Telegram уведомления пользователю %s',
                 user.telegram_id,
