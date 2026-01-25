@@ -2502,7 +2502,9 @@ class Settings(BaseSettings):
         return bool(self.CABINET_EMAIL_AUTH_ENABLED)
 
     def is_smtp_configured(self) -> bool:
-        return bool(self.SMTP_HOST and self.SMTP_USER and self.SMTP_PASSWORD)
+        # For servers without AUTH, only host and from_email are required
+        has_from = bool(self.SMTP_FROM_EMAIL or self.SMTP_USER)
+        return bool(self.SMTP_HOST and has_from)
 
     def get_smtp_from_email(self) -> str | None:
         if self.SMTP_FROM_EMAIL:

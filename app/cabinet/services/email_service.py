@@ -29,14 +29,21 @@ class EmailService:
 
     def _get_smtp_connection(self) -> smtplib.SMTP:
         """Create and return SMTP connection."""
-        if self.use_tls:
-            smtp = smtplib.SMTP(self.host, self.port)
-            smtp.starttls()
-        else:
-            smtp = smtplib.SMTP(self.host, self.port)
+        smtp = smtplib.SMTP(self.host, self.port)
+        smtp.ehlo()
 
+        if self.use_tls:
+            smtp.starttls()
+            smtp.ehlo()
+
+        # Only attempt login if credentials are provided AND server supports AUTH
         if self.user and self.password:
-            smtp.login(self.user, self.password)
+            if smtp.has_extn('auth'):
+                smtp.login(self.user, self.password)
+            else:
+                logger.debug(
+                    f'SMTP server {self.host} does not support AUTH, skipping authentication'
+                )
 
         return smtp
 
