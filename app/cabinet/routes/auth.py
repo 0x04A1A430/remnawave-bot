@@ -297,8 +297,8 @@ async def register_email(
 
     # Send verification email asynchronously (smtplib is blocking)
     if settings.is_cabinet_email_verification_enabled() and email_service.is_configured():
-        # TODO: Get actual verification URL from settings
-        verification_url = 'https://example.com/cabinet/verify-email'
+        cabinet_url = getattr(settings, 'CABINET_URL', 'https://example.com/cabinet')
+        verification_url = f'{cabinet_url}/verify-email'
         await asyncio.to_thread(
             email_service.send_verification_email,
             to_email=request.email,
@@ -391,7 +391,7 @@ async def register_email_standalone(
         # Отправить email верификации
         if settings.is_cabinet_email_verification_enabled() and email_service.is_configured():
             cabinet_url = getattr(settings, 'CABINET_URL', 'https://example.com/cabinet')
-            verification_url = f'{cabinet_url}/verify-email?token={verification_token}'
+            verification_url = f'{cabinet_url}/verify-email'
             await asyncio.to_thread(
                 email_service.send_verification_email,
                 to_email=request.email,
@@ -485,7 +485,8 @@ async def resend_verification(
 
     # Send verification email asynchronously (smtplib is blocking)
     if settings.is_cabinet_email_verification_enabled() and email_service.is_configured():
-        verification_url = 'https://example.com/cabinet/verify-email'
+        cabinet_url = getattr(settings, 'CABINET_URL', 'https://example.com/cabinet')
+        verification_url = f'{cabinet_url}/verify-email'
         await asyncio.to_thread(
             email_service.send_verification_email,
             to_email=user.email,

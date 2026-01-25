@@ -32,6 +32,7 @@ THEME_COLORS_KEY = 'CABINET_THEME_COLORS'  # Stores JSON with theme colors
 ENABLED_THEMES_KEY = 'CABINET_ENABLED_THEMES'  # Stores JSON with enabled themes {"dark": true, "light": false}
 ANIMATION_ENABLED_KEY = 'CABINET_ANIMATION_ENABLED'  # Stores "true" or "false"
 FULLSCREEN_ENABLED_KEY = 'CABINET_FULLSCREEN_ENABLED'  # Stores "true" or "false"
+EMAIL_AUTH_ENABLED_KEY = 'CABINET_EMAIL_AUTH_ENABLED'  # Stores "true" or "false"
 
 # Allowed image types
 ALLOWED_CONTENT_TYPES = {'image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/svg+xml'}
@@ -124,6 +125,18 @@ class FullscreenEnabledResponse(BaseModel):
 
 class FullscreenEnabledUpdate(BaseModel):
     """Request to update fullscreen setting."""
+
+    enabled: bool
+
+
+class EmailAuthEnabledResponse(BaseModel):
+    """Email auth enabled setting."""
+
+    enabled: bool = True
+
+
+class EmailAuthEnabledUpdate(BaseModel):
+    """Request to update email auth setting."""
 
     enabled: bool
 
@@ -586,3 +599,39 @@ async def update_fullscreen_enabled(
     logger.info(f'Admin {admin.telegram_id} set fullscreen enabled: {payload.enabled}')
 
     return FullscreenEnabledResponse(enabled=payload.enabled)
+
+
+# ============ Email Auth Routes ============
+
+
+@router.get('/email-auth', response_model=EmailAuthEnabledResponse)
+async def get_email_auth_enabled(
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """
+    Get email auth enabled setting.
+    This is a public endpoint - no authentication required.
+    Controls whether email registration/login is available.
+    """
+    email_auth_value = await get_setting_value(db, EMAIL_AUTH_ENABLED_KEY)
+
+    if email_auth_value is not None:
+        enabled = email_auth_value.lower() == 'true'
+        return EmailAuthEnabledResponse(enabled=enabled)
+
+    # Default: check config setting
+    return EmailAuthEnabledResponse(enabled=settings.is_cabinet_email_auth_enabled())
+
+
+@router.patch('/email-auth', response_model=EmailAuthEnabledResponse)
+async def update_email_auth_enabled(
+    payload: EmailAuthEnabledUpdate,
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Update email auth enabled setting. Admin only."""
+    await set_setting_value(db, EMAIL_AUTH_ENABLED_KEY, str(payload.enabled).lower())
+
+    logger.info(f'Admin {admin.telegram_id} set email auth enabled: {payload.enabled}')
+
+    return EmailAuthEnabledResponse(enabled=payload.enabled)
