@@ -119,6 +119,93 @@ async def _store_refresh_token(
         await db.rollback()
 
 
+async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -> None:
+    """
+    Check if user has subscription in RemnaWave panel by email and sync it.
+    Called after email verification to import existing subscriptions.
+    """
+    if not user.email:
+        return
+
+    try:
+        from app.services.remnawave_service import RemnaWaveService
+
+        service = RemnaWaveService()
+        if not service.is_configured:
+            return
+
+        async with service.get_api_client() as api:
+            # Try to find user by email in panel
+            panel_user = await api.get_user_by_email(user.email)
+
+            if not panel_user:
+                logger.debug(f'No subscription found in panel for email: {user.email}')
+                return
+
+            logger.info(f'Found subscription in panel for email {user.email}: {panel_user.uuid}')
+
+            # Link user to panel
+            user.remnawave_uuid = panel_user.uuid
+
+            # Create or update subscription
+            from app.database.crud.subscription import get_subscription_by_user_id
+            from app.database.models import Subscription, SubscriptionStatus
+
+            existing_sub = await get_subscription_by_user_id(db, user.id)
+
+            # Parse panel data
+            expire_at = panel_user.expire_at
+            traffic_limit_gb = panel_user.traffic_limit_bytes // (1024**3) if panel_user.traffic_limit_bytes > 0 else 0
+            used_traffic_gb = panel_user.used_traffic_bytes / (1024**3) if panel_user.used_traffic_bytes > 0 else 0
+
+            # Determine status
+            current_time = datetime.utcnow()
+            if panel_user.status.value == 'ACTIVE' and expire_at > current_time:
+                sub_status = SubscriptionStatus.ACTIVE
+            elif expire_at <= current_time:
+                sub_status = SubscriptionStatus.EXPIRED
+            else:
+                sub_status = SubscriptionStatus.DISABLED
+
+            if existing_sub:
+                # Update existing subscription
+                existing_sub.end_date = expire_at
+                existing_sub.traffic_limit_gb = traffic_limit_gb
+                existing_sub.used_traffic_gb = used_traffic_gb
+                existing_sub.status = sub_status.value
+                existing_sub.remnawave_short_uuid = panel_user.short_uuid
+                existing_sub.subscription_url = panel_user.subscription_url
+                existing_sub.subscription_crypto_link = panel_user.happ_crypto_link
+                existing_sub.is_trial = False  # Panel subscription is not trial
+                logger.info(f'Updated subscription for email user {user.email}')
+            else:
+                # Create new subscription
+                new_sub = Subscription(
+                    user_id=user.id,
+                    start_date=current_time,
+                    end_date=expire_at,
+                    traffic_limit_gb=traffic_limit_gb,
+                    used_traffic_gb=used_traffic_gb,
+                    status=sub_status.value,
+                    is_trial=False,
+                    remnawave_short_uuid=panel_user.short_uuid,
+                    subscription_url=panel_user.subscription_url,
+                    subscription_crypto_link=panel_user.happ_crypto_link,
+                )
+                db.add(new_sub)
+                logger.info(f'Created subscription for email user {user.email}')
+
+            await db.commit()
+
+    except Exception as e:
+        logger.warning(f'Failed to sync subscription from panel for {user.email}: {e}')
+        # Don't fail verification if sync fails
+        try:
+            await db.rollback()
+        except Exception:
+            pass
+
+
 @router.post('/telegram', response_model=AuthResponse)
 async def auth_telegram(
     request: TelegramAuthRequest,
@@ -448,6 +535,9 @@ async def verify_email(
     user.cabinet_last_login = datetime.utcnow()
 
     await db.commit()
+
+    # Check if user has subscription in RemnaWave panel by email
+    await _sync_subscription_from_panel_by_email(db, user)
 
     # Return auth tokens so user is logged in after verification
     response = _create_auth_response(user)
