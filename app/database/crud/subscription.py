@@ -1856,7 +1856,7 @@ async def get_daily_subscriptions_for_charge(db: AsyncSession) -> list[Subscript
 
 async def get_disabled_daily_subscriptions_for_resume(
     db: AsyncSession,
-) -> List[Subscription]:
+) -> list[Subscription]:
     """
     Получает список DISABLED суточных подписок, которые можно возобновить.
     Подписки с достаточным балансом пользователя будут возобновлены.
