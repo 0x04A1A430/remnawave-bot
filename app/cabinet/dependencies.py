@@ -1,5 +1,6 @@
 """FastAPI dependencies for cabinet module."""
 
+import asyncio
 import logging
 
 from aiogram import Bot
@@ -129,7 +130,10 @@ async def get_current_cabinet_user(
             if not is_admin:
                 try:
                     bot = _get_channel_check_bot()
-                    chat_member = await bot.get_chat_member(chat_id=settings.CHANNEL_SUB_ID, user_id=user.telegram_id)
+                    chat_member = await asyncio.wait_for(
+                        bot.get_chat_member(chat_id=settings.CHANNEL_SUB_ID, user_id=user.telegram_id),
+                        timeout=10.0,
+                    )
                     # Не закрываем сессию - бот переиспользуется
 
                     if chat_member.status not in ['member', 'administrator', 'creator']:
@@ -143,6 +147,9 @@ async def get_current_cabinet_user(
                         )
                 except HTTPException:
                     raise
+                except asyncio.TimeoutError:
+                    logger.warning(f'Timeout checking channel subscription for user {user.telegram_id}')
+                    # Don't block user if check times out
                 except Exception as e:
                     logger.warning(f'Failed to check channel subscription for user {user.telegram_id}: {e}')
                     # Don't block user if check fails
