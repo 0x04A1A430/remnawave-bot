@@ -110,3 +110,11 @@ class AuthResponse(BaseModel):
     token_type: str = 'bearer'
     expires_in: int
     user: UserResponse
+
+
+class RegisterResponse(BaseModel):
+    """Response for email registration (before verification)."""
+
+    message: str = Field(..., description='Success message')
+    email: str = Field(..., description='Email address to verify')
+    requires_verification: bool = Field(True, description='Whether email verification is required')
