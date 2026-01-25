@@ -1138,6 +1138,7 @@ class RemnaWaveService:
                             'username': user_obj.username,
                             'status': user_obj.status.value,
                             'telegramId': user_obj.telegram_id,
+                            'email': user_obj.email,  # Email для синхронизации email-only пользователей
                             'expireAt': user_obj.expire_at.isoformat() + 'Z',
                             'trafficLimitBytes': user_obj.traffic_limit_bytes,
                             'usedTrafficBytes': user_obj.used_traffic_bytes,
@@ -1172,6 +1173,11 @@ class RemnaWaveService:
             bot_users_by_uuid = {
                 user.remnawave_uuid: user for user in bot_users if getattr(user, 'remnawave_uuid', None)
             }
+            # Index users by email for email-only sync
+            bot_users_by_email = {
+                user.email.lower(): user for user in bot_users
+                if user.email and user.email_verified
+            }
             # Also index email-only users by their remnawave_uuid for sync
             email_users_count = sum(1 for u in bot_users if u.telegram_id is None)
             if email_users_count > 0:
@@ -1194,6 +1200,14 @@ class RemnaWaveService:
                 )
 
             panel_telegram_ids = set(unique_panel_users_map.keys())
+
+            # Email-only пользователи из панели (без telegram_id, но с email)
+            panel_users_email_only = [
+                user for user in panel_users
+                if user.get('telegramId') is None and user.get('email')
+            ]
+            if panel_users_email_only:
+                logger.info(f'📧 Пользователей в панели с Email (без Telegram): {len(panel_users_email_only)}')
 
             # Для ускорения - подготовим данные о подписках
             # Соберем все существующие подписки за один запрос
@@ -1333,6 +1347,54 @@ class RemnaWaveService:
                 for mutation in reversed(pending_uuid_mutations):
                     mutation.rollback()
                 pending_uuid_mutations.clear()
+
+            # Обработка email-only пользователей из панели
+            if panel_users_email_only and sync_type in ['new_only', 'all']:
+                logger.info(f'📧 Обработка {len(panel_users_email_only)} email-only пользователей из панели...')
+
+                for panel_user in panel_users_email_only:
+                    try:
+                        panel_email = panel_user.get('email', '').lower()
+                        panel_uuid = panel_user.get('uuid')
+
+                        if not panel_email:
+                            continue
+
+                        # Ищем пользователя по email в боте
+                        db_user = bot_users_by_email.get(panel_email)
+
+                        # Если не нашли по email, ищем по UUID
+                        if not db_user and panel_uuid:
+                            db_user = bot_users_by_uuid.get(panel_uuid)
+
+                        if db_user:
+                            # Обновляем существующего пользователя
+                            # Обновляем remnawave_uuid если нет
+                            if panel_uuid and not db_user.remnawave_uuid:
+                                db_user.remnawave_uuid = panel_uuid
+
+                            # Обновляем или создаем подписку
+                            if hasattr(db_user, 'subscription') and db_user.subscription:
+                                await self._update_subscription_from_panel_data(db, db_user, panel_user)
+                            else:
+                                await self._create_subscription_from_panel_data(db, db_user, panel_user)
+
+                            stats['updated'] += 1
+                            logger.info(f'📧 Обновлен email-пользователь: {panel_email}')
+                        else:
+                            # Email-only пользователи не создаются автоматически при синхронизации,
+                            # они должны сначала зарегистрироваться через cabinet
+                            logger.debug(f'📧 Email-пользователь {panel_email} не найден в боте, пропускаем')
+
+                    except Exception as email_user_error:
+                        logger.error(f'❌ Ошибка обработки email-пользователя: {email_user_error}')
+                        stats['errors'] += 1
+
+                try:
+                    await db.commit()
+                except Exception as email_commit_error:
+                    logger.error(f'❌ Ошибка коммита email-пользователей: {email_commit_error}')
+                    await db.rollback()
 
             if sync_type == 'all':
                 logger.info('🗑️ Деактивация подписок пользователей, отсутствующих в панели...')
@@ -1770,8 +1832,9 @@ class RemnaWaveService:
                                     else 0,
                                     traffic_limit_strategy=TrafficLimitStrategy.MONTH,
                                     telegram_id=user.telegram_id,
+                                    email=user.email,
                                     description=settings.format_remnawave_user_description(
-                                        full_name=user.full_name, username=user.username, telegram_id=user.telegram_id
+                                        full_name=user.full_name, username=user.username, telegram_id=user.telegram_id, email=user.email
                                     ),
                                     active_internal_squads=sub.connected_squads,
                                 )
@@ -1796,6 +1859,7 @@ class RemnaWaveService:
                                         expire_at=expire_at,
                                         traffic_limit_bytes=create_kwargs['traffic_limit_bytes'],
                                         traffic_limit_strategy=TrafficLimitStrategy.MONTH,
+                                        email=user.email,
                                         description=create_kwargs['description'],
                                         active_internal_squads=sub.connected_squads,
                                     )
