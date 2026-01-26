@@ -53,6 +53,10 @@ class NotificationType(Enum):
     REFERRAL_BONUS = 'referral_bonus'
     REFERRAL_REGISTERED = 'referral_registered'
 
+    # Auth emails
+    EMAIL_VERIFICATION = 'email_verification'
+    PASSWORD_RESET = 'password_reset'
+
     # Other
     BROADCAST = 'broadcast'
     PAYMENT_RECEIVED = 'payment_received'
