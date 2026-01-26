@@ -4223,33 +4223,33 @@ async def fix_button_click_logs_fk() -> bool:
                     logger.info('🔧 Исправляем FK button_click_logs.user_id: telegram_id -> id')
 
                     # Обнуляем невалидные user_id (которые были internal id, а не telegram_id)
-                    await conn.execute(text("""
+                    await conn.execute(
+                        text("""
                         UPDATE button_click_logs
                         SET user_id = NULL
                         WHERE user_id IS NOT NULL
                           AND user_id NOT IN (SELECT telegram_id FROM users)
-                    """))
+                    """)
+                    )
 
                     # Удаляем старый FK
-                    await conn.execute(text(
-                        'ALTER TABLE button_click_logs DROP CONSTRAINT IF EXISTS button_click_logs_user_id_fkey'
-                    ))
+                    await conn.execute(
+                        text('ALTER TABLE button_click_logs DROP CONSTRAINT IF EXISTS button_click_logs_user_id_fkey')
+                    )
 
                     # Меняем тип колонки и добавляем правильный FK
-                    await conn.execute(text(
-                        'ALTER TABLE button_click_logs ALTER COLUMN user_id TYPE INTEGER'
-                    ))
+                    await conn.execute(text('ALTER TABLE button_click_logs ALTER COLUMN user_id TYPE INTEGER'))
 
                     # Обнуляем все значения, т.к. они были записаны неправильно
-                    await conn.execute(text(
-                        'UPDATE button_click_logs SET user_id = NULL'
-                    ))
+                    await conn.execute(text('UPDATE button_click_logs SET user_id = NULL'))
 
-                    await conn.execute(text(
-                        'ALTER TABLE button_click_logs '
-                        'ADD CONSTRAINT button_click_logs_user_id_fkey '
-                        'FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL'
-                    ))
+                    await conn.execute(
+                        text(
+                            'ALTER TABLE button_click_logs '
+                            'ADD CONSTRAINT button_click_logs_user_id_fkey '
+                            'FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL'
+                        )
+                    )
 
                     logger.info('✅ FK button_click_logs.user_id исправлен')
                 else:
