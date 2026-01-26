@@ -127,177 +127,147 @@ async def get_transactions(
     )
 
 
-@router.get('/payment-methods', response_model=list[PaymentMethodResponse])
-async def get_payment_methods():
-    """Get available payment methods."""
-    methods = []
+async def _get_available_payment_methods(
+    db: AsyncSession,
+    user: User,
+) -> list[PaymentMethodResponse]:
+    """Get available payment methods filtered by DB config and user context.
 
-    # YooKassa - with card and SBP options
-    if settings.is_yookassa_enabled():
-        methods.append(
-            PaymentMethodResponse(
-                id='yookassa',
-                name=settings.get_yookassa_display_name(),
-                description='Pay via YooKassa',
-                min_amount_kopeks=settings.YOOKASSA_MIN_AMOUNT_KOPEKS,
-                max_amount_kopeks=settings.YOOKASSA_MAX_AMOUNT_KOPEKS,
-                is_available=True,
-                options=[
-                    {'id': 'card', 'name': '💳 Карта', 'description': 'Банковская карта'},
-                    {'id': 'sbp', 'name': '🏦 СБП', 'description': 'Система быстрых платежей (QR)'},
-                ],
-            )
-        )
+    Combines env-var availability with DB-based admin config (ordering, display conditions).
+    """
+    from app.services.payment_method_config_service import (
+        _get_method_defaults,
+        get_all_configs,
+    )
 
-    # CryptoBot
-    if settings.is_cryptobot_enabled():
-        methods.append(
-            PaymentMethodResponse(
-                id='cryptobot',
-                name=settings.get_cryptobot_display_name(),
-                description='Pay with cryptocurrency via CryptoBot',
-                min_amount_kopeks=1000,
-                max_amount_kopeks=10000000,
-                is_available=True,
-            )
-        )
+    configs = await get_all_configs(db)
+    defaults = _get_method_defaults()
 
-    # Telegram Stars
-    if settings.TELEGRAM_STARS_ENABLED:
-        methods.append(
-            PaymentMethodResponse(
-                id='telegram_stars',
-                name=settings.get_telegram_stars_display_name(),
-                description='Pay with Telegram Stars',
-                min_amount_kopeks=100,
-                max_amount_kopeks=1000000,
-                is_available=True,
-            )
-        )
+    # Provider availability checks from env vars
+    provider_enabled = {
+        'telegram_stars': settings.TELEGRAM_STARS_ENABLED,
+        'tribute': settings.TRIBUTE_ENABLED and bool(getattr(settings, 'TRIBUTE_DONATE_LINK', '')),
+        'cryptobot': settings.is_cryptobot_enabled(),
+        'heleket': settings.is_heleket_enabled(),
+        'yookassa': settings.is_yookassa_enabled(),
+        'mulenpay': settings.is_mulenpay_enabled(),
+        'pal24': settings.is_pal24_enabled(),
+        'platega': settings.is_platega_enabled(),
+        'wata': settings.is_wata_enabled(),
+        'freekassa': settings.is_freekassa_enabled(),
+        'cloudpayments': settings.is_cloudpayments_enabled(),
+    }
 
-    # Heleket
-    if settings.is_heleket_enabled():
-        methods.append(
-            PaymentMethodResponse(
-                id='heleket',
-                name=settings.get_heleket_display_name(),
-                description='Pay with cryptocurrency via Heleket',
-                min_amount_kopeks=1000,
-                max_amount_kopeks=10000000,
-                is_available=True,
-            )
-        )
-
-    # MulenPay
-    if settings.is_mulenpay_enabled():
-        methods.append(
-            PaymentMethodResponse(
-                id='mulenpay',
-                name=settings.get_mulenpay_display_name(),
-                description='MulenPay payment',
-                min_amount_kopeks=settings.MULENPAY_MIN_AMOUNT_KOPEKS,
-                max_amount_kopeks=settings.MULENPAY_MAX_AMOUNT_KOPEKS,
-                is_available=True,
-            )
-        )
-
-    # PAL24 - add options for card/sbp
-    if settings.is_pal24_enabled():
-        methods.append(
-            PaymentMethodResponse(
-                id='pal24',
-                name=settings.get_pal24_display_name(),
-                description='Pay via PAL24',
-                min_amount_kopeks=settings.PAL24_MIN_AMOUNT_KOPEKS,
-                max_amount_kopeks=settings.PAL24_MAX_AMOUNT_KOPEKS,
-                is_available=True,
-                options=[
-                    {'id': 'sbp', 'name': '🏦 СБП', 'description': 'Система быстрых платежей'},
-                    {'id': 'card', 'name': '💳 Карта', 'description': 'Банковская карта'},
-                ],
-            )
-        )
-
-    # Platega - add options for different payment methods
-    if settings.is_platega_enabled():
-        platega_methods = settings.get_platega_active_methods()
-        definitions = settings.get_platega_method_definitions()
-        platega_options = []
-        for method_code in platega_methods:
-            info = definitions.get(method_code, {})
-            platega_options.append(
-                {
+    # Default options builder (for methods with sub-options)
+    def _build_options(method_id: str, config_sub_options: dict | None) -> list[dict] | None:
+        if method_id == 'yookassa':
+            all_opts = [
+                {'id': 'card', 'name': '💳 Карта', 'description': 'Банковская карта'},
+                {'id': 'sbp', 'name': '🏦 СБП', 'description': 'Система быстрых платежей (QR)'},
+            ]
+        elif method_id == 'pal24':
+            all_opts = [
+                {'id': 'sbp', 'name': '🏦 СБП', 'description': 'Система быстрых платежей'},
+                {'id': 'card', 'name': '💳 Карта', 'description': 'Банковская карта'},
+            ]
+        elif method_id == 'platega':
+            platega_methods = settings.get_platega_active_methods()
+            definitions = settings.get_platega_method_definitions()
+            all_opts = []
+            for method_code in platega_methods:
+                info = definitions.get(method_code, {})
+                all_opts.append({
                     'id': str(method_code),
                     'name': info.get('title') or info.get('name') or f'Platega {method_code}',
                     'description': info.get('description') or info.get('name') or '',
-                }
-            )
+                })
+        elif method_id == 'freekassa':
+            all_opts = [
+                {'id': 'sbp', 'name': '🏦 NSPK СБП', 'description': 'Система быстрых платежей'},
+                {'id': 'card', 'name': '💳 Карта', 'description': 'Банковская карта'},
+            ]
+        elif method_id == 'cloudpayments':
+            all_opts = [
+                {'id': 'card', 'name': '💳 Карта', 'description': 'Банковская карта'},
+                {'id': 'sbp', 'name': '🏦 СБП', 'description': 'Система быстрых платежей'},
+            ]
+        else:
+            return None
+
+        if not all_opts:
+            return None
+
+        # Filter by sub_options config from DB
+        if config_sub_options:
+            all_opts = [o for o in all_opts if config_sub_options.get(o['id'], True)]
+
+        return all_opts if all_opts else None
+
+    # User promo group IDs for filtering
+    user_promo_group_ids: set[int] = set()
+    if hasattr(user, 'user_promo_groups') and user.user_promo_groups:
+        for upg in user.user_promo_groups:
+            user_promo_group_ids.add(upg.promo_group_id)
+    if hasattr(user, 'promo_group_id') and user.promo_group_id:
+        user_promo_group_ids.add(user.promo_group_id)
+
+    methods = []
+    for config in configs:
+        mid = config.method_id
+
+        # 1. Check env-var provider availability AND DB admin toggle
+        if not provider_enabled.get(mid, False):
+            continue
+        if not config.is_enabled:
+            continue
+
+        # 2. Check user type filter
+        if config.user_type_filter == 'telegram' and user.auth_type != 'telegram':
+            continue
+        if config.user_type_filter == 'email' and user.auth_type != 'email':
+            continue
+
+        # 3. Check first topup filter
+        if config.first_topup_filter == 'yes' and not user.has_made_first_topup:
+            continue
+        if config.first_topup_filter == 'no' and user.has_made_first_topup:
+            continue
+
+        # 4. Check promo group filter
+        if config.promo_group_filter_mode == 'selected' and config.allowed_promo_groups:
+            allowed_ids = {pg.id for pg in config.allowed_promo_groups}
+            if not user_promo_group_ids.intersection(allowed_ids):
+                continue
+
+        # Build the response
+        method_def = defaults.get(mid, {})
+        display_name = config.display_name or method_def.get('default_display_name', mid)
+        min_amount = config.min_amount_kopeks or method_def.get('default_min', 1000)
+        max_amount = config.max_amount_kopeks or method_def.get('default_max', 10000000)
+        options = _build_options(mid, config.sub_options)
 
         methods.append(
             PaymentMethodResponse(
-                id='platega',
-                name=settings.get_platega_display_name(),
-                description='Pay via Platega',
-                min_amount_kopeks=settings.PLATEGA_MIN_AMOUNT_KOPEKS,
-                max_amount_kopeks=settings.PLATEGA_MAX_AMOUNT_KOPEKS,
+                id=mid,
+                name=display_name,
+                description=None,
+                min_amount_kopeks=min_amount,
+                max_amount_kopeks=max_amount,
                 is_available=True,
-                options=platega_options if platega_options else None,
-            )
-        )
-
-    # Wata
-    if settings.is_wata_enabled():
-        methods.append(
-            PaymentMethodResponse(
-                id='wata',
-                name=settings.get_wata_display_name(),
-                description='Pay via Wata',
-                min_amount_kopeks=settings.WATA_MIN_AMOUNT_KOPEKS,
-                max_amount_kopeks=settings.WATA_MAX_AMOUNT_KOPEKS,
-                is_available=True,
-            )
-        )
-
-    # CloudPayments
-    if settings.is_cloudpayments_enabled():
-        methods.append(
-            PaymentMethodResponse(
-                id='cloudpayments',
-                name=settings.get_cloudpayments_display_name(),
-                description='Pay with bank card via CloudPayments',
-                min_amount_kopeks=settings.CLOUDPAYMENTS_MIN_AMOUNT_KOPEKS,
-                max_amount_kopeks=settings.CLOUDPAYMENTS_MAX_AMOUNT_KOPEKS,
-                is_available=True,
-            )
-        )
-
-    # FreeKassa
-    if settings.is_freekassa_enabled():
-        methods.append(
-            PaymentMethodResponse(
-                id='freekassa',
-                name=settings.get_freekassa_display_name(),
-                description='Pay via FreeKassa',
-                min_amount_kopeks=settings.FREEKASSA_MIN_AMOUNT_KOPEKS,
-                max_amount_kopeks=settings.FREEKASSA_MAX_AMOUNT_KOPEKS,
-                is_available=True,
-            )
-        )
-
-    # Tribute
-    if settings.TRIBUTE_ENABLED and settings.TRIBUTE_DONATE_LINK:
-        methods.append(
-            PaymentMethodResponse(
-                id='tribute',
-                name='Tribute',
-                description='Pay with bank card via Tribute',
-                min_amount_kopeks=10000,
-                max_amount_kopeks=10000000,
-                is_available=True,
+                options=options,
             )
         )
 
     return methods
+
+
+@router.get('/payment-methods', response_model=list[PaymentMethodResponse])
+async def get_payment_methods(
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Get available payment methods."""
+    return await _get_available_payment_methods(db, user)
 
 
 @router.post('/stars-invoice', response_model=StarsInvoiceResponse)
@@ -401,7 +371,7 @@ async def create_topup(
 ):
     """Create payment for balance top-up."""
     # Validate payment method
-    methods = await get_payment_methods()
+    methods = await _get_available_payment_methods(db, user)
     method = next((m for m in methods if m.id == request.payment_method), None)
 
     if not method or not method.is_available:
