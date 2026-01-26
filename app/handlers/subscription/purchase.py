@@ -4168,6 +4168,16 @@ async def handle_simple_subscription_purchase(
 
     # Если у пользователя уже есть активная подписка, продлеваем её
     if current_subscription and current_subscription.is_active:
+        # При продлении учитываем количество устройств из текущей подписки,
+        # чтобы доп. устройства были включены в цену продления
+        effective_device_limit = simple_device_limit
+        if settings.is_devices_selection_enabled():
+            current_device_limit = current_subscription.device_limit or simple_device_limit
+            # Модем добавляет +1 к device_limit, но оплачивается отдельно
+            if getattr(current_subscription, 'modem_enabled', False):
+                current_device_limit = max(1, current_device_limit - 1)
+            effective_device_limit = max(simple_device_limit, current_device_limit)
+
         # Продлеваем существующую подписку
         await _extend_existing_subscription(
             callback=callback,
@@ -4175,7 +4185,7 @@ async def handle_simple_subscription_purchase(
             db=db,
             current_subscription=current_subscription,
             period_days=settings.SIMPLE_SUBSCRIPTION_PERIOD_DAYS,
-            device_limit=simple_device_limit,
+            device_limit=effective_device_limit,
             traffic_limit_gb=settings.SIMPLE_SUBSCRIPTION_TRAFFIC_GB,
             squad_uuid=settings.SIMPLE_SUBSCRIPTION_SQUAD_UUID,
         )
