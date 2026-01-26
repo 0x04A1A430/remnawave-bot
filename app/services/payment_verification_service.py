@@ -79,11 +79,12 @@ SUPPORTED_AUTO_CHECK_METHODS: frozenset[PaymentMethod] = frozenset(
         PaymentMethod.YOOKASSA,
         PaymentMethod.MULENPAY,
         PaymentMethod.PAL24,
-        PaymentMethod.WATA,
         PaymentMethod.CRYPTOBOT,
         PaymentMethod.PLATEGA,
         # CloudPayments removed - API returns "Completed" during authorization
         # before final result, causing premature balance credits. Webhooks work correctly.
+        # WATA removed - API returns 429 "Use webhook – polling is rate-limited".
+        # Payments are processed via webhook (wata_webhook.py).
         PaymentMethod.FREEKASSA,
     }
 )

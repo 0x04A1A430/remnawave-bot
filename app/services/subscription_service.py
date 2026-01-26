@@ -192,6 +192,12 @@ class SubscriptionService:
                 logger.error(f'Ошибка валидации подписки для пользователя {self._format_user_log(user)}')
                 return None
 
+            # Загружаем tariff заранее, чтобы избежать lazy loading в async контексте
+            try:
+                await db.refresh(subscription, ['tariff'])
+            except Exception:
+                pass  # tariff может быть None или уже загружен
+
             user_tag = self._resolve_user_tag(subscription)
 
             async with self.get_api_client() as api:

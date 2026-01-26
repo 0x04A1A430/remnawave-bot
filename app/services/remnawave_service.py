@@ -1174,10 +1174,7 @@ class RemnaWaveService:
                 user.remnawave_uuid: user for user in bot_users if getattr(user, 'remnawave_uuid', None)
             }
             # Index users by email for email-only sync
-            bot_users_by_email = {
-                user.email.lower(): user for user in bot_users
-                if user.email and user.email_verified
-            }
+            bot_users_by_email = {user.email.lower(): user for user in bot_users if user.email and user.email_verified}
             # Also index email-only users by their remnawave_uuid for sync
             email_users_count = sum(1 for u in bot_users if u.telegram_id is None)
             if email_users_count > 0:
@@ -1203,8 +1200,7 @@ class RemnaWaveService:
 
             # Email-only пользователи из панели (без telegram_id, но с email)
             panel_users_email_only = [
-                user for user in panel_users
-                if user.get('telegramId') is None and user.get('email')
+                user for user in panel_users if user.get('telegramId') is None and user.get('email')
             ]
             if panel_users_email_only:
                 logger.info(f'📧 Пользователей в панели с Email (без Telegram): {len(panel_users_email_only)}')
@@ -1843,7 +1839,10 @@ class RemnaWaveService:
                                     telegram_id=user.telegram_id,
                                     email=user.email,
                                     description=settings.format_remnawave_user_description(
-                                        full_name=user.full_name, username=user.username, telegram_id=user.telegram_id, email=user.email
+                                        full_name=user.full_name,
+                                        username=user.username,
+                                        telegram_id=user.telegram_id,
+                                        email=user.email,
                                     ),
                                     active_internal_squads=sub.connected_squads,
                                 )

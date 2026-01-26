@@ -31,6 +31,13 @@ docker-compose.override.yml
 # Разрешаем .gitignore чтобы он попал в репозиторий
 !.gitignore
 
+# Разрешаем .github/ (workflows, pre-commit и т.д.)
+!.github/
+!.github/**
+
+# Разрешаем Makefile
+!Makefile
+
 # Внутри разрешенных папок игнорируем служебные файлы
 app/__pycache__/
 app/**/__pycache__/

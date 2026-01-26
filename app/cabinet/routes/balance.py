@@ -284,6 +284,19 @@ async def get_payment_methods():
             )
         )
 
+    # Tribute
+    if settings.TRIBUTE_ENABLED and settings.TRIBUTE_DONATE_LINK:
+        methods.append(
+            PaymentMethodResponse(
+                id='tribute',
+                name='Tribute',
+                description='Pay with bank card via Tribute',
+                min_amount_kopeks=10000,
+                max_amount_kopeks=10000000,
+                is_available=True,
+            )
+        )
+
     return methods
 
 
@@ -714,6 +727,17 @@ async def create_topup(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail='Failed to create FreeKassa payment',
                 )
+
+        elif request.payment_method == 'tribute':
+            if not settings.TRIBUTE_ENABLED or not settings.TRIBUTE_DONATE_LINK:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail='Tribute payment method is unavailable',
+                )
+
+            user_identifier = user.telegram_id or user.id
+            payment_url = f'{settings.TRIBUTE_DONATE_LINK}&user_id={user_identifier}'
+            payment_id = f'tribute_{user_identifier}_{request.amount_kopeks}'
 
         else:
             # For other payment methods, redirect to bot
