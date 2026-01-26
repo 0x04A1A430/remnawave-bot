@@ -383,6 +383,22 @@ class TelegramStarsMixin:
                     exc_info=True,
                 )
 
+        # Начисляем реферальную комиссию за прямую покупку подписки
+        try:
+            from app.services.referral_service import process_referral_topup
+
+            await process_referral_topup(
+                db,
+                user.id,
+                amount_kopeks,
+                getattr(self, 'bot', None),
+            )
+        except Exception as ref_error:
+            logger.error(
+                'Ошибка реферального начисления при покупке подписки через Stars: %s',
+                ref_error,
+            )
+
         logger.info(
             '✅ Обработан Stars платеж как покупка подписки: пользователь %s, %s звезд → %s',
             user.id,
