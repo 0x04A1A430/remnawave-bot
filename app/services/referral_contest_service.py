@@ -536,6 +536,22 @@ class ReferralContestService:
 
         for contest in contests:
             try:
+                # Проверяем что реферал зарегистрировался В ПЕРИОД конкурса
+                user_created_at = user.created_at if user.created_at.tzinfo is None else user.created_at.replace(tzinfo=None)
+                contest_start = contest.start_at if contest.start_at.tzinfo is None else contest.start_at.replace(tzinfo=None)
+                contest_end = contest.end_at if contest.end_at.tzinfo is None else contest.end_at.replace(tzinfo=None)
+
+                if user_created_at < contest_start or user_created_at > contest_end:
+                    logger.debug(
+                        'Реферал %s зарегистрирован вне периода конкурса %s (создан %s, период %s - %s)',
+                        user.id,
+                        contest.id,
+                        user_created_at,
+                        contest_start,
+                        contest_end,
+                    )
+                    continue
+
                 event = await add_contest_event(
                     db,
                     contest_id=contest.id,
@@ -577,6 +593,22 @@ class ReferralContestService:
 
         for contest in contests:
             try:
+                # Проверяем что реферал зарегистрировался В ПЕРИОД конкурса
+                user_created_at = user.created_at if user.created_at.tzinfo is None else user.created_at.replace(tzinfo=None)
+                contest_start = contest.start_at if contest.start_at.tzinfo is None else contest.start_at.replace(tzinfo=None)
+                contest_end = contest.end_at if contest.end_at.tzinfo is None else contest.end_at.replace(tzinfo=None)
+
+                if user_created_at < contest_start or user_created_at > contest_end:
+                    logger.debug(
+                        'Реферал %s зарегистрирован вне периода конкурса %s (создан %s, период %s - %s)',
+                        user.id,
+                        contest.id,
+                        user_created_at,
+                        contest_start,
+                        contest_end,
+                    )
+                    continue
+
                 event = await add_contest_event(
                     db,
                     contest_id=contest.id,
@@ -620,6 +652,32 @@ class ReferralContestService:
             return stats
         except Exception as exc:
             logger.error('Ошибка синхронизации конкурса %s: %s', contest_id, exc)
+            return {'error': str(exc)}
+
+    async def cleanup_contest(
+        self,
+        db: AsyncSession,
+        contest_id: int,
+    ) -> dict:
+        """Очистить неправильные события конкурса.
+
+        Удаляет события для рефералов, зарегистрированных ВНЕ периода конкурса.
+        Используется для исправления данных после бага.
+        """
+        from app.database.crud.referral_contest import cleanup_invalid_contest_events
+
+        try:
+            stats = await cleanup_invalid_contest_events(db, contest_id)
+            if 'error' not in stats:
+                logger.info(
+                    'Очистка конкурса %s: удалено %s невалидных событий, осталось %s',
+                    contest_id,
+                    stats.get('deleted', 0),
+                    stats.get('remaining', 0),
+                )
+            return stats
+        except Exception as exc:
+            logger.error('Ошибка очистки конкурса %s: %s', contest_id, exc)
             return {'error': str(exc)}
 
 

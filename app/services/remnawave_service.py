@@ -1663,17 +1663,26 @@ class RemnaWaveService:
                 # КРИТИЧНО: НЕ перезаписываем end_date если локальная дата ПОЗЖЕ
                 # Это защищает от ситуации когда подписка была продлена в боте,
                 # но RemnaWave ещё не получил обновление или вернул старую дату
-                if abs((subscription.end_date - expire_at).total_seconds()) > 60:
+                time_diff = abs((subscription.end_date - expire_at).total_seconds())
+                if time_diff > 60:
                     if expire_at > subscription.end_date:
                         # RemnaWave имеет более позднюю дату - обновляем
                         subscription.end_date = expire_at
-                        logger.debug(f'Обновлена дата окончания подписки до {expire_at}')
+                        logger.info(
+                            f'✅ Sync: обновлена end_date для user {getattr(user, "telegram_id", "?")}: '
+                            f'{subscription.end_date} -> {expire_at} (разница: {time_diff:.0f}с)'
+                        )
                     else:
                         # Локальная дата позже - НЕ перезаписываем, логируем предупреждение
                         logger.warning(
                             f'⚠️ Sync: пропускаем обновление end_date для user {getattr(user, "telegram_id", "?")}: '
                             f'локальная дата ({subscription.end_date}) позже чем в RemnaWave ({expire_at})'
                         )
+                else:
+                    logger.debug(
+                        f'⏭️ Sync: пропускаем обновление end_date для user {getattr(user, "telegram_id", "?")}: '
+                        f'разница слишком мала ({time_diff:.0f}с < 60с)'
+                    )
 
             current_time = self._now_utc()
             if panel_status == 'ACTIVE' and subscription.end_date > current_time:
