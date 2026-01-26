@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 from .admin_apps import router as admin_apps_router
 from .admin_ban_system import router as admin_ban_system_router
+from .admin_email_templates import router as admin_email_templates_router
 from .admin_broadcasts import router as admin_broadcasts_router
 from .admin_campaigns import router as admin_campaigns_router
 from .admin_payments import router as admin_payments_router
@@ -79,6 +80,7 @@ router.include_router(admin_users_router)
 router.include_router(admin_payments_router)
 router.include_router(admin_promo_offers_router)
 router.include_router(admin_remnawave_router)
+router.include_router(admin_email_templates_router)
 
 # WebSocket route
 router.include_router(websocket_router)
