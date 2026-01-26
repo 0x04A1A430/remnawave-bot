@@ -67,7 +67,8 @@ async def start_simple_subscription_purchase(
     device_limit = resolve_simple_subscription_device_limit()
 
     # При продлении учитываем количество устройств из текущей подписки
-    if current_subscription and settings.is_devices_selection_enabled():
+    # (независимо от того, включён ли выбор устройств)
+    if current_subscription:
         current_device_limit = current_subscription.device_limit or device_limit
         # Модем добавляет +1 к device_limit, но оплачивается отдельно
         if getattr(current_subscription, 'modem_enabled', False):
