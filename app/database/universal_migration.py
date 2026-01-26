@@ -6162,8 +6162,7 @@ async def create_email_templates_table() -> bool:
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(notification_type, language)
-                );
-                CREATE INDEX idx_email_templates_type ON email_templates(notification_type);
+                )
                 """
             elif db_type == 'postgresql':
                 create_sql = """
@@ -6177,8 +6176,7 @@ async def create_email_templates_table() -> bool:
                     created_at TIMESTAMP DEFAULT NOW(),
                     updated_at TIMESTAMP DEFAULT NOW(),
                     UNIQUE(notification_type, language)
-                );
-                CREATE INDEX idx_email_templates_type ON email_templates(notification_type);
+                )
                 """
             else:
                 create_sql = """
@@ -6192,11 +6190,11 @@ async def create_email_templates_table() -> bool:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                     UNIQUE KEY uq_email_templates_type_lang (notification_type, language)
-                ) ENGINE=InnoDB;
-                CREATE INDEX idx_email_templates_type ON email_templates(notification_type);
+                ) ENGINE=InnoDB
                 """
 
             await conn.execute(text(create_sql))
+            await conn.execute(text('CREATE INDEX idx_email_templates_type ON email_templates(notification_type)'))
             logger.info('✅ Таблица email_templates создана')
             return True
 
