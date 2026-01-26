@@ -116,7 +116,7 @@ async def edit_or_answer_photo(
         return
 
     # Если режим логотипа выключен или требуется текстовое сообщение — работаем текстом
-    if force_text or not settings.ENABLE_LOGO_MODE:
+    if force_text or not settings.ENABLE_LOGO_MODE or settings.is_text_main_menu_mode():
         try:
             if callback.message.photo:
                 await callback.message.delete()
