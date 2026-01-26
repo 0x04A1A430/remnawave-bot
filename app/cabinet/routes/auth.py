@@ -54,6 +54,7 @@ from ..schemas.auth import (
     UserResponse,
 )
 from ..services.email_service import email_service
+from ..services.email_template_overrides import get_rendered_override
 
 
 logger = logging.getLogger(__name__)
@@ -414,13 +415,27 @@ async def register_email(
     if settings.is_cabinet_email_verification_enabled() and email_service.is_configured():
         cabinet_url = settings.CABINET_URL
         verification_url = f'{cabinet_url}/verify-email'
+        lang = user.language or 'ru'
+        full_url = f'{verification_url}?token={verification_token}'
+        expire_hours = settings.get_cabinet_email_verification_expire_hours()
+
+        # Check for admin template override
+        override = await get_rendered_override(
+            'email_verification', lang,
+            context={'username': user.first_name or '', 'verification_url': full_url, 'expire_hours': str(expire_hours)},
+            db=db,
+        )
+        custom_subject, custom_body = override if override else (None, None)
+
         await asyncio.to_thread(
             email_service.send_verification_email,
             to_email=request.email,
             verification_token=verification_token,
             verification_url=verification_url,
             username=user.first_name,
-            language=user.language or 'ru',
+            language=lang,
+            custom_subject=custom_subject,
+            custom_body_html=custom_body,
         )
 
     return {
@@ -510,13 +525,26 @@ async def register_email_standalone(
         if settings.is_cabinet_email_verification_enabled() and email_service.is_configured():
             cabinet_url = settings.CABINET_URL
             verification_url = f'{cabinet_url}/verify-email'
+            lang = user.language or request.language or 'ru'
+            full_url = f'{verification_url}?token={verification_token}'
+            expire_hours = settings.get_cabinet_email_verification_expire_hours()
+
+            override = await get_rendered_override(
+                'email_verification', lang,
+                context={'username': user.first_name or 'User', 'verification_url': full_url, 'expire_hours': str(expire_hours)},
+                db=db,
+            )
+            custom_subject, custom_body = override if override else (None, None)
+
             await asyncio.to_thread(
                 email_service.send_verification_email,
                 to_email=request.email,
                 verification_token=verification_token,
                 verification_url=verification_url,
                 username=user.first_name or 'User',
-                language=user.language or request.language or 'ru',
+                language=lang,
+                custom_subject=custom_subject,
+                custom_body_html=custom_body,
             )
 
     # Обработать реферальную регистрацию (если есть реферер)
@@ -609,13 +637,26 @@ async def resend_verification(
     if settings.is_cabinet_email_verification_enabled() and email_service.is_configured():
         cabinet_url = settings.CABINET_URL
         verification_url = f'{cabinet_url}/verify-email'
+        lang = user.language or 'ru'
+        full_url = f'{verification_url}?token={verification_token}'
+        expire_hours = settings.get_cabinet_email_verification_expire_hours()
+
+        override = await get_rendered_override(
+            'email_verification', lang,
+            context={'username': user.first_name or '', 'verification_url': full_url, 'expire_hours': str(expire_hours)},
+            db=db,
+        )
+        custom_subject, custom_body = override if override else (None, None)
+
         await asyncio.to_thread(
             email_service.send_verification_email,
             to_email=user.email,
             verification_token=verification_token,
             verification_url=verification_url,
             username=user.first_name,
-            language=user.language or 'ru',
+            language=lang,
+            custom_subject=custom_subject,
+            custom_body_html=custom_body,
         )
     elif not settings.is_cabinet_email_verification_enabled():
         raise HTTPException(
@@ -813,13 +854,26 @@ async def forgot_password(
     if email_service.is_configured():
         cabinet_url = settings.CABINET_URL
         reset_url = f'{cabinet_url}/reset-password'
+        lang = user.language or 'ru'
+        full_url = f'{reset_url}?token={reset_token}'
+        expire_hours = settings.get_cabinet_password_reset_expire_hours()
+
+        override = await get_rendered_override(
+            'password_reset', lang,
+            context={'username': user.first_name or '', 'reset_url': full_url, 'expire_hours': str(expire_hours)},
+            db=db,
+        )
+        custom_subject, custom_body = override if override else (None, None)
+
         await asyncio.to_thread(
             email_service.send_password_reset_email,
             to_email=user.email,
             reset_token=reset_token,
             reset_url=reset_url,
             username=user.first_name,
-            language=user.language or 'ru',
+            language=lang,
+            custom_subject=custom_subject,
+            custom_body_html=custom_body,
         )
 
     return {'message': 'If the email exists, a password reset link has been sent'}

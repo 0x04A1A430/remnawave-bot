@@ -136,6 +136,18 @@ TEMPLATE_TYPES = [
         'description': {'ru': 'Уведомление о получении платежа', 'en': 'Payment received notification', 'zh': '收到付款通知', 'ua': 'Сповіщення про отримання платежу'},
         'context_vars': ['amount', 'payment_method'],
     },
+    {
+        'type': 'email_verification',
+        'label': {'ru': 'Подтверждение email', 'en': 'Email Verification', 'zh': '邮箱验证', 'ua': 'Підтвердження email'},
+        'description': {'ru': 'Письмо для подтверждения email адреса при регистрации', 'en': 'Email address verification letter sent during registration', 'zh': '注册时发送的邮箱验证邮件', 'ua': 'Лист для підтвердження email адреси при реєстрації'},
+        'context_vars': ['username', 'verification_url', 'expire_hours'],
+    },
+    {
+        'type': 'password_reset',
+        'label': {'ru': 'Сброс пароля', 'en': 'Password Reset', 'zh': '重置密码', 'ua': 'Скидання пароля'},
+        'description': {'ru': 'Письмо для сброса пароля', 'en': 'Password reset email', 'zh': '密码重置邮件', 'ua': 'Лист для скидання пароля'},
+        'context_vars': ['username', 'reset_url', 'expire_hours'],
+    },
 ]
 
 SAMPLE_CONTEXTS: dict[str, dict[str, Any]] = {
@@ -157,6 +169,8 @@ SAMPLE_CONTEXTS: dict[str, dict[str, Any]] = {
     'referral_registered': {'referral_name': 'John'},
     'traffic_reset': {'traffic_limit': '100 GB'},
     'payment_received': {'formatted_amount': '500.00 ₽', 'payment_method': 'YooKassa'},
+    'email_verification': {'username': 'John', 'verification_url': 'https://example.com/verify?token=abc123', 'expire_hours': 24},
+    'password_reset': {'username': 'John', 'reset_url': 'https://example.com/reset?token=abc123', 'expire_hours': 1},
 }
 
 AVAILABLE_LANGUAGES = ['ru', 'en', 'zh', 'ua']
