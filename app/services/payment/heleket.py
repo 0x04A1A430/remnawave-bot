@@ -362,6 +362,10 @@ class HeleketPaymentMixin:
             await db.commit()
             await db.refresh(user)
 
+        # Перезагружаем пользователя с зависимостями после коммита,
+        # чтобы избежать lazy load в async-контексте (MissingGreenlet)
+        user = await get_user_by_id(db, user.id) or user
+
         if getattr(self, 'bot', None):
             topup_status = '🆕 Первое пополнение' if was_first_topup else '🔄 Пополнение'
             referrer_info = format_referrer_info(user)
