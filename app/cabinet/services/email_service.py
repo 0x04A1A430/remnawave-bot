@@ -41,9 +41,7 @@ class EmailService:
             if smtp.has_extn('auth'):
                 smtp.login(self.user, self.password)
             else:
-                logger.debug(
-                    f'SMTP server {self.host} does not support AUTH, skipping authentication'
-                )
+                logger.debug(f'SMTP server {self.host} does not support AUTH, skipping authentication')
 
         return smtp
 

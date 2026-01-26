@@ -341,7 +341,11 @@ class RemnaWaveAPI:
 
         connector = aiohttp.TCPConnector(**connector_kwargs)
 
-        session_kwargs = {'timeout': aiohttp.ClientTimeout(total=60, connect=10), 'headers': headers, 'connector': connector}
+        session_kwargs = {
+            'timeout': aiohttp.ClientTimeout(total=60, connect=10),
+            'headers': headers,
+            'connector': connector,
+        }
 
         if cookies:
             session_kwargs['cookies'] = cookies

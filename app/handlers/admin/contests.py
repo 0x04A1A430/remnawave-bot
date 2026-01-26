@@ -788,6 +788,16 @@ async def sync_contest(
 
     from app.services.referral_contest_service import referral_contest_service
 
+    # ШАГ 1: Очистка невалидных событий (рефералы зарегистрированные вне периода конкурса)
+    cleanup_stats = await referral_contest_service.cleanup_contest(db, contest_id)
+
+    if 'error' in cleanup_stats:
+        await callback.message.answer(
+            f'❌ Ошибка очистки:\n{cleanup_stats["error"]}',
+        )
+        return
+
+    # ШАГ 2: Синхронизация сумм для оставшихся валидных событий
     stats = await referral_contest_service.sync_contest(db, contest_id)
 
     if 'error' in stats:
@@ -810,12 +820,16 @@ async def sync_contest(
         f'   <code>{start_str}</code>',
         f'   <code>{end_str}</code>',
         '',
-        f'📝 Рефералов в периоде: <b>{stats.get("total_events", 0)}</b>',
-        f'⚠️ Отфильтровано (вне периода): <b>{stats.get("filtered_out_events", 0)}</b>',
-        f'📊 Всего событий в БД: <b>{stats.get("total_all_events", 0)}</b>',
+        '🧹 <b>ОЧИСТКА:</b>',
+        f'   🗑 Удалено невалидных событий: <b>{cleanup_stats.get("deleted", 0)}</b>',
+        f'   ✅ Осталось валидных событий: <b>{cleanup_stats.get("remaining", 0)}</b>',
+        f'   📊 Было событий до очистки: <b>{cleanup_stats.get("total_before", 0)}</b>',
         '',
-        f'🔄 Обновлено сумм: <b>{stats.get("updated", 0)}</b>',
-        f'⏭ Без изменений: <b>{stats.get("skipped", 0)}</b>',
+        '📊 <b>СИНХРОНИЗАЦИЯ:</b>',
+        f'   📝 Рефералов в периоде: <b>{stats.get("total_events", 0)}</b>',
+        f'   ⚠️ Отфильтровано (вне периода): <b>{stats.get("filtered_out_events", 0)}</b>',
+        f'   🔄 Обновлено сумм: <b>{stats.get("updated", 0)}</b>',
+        f'   ⏭ Без изменений: <b>{stats.get("skipped", 0)}</b>',
         '',
         f'💳 Рефералов оплатили: <b>{stats.get("paid_count", 0)}</b>',
         f'❌ Рефералов не оплатили: <b>{stats.get("unpaid_count", 0)}</b>',

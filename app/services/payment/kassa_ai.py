@@ -332,17 +332,40 @@ class KassaAiPaymentMixin:
         # Отправка уведомления пользователю (только Telegram-пользователям)
         if getattr(self, 'bot', None) and user.telegram_id:
             try:
-                keyboard = await self.build_topup_success_keyboard(user)
                 display_name = settings.get_kassa_ai_display_name()
-                await self.bot.send_message(
-                    user.telegram_id,
-                    (
+
+                if settings.SHOW_ACTIVATION_PROMPT_AFTER_TOPUP:
+                    # Яркое сообщение для тупых
+                    from aiogram import types
+
+                    message = (
+                        '✅ <b>Платеж успешно завершен!</b>\n\n'
+                        f'💰 Сумма: {settings.format_price(payment.amount_kopeks)}\n'
+                        f'💳 Способ: {display_name}\n\n'
+                        '💎 Средства зачислены на ваш баланс!\n\n'
+                        '‼️ <b>ВНИМАНИЕ! ОБЯЗАТЕЛЬНО АКТИВИРУЙТЕ ПОДПИСКУ!</b> ‼️\n\n'
+                        '⚠️ Пополнение баланса <b>НЕ АКТИВИРУЕТ</b> подписку автоматически!\n\n'
+                        '👇 <b>НАЖМИТЕ КНОПКУ НИЖЕ ДЛЯ АКТИВАЦИИ</b> 👇'
+                    )
+                    keyboard = types.InlineKeyboardMarkup(
+                        inline_keyboard=[
+                            [types.InlineKeyboardButton(text='🔥 АКТИВИРОВАТЬ ПОДПИСКУ', callback_data='menu_buy')],
+                        ]
+                    )
+                else:
+                    # Стандартное сообщение (как было раньше)
+                    keyboard = await self.build_topup_success_keyboard(user)
+                    message = (
                         '✅ <b>Пополнение успешно!</b>\n\n'
                         f'💰 Сумма: {settings.format_price(payment.amount_kopeks)}\n'
                         f'💳 Способ: {display_name}\n'
                         f'🆔 Транзакция: {transaction.id}\n\n'
                         'Баланс пополнен автоматически!'
-                    ),
+                    )
+
+                await self.bot.send_message(
+                    user.telegram_id,
+                    message,
                     parse_mode='HTML',
                     reply_markup=keyboard,
                 )
