@@ -33,6 +33,9 @@ ENABLED_THEMES_KEY = 'CABINET_ENABLED_THEMES'  # Stores JSON with enabled themes
 ANIMATION_ENABLED_KEY = 'CABINET_ANIMATION_ENABLED'  # Stores "true" or "false"
 FULLSCREEN_ENABLED_KEY = 'CABINET_FULLSCREEN_ENABLED'  # Stores "true" or "false"
 EMAIL_AUTH_ENABLED_KEY = 'CABINET_EMAIL_AUTH_ENABLED'  # Stores "true" or "false"
+YANDEX_METRIKA_ID_KEY = 'CABINET_YANDEX_METRIKA_ID'  # Stores counter ID (numeric string)
+GOOGLE_ADS_ID_KEY = 'CABINET_GOOGLE_ADS_ID'  # Stores conversion ID (e.g. "AW-123456789")
+GOOGLE_ADS_LABEL_KEY = 'CABINET_GOOGLE_ADS_LABEL'  # Stores conversion label (alphanumeric)
 
 # Allowed image types
 ALLOWED_CONTENT_TYPES = {'image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/svg+xml'}
@@ -139,6 +142,22 @@ class EmailAuthEnabledUpdate(BaseModel):
     """Request to update email auth setting."""
 
     enabled: bool
+
+
+class AnalyticsCountersResponse(BaseModel):
+    """Analytics counter settings."""
+
+    yandex_metrika_id: str = ''
+    google_ads_id: str = ''
+    google_ads_label: str = ''
+
+
+class AnalyticsCountersUpdate(BaseModel):
+    """Request to update analytics counters (partial update allowed)."""
+
+    yandex_metrika_id: str | None = None
+    google_ads_id: str | None = None
+    google_ads_label: str | None = None
 
 
 # Default theme colors
@@ -635,3 +654,67 @@ async def update_email_auth_enabled(
     logger.info(f'Admin {admin.telegram_id} set email auth enabled: {payload.enabled}')
 
     return EmailAuthEnabledResponse(enabled=payload.enabled)
+
+
+# ============ Analytics Counters Routes ============
+
+
+@router.get('/analytics', response_model=AnalyticsCountersResponse)
+async def get_analytics_counters(
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """
+    Get analytics counter settings.
+    This is a public endpoint - no authentication required.
+    """
+    yandex_id = await get_setting_value(db, YANDEX_METRIKA_ID_KEY) or ''
+    google_id = await get_setting_value(db, GOOGLE_ADS_ID_KEY) or ''
+    google_label = await get_setting_value(db, GOOGLE_ADS_LABEL_KEY) or ''
+
+    return AnalyticsCountersResponse(
+        yandex_metrika_id=yandex_id,
+        google_ads_id=google_id,
+        google_ads_label=google_label,
+    )
+
+
+@router.patch('/analytics', response_model=AnalyticsCountersResponse)
+async def update_analytics_counters(
+    payload: AnalyticsCountersUpdate,
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Update analytics counter settings. Admin only. Partial update supported."""
+    if payload.yandex_metrika_id is not None:
+        value = payload.yandex_metrika_id.strip()
+        if value and not value.isdigit():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='Yandex Metrika counter ID must be numeric',
+            )
+        await set_setting_value(db, YANDEX_METRIKA_ID_KEY, value)
+
+    if payload.google_ads_id is not None:
+        value = payload.google_ads_id.strip()
+        if value and not value.startswith('AW-'):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='Google Ads conversion ID must start with AW-',
+            )
+        await set_setting_value(db, GOOGLE_ADS_ID_KEY, value)
+
+    if payload.google_ads_label is not None:
+        await set_setting_value(db, GOOGLE_ADS_LABEL_KEY, payload.google_ads_label.strip())
+
+    logger.info(f'Admin {admin.telegram_id} updated analytics counters')
+
+    # Return current state
+    yandex_id = await get_setting_value(db, YANDEX_METRIKA_ID_KEY) or ''
+    google_id = await get_setting_value(db, GOOGLE_ADS_ID_KEY) or ''
+    google_label = await get_setting_value(db, GOOGLE_ADS_LABEL_KEY) or ''
+
+    return AnalyticsCountersResponse(
+        yandex_metrika_id=yandex_id,
+        google_ads_id=google_id,
+        google_ads_label=google_label,
+    )
