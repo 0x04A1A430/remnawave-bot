@@ -688,7 +688,7 @@ async def get_top_referrers(
         referrer_ids = list(referrers_data.keys())
         if referrer_ids:
             users_query = await db.execute(
-                select(User.id, User.telegram_id, User.username, User.first_name, User.last_name).where(
+                select(User.id, User.telegram_id, User.username, User.first_name, User.last_name, User.email).where(
                     User.id.in_(referrer_ids)
                 )
             )
