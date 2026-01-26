@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 # ============ Default method definitions ============
 
+
 # Mapping: method_id -> (default_display_name_func, is_configured_func, default_min, default_max, has_sub_options)
 def _get_method_defaults() -> dict:
     """Get default configuration for each payment method based on env vars."""
@@ -121,10 +122,12 @@ def _get_platega_sub_options() -> list[dict] | None:
         options = []
         for method_code in active_methods:
             info = definitions.get(method_code, {})
-            options.append({
-                'id': str(method_code),
-                'name': info.get('title') or info.get('name') or f'Platega {method_code}',
-            })
+            options.append(
+                {
+                    'id': str(method_code),
+                    'name': info.get('title') or info.get('name') or f'Platega {method_code}',
+                }
+            )
         return options if options else None
     except Exception:
         return None
@@ -154,9 +157,7 @@ async def ensure_payment_method_configs(db: AsyncSession) -> None:
 
     Called on startup to seed defaults from env vars.
     """
-    count_result = await db.execute(
-        select(func.count()).select_from(PaymentMethodConfig)
-    )
+    count_result = await db.execute(select(func.count()).select_from(PaymentMethodConfig))
     count = count_result.scalar() or 0
 
     if count > 0:
@@ -229,9 +230,13 @@ async def update_config(
 
     # Update scalar fields
     updatable_fields = (
-        'is_enabled', 'display_name', 'sub_options',
-        'min_amount_kopeks', 'max_amount_kopeks',
-        'user_type_filter', 'first_topup_filter',
+        'is_enabled',
+        'display_name',
+        'sub_options',
+        'min_amount_kopeks',
+        'max_amount_kopeks',
+        'user_type_filter',
+        'first_topup_filter',
         'promo_group_filter_mode',
     )
     for key in updatable_fields:
@@ -241,9 +246,7 @@ async def update_config(
     # Update promo groups M2M if specified
     if promo_group_ids is not None:
         if promo_group_ids:
-            result = await db.execute(
-                select(PromoGroup).where(PromoGroup.id.in_(promo_group_ids))
-            )
+            result = await db.execute(select(PromoGroup).where(PromoGroup.id.in_(promo_group_ids)))
             groups = list(result.scalars().all())
         else:
             groups = []
@@ -257,9 +260,7 @@ async def update_config(
 async def update_sort_order(db: AsyncSession, ordered_method_ids: list[str]) -> None:
     """Batch update sort order for all methods."""
     for index, method_id in enumerate(ordered_method_ids):
-        result = await db.execute(
-            select(PaymentMethodConfig).where(PaymentMethodConfig.method_id == method_id)
-        )
+        result = await db.execute(select(PaymentMethodConfig).where(PaymentMethodConfig.method_id == method_id))
         config = result.scalar_one_or_none()
         if config:
             config.sort_order = index
@@ -269,7 +270,5 @@ async def update_sort_order(db: AsyncSession, ordered_method_ids: list[str]) -> 
 
 async def get_all_promo_groups(db: AsyncSession) -> list[PromoGroup]:
     """Get all promo groups for the filter selector."""
-    result = await db.execute(
-        select(PromoGroup).order_by(PromoGroup.priority.desc(), PromoGroup.name)
-    )
+    result = await db.execute(select(PromoGroup).order_by(PromoGroup.priority.desc(), PromoGroup.name))
     return list(result.scalars().all())
