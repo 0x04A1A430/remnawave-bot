@@ -4140,7 +4140,7 @@ async def create_button_click_logs_table() -> bool:
                 CREATE TABLE button_click_logs (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     button_id VARCHAR(100) NOT NULL,
-                    user_id BIGINT NULL REFERENCES users(telegram_id) ON DELETE SET NULL,
+                    user_id INTEGER NULL REFERENCES users(id) ON DELETE SET NULL,
                     callback_data VARCHAR(255) NULL,
                     clicked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     button_type VARCHAR(20) NULL,
@@ -4152,7 +4152,7 @@ async def create_button_click_logs_table() -> bool:
                 CREATE TABLE button_click_logs (
                     id SERIAL PRIMARY KEY,
                     button_id VARCHAR(100) NOT NULL,
-                    user_id BIGINT NULL REFERENCES users(telegram_id) ON DELETE SET NULL,
+                    user_id INTEGER NULL REFERENCES users(id) ON DELETE SET NULL,
                     callback_data VARCHAR(255) NULL,
                     clicked_at TIMESTAMP DEFAULT NOW(),
                     button_type VARCHAR(20) NULL,
@@ -4164,12 +4164,12 @@ async def create_button_click_logs_table() -> bool:
                 CREATE TABLE button_click_logs (
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     button_id VARCHAR(100) NOT NULL,
-                    user_id BIGINT NULL,
+                    user_id INTEGER NULL,
                     callback_data VARCHAR(255) NULL,
                     clicked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     button_type VARCHAR(20) NULL,
                     button_text VARCHAR(255) NULL,
-                    FOREIGN KEY (user_id) REFERENCES users(telegram_id) ON DELETE SET NULL
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
                 ) ENGINE=InnoDB
                 """
 
@@ -4191,6 +4191,74 @@ async def create_button_click_logs_table() -> bool:
 
     except Exception as error:
         logger.error(f'❌ Ошибка создания таблицы button_click_logs: {error}')
+        return False
+
+
+async def fix_button_click_logs_fk() -> bool:
+    """Исправляет FK button_click_logs.user_id: users(telegram_id) -> users(id)."""
+    table_exists = await check_table_exists('button_click_logs')
+    if not table_exists:
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'postgresql':
+                # Проверяем, ссылается ли FK на telegram_id (ошибочный вариант)
+                check_sql = text("""
+                    SELECT ccu.column_name
+                    FROM information_schema.table_constraints tc
+                    JOIN information_schema.constraint_column_usage ccu
+                        ON tc.constraint_name = ccu.constraint_name
+                    WHERE tc.table_name = 'button_click_logs'
+                        AND tc.constraint_type = 'FOREIGN KEY'
+                        AND ccu.table_name = 'users'
+                    LIMIT 1
+                """)
+                result = await conn.execute(check_sql)
+                row = result.fetchone()
+
+                if row and row[0] == 'telegram_id':
+                    logger.info('🔧 Исправляем FK button_click_logs.user_id: telegram_id -> id')
+
+                    # Обнуляем невалидные user_id (которые были internal id, а не telegram_id)
+                    await conn.execute(text("""
+                        UPDATE button_click_logs
+                        SET user_id = NULL
+                        WHERE user_id IS NOT NULL
+                          AND user_id NOT IN (SELECT telegram_id FROM users)
+                    """))
+
+                    # Удаляем старый FK
+                    await conn.execute(text(
+                        'ALTER TABLE button_click_logs DROP CONSTRAINT IF EXISTS button_click_logs_user_id_fkey'
+                    ))
+
+                    # Меняем тип колонки и добавляем правильный FK
+                    await conn.execute(text(
+                        'ALTER TABLE button_click_logs ALTER COLUMN user_id TYPE INTEGER'
+                    ))
+
+                    # Обнуляем все значения, т.к. они были записаны неправильно
+                    await conn.execute(text(
+                        'UPDATE button_click_logs SET user_id = NULL'
+                    ))
+
+                    await conn.execute(text(
+                        'ALTER TABLE button_click_logs '
+                        'ADD CONSTRAINT button_click_logs_user_id_fkey '
+                        'FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL'
+                    ))
+
+                    logger.info('✅ FK button_click_logs.user_id исправлен')
+                else:
+                    logger.debug('FK button_click_logs.user_id уже корректен')
+
+            return True
+
+    except Exception as error:
+        logger.error(f'❌ Ошибка исправления FK button_click_logs: {error}')
         return False
 
 
@@ -6189,6 +6257,13 @@ async def run_universal_migration():
             logger.info('✅ Таблица button_click_logs готова')
         else:
             logger.warning('⚠️ Проблемы с таблицей button_click_logs')
+
+        logger.info('=== ИСПРАВЛЕНИЕ FK BUTTON_CLICK_LOGS ===')
+        fk_fixed = await fix_button_click_logs_fk()
+        if fk_fixed:
+            logger.info('✅ FK button_click_logs проверен')
+        else:
+            logger.warning('⚠️ Проблемы с FK button_click_logs')
 
         logger.info('=== ДОБАВЛЕНИЕ КОЛОНКИ ДЛЯ ТРИАЛЬНЫХ СКВАДОВ ===')
         trial_column_ready = await add_server_trial_flag_column()
