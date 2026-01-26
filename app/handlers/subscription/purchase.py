@@ -1581,6 +1581,11 @@ async def handle_extend_subscription(callback: types.CallbackQuery, db_user: Use
                     else:
                         device_limit = forced_limit
 
+            # Модем добавляет +1 к device_limit, но оплачивается отдельно,
+            # поэтому не должен учитываться как платное устройство при продлении
+            if getattr(subscription, 'modem_enabled', False):
+                device_limit = max(1, device_limit - 1)
+
             additional_devices = max(0, (device_limit or 0) - settings.DEFAULT_DEVICE_LIMIT)
             devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
             devices_total_base = devices_price_per_month * months_in_period
@@ -1804,6 +1809,11 @@ async def confirm_extend_subscription(callback: types.CallbackQuery, db_user: Us
                     device_limit = settings.DEFAULT_DEVICE_LIMIT
                 else:
                     device_limit = forced_limit
+
+        # Модем добавляет +1 к device_limit, но оплачивается отдельно,
+        # поэтому не должен учитываться как платное устройство при продлении
+        if getattr(subscription, 'modem_enabled', False):
+            device_limit = max(1, device_limit - 1)
 
         additional_devices = max(0, (device_limit or 0) - settings.DEFAULT_DEVICE_LIMIT)
         devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
