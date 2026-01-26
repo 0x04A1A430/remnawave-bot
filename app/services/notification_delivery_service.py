@@ -247,9 +247,27 @@ class NotificationDeliveryService:
             return False
 
         try:
-            # Get email template
+            # Get email template (check DB override first, then fall back to hardcoded)
             language = user.language or 'ru'
-            template = self.email_templates.get_template(notification_type, language, context)
+
+            # Try DB override
+            template = None
+            try:
+                from app.cabinet.services.email_template_overrides import get_template_override
+
+                override = await get_template_override(notification_type.value, language)
+                if override:
+                    # Wrap custom body in base template
+                    full_html = self.email_templates._get_base_template(override['body_html'], language)
+                    template = {
+                        'subject': override['subject'],
+                        'body_html': full_html,
+                    }
+            except Exception as e:
+                logger.debug('Не удалось проверить override шаблона: %s', e)
+
+            if not template:
+                template = self.email_templates.get_template(notification_type, language, context)
 
             if not template:
                 logger.warning(
