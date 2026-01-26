@@ -55,6 +55,8 @@ class EmailNotificationTemplates:
             NotificationType.REFERRAL_REGISTERED: self._referral_registered_template,
             NotificationType.TRAFFIC_RESET: self._traffic_reset_template,
             NotificationType.PAYMENT_RECEIVED: self._payment_received_template,
+            NotificationType.EMAIL_VERIFICATION: self._email_verification_template,
+            NotificationType.PASSWORD_RESET: self._password_reset_template,
         }
 
         template_func = template_map.get(notification_type)
@@ -919,6 +921,154 @@ class EmailNotificationTemplates:
                 </div>
                 <p>Thank you for your payment!</p>
                 {self._get_cabinet_button(language)}
+            """,
+        }
+
+        return {
+            'subject': subjects.get(language, subjects['ru']),
+            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+        }
+
+    # ============================================================================
+    # Auth Email Templates
+    # ============================================================================
+
+    def _email_verification_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+        """Template for email verification."""
+        username = context.get('username', '')
+        verification_url = context.get('verification_url', '#')
+        expire_hours = context.get('expire_hours', 24)
+
+        subjects = {
+            'ru': 'Подтверждение email адреса',
+            'en': 'Verify your email address',
+            'zh': '验证您的邮箱地址',
+            'ua': 'Підтвердження email адреси',
+        }
+
+        greeting = {
+            'ru': f'Здравствуйте{", " + username if username else ""}!',
+            'en': f'Hello{", " + username if username else ""}!',
+            'zh': f'您好{", " + username if username else ""}!',
+            'ua': f'Вітаємо{", " + username if username else ""}!',
+        }
+
+        bodies = {
+            'ru': f"""
+                <h2>{greeting.get('ru')}</h2>
+                <p>Спасибо за регистрацию! Пожалуйста, подтвердите ваш email адрес, нажав на кнопку ниже:</p>
+                <p style="text-align: center;">
+                    <a href="{verification_url}" class="button">Подтвердить email</a>
+                </p>
+                <p>Или скопируйте и вставьте эту ссылку в браузер:</p>
+                <p><a href="{verification_url}">{verification_url}</a></p>
+                <p>Ссылка действительна в течение {expire_hours} часов.</p>
+                <p style="color: #666;">Если вы не создавали аккаунт, просто проигнорируйте это письмо.</p>
+            """,
+            'en': f"""
+                <h2>{greeting.get('en')}</h2>
+                <p>Thank you for registering! Please verify your email address by clicking the button below:</p>
+                <p style="text-align: center;">
+                    <a href="{verification_url}" class="button">Verify Email</a>
+                </p>
+                <p>Or copy and paste this link in your browser:</p>
+                <p><a href="{verification_url}">{verification_url}</a></p>
+                <p>This link will expire in {expire_hours} hours.</p>
+                <p style="color: #666;">If you didn't create an account, you can safely ignore this email.</p>
+            """,
+            'zh': f"""
+                <h2>{greeting.get('zh')}</h2>
+                <p>感谢您的注册！请点击下方按钮验证您的邮箱地址：</p>
+                <p style="text-align: center;">
+                    <a href="{verification_url}" class="button">验证邮箱</a>
+                </p>
+                <p>或将此链接复制并粘贴到浏览器中：</p>
+                <p><a href="{verification_url}">{verification_url}</a></p>
+                <p>此链接将在 {expire_hours} 小时后过期。</p>
+                <p style="color: #666;">如果您没有创建账户，请忽略此邮件。</p>
+            """,
+            'ua': f"""
+                <h2>{greeting.get('ua')}</h2>
+                <p>Дякуємо за реєстрацію! Будь ласка, підтвердіть вашу email адресу, натиснувши на кнопку нижче:</p>
+                <p style="text-align: center;">
+                    <a href="{verification_url}" class="button">Підтвердити email</a>
+                </p>
+                <p>Або скопіюйте та вставте це посилання в браузер:</p>
+                <p><a href="{verification_url}">{verification_url}</a></p>
+                <p>Посилання дійсне протягом {expire_hours} годин.</p>
+                <p style="color: #666;">Якщо ви не створювали акаунт, просто проігноруйте цей лист.</p>
+            """,
+        }
+
+        return {
+            'subject': subjects.get(language, subjects['ru']),
+            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+        }
+
+    def _password_reset_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+        """Template for password reset."""
+        username = context.get('username', '')
+        reset_url = context.get('reset_url', '#')
+        expire_hours = context.get('expire_hours', 1)
+
+        subjects = {
+            'ru': 'Сброс пароля',
+            'en': 'Reset your password',
+            'zh': '重置您的密码',
+            'ua': 'Скидання пароля',
+        }
+
+        greeting = {
+            'ru': f'Здравствуйте{", " + username if username else ""}!',
+            'en': f'Hello{", " + username if username else ""}!',
+            'zh': f'您好{", " + username if username else ""}!',
+            'ua': f'Вітаємо{", " + username if username else ""}!',
+        }
+
+        bodies = {
+            'ru': f"""
+                <h2>{greeting.get('ru')}</h2>
+                <p>Мы получили запрос на сброс вашего пароля. Нажмите на кнопку ниже, чтобы установить новый пароль:</p>
+                <p style="text-align: center;">
+                    <a href="{reset_url}" class="button" style="background-color: #dc3545;">Сбросить пароль</a>
+                </p>
+                <p>Или скопируйте и вставьте эту ссылку в браузер:</p>
+                <p><a href="{reset_url}">{reset_url}</a></p>
+                <p>Ссылка действительна в течение {expire_hours} часов.</p>
+                <p class="warning" style="color: #dc3545; font-weight: bold;">Если вы не запрашивали сброс пароля, проигнорируйте это письмо или свяжитесь с поддержкой.</p>
+            """,
+            'en': f"""
+                <h2>{greeting.get('en')}</h2>
+                <p>We received a request to reset your password. Click the button below to set a new password:</p>
+                <p style="text-align: center;">
+                    <a href="{reset_url}" class="button" style="background-color: #dc3545;">Reset Password</a>
+                </p>
+                <p>Or copy and paste this link in your browser:</p>
+                <p><a href="{reset_url}">{reset_url}</a></p>
+                <p>This link will expire in {expire_hours} hour(s).</p>
+                <p class="warning" style="color: #dc3545; font-weight: bold;">If you didn't request a password reset, please ignore this email or contact support.</p>
+            """,
+            'zh': f"""
+                <h2>{greeting.get('zh')}</h2>
+                <p>我们收到了重置您密码的请求。点击下方按钮设置新密码：</p>
+                <p style="text-align: center;">
+                    <a href="{reset_url}" class="button" style="background-color: #dc3545;">重置密码</a>
+                </p>
+                <p>或将此链接复制并粘贴到浏览器中：</p>
+                <p><a href="{reset_url}">{reset_url}</a></p>
+                <p>此链接将在 {expire_hours} 小时后过期。</p>
+                <p class="warning" style="color: #dc3545; font-weight: bold;">如果您没有请求重置密码，请忽略此邮件或联系客服。</p>
+            """,
+            'ua': f"""
+                <h2>{greeting.get('ua')}</h2>
+                <p>Ми отримали запит на скидання вашого пароля. Натисніть на кнопку нижче, щоб встановити новий пароль:</p>
+                <p style="text-align: center;">
+                    <a href="{reset_url}" class="button" style="background-color: #dc3545;">Скинути пароль</a>
+                </p>
+                <p>Або скопіюйте та вставте це посилання в браузер:</p>
+                <p><a href="{reset_url}">{reset_url}</a></p>
+                <p>Посилання дійсне протягом {expire_hours} годин.</p>
+                <p class="warning" style="color: #dc3545; font-weight: bold;">Якщо ви не запитували скидання пароля, проігноруйте цей лист або зв'яжіться з підтримкою.</p>
             """,
         }
 

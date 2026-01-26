@@ -108,6 +108,8 @@ class EmailService:
         verification_url: str,
         username: str | None = None,
         language: str = 'ru',
+        custom_subject: str | None = None,
+        custom_body_html: str | None = None,
     ) -> bool:
         """
         Send email verification email.
@@ -118,10 +120,15 @@ class EmailService:
             verification_url: Base URL for verification (token will be appended)
             username: User's name for personalization
             language: Language code (ru, en, zh, ua)
+            custom_subject: Override subject from admin template
+            custom_body_html: Override body HTML from admin template (already wrapped in base template)
 
         Returns:
             True if email was sent successfully, False otherwise
         """
+        if custom_subject and custom_body_html:
+            return self.send_email(to_email, custom_subject, custom_body_html)
+
         full_url = f'{verification_url}?token={verification_token}'
         expire_hours = settings.get_cabinet_email_verification_expire_hours()
 
@@ -218,6 +225,8 @@ class EmailService:
         reset_url: str,
         username: str | None = None,
         language: str = 'ru',
+        custom_subject: str | None = None,
+        custom_body_html: str | None = None,
     ) -> bool:
         """
         Send password reset email.
@@ -228,10 +237,15 @@ class EmailService:
             reset_url: Base URL for password reset (token will be appended)
             username: User's name for personalization
             language: Language code (ru, en, zh, ua)
+            custom_subject: Override subject from admin template
+            custom_body_html: Override body HTML from admin template (already wrapped in base template)
 
         Returns:
             True if email was sent successfully, False otherwise
         """
+        if custom_subject and custom_body_html:
+            return self.send_email(to_email, custom_subject, custom_body_html)
+
         full_url = f'{reset_url}?token={reset_token}'
         expire_hours = settings.get_cabinet_password_reset_expire_hours()
 
