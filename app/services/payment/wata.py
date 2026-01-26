@@ -472,7 +472,10 @@ class WataPaymentMixin:
         user.balance_kopeks += payment.amount_kopeks
         user.updated_at = datetime.utcnow()
         await db.commit()
-        await db.refresh(user)
+        user = await payment_module.get_user_by_id(db, user.id)
+        if not user:
+            logger.error('Пользователь %s не найден после коммита WATA', payment.user_id)
+            return payment
 
         promo_group = user.get_primary_promo_group()
         subscription = getattr(user, 'subscription', None)
