@@ -2,12 +2,13 @@
 
 import logging
 
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import settings
-from app.database.models import PaymentMethodConfig, PromoGroup, payment_method_promo_groups
+from app.database.models import PaymentMethodConfig, PromoGroup
+
 
 logger = logging.getLogger(__name__)
 
