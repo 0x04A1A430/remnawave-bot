@@ -116,11 +116,20 @@ async def edit_or_answer_photo(
         return
 
     # Если режим логотипа выключен или требуется текстовое сообщение — работаем текстом
-    if force_text or not settings.ENABLE_LOGO_MODE or settings.is_text_main_menu_mode():
+    if force_text or not settings.ENABLE_LOGO_MODE:
         try:
             if callback.message.photo:
-                await callback.message.delete()
-                await _answer_text(callback, caption, keyboard, resolved_parse_mode)
+                if force_text:
+                    # Текстовый режим главного меню: редактируем caption на месте,
+                    # чтобы сообщение не удалялось и не пересоздавалось заново
+                    await callback.message.edit_caption(
+                        caption=caption,
+                        reply_markup=keyboard,
+                        parse_mode=resolved_parse_mode,
+                    )
+                else:
+                    await callback.message.delete()
+                    await _answer_text(callback, caption, keyboard, resolved_parse_mode)
             else:
                 await callback.message.edit_text(
                     caption,
