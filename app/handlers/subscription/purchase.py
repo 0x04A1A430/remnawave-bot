@@ -4168,6 +4168,15 @@ async def handle_simple_subscription_purchase(
 
     # Если у пользователя уже есть активная подписка, продлеваем её
     if current_subscription and current_subscription.is_active:
+        # При продлении используем текущие устройства подписки, а не дефолтные
+        extend_device_limit = current_subscription.device_limit or simple_device_limit
+        # Модем добавляет +1 к device_limit, но оплачивается отдельно
+        modem_enabled = getattr(current_subscription, 'modem_enabled', False)
+        if modem_enabled:
+            extend_device_limit = max(1, extend_device_limit - 1)
+        # Используем максимум из текущего и дефолтного
+        extend_device_limit = max(simple_device_limit, extend_device_limit)
+
         # Продлеваем существующую подписку
         await _extend_existing_subscription(
             callback=callback,
@@ -4175,9 +4184,10 @@ async def handle_simple_subscription_purchase(
             db=db,
             current_subscription=current_subscription,
             period_days=settings.SIMPLE_SUBSCRIPTION_PERIOD_DAYS,
-            device_limit=simple_device_limit,
+            device_limit=extend_device_limit,
             traffic_limit_gb=settings.SIMPLE_SUBSCRIPTION_TRAFFIC_GB,
             squad_uuid=settings.SIMPLE_SUBSCRIPTION_SQUAD_UUID,
+            modem_enabled=modem_enabled,
         )
         return
 
@@ -4297,6 +4307,7 @@ async def _extend_existing_subscription(
     device_limit: int,
     traffic_limit_gb: int,
     squad_uuid: str,
+    modem_enabled: bool = False,
 ):
     """Продлевает существующую подписку."""
     from datetime import datetime, timedelta
@@ -4314,6 +4325,7 @@ async def _extend_existing_subscription(
         'device_limit': device_limit,
         'traffic_limit_gb': traffic_limit_gb,
         'squad_uuid': squad_uuid,
+        'modem_enabled': modem_enabled,
     }
     price_kopeks, price_breakdown = await _calculate_simple_subscription_price(
         db,
@@ -4321,15 +4333,18 @@ async def _extend_existing_subscription(
         user=db_user,
         resolved_squad_uuid=squad_uuid,
     )
-    logger.debug(
-        'SIMPLE_SUBSCRIPTION_EXTEND_PRICE | user=%s | total=%s | base=%s | traffic=%s | devices=%s | servers=%s | discount=%s',
+    logger.warning(
+        'SIMPLE_SUBSCRIPTION_EXTEND_PRICE | user=%s | total=%s | base=%s | traffic=%s | devices=%s | modem=%s | servers=%s | discount=%s | device_limit=%s | modem_enabled=%s',
         db_user.id,
         price_kopeks,
         price_breakdown.get('base_price', 0),
         price_breakdown.get('traffic_price', 0),
         price_breakdown.get('devices_price', 0),
+        price_breakdown.get('modem_price', 0),
         price_breakdown.get('servers_price', 0),
         price_breakdown.get('total_discount', 0),
+        device_limit,
+        modem_enabled,
     )
 
     # Проверяем баланс пользователя
