@@ -687,6 +687,22 @@ class YooKassaPaymentMixin:
                         payment.yookassa_payment_id,
                         user.id,
                     )
+
+                    # Начисляем реферальную комиссию за прямую покупку подписки
+                    try:
+                        from app.services.referral_service import process_referral_topup
+
+                        await process_referral_topup(
+                            db,
+                            user.id,
+                            payment.amount_kopeks,
+                            getattr(self, 'bot', None),
+                        )
+                    except Exception as ref_error:
+                        logger.error(
+                            'Ошибка реферального начисления при покупке подписки YooKassa: %s',
+                            ref_error,
+                        )
                 else:
                     old_balance = getattr(user, 'balance_kopeks', 0)
                     was_first_topup = not getattr(user, 'has_made_first_topup', False)
