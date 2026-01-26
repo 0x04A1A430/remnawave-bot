@@ -255,6 +255,8 @@ async def get_renewal_options(
     # В режиме тарифов берём цены из тарифа пользователя
     tariff_prices = None
     tariff_periods = None
+    extra_devices = 0
+    tariff_device_price = 0
     if settings.is_tariffs_mode():
         subscription = await get_subscription_by_user_id(db, user.id)
         if subscription and subscription.tariff_id:
@@ -262,6 +264,10 @@ async def get_renewal_options(
             if tariff and tariff.period_prices:
                 tariff_prices = {int(k): v for k, v in tariff.period_prices.items()}
                 tariff_periods = sorted(tariff_prices.keys())
+                # Учитываем докупленные устройства сверх тарифа
+                extra_devices = max(0, (subscription.device_limit or 0) - (tariff.device_limit or 0))
+                if extra_devices > 0:
+                    tariff_device_price = tariff.device_price_kopeks or settings.PRICE_PER_DEVICE
 
     # Используем периоды тарифа или стандартные
     if tariff_periods:
@@ -278,6 +284,12 @@ async def get_renewal_options(
 
         if price_kopeks <= 0:
             continue
+
+        # Добавляем стоимость докупленных устройств за период продления
+        if extra_devices > 0 and tariff_device_price > 0:
+            from app.utils.pricing_utils import calculate_months_from_days
+            months = calculate_months_from_days(period)
+            price_kopeks += extra_devices * tariff_device_price * months
 
         # Apply user's discount if any
         discount_percent = 0
@@ -320,6 +332,7 @@ async def renew_subscription(
 
     # В режиме тарифов берём цену из тарифа пользователя
     price_kopeks = 0
+    tariff = None
     if settings.is_tariffs_mode() and user.subscription.tariff_id:
         tariff = await get_tariff_by_id(db, user.subscription.tariff_id)
         if tariff and tariff.period_prices:
@@ -334,6 +347,15 @@ async def renew_subscription(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Invalid renewal period',
         )
+
+    # Добавляем стоимость докупленных устройств сверх тарифа
+    if tariff:
+        extra_devices = max(0, (user.subscription.device_limit or 0) - (tariff.device_limit or 0))
+        if extra_devices > 0:
+            from app.utils.pricing_utils import calculate_months_from_days
+            device_price = tariff.device_price_kopeks or settings.PRICE_PER_DEVICE
+            months = calculate_months_from_days(request.period_days)
+            price_kopeks += extra_devices * device_price * months
 
     # Apply promo group discount
     original_price_kopeks = price_kopeks
@@ -396,7 +418,8 @@ async def renew_subscription(
         # Add tariff parameters for tariffs mode
         if tariff_id:
             cart_data['traffic_limit_gb'] = tariff_traffic_limit_gb
-            cart_data['device_limit'] = tariff_device_limit
+            # Сохраняем актуальный device_limit подписки (включая докупленные устройства)
+            cart_data['device_limit'] = user.subscription.device_limit
             cart_data['allowed_squads'] = tariff_allowed_squads
 
         try:
@@ -1430,6 +1453,26 @@ async def purchase_tariff(
             traffic_limit_gb = request.traffic_gb
             price_kopeks += traffic_price_kopeks
 
+        # Проверяем, есть ли докупленные устройства при продлении того же тарифа
+        existing_subscription = await get_subscription_by_user_id(db, user.id)
+        extra_devices = 0
+        effective_device_limit = tariff.device_limit
+        if existing_subscription and existing_subscription.tariff_id == tariff.id:
+            extra_devices = max(0, (existing_subscription.device_limit or 0) - (tariff.device_limit or 0))
+            if extra_devices > 0:
+                effective_device_limit = existing_subscription.device_limit
+                if not is_daily_tariff:
+                    from app.utils.pricing_utils import calculate_months_from_days
+                    device_price_per_month = tariff.device_price_kopeks or settings.PRICE_PER_DEVICE
+                    months = calculate_months_from_days(period_days)
+                    extra_devices_cost = extra_devices * device_price_per_month * months
+                    # Применяем скидку промогруппы на устройства
+                    if promo_group and extra_devices_cost > 0:
+                        devices_discount_pct = promo_group.get_discount_percent('devices', period_days)
+                        if devices_discount_pct > 0:
+                            extra_devices_cost = extra_devices_cost - (extra_devices_cost * devices_discount_pct // 100)
+                    price_kopeks += extra_devices_cost
+
         # Apply promo offer discount (temporary discount from promo offers)
         price_before_promo_offer = price_kopeks
         promo_offer_discount_percent = get_user_active_promo_discount_percent(user)
@@ -1456,7 +1499,7 @@ async def purchase_tariff(
                     'return_to_cart': True,
                     'description': f'Покупка суточного тарифа {tariff.name}',
                     'traffic_limit_gb': tariff.traffic_limit_gb,
-                    'device_limit': tariff.device_limit,
+                    'device_limit': effective_device_limit,
                     'allowed_squads': tariff.allowed_squads or [],
                     'source': 'cabinet',
                 }
@@ -1472,7 +1515,7 @@ async def purchase_tariff(
                     'return_to_cart': True,
                     'description': f'Покупка тарифа {tariff.name} на {period_days} дней',
                     'traffic_limit_gb': traffic_limit_gb,
-                    'device_limit': tariff.device_limit,
+                    'device_limit': effective_device_limit,
                     'allowed_squads': tariff.allowed_squads or [],
                     'discount_percent': discount_percent,
                     'source': 'cabinet',
@@ -1495,7 +1538,7 @@ async def purchase_tariff(
                 },
             )
 
-        subscription = await get_subscription_by_user_id(db, user.id)
+        subscription = existing_subscription
 
         # Get server squads from tariff
         squads = tariff.allowed_squads or []
@@ -1539,14 +1582,14 @@ async def purchase_tariff(
         )
 
         if subscription:
-            # Extend/change tariff
+            # Extend/change tariff — сохраняем докупленные устройства при продлении того же тарифа
             subscription = await extend_subscription(
                 db=db,
                 subscription=subscription,
                 days=period_days,
                 tariff_id=tariff.id,
                 traffic_limit_gb=traffic_limit_gb,
-                device_limit=tariff.device_limit,
+                device_limit=effective_device_limit,
                 connected_squads=squads,
             )
         else:
