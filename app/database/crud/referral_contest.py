@@ -451,13 +451,15 @@ async def get_contest_transaction_breakdown(
     )
     subscription_total = int(subscription_result.scalar_one() or 0)
 
-    # Сумма пополнений баланса
+    # Сумма пополнений баланса (ТОЛЬКО реальные платежи, БЕЗ бонусов)
+    # Бонусы имеют payment_method = NULL, реальные платежи всегда имеют payment_method
     deposit_result = await db.execute(
         select(func.coalesce(func.sum(Transaction.amount_kopeks), 0)).where(
             and_(
                 Transaction.user_id.in_(referral_ids),
                 Transaction.is_completed.is_(True),
                 Transaction.type == TransactionType.DEPOSIT.value,
+                Transaction.payment_method.is_not(None),  # Исключаем системные бонусы
                 Transaction.created_at >= contest_start,
                 Transaction.created_at <= contest_end,
             )
@@ -613,21 +615,26 @@ async def debug_contest_transactions(
     )
     txs_out = transactions_outside.scalars().all()
 
-    # Подсчёт общих сумм ПО ТИПАМ
-    deposit_in_period = sum(tx.amount_kopeks for tx in txs_in if tx.type == TransactionType.DEPOSIT.value)
+    # Подсчёт общих сумм ПО ТИПАМ (исключаем бонусы без payment_method)
+    deposit_in_period = sum(
+        tx.amount_kopeks
+        for tx in txs_in
+        if tx.type == TransactionType.DEPOSIT.value and tx.payment_method is not None
+    )
     subscription_in_period = sum(
         tx.amount_kopeks for tx in txs_in if tx.type == TransactionType.SUBSCRIPTION_PAYMENT.value
     )
     total_in_period = deposit_in_period + subscription_in_period
     total_outside = sum(tx.amount_kopeks for tx in txs_out)
 
-    # Подсчёт ПОЛНЫХ сумм (не только sample)
+    # Подсчёт ПОЛНЫХ сумм (не только sample, БЕЗ бонусов)
     full_deposit_result = await db.execute(
         select(func.coalesce(func.sum(Transaction.amount_kopeks), 0)).where(
             and_(
                 Transaction.user_id.in_(referral_ids),
                 Transaction.is_completed.is_(True),
                 Transaction.type == TransactionType.DEPOSIT.value,
+                Transaction.payment_method.is_not(None),  # Исключаем системные бонусы
                 Transaction.created_at >= contest_start,
                 Transaction.created_at <= contest_end,
             )
@@ -732,14 +739,16 @@ async def sync_contest_events(
         'contest_end': contest_end.isoformat(),
     }
 
-    # Получаем события конкурса ТОЛЬКО те, что произошли в период конкурса
-    # (реферал зарегистрировался в период проведения конкурса)
+    # Получаем события конкурса ТОЛЬКО для рефералов, зарегистрированных в период конкурса
+    # (проверяем User.created_at, а не ReferralContestEvent.occurred_at)
     events_result = await db.execute(
-        select(ReferralContestEvent).where(
+        select(ReferralContestEvent)
+        .join(User, User.id == ReferralContestEvent.referral_id)
+        .where(
             and_(
                 ReferralContestEvent.contest_id == contest_id,
-                ReferralContestEvent.occurred_at >= contest_start,
-                ReferralContestEvent.occurred_at <= contest_end,
+                User.created_at >= contest_start,
+                User.created_at <= contest_end,
             )
         )
     )
@@ -772,12 +781,13 @@ async def sync_contest_events(
         sub_result = await db.execute(subscription_query)
         subscription_paid = int(sub_result.scalar_one() or 0)
 
-        # Также считаем пополнения баланса (для информации)
+        # Также считаем пополнения баланса (ТОЛЬКО реальные платежи, БЕЗ бонусов)
         deposit_query = select(func.coalesce(func.sum(Transaction.amount_kopeks), 0)).where(
             and_(
                 Transaction.user_id == event.referral_id,
                 Transaction.is_completed.is_(True),
                 Transaction.type == TransactionType.DEPOSIT.value,
+                Transaction.payment_method.is_not(None),  # Исключаем системные бонусы
                 Transaction.created_at >= contest_start,
                 Transaction.created_at <= contest_end,
             )
@@ -823,3 +833,90 @@ async def sync_contest_events(
     )
 
     return stats
+
+
+async def cleanup_invalid_contest_events(
+    db: AsyncSession,
+    contest_id: int,
+) -> dict:
+    """Удалить события конкурса для рефералов, зарегистрированных ВНЕ периода конкурса.
+
+    Эта функция очищает неправильные события, созданные до исправления бага.
+    Удаляет события только для рефералов, чья дата регистрации (User.created_at)
+    находится вне периода конкурса (contest.start_at - contest.end_at).
+
+    Returns:
+        dict: {
+            "deleted": int,  # Количество удалённых событий
+            "remaining": int,  # Осталось валидных событий
+            "total_before": int,  # Было событий до очистки
+        }
+    """
+    contest = await get_referral_contest(db, contest_id)
+    if not contest:
+        return {'error': 'Contest not found'}
+
+    # Нормализуем границы дат
+    contest_start = contest.start_at
+    contest_end = contest.end_at
+    if contest_end.hour == 0 and contest_end.minute == 0 and contest_end.second == 0:
+        contest_end = contest_end.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+    logger.info('Очистка конкурса %s: период с %s по %s', contest_id, contest_start, contest_end)
+
+    # Считаем сколько было событий до очистки
+    total_before_result = await db.execute(
+        select(func.count(ReferralContestEvent.id)).where(ReferralContestEvent.contest_id == contest_id)
+    )
+    total_before = int(total_before_result.scalar_one() or 0)
+
+    # Находим события для рефералов, зарегистрированных ВНЕ периода конкурса
+    invalid_events_result = await db.execute(
+        select(ReferralContestEvent.id)
+        .join(User, User.id == ReferralContestEvent.referral_id)
+        .where(
+            and_(
+                ReferralContestEvent.contest_id == contest_id,
+                func.not_(
+                    and_(
+                        User.created_at >= contest_start,
+                        User.created_at <= contest_end,
+                    )
+                ),
+            )
+        )
+    )
+    invalid_event_ids = [row[0] for row in invalid_events_result.fetchall()]
+
+    deleted = 0
+    if invalid_event_ids:
+        # Удаляем невалидные события
+        from sqlalchemy import delete as sql_delete
+
+        delete_result = await db.execute(
+            sql_delete(ReferralContestEvent).where(ReferralContestEvent.id.in_(invalid_event_ids))
+        )
+        deleted = delete_result.rowcount
+        await db.commit()
+
+    # Считаем сколько осталось валидных событий
+    remaining_result = await db.execute(
+        select(func.count(ReferralContestEvent.id)).where(ReferralContestEvent.contest_id == contest_id)
+    )
+    remaining = int(remaining_result.scalar_one() or 0)
+
+    logger.info(
+        'Очистка конкурса %s завершена: удалено %s невалидных событий, осталось %s валидных (было %s)',
+        contest_id,
+        deleted,
+        remaining,
+        total_before,
+    )
+
+    return {
+        'deleted': deleted,
+        'remaining': remaining,
+        'total_before': total_before,
+        'contest_start': contest_start.isoformat(),
+        'contest_end': contest_end.isoformat(),
+    }

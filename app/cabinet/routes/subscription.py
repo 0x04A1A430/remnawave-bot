@@ -1642,9 +1642,9 @@ async def purchase_tariff(
         if not user.telegram_id and user.email and user.email_verified:
             try:
                 # Determine if this is a new subscription or extension
-                was_new_subscription = subscription.start_date and (
-                    datetime.utcnow() - subscription.start_date
-                ).total_seconds() < 60
+                was_new_subscription = (
+                    subscription.start_date and (datetime.utcnow() - subscription.start_date).total_seconds() < 60
+                )
                 notification_type = (
                     NotificationType.SUBSCRIPTION_ACTIVATED
                     if was_new_subscription

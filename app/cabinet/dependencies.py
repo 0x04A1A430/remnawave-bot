@@ -147,7 +147,7 @@ async def get_current_cabinet_user(
                         )
                 except HTTPException:
                     raise
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     logger.warning(f'Timeout checking channel subscription for user {user.telegram_id}')
                     # Don't block user if check times out
                 except Exception as e:

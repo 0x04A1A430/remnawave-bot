@@ -3,16 +3,22 @@
 import asyncio
 import hashlib
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database.crud.user import create_user, create_user_by_email, get_user_by_id, get_user_by_referral_code, get_user_by_telegram_id
-from app.services.referral_service import process_referral_registration
+from app.database.crud.user import (
+    create_user,
+    create_user_by_email,
+    get_user_by_id,
+    get_user_by_referral_code,
+    get_user_by_telegram_id,
+)
 from app.database.models import CabinetRefreshToken, User
+from app.services.referral_service import process_referral_registration
 
 from ..auth import (
     create_access_token,
@@ -161,18 +167,16 @@ async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -
             traffic_used_gb = panel_user.used_traffic_bytes / (1024**3) if panel_user.used_traffic_bytes > 0 else 0
 
             # Extract squad UUIDs from active_internal_squads
-            connected_squads = [
-                s.get('uuid', '') for s in (panel_user.active_internal_squads or []) if s.get('uuid')
-            ]
+            connected_squads = [s.get('uuid', '') for s in (panel_user.active_internal_squads or []) if s.get('uuid')]
 
             # Device limit from panel
             device_limit = panel_user.hwid_device_limit or 1
 
             # Determine status - use timezone-aware datetime for comparison
-            current_time = datetime.now(timezone.utc)
+            current_time = datetime.now(UTC)
             # Make expire_at timezone-aware if it's naive
             if expire_at.tzinfo is None:
-                expire_at = expire_at.replace(tzinfo=timezone.utc)
+                expire_at = expire_at.replace(tzinfo=UTC)
 
             if panel_user.status.value == 'ACTIVE' and expire_at > current_time:
                 sub_status = SubscriptionStatus.ACTIVE
@@ -195,7 +199,9 @@ async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -
                 existing_sub.connected_squads = connected_squads
                 existing_sub.device_limit = device_limit
                 existing_sub.is_trial = False  # Panel subscription is not trial
-                logger.info(f'Updated subscription for email user {user.email}, squads: {connected_squads}, devices: {device_limit}')
+                logger.info(
+                    f'Updated subscription for email user {user.email}, squads: {connected_squads}, devices: {device_limit}'
+                )
             else:
                 # Create new subscription
                 # Convert current_time to naive for database storage if needed
@@ -216,7 +222,9 @@ async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -
                     device_limit=device_limit,
                 )
                 db.add(new_sub)
-                logger.info(f'Created subscription for email user {user.email}, squads: {connected_squads}, devices: {device_limit}')
+                logger.info(
+                    f'Created subscription for email user {user.email}, squads: {connected_squads}, devices: {device_limit}'
+                )
 
             await db.commit()
 
@@ -469,7 +477,9 @@ async def register_email_standalone(
                 logger.warning(f'Self-referral attempt blocked: email={request.email}, code={request.referral_code}')
                 referrer = None
             else:
-                logger.info(f'Found referrer for email registration: referrer_id={referrer.id}, code={request.referral_code}')
+                logger.info(
+                    f'Found referrer for email registration: referrer_id={referrer.id}, code={request.referral_code}'
+                )
 
     # Создать пользователя
     user = await create_user_by_email(

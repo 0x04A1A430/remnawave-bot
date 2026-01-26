@@ -135,10 +135,15 @@ async def _persist_broadcast_result(
 ) -> None:
     """Сохраняет результаты рассылки с повторной попыткой при обрыве соединения."""
 
+    # Сохраняем ID и время завершения в локальные переменные ДО операций с БД,
+    # чтобы избежать обращения к атрибутам отсоединенного объекта при потере соединения
+    broadcast_id = broadcast_history.id
+    completed_at = datetime.utcnow()
+
     broadcast_history.sent_count = sent_count
     broadcast_history.failed_count = failed_count
     broadcast_history.status = status
-    broadcast_history.completed_at = datetime.utcnow()
+    broadcast_history.completed_at = completed_at
 
     try:
         await db.commit()
@@ -152,22 +157,22 @@ async def _persist_broadcast_result(
 
     try:
         async with AsyncSessionLocal() as retry_session:
-            retry_history = await retry_session.get(BroadcastHistory, broadcast_history.id)
+            retry_history = await retry_session.get(BroadcastHistory, broadcast_id)
             if not retry_history:
                 logger.critical(
                     'Не удалось найти запись BroadcastHistory #%s для повторной записи результатов',
-                    broadcast_history.id,
+                    broadcast_id,
                 )
                 return
 
             retry_history.sent_count = sent_count
             retry_history.failed_count = failed_count
             retry_history.status = status
-            retry_history.completed_at = broadcast_history.completed_at
+            retry_history.completed_at = completed_at
             await retry_session.commit()
             logger.info(
                 'Результаты рассылки успешно сохранены после повторного подключения к БД (id=%s)',
-                broadcast_history.id,
+                broadcast_id,
             )
     except Exception as retry_error:
         logger.critical(

@@ -1886,9 +1886,7 @@ async def get_disabled_daily_subscriptions_for_resume(
     result = await db.execute(query)
     subscriptions = result.scalars().all()
 
-    logger.info(
-        f"🔍 Найдено {len(subscriptions)} DISABLED суточных подписок для возобновления"
-    )
+    logger.info(f'🔍 Найдено {len(subscriptions)} DISABLED суточных подписок для возобновления')
 
     return list(subscriptions)
 
