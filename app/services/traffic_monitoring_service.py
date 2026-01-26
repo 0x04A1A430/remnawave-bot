@@ -553,8 +553,8 @@ class TrafficMonitoringServiceV2:
 
         # Получаем период за последние 24 часа
         now = datetime.utcnow()
-        start_date = (now - timedelta(hours=24)).strftime('%Y-%m-%dT%H:%M:%S.000Z')
-        end_date = now.strftime('%Y-%m-%dT%H:%M:%S.999Z')
+        start_date = (now - timedelta(hours=24)).strftime('%Y-%m-%d')
+        end_date = now.strftime('%Y-%m-%d')
 
         users = await self.get_all_users_with_traffic()
         semaphore = asyncio.Semaphore(self.get_concurrency())
