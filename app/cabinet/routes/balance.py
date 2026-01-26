@@ -176,11 +176,13 @@ async def _get_available_payment_methods(
             all_opts = []
             for method_code in platega_methods:
                 info = definitions.get(method_code, {})
-                all_opts.append({
-                    'id': str(method_code),
-                    'name': info.get('title') or info.get('name') or f'Platega {method_code}',
-                    'description': info.get('description') or info.get('name') or '',
-                })
+                all_opts.append(
+                    {
+                        'id': str(method_code),
+                        'name': info.get('title') or info.get('name') or f'Platega {method_code}',
+                        'description': info.get('description') or info.get('name') or '',
+                    }
+                )
         elif method_id == 'freekassa':
             all_opts = [
                 {'id': 'sbp', 'name': '🏦 NSPK СБП', 'description': 'Система быстрых платежей'},

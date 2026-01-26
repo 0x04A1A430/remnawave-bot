@@ -421,8 +421,13 @@ async def register_email(
 
         # Check for admin template override
         override = await get_rendered_override(
-            'email_verification', lang,
-            context={'username': user.first_name or '', 'verification_url': full_url, 'expire_hours': str(expire_hours)},
+            'email_verification',
+            lang,
+            context={
+                'username': user.first_name or '',
+                'verification_url': full_url,
+                'expire_hours': str(expire_hours),
+            },
             db=db,
         )
         custom_subject, custom_body = override if override else (None, None)
@@ -530,8 +535,13 @@ async def register_email_standalone(
             expire_hours = settings.get_cabinet_email_verification_expire_hours()
 
             override = await get_rendered_override(
-                'email_verification', lang,
-                context={'username': user.first_name or 'User', 'verification_url': full_url, 'expire_hours': str(expire_hours)},
+                'email_verification',
+                lang,
+                context={
+                    'username': user.first_name or 'User',
+                    'verification_url': full_url,
+                    'expire_hours': str(expire_hours),
+                },
                 db=db,
             )
             custom_subject, custom_body = override if override else (None, None)
@@ -642,8 +652,13 @@ async def resend_verification(
         expire_hours = settings.get_cabinet_email_verification_expire_hours()
 
         override = await get_rendered_override(
-            'email_verification', lang,
-            context={'username': user.first_name or '', 'verification_url': full_url, 'expire_hours': str(expire_hours)},
+            'email_verification',
+            lang,
+            context={
+                'username': user.first_name or '',
+                'verification_url': full_url,
+                'expire_hours': str(expire_hours),
+            },
             db=db,
         )
         custom_subject, custom_body = override if override else (None, None)
@@ -859,7 +874,8 @@ async def forgot_password(
         expire_hours = settings.get_cabinet_password_reset_expire_hours()
 
         override = await get_rendered_override(
-            'password_reset', lang,
+            'password_reset',
+            lang,
             context={'username': user.first_name or '', 'reset_url': full_url, 'expire_hours': str(expire_hours)},
             db=db,
         )

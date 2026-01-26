@@ -31,128 +31,288 @@ TEMPLATE_TYPES = [
     {
         'type': 'balance_topup',
         'label': {'ru': 'Пополнение баланса', 'en': 'Balance Top-up', 'zh': '余额充值', 'ua': 'Поповнення балансу'},
-        'description': {'ru': 'Уведомление о пополнении баланса', 'en': 'Balance top-up notification', 'zh': '余额充值通知', 'ua': 'Сповіщення про поповнення балансу'},
+        'description': {
+            'ru': 'Уведомление о пополнении баланса',
+            'en': 'Balance top-up notification',
+            'zh': '余额充值通知',
+            'ua': 'Сповіщення про поповнення балансу',
+        },
         'context_vars': ['amount', 'balance'],
     },
     {
         'type': 'balance_change',
         'label': {'ru': 'Изменение баланса', 'en': 'Balance Change', 'zh': '余额变动', 'ua': 'Зміна балансу'},
-        'description': {'ru': 'Уведомление об изменении баланса', 'en': 'Balance change notification', 'zh': '余额变动通知', 'ua': 'Сповіщення про зміну балансу'},
+        'description': {
+            'ru': 'Уведомление об изменении баланса',
+            'en': 'Balance change notification',
+            'zh': '余额变动通知',
+            'ua': 'Сповіщення про зміну балансу',
+        },
         'context_vars': ['amount', 'balance'],
     },
     {
         'type': 'subscription_expiring',
-        'label': {'ru': 'Подписка истекает', 'en': 'Subscription Expiring', 'zh': '订阅即将到期', 'ua': 'Підписка закінчується'},
-        'description': {'ru': 'Предупреждение об истечении подписки', 'en': 'Subscription expiring warning', 'zh': '订阅即将到期警告', 'ua': 'Попередження про закінчення підписки'},
+        'label': {
+            'ru': 'Подписка истекает',
+            'en': 'Subscription Expiring',
+            'zh': '订阅即将到期',
+            'ua': 'Підписка закінчується',
+        },
+        'description': {
+            'ru': 'Предупреждение об истечении подписки',
+            'en': 'Subscription expiring warning',
+            'zh': '订阅即将到期警告',
+            'ua': 'Попередження про закінчення підписки',
+        },
         'context_vars': ['days_left', 'expires_at'],
     },
     {
         'type': 'subscription_expired',
-        'label': {'ru': 'Подписка истекла', 'en': 'Subscription Expired', 'zh': '订阅已到期', 'ua': 'Підписка закінчилась'},
-        'description': {'ru': 'Уведомление об истечении подписки', 'en': 'Subscription expired notification', 'zh': '订阅已到期通知', 'ua': 'Сповіщення про закінчення підписки'},
+        'label': {
+            'ru': 'Подписка истекла',
+            'en': 'Subscription Expired',
+            'zh': '订阅已到期',
+            'ua': 'Підписка закінчилась',
+        },
+        'description': {
+            'ru': 'Уведомление об истечении подписки',
+            'en': 'Subscription expired notification',
+            'zh': '订阅已到期通知',
+            'ua': 'Сповіщення про закінчення підписки',
+        },
         'context_vars': [],
     },
     {
         'type': 'subscription_renewed',
-        'label': {'ru': 'Подписка продлена', 'en': 'Subscription Renewed', 'zh': '订阅已续期', 'ua': 'Підписка продовжена'},
-        'description': {'ru': 'Уведомление о продлении подписки', 'en': 'Subscription renewed notification', 'zh': '订阅已续期通知', 'ua': 'Сповіщення про продовження підписки'},
+        'label': {
+            'ru': 'Подписка продлена',
+            'en': 'Subscription Renewed',
+            'zh': '订阅已续期',
+            'ua': 'Підписка продовжена',
+        },
+        'description': {
+            'ru': 'Уведомление о продлении подписки',
+            'en': 'Subscription renewed notification',
+            'zh': '订阅已续期通知',
+            'ua': 'Сповіщення про продовження підписки',
+        },
         'context_vars': ['new_end_date', 'tariff_name'],
     },
     {
         'type': 'subscription_activated',
-        'label': {'ru': 'Подписка активирована', 'en': 'Subscription Activated', 'zh': '订阅已激活', 'ua': 'Підписка активована'},
-        'description': {'ru': 'Уведомление об активации подписки', 'en': 'Subscription activated notification', 'zh': '订阅已激活通知', 'ua': 'Сповіщення про активацію підписки'},
+        'label': {
+            'ru': 'Подписка активирована',
+            'en': 'Subscription Activated',
+            'zh': '订阅已激活',
+            'ua': 'Підписка активована',
+        },
+        'description': {
+            'ru': 'Уведомление об активации подписки',
+            'en': 'Subscription activated notification',
+            'zh': '订阅已激活通知',
+            'ua': 'Сповіщення про активацію підписки',
+        },
         'context_vars': ['tariff_name', 'end_date'],
     },
     {
         'type': 'autopay_success',
-        'label': {'ru': 'Автоплатёж успешен', 'en': 'Autopay Success', 'zh': '自动续费成功', 'ua': 'Автоплатіж успішний'},
-        'description': {'ru': 'Уведомление об успешном автоплатеже', 'en': 'Autopay success notification', 'zh': '自动续费成功通知', 'ua': 'Сповіщення про успішний автоплатіж'},
+        'label': {
+            'ru': 'Автоплатёж успешен',
+            'en': 'Autopay Success',
+            'zh': '自动续费成功',
+            'ua': 'Автоплатіж успішний',
+        },
+        'description': {
+            'ru': 'Уведомление об успешном автоплатеже',
+            'en': 'Autopay success notification',
+            'zh': '自动续费成功通知',
+            'ua': 'Сповіщення про успішний автоплатіж',
+        },
         'context_vars': ['amount', 'balance', 'new_end_date'],
     },
     {
         'type': 'autopay_failed',
-        'label': {'ru': 'Автоплатёж не удался', 'en': 'Autopay Failed', 'zh': '自动续费失败', 'ua': 'Автоплатіж не вдався'},
-        'description': {'ru': 'Уведомление о неудачном автоплатеже', 'en': 'Autopay failed notification', 'zh': '自动续费失败通知', 'ua': 'Сповіщення про невдалий автоплатіж'},
+        'label': {
+            'ru': 'Автоплатёж не удался',
+            'en': 'Autopay Failed',
+            'zh': '自动续费失败',
+            'ua': 'Автоплатіж не вдався',
+        },
+        'description': {
+            'ru': 'Уведомление о неудачном автоплатеже',
+            'en': 'Autopay failed notification',
+            'zh': '自动续费失败通知',
+            'ua': 'Сповіщення про невдалий автоплатіж',
+        },
         'context_vars': ['reason'],
     },
     {
         'type': 'autopay_insufficient_funds',
-        'label': {'ru': 'Недостаточно средств (автоплатёж)', 'en': 'Insufficient Funds (Autopay)', 'zh': '余额不足（自动续费）', 'ua': 'Недостатньо коштів (автоплатіж)'},
-        'description': {'ru': 'Уведомление о нехватке средств для автоплатежа', 'en': 'Insufficient funds for autopay notification', 'zh': '自动续费余额不足通知', 'ua': 'Сповіщення про нестачу коштів для автоплатежу'},
+        'label': {
+            'ru': 'Недостаточно средств (автоплатёж)',
+            'en': 'Insufficient Funds (Autopay)',
+            'zh': '余额不足（自动续费）',
+            'ua': 'Недостатньо коштів (автоплатіж)',
+        },
+        'description': {
+            'ru': 'Уведомление о нехватке средств для автоплатежа',
+            'en': 'Insufficient funds for autopay notification',
+            'zh': '自动续费余额不足通知',
+            'ua': 'Сповіщення про нестачу коштів для автоплатежу',
+        },
         'context_vars': ['required_amount', 'balance'],
     },
     {
         'type': 'daily_debit',
         'label': {'ru': 'Суточное списание', 'en': 'Daily Debit', 'zh': '每日扣费', 'ua': 'Добове списання'},
-        'description': {'ru': 'Уведомление о суточном списании', 'en': 'Daily debit notification', 'zh': '每日扣费通知', 'ua': 'Сповіщення про добове списання'},
+        'description': {
+            'ru': 'Уведомление о суточном списании',
+            'en': 'Daily debit notification',
+            'zh': '每日扣费通知',
+            'ua': 'Сповіщення про добове списання',
+        },
         'context_vars': ['amount', 'balance'],
     },
     {
         'type': 'daily_insufficient_funds',
-        'label': {'ru': 'Недостаточно средств (суточное)', 'en': 'Insufficient Funds (Daily)', 'zh': '余额不足（每日）', 'ua': 'Недостатньо коштів (добове)'},
-        'description': {'ru': 'Уведомление о нехватке средств для суточного списания', 'en': 'Insufficient funds for daily debit', 'zh': '每日扣费余额不足通知', 'ua': 'Сповіщення про нестачу коштів для добового списання'},
+        'label': {
+            'ru': 'Недостаточно средств (суточное)',
+            'en': 'Insufficient Funds (Daily)',
+            'zh': '余额不足（每日）',
+            'ua': 'Недостатньо коштів (добове)',
+        },
+        'description': {
+            'ru': 'Уведомление о нехватке средств для суточного списания',
+            'en': 'Insufficient funds for daily debit',
+            'zh': '每日扣费余额不足通知',
+            'ua': 'Сповіщення про нестачу коштів для добового списання',
+        },
         'context_vars': ['required_amount', 'balance'],
     },
     {
         'type': 'ban_notification',
         'label': {'ru': 'Блокировка аккаунта', 'en': 'Account Banned', 'zh': '账户被封禁', 'ua': 'Блокування акаунту'},
-        'description': {'ru': 'Уведомление о блокировке аккаунта', 'en': 'Account banned notification', 'zh': '账户被封禁通知', 'ua': 'Сповіщення про блокування акаунту'},
+        'description': {
+            'ru': 'Уведомление о блокировке аккаунта',
+            'en': 'Account banned notification',
+            'zh': '账户被封禁通知',
+            'ua': 'Сповіщення про блокування акаунту',
+        },
         'context_vars': ['reason'],
     },
     {
         'type': 'unban_notification',
-        'label': {'ru': 'Разблокировка аккаунта', 'en': 'Account Unbanned', 'zh': '账户已解封', 'ua': 'Розблокування акаунту'},
-        'description': {'ru': 'Уведомление о разблокировке аккаунта', 'en': 'Account unbanned notification', 'zh': '账户已解封通知', 'ua': 'Сповіщення про розблокування акаунту'},
+        'label': {
+            'ru': 'Разблокировка аккаунта',
+            'en': 'Account Unbanned',
+            'zh': '账户已解封',
+            'ua': 'Розблокування акаунту',
+        },
+        'description': {
+            'ru': 'Уведомление о разблокировке аккаунта',
+            'en': 'Account unbanned notification',
+            'zh': '账户已解封通知',
+            'ua': 'Сповіщення про розблокування акаунту',
+        },
         'context_vars': [],
     },
     {
         'type': 'warning_notification',
         'label': {'ru': 'Предупреждение', 'en': 'Warning', 'zh': '警告', 'ua': 'Попередження'},
-        'description': {'ru': 'Предупреждение пользователю', 'en': 'Warning notification', 'zh': '警告通知', 'ua': 'Попередження користувачу'},
+        'description': {
+            'ru': 'Предупреждение пользователю',
+            'en': 'Warning notification',
+            'zh': '警告通知',
+            'ua': 'Попередження користувачу',
+        },
         'context_vars': ['message'],
     },
     {
         'type': 'referral_bonus',
         'label': {'ru': 'Реферальный бонус', 'en': 'Referral Bonus', 'zh': '推荐奖励', 'ua': 'Реферальний бонус'},
-        'description': {'ru': 'Уведомление о начислении реферального бонуса', 'en': 'Referral bonus notification', 'zh': '推荐奖励通知', 'ua': 'Сповіщення про нарахування реферального бонусу'},
+        'description': {
+            'ru': 'Уведомление о начислении реферального бонуса',
+            'en': 'Referral bonus notification',
+            'zh': '推荐奖励通知',
+            'ua': 'Сповіщення про нарахування реферального бонусу',
+        },
         'context_vars': ['amount', 'referral_name'],
     },
     {
         'type': 'referral_registered',
         'label': {'ru': 'Новый реферал', 'en': 'New Referral', 'zh': '新推荐用户', 'ua': 'Новий реферал'},
-        'description': {'ru': 'Уведомление о регистрации реферала', 'en': 'New referral registered notification', 'zh': '新推荐用户注册通知', 'ua': 'Сповіщення про реєстрацію реферала'},
+        'description': {
+            'ru': 'Уведомление о регистрации реферала',
+            'en': 'New referral registered notification',
+            'zh': '新推荐用户注册通知',
+            'ua': 'Сповіщення про реєстрацію реферала',
+        },
         'context_vars': ['referral_name'],
     },
     {
         'type': 'traffic_reset',
         'label': {'ru': 'Сброс трафика', 'en': 'Traffic Reset', 'zh': '流量重置', 'ua': 'Скидання трафіку'},
-        'description': {'ru': 'Уведомление о сбросе трафика', 'en': 'Traffic reset notification', 'zh': '流量重置通知', 'ua': 'Сповіщення про скидання трафіку'},
+        'description': {
+            'ru': 'Уведомление о сбросе трафика',
+            'en': 'Traffic reset notification',
+            'zh': '流量重置通知',
+            'ua': 'Сповіщення про скидання трафіку',
+        },
         'context_vars': ['traffic_limit'],
     },
     {
         'type': 'payment_received',
         'label': {'ru': 'Платёж получен', 'en': 'Payment Received', 'zh': '收到付款', 'ua': 'Платіж отримано'},
-        'description': {'ru': 'Уведомление о получении платежа', 'en': 'Payment received notification', 'zh': '收到付款通知', 'ua': 'Сповіщення про отримання платежу'},
+        'description': {
+            'ru': 'Уведомление о получении платежа',
+            'en': 'Payment received notification',
+            'zh': '收到付款通知',
+            'ua': 'Сповіщення про отримання платежу',
+        },
         'context_vars': ['amount', 'payment_method'],
     },
     {
         'type': 'email_verification',
-        'label': {'ru': 'Подтверждение email', 'en': 'Email Verification', 'zh': '邮箱验证', 'ua': 'Підтвердження email'},
-        'description': {'ru': 'Письмо для подтверждения email адреса при регистрации', 'en': 'Email address verification letter sent during registration', 'zh': '注册时发送的邮箱验证邮件', 'ua': 'Лист для підтвердження email адреси при реєстрації'},
+        'label': {
+            'ru': 'Подтверждение email',
+            'en': 'Email Verification',
+            'zh': '邮箱验证',
+            'ua': 'Підтвердження email',
+        },
+        'description': {
+            'ru': 'Письмо для подтверждения email адреса при регистрации',
+            'en': 'Email address verification letter sent during registration',
+            'zh': '注册时发送的邮箱验证邮件',
+            'ua': 'Лист для підтвердження email адреси при реєстрації',
+        },
         'context_vars': ['username', 'verification_url', 'expire_hours'],
     },
     {
         'type': 'password_reset',
         'label': {'ru': 'Сброс пароля', 'en': 'Password Reset', 'zh': '重置密码', 'ua': 'Скидання пароля'},
-        'description': {'ru': 'Письмо для сброса пароля', 'en': 'Password reset email', 'zh': '密码重置邮件', 'ua': 'Лист для скидання пароля'},
+        'description': {
+            'ru': 'Письмо для сброса пароля',
+            'en': 'Password reset email',
+            'zh': '密码重置邮件',
+            'ua': 'Лист для скидання пароля',
+        },
         'context_vars': ['username', 'reset_url', 'expire_hours'],
     },
 ]
 
 SAMPLE_CONTEXTS: dict[str, dict[str, Any]] = {
-    'balance_topup': {'formatted_amount': '500.00 ₽', 'formatted_balance': '1500.00 ₽', 'amount_rubles': 500, 'new_balance_rubles': 1500},
-    'balance_change': {'formatted_amount': '-200.00 ₽', 'formatted_balance': '1300.00 ₽', 'amount_rubles': -200, 'new_balance_rubles': 1300},
+    'balance_topup': {
+        'formatted_amount': '500.00 ₽',
+        'formatted_balance': '1500.00 ₽',
+        'amount_rubles': 500,
+        'new_balance_rubles': 1500,
+    },
+    'balance_change': {
+        'formatted_amount': '-200.00 ₽',
+        'formatted_balance': '1300.00 ₽',
+        'amount_rubles': -200,
+        'new_balance_rubles': 1300,
+    },
     'subscription_expiring': {'days_left': 3, 'expires_at': '2025-01-30'},
     'subscription_expired': {},
     'subscription_renewed': {'new_end_date': '2025-02-28', 'tariff_name': 'Premium'},
@@ -169,7 +329,11 @@ SAMPLE_CONTEXTS: dict[str, dict[str, Any]] = {
     'referral_registered': {'referral_name': 'John'},
     'traffic_reset': {'traffic_limit': '100 GB'},
     'payment_received': {'formatted_amount': '500.00 ₽', 'payment_method': 'YooKassa'},
-    'email_verification': {'username': 'John', 'verification_url': 'https://example.com/verify?token=abc123', 'expire_hours': 24},
+    'email_verification': {
+        'username': 'John',
+        'verification_url': 'https://example.com/verify?token=abc123',
+        'expire_hours': 24,
+    },
     'password_reset': {'username': 'John', 'reset_url': 'https://example.com/reset?token=abc123', 'expire_hours': 1},
 }
 
@@ -178,14 +342,17 @@ AVAILABLE_LANGUAGES = ['ru', 'en', 'zh', 'ua']
 
 # ============ Schemas ============
 
+
 class EmailTemplateUpdate(BaseModel):
     """Request to update an email template."""
+
     subject: str = Field(..., min_length=1, max_length=500)
     body_html: str = Field(..., min_length=1)
 
 
 class EmailTemplatePreviewRequest(BaseModel):
     """Request to preview an email template."""
+
     language: str = Field(default='ru')
     subject: str = Field(default='')
     body_html: str = Field(default='')
@@ -193,11 +360,13 @@ class EmailTemplatePreviewRequest(BaseModel):
 
 class EmailTemplateSendTestRequest(BaseModel):
     """Request to send a test email."""
+
     language: str = Field(default='ru')
     email: str = Field(default='')
 
 
 # ============ Endpoints ============
+
 
 @router.get('', summary='List all email template types')
 async def list_template_types(
@@ -223,10 +392,12 @@ async def list_template_types(
             languages[lang] = {
                 'has_custom': lang in override_map.get(type_key, {}),
             }
-        result.append({
-            **tpl_type,
-            'languages': languages,
-        })
+        result.append(
+            {
+                **tpl_type,
+                'languages': languages,
+            }
+        )
 
     return {'items': result, 'available_languages': AVAILABLE_LANGUAGES}
 
@@ -263,6 +434,7 @@ async def get_templates_for_type(
         # Get default template
         try:
             from app.services.notification_delivery_service import NotificationType
+
             ntype_enum = NotificationType(notification_type)
             default_template = templates_instance.get_template(ntype_enum, lang, sample_context)
         except Exception:
@@ -396,6 +568,7 @@ async def preview_template(
         sample_context = SAMPLE_CONTEXTS.get(notification_type, {})
         try:
             from app.services.notification_delivery_service import NotificationType
+
             ntype_enum = NotificationType(notification_type)
             default_template = templates_instance.get_template(ntype_enum, language, sample_context)
         except Exception:
@@ -450,6 +623,7 @@ async def send_test_email(
 
     # Check for DB override
     from ..services.email_template_overrides import get_template_override
+
     override = await get_template_override(notification_type, language, db)
 
     if override:
@@ -458,6 +632,7 @@ async def send_test_email(
     else:
         try:
             from app.services.notification_delivery_service import NotificationType
+
             ntype_enum = NotificationType(notification_type)
             default_template = templates_instance.get_template(ntype_enum, language, sample_context)
         except Exception:
