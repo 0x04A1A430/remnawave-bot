@@ -387,7 +387,6 @@ async def renew_subscription(
         tariff_id = user.subscription.tariff_id
         tariff_name = None
         tariff_traffic_limit_gb = None
-        tariff_device_limit = None
         tariff_allowed_squads = None
 
         if tariff_id:
@@ -395,7 +394,6 @@ async def renew_subscription(
             if tariff:
                 tariff_name = tariff.name
                 tariff_traffic_limit_gb = tariff.traffic_limit_gb
-                tariff_device_limit = tariff.device_limit
                 tariff_allowed_squads = tariff.allowed_squads or []
 
         # Save cart for auto-purchase after balance top-up
