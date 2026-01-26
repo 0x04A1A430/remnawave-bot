@@ -219,7 +219,6 @@ async def show_main_menu(
         caption=menu_text,
         keyboard=keyboard,
         parse_mode='HTML',
-        force_text=settings.is_text_main_menu_mode(),
     )
     if not skip_callback_answer:
         await callback.answer()
@@ -1066,7 +1065,6 @@ async def handle_back_to_menu(callback: types.CallbackQuery, state: FSMContext, 
         caption=menu_text,
         keyboard=keyboard,
         parse_mode='HTML',
-        force_text=settings.is_text_main_menu_mode(),
     )
     await callback.answer()
 
