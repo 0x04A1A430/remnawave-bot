@@ -121,7 +121,7 @@ async def save_template_override(
     )
     row = existing.fetchone()
 
-    now = datetime.utcnow().isoformat()
+    now = datetime.utcnow()
 
     if row:
         # Update
