@@ -249,6 +249,21 @@ async def main():
                 logger.error(f'❌ Не удалось синхронизировать серверы: {error}')
 
         async with timeline.stage(
+            'Инициализация платёжных методов',
+            '💳',
+            success_message='Платёжные методы инициализированы',
+        ) as stage:
+            try:
+                from app.database.database import AsyncSessionLocal
+                from app.services.payment_method_config_service import ensure_payment_method_configs
+
+                async with AsyncSessionLocal() as db:
+                    await ensure_payment_method_configs(db)
+            except Exception as error:
+                stage.warning(f'Не удалось инициализировать платёжные методы: {error}')
+                logger.error(f'❌ Не удалось инициализировать платёжные методы: {error}')
+
+        async with timeline.stage(
             'Загрузка конфигурации из БД',
             '⚙️',
             success_message='Конфигурация загружена',

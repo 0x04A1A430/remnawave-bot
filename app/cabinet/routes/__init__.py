@@ -7,6 +7,7 @@ from .admin_ban_system import router as admin_ban_system_router
 from .admin_email_templates import router as admin_email_templates_router
 from .admin_broadcasts import router as admin_broadcasts_router
 from .admin_campaigns import router as admin_campaigns_router
+from .admin_payment_methods import router as admin_payment_methods_router
 from .admin_payments import router as admin_payments_router
 from .admin_promo_offers import router as admin_promo_offers_router
 from .admin_promocodes import promo_groups_router as admin_promo_groups_router, router as admin_promocodes_router
@@ -77,6 +78,7 @@ router.include_router(admin_promocodes_router)
 router.include_router(admin_promo_groups_router)
 router.include_router(admin_campaigns_router)
 router.include_router(admin_users_router)
+router.include_router(admin_payment_methods_router)
 router.include_router(admin_payments_router)
 router.include_router(admin_promo_offers_router)
 router.include_router(admin_remnawave_router)
