@@ -284,6 +284,19 @@ async def get_payment_methods():
             )
         )
 
+    # KassaAI
+    if settings.is_kassa_ai_enabled():
+        methods.append(
+            PaymentMethodResponse(
+                id='kassa_ai',
+                name=settings.get_kassa_ai_display_name(),
+                description='Pay via KassaAI',
+                min_amount_kopeks=settings.KASSA_AI_MIN_AMOUNT_KOPEKS,
+                max_amount_kopeks=settings.KASSA_AI_MAX_AMOUNT_KOPEKS,
+                is_available=True,
+            )
+        )
+
     # Tribute
     if settings.TRIBUTE_ENABLED and settings.TRIBUTE_DONATE_LINK:
         methods.append(
@@ -728,6 +741,31 @@ async def create_topup(
                     detail='Failed to create FreeKassa payment',
                 )
 
+        elif request.payment_method == 'kassa_ai':
+            if not settings.is_kassa_ai_enabled():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail='KassaAI payment method is unavailable',
+                )
+
+            payment_service = PaymentService()
+            result = await payment_service.create_kassa_ai_payment(
+                db=db,
+                user_id=user.id,
+                amount_kopeks=request.amount_kopeks,
+                description=settings.get_balance_payment_description(request.amount_kopeks),
+                language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+            )
+
+            if result and result.get('payment_url'):
+                payment_url = result.get('payment_url')
+                payment_id = str(result.get('local_payment_id') or result.get('order_id') or 'pending')
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail='Failed to create KassaAI payment',
+                )
+
         elif request.payment_method == 'tribute':
             if not settings.TRIBUTE_ENABLED or not settings.TRIBUTE_DONATE_LINK:
                 raise HTTPException(
@@ -868,6 +906,17 @@ def _get_status_info(record: PendingPayment) -> tuple[str, str]:
         }
         return mapping.get(status, ('❓', 'Неизвестно'))
 
+    if record.method == PaymentMethod.KASSA_AI:
+        mapping = {
+            'pending': ('⏳', 'Ожидает оплаты'),
+            'success': ('✅', 'Оплачено'),
+            'paid': ('✅', 'Оплачено'),
+            'canceled': ('❌', 'Отменено'),
+            'failed': ('❌', 'Ошибка'),
+            'expired': ('⌛', 'Истёк'),
+        }
+        return mapping.get(status, ('❓', 'Неизвестно'))
+
     return '❓', 'Неизвестно'
 
 
@@ -896,6 +945,8 @@ def _is_checkable(record: PendingPayment) -> bool:
         return status in {'pending', 'authorized'}
     if record.method == PaymentMethod.FREEKASSA:
         return status in {'pending', 'created', 'processing'}
+    if record.method == PaymentMethod.KASSA_AI:
+        return status in {'pending', 'created', 'processing'}
     return False
 
 
@@ -919,7 +970,7 @@ def _get_payment_url(record: PendingPayment) -> str | None:
         )
     elif record.method == PaymentMethod.PLATEGA:
         payment_url = getattr(payment, 'redirect_url', None) or payment_url
-    elif record.method == PaymentMethod.CLOUDPAYMENTS or record.method == PaymentMethod.FREEKASSA:
+    elif record.method in (PaymentMethod.CLOUDPAYMENTS, PaymentMethod.FREEKASSA, PaymentMethod.KASSA_AI):
         payment_url = getattr(payment, 'payment_url', None) or payment_url
 
     return payment_url

@@ -1529,6 +1529,24 @@ class ReferralContestEvent(Base):
         )
 
 
+class ReferralContestVirtualParticipant(Base):
+    __tablename__ = 'referral_contest_virtual_participants'
+
+    id = Column(Integer, primary_key=True, index=True)
+    contest_id = Column(Integer, ForeignKey('referral_contests.id', ondelete='CASCADE'), nullable=False)
+    display_name = Column(String(255), nullable=False)
+    referral_count = Column(Integer, nullable=False, default=0)
+    total_amount_kopeks = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, default=func.now())
+
+    contest = relationship('ReferralContest')
+
+    def __repr__(self):
+        return (
+            f"<ReferralContestVirtualParticipant id={self.id} name='{self.display_name}' count={self.referral_count}>"
+        )
+
+
 class ContestTemplate(Base):
     __tablename__ = 'contest_templates'
 

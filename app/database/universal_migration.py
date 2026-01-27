@@ -1731,6 +1731,65 @@ async def create_referral_contest_events_table() -> bool:
     return False
 
 
+async def create_referral_contest_virtual_participants_table() -> bool:
+    table_exists = await check_table_exists('referral_contest_virtual_participants')
+    if table_exists:
+        logger.info('Таблица referral_contest_virtual_participants уже существует')
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'sqlite':
+                await conn.execute(
+                    text("""
+                    CREATE TABLE referral_contest_virtual_participants (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        contest_id INTEGER NOT NULL,
+                        display_name VARCHAR(255) NOT NULL,
+                        referral_count INTEGER NOT NULL DEFAULT 0,
+                        total_amount_kopeks INTEGER NOT NULL DEFAULT 0,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY(contest_id) REFERENCES referral_contests(id) ON DELETE CASCADE
+                    )
+                """)
+                )
+            elif db_type == 'postgresql':
+                await conn.execute(
+                    text("""
+                    CREATE TABLE referral_contest_virtual_participants (
+                        id SERIAL PRIMARY KEY,
+                        contest_id INTEGER NOT NULL REFERENCES referral_contests(id) ON DELETE CASCADE,
+                        display_name VARCHAR(255) NOT NULL,
+                        referral_count INTEGER NOT NULL DEFAULT 0,
+                        total_amount_kopeks INTEGER NOT NULL DEFAULT 0,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                )
+            else:
+                await conn.execute(
+                    text("""
+                    CREATE TABLE referral_contest_virtual_participants (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        contest_id INT NOT NULL,
+                        display_name VARCHAR(255) NOT NULL,
+                        referral_count INT NOT NULL DEFAULT 0,
+                        total_amount_kopeks INT NOT NULL DEFAULT 0,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY(contest_id) REFERENCES referral_contests(id) ON DELETE CASCADE
+                    )
+                """)
+                )
+
+        logger.info('✅ Таблица referral_contest_virtual_participants создана')
+        return True
+    except Exception as error:
+        logger.error(f'Ошибка создания таблицы referral_contest_virtual_participants: {error}')
+    return False
+
+
 async def ensure_referral_contest_summary_columns() -> bool:
     ok = True
     for column in ['daily_summary_times', 'last_daily_summary_at']:
@@ -4223,33 +4282,33 @@ async def fix_button_click_logs_fk() -> bool:
                     logger.info('🔧 Исправляем FK button_click_logs.user_id: telegram_id -> id')
 
                     # Обнуляем невалидные user_id (которые были internal id, а не telegram_id)
-                    await conn.execute(text("""
+                    await conn.execute(
+                        text("""
                         UPDATE button_click_logs
                         SET user_id = NULL
                         WHERE user_id IS NOT NULL
                           AND user_id NOT IN (SELECT telegram_id FROM users)
-                    """))
+                    """)
+                    )
 
                     # Удаляем старый FK
-                    await conn.execute(text(
-                        'ALTER TABLE button_click_logs DROP CONSTRAINT IF EXISTS button_click_logs_user_id_fkey'
-                    ))
+                    await conn.execute(
+                        text('ALTER TABLE button_click_logs DROP CONSTRAINT IF EXISTS button_click_logs_user_id_fkey')
+                    )
 
                     # Меняем тип колонки и добавляем правильный FK
-                    await conn.execute(text(
-                        'ALTER TABLE button_click_logs ALTER COLUMN user_id TYPE INTEGER'
-                    ))
+                    await conn.execute(text('ALTER TABLE button_click_logs ALTER COLUMN user_id TYPE INTEGER'))
 
                     # Обнуляем все значения, т.к. они были записаны неправильно
-                    await conn.execute(text(
-                        'UPDATE button_click_logs SET user_id = NULL'
-                    ))
+                    await conn.execute(text('UPDATE button_click_logs SET user_id = NULL'))
 
-                    await conn.execute(text(
-                        'ALTER TABLE button_click_logs '
-                        'ADD CONSTRAINT button_click_logs_user_id_fkey '
-                        'FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL'
-                    ))
+                    await conn.execute(
+                        text(
+                            'ALTER TABLE button_click_logs '
+                            'ADD CONSTRAINT button_click_logs_user_id_fkey '
+                            'FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL'
+                        )
+                    )
 
                     logger.info('✅ FK button_click_logs.user_id исправлен')
                 else:
@@ -6394,6 +6453,12 @@ async def run_universal_migration():
             logger.info('✅ Таблица referral_contest_events готова')
         else:
             logger.warning('⚠️ Проблемы с таблицей referral_contest_events')
+
+        virtual_participants_ready = await create_referral_contest_virtual_participants_table()
+        if virtual_participants_ready:
+            logger.info('✅ Таблица referral_contest_virtual_participants готова')
+        else:
+            logger.warning('⚠️ Проблемы с таблицей referral_contest_virtual_participants')
 
         contest_type_ready = await ensure_referral_contest_type_column()
         if contest_type_ready:

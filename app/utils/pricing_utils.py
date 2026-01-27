@@ -256,7 +256,11 @@ async def compute_simple_subscription_price(
         )
 
     total_before_discount = (
-        base_price_original + traffic_price_original + devices_price_original + servers_price_original + modem_price_original
+        base_price_original
+        + traffic_price_original
+        + devices_price_original
+        + servers_price_original
+        + modem_price_original
     )
 
     total_discount = base_discount + traffic_discount + devices_discount + servers_discount_total

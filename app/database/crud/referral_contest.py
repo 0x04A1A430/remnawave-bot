@@ -9,6 +9,7 @@ from sqlalchemy.orm import selectinload
 from app.database.models import (
     ReferralContest,
     ReferralContestEvent,
+    ReferralContestVirtualParticipant,
     Transaction,
     TransactionType,
     User,
@@ -617,9 +618,7 @@ async def debug_contest_transactions(
 
     # Подсчёт общих сумм ПО ТИПАМ (исключаем бонусы без payment_method)
     deposit_in_period = sum(
-        tx.amount_kopeks
-        for tx in txs_in
-        if tx.type == TransactionType.DEPOSIT.value and tx.payment_method is not None
+        tx.amount_kopeks for tx in txs_in if tx.type == TransactionType.DEPOSIT.value and tx.payment_method is not None
     )
     subscription_in_period = sum(
         tx.amount_kopeks for tx in txs_in if tx.type == TransactionType.SUBSCRIPTION_PAYMENT.value
@@ -920,3 +919,96 @@ async def cleanup_invalid_contest_events(
         'contest_start': contest_start.isoformat(),
         'contest_end': contest_end.isoformat(),
     }
+
+
+# ── Виртуальные участники ──────────────────────────────────────────────
+
+
+async def add_virtual_participant(
+    db: AsyncSession,
+    contest_id: int,
+    display_name: str,
+    referral_count: int,
+    total_amount_kopeks: int = 0,
+) -> ReferralContestVirtualParticipant:
+    vp = ReferralContestVirtualParticipant(
+        contest_id=contest_id,
+        display_name=display_name,
+        referral_count=referral_count,
+        total_amount_kopeks=total_amount_kopeks,
+    )
+    db.add(vp)
+    await db.commit()
+    await db.refresh(vp)
+    return vp
+
+
+async def list_virtual_participants(
+    db: AsyncSession,
+    contest_id: int,
+) -> Sequence[ReferralContestVirtualParticipant]:
+    result = await db.execute(
+        select(ReferralContestVirtualParticipant)
+        .where(ReferralContestVirtualParticipant.contest_id == contest_id)
+        .order_by(ReferralContestVirtualParticipant.referral_count.desc())
+    )
+    return result.scalars().all()
+
+
+async def delete_virtual_participant(
+    db: AsyncSession,
+    participant_id: int,
+) -> bool:
+    result = await db.execute(
+        select(ReferralContestVirtualParticipant).where(ReferralContestVirtualParticipant.id == participant_id)
+    )
+    vp = result.scalar_one_or_none()
+    if not vp:
+        return False
+    await db.delete(vp)
+    await db.commit()
+    return True
+
+
+async def update_virtual_participant_count(
+    db: AsyncSession,
+    participant_id: int,
+    referral_count: int,
+) -> ReferralContestVirtualParticipant | None:
+    result = await db.execute(
+        select(ReferralContestVirtualParticipant).where(ReferralContestVirtualParticipant.id == participant_id)
+    )
+    vp = result.scalar_one_or_none()
+    if not vp:
+        return None
+    vp.referral_count = referral_count
+    await db.commit()
+    await db.refresh(vp)
+    return vp
+
+
+async def get_contest_leaderboard_with_virtual(
+    db: AsyncSession,
+    contest_id: int,
+    *,
+    limit: int | None = None,
+) -> list[tuple[str, int, int, bool]]:
+    """Лидерборд с виртуальными участниками.
+
+    Возвращает список кортежей (display_name, referral_count, total_amount, is_virtual).
+    """
+    real = await get_contest_leaderboard(db, contest_id)
+    virtual = await list_virtual_participants(db, contest_id)
+
+    merged: list[tuple[str, int, int, bool]] = []
+    for user, score, amount in real:
+        merged.append((user.full_name, score, amount, False))
+    for vp in virtual:
+        merged.append((vp.display_name, vp.referral_count, vp.total_amount_kopeks, True))
+
+    merged.sort(key=lambda x: (-x[1], -x[2]))
+
+    if limit:
+        merged = merged[:limit]
+
+    return merged
