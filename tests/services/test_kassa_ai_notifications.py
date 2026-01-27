@@ -14,8 +14,8 @@ def test_notification_message_bright_prompt():
 
     # Эмулируем код из kassa_ai.py
     SHOW_ACTIVATION_PROMPT_AFTER_TOPUP = True
-    display_name = "Kassa AI"
-    amount_formatted = "10₽"
+    display_name = 'Kassa AI'
+    amount_formatted = '10₽'
 
     if SHOW_ACTIVATION_PROMPT_AFTER_TOPUP:
         message = (
@@ -37,7 +37,7 @@ def test_notification_message_bright_prompt():
     assert '👇' in message
     assert display_name in message
     assert amount_formatted in message
-    print(f"\n✅ ЯРКОЕ сообщение сформировано правильно:\n{message}")
+    print(f'\n✅ ЯРКОЕ сообщение сформировано правильно:\n{message}')
 
 
 def test_notification_message_standard():
@@ -46,8 +46,8 @@ def test_notification_message_standard():
     """
     # Эмулируем код из kassa_ai.py
     SHOW_ACTIVATION_PROMPT_AFTER_TOPUP = False
-    display_name = "Kassa AI"
-    amount_formatted = "10₽"
+    display_name = 'Kassa AI'
+    amount_formatted = '10₽'
 
     if SHOW_ACTIVATION_PROMPT_AFTER_TOPUP:
         message = ''
@@ -69,7 +69,7 @@ def test_notification_message_standard():
     assert 'Платеж успешно завершен' in message
     assert display_name in message
     assert amount_formatted in message
-    print(f"\n✅ Обычное сообщение сформировано правильно:\n{message}")
+    print(f'\n✅ Обычное сообщение сформировано правильно:\n{message}')
 
 
 def test_telegram_id_saved_before_commit():
@@ -92,7 +92,7 @@ def test_telegram_id_saved_before_commit():
     # Проверяем что локальные переменные сохранились
     assert user_telegram_id == 123456789
     assert user_language == 'ru'
-    print(f"\n✅ telegram_id сохранен в локальную переменную: {user_telegram_id}")
+    print(f'\n✅ telegram_id сохранен в локальную переменную: {user_telegram_id}')
 
 
 def test_send_message_called_with_correct_params():
@@ -103,7 +103,7 @@ def test_send_message_called_with_correct_params():
     bot.send_message = MagicMock()
 
     user_telegram_id = 123456789
-    message = "Тестовое сообщение"
+    message = 'Тестовое сообщение'
     keyboard = MagicMock()
 
     # Эмулируем вызов
@@ -121,7 +121,7 @@ def test_send_message_called_with_correct_params():
     assert call_args[1]['chat_id'] == 123456789
     assert call_args[1]['parse_mode'] == 'HTML'
     assert call_args[1]['text'] == message
-    print(f"\n✅ bot.send_message вызван с правильными параметрами")
+    print(f'\n✅ bot.send_message вызван с правильными параметрами')
 
 
 def test_no_send_when_no_telegram_id():
@@ -135,8 +135,8 @@ def test_no_send_when_no_telegram_id():
 
     # Эмулируем проверку
     if bot and user_telegram_id:
-        bot.send_message(chat_id=user_telegram_id, text="test")
+        bot.send_message(chat_id=user_telegram_id, text='test')
 
     # Проверка
     bot.send_message.assert_not_called()
-    print(f"\n✅ bot.send_message НЕ вызван когда telegram_id=None")
+    print(f'\n✅ bot.send_message НЕ вызван когда telegram_id=None')
