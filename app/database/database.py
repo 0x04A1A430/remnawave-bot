@@ -39,10 +39,10 @@ if IS_SQLITE:
 else:
     poolclass = AsyncAdaptedQueuePool
     pool_kwargs = {
-        'pool_size': 30,  # Увеличен с 20
-        'max_overflow': 50,  # Увеличен с 30
-        'pool_timeout': 60,  # Увеличен с 30 для обработки пиковых нагрузок
-        'pool_recycle': 1800,  # Уменьшен с 3600 до 30 мин для более быстрого recycling
+        'pool_size': 20,  # Уменьшен с 30, чтобы не превышать max_connections PostgreSQL
+        'max_overflow': 20,  # Уменьшен с 50, макс 40 соединений вместо 80
+        'pool_timeout': 30,  # Уменьшен с 60, быстрее отдавать 503 при перегрузке
+        'pool_recycle': 1800,  # 30 мин для более быстрого recycling
         'pool_pre_ping': True,
         # Агрессивная очистка мертвых соединений
         'pool_reset_on_return': 'rollback',
@@ -60,8 +60,8 @@ _pg_connect_args = {
         'statement_timeout': '60000',  # 60 секунд
         'idle_in_transaction_session_timeout': '300000',  # 5 минут
     },
-    'command_timeout': 60,
-    'timeout': 60,  # Увеличен с 30 до 60 сек для обработки пиковых нагрузок
+    'command_timeout': 30,  # Уменьшен с 60, быстрее обнаруживать зависшие запросы
+    'timeout': 10,  # Уменьшен с 60, быстрый провал при недоступности PostgreSQL
 }
 
 engine = create_async_engine(
