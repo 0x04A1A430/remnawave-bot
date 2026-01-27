@@ -849,7 +849,7 @@ async def get_recent_payments(
         user_ids = list({t.user_id for t in transactions})
         if user_ids:
             users_query = await db.execute(
-                select(User.id, User.telegram_id, User.username, User.first_name, User.last_name).where(
+                select(User.id, User.telegram_id, User.username, User.first_name, User.last_name, User.email).where(
                     User.id.in_(user_ids)
                 )
             )
