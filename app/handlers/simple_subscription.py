@@ -76,12 +76,18 @@ async def start_simple_subscription_purchase(
         # Используем максимум из текущего и дефолтного
         device_limit = max(device_limit, current_device_limit)
 
+    # Проверяем, включён ли модем у текущей подписки
+    modem_enabled = False
+    if current_subscription:
+        modem_enabled = getattr(current_subscription, 'modem_enabled', False)
+
     # Подготовим параметры простой подписки
     subscription_params = {
         'period_days': settings.SIMPLE_SUBSCRIPTION_PERIOD_DAYS,
         'device_limit': device_limit,
         'traffic_limit_gb': settings.SIMPLE_SUBSCRIPTION_TRAFFIC_GB,
         'squad_uuid': settings.SIMPLE_SUBSCRIPTION_SQUAD_UUID,
+        'modem_enabled': modem_enabled,
     }
 
     # Сохраняем параметры в состояние
@@ -107,12 +113,13 @@ async def start_simple_subscription_purchase(
     user_balance_kopeks = getattr(db_user, 'balance_kopeks', 0)
 
     logger.warning(
-        'SIMPLE_SUBSCRIPTION_DEBUG_START | user=%s | period=%s | base=%s | traffic=%s | devices=%s | servers=%s | discount=%s | total=%s | squads=%s',
+        'SIMPLE_SUBSCRIPTION_DEBUG_START | user=%s | period=%s | base=%s | traffic=%s | devices=%s | modem=%s | servers=%s | discount=%s | total=%s | squads=%s',
         db_user.id,
         period_days,
         price_breakdown.get('base_price', 0),
         price_breakdown.get('traffic_price', 0),
         price_breakdown.get('devices_price', 0),
+        price_breakdown.get('modem_price', 0),
         price_breakdown.get('servers_price', 0),
         price_breakdown.get('total_discount', 0),
         price_kopeks,
