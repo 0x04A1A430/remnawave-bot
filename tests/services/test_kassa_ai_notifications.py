@@ -2,15 +2,13 @@
 Упрощенные тесты для проверки логики уведомлений Kassa AI.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
-import pytest
+from unittest.mock import MagicMock
 
 
 def test_notification_message_bright_prompt():
     """
     Тест: проверяем что формируется ЯРКОЕ сообщение с SHOW_ACTIVATION_PROMPT_AFTER_TOPUP=true.
     """
-    from app.config import settings
 
     # Эмулируем код из kassa_ai.py
     SHOW_ACTIVATION_PROMPT_AFTER_TOPUP = True
@@ -121,7 +119,7 @@ def test_send_message_called_with_correct_params():
     assert call_args[1]['chat_id'] == 123456789
     assert call_args[1]['parse_mode'] == 'HTML'
     assert call_args[1]['text'] == message
-    print(f'\n✅ bot.send_message вызван с правильными параметрами')
+    print('\n✅ bot.send_message вызван с правильными параметрами')
 
 
 def test_no_send_when_no_telegram_id():
@@ -139,4 +137,4 @@ def test_no_send_when_no_telegram_id():
 
     # Проверка
     bot.send_message.assert_not_called()
-    print(f'\n✅ bot.send_message НЕ вызван когда telegram_id=None')
+    print('\n✅ bot.send_message НЕ вызван когда telegram_id=None')
