@@ -243,18 +243,19 @@ async def _prepare_auto_extend_context(
                 tariff_id,
                 price_kopeks,
             )
-        else:
-            # Добавляем стоимость докупленных устройств при продлении того же тарифа
-            if subscription.tariff_id == tariff_id:
-                from app.database.crud.tariff import get_tariff_by_id as _get_tariff
-                _tariff = await _get_tariff(db, tariff_id)
-                if _tariff:
-                    extra_devices = max(0, (subscription.device_limit or 0) - (_tariff.device_limit or 0))
-                    if extra_devices > 0:
-                        from app.utils.pricing_utils import calculate_months_from_days
-                        device_price_per_month = _tariff.device_price_kopeks or settings.PRICE_PER_DEVICE
-                        months = calculate_months_from_days(period_days)
-                        price_kopeks += extra_devices * device_price_per_month * months
+        # Добавляем стоимость докупленных устройств при продлении того же тарифа
+        elif subscription.tariff_id == tariff_id:
+            from app.database.crud.tariff import get_tariff_by_id as _get_tariff
+
+            _tariff = await _get_tariff(db, tariff_id)
+            if _tariff:
+                extra_devices = max(0, (subscription.device_limit or 0) - (_tariff.device_limit or 0))
+                if extra_devices > 0:
+                    from app.utils.pricing_utils import calculate_months_from_days
+
+                    device_price_per_month = _tariff.device_price_kopeks or settings.PRICE_PER_DEVICE
+                    months = calculate_months_from_days(period_days)
+                    price_kopeks += extra_devices * device_price_per_month * months
     else:
         price_kopeks = _safe_int(
             cart_data.get('total_price') or cart_data.get('price') or cart_data.get('final_price'),
@@ -623,6 +624,7 @@ async def _auto_purchase_tariff(
         extra_devices = max(0, (existing_subscription.device_limit or 0) - (tariff.device_limit or 0))
         if extra_devices > 0:
             from app.utils.pricing_utils import calculate_months_from_days
+
             device_price_per_month = tariff.device_price_kopeks or settings.PRICE_PER_DEVICE
             months = calculate_months_from_days(period_days)
             extra_devices_cost = extra_devices * device_price_per_month * months

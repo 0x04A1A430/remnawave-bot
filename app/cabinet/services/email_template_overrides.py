@@ -121,7 +121,7 @@ async def save_template_override(
     )
     row = existing.fetchone()
 
-    now = datetime.utcnow().isoformat()
+    now = datetime.utcnow()
 
     if row:
         # Update
@@ -166,6 +166,43 @@ async def save_template_override(
         'body_html': body_html,
         'is_active': True,
     }
+
+
+async def get_rendered_override(
+    notification_type: str,
+    language: str,
+    context: dict[str, Any] | None = None,
+    db: AsyncSession | None = None,
+) -> tuple[str, str] | None:
+    """
+    Get a custom template override rendered with the base email template.
+
+    Returns:
+        Tuple of (subject, body_html) if override exists, None otherwise.
+    """
+    override = await get_template_override(notification_type, language, db)
+    if not override:
+        return None
+
+    from .email_templates import EmailNotificationTemplates
+
+    templates = EmailNotificationTemplates()
+    body_html = override['body_html']
+
+    # Simple variable substitution for context vars like {username}, {verification_url}, etc.
+    if context:
+        for key, value in context.items():
+            body_html = body_html.replace(f'{{{key}}}', str(value))
+
+    rendered = templates._get_base_template(body_html, language)
+    subject = override['subject']
+
+    # Also substitute in subject
+    if context:
+        for key, value in context.items():
+            subject = subject.replace(f'{{{key}}}', str(value))
+
+    return (subject, rendered)
 
 
 async def delete_template_override(

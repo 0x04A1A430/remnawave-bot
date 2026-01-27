@@ -288,6 +288,7 @@ async def get_renewal_options(
         # Добавляем стоимость докупленных устройств за период продления
         if extra_devices > 0 and tariff_device_price > 0:
             from app.utils.pricing_utils import calculate_months_from_days
+
             months = calculate_months_from_days(period)
             price_kopeks += extra_devices * tariff_device_price * months
 
@@ -353,6 +354,7 @@ async def renew_subscription(
         extra_devices = max(0, (user.subscription.device_limit or 0) - (tariff.device_limit or 0))
         if extra_devices > 0:
             from app.utils.pricing_utils import calculate_months_from_days
+
             device_price = tariff.device_price_kopeks or settings.PRICE_PER_DEVICE
             months = calculate_months_from_days(request.period_days)
             price_kopeks += extra_devices * device_price * months
@@ -387,7 +389,6 @@ async def renew_subscription(
         tariff_id = user.subscription.tariff_id
         tariff_name = None
         tariff_traffic_limit_gb = None
-        tariff_device_limit = None
         tariff_allowed_squads = None
 
         if tariff_id:
@@ -395,7 +396,6 @@ async def renew_subscription(
             if tariff:
                 tariff_name = tariff.name
                 tariff_traffic_limit_gb = tariff.traffic_limit_gb
-                tariff_device_limit = tariff.device_limit
                 tariff_allowed_squads = tariff.allowed_squads or []
 
         # Save cart for auto-purchase after balance top-up
@@ -1493,6 +1493,7 @@ async def purchase_tariff(
                 effective_device_limit = existing_subscription.device_limit
                 if not is_daily_tariff:
                     from app.utils.pricing_utils import calculate_months_from_days
+
                     device_price_per_month = tariff.device_price_kopeks or settings.PRICE_PER_DEVICE
                     months = calculate_months_from_days(period_days)
                     extra_devices_cost = extra_devices * device_price_per_month * months

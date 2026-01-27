@@ -617,9 +617,7 @@ async def debug_contest_transactions(
 
     # Подсчёт общих сумм ПО ТИПАМ (исключаем бонусы без payment_method)
     deposit_in_period = sum(
-        tx.amount_kopeks
-        for tx in txs_in
-        if tx.type == TransactionType.DEPOSIT.value and tx.payment_method is not None
+        tx.amount_kopeks for tx in txs_in if tx.type == TransactionType.DEPOSIT.value and tx.payment_method is not None
     )
     subscription_in_period = sum(
         tx.amount_kopeks for tx in txs_in if tx.type == TransactionType.SUBSCRIPTION_PAYMENT.value

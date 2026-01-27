@@ -537,8 +537,12 @@ class ReferralContestService:
         for contest in contests:
             try:
                 # Проверяем что реферал зарегистрировался В ПЕРИОД конкурса
-                user_created_at = user.created_at if user.created_at.tzinfo is None else user.created_at.replace(tzinfo=None)
-                contest_start = contest.start_at if contest.start_at.tzinfo is None else contest.start_at.replace(tzinfo=None)
+                user_created_at = (
+                    user.created_at if user.created_at.tzinfo is None else user.created_at.replace(tzinfo=None)
+                )
+                contest_start = (
+                    contest.start_at if contest.start_at.tzinfo is None else contest.start_at.replace(tzinfo=None)
+                )
                 contest_end = contest.end_at if contest.end_at.tzinfo is None else contest.end_at.replace(tzinfo=None)
 
                 if user_created_at < contest_start or user_created_at > contest_end:
@@ -594,8 +598,12 @@ class ReferralContestService:
         for contest in contests:
             try:
                 # Проверяем что реферал зарегистрировался В ПЕРИОД конкурса
-                user_created_at = user.created_at if user.created_at.tzinfo is None else user.created_at.replace(tzinfo=None)
-                contest_start = contest.start_at if contest.start_at.tzinfo is None else contest.start_at.replace(tzinfo=None)
+                user_created_at = (
+                    user.created_at if user.created_at.tzinfo is None else user.created_at.replace(tzinfo=None)
+                )
+                contest_start = (
+                    contest.start_at if contest.start_at.tzinfo is None else contest.start_at.replace(tzinfo=None)
+                )
                 contest_end = contest.end_at if contest.end_at.tzinfo is None else contest.end_at.replace(tzinfo=None)
 
                 if user_created_at < contest_start or user_created_at > contest_end:
