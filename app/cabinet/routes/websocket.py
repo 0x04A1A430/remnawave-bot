@@ -141,13 +141,19 @@ async def verify_cabinet_ws_token(token: str) -> tuple[int | None, bool]:
     except (TypeError, ValueError):
         return None, False
 
-    async with AsyncSessionLocal() as db:
-        user = await get_user_by_id(db, user_id)
-        if not user or user.status != 'active':
-            return None, False
+    try:
+        async with AsyncSessionLocal() as db:
+            user = await get_user_by_id(db, user_id)
+            if not user or user.status != 'active':
+                return None, False
 
-        is_admin = settings.is_admin(telegram_id=user.telegram_id, email=user.email if user.email_verified else None)
-        return user_id, is_admin
+            is_admin = settings.is_admin(
+                telegram_id=user.telegram_id, email=user.email if user.email_verified else None
+            )
+            return user_id, is_admin
+    except (TimeoutError, OSError, ConnectionRefusedError) as e:
+        logger.error('Database connection error in WS token verification: %s', str(e)[:200])
+        return None, False
 
 
 @router.websocket('/ws')
