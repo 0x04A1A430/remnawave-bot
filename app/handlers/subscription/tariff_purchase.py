@@ -836,13 +836,18 @@ async def handle_custom_confirm(
 
         if existing_subscription:
             # Продлеваем существующую подписку и обновляем параметры тарифа
+            # Сохраняем докупленные устройства при продлении того же тарифа
+            if existing_subscription.tariff_id == tariff.id:
+                effective_device_limit = max(tariff.device_limit or 0, existing_subscription.device_limit or 0)
+            else:
+                effective_device_limit = tariff.device_limit
             subscription = await extend_subscription(
                 db,
                 existing_subscription,
                 days=custom_days,
                 tariff_id=tariff.id,
                 traffic_limit_gb=traffic_limit,
-                device_limit=tariff.device_limit,
+                device_limit=effective_device_limit,
                 connected_squads=squads,
             )
         else:
@@ -1138,13 +1143,18 @@ async def confirm_tariff_purchase(
 
         if existing_subscription:
             # Продлеваем существующую подписку и обновляем параметры тарифа
+            # Сохраняем докупленные устройства при продлении того же тарифа
+            if existing_subscription.tariff_id == tariff.id:
+                effective_device_limit = max(tariff.device_limit or 0, existing_subscription.device_limit or 0)
+            else:
+                effective_device_limit = tariff.device_limit
             subscription = await extend_subscription(
                 db,
                 existing_subscription,
                 days=period,
                 tariff_id=tariff.id,
                 traffic_limit_gb=tariff.traffic_limit_gb,
-                device_limit=tariff.device_limit,
+                device_limit=effective_device_limit,
                 connected_squads=squads,
             )
         else:
@@ -1292,9 +1302,14 @@ async def confirm_daily_tariff_purchase(
 
         if existing_subscription:
             # Обновляем существующую подписку на суточный тариф
+            # Сохраняем докупленные устройства при продлении того же тарифа
+            if existing_subscription.tariff_id == tariff.id:
+                effective_device_limit = max(tariff.device_limit or 0, existing_subscription.device_limit or 0)
+            else:
+                effective_device_limit = tariff.device_limit
             existing_subscription.tariff_id = tariff.id
             existing_subscription.traffic_limit_gb = tariff.traffic_limit_gb
-            existing_subscription.device_limit = tariff.device_limit
+            existing_subscription.device_limit = effective_device_limit
             existing_subscription.connected_squads = squads
             existing_subscription.status = 'active'
             existing_subscription.is_trial = False  # Сбрасываем триальный статус
@@ -2200,13 +2215,18 @@ async def confirm_tariff_switch(
         days_for_new_tariff = period
 
         # Обновляем подписку с новыми параметрами тарифа
+        # Сохраняем докупленные устройства при продлении того же тарифа
+        if subscription.tariff_id == tariff.id:
+            effective_device_limit = max(tariff.device_limit or 0, subscription.device_limit or 0)
+        else:
+            effective_device_limit = tariff.device_limit
         subscription = await extend_subscription(
             db,
             subscription,
             days=days_for_new_tariff,  # Даем ровно оплаченный период
             tariff_id=tariff.id,
             traffic_limit_gb=tariff.traffic_limit_gb,
-            device_limit=tariff.device_limit,
+            device_limit=effective_device_limit,
             connected_squads=squads,
         )
 
@@ -2347,9 +2367,14 @@ async def confirm_daily_tariff_switch(
             squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
 
         # Обновляем подписку на суточный тариф
+        # Сохраняем докупленные устройства при продлении того же тарифа
+        if subscription.tariff_id == tariff.id:
+            effective_device_limit = max(tariff.device_limit or 0, subscription.device_limit or 0)
+        else:
+            effective_device_limit = tariff.device_limit
         subscription.tariff_id = tariff.id
         subscription.traffic_limit_gb = tariff.traffic_limit_gb
-        subscription.device_limit = tariff.device_limit
+        subscription.device_limit = effective_device_limit
         subscription.connected_squads = squads
         subscription.status = 'active'
         subscription.is_trial = False  # Сбрасываем триальный статус
@@ -2890,9 +2915,14 @@ async def confirm_instant_switch(
         is_new_daily = getattr(new_tariff, 'is_daily', False)
 
         # Обновляем подписку с новыми параметрами тарифа
+        # Сохраняем докупленные устройства при продлении того же тарифа
+        if subscription.tariff_id == new_tariff.id:
+            effective_device_limit = max(new_tariff.device_limit or 0, subscription.device_limit or 0)
+        else:
+            effective_device_limit = new_tariff.device_limit
         subscription.tariff_id = new_tariff.id
         subscription.traffic_limit_gb = new_tariff.traffic_limit_gb
-        subscription.device_limit = new_tariff.device_limit
+        subscription.device_limit = effective_device_limit
         subscription.connected_squads = squads
 
         # Сбрасываем докупленный трафик при смене тарифа

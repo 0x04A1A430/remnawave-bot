@@ -243,6 +243,19 @@ async def _prepare_auto_extend_context(
                 tariff_id,
                 price_kopeks,
             )
+        # Добавляем стоимость докупленных устройств при продлении того же тарифа
+        elif subscription.tariff_id == tariff_id:
+            from app.database.crud.tariff import get_tariff_by_id as _get_tariff
+
+            _tariff = await _get_tariff(db, tariff_id)
+            if _tariff:
+                extra_devices = max(0, (subscription.device_limit or 0) - (_tariff.device_limit or 0))
+                if extra_devices > 0:
+                    from app.utils.pricing_utils import calculate_months_from_days
+
+                    device_price_per_month = _tariff.device_price_kopeks or settings.PRICE_PER_DEVICE
+                    months = calculate_months_from_days(period_days)
+                    price_kopeks += extra_devices * device_price_per_month * months
     else:
         price_kopeks = _safe_int(
             cart_data.get('total_price') or cart_data.get('price') or cart_data.get('final_price'),
@@ -603,6 +616,20 @@ async def _auto_purchase_tariff(
 
     final_price = _apply_promo_discount_for_tariff(base_price, discount_percent)
 
+    # Проверяем есть ли уже подписка (нужно до расчёта цены для учёта доп. устройств)
+    existing_subscription = await get_subscription_by_user_id(db, user.id)
+
+    # Добавляем стоимость докупленных устройств при продлении того же тарифа
+    if existing_subscription and existing_subscription.tariff_id == tariff_id:
+        extra_devices = max(0, (existing_subscription.device_limit or 0) - (tariff.device_limit or 0))
+        if extra_devices > 0:
+            from app.utils.pricing_utils import calculate_months_from_days
+
+            device_price_per_month = tariff.device_price_kopeks or settings.PRICE_PER_DEVICE
+            months = calculate_months_from_days(period_days)
+            extra_devices_cost = extra_devices * device_price_per_month * months
+            final_price += extra_devices_cost
+
     if user.balance_kopeks < final_price:
         logger.info(
             '🔁 Автопокупка тарифа: у пользователя %s недостаточно средств (%s < %s)',
@@ -637,19 +664,21 @@ async def _auto_purchase_tariff(
         all_servers, _ = await get_all_server_squads(db, available_only=True)
         squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
 
-    # Проверяем есть ли уже подписка
-    existing_subscription = await get_subscription_by_user_id(db, user.id)
-
     try:
         if existing_subscription:
             # Продлеваем существующую подписку
+            # Сохраняем докупленные устройства при продлении того же тарифа
+            if existing_subscription.tariff_id == tariff.id:
+                effective_device_limit = max(tariff.device_limit or 0, existing_subscription.device_limit or 0)
+            else:
+                effective_device_limit = tariff.device_limit
             subscription = await extend_subscription(
                 db,
                 existing_subscription,
                 days=period_days,
                 tariff_id=tariff.id,
                 traffic_limit_gb=tariff.traffic_limit_gb,
-                device_limit=tariff.device_limit,
+                device_limit=effective_device_limit,
                 connected_squads=squads,
             )
             was_trial_conversion = existing_subscription.is_trial

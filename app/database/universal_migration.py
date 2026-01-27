@@ -6198,6 +6198,70 @@ async def add_user_email_auth_columns() -> bool:
         return False
 
 
+async def create_email_templates_table() -> bool:
+    """Create email_templates table for storing custom email template overrides."""
+    table_exists = await check_table_exists('email_templates')
+    if table_exists:
+        logger.info('ℹ️ Таблица email_templates уже существует')
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'sqlite':
+                create_sql = """
+                CREATE TABLE email_templates (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    notification_type VARCHAR(50) NOT NULL,
+                    language VARCHAR(10) NOT NULL,
+                    subject VARCHAR(500) NOT NULL,
+                    body_html TEXT NOT NULL,
+                    is_active BOOLEAN NOT NULL DEFAULT 1,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(notification_type, language)
+                )
+                """
+            elif db_type == 'postgresql':
+                create_sql = """
+                CREATE TABLE email_templates (
+                    id SERIAL PRIMARY KEY,
+                    notification_type VARCHAR(50) NOT NULL,
+                    language VARCHAR(10) NOT NULL,
+                    subject VARCHAR(500) NOT NULL,
+                    body_html TEXT NOT NULL,
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW(),
+                    UNIQUE(notification_type, language)
+                )
+                """
+            else:
+                create_sql = """
+                CREATE TABLE email_templates (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    notification_type VARCHAR(50) NOT NULL,
+                    language VARCHAR(10) NOT NULL,
+                    subject VARCHAR(500) NOT NULL,
+                    body_html TEXT NOT NULL,
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    UNIQUE KEY uq_email_templates_type_lang (notification_type, language)
+                ) ENGINE=InnoDB
+                """
+
+            await conn.execute(text(create_sql))
+            await conn.execute(text('CREATE INDEX idx_email_templates_type ON email_templates(notification_type)'))
+            logger.info('✅ Таблица email_templates создана')
+            return True
+
+    except Exception as error:
+        logger.error(f'❌ Ошибка создания таблицы email_templates: {error}')
+        return False
+
+
 async def migrate_cloudpayments_transaction_id_to_bigint() -> bool:
     """
     Миграция колонки transaction_id_cp в cloudpayments_payments с INTEGER на BIGINT.
@@ -6907,6 +6971,13 @@ async def run_universal_migration():
             logger.info('✅ Таблицы колеса удачи готовы')
         else:
             logger.warning('⚠️ Проблемы с таблицами колеса удачи')
+
+        logger.info('=== СОЗДАНИЕ ТАБЛИЦЫ EMAIL_TEMPLATES ===')
+        email_templates_ready = await create_email_templates_table()
+        if email_templates_ready:
+            logger.info('✅ Таблица email_templates готова')
+        else:
+            logger.warning('⚠️ Проблемы с таблицей email_templates')
 
         logger.info('=== МИГРАЦИЯ CLOUDPAYMENTS TRANSACTION_ID НА BIGINT ===')
         cloudpayments_bigint_ready = await migrate_cloudpayments_transaction_id_to_bigint()

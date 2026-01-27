@@ -293,12 +293,21 @@ async def compute_simple_subscription_price(
     return total_price, breakdown
 
 
-def format_period_description(days: int, language: str = 'ru') -> str:
-    months = calculate_months_from_days(days)
+def _pluralize_days_ru(n: int) -> str:
+    """Склонение слова 'день' по числу: 1 день, 2 дня, 5 дней."""
+    mod100 = n % 100
+    mod10 = n % 10
+    if 11 <= mod100 <= 19:
+        return 'дней'
+    if mod10 == 1:
+        return 'день'
+    if 2 <= mod10 <= 4:
+        return 'дня'
+    return 'дней'
 
+
+def format_period_description(days: int, language: str = 'ru') -> str:
     if language == 'ru':
-        if days == 14:
-            return '14 дней'
         if days == 30:
             return '1 месяц'
         if days == 60:
@@ -309,12 +318,20 @@ def format_period_description(days: int, language: str = 'ru') -> str:
             return '6 месяцев'
         if days == 360:
             return '12 месяцев'
-        month_word = 'месяц' if months == 1 else ('месяца' if 2 <= months <= 4 else 'месяцев')
-        return f'{days} дней ({months} {month_word})'
-    if days == 14:
-        return '14 days'
-    month_word = 'month' if months == 1 else 'months'
-    return f'{days} days ({months} {month_word})'
+        return f'{days} {_pluralize_days_ru(days)}'
+
+    if days == 30:
+        return '1 month'
+    if days == 60:
+        return '2 months'
+    if days == 90:
+        return '3 months'
+    if days == 180:
+        return '6 months'
+    if days == 360:
+        return '12 months'
+    day_word = 'day' if days == 1 else 'days'
+    return f'{days} {day_word}'
 
 
 def validate_pricing_calculation(base_price: int, monthly_additions: int, months: int, total_calculated: int) -> bool:

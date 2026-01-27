@@ -1478,9 +1478,35 @@ async def get_target_users_count(db: AsyncSession, target: str) -> int:
         result = await db.execute(query)
         return result.scalar() or 0
 
-    # Для остальных фильтров (custom_ и неизвестные) - fallback на старый метод
-    users = await get_target_users(db, target)
-    return len(users)
+    # Custom filters — быстрый COUNT вместо загрузки всех пользователей
+    if target.startswith('custom_'):
+        now = datetime.utcnow()
+        today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        criteria = target[len('custom_') :]
+
+        if criteria == 'today':
+            query = select(sql_func.count(User.id)).where(base_filter, User.created_at >= today)
+        elif criteria == 'week':
+            query = select(sql_func.count(User.id)).where(base_filter, User.created_at >= now - timedelta(days=7))
+        elif criteria == 'month':
+            query = select(sql_func.count(User.id)).where(base_filter, User.created_at >= now - timedelta(days=30))
+        elif criteria == 'active_today':
+            query = select(sql_func.count(User.id)).where(base_filter, User.last_activity >= today)
+        elif criteria == 'inactive_week':
+            query = select(sql_func.count(User.id)).where(base_filter, User.last_activity < now - timedelta(days=7))
+        elif criteria == 'inactive_month':
+            query = select(sql_func.count(User.id)).where(base_filter, User.last_activity < now - timedelta(days=30))
+        elif criteria == 'referrals':
+            query = select(sql_func.count(User.id)).where(base_filter, User.referred_by_id.isnot(None))
+        elif criteria == 'direct':
+            query = select(sql_func.count(User.id)).where(base_filter, User.referred_by_id.is_(None))
+        else:
+            return 0
+
+        result = await db.execute(query)
+        return result.scalar() or 0
+
+    return 0
 
 
 async def get_target_users(db: AsyncSession, target: str) -> list:

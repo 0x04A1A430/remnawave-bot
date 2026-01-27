@@ -17,14 +17,16 @@ async def notification_sent(
     days_before: int | None = None,
 ) -> bool:
     result = await db.execute(
-        select(SentNotification).where(
+        select(SentNotification)
+        .where(
             SentNotification.user_id == user_id,
             SentNotification.subscription_id == subscription_id,
             SentNotification.notification_type == notification_type,
             SentNotification.days_before == days_before,
         )
+        .limit(1)
     )
-    return result.scalar_one_or_none() is not None
+    return result.scalars().first() is not None
 
 
 async def record_notification(
@@ -34,6 +36,9 @@ async def record_notification(
     notification_type: str,
     days_before: int | None = None,
 ) -> None:
+    already_exists = await notification_sent(db, user_id, subscription_id, notification_type, days_before)
+    if already_exists:
+        return
     notification = SentNotification(
         user_id=user_id,
         subscription_id=subscription_id,

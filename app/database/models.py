@@ -63,6 +63,25 @@ tariff_promo_groups = Table(
 )
 
 
+# M2M таблица для связи платёжных методов с промогруппами (условия показа)
+payment_method_promo_groups = Table(
+    'payment_method_promo_groups',
+    Base.metadata,
+    Column(
+        'payment_method_config_id',
+        Integer,
+        ForeignKey('payment_method_configs.id', ondelete='CASCADE'),
+        primary_key=True,
+    ),
+    Column(
+        'promo_group_id',
+        Integer,
+        ForeignKey('promo_groups.id', ondelete='CASCADE'),
+        primary_key=True,
+    ),
+)
+
+
 class UserStatus(Enum):
     ACTIVE = 'active'
     BLOCKED = 'blocked'
@@ -2625,3 +2644,58 @@ class TicketNotification(Base):
 
     def __repr__(self) -> str:
         return f'<TicketNotification id={self.id} type={self.notification_type} for_admin={self.is_for_admin}>'
+
+
+# ==================== PAYMENT METHOD CONFIG ====================
+
+
+class PaymentMethodConfig(Base):
+    """Конфигурация отображения платёжных методов в кабинете."""
+
+    __tablename__ = 'payment_method_configs'
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Уникальный идентификатор метода (совпадает с PaymentMethod enum: 'yookassa', 'cryptobot' и т.д.)
+    method_id = Column(String(50), unique=True, nullable=False, index=True)
+
+    # Порядок отображения (меньше = выше)
+    sort_order = Column(Integer, nullable=False, default=0, index=True)
+
+    # Включён/выключен (дополнительно к env-переменным)
+    is_enabled = Column(Boolean, nullable=False, default=True)
+
+    # Переопределение отображаемого имени (null = использовать из env)
+    display_name = Column(String(255), nullable=True)
+
+    # Под-опции включения/выключения (JSON): {"card": true, "sbp": false}
+    # Для методов с вариантами: yookassa, pal24, platega
+    sub_options = Column(JSON, nullable=True, default=None)
+
+    # Переопределение мин/макс сумм (null = из env)
+    min_amount_kopeks = Column(Integer, nullable=True)
+    max_amount_kopeks = Column(Integer, nullable=True)
+
+    # --- Условия отображения ---
+
+    # Фильтр по типу пользователя: 'all', 'telegram', 'email'
+    user_type_filter = Column(String(20), nullable=False, default='all')
+
+    # Фильтр по первому пополнению: 'any', 'yes' (делал), 'no' (не делал)
+    first_topup_filter = Column(String(10), nullable=False, default='any')
+
+    # Режим фильтра промо-групп: 'all' (все видят), 'selected' (только выбранные)
+    promo_group_filter_mode = Column(String(20), nullable=False, default='all')
+
+    # M2M связь с промогруппами
+    allowed_promo_groups = relationship(
+        'PromoGroup',
+        secondary=payment_method_promo_groups,
+        lazy='selectin',
+    )
+
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    def __repr__(self) -> str:
+        return f"<PaymentMethodConfig method_id='{self.method_id}' order={self.sort_order} enabled={self.is_enabled}>"
