@@ -62,7 +62,9 @@ async def get_template_override(
 async def get_all_overrides(db: AsyncSession) -> list[dict[str, Any]]:
     """Get all custom template overrides from the database."""
     result = await db.execute(
-        text('SELECT id, notification_type, language, subject, body_html, is_active, created_at, updated_at FROM email_templates ORDER BY notification_type, language')
+        text(
+            'SELECT id, notification_type, language, subject, body_html, is_active, created_at, updated_at FROM email_templates ORDER BY notification_type, language'
+        )
     )
     rows = result.fetchall()
     return [
@@ -114,9 +116,7 @@ async def save_template_override(
     """Save or update a custom email template in the database."""
     # Check if exists
     existing = await db.execute(
-        text(
-            'SELECT id FROM email_templates WHERE notification_type = :ntype AND language = :lang'
-        ),
+        text('SELECT id FROM email_templates WHERE notification_type = :ntype AND language = :lang'),
         {'ntype': notification_type, 'lang': language},
     )
     row = existing.fetchone()
@@ -212,9 +212,7 @@ async def delete_template_override(
 ) -> bool:
     """Delete a custom template override (revert to default)."""
     result = await db.execute(
-        text(
-            'DELETE FROM email_templates WHERE notification_type = :ntype AND language = :lang'
-        ),
+        text('DELETE FROM email_templates WHERE notification_type = :ntype AND language = :lang'),
         {'ntype': notification_type, 'lang': language},
     )
     await db.commit()
