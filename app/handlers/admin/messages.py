@@ -1482,7 +1482,7 @@ async def get_target_users_count(db: AsyncSession, target: str) -> int:
     if target.startswith('custom_'):
         now = datetime.utcnow()
         today = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        criteria = target[len('custom_'):]
+        criteria = target[len('custom_') :]
 
         if criteria == 'today':
             query = select(sql_func.count(User.id)).where(base_filter, User.created_at >= today)
