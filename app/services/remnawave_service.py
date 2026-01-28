@@ -265,13 +265,14 @@ class RemnaWaveService:
 
             parsed_date = datetime.fromisoformat(cleaned_date)
 
-            # Убираем tzinfo и интерпретируем время как локальное время панели
-            naive_date = parsed_date.replace(tzinfo=None)
-            localized = naive_date.replace(tzinfo=self._panel_timezone)
+            # Панель RemnaWave всегда отдаёт время в UTC
+            # Если есть tzinfo - конвертируем в UTC, иначе считаем что уже UTC
+            if parsed_date.tzinfo is not None:
+                utc_normalized = parsed_date.astimezone(self._utc_timezone).replace(tzinfo=None)
+            else:
+                utc_normalized = parsed_date
 
-            utc_normalized = localized.astimezone(self._utc_timezone).replace(tzinfo=None)
-
-            logger.debug(f'Успешно распарсена дата: {date_str} -> {utc_normalized} (нормализовано в UTC)')
+            logger.debug(f'Успешно распарсена дата: {date_str} -> {utc_normalized} (UTC)')
             return utc_normalized
 
         except Exception as e:
@@ -304,9 +305,8 @@ class RemnaWaveService:
             else:
                 result = normalized_expire
 
-        # Конвертируем из naive UTC в локальное время панели (naive)
-        utc_aware = result.replace(tzinfo=self._utc_timezone)
-        return utc_aware.astimezone(self._panel_timezone).replace(tzinfo=None)
+        # Панель RemnaWave ожидает время в UTC
+        return result
 
     def _safe_panel_expire_date(self, panel_user: dict[str, Any]) -> datetime:
         """Парсит дату окончания подписки пользователя панели для сравнения."""
