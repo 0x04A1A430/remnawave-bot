@@ -754,6 +754,7 @@ async def create_topup(
                 user_id=user.id,
                 amount_kopeks=request.amount_kopeks,
                 description=settings.get_balance_payment_description(request.amount_kopeks),
+                email=getattr(user, 'email', None),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
             )
 

@@ -1,7 +1,7 @@
 """Admin routes for managing users in cabinet."""
 
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import Integer, and_, func, or_, select
@@ -32,6 +32,7 @@ from app.database.models import (
     User,
     UserStatus,
 )
+from app.utils.timezone import panel_datetime_to_naive_utc
 
 from ..dependencies import get_cabinet_db, get_current_admin_user
 from ..schemas.users import (
@@ -1372,12 +1373,8 @@ async def get_user_sync_status(
                         bot_end_utc = (
                             bot_sub_end_date.replace(tzinfo=None) if bot_sub_end_date.tzinfo else bot_sub_end_date
                         )
-                        # Panel dates might be timezone-aware, convert to UTC first
-                        if panel_expire_at.tzinfo:
-                            panel_end_utc = panel_expire_at.astimezone(UTC).replace(tzinfo=None)
-                        else:
-                            # Panel might return naive datetime in MSK (UTC+3), try both interpretations
-                            panel_end_utc = panel_expire_at
+                        # Panel returns local time with misleading +00:00 offset
+                        panel_end_utc = panel_datetime_to_naive_utc(panel_expire_at)
 
                         diff_seconds = abs((bot_end_utc - panel_end_utc).total_seconds())
                         # Allow for timezone offset (3 hours = MSK) and small sync delays
@@ -1508,7 +1505,7 @@ async def sync_user_from_panel(
                 short_uuid=panel_user.short_uuid,
                 username=panel_user.username,
                 status=panel_user.status.value if panel_user.status else None,
-                expire_at=panel_user.expire_at,
+                expire_at=panel_datetime_to_naive_utc(panel_user.expire_at) if panel_user.expire_at else None,
                 traffic_limit_gb=panel_user.traffic_limit_bytes / (1024**3) if panel_user.traffic_limit_bytes else 0,
                 traffic_used_gb=panel_user.used_traffic_bytes / (1024**3) if panel_user.used_traffic_bytes else 0,
                 device_limit=panel_user.hwid_device_limit or 1,
@@ -1527,11 +1524,8 @@ async def sync_user_from_panel(
 
                 # Update end date (normalize timezone)
                 if panel_user.expire_at:
-                    # Convert panel expire_at to naive UTC for storage
-                    if panel_user.expire_at.tzinfo:
-                        panel_expire_utc = panel_user.expire_at.astimezone(UTC).replace(tzinfo=None)
-                    else:
-                        panel_expire_utc = panel_user.expire_at
+                    # Panel returns local time with misleading +00:00 offset
+                    panel_expire_utc = panel_datetime_to_naive_utc(panel_user.expire_at)
 
                     sub_end_naive = (
                         sub.end_date.replace(tzinfo=None) if sub.end_date and sub.end_date.tzinfo else sub.end_date
@@ -1602,11 +1596,8 @@ async def sync_user_from_panel(
                 panel_traffic_limit = (
                     int(panel_user.traffic_limit_bytes / (1024**3)) if panel_user.traffic_limit_bytes else 100
                 )
-                # Normalize panel expire date for calculation
-                if panel_user.expire_at.tzinfo:
-                    panel_expire_naive = panel_user.expire_at.astimezone(UTC).replace(tzinfo=None)
-                else:
-                    panel_expire_naive = panel_user.expire_at
+                # Panel returns local time with misleading +00:00 offset
+                panel_expire_naive = panel_datetime_to_naive_utc(panel_user.expire_at)
                 days_remaining = max(1, (panel_expire_naive - datetime.utcnow()).days)
 
                 new_sub = await create_paid_subscription(
