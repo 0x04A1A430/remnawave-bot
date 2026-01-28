@@ -236,6 +236,18 @@ class RemnaWaveService:
         """Возвращает текущее время в UTC без привязки к часовому поясу."""
         return datetime.now(self._utc_timezone).replace(tzinfo=None)
 
+    def _local_to_utc(self, local_dt: datetime) -> datetime:
+        """Конвертирует naive локальную дату (в таймзоне панели/бота) в naive UTC.
+
+        Используется для корректного сравнения дат из БД с датами из RemnaWave.
+        """
+        if local_dt.tzinfo is not None:
+            # Уже есть tzinfo - конвертируем напрямую
+            return local_dt.astimezone(self._utc_timezone).replace(tzinfo=None)
+        # Naive datetime - интерпретируем как локальное время панели
+        local_aware = local_dt.replace(tzinfo=self._panel_timezone)
+        return local_aware.astimezone(self._utc_timezone).replace(tzinfo=None)
+
     def _parse_remnawave_date(self, date_str: str) -> datetime:
         if not date_str:
             return self._now_utc() + timedelta(days=30)
@@ -1663,25 +1675,34 @@ class RemnaWaveService:
             expire_at_str = panel_user.get('expireAt', '')
 
             if expire_at_str:
+                # expire_at приходит в UTC (naive) из _parse_remnawave_date
                 expire_at = self._parse_remnawave_date(expire_at_str)
+
+                # Конвертируем локальную дату из БД в UTC для корректного сравнения
+                # subscription.end_date хранится в локальной таймзоне (MSK)
+                local_end_date_utc = self._local_to_utc(subscription.end_date)
 
                 # КРИТИЧНО: НЕ перезаписываем end_date если локальная дата ПОЗЖЕ
                 # Это защищает от ситуации когда подписка была продлена в боте,
                 # но RemnaWave ещё не получил обновление или вернул старую дату
-                time_diff = abs((subscription.end_date - expire_at).total_seconds())
+                time_diff = abs((local_end_date_utc - expire_at).total_seconds())
                 if time_diff > 60:
-                    if expire_at > subscription.end_date:
+                    if expire_at > local_end_date_utc:
                         # RemnaWave имеет более позднюю дату - обновляем
-                        subscription.end_date = expire_at
+                        # Конвертируем UTC обратно в локальное время для сохранения в БД
+                        new_end_date_local = expire_at.replace(tzinfo=self._utc_timezone).astimezone(
+                            self._panel_timezone
+                        ).replace(tzinfo=None)
                         logger.info(
                             f'✅ Sync: обновлена end_date для user {getattr(user, "telegram_id", "?")}: '
-                            f'{subscription.end_date} -> {expire_at} (разница: {time_diff:.0f}с)'
+                            f'{subscription.end_date} -> {new_end_date_local} (разница: {time_diff:.0f}с)'
                         )
+                        subscription.end_date = new_end_date_local
                     else:
-                        # Локальная дата позже - НЕ перезаписываем, логируем предупреждение
-                        logger.warning(
-                            f'⚠️ Sync: пропускаем обновление end_date для user {getattr(user, "telegram_id", "?")}: '
-                            f'локальная дата ({subscription.end_date}) позже чем в RemnaWave ({expire_at})'
+                        # Локальная дата позже - НЕ перезаписываем
+                        logger.debug(
+                            f'⏭️ Sync: end_date для user {getattr(user, "telegram_id", "?")} актуальна: '
+                            f'локальная ({subscription.end_date} / UTC: {local_end_date_utc}) >= RemnaWave ({expire_at} UTC)'
                         )
                 else:
                     logger.debug(
@@ -1690,18 +1711,21 @@ class RemnaWaveService:
                     )
 
             current_time = self._now_utc()
-            if panel_status == 'ACTIVE' and subscription.end_date > current_time:
+            # Конвертируем end_date в UTC для корректного сравнения с current_time
+            end_date_utc = self._local_to_utc(subscription.end_date)
+
+            if panel_status == 'ACTIVE' and end_date_utc > current_time:
                 new_status = SubscriptionStatus.ACTIVE.value
             elif panel_status == 'DISABLED':
                 new_status = SubscriptionStatus.DISABLED.value
-            elif subscription.end_date <= current_time:
+            elif end_date_utc <= current_time:
                 # КРИТИЧНО: НЕ деактивируем если текущий статус ACTIVE
                 # Это защищает от race condition когда sync использует старую end_date из памяти,
                 # а реальная end_date уже обновлена продлением
                 if subscription.status == SubscriptionStatus.ACTIVE.value:
                     logger.warning(
                         f'⚠️ Sync: пропускаем деактивацию подписки user {getattr(user, "telegram_id", "?")}: '
-                        f'статус ACTIVE, end_date в памяти ({subscription.end_date}) <= now. '
+                        f'статус ACTIVE, end_date ({subscription.end_date} / UTC: {end_date_utc}) <= now ({current_time}). '
                         f'Деактивация будет выполнена через middleware с буфером.'
                     )
                     new_status = subscription.status  # Сохраняем текущий статус
@@ -2498,13 +2522,15 @@ class RemnaWaveService:
                         issues_fixed = 0
 
                         current_time = self._now_utc()
+                        # Конвертируем end_date в UTC для корректного сравнения
+                        end_date_utc = self._local_to_utc(subscription.end_date)
                         # Добавляем буфер 5 минут для защиты от race condition при продлении
                         expiry_buffer = timedelta(minutes=5)
                         if (
-                            subscription.end_date + expiry_buffer <= current_time
+                            end_date_utc + expiry_buffer <= current_time
                             and subscription.status == SubscriptionStatus.ACTIVE.value
                         ):
-                            time_since_expiry = current_time - subscription.end_date
+                            time_since_expiry = current_time - end_date_utc
                             logger.warning(
                                 f'🔧 fix_data_issues: деактивируем подписку {subscription.id} '
                                 f'(user={user.telegram_id}), просрочена на {time_since_expiry}'
