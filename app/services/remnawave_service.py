@@ -1300,6 +1300,7 @@ class RemnaWaveService:
                         # Используем async запрос вместо доступа к relationship,
                         # чтобы избежать lazy-load в async контексте
                         from app.database.crud.subscription import get_subscription_by_user_id as _get_sub
+
                         existing_sub = await _get_sub(db, db_user.id)
                         if existing_sub:
                             await self._update_subscription_from_panel_data(db, db_user, panel_user)
@@ -1381,6 +1382,7 @@ class RemnaWaveService:
                             # Используем async запрос вместо доступа к relationship,
                             # чтобы избежать lazy-load (greenlet_spawn) в async контексте
                             from app.database.crud.subscription import get_subscription_by_user_id as _get_sub_email
+
                             existing_sub = await _get_sub_email(db, db_user.id)
                             if existing_sub:
                                 await self._update_subscription_from_panel_data(db, db_user, panel_user)
