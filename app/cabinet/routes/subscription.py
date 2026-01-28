@@ -48,7 +48,9 @@ from ..schemas.subscription import (
     RenewalOptionResponse,
     RenewalRequest,
     ServerInfo,
+    SubscriptionData,
     SubscriptionResponse,
+    SubscriptionStatusResponse,
     TariffPurchaseRequest,
     TrafficPackageResponse,
     TrafficPurchaseRequest,
@@ -66,7 +68,7 @@ def _subscription_to_response(
     servers: list[ServerInfo] | None = None,
     tariff_name: str | None = None,
     traffic_purchases: list[dict[str, Any]] | None = None,
-) -> SubscriptionResponse:
+) -> SubscriptionData:
     """Convert Subscription model to response."""
     now = datetime.utcnow()
 
@@ -171,7 +173,7 @@ def _subscription_to_response(
     )
 
 
-@router.get('', response_model=SubscriptionResponse)
+@router.get('', response_model=SubscriptionStatusResponse)
 async def get_subscription(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
@@ -184,10 +186,8 @@ async def get_subscription(
     fresh_user = await get_user_by_id(db, user.id)
 
     if not fresh_user or not fresh_user.subscription:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='No subscription found',
-        )
+        # Return 200 with has_subscription: false instead of 404
+        return SubscriptionStatusResponse(has_subscription=False, subscription=None)
 
     # Load tariff for daily subscription check and tariff name
     tariff_name = None
@@ -241,7 +241,8 @@ async def get_subscription(
             }
         )
 
-    return _subscription_to_response(fresh_user.subscription, servers, tariff_name, traffic_purchases_data)
+    subscription_data = _subscription_to_response(fresh_user.subscription, servers, tariff_name, traffic_purchases_data)
+    return SubscriptionStatusResponse(has_subscription=True, subscription=subscription_data)
 
 
 @router.get('/renewal-options', response_model=list[RenewalOptionResponse])
