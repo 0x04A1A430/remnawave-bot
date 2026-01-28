@@ -253,10 +253,8 @@ class RemnaWaveService:
 
             parsed_date = datetime.fromisoformat(cleaned_date)
 
-            if parsed_date.tzinfo is not None:
-                localized = parsed_date.astimezone(self._panel_timezone)
-            else:
-                localized = parsed_date.replace(tzinfo=self._panel_timezone)
+            naive_date = parsed_date.replace(tzinfo=None)
+            localized = naive_date.replace(tzinfo=self._panel_timezone)
 
             utc_normalized = localized.astimezone(self._utc_timezone).replace(tzinfo=None)
 
