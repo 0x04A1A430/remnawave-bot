@@ -253,6 +253,7 @@ class RemnaWaveService:
 
             parsed_date = datetime.fromisoformat(cleaned_date)
 
+            # Убираем tzinfo и интерпретируем время как локальное время панели
             naive_date = parsed_date.replace(tzinfo=None)
             localized = naive_date.replace(tzinfo=self._panel_timezone)
 
@@ -266,27 +267,34 @@ class RemnaWaveService:
             return self._now_utc() + timedelta(days=30)
 
     def _safe_expire_at_for_panel(self, expire_at: datetime | None) -> datetime:
-        """Гарантирует, что дата окончания не в прошлом для панели."""
+        """Гарантирует, что дата окончания не в прошлом для панели.
+
+        Принимает naive UTC datetime, возвращает naive datetime в таймзоне панели.
+        """
 
         now = self._now_utc()
         minimum_expire = now + timedelta(minutes=1)
 
         if not expire_at:
-            return minimum_expire
+            result = minimum_expire
+        else:
+            normalized_expire = expire_at
+            if normalized_expire.tzinfo is not None:
+                normalized_expire = normalized_expire.replace(tzinfo=None)
 
-        normalized_expire = expire_at
-        if normalized_expire.tzinfo is not None:
-            normalized_expire = normalized_expire.replace(tzinfo=None)
+            if normalized_expire < minimum_expire:
+                logger.debug(
+                    '⚙️ Коррекция даты истечения (%s) до минимально допустимой (%s) для панели',
+                    normalized_expire,
+                    minimum_expire,
+                )
+                result = minimum_expire
+            else:
+                result = normalized_expire
 
-        if normalized_expire < minimum_expire:
-            logger.debug(
-                '⚙️ Коррекция даты истечения (%s) до минимально допустимой (%s) для панели',
-                normalized_expire,
-                minimum_expire,
-            )
-            return minimum_expire
-
-        return normalized_expire
+        # Конвертируем из naive UTC в локальное время панели (naive)
+        utc_aware = result.replace(tzinfo=self._utc_timezone)
+        return utc_aware.astimezone(self._panel_timezone).replace(tzinfo=None)
 
     def _safe_panel_expire_date(self, panel_user: dict[str, Any]) -> datetime:
         """Парсит дату окончания подписки пользователя панели для сравнения."""
@@ -1137,7 +1145,7 @@ class RemnaWaveService:
                             'status': user_obj.status.value,
                             'telegramId': user_obj.telegram_id,
                             'email': user_obj.email,  # Email для синхронизации email-only пользователей
-                            'expireAt': user_obj.expire_at.isoformat() + 'Z',
+                            'expireAt': user_obj.expire_at.replace(tzinfo=None).isoformat(),
                             'trafficLimitBytes': user_obj.traffic_limit_bytes,
                             'usedTrafficBytes': user_obj.used_traffic_bytes,
                             'hwidDeviceLimit': user_obj.hwid_device_limit,
