@@ -651,6 +651,12 @@ def get_referral_contest_manage_keyboard(
         ],
         [
             InlineKeyboardButton(
+                text='👻 Виртуальные',
+                callback_data=f'admin_contest_vp_{contest_id}',
+            ),
+        ],
+        [
+            InlineKeyboardButton(
                 text='🔄 Синхронизация',
                 callback_data=f'admin_contest_sync_{contest_id}',
             ),

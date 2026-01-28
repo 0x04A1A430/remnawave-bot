@@ -12,10 +12,11 @@ from app.config import settings
 from app.database.crud.referral_contest import (
     add_contest_event,
     get_contest_events_count,
-    get_contest_leaderboard,
+    get_contest_leaderboard_with_virtual,
     get_contests_for_events,
     get_contests_for_summaries,
     get_referrer_score,
+    list_virtual_participants,
     mark_daily_summary_sent,
     mark_final_summary_sent,
 )
@@ -173,8 +174,10 @@ class ReferralContestService:
         day_start_utc = day_start_local.astimezone(UTC).replace(tzinfo=None)
         day_end_utc = day_end_local.astimezone(UTC).replace(tzinfo=None)
 
-        leaderboard = list(await get_contest_leaderboard(db, contest.id))
-        total_events = await get_contest_events_count(db, contest.id)
+        leaderboard = await get_contest_leaderboard_with_virtual(db, contest.id)
+        virtual_participants = await list_virtual_participants(db, contest.id)
+        virtual_count = sum(vp.referral_count for vp in virtual_participants)
+        total_events = await get_contest_events_count(db, contest.id) + virtual_count
         today_events = await get_contest_events_count(
             db,
             contest.id,
@@ -269,7 +272,7 @@ class ReferralContestService:
         self,
         *,
         contest: ReferralContest,
-        leaderboard: Sequence[tuple[User, int, int]],
+        leaderboard: Sequence[tuple[str, int, int, bool]],
         total_events: int,
         today_events: int,
         is_final: bool,
@@ -293,10 +296,9 @@ class ReferralContestService:
         ]
 
         if leaderboard:
-            for idx, (user, score, _) in enumerate(leaderboard[:5], start=1):
-                name = user.full_name
-                user_id_display = user.telegram_id or user.email or f'#{user.id}'
-                lines.append(f'{idx}. {name} ({user_id_display}) — {score}')
+            for idx, (name, score, _, is_virtual) in enumerate(leaderboard[:5], start=1):
+                virt_mark = ' 👻' if is_virtual else ''
+                lines.append(f'{idx}. {name}{virt_mark} — {score}')
         else:
             lines.append('Пока нет участников.')
 
@@ -318,7 +320,7 @@ class ReferralContestService:
         self,
         *,
         contest: ReferralContest,
-        leaderboard: Sequence[tuple[User, int, int]],
+        leaderboard: Sequence[tuple[str, int, int, bool]],
         total_events: int,
         today_events: int,
         is_final: bool,
@@ -346,8 +348,8 @@ class ReferralContestService:
         ]
 
         if leaderboard:
-            for idx, (user, score, _) in enumerate(leaderboard[:5], start=1):
-                lines.append(f'{idx}. {user.full_name} — {score}')
+            for idx, (name, score, _, _is_virtual) in enumerate(leaderboard[:5], start=1):
+                lines.append(f'{idx}. {name} — {score}')
         else:
             lines.append('Пока нет участников.')
 

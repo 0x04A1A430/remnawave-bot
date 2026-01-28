@@ -9,15 +9,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.crud.referral_contest import (
+    add_virtual_participant,
     create_referral_contest,
     delete_referral_contest,
+    delete_virtual_participant,
     get_contest_events_count,
-    get_contest_leaderboard,
+    get_contest_leaderboard_with_virtual,
     get_referral_contest,
     get_referral_contests_count,
     list_referral_contests,
+    list_virtual_participants,
     toggle_referral_contest,
     update_referral_contest,
+    update_virtual_participant_count,
 )
 from app.keyboards.admin import (
     get_admin_contests_keyboard,
@@ -240,8 +244,10 @@ async def show_contest_details(
         return
 
     tz = _ensure_timezone(contest.timezone or settings.TIMEZONE)
-    leaderboard = await get_contest_leaderboard(db, contest.id, limit=5)
-    total_events = await get_contest_events_count(db, contest.id)
+    leaderboard = await get_contest_leaderboard_with_virtual(db, contest.id, limit=5)
+    virtual_list = await list_virtual_participants(db, contest.id)
+    virtual_count = sum(vp.referral_count for vp in virtual_list)
+    total_events = await get_contest_events_count(db, contest.id) + virtual_count
 
     lines = [
         f'🏆 <b>{contest.title}</b>',
@@ -256,8 +262,9 @@ async def show_contest_details(
     if leaderboard:
         lines.append('')
         lines.append(texts.t('ADMIN_CONTEST_LEADERBOARD_TITLE', '📊 Топ участников:'))
-        for idx, (user, score, _) in enumerate(leaderboard, start=1):
-            lines.append(f'{idx}. {user.full_name} — {score}')
+        for idx, (name, score, _, is_virtual) in enumerate(leaderboard, start=1):
+            virt_mark = ' 👻' if is_virtual else ''
+            lines.append(f'{idx}. {name}{virt_mark} — {score}')
 
     await callback.message.edit_text(
         '\n'.join(lines),
@@ -427,7 +434,7 @@ async def show_leaderboard(
         await callback.answer(texts.t('ADMIN_CONTEST_NOT_FOUND', 'Конкурс не найден.'), show_alert=True)
         return
 
-    leaderboard = await get_contest_leaderboard(db, contest_id, limit=10)
+    leaderboard = await get_contest_leaderboard_with_virtual(db, contest_id, limit=10)
     if not leaderboard:
         await callback.answer(texts.t('ADMIN_CONTEST_EMPTY_LEADERBOARD', 'Пока нет участников.'), show_alert=True)
         return
@@ -435,9 +442,9 @@ async def show_leaderboard(
     lines = [
         texts.t('ADMIN_CONTEST_LEADERBOARD_TITLE', '📊 Топ участников:'),
     ]
-    for idx, (user, score, _) in enumerate(leaderboard, start=1):
-        user_id_display = user.telegram_id or user.email or f'#{user.id}'
-        lines.append(f'{idx}. {user.full_name} ({user_id_display}) — {score}')
+    for idx, (name, score, _, is_virtual) in enumerate(leaderboard, start=1):
+        virt_mark = ' 👻' if is_virtual else ''
+        lines.append(f'{idx}. {name}{virt_mark} — {score}')
 
     await callback.message.edit_text(
         '\n'.join(lines),
@@ -676,6 +683,9 @@ async def show_detailed_stats(
     from app.services.referral_contest_service import referral_contest_service
 
     stats = await referral_contest_service.get_detailed_contest_stats(db, contest_id)
+    virtual = await list_virtual_participants(db, contest_id)
+    virtual_count = len(virtual)
+    virtual_referrals = sum(vp.referral_count for vp in virtual)
 
     # Общее сообщение с основной статистикой
     general_lines = [
@@ -692,6 +702,10 @@ async def show_detailed_stats(
         f'   🛒 Покупки подписок: <b>{stats.get("subscription_total", 0) // 100} руб.</b>',
         f'   📥 Пополнения баланса: <b>{stats.get("deposit_total", 0) // 100} руб.</b>',
     ]
+
+    if virtual_count > 0:
+        general_lines.append('')
+        general_lines.append(f'👻 Виртуальных: <b>{virtual_count}</b> (рефералов: {virtual_referrals})')
 
     await callback.message.edit_text(
         '\n'.join(general_lines),
@@ -970,6 +984,274 @@ async def debug_contest_transactions(
     )
 
 
+# ── Виртуальные участники ──────────────────────────────────────────────
+
+
+@admin_required
+@error_handler
+async def show_virtual_participants(
+    callback: types.CallbackQuery,
+    db_user,
+    db: AsyncSession,
+):
+    contest_id = int(callback.data.split('_')[-1])
+    contest = await get_referral_contest(db, contest_id)
+    if not contest:
+        await callback.answer('Конкурс не найден.', show_alert=True)
+        return
+
+    vps = await list_virtual_participants(db, contest_id)
+
+    lines = [f'👻 <b>Виртуальные участники</b> — {contest.title}', '']
+    if vps:
+        for vp in vps:
+            lines.append(f'• {vp.display_name} — {vp.referral_count} реф.')
+    else:
+        lines.append('Пока нет виртуальных участников.')
+
+    rows = [
+        [
+            types.InlineKeyboardButton(
+                text='➕ Добавить',
+                callback_data=f'admin_contest_vp_add_{contest_id}',
+            ),
+        ],
+    ]
+    if vps:
+        for vp in vps:
+            rows.append(
+                [
+                    types.InlineKeyboardButton(
+                        text=f'✏️ {vp.display_name}',
+                        callback_data=f'admin_contest_vp_edit_{vp.id}',
+                    ),
+                    types.InlineKeyboardButton(
+                        text='🗑',
+                        callback_data=f'admin_contest_vp_del_{vp.id}',
+                    ),
+                ]
+            )
+    rows.append(
+        [
+            types.InlineKeyboardButton(
+                text='⬅️ Назад',
+                callback_data=f'admin_contest_view_{contest_id}',
+            ),
+        ]
+    )
+
+    await callback.message.edit_text(
+        '\n'.join(lines),
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=rows),
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def start_add_virtual_participant(
+    callback: types.CallbackQuery,
+    db_user,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    contest_id = int(callback.data.split('_')[-1])
+    await state.set_state(AdminStates.adding_virtual_participant_name)
+    await state.update_data(vp_contest_id=contest_id)
+    await callback.message.edit_text(
+        '👻 Введите отображаемое имя виртуального участника:',
+        reply_markup=types.InlineKeyboardMarkup(
+            inline_keyboard=[
+                [types.InlineKeyboardButton(text='❌ Отмена', callback_data=f'admin_contest_vp_{contest_id}')],
+            ]
+        ),
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def process_virtual_participant_name(
+    message: types.Message,
+    db_user,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    name = message.text.strip()
+    if not name or len(name) > 200:
+        await message.answer('Имя должно быть от 1 до 200 символов. Попробуйте ещё раз:')
+        return
+    await state.update_data(vp_name=name)
+    await state.set_state(AdminStates.adding_virtual_participant_count)
+    await message.answer(f'Имя: <b>{name}</b>\n\nВведите количество рефералов (число):')
+
+
+@admin_required
+@error_handler
+async def process_virtual_participant_count(
+    message: types.Message,
+    db_user,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    try:
+        count = int(message.text.strip())
+        if count < 1:
+            raise ValueError
+    except (ValueError, TypeError):
+        await message.answer('Введите положительное целое число:')
+        return
+
+    data = await state.get_data()
+    contest_id = data['vp_contest_id']
+    display_name = data['vp_name']
+    await state.clear()
+
+    vp = await add_virtual_participant(db, contest_id, display_name, count)
+    await message.answer(
+        f'✅ Виртуальный участник добавлен:\nИмя: <b>{vp.display_name}</b>\nРефералов: <b>{vp.referral_count}</b>',
+        reply_markup=types.InlineKeyboardMarkup(
+            inline_keyboard=[
+                [types.InlineKeyboardButton(text='👻 К списку', callback_data=f'admin_contest_vp_{contest_id}')],
+                [types.InlineKeyboardButton(text='⬅️ К конкурсу', callback_data=f'admin_contest_view_{contest_id}')],
+            ]
+        ),
+    )
+
+
+@admin_required
+@error_handler
+async def delete_virtual_participant_handler(
+    callback: types.CallbackQuery,
+    db_user,
+    db: AsyncSession,
+):
+    vp_id = int(callback.data.split('_')[-1])
+
+    # Получим contest_id до удаления
+    from sqlalchemy import select as sa_select
+
+    from app.database.models import ReferralContestVirtualParticipant
+
+    result = await db.execute(
+        sa_select(ReferralContestVirtualParticipant).where(ReferralContestVirtualParticipant.id == vp_id)
+    )
+    vp = result.scalar_one_or_none()
+    if not vp:
+        await callback.answer('Участник не найден.', show_alert=True)
+        return
+
+    contest_id = vp.contest_id
+    deleted = await delete_virtual_participant(db, vp_id)
+    if deleted:
+        await callback.answer('✅ Удалён', show_alert=False)
+    else:
+        await callback.answer('Не удалось удалить.', show_alert=True)
+
+    # Вернуться к списку
+    vps = await list_virtual_participants(db, contest_id)
+    contest = await get_referral_contest(db, contest_id)
+
+    lines = [f'👻 <b>Виртуальные участники</b> — {contest.title}', '']
+    if vps:
+        for v in vps:
+            lines.append(f'• {v.display_name} — {v.referral_count} реф.')
+    else:
+        lines.append('Пока нет виртуальных участников.')
+
+    rows = [
+        [types.InlineKeyboardButton(text='➕ Добавить', callback_data=f'admin_contest_vp_add_{contest_id}')],
+    ]
+    if vps:
+        for v in vps:
+            rows.append(
+                [
+                    types.InlineKeyboardButton(
+                        text=f'✏️ {v.display_name}', callback_data=f'admin_contest_vp_edit_{v.id}'
+                    ),
+                    types.InlineKeyboardButton(text='🗑', callback_data=f'admin_contest_vp_del_{v.id}'),
+                ]
+            )
+    rows.append([types.InlineKeyboardButton(text='⬅️ Назад', callback_data=f'admin_contest_view_{contest_id}')])
+
+    await callback.message.edit_text(
+        '\n'.join(lines),
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=rows),
+    )
+
+
+@admin_required
+@error_handler
+async def start_edit_virtual_participant(
+    callback: types.CallbackQuery,
+    db_user,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    vp_id = int(callback.data.split('_')[-1])
+
+    from sqlalchemy import select as sa_select
+
+    from app.database.models import ReferralContestVirtualParticipant
+
+    result = await db.execute(
+        sa_select(ReferralContestVirtualParticipant).where(ReferralContestVirtualParticipant.id == vp_id)
+    )
+    vp = result.scalar_one_or_none()
+    if not vp:
+        await callback.answer('Участник не найден.', show_alert=True)
+        return
+
+    await state.set_state(AdminStates.editing_virtual_participant_count)
+    await state.update_data(vp_edit_id=vp_id, vp_edit_contest_id=vp.contest_id)
+    await callback.message.edit_text(
+        f'✏️ <b>{vp.display_name}</b>\n'
+        f'Текущее кол-во рефералов: <b>{vp.referral_count}</b>\n\n'
+        f'Введите новое количество:',
+        reply_markup=types.InlineKeyboardMarkup(
+            inline_keyboard=[
+                [types.InlineKeyboardButton(text='❌ Отмена', callback_data=f'admin_contest_vp_{vp.contest_id}')],
+            ]
+        ),
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def process_edit_virtual_participant_count(
+    message: types.Message,
+    db_user,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    try:
+        count = int(message.text.strip())
+        if count < 1:
+            raise ValueError
+    except (ValueError, TypeError):
+        await message.answer('Введите положительное целое число:')
+        return
+
+    data = await state.get_data()
+    vp_id = data['vp_edit_id']
+    contest_id = data['vp_edit_contest_id']
+    await state.clear()
+
+    vp = await update_virtual_participant_count(db, vp_id, count)
+    if vp:
+        await message.answer(
+            f'✅ Обновлено: <b>{vp.display_name}</b> — {vp.referral_count} реф.',
+            reply_markup=types.InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [types.InlineKeyboardButton(text='👻 К списку', callback_data=f'admin_contest_vp_{contest_id}')],
+                ]
+            ),
+        )
+    else:
+        await message.answer('Участник не найден.')
+
+
 def register_handlers(dp: Dispatcher):
     dp.callback_query.register(show_contests_menu, F.data == 'admin_contests')
     dp.callback_query.register(show_referral_contests_menu, F.data == 'admin_contests_referral')
@@ -996,3 +1278,11 @@ def register_handlers(dp: Dispatcher):
     dp.message.register(process_end_date, AdminStates.creating_referral_contest_end)
     dp.message.register(finalize_contest_creation, AdminStates.creating_referral_contest_time)
     dp.message.register(process_edit_summary_times, AdminStates.editing_referral_contest_summary_times)
+
+    dp.callback_query.register(start_add_virtual_participant, F.data.startswith('admin_contest_vp_add_'))
+    dp.callback_query.register(delete_virtual_participant_handler, F.data.startswith('admin_contest_vp_del_'))
+    dp.callback_query.register(start_edit_virtual_participant, F.data.startswith('admin_contest_vp_edit_'))
+    dp.callback_query.register(show_virtual_participants, F.data.regexp(r'^admin_contest_vp_\d+$'))
+    dp.message.register(process_virtual_participant_name, AdminStates.adding_virtual_participant_name)
+    dp.message.register(process_virtual_participant_count, AdminStates.adding_virtual_participant_count)
+    dp.message.register(process_edit_virtual_participant_count, AdminStates.editing_virtual_participant_count)
