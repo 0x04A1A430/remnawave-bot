@@ -24,7 +24,7 @@ class TrafficPurchaseInfo(BaseModel):
     progress_percent: float
 
 
-class SubscriptionResponse(BaseModel):
+class SubscriptionData(BaseModel):
     """User subscription data."""
 
     id: int
@@ -59,6 +59,17 @@ class SubscriptionResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# Backward compatibility alias
+SubscriptionResponse = SubscriptionData
+
+
+class SubscriptionStatusResponse(BaseModel):
+    """Response for subscription status endpoint - handles users with and without subscription."""
+
+    has_subscription: bool
+    subscription: SubscriptionData | None = None
 
 
 class RenewalOptionResponse(BaseModel):
