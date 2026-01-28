@@ -109,6 +109,13 @@ def _get_method_defaults() -> dict:
                 {'id': 'sbp', 'name': 'СБП'},
             ],
         },
+        'kassa_ai': {
+            'default_display_name': settings.get_kassa_ai_display_name(),
+            'is_configured': settings.is_kassa_ai_enabled(),
+            'default_min': settings.KASSA_AI_MIN_AMOUNT_KOPEKS,
+            'default_max': settings.KASSA_AI_MAX_AMOUNT_KOPEKS,
+            'available_sub_options': None,
+        },
     }
 
 
@@ -146,6 +153,7 @@ DEFAULT_METHOD_ORDER = [
     'wata',
     'freekassa',
     'cloudpayments',
+    'kassa_ai',
 ]
 
 
