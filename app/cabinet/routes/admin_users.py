@@ -1,7 +1,7 @@
 """Admin routes for managing users in cabinet."""
 
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import Integer, and_, func, or_, select
@@ -32,7 +32,6 @@ from app.database.models import (
     User,
     UserStatus,
 )
-
 from app.utils.timezone import panel_datetime_to_naive_utc
 
 from ..dependencies import get_cabinet_db, get_current_admin_user

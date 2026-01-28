@@ -10,7 +10,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.utils.timezone import panel_datetime_to_naive_utc
 from app.database.crud.user import (
     create_user,
     create_user_by_email,
@@ -20,6 +19,7 @@ from app.database.crud.user import (
 )
 from app.database.models import CabinetRefreshToken, User
 from app.services.referral_service import process_referral_registration
+from app.utils.timezone import panel_datetime_to_naive_utc
 
 from ..auth import (
     create_access_token,
