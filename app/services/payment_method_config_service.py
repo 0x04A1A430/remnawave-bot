@@ -261,7 +261,7 @@ async def update_config(
         config.allowed_promo_groups = groups
 
     await db.commit()
-    await db.refresh(config, attribute_names=['allowed_promo_groups'])
+    await db.refresh(config)
     return config
 
 
