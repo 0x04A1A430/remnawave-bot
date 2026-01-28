@@ -156,6 +156,7 @@ async def _get_available_payment_methods(
         'wata': settings.is_wata_enabled(),
         'freekassa': settings.is_freekassa_enabled(),
         'cloudpayments': settings.is_cloudpayments_enabled(),
+        'kassa_ai': settings.is_kassa_ai_enabled(),
     }
 
     # Default options builder (for methods with sub-options)
@@ -698,6 +699,32 @@ async def create_topup(
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail='Failed to create FreeKassa payment',
+                )
+
+        elif request.payment_method == 'kassa_ai':
+            if not settings.is_kassa_ai_enabled():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail='Kassa AI payment method is unavailable',
+                )
+
+            payment_service = PaymentService()
+            result = await payment_service.create_kassa_ai_payment(
+                db=db,
+                user_id=user.id,
+                amount_kopeks=request.amount_kopeks,
+                description=settings.get_balance_payment_description(request.amount_kopeks),
+                email=getattr(user, 'email', None),
+                language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+            )
+
+            if result and result.get('payment_url'):
+                payment_url = result.get('payment_url')
+                payment_id = str(result.get('local_payment_id') or result.get('order_id') or 'pending')
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail='Failed to create Kassa AI payment',
                 )
 
         elif request.payment_method == 'tribute':
