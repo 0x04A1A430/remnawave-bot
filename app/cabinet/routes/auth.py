@@ -19,6 +19,7 @@ from app.database.crud.user import (
 )
 from app.database.models import CabinetRefreshToken, User
 from app.services.referral_service import process_referral_registration
+from app.utils.timezone import panel_datetime_to_naive_utc
 
 from ..auth import (
     create_access_token,
@@ -162,8 +163,8 @@ async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -
 
             existing_sub = await get_subscription_by_user_id(db, user.id)
 
-            # Parse panel data
-            expire_at = panel_user.expire_at
+            # Parse panel data — panel returns local time with misleading +00:00 offset
+            expire_at = panel_datetime_to_naive_utc(panel_user.expire_at)
             traffic_limit_gb = panel_user.traffic_limit_bytes // (1024**3) if panel_user.traffic_limit_bytes > 0 else 0
             traffic_used_gb = panel_user.used_traffic_bytes / (1024**3) if panel_user.used_traffic_bytes > 0 else 0
 
@@ -173,11 +174,8 @@ async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -
             # Device limit from panel
             device_limit = panel_user.hwid_device_limit or 1
 
-            # Determine status - use timezone-aware datetime for comparison
-            current_time = datetime.now(UTC)
-            # Make expire_at timezone-aware if it's naive
-            if expire_at.tzinfo is None:
-                expire_at = expire_at.replace(tzinfo=UTC)
+            # Determine status — expire_at is now naive UTC
+            current_time = datetime.now(UTC).replace(tzinfo=None)
 
             if panel_user.status.value == 'ACTIVE' and expire_at > current_time:
                 sub_status = SubscriptionStatus.ACTIVE
@@ -187,10 +185,8 @@ async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -
                 sub_status = SubscriptionStatus.DISABLED
 
             if existing_sub:
-                # Update existing subscription
-                # Convert to naive datetime for database storage
-                end_date_naive = expire_at.replace(tzinfo=None) if expire_at.tzinfo else expire_at
-                existing_sub.end_date = end_date_naive
+                # Update existing subscription (expire_at already naive UTC)
+                existing_sub.end_date = expire_at
                 existing_sub.traffic_limit_gb = traffic_limit_gb
                 existing_sub.traffic_used_gb = traffic_used_gb
                 existing_sub.status = sub_status.value
@@ -204,14 +200,11 @@ async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -
                     f'Updated subscription for email user {user.email}, squads: {connected_squads}, devices: {device_limit}'
                 )
             else:
-                # Create new subscription
-                # Convert current_time to naive for database storage if needed
-                start_date_naive = current_time.replace(tzinfo=None)
-                end_date_naive = expire_at.replace(tzinfo=None) if expire_at.tzinfo else expire_at
+                # Create new subscription (expire_at and current_time already naive UTC)
                 new_sub = Subscription(
                     user_id=user.id,
-                    start_date=start_date_naive,
-                    end_date=end_date_naive,
+                    start_date=current_time,
+                    end_date=expire_at,
                     traffic_limit_gb=traffic_limit_gb,
                     traffic_used_gb=traffic_used_gb,
                     status=sub_status.value,
