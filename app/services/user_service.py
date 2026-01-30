@@ -49,6 +49,7 @@ from app.database.models import (
     User,
     UserMessage,
     UserStatus,
+    WataPayment,
     WelcomeText,
     YooKassaPayment,
 )
@@ -988,6 +989,17 @@ class UserService:
                     await db.flush()
             except Exception as e:
                 logger.error(f'❌ Ошибка удаления подписки: {e}')
+
+            try:
+                wata_payments_result = await db.execute(select(WataPayment).where(WataPayment.user_id == user_id))
+                wata_payments = wata_payments_result.scalars().all()
+
+                if wata_payments:
+                    logger.info(f'🔄 Удаляем {len(wata_payments)} Wata платежей')
+                    await db.execute(delete(WataPayment).where(WataPayment.user_id == user_id))
+                    await db.flush()
+            except Exception as e:
+                logger.error(f'❌ Ошибка удаления Wata платежей: {e}')
 
             try:
                 await db.execute(delete(User).where(User.id == user_id))
