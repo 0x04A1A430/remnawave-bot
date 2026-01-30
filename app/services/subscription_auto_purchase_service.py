@@ -9,11 +9,6 @@ from aiogram import Bot
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
 
-# WebSocket notifications for cabinet
-from app.cabinet.routes.websocket import (
-    notify_user_subscription_activated,
-    notify_user_subscription_renewed,
-)
 from app.config import settings
 from app.database.crud.subscription import extend_subscription
 from app.database.crud.transaction import create_transaction
@@ -352,6 +347,9 @@ async def _auto_extend_subscription(
     *,
     bot: Bot | None = None,
 ) -> bool:
+    # Lazy import to avoid circular dependency
+    from app.cabinet.routes.websocket import notify_user_subscription_renewed
+
     try:
         prepared = await _prepare_auto_extend_context(db, user, cart_data)
     except Exception as error:  # pragma: no cover - defensive logging
@@ -589,6 +587,11 @@ async def _auto_purchase_tariff(
     bot: Bot | None = None,
 ) -> bool:
     """Автоматическая покупка периодного тарифа из сохранённой корзины."""
+    # Lazy imports to avoid circular dependency
+    from app.cabinet.routes.websocket import (
+        notify_user_subscription_activated,
+        notify_user_subscription_renewed,
+    )
     from app.database.crud.server_squad import get_all_server_squads
     from app.database.crud.subscription import (
         create_paid_subscription,
@@ -869,6 +872,11 @@ async def _auto_purchase_daily_tariff(
     """Автоматическая покупка суточного тарифа из сохранённой корзины."""
     from datetime import datetime, timedelta
 
+    # Lazy imports to avoid circular dependency
+    from app.cabinet.routes.websocket import (
+        notify_user_subscription_activated,
+        notify_user_subscription_renewed,
+    )
     from app.database.crud.server_squad import get_all_server_squads
     from app.database.crud.subscription import create_paid_subscription, get_subscription_by_user_id
     from app.database.crud.tariff import get_tariff_by_id
@@ -1126,6 +1134,11 @@ async def auto_purchase_saved_cart_after_topup(
     bot: Bot | None = None,
 ) -> bool:
     """Attempts to automatically purchase a subscription from a saved cart."""
+    # Lazy imports to avoid circular dependency
+    from app.cabinet.routes.websocket import (
+        notify_user_subscription_activated,
+        notify_user_subscription_renewed,
+    )
 
     if not settings.is_auto_purchase_after_topup_enabled():
         return False
@@ -1361,6 +1374,11 @@ async def auto_activate_subscription_after_topup(
     """
     from datetime import datetime
 
+    # Lazy imports to avoid circular dependency
+    from app.cabinet.routes.websocket import (
+        notify_user_subscription_activated,
+        notify_user_subscription_renewed,
+    )
     from app.database.crud.server_squad import get_available_server_squads, get_server_ids_by_uuids
     from app.database.crud.subscription import create_paid_subscription, get_subscription_by_user_id
     from app.database.crud.transaction import create_transaction
