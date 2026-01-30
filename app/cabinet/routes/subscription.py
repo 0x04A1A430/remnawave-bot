@@ -1667,8 +1667,6 @@ async def purchase_tariff(
         # Save cart for auto-renewal (not for daily tariffs - they have their own charging)
         if not is_daily_tariff:
             try:
-                from app.services.user_cart_service import user_cart_service
-
                 cart_data = {
                     'cart_mode': 'extend',
                     'subscription_id': subscription.id,
