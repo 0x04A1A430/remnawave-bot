@@ -1024,7 +1024,6 @@ async def check_missing_bonuses(
 ):
     """Проверяет по БД — всем ли рефералам начислены бонусы."""
     from app.services.referral_diagnostics_service import (
-        MissingBonusReport,
         referral_diagnostics_service,
     )
 
@@ -1057,13 +1056,13 @@ async def check_missing_bonuses(
             for i, mb in enumerate(report.missing_bonuses[:15], 1):
                 referral_name = mb.referral_full_name or mb.referral_username or str(mb.referral_telegram_id)
                 referrer_name = mb.referrer_full_name or mb.referrer_username or str(mb.referrer_telegram_id)
-                text += f"\n{i}. <b>{referral_name}</b>"
-                text += f"\n   └ Пригласил: {referrer_name}"
-                text += f"\n   └ Пополнение: {mb.first_topup_amount_kopeks / 100:.0f}₽"
-                text += f"\n   └ Бонусы: {mb.referral_bonus_amount / 100:.0f}₽ + {mb.referrer_bonus_amount / 100:.0f}₽"
+                text += f'\n{i}. <b>{referral_name}</b>'
+                text += f'\n   └ Пригласил: {referrer_name}'
+                text += f'\n   └ Пополнение: {mb.first_topup_amount_kopeks / 100:.0f}₽'
+                text += f'\n   └ Бонусы: {mb.referral_bonus_amount / 100:.0f}₽ + {mb.referrer_bonus_amount / 100:.0f}₽'
 
             if len(report.missing_bonuses) > 15:
-                text += f"\n\n<i>... и ещё {len(report.missing_bonuses) - 15} чел.</i>"
+                text += f'\n\n<i>... и ещё {len(report.missing_bonuses) - 15} чел.</i>'
 
             keyboard = types.InlineKeyboardMarkup(
                 inline_keyboard=[
@@ -1095,7 +1094,6 @@ async def apply_missing_bonuses(
 ):
     """Применяет начисление пропущенных бонусов."""
     from app.services.referral_diagnostics_service import (
-        MissingBonus,
         MissingBonusReport,
         referral_diagnostics_service,
     )
@@ -1200,7 +1198,7 @@ async def sync_referrals_with_contest(
                 total_skipped += stats.get('skipped', 0)
                 contest_results.append(f"• {contest.title}: +{stats.get('created', 0)} новых")
             else:
-                contest_results.append(f"• {contest.title}: ошибка")
+                contest_results.append(f'• {contest.title}: ошибка')
 
         text = f"""
 🏆 <b>Синхронизация с конкурсами завершена!</b>
@@ -1420,7 +1418,7 @@ async def receive_log_file(message: types.Message, db_user: User, db: AsyncSessi
             await status_message.edit_text(
                 f'❌ <b>Ошибка при анализе файла</b>\n\n'
                 f'Файл: {file_name}\n'
-                f'Ошибка: {str(e)}\n\n'
+                f'Ошибка: {e!s}\n\n'
                 f'Проверьте, что файл является текстовым логом бота.',
                 reply_markup=types.InlineKeyboardMarkup(
                     inline_keyboard=[
@@ -1431,7 +1429,7 @@ async def receive_log_file(message: types.Message, db_user: User, db: AsyncSessi
             )
         except:
             await message.answer(
-                f'❌ Ошибка при анализе файла: {str(e)}',
+                f'❌ Ошибка при анализе файла: {e!s}',
                 reply_markup=types.InlineKeyboardMarkup(
                     inline_keyboard=[
                         [types.InlineKeyboardButton(text='⬅️ Назад', callback_data='admin_referral_diagnostics')]

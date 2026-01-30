@@ -7,9 +7,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.models import User
 from app.services.referral_diagnostics_service import ReferralDiagnosticsService
 
 
@@ -55,7 +53,7 @@ async def test_parse_logs_basic(temp_log_file, sample_log_content):
     events = await service._parse_logs(today, tomorrow)
 
     # Проверяем что нашлись все события
-    assert len(events) >= 6, f"Expected at least 6 events, found {len(events)}"
+    assert len(events) >= 6, f'Expected at least 6 events, found {len(events)}'
 
     # Проверяем типы событий
     event_types = [e.event_type for e in events]
@@ -85,18 +83,18 @@ async def test_analyze_period_with_issues(temp_log_file, sample_log_content):
     # Проверяем статистику
     # Примечание: code_found не имеет telegram_id, поэтому total_link_clicks будет 0
     # Это нормально - мы считаем только события с telegram_id
-    assert report.total_codes_applied >= 1, "Should have applied codes"
+    assert report.total_codes_applied >= 1, 'Should have applied codes'
 
     # Проверяем что нашлись проблемные случаи
     # (987654321 применил код, но не завершил регистрацию)
     assert 987654321 in report.users_applied_no_registration, \
-        f"Expected 987654321 in problems, got: {report.users_applied_no_registration}"
+        f'Expected 987654321 in problems, got: {report.users_applied_no_registration}'
 
 
 @pytest.mark.asyncio
 async def test_empty_log_file(temp_log_file):
     """Тест работы с пустым лог-файлом."""
-    temp_log_file.write_text("")
+    temp_log_file.write_text('')
 
     service = ReferralDiagnosticsService(log_path=str(temp_log_file))
 

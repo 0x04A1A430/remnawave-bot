@@ -459,7 +459,7 @@ class ReferralDiagnosticsService:
         date_prefix = start_date.strftime('%Y-%m-%d') if use_date_prefix else None
 
         try:
-            with open(self.log_path, 'r', encoding='utf-8', errors='ignore') as f:
+            with open(self.log_path, encoding='utf-8', errors='ignore') as f:
                 for line in f:
                     total_lines += 1
                     line = line.strip()
