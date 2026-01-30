@@ -280,3 +280,108 @@ async def get_all_promo_groups(db: AsyncSession) -> list[PromoGroup]:
     """Get all promo groups for the filter selector."""
     result = await db.execute(select(PromoGroup).order_by(PromoGroup.priority.desc(), PromoGroup.name))
     return list(result.scalars().all())
+
+
+# ============ User-facing methods ============
+
+
+async def get_enabled_methods_for_user(
+    db: AsyncSession,
+    user: 'User | None' = None,
+    is_first_topup: bool | None = None,
+) -> list[dict]:
+    """Get payment methods available for a specific user.
+
+    Applies all filters from PaymentMethodConfig:
+    - is_enabled
+    - is_provider_configured (from env)
+    - user_type_filter
+    - first_topup_filter
+    - promo_group_filter
+
+    Returns list of dicts with method info ready for API response.
+    """
+    from app.database.models import UserPromoGroup
+
+    configs = await get_all_configs(db)
+    defaults = _get_method_defaults()
+
+    result = []
+
+    for config in configs:
+        method_id = config.method_id
+        method_def = defaults.get(method_id, {})
+
+        # Skip if not enabled in admin panel
+        if not config.is_enabled:
+            continue
+
+        # Skip if provider not configured in env
+        if not method_def.get('is_configured', False):
+            continue
+
+        # Apply user_type_filter
+        if user and config.user_type_filter != 'all':
+            if config.user_type_filter == 'telegram' and not user.telegram_id:
+                continue
+            if config.user_type_filter == 'email' and not getattr(user, 'email', None):
+                continue
+
+        # Apply first_topup_filter
+        if config.first_topup_filter != 'any' and is_first_topup is not None:
+            if config.first_topup_filter == 'yes' and not is_first_topup:
+                continue
+            if config.first_topup_filter == 'no' and is_first_topup:
+                continue
+
+        # Apply promo_group_filter
+        if config.promo_group_filter_mode == 'selected' and user:
+            allowed_group_ids = {pg.id for pg in config.allowed_promo_groups}
+            if allowed_group_ids:
+                # Get user's promo groups
+                user_groups_result = await db.execute(
+                    select(UserPromoGroup.promo_group_id).where(UserPromoGroup.user_id == user.id)
+                )
+                user_group_ids = set(user_groups_result.scalars().all())
+
+                # Check if user has at least one allowed group
+                if not user_group_ids.intersection(allowed_group_ids):
+                    continue
+
+        # Build display name
+        display_name = config.display_name or method_def.get('default_display_name', method_id)
+
+        # Build min/max amounts (DB overrides env defaults)
+        min_amount = (
+            config.min_amount_kopeks if config.min_amount_kopeks is not None else method_def.get('default_min', 1000)
+        )
+        max_amount = (
+            config.max_amount_kopeks
+            if config.max_amount_kopeks is not None
+            else method_def.get('default_max', 10000000)
+        )
+
+        # Build options (filter by sub_options config)
+        options = None
+        available_sub_options = method_def.get('available_sub_options')
+        if available_sub_options and config.sub_options:
+            enabled_options = []
+            for opt in available_sub_options:
+                opt_id = opt['id']
+                if config.sub_options.get(opt_id, True):
+                    enabled_options.append(opt)
+            if enabled_options:
+                options = enabled_options
+
+        result.append(
+            {
+                'id': method_id,
+                'name': display_name,
+                'min_amount_kopeks': min_amount,
+                'max_amount_kopeks': max_amount,
+                'options': options,
+                'sort_order': config.sort_order,
+            }
+        )
+
+    return result
