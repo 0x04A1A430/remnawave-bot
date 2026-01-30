@@ -52,6 +52,7 @@ class UserCartService:
         """
         client = self._get_redis_client()
         if client is None:
+            logger.warning(f'🛒 Redis недоступен, корзина пользователя {user_id} НЕ сохранена')
             return False
 
         try:
@@ -59,10 +60,11 @@ class UserCartService:
             json_data = json.dumps(cart_data, ensure_ascii=False)
             effective_ttl = ttl if ttl is not None else settings.CART_TTL_SECONDS
             await client.setex(key, effective_ttl, json_data)
-            logger.debug(f'Корзина пользователя {user_id} сохранена в Redis')
+            cart_mode = cart_data.get('cart_mode', 'unknown')
+            logger.info(f'🛒 Корзина пользователя {user_id} сохранена в Redis (mode={cart_mode}, ttl={effective_ttl}s)')
             return True
         except Exception as e:
-            logger.error(f'Ошибка сохранения корзины пользователя {user_id}: {e}')
+            logger.error(f'🛒 Ошибка сохранения корзины пользователя {user_id}: {e}')
             return False
 
     async def get_user_cart(self, user_id: int) -> dict[str, Any] | None:
@@ -127,14 +129,17 @@ class UserCartService:
         """
         client = self._get_redis_client()
         if client is None:
+            logger.warning(f'🛒 Redis недоступен, проверка корзины пользователя {user_id} невозможна')
             return False
 
         try:
             key = f'user_cart:{user_id}'
             exists = await client.exists(key)
-            return bool(exists)
+            result = bool(exists)
+            logger.info(f'🛒 Проверка корзины пользователя {user_id}: {"найдена" if result else "не найдена"}')
+            return result
         except Exception as e:
-            logger.error(f'Ошибка проверки наличия корзины пользователя {user_id}: {e}')
+            logger.error(f'🛒 Ошибка проверки наличия корзины пользователя {user_id}: {e}')
             return False
 
 
