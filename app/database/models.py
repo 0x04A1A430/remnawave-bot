@@ -991,6 +991,10 @@ class User(Base):
     password_reset_token = Column(String(255), nullable=True)
     password_reset_expires = Column(DateTime, nullable=True)
     cabinet_last_login = Column(DateTime, nullable=True)
+    # Email change fields
+    email_change_new = Column(String(255), nullable=True)  # New email pending verification
+    email_change_code = Column(String(6), nullable=True)  # 6-digit verification code
+    email_change_expires = Column(DateTime, nullable=True)  # Code expiration
     broadcasts = relationship('BroadcastHistory', back_populates='admin')
     referrals = relationship('User', backref='referrer', remote_side=[id], foreign_keys='User.referred_by_id')
     subscription = relationship('Subscription', back_populates='user', uselist=False)
