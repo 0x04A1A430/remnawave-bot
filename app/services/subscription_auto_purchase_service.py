@@ -9,6 +9,11 @@ from aiogram import Bot
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
 
+# WebSocket notifications for cabinet
+from app.cabinet.routes.websocket import (
+    notify_user_subscription_activated,
+    notify_user_subscription_renewed,
+)
 from app.config import settings
 from app.database.crud.subscription import extend_subscription
 from app.database.crud.transaction import create_transaction
@@ -559,6 +564,20 @@ async def _auto_extend_subscription(
         _format_user_id(user),
     )
 
+    # Send WebSocket notification to cabinet frontend
+    try:
+        await notify_user_subscription_renewed(
+            user_id=user.id,
+            new_expires_at=new_end_date.isoformat() if new_end_date else '',
+            amount_kopeks=prepared.price_kopeks,
+        )
+    except Exception as ws_error:
+        logger.warning(
+            '⚠️ Автопокупка: не удалось отправить WS уведомление о продлении для %s: %s',
+            _format_user_id(user),
+            ws_error,
+        )
+
     return True
 
 
@@ -814,6 +833,29 @@ async def _auto_purchase_tariff(
         _format_user_id(user),
     )
 
+    # Send WebSocket notification to cabinet frontend
+    try:
+        if existing_subscription:
+            # Renewal of existing subscription
+            await notify_user_subscription_renewed(
+                user_id=user.id,
+                new_expires_at=subscription.end_date.isoformat() if subscription.end_date else '',
+                amount_kopeks=final_price,
+            )
+        else:
+            # New subscription activation
+            await notify_user_subscription_activated(
+                user_id=user.id,
+                expires_at=subscription.end_date.isoformat() if subscription.end_date else '',
+                tariff_name=tariff.name,
+            )
+    except Exception as ws_error:
+        logger.warning(
+            '⚠️ Автопокупка тарифа: не удалось отправить WS уведомление для %s: %s',
+            _format_user_id(user),
+            ws_error,
+        )
+
     return True
 
 
@@ -1051,6 +1093,29 @@ async def _auto_purchase_daily_tariff(
         _format_user_id(user),
     )
 
+    # Send WebSocket notification to cabinet frontend
+    try:
+        if existing_subscription:
+            # Renewal/upgrade of existing subscription
+            await notify_user_subscription_renewed(
+                user_id=user.id,
+                new_expires_at=subscription.end_date.isoformat() if subscription.end_date else '',
+                amount_kopeks=daily_price,
+            )
+        else:
+            # New subscription activation
+            await notify_user_subscription_activated(
+                user_id=user.id,
+                expires_at=subscription.end_date.isoformat() if subscription.end_date else '',
+                tariff_name=tariff.name,
+            )
+    except Exception as ws_error:
+        logger.warning(
+            '⚠️ Автопокупка суточного тарифа: не удалось отправить WS уведомление для %s: %s',
+            _format_user_id(user),
+            ws_error,
+        )
+
     return True
 
 
@@ -1243,6 +1308,29 @@ async def auto_purchase_saved_cart_after_topup(
         _format_user_id(user),
     )
 
+    # Send WebSocket notification to cabinet frontend
+    try:
+        if was_trial_conversion:
+            # Trial conversion = activation
+            await notify_user_subscription_activated(
+                user_id=user.id,
+                expires_at=subscription.end_date.isoformat() if subscription and subscription.end_date else '',
+                tariff_name='',
+            )
+        else:
+            # Regular purchase = renewal or new activation
+            await notify_user_subscription_renewed(
+                user_id=user.id,
+                new_expires_at=subscription.end_date.isoformat() if subscription and subscription.end_date else '',
+                amount_kopeks=pricing.final_total,
+            )
+    except Exception as ws_error:
+        logger.warning(
+            '⚠️ Автопокупка: не удалось отправить WS уведомление для %s: %s',
+            _format_user_id(user),
+            ws_error,
+        )
+
     return True
 
 
@@ -1397,6 +1485,20 @@ async def auto_activate_subscription_after_topup(
                 best_price,
             )
 
+            # Send WebSocket notification to cabinet frontend
+            try:
+                await notify_user_subscription_renewed(
+                    user_id=user.id,
+                    new_expires_at=result.subscription.end_date.isoformat() if result.subscription.end_date else '',
+                    amount_kopeks=best_price,
+                )
+            except Exception as ws_error:
+                logger.warning(
+                    '⚠️ Автоактивация: не удалось отправить WS уведомление о продлении для %s: %s',
+                    _format_user_id(user),
+                    ws_error,
+                )
+
             # Уведомление пользователю (только для Telegram-пользователей)
             if bot and user.telegram_id:
                 try:
@@ -1474,6 +1576,20 @@ async def auto_activate_subscription_after_topup(
                 _format_user_id(user),
                 best_price,
             )
+
+            # Send WebSocket notification to cabinet frontend
+            try:
+                await notify_user_subscription_activated(
+                    user_id=user.id,
+                    expires_at=new_subscription.end_date.isoformat() if new_subscription.end_date else '',
+                    tariff_name='',
+                )
+            except Exception as ws_error:
+                logger.warning(
+                    '⚠️ Автоактивация: не удалось отправить WS уведомление об активации для %s: %s',
+                    _format_user_id(user),
+                    ws_error,
+                )
 
             # Уведомление пользователю (только для Telegram-пользователей)
             if bot and user.telegram_id:
