@@ -12,6 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import PaymentMethod, TransactionType
+from app.services.subscription_auto_purchase_service import (
+    auto_activate_subscription_after_topup,
+    auto_purchase_saved_cart_after_topup,
+)
 from app.utils.payment_logger import payment_logger as logger
 from app.utils.user_utils import format_referrer_info
 
@@ -423,6 +427,54 @@ class HeleketPaymentMixin:
                     logger.error('Ошибка отправки уведомления пользователю Heleket: %s', error)
             else:
                 logger.info(f'Пропуск Telegram-уведомления Heleket для email-пользователя {user.id}')
+
+        # Автопокупка из сохранённой корзины и умная автоактивация
+        try:
+            from app.services.user_cart_service import user_cart_service
+
+            has_saved_cart = await user_cart_service.has_user_cart(user.id)
+            auto_purchase_success = False
+            if has_saved_cart:
+                try:
+                    auto_purchase_success = await auto_purchase_saved_cart_after_topup(
+                        db,
+                        user,
+                        bot=getattr(self, 'bot', None),
+                    )
+                except Exception as auto_error:
+                    logger.error(
+                        'Ошибка автоматической покупки подписки для пользователя %s: %s',
+                        user.id,
+                        auto_error,
+                        exc_info=True,
+                    )
+
+                if auto_purchase_success:
+                    has_saved_cart = False
+
+            # Умная автоактивация если автопокупка не сработала
+            if not auto_purchase_success:
+                try:
+                    await auto_activate_subscription_after_topup(
+                        db,
+                        user,
+                        bot=getattr(self, 'bot', None),
+                        topup_amount=amount_kopeks,
+                    )
+                except Exception as auto_activate_error:
+                    logger.error(
+                        'Ошибка умной автоактивации для пользователя %s: %s',
+                        user.id,
+                        auto_activate_error,
+                        exc_info=True,
+                    )
+        except Exception as error:
+            logger.error(
+                'Ошибка при работе с автоактивацией для пользователя %s: %s',
+                user.id,
+                error,
+                exc_info=True,
+            )
 
         return updated_payment
 
