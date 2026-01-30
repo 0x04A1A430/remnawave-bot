@@ -1099,3 +1099,125 @@ async def get_user_by_email(db: AsyncSession, email: str) -> User | None:
     """Get user by email address."""
     result = await db.execute(select(User).where(User.email == email))
     return result.scalar_one_or_none()
+
+
+async def is_email_taken(db: AsyncSession, email: str, exclude_user_id: int | None = None) -> bool:
+    """
+    Check if email is already taken by another user.
+
+    Args:
+        db: Database session
+        email: Email to check
+        exclude_user_id: User ID to exclude from check (for current user)
+
+    Returns:
+        True if email is taken, False otherwise
+    """
+    query = select(User.id).where(User.email == email)
+    if exclude_user_id:
+        query = query.where(User.id != exclude_user_id)
+    result = await db.execute(query)
+    return result.scalar_one_or_none() is not None
+
+
+async def set_email_change_pending(
+    db: AsyncSession,
+    user: User,
+    new_email: str,
+    code: str,
+    expires_at: datetime,
+) -> User:
+    """
+    Set pending email change for user.
+
+    Args:
+        db: Database session
+        user: User object
+        new_email: New email address
+        code: 6-digit verification code
+        expires_at: Code expiration datetime
+
+    Returns:
+        Updated User object
+    """
+    user.email_change_new = new_email
+    user.email_change_code = code
+    user.email_change_expires = expires_at
+    user.updated_at = datetime.utcnow()
+
+    await db.commit()
+    await db.refresh(user)
+
+    logger.info(f'Email change pending for user {user.id}: {user.email} -> {new_email}')
+    return user
+
+
+async def verify_and_apply_email_change(db: AsyncSession, user: User, code: str) -> tuple[bool, str]:
+    """
+    Verify email change code and apply the change.
+
+    Args:
+        db: Database session
+        user: User object
+        code: Verification code from user
+
+    Returns:
+        Tuple of (success: bool, message: str)
+    """
+    if not user.email_change_new or not user.email_change_code:
+        return False, 'No pending email change'
+
+    if user.email_change_expires and datetime.utcnow() > user.email_change_expires:
+        # Clear expired data
+        user.email_change_new = None
+        user.email_change_code = None
+        user.email_change_expires = None
+        await db.commit()
+        return False, 'Verification code has expired'
+
+    if user.email_change_code != code:
+        return False, 'Invalid verification code'
+
+    # Check if new email is still available
+    existing = await get_user_by_email(db, user.email_change_new)
+    if existing and existing.id != user.id:
+        user.email_change_new = None
+        user.email_change_code = None
+        user.email_change_expires = None
+        await db.commit()
+        return False, 'This email is already taken'
+
+    old_email = user.email
+    new_email = user.email_change_new
+
+    # Apply the change
+    user.email = new_email
+    user.email_verified = True
+    user.email_verified_at = datetime.utcnow()
+    user.email_change_new = None
+    user.email_change_code = None
+    user.email_change_expires = None
+    user.updated_at = datetime.utcnow()
+
+    await db.commit()
+    await db.refresh(user)
+
+    logger.info(f'Email changed for user {user.id}: {old_email} -> {new_email}')
+    return True, 'Email changed successfully'
+
+
+async def clear_email_change_pending(db: AsyncSession, user: User) -> None:
+    """
+    Clear pending email change data.
+
+    Args:
+        db: Database session
+        user: User object
+    """
+    user.email_change_new = None
+    user.email_change_code = None
+    user.email_change_expires = None
+    user.updated_at = datetime.utcnow()
+
+    await db.commit()
+    logger.info(f'Email change cancelled for user {user.id}')
