@@ -1729,9 +1729,8 @@ async def required_sub_channel_check(
     try:
         state_data = await state.get_data() or {}
 
-        # ИСПРАВЛЕНИЕ БАГА: используем .get() вместо .pop() чтобы не удалять payload
-        # При повторных кликах "Я подписался" payload должен сохраняться
-        pending_start_payload = state_data.get('pending_start_payload', None)
+        # Получаем payload БЕЗ удаления - удалим только после успешной проверки подписки
+        pending_start_payload = state_data.get('pending_start_payload')
 
         # Если в FSM state нет payload, пробуем получить из Redis (резервный механизм)
         if not pending_start_payload:
@@ -1744,16 +1743,55 @@ async def required_sub_channel_check(
                     pending_start_payload,
                 )
 
-        state_updated = False
-
         if pending_start_payload:
             logger.info(
                 "📦 CHANNEL CHECK: Найден сохраненный payload '%s'",
                 pending_start_payload,
             )
 
-            # ИСПРАВЛЕНИЕ БАГА: НЕ удаляем Redis payload здесь!
-            # Удаление происходит только после успешной регистрации пользователя
+        user = db_user
+        if not user:
+            user = await get_user_by_telegram_id(db, query.from_user.id)
+
+        if user and getattr(user, 'language', None):
+            language = user.language
+        elif state_data.get('language'):
+            language = state_data['language']
+
+        texts = get_texts(language)
+
+        chat_member = await bot.get_chat_member(chat_id=settings.CHANNEL_SUB_ID, user_id=query.from_user.id)
+
+        if chat_member.status not in [
+            ChatMemberStatus.MEMBER,
+            ChatMemberStatus.ADMINISTRATOR,
+            ChatMemberStatus.CREATOR,
+        ]:
+            # НЕ удаляем payload - пользователь может попробовать снова после подписки
+            logger.info(
+                "📦 CHANNEL CHECK: Подписка не подтверждена, payload '%s' сохранён для следующей попытки",
+                pending_start_payload,
+            )
+            return await query.answer(
+                texts.t('CHANNEL_SUBSCRIBE_REQUIRED_ALERT', '❌ Вы не подписались на канал!'),
+                show_alert=True,
+            )
+
+        # Подписка подтверждена - теперь удаляем payload и обрабатываем его
+        if pending_start_payload:
+            # Удаляем из FSM state
+            state_data.pop('pending_start_payload', None)
+
+            # Очищаем Redis после успешной проверки подписки
+            await delete_pending_payload_from_redis(query.from_user.id)
+
+            # Всегда обновляем referral_code если есть новый payload
+            # (исправление бага с устаревшими данными в state)
+            campaign = await get_campaign_by_start_parameter(
+                db,
+                pending_start_payload,
+                only_active=True,
+            )
 
             # Обрабатываем payload только если ещё не обработан
             # (проверяем по наличию referral_code или campaign_id в state)
@@ -1784,31 +1822,7 @@ async def required_sub_channel_check(
                     state_data.get('referral_code') or f"campaign_id={state_data.get('campaign_id')}",
                 )
 
-        if state_updated:
             await state.set_data(state_data)
-
-        user = db_user
-        if not user:
-            user = await get_user_by_telegram_id(db, query.from_user.id)
-
-        if user and getattr(user, 'language', None):
-            language = user.language
-        elif state_data.get('language'):
-            language = state_data['language']
-
-        texts = get_texts(language)
-
-        chat_member = await bot.get_chat_member(chat_id=settings.CHANNEL_SUB_ID, user_id=query.from_user.id)
-
-        if chat_member.status not in [
-            ChatMemberStatus.MEMBER,
-            ChatMemberStatus.ADMINISTRATOR,
-            ChatMemberStatus.CREATOR,
-        ]:
-            return await query.answer(
-                texts.t('CHANNEL_SUBSCRIBE_REQUIRED_ALERT', '❌ Вы не подписались на канал!'),
-                show_alert=True,
-            )
 
         if user and user.subscription:
             subscription = user.subscription
