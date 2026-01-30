@@ -132,6 +132,28 @@ class PaymentCommonMixin:
         payment_method_title: str | None = None,
     ) -> None:
         """Отправляет пользователю уведомление об успешном платеже."""
+        # Lazy import to avoid circular dependency
+        from app.cabinet.routes.websocket import notify_user_balance_topup
+
+        # Send WebSocket notification to cabinet frontend (works for both Telegram and email-only users)
+        user_id = getattr(user, 'id', None) if user else None
+        if user_id:
+            try:
+                # Get new balance from user
+                new_balance = getattr(user, 'balance_kopeks', 0)
+                await notify_user_balance_topup(
+                    user_id=user_id,
+                    amount_kopeks=amount_kopeks,
+                    new_balance_kopeks=new_balance,
+                    description=payment_method_title or '',
+                )
+            except Exception as ws_error:
+                logger.warning(
+                    'Не удалось отправить WS уведомление о пополнении баланса для user_id=%s: %s',
+                    user_id,
+                    ws_error,
+                )
+
         if not getattr(self, 'bot', None):
             # Если бот не передан (например, внутри фоновых задач), уведомление пропускаем.
             return
