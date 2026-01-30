@@ -13,6 +13,7 @@ from app.config import settings
 from app.database.crud.user import get_user_by_id
 from app.database.models import PaymentMethod, Transaction, User
 from app.external.cryptobot import CryptoBotService
+from app.services.payment_method_config_service import get_enabled_methods_for_user
 from app.services.payment_service import PaymentService
 from app.services.payment_verification_service import (
     SUPPORTED_MANUAL_CHECK_METHODS,
@@ -128,185 +129,83 @@ async def get_transactions(
 
 
 @router.get('/payment-methods', response_model=list[PaymentMethodResponse])
-async def get_payment_methods():
-    """Get available payment methods."""
+async def get_payment_methods(
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Get available payment methods for the current user.
+
+    Uses PaymentMethodConfig from database for:
+    - Sort order (sort_order)
+    - Enabled/disabled status (is_enabled)
+    - Display names (display_name with fallback to env)
+    - Min/max amounts (with fallback to env defaults)
+    - Sub-options filtering (sub_options)
+    - User filters (user_type_filter, first_topup_filter, promo_group_filter)
+    """
+    # Check if this is user's first topup
+    from sqlalchemy import exists
+
+    has_completed_topup = await db.execute(
+        select(
+            exists().where(
+                Transaction.user_id == user.id,
+                Transaction.type == 'deposit',
+                Transaction.is_completed == True,
+            )
+        )
+    )
+    is_first_topup = not has_completed_topup.scalar()
+
+    # Get enabled methods from database config
+    enabled_methods = await get_enabled_methods_for_user(db, user=user, is_first_topup=is_first_topup)
+
+    # Build response with additional options formatting
     methods = []
+    for method_data in enabled_methods:
+        method_id = method_data['id']
 
-    # YooKassa - with card and SBP options
-    if settings.is_yookassa_enabled():
-        methods.append(
-            PaymentMethodResponse(
-                id='yookassa',
-                name=settings.get_yookassa_display_name(),
-                description='Pay via YooKassa',
-                min_amount_kopeks=settings.YOOKASSA_MIN_AMOUNT_KOPEKS,
-                max_amount_kopeks=settings.YOOKASSA_MAX_AMOUNT_KOPEKS,
-                is_available=True,
-                options=[
-                    {'id': 'card', 'name': '💳 Карта', 'description': 'Банковская карта'},
-                    {'id': 'sbp', 'name': '🏦 СБП', 'description': 'Система быстрых платежей (QR)'},
-                ],
-            )
-        )
+        # Format options with descriptions for specific methods
+        options = method_data.get('options')
+        if options:
+            formatted_options = []
+            for opt in options:
+                opt_id = opt['id']
+                opt_name = opt.get('name', opt_id)
+                description = ''
 
-    # CryptoBot
-    if settings.is_cryptobot_enabled():
-        methods.append(
-            PaymentMethodResponse(
-                id='cryptobot',
-                name=settings.get_cryptobot_display_name(),
-                description='Pay with cryptocurrency via CryptoBot',
-                min_amount_kopeks=1000,
-                max_amount_kopeks=10000000,
-                is_available=True,
-            )
-        )
+                # Add descriptions based on method and option
+                if method_id in ('yookassa', 'pal24', 'cloudpayments', 'freekassa'):
+                    if opt_id == 'card':
+                        opt_name = f'💳 {opt_name}'
+                        description = 'Банковская карта'
+                    elif opt_id == 'sbp':
+                        opt_name = f'🏦 {opt_name}'
+                        description = 'Система быстрых платежей'
+                elif method_id == 'platega':
+                    # Platega options already have descriptions from config
+                    definitions = settings.get_platega_method_definitions()
+                    info = definitions.get(int(opt_id), {}) if opt_id.isdigit() else {}
+                    description = info.get('description') or info.get('name') or ''
 
-    # Telegram Stars
-    if settings.TELEGRAM_STARS_ENABLED:
-        methods.append(
-            PaymentMethodResponse(
-                id='telegram_stars',
-                name=settings.get_telegram_stars_display_name(),
-                description='Pay with Telegram Stars',
-                min_amount_kopeks=100,
-                max_amount_kopeks=1000000,
-                is_available=True,
-            )
-        )
-
-    # Heleket
-    if settings.is_heleket_enabled():
-        methods.append(
-            PaymentMethodResponse(
-                id='heleket',
-                name=settings.get_heleket_display_name(),
-                description='Pay with cryptocurrency via Heleket',
-                min_amount_kopeks=1000,
-                max_amount_kopeks=10000000,
-                is_available=True,
-            )
-        )
-
-    # MulenPay
-    if settings.is_mulenpay_enabled():
-        methods.append(
-            PaymentMethodResponse(
-                id='mulenpay',
-                name=settings.get_mulenpay_display_name(),
-                description='MulenPay payment',
-                min_amount_kopeks=settings.MULENPAY_MIN_AMOUNT_KOPEKS,
-                max_amount_kopeks=settings.MULENPAY_MAX_AMOUNT_KOPEKS,
-                is_available=True,
-            )
-        )
-
-    # PAL24 - add options for card/sbp
-    if settings.is_pal24_enabled():
-        methods.append(
-            PaymentMethodResponse(
-                id='pal24',
-                name=settings.get_pal24_display_name(),
-                description='Pay via PAL24',
-                min_amount_kopeks=settings.PAL24_MIN_AMOUNT_KOPEKS,
-                max_amount_kopeks=settings.PAL24_MAX_AMOUNT_KOPEKS,
-                is_available=True,
-                options=[
-                    {'id': 'sbp', 'name': '🏦 СБП', 'description': 'Система быстрых платежей'},
-                    {'id': 'card', 'name': '💳 Карта', 'description': 'Банковская карта'},
-                ],
-            )
-        )
-
-    # Platega - add options for different payment methods
-    if settings.is_platega_enabled():
-        platega_methods = settings.get_platega_active_methods()
-        definitions = settings.get_platega_method_definitions()
-        platega_options = []
-        for method_code in platega_methods:
-            info = definitions.get(method_code, {})
-            platega_options.append(
-                {
-                    'id': str(method_code),
-                    'name': info.get('title') or info.get('name') or f'Platega {method_code}',
-                    'description': info.get('description') or info.get('name') or '',
-                }
-            )
+                formatted_options.append(
+                    {
+                        'id': opt_id,
+                        'name': opt_name,
+                        'description': description,
+                    }
+                )
+            options = formatted_options if formatted_options else None
 
         methods.append(
             PaymentMethodResponse(
-                id='platega',
-                name=settings.get_platega_display_name(),
-                description='Pay via Platega',
-                min_amount_kopeks=settings.PLATEGA_MIN_AMOUNT_KOPEKS,
-                max_amount_kopeks=settings.PLATEGA_MAX_AMOUNT_KOPEKS,
+                id=method_id,
+                name=method_data['name'],
+                description=None,
+                min_amount_kopeks=method_data['min_amount_kopeks'],
+                max_amount_kopeks=method_data['max_amount_kopeks'],
                 is_available=True,
-                options=platega_options if platega_options else None,
-            )
-        )
-
-    # Wata
-    if settings.is_wata_enabled():
-        methods.append(
-            PaymentMethodResponse(
-                id='wata',
-                name=settings.get_wata_display_name(),
-                description='Pay via Wata',
-                min_amount_kopeks=settings.WATA_MIN_AMOUNT_KOPEKS,
-                max_amount_kopeks=settings.WATA_MAX_AMOUNT_KOPEKS,
-                is_available=True,
-            )
-        )
-
-    # CloudPayments
-    if settings.is_cloudpayments_enabled():
-        methods.append(
-            PaymentMethodResponse(
-                id='cloudpayments',
-                name=settings.get_cloudpayments_display_name(),
-                description='Pay with bank card via CloudPayments',
-                min_amount_kopeks=settings.CLOUDPAYMENTS_MIN_AMOUNT_KOPEKS,
-                max_amount_kopeks=settings.CLOUDPAYMENTS_MAX_AMOUNT_KOPEKS,
-                is_available=True,
-            )
-        )
-
-    # FreeKassa
-    if settings.is_freekassa_enabled():
-        methods.append(
-            PaymentMethodResponse(
-                id='freekassa',
-                name=settings.get_freekassa_display_name(),
-                description='Pay via FreeKassa',
-                min_amount_kopeks=settings.FREEKASSA_MIN_AMOUNT_KOPEKS,
-                max_amount_kopeks=settings.FREEKASSA_MAX_AMOUNT_KOPEKS,
-                is_available=True,
-            )
-        )
-
-    # KassaAI
-    if settings.is_kassa_ai_enabled():
-        methods.append(
-            PaymentMethodResponse(
-                id='kassa_ai',
-                name=settings.get_kassa_ai_display_name(),
-                description='Pay via KassaAI',
-                min_amount_kopeks=settings.KASSA_AI_MIN_AMOUNT_KOPEKS,
-                max_amount_kopeks=settings.KASSA_AI_MAX_AMOUNT_KOPEKS,
-                is_available=True,
-            )
-        )
-
-    # Tribute
-    if settings.TRIBUTE_ENABLED and settings.TRIBUTE_DONATE_LINK:
-        methods.append(
-            PaymentMethodResponse(
-                id='tribute',
-                name='Tribute',
-                description='Pay with bank card via Tribute',
-                min_amount_kopeks=10000,
-                max_amount_kopeks=10000000,
-                is_available=True,
+                options=options,
             )
         )
 
@@ -414,7 +313,7 @@ async def create_topup(
 ):
     """Create payment for balance top-up."""
     # Validate payment method
-    methods = await get_payment_methods()
+    methods = await get_payment_methods(user=user, db=db)
     method = next((m for m in methods if m.id == request.payment_method), None)
 
     if not method or not method.is_available:
