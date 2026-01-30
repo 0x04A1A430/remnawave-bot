@@ -1690,9 +1690,11 @@ class RemnaWaveService:
                     if expire_at > local_end_date_utc:
                         # RemnaWave имеет более позднюю дату - обновляем
                         # Конвертируем UTC обратно в локальное время для сохранения в БД
-                        new_end_date_local = expire_at.replace(tzinfo=self._utc_timezone).astimezone(
-                            self._panel_timezone
-                        ).replace(tzinfo=None)
+                        new_end_date_local = (
+                            expire_at.replace(tzinfo=self._utc_timezone)
+                            .astimezone(self._panel_timezone)
+                            .replace(tzinfo=None)
+                        )
                         logger.info(
                             f'✅ Sync: обновлена end_date для user {getattr(user, "telegram_id", "?")}: '
                             f'{subscription.end_date} -> {new_end_date_local} (разница: {time_diff:.0f}с)'

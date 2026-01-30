@@ -3493,6 +3493,10 @@ async def add_user_cabinet_columns() -> bool:
         ('password_reset_token', 'VARCHAR(255)', 'VARCHAR(255)', 'VARCHAR(255)'),
         ('password_reset_expires', 'DATETIME', 'TIMESTAMP', 'DATETIME'),
         ('cabinet_last_login', 'DATETIME', 'TIMESTAMP', 'DATETIME'),
+        # Email change fields
+        ('email_change_new', 'VARCHAR(255)', 'VARCHAR(255)', 'VARCHAR(255)'),
+        ('email_change_code', 'VARCHAR(6)', 'VARCHAR(6)', 'VARCHAR(6)'),
+        ('email_change_expires', 'DATETIME', 'TIMESTAMP', 'DATETIME'),
     ]
 
     try:

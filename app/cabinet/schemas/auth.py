@@ -118,3 +118,23 @@ class RegisterResponse(BaseModel):
     message: str = Field(..., description='Success message')
     email: str = Field(..., description='Email address to verify')
     requires_verification: bool = Field(True, description='Whether email verification is required')
+
+
+class EmailChangeRequest(BaseModel):
+    """Request to initiate email change."""
+
+    new_email: EmailStr = Field(..., description='New email address')
+
+
+class EmailChangeVerifyRequest(BaseModel):
+    """Request to verify email change with code."""
+
+    code: str = Field(..., min_length=6, max_length=6, description='6-digit verification code')
+
+
+class EmailChangeResponse(BaseModel):
+    """Response for email change initiation."""
+
+    message: str = Field(..., description='Success message')
+    new_email: str = Field(..., description='New email address pending verification')
+    expires_in_minutes: int = Field(..., description='Code expiration time in minutes')

@@ -11,11 +11,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.crud.user import (
+    clear_email_change_pending,
     create_user,
     create_user_by_email,
     get_user_by_id,
     get_user_by_referral_code,
     get_user_by_telegram_id,
+    is_email_taken,
+    set_email_change_pending,
+    verify_and_apply_email_change,
 )
 from app.database.models import CabinetRefreshToken, User
 from app.services.referral_service import process_referral_registration
@@ -31,8 +35,10 @@ from ..auth import (
     verify_password,
 )
 from ..auth.email_verification import (
+    generate_email_change_code,
     generate_password_reset_token,
     generate_verification_token,
+    get_email_change_expires_at,
     get_password_reset_expires_at,
     get_verification_expires_at,
     is_token_expired,
@@ -41,6 +47,9 @@ from ..auth.jwt_handler import get_refresh_token_expires_at
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 from ..schemas.auth import (
     AuthResponse,
+    EmailChangeRequest,
+    EmailChangeResponse,
+    EmailChangeVerifyRequest,
     EmailLoginRequest,
     EmailRegisterRequest,
     EmailRegisterStandaloneRequest,
@@ -934,3 +943,152 @@ async def check_is_admin(
     """Check if current user is an admin."""
     is_admin = settings.is_admin(telegram_id=user.telegram_id, email=user.email if user.email_verified else None)
     return {'is_admin': is_admin}
+
+
+@router.post('/email/change', response_model=EmailChangeResponse)
+async def request_email_change(
+    request: EmailChangeRequest,
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """
+    Request email change.
+
+    Sends a 6-digit verification code to the new email address.
+    User must have a verified email to change it.
+    """
+    # Check if user has a verified email
+    if not user.email or not user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='You must have a verified email to change it',
+        )
+
+    # Check if new email is the same as current
+    if request.new_email.lower() == user.email.lower():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='New email is the same as current email',
+        )
+
+    # Check if new email is already taken
+    if await is_email_taken(db, request.new_email, exclude_user_id=user.id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='This email is already registered',
+        )
+
+    # Generate verification code
+    code = generate_email_change_code()
+    expires_at = get_email_change_expires_at()
+    expire_minutes = settings.get_cabinet_email_change_code_expire_minutes()
+
+    # Save pending email change
+    await set_email_change_pending(db, user, request.new_email, code, expires_at)
+
+    # Send verification email to new address
+    if email_service.is_configured():
+        lang = user.language or 'ru'
+
+        # Check for admin template override
+        override = await get_rendered_override(
+            'email_change_code',
+            lang,
+            context={
+                'username': user.first_name or '',
+                'code': code,
+                'expire_minutes': str(expire_minutes),
+            },
+            db=db,
+        )
+        custom_subject, custom_body = override if override else (None, None)
+
+        await asyncio.to_thread(
+            email_service.send_email_change_code,
+            to_email=request.new_email,
+            code=code,
+            username=user.first_name,
+            language=lang,
+            custom_subject=custom_subject,
+            custom_body_html=custom_body,
+        )
+    else:
+        # Clear pending change if email service is not configured
+        await clear_email_change_pending(db, user)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail='Email service is not configured',
+        )
+
+    logger.info(f'Email change requested for user {user.id}: {user.email} -> {request.new_email}')
+
+    return EmailChangeResponse(
+        message='Verification code sent to new email',
+        new_email=request.new_email,
+        expires_in_minutes=expire_minutes,
+    )
+
+
+@router.post('/email/change/verify')
+async def verify_email_change(
+    request: EmailChangeVerifyRequest,
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """
+    Verify email change with code.
+
+    Completes the email change process if the code is valid.
+    """
+    success, message = await verify_and_apply_email_change(db, user, request.code)
+
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=message,
+        )
+
+    return {
+        'message': message,
+        'new_email': user.email,
+    }
+
+
+@router.post('/email/change/cancel')
+async def cancel_email_change(
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """
+    Cancel pending email change.
+    """
+    if not user.email_change_new:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='No pending email change',
+        )
+
+    await clear_email_change_pending(db, user)
+
+    return {'message': 'Email change cancelled'}
+
+
+@router.get('/email/change/status')
+async def get_email_change_status(
+    user: User = Depends(get_current_cabinet_user),
+):
+    """
+    Get pending email change status.
+    """
+    if not user.email_change_new:
+        return {
+            'pending': False,
+            'new_email': None,
+            'expires_at': None,
+        }
+
+    return {
+        'pending': True,
+        'new_email': user.email_change_new,
+        'expires_at': user.email_change_expires.isoformat() if user.email_change_expires else None,
+    }

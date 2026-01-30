@@ -336,6 +336,122 @@ class EmailService:
 
         return self.send_email(to_email, subject, body_html)
 
+    def send_email_change_code(
+        self,
+        to_email: str,
+        code: str,
+        username: str | None = None,
+        language: str = 'ru',
+        custom_subject: str | None = None,
+        custom_body_html: str | None = None,
+    ) -> bool:
+        """
+        Send email change verification code.
+
+        Args:
+            to_email: New email address
+            code: 6-digit verification code
+            username: User's name for personalization
+            language: Language code (ru, en, zh, ua)
+            custom_subject: Override subject from admin template
+            custom_body_html: Override body HTML from admin template
+
+        Returns:
+            True if email was sent successfully, False otherwise
+        """
+        if custom_subject and custom_body_html:
+            return self.send_email(to_email, custom_subject, custom_body_html)
+
+        expire_minutes = settings.get_cabinet_email_change_code_expire_minutes()
+
+        texts = {
+            'ru': {
+                'greeting': f'Здравствуйте{", " + username if username else ""}!',
+                'subject': 'Код подтверждения для смены email',
+                'intro': 'Вы запросили смену email адреса. Используйте код ниже для подтверждения:',
+                'code_label': 'Ваш код подтверждения:',
+                'expires': f'Код действителен в течение {expire_minutes} минут.',
+                'ignore': 'Если вы не запрашивали смену email, просто проигнорируйте это письмо.',
+                'regards': 'С уважением,',
+            },
+            'en': {
+                'greeting': f'Hello{", " + username if username else ""}!',
+                'subject': 'Email change verification code',
+                'intro': 'You requested to change your email address. Use the code below to confirm:',
+                'code_label': 'Your verification code:',
+                'expires': f'This code will expire in {expire_minutes} minutes.',
+                'ignore': "If you didn't request an email change, you can safely ignore this email.",
+                'regards': 'Best regards,',
+            },
+            'zh': {
+                'greeting': f'您好{", " + username if username else ""}!',
+                'subject': '邮箱更换验证码',
+                'intro': '您请求更换邮箱地址。请使用以下验证码确认：',
+                'code_label': '您的验证码：',
+                'expires': f'此验证码将在 {expire_minutes} 分钟后过期。',
+                'ignore': '如果您没有请求更换邮箱，请忽略此邮件。',
+                'regards': '此致,',
+            },
+            'ua': {
+                'greeting': f'Вітаємо{", " + username if username else ""}!',
+                'subject': 'Код підтвердження для зміни email',
+                'intro': 'Ви запросили зміну email адреси. Використовуйте код нижче для підтвердження:',
+                'code_label': 'Ваш код підтвердження:',
+                'expires': f'Код дійсний протягом {expire_minutes} хвилин.',
+                'ignore': 'Якщо ви не запитували зміну email, просто проігноруйте цей лист.',
+                'regards': 'З повагою,',
+            },
+        }
+
+        t = texts.get(language, texts['ru'])
+
+        subject = t['subject']
+        body_html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .code-box {{
+                    background-color: #f8f9fa;
+                    border: 2px solid #007bff;
+                    border-radius: 8px;
+                    padding: 20px;
+                    text-align: center;
+                    margin: 20px 0;
+                }}
+                .code {{
+                    font-size: 32px;
+                    font-weight: bold;
+                    letter-spacing: 8px;
+                    color: #007bff;
+                    font-family: monospace;
+                }}
+                .footer {{ margin-top: 30px; font-size: 12px; color: #666; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h2>{t['greeting']}</h2>
+                <p>{t['intro']}</p>
+                <div class="code-box">
+                    <p>{t['code_label']}</p>
+                    <p class="code">{code}</p>
+                </div>
+                <p>{t['expires']}</p>
+                <p>{t['ignore']}</p>
+                <div class="footer">
+                    <p>{t['regards']}<br>{self.from_name}</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+
+        return self.send_email(to_email, subject, body_html)
+
 
 # Singleton instance
 email_service = EmailService()
