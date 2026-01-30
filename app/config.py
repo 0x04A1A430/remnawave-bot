@@ -691,6 +691,7 @@ class Settings(BaseSettings):
     CABINET_EMAIL_VERIFICATION_ENABLED: bool = True
     CABINET_EMAIL_VERIFICATION_EXPIRE_HOURS: int = 24
     CABINET_PASSWORD_RESET_EXPIRE_HOURS: int = 1
+    CABINET_EMAIL_CHANGE_CODE_EXPIRE_MINUTES: int = 15  # Email change verification code expiration
     CABINET_EMAIL_AUTH_ENABLED: bool = True  # Enable email registration/login in cabinet
     CABINET_URL: str = 'https://example.com/cabinet'  # Base URL for cabinet (used in verification emails)
 
@@ -2497,6 +2498,9 @@ class Settings(BaseSettings):
 
     def get_cabinet_password_reset_expire_hours(self) -> int:
         return max(1, self.CABINET_PASSWORD_RESET_EXPIRE_HOURS)
+
+    def get_cabinet_email_change_code_expire_minutes(self) -> int:
+        return max(1, self.CABINET_EMAIL_CHANGE_CODE_EXPIRE_MINUTES)
 
     def is_cabinet_email_auth_enabled(self) -> bool:
         return bool(self.CABINET_EMAIL_AUTH_ENABLED)
