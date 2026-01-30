@@ -991,9 +991,7 @@ class UserService:
                 logger.error(f'❌ Ошибка удаления подписки: {e}')
 
             try:
-                wata_payments_result = await db.execute(
-                    select(WataPayment).where(WataPayment.user_id == user_id)
-                )
+                wata_payments_result = await db.execute(select(WataPayment).where(WataPayment.user_id == user_id))
                 wata_payments = wata_payments_result.scalars().all()
 
                 if wata_payments:
