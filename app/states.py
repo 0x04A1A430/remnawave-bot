@@ -118,6 +118,9 @@ class AdminStates(StatesGroup):
     adding_virtual_participant_name = State()
     adding_virtual_participant_count = State()
     editing_virtual_participant_count = State()
+    # Массовое создание виртуальных участников (массовка)
+    adding_mass_virtual_count = State()  # Сколько призраков создать
+    adding_mass_virtual_referrals = State()  # По сколько рефералов у каждого
     editing_daily_contest_field = State()
     editing_daily_contest_value = State()
 
@@ -131,6 +134,10 @@ class AdminStates(StatesGroup):
 
     # Тестовое начисление реферального дохода
     test_referral_earning_input = State()
+
+    # Диагностика рефералов
+    referral_diagnostics_period = State()
+    waiting_for_log_file = State()
 
     editing_rules_page = State()
     editing_privacy_policy = State()
