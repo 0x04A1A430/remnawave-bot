@@ -1134,11 +1134,14 @@ async def auto_purchase_saved_cart_after_topup(
     bot: Bot | None = None,
 ) -> bool:
     """Attempts to automatically purchase a subscription from a saved cart."""
+    from datetime import datetime, timedelta
+
     # Lazy imports to avoid circular dependency
     from app.cabinet.routes.websocket import (
         notify_user_subscription_activated,
         notify_user_subscription_renewed,
     )
+    from app.database.crud.transaction import get_user_transactions
 
     if not settings.is_auto_purchase_after_topup_enabled():
         return False
@@ -1153,6 +1156,33 @@ async def auto_purchase_saved_cart_after_topup(
     logger.info('🔁 Автопокупка: обнаружена сохранённая корзина у пользователя %s', _format_user_id(user))
 
     cart_mode = cart_data.get('cart_mode') or cart_data.get('mode')
+
+    # Защита от race condition: если подписка была куплена/продлена в последние 60 секунд,
+    # пропускаем автопокупку чтобы избежать двойного списания
+    if cart_mode in ('extend', 'tariff_purchase', 'daily_tariff_purchase'):
+        try:
+            recent_transactions = await get_user_transactions(db, user.id, limit=1)
+            if recent_transactions:
+                last_tx = recent_transactions[0]
+                if (
+                    last_tx.type == TransactionType.SUBSCRIPTION_PAYMENT
+                    and last_tx.created_at
+                    and (datetime.utcnow() - last_tx.created_at) < timedelta(seconds=60)
+                ):
+                    logger.info(
+                        '🔁 Автопокупка: пропускаем для пользователя %s - подписка уже куплена %s секунд назад',
+                        _format_user_id(user),
+                        (datetime.utcnow() - last_tx.created_at).total_seconds(),
+                    )
+                    # Очищаем корзину чтобы не срабатывало повторно
+                    await user_cart_service.delete_user_cart(user.id)
+                    return False
+        except Exception as check_error:
+            logger.warning(
+                '🔁 Автопокупка: ошибка проверки последней транзакции для %s: %s',
+                _format_user_id(user),
+                check_error,
+            )
 
     # Обработка продления подписки
     if cart_mode == 'extend':
