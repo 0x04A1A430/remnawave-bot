@@ -374,6 +374,25 @@ async def notify_user_subscription_renewed(
     )
 
 
+async def notify_user_devices_purchased(
+    user_id: int,
+    devices_added: int,
+    new_device_limit: int,
+    amount_kopeks: int,
+) -> None:
+    """Уведомить пользователя о покупке устройств."""
+    await cabinet_ws_manager.send_to_user(
+        user_id,
+        {
+            'type': 'subscription.devices_purchased',
+            'devices_added': devices_added,
+            'new_device_limit': new_device_limit,
+            'amount_kopeks': amount_kopeks,
+            'amount_rubles': amount_kopeks / 100,
+        },
+    )
+
+
 # ============================================================================
 # Уведомления об автопродлении
 # ============================================================================
