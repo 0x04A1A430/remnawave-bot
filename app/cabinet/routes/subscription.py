@@ -666,9 +666,35 @@ async def purchase_traffic(
 
     # Проверяем баланс
     if user.balance_kopeks < final_price:
+        missing = final_price - user.balance_kopeks
+
+        # Save cart for auto-purchase after balance top-up
+        cart_data = {
+            'cart_mode': 'add_traffic',
+            'subscription_id': subscription.id,
+            'traffic_gb': request.gb,
+            'price_kopeks': final_price,
+            'base_price_kopeks': base_price_kopeks,
+            'discount_percent': traffic_discount_percent,
+            'source': 'cabinet',
+            'description': f'Докупка {request.gb} ГБ трафика',
+        }
+
+        try:
+            await user_cart_service.save_user_cart(user.id, cart_data)
+            logger.info(f'Cart saved for traffic purchase (cabinet) user {user.id}: +{request.gb} GB')
+        except Exception as e:
+            logger.error(f'Error saving cart for traffic purchase (cabinet): {e}')
+
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail=f'Insufficient balance. Need {final_price / 100:.2f} RUB, have {user.balance_kopeks / 100:.2f} RUB',
+            detail={
+                'code': 'insufficient_funds',
+                'message': f'Недостаточно средств. Не хватает {settings.format_price(missing)}',
+                'missing_amount': missing,
+                'cart_saved': True,
+                'cart_mode': 'add_traffic',
+            },
         )
 
     # Формируем описание
@@ -1938,6 +1964,122 @@ async def purchase_devices(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Не удалось обработать покупку устройств',
         )
+
+
+@router.post('/traffic/save-cart')
+async def save_traffic_cart(
+    request: TrafficPurchaseRequest,
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> dict[str, bool]:
+    """Save cart for traffic purchase (for insufficient balance flow)."""
+    from app.utils.pricing_utils import calculate_prorated_price
+
+    await db.refresh(user, ['subscription'])
+    subscription = user.subscription
+
+    if not subscription:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='У вас нет активной подписки',
+        )
+
+    if subscription.status not in ['active', 'trial']:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Ваша подписка неактивна',
+        )
+
+    if subscription.is_trial:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Докупка трафика недоступна на пробном периоде',
+        )
+
+    if subscription.traffic_limit_gb == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='У вас уже безлимитный трафик',
+        )
+
+    # Get traffic price from tariff or settings
+    tariff = None
+    base_price_kopeks = 0
+    is_tariff_mode = settings.is_tariffs_mode() and subscription.tariff_id
+
+    if is_tariff_mode:
+        tariff = await get_tariff_by_id(db, subscription.tariff_id)
+        if not tariff:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail='Тариф не найден',
+            )
+
+        if not getattr(tariff, 'traffic_topup_enabled', False):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='Докупка трафика недоступна на вашем тарифе',
+            )
+
+        packages = tariff.get_traffic_topup_packages() if hasattr(tariff, 'get_traffic_topup_packages') else {}
+        if request.gb not in packages:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f'Пакет трафика {request.gb} ГБ недоступен',
+            )
+        base_price_kopeks = packages[request.gb]
+    else:
+        if not settings.is_traffic_topup_enabled():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='Докупка трафика отключена',
+            )
+
+        packages = settings.get_traffic_packages()
+        matching_pkg = next((pkg for pkg in packages if pkg['gb'] == request.gb and pkg.get('enabled', True)), None)
+        if not matching_pkg:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='Недоступный пакет трафика',
+            )
+        base_price_kopeks = matching_pkg['price']
+
+    # Apply promo group discount
+    traffic_discount_percent = 0
+    promo_group = (
+        user.get_primary_promo_group()
+        if hasattr(user, 'get_primary_promo_group')
+        else getattr(user, 'promo_group', None)
+    )
+    if promo_group:
+        apply_to_addons = getattr(promo_group, 'apply_discounts_to_addons', True)
+        if apply_to_addons:
+            traffic_discount_percent = max(0, min(100, int(getattr(promo_group, 'traffic_discount_percent', 0) or 0)))
+
+    if traffic_discount_percent > 0:
+        base_price_kopeks = int(base_price_kopeks * (100 - traffic_discount_percent) / 100)
+
+    # Calculate prorated price
+    final_price, _ = calculate_prorated_price(
+        base_price_kopeks,
+        subscription.end_date,
+    )
+
+    # Save cart for auto-purchase after balance top-up
+    cart_data = {
+        'cart_mode': 'add_traffic',
+        'subscription_id': subscription.id,
+        'traffic_gb': request.gb,
+        'price_kopeks': final_price,
+        'base_price_kopeks': base_price_kopeks,
+        'discount_percent': traffic_discount_percent,
+        'source': 'cabinet',
+        'description': f'Докупка {request.gb} ГБ трафика',
+    }
+    await user_cart_service.save_user_cart(user.id, cart_data)
+    logger.info(f'Cart saved for traffic purchase (cabinet save-cart) user {user.id}: +{request.gb} GB')
+
+    return {'success': True, 'cart_saved': True}
 
 
 @router.post('/devices/save-cart')

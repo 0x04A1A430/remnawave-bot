@@ -393,6 +393,25 @@ async def notify_user_devices_purchased(
     )
 
 
+async def notify_user_traffic_purchased(
+    user_id: int,
+    traffic_gb_added: int,
+    new_traffic_limit_gb: int,
+    amount_kopeks: int,
+) -> None:
+    """Уведомить пользователя о покупке трафика."""
+    await cabinet_ws_manager.send_to_user(
+        user_id,
+        {
+            'type': 'subscription.traffic_purchased',
+            'traffic_gb_added': traffic_gb_added,
+            'new_traffic_limit_gb': new_traffic_limit_gb,
+            'amount_kopeks': amount_kopeks,
+            'amount_rubles': amount_kopeks / 100,
+        },
+    )
+
+
 # ============================================================================
 # Уведомления об автопродлении
 # ============================================================================
