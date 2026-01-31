@@ -3369,8 +3369,6 @@ async def add_email_fields_to_broadcast_history():
 
     try:
         async with engine.begin() as conn:
-            db_type = await get_database_type()
-
             for field_name, field_type in email_fields.items():
                 field_exists = await check_column_exists('broadcast_history', field_name)
 
