@@ -1127,6 +1127,197 @@ async def _auto_purchase_daily_tariff(
     return True
 
 
+async def _auto_add_devices(
+    db: AsyncSession,
+    user: User,
+    cart_data: dict,
+    *,
+    bot: Bot | None = None,
+) -> bool:
+    """Auto-purchase devices from saved cart after balance topup."""
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+    from app.database.crud.subscription import get_subscription_by_user_id
+    from app.database.crud.user import subtract_user_balance
+    from app.database.models import PaymentMethod
+
+    devices_to_add = _safe_int(cart_data.get('devices_to_add'))
+    price_kopeks = _safe_int(cart_data.get('price_kopeks'))
+
+    if devices_to_add <= 0 or price_kopeks <= 0:
+        logger.warning(
+            '🔁 Автопокупка устройств: некорректные данные корзины для пользователя %s (devices=%s, price=%s)',
+            _format_user_id(user),
+            devices_to_add,
+            price_kopeks,
+        )
+        return False
+
+    # Проверяем баланс
+    if user.balance_kopeks < price_kopeks:
+        logger.info(
+            '🔁 Автопокупка устройств: у пользователя %s недостаточно средств (%s < %s)',
+            _format_user_id(user),
+            user.balance_kopeks,
+            price_kopeks,
+        )
+        return False
+
+    # Проверяем подписку
+    subscription = await get_subscription_by_user_id(db, user.id)
+    if not subscription:
+        logger.warning(
+            '🔁 Автопокупка устройств: у пользователя %s нет подписки',
+            _format_user_id(user),
+        )
+        await user_cart_service.delete_user_cart(user.id)
+        return False
+
+    if subscription.status not in ('active', 'trial', 'ACTIVE', 'TRIAL'):
+        logger.warning(
+            '🔁 Автопокупка устройств: подписка пользователя %s не активна (status=%s)',
+            _format_user_id(user),
+            subscription.status,
+        )
+        await user_cart_service.delete_user_cart(user.id)
+        return False
+
+    # Списываем баланс
+    description = f'Покупка {devices_to_add} доп. устройств'
+    try:
+        success = await subtract_user_balance(
+            db,
+            user,
+            price_kopeks,
+            description,
+            create_transaction=True,
+            payment_method=PaymentMethod.BALANCE,
+        )
+        if not success:
+            logger.warning(
+                '❌ Автопокупка устройств: не удалось списать баланс пользователя %s',
+                _format_user_id(user),
+            )
+            return False
+    except Exception as error:
+        logger.error(
+            '❌ Автопокупка устройств: ошибка списания баланса пользователя %s: %s',
+            _format_user_id(user),
+            error,
+            exc_info=True,
+        )
+        return False
+
+    # Добавляем устройства
+    old_device_limit = subscription.device_limit or 1
+    subscription.device_limit = old_device_limit + devices_to_add
+
+    try:
+        await db.commit()
+        await db.refresh(subscription)
+    except Exception as error:
+        logger.error(
+            '❌ Автопокупка устройств: ошибка сохранения подписки пользователя %s: %s',
+            _format_user_id(user),
+            error,
+            exc_info=True,
+        )
+        await db.rollback()
+        return False
+
+    # Синхронизация с RemnaWave
+    try:
+        subscription_service = SubscriptionService()
+        await subscription_service.update_remnawave_user(db, subscription)
+    except Exception as error:
+        logger.warning(
+            '⚠️ Автопокупка устройств: не удалось обновить Remnawave для пользователя %s: %s',
+            _format_user_id(user),
+            error,
+        )
+
+    # Очищаем корзину (транзакция уже создана в subtract_user_balance)
+    await user_cart_service.delete_user_cart(user.id)
+
+    logger.info(
+        '✅ Автопокупка устройств: пользователь %s добавил %s устройств (было %s, стало %s) за %s коп.',
+        _format_user_id(user),
+        devices_to_add,
+        old_device_limit,
+        subscription.device_limit,
+        price_kopeks,
+    )
+
+    # Уведомление пользователю
+    if bot and user.telegram_id:
+        texts = get_texts(getattr(user, 'language', 'ru'))
+        try:
+            message = texts.t(
+                'AUTO_PURCHASE_DEVICES_SUCCESS',
+                (
+                    '✅ <b>Устройства добавлены автоматически!</b>\n\n'
+                    '📱 Добавлено: {devices_to_add} устройств\n'
+                    '📊 Новый лимит: {new_limit} устройств\n'
+                    '💰 Списано: {price}'
+                ),
+            ).format(
+                devices_to_add=devices_to_add,
+                new_limit=subscription.device_limit,
+                price=texts.format_price(price_kopeks),
+            )
+
+            keyboard = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
+                            callback_data='menu_subscription',
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '🏠 Главное меню'),
+                            callback_data='back_to_menu',
+                        )
+                    ],
+                ]
+            )
+
+            await bot.send_message(
+                chat_id=user.telegram_id,
+                text=message,
+                reply_markup=keyboard,
+                parse_mode='HTML',
+            )
+        except Exception as error:
+            logger.warning(
+                '⚠️ Автопокупка устройств: не удалось уведомить пользователя %s: %s',
+                user.telegram_id,
+                error,
+            )
+
+    # Уведомление админам
+    if bot:
+        try:
+            notification_service = AdminNotificationService(bot)
+            await notification_service.send_subscription_update_notification(
+                db,
+                user,
+                subscription,
+                'devices',
+                old_device_limit,
+                subscription.device_limit,
+                price_kopeks,
+            )
+        except Exception as error:
+            logger.warning(
+                '⚠️ Автопокупка устройств: не удалось уведомить админов: %s',
+                error,
+            )
+
+    return True
+
+
 async def auto_purchase_saved_cart_after_topup(
     db: AsyncSession,
     user: User,
@@ -1195,6 +1386,10 @@ async def auto_purchase_saved_cart_after_topup(
     # Обработка покупки суточного тарифа
     if cart_mode == 'daily_tariff_purchase':
         return await _auto_purchase_daily_tariff(db, user, cart_data, bot=bot)
+
+    # Обработка докупки устройств
+    if cart_mode == 'add_devices':
+        return await _auto_add_devices(db, user, cart_data, bot=bot)
 
     try:
         prepared = await _prepare_auto_purchase(db, user, cart_data)

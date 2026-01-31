@@ -755,9 +755,31 @@ async def purchase_devices(
 
     # Check balance
     if user.balance_kopeks < total_price:
+        missing = total_price - user.balance_kopeks
+
+        # Сохраняем корзину для автопокупки после пополнения
+        try:
+            cart_data = {
+                'cart_mode': 'add_devices',
+                'devices_to_add': request.devices,
+                'price_kopeks': total_price,
+                'source': 'cabinet',
+            }
+            await user_cart_service.save_user_cart(user.id, cart_data)
+            logger.info(f'Cart saved for device purchase (cabinet /devices) user {user.id}: +{request.devices} devices')
+        except Exception as e:
+            logger.error(f'Error saving cart for device purchase (cabinet /devices): {e}')
+
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Insufficient balance',
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail={
+                'code': 'insufficient_funds',
+                'error': 'Insufficient balance',
+                'required_kopeks': total_price,
+                'current_kopeks': user.balance_kopeks,
+                'missing_kopeks': missing,
+                'cart_saved': True,
+            },
         )
 
     # Check max devices limit
@@ -771,8 +793,20 @@ async def purchase_devices(
             detail=f'Maximum device limit is {max_devices}',
         )
 
-    # Deduct balance and add devices
-    user.balance_kopeks -= total_price
+    # Deduct balance and create transaction
+    from app.database.crud.user import subtract_user_balance
+    from app.database.models import PaymentMethod
+
+    await subtract_user_balance(
+        db=db,
+        user=user,
+        amount_kopeks=total_price,
+        description=f'Покупка {request.devices} доп. устройств',
+        create_transaction=True,
+        payment_method=PaymentMethod.BALANCE,
+    )
+
+    # Add devices
     user.subscription.device_limit = new_devices
 
     await db.commit()
@@ -1827,24 +1861,43 @@ async def purchase_devices(
         # Check balance
         if user.balance_kopeks < price_kopeks:
             missing = price_kopeks - user.balance_kopeks
+
+            # Сохраняем корзину для автопокупки после пополнения
+            try:
+                cart_data = {
+                    'cart_mode': 'add_devices',
+                    'devices_to_add': request.devices,
+                    'price_kopeks': price_kopeks,
+                    'source': 'cabinet',
+                }
+                await user_cart_service.save_user_cart(user.id, cart_data)
+                logger.info(f'Cart saved for device purchase (cabinet) user {user.id}: +{request.devices} devices')
+            except Exception as e:
+                logger.error(f'Error saving cart for device purchase (cabinet): {e}')
+
             raise HTTPException(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
                 detail={
+                    'code': 'insufficient_funds',
                     'error': 'Insufficient balance',
                     'required_kopeks': price_kopeks,
                     'current_kopeks': user.balance_kopeks,
                     'missing_kopeks': missing,
+                    'cart_saved': True,
                 },
             )
 
-        # Deduct balance
+        # Deduct balance and create transaction
         from app.database.crud.user import subtract_user_balance
+        from app.database.models import PaymentMethod
 
         await subtract_user_balance(
             db=db,
             user=user,
             amount_kopeks=price_kopeks,
             description=f'Покупка {request.devices} доп. устройств',
+            create_transaction=True,
+            payment_method=PaymentMethod.BALANCE,
         )
 
         # Increase device limit
