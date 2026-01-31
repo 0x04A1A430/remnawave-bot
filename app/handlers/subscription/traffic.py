@@ -21,6 +21,7 @@ from app.keyboards.inline import (
 from app.localization.texts import get_texts
 from app.services.remnawave_service import RemnaWaveService
 from app.services.subscription_service import SubscriptionService
+from app.services.user_cart_service import user_cart_service
 from app.states import SubscriptionStates
 from app.utils.pricing_utils import (
     apply_percentage_discount,
@@ -239,7 +240,7 @@ async def handle_reset_traffic(callback: types.CallbackQuery, db_user: User, db:
 
     await callback.message.edit_text(
         f'🔄 <b>Сброс трафика</b>\n\n'
-        f'Использовано: {texts.format_traffic(subscription.traffic_used_gb)}\n'
+        f'Использовано: {texts.format_traffic(subscription.traffic_used_gb, is_limit=False)}\n'
         f'Лимит: {texts.format_traffic(subscription.traffic_limit_gb)}\n\n'
         f'Стоимость сброса: {texts.format_price(reset_price)}{price_info}{balance_info}\n\n'
         'После сброса счетчик использованного трафика станет равным 0.',
@@ -495,6 +496,24 @@ async def add_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSes
 
     if db_user.balance_kopeks < price:
         missing_kopeks = price - db_user.balance_kopeks
+
+        # Save cart for auto-purchase after balance top-up
+        cart_data = {
+            'cart_mode': 'add_traffic',
+            'subscription_id': subscription.id,
+            'traffic_gb': traffic_gb,
+            'price_kopeks': price,
+            'base_price_kopeks': discounted_per_month,
+            'discount_percent': discount_result['percent'],
+            'source': 'bot',
+            'description': f'Докупка {traffic_gb} ГБ трафика',
+        }
+        try:
+            await user_cart_service.save_user_cart(db_user.id, cart_data)
+            logger.info(f'Cart saved for traffic purchase (bot) user {db_user.telegram_id}: +{traffic_gb} GB')
+        except Exception as e:
+            logger.error(f'Error saving cart for traffic purchase (bot): {e}')
+
         message_text = texts.t(
             'ADDON_INSUFFICIENT_FUNDS_MESSAGE',
             (
