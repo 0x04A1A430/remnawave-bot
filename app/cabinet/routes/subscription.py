@@ -771,8 +771,20 @@ async def purchase_devices(
             detail=f'Maximum device limit is {max_devices}',
         )
 
-    # Deduct balance and add devices
-    user.balance_kopeks -= total_price
+    # Deduct balance and create transaction
+    from app.database.crud.user import subtract_user_balance
+    from app.database.models import PaymentMethod
+
+    await subtract_user_balance(
+        db=db,
+        user=user,
+        amount_kopeks=total_price,
+        description=f'Покупка {request.devices} доп. устройств',
+        create_transaction=True,
+        payment_method=PaymentMethod.BALANCE,
+    )
+
+    # Add devices
     user.subscription.device_limit = new_devices
 
     await db.commit()
@@ -1837,14 +1849,17 @@ async def purchase_devices(
                 },
             )
 
-        # Deduct balance
+        # Deduct balance and create transaction
         from app.database.crud.user import subtract_user_balance
+        from app.database.models import PaymentMethod
 
         await subtract_user_balance(
             db=db,
             user=user,
             amount_kopeks=price_kopeks,
             description=f'Покупка {request.devices} доп. устройств',
+            create_transaction=True,
+            payment_method=PaymentMethod.BALANCE,
         )
 
         # Increase device limit
