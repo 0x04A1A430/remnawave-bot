@@ -149,7 +149,7 @@ async def _get_email_filter_count(db: AsyncSession, target: str) -> int:
     """Get count of email users matching the filter."""
     base_conditions = [
         User.email.isnot(None),
-        User.email_verified == True,  # noqa: E712
+        User.email_verified == True,
         User.status == 'active',
     ]
 
@@ -185,10 +185,12 @@ async def _get_email_filter_count(db: AsyncSession, target: str) -> int:
             .join(Subscription, User.id == Subscription.user_id)
             .where(
                 *base_conditions,
-                Subscription.status.in_([
-                    SubscriptionStatus.EXPIRED.value,
-                    SubscriptionStatus.DISABLED.value,
-                ]),
+                Subscription.status.in_(
+                    [
+                        SubscriptionStatus.EXPIRED.value,
+                        SubscriptionStatus.DISABLED.value,
+                    ]
+                ),
             )
         )
 
@@ -659,10 +661,7 @@ async def create_combined_broadcast(
 
     await db.refresh(broadcast)
 
-    logger.info(
-        f"Admin {admin.id} created {request.channel} broadcast {broadcast.id} "
-        f"for target '{request.target}'"
-    )
+    logger.info(f"Admin {admin.id} created {request.channel} broadcast {broadcast.id} for target '{request.target}'")
 
     return _serialize_broadcast(broadcast)
 
