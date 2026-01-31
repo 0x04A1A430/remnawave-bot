@@ -1940,6 +1940,81 @@ async def purchase_devices(
         )
 
 
+@router.post('/devices/save-cart')
+async def save_devices_cart(
+    request: DevicePurchaseRequest,
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> dict[str, bool]:
+    """Save cart for device purchase (for insufficient balance flow)."""
+    await db.refresh(user, ['subscription'])
+    subscription = user.subscription
+
+    if not subscription:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='У вас нет активной подписки',
+        )
+
+    if subscription.status not in ['active', 'trial']:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Ваша подписка неактивна',
+        )
+
+    # Get tariff for device price (if exists)
+    tariff = None
+    if subscription.tariff_id:
+        tariff = await get_tariff_by_id(db, subscription.tariff_id)
+
+    # Determine device price and max limit from tariff or settings
+    if tariff and tariff.device_price_kopeks:
+        device_price = tariff.device_price_kopeks
+        max_device_limit = tariff.max_device_limit
+    else:
+        device_price = settings.PRICE_PER_DEVICE
+        max_device_limit = settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else None
+
+    if not device_price or device_price <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Докупка устройств недоступна',
+        )
+
+    # Check max device limit
+    current_devices = subscription.device_limit or 1
+    new_device_count = current_devices + request.devices
+    if max_device_limit and new_device_count > max_device_limit:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f'Максимальное количество устройств: {max_device_limit}',
+        )
+
+    # Calculate prorated price based on remaining days
+    now = datetime.now(UTC)
+    end_date = subscription.end_date
+    if end_date.tzinfo is None:
+        end_date = end_date.replace(tzinfo=UTC)
+
+    days_left = max(1, (end_date - now).days)
+    total_days = 30
+
+    price_kopeks = int(device_price * request.devices * days_left / total_days)
+    price_kopeks = max(100, price_kopeks)  # Minimum 1 ruble
+
+    # Save cart for auto-purchase after balance top-up
+    cart_data = {
+        'cart_mode': 'add_devices',
+        'devices_to_add': request.devices,
+        'price_kopeks': price_kopeks,
+        'source': 'cabinet',
+    }
+    await user_cart_service.save_user_cart(user.id, cart_data)
+    logger.info(f'Cart saved for device purchase (cabinet save-cart) user {user.id}: +{request.devices} devices')
+
+    return {'success': True, 'cart_saved': True}
+
+
 @router.get('/devices/price')
 async def get_device_price(
     devices: int = 1,
