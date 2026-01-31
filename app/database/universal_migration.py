@@ -3369,6 +3369,9 @@ async def add_email_fields_to_broadcast_history():
 
     try:
         async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            # Добавление новых полей
             for field_name, field_type in email_fields.items():
                 field_exists = await check_column_exists('broadcast_history', field_name)
 
@@ -3380,6 +3383,23 @@ async def add_email_fields_to_broadcast_history():
                     logger.info(f'✅ Поле {field_name} успешно добавлено')
                 else:
                     logger.info(f'Поле {field_name} уже существует в broadcast_history')
+
+            # Сделать message_text nullable для email-only рассылок
+            try:
+                if db_type == 'postgresql':
+                    await conn.execute(
+                        text('ALTER TABLE broadcast_history ALTER COLUMN message_text DROP NOT NULL')
+                    )
+                    logger.info('✅ Колонка message_text теперь nullable')
+                elif db_type == 'mysql':
+                    await conn.execute(
+                        text('ALTER TABLE broadcast_history MODIFY COLUMN message_text TEXT NULL')
+                    )
+                    logger.info('✅ Колонка message_text теперь nullable')
+                # SQLite не поддерживает ALTER COLUMN, но там по умолчанию nullable
+            except Exception as e:
+                # Игнорируем если уже nullable или другая ошибка
+                logger.debug(f'message_text nullable: {e}')
 
             logger.info('✅ Все поля email в broadcast_history готовы')
             return True
