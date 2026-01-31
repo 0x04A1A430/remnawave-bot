@@ -1248,6 +1248,22 @@ async def _auto_add_devices(
         price_kopeks,
     )
 
+    # WebSocket уведомление для кабинета
+    try:
+        from app.cabinet.routes.websocket import notify_user_devices_purchased
+
+        await notify_user_devices_purchased(
+            user_id=user.id,
+            devices_added=devices_to_add,
+            new_device_limit=subscription.device_limit,
+            amount_kopeks=price_kopeks,
+        )
+    except Exception as ws_error:
+        logger.warning(
+            '⚠️ Автопокупка устройств: не удалось отправить WebSocket уведомление: %s',
+            ws_error,
+        )
+
     # Уведомление пользователю
     if bot and user.telegram_id:
         texts = get_texts(getattr(user, 'language', 'ru'))
