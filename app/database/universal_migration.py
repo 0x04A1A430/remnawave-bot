@@ -3387,14 +3387,10 @@ async def add_email_fields_to_broadcast_history():
             # Сделать message_text nullable для email-only рассылок
             try:
                 if db_type == 'postgresql':
-                    await conn.execute(
-                        text('ALTER TABLE broadcast_history ALTER COLUMN message_text DROP NOT NULL')
-                    )
+                    await conn.execute(text('ALTER TABLE broadcast_history ALTER COLUMN message_text DROP NOT NULL'))
                     logger.info('✅ Колонка message_text теперь nullable')
                 elif db_type == 'mysql':
-                    await conn.execute(
-                        text('ALTER TABLE broadcast_history MODIFY COLUMN message_text TEXT NULL')
-                    )
+                    await conn.execute(text('ALTER TABLE broadcast_history MODIFY COLUMN message_text TEXT NULL'))
                     logger.info('✅ Колонка message_text теперь nullable')
                 # SQLite не поддерживает ALTER COLUMN, но там по умолчанию nullable
             except Exception as e:
