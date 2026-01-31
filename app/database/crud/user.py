@@ -686,6 +686,7 @@ async def get_users_list(
     offset: int = 0,
     limit: int = 50,
     search: str | None = None,
+    email: str | None = None,
     status: UserStatus | None = None,
     order_by_balance: bool = False,
     order_by_traffic: bool = False,
@@ -721,6 +722,9 @@ async def get_users_list(
                 pass
 
         query = query.where(or_(*conditions))
+
+    if email:
+        query = query.where(User.email.ilike(f'%{email}%'))
 
     sort_flags = [
         order_by_balance,
@@ -777,7 +781,9 @@ async def get_users_list(
     return users
 
 
-async def get_users_count(db: AsyncSession, status: UserStatus | None = None, search: str | None = None) -> int:
+async def get_users_count(
+    db: AsyncSession, status: UserStatus | None = None, search: str | None = None, email: str | None = None
+) -> int:
     query = select(func.count(User.id))
 
     if status:
@@ -802,6 +808,9 @@ async def get_users_count(db: AsyncSession, status: UserStatus | None = None, se
                 pass
 
         query = query.where(or_(*conditions))
+
+    if email:
+        query = query.where(User.email.ilike(f'%{email}%'))
 
     result = await db.execute(query)
     return result.scalar()
