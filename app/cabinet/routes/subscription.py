@@ -3284,6 +3284,11 @@ async def toggle_subscription_pause(
     new_paused_state = not is_currently_paused
     user.subscription.is_daily_paused = new_paused_state
 
+    # Сохраняем статус ДО изменения для проверки RemnaWave
+    from app.database.models import SubscriptionStatus
+
+    was_disabled = user.subscription.status == SubscriptionStatus.DISABLED.value
+
     # If resuming, check balance
     if not new_paused_state:
         daily_price = getattr(tariff, 'daily_price_kopeks', 0)
@@ -3299,9 +3304,7 @@ async def toggle_subscription_pause(
             )
 
         # Restore ACTIVE status if was DISABLED
-        from app.database.models import SubscriptionStatus
-
-        if user.subscription.status == SubscriptionStatus.DISABLED.value:
+        if was_disabled:
             user.subscription.status = SubscriptionStatus.ACTIVE.value
             user.subscription.last_daily_charge_at = datetime.utcnow()
             user.subscription.end_date = datetime.utcnow() + timedelta(days=1)
@@ -3310,14 +3313,15 @@ async def toggle_subscription_pause(
     await db.refresh(user.subscription)
     await db.refresh(user)
 
-    # Sync with RemnaWave when resuming
-    if not new_paused_state:
+    # Sync with RemnaWave only when resuming from DISABLED state
+    # При паузе НЕ отключаем - пользователь может пользоваться до конца оплаченного периода
+    # При возобновлении включаем только если подписка была отключена (DISABLED)
+    if not new_paused_state and user.remnawave_uuid and was_disabled:
         try:
             subscription_service = SubscriptionService()
-            if user.remnawave_uuid:
-                await subscription_service.enable_remnawave_user(user.remnawave_uuid)
+            await subscription_service.enable_remnawave_user(user.remnawave_uuid)
         except Exception as e:
-            logger.error(f'Error syncing with RemnaWave on resume: {e}')
+            logger.error(f'Error enabling RemnaWave user on resume: {e}')
 
     if new_paused_state:
         message = 'Daily subscription paused'
