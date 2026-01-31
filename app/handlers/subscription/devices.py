@@ -22,6 +22,7 @@ from app.keyboards.inline import (
 from app.localization.texts import get_texts
 from app.services.remnawave_service import RemnaWaveService
 from app.services.subscription_service import SubscriptionService
+from app.services.user_cart_service import user_cart_service
 from app.utils.pagination import paginate_list
 from app.utils.pricing_utils import (
     apply_percentage_discount,
@@ -353,11 +354,28 @@ async def confirm_change_devices(callback: types.CallbackQuery, db_user: User, d
                 missing=texts.format_price(missing_kopeks),
             )
 
+            # Сохраняем корзину для автопокупки после пополнения баланса
+            await user_cart_service.save_user_cart(
+                user_id=db_user.id,
+                cart_data={
+                    'cart_mode': 'add_devices',
+                    'devices_to_add': devices_difference,
+                    'price_kopeks': price,
+                },
+            )
+            logger.info(
+                'Сохранена корзина add_devices для пользователя %s: +%s устройств, цена %s коп.',
+                db_user.telegram_id,
+                devices_difference,
+                price,
+            )
+
             await callback.message.answer(
                 message_text,
                 reply_markup=get_insufficient_balance_keyboard(
                     db_user.language,
                     amount_kopeks=missing_kopeks,
+                    has_saved_cart=True,
                 ),
                 parse_mode='HTML',
             )
@@ -1049,12 +1067,29 @@ async def confirm_add_devices(callback: types.CallbackQuery, db_user: User, db: 
             missing=texts.format_price(missing_kopeks),
         )
 
+        # Сохраняем корзину для автопокупки после пополнения баланса
+        await user_cart_service.save_user_cart(
+            user_id=db_user.id,
+            cart_data={
+                'cart_mode': 'add_devices',
+                'devices_to_add': devices_count,
+                'price_kopeks': price,
+            },
+        )
+        logger.info(
+            'Сохранена корзина add_devices для пользователя %s: +%s устройств, цена %s коп.',
+            db_user.telegram_id,
+            devices_count,
+            price,
+        )
+
         await callback.message.edit_text(
             message_text,
             reply_markup=get_insufficient_balance_keyboard(
                 db_user.language,
                 resume_callback=resume_callback,
                 amount_kopeks=missing_kopeks,
+                has_saved_cart=True,
             ),
             parse_mode='HTML',
         )
