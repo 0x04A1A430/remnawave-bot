@@ -1334,6 +1334,228 @@ async def _auto_add_devices(
     return True
 
 
+async def _auto_add_traffic(
+    db: AsyncSession,
+    user: User,
+    cart_data: dict,
+    *,
+    bot: Bot | None = None,
+) -> bool:
+    """Auto-purchase traffic from saved cart after balance topup."""
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+    from app.database.crud.subscription import add_subscription_traffic, get_subscription_by_user_id
+    from app.database.crud.user import subtract_user_balance
+    from app.database.models import PaymentMethod
+
+    traffic_gb = _safe_int(cart_data.get('traffic_gb'))
+    price_kopeks = _safe_int(cart_data.get('price_kopeks'))
+
+    if traffic_gb <= 0 or price_kopeks <= 0:
+        logger.warning(
+            '🔁 Автопокупка трафика: некорректные данные корзины для пользователя %s (traffic_gb=%s, price=%s)',
+            _format_user_id(user),
+            traffic_gb,
+            price_kopeks,
+        )
+        return False
+
+    # Verify balance
+    if user.balance_kopeks < price_kopeks:
+        logger.info(
+            '🔁 Автопокупка трафика: у пользователя %s недостаточно средств (%s < %s)',
+            _format_user_id(user),
+            user.balance_kopeks,
+            price_kopeks,
+        )
+        return False
+
+    # Verify subscription
+    subscription = await get_subscription_by_user_id(db, user.id)
+    if not subscription:
+        logger.warning(
+            '🔁 Автопокупка трафика: у пользователя %s нет подписки',
+            _format_user_id(user),
+        )
+        await user_cart_service.delete_user_cart(user.id)
+        return False
+
+    if subscription.status not in ('active', 'trial', 'ACTIVE', 'TRIAL'):
+        logger.warning(
+            '🔁 Автопокупка трафика: подписка пользователя %s не активна (status=%s)',
+            _format_user_id(user),
+            subscription.status,
+        )
+        await user_cart_service.delete_user_cart(user.id)
+        return False
+
+    if subscription.is_trial:
+        logger.warning(
+            '🔁 Автопокупка трафика: у пользователя %s пробная подписка',
+            _format_user_id(user),
+        )
+        await user_cart_service.delete_user_cart(user.id)
+        return False
+
+    if subscription.traffic_limit_gb == 0:
+        logger.warning(
+            '🔁 Автопокупка трафика: у пользователя %s уже безлимитный трафик',
+            _format_user_id(user),
+        )
+        await user_cart_service.delete_user_cart(user.id)
+        return False
+
+    # Deduct balance
+    description = f'Докупка {traffic_gb} ГБ трафика'
+    try:
+        success = await subtract_user_balance(
+            db,
+            user,
+            price_kopeks,
+            description,
+            create_transaction=True,
+            payment_method=PaymentMethod.BALANCE,
+        )
+        if not success:
+            logger.warning(
+                '❌ Автопокупка трафика: не удалось списать баланс пользователя %s',
+                _format_user_id(user),
+            )
+            return False
+    except Exception as error:
+        logger.error(
+            '❌ Автопокупка трафика: ошибка списания баланса пользователя %s: %s',
+            _format_user_id(user),
+            error,
+            exc_info=True,
+        )
+        return False
+
+    # Add traffic
+    old_traffic_limit = subscription.traffic_limit_gb or 0
+    try:
+        await add_subscription_traffic(db, subscription, traffic_gb)
+        await db.commit()
+        await db.refresh(subscription)
+    except Exception as error:
+        logger.error(
+            '❌ Автопокупка трафика: ошибка добавления трафика пользователю %s: %s',
+            _format_user_id(user),
+            error,
+            exc_info=True,
+        )
+        await db.rollback()
+        return False
+
+    # Sync with RemnaWave
+    try:
+        subscription_service = SubscriptionService()
+        await subscription_service.update_remnawave_user(db, subscription)
+    except Exception as error:
+        logger.warning(
+            '⚠️ Автопокупка трафика: не удалось обновить Remnawave для пользователя %s: %s',
+            _format_user_id(user),
+            error,
+        )
+
+    # Clear cart (transaction already created in subtract_user_balance)
+    await user_cart_service.delete_user_cart(user.id)
+
+    logger.info(
+        '✅ Автопокупка трафика: пользователь %s добавил %s ГБ (было %s, стало %s) за %s коп.',
+        _format_user_id(user),
+        traffic_gb,
+        old_traffic_limit,
+        subscription.traffic_limit_gb,
+        price_kopeks,
+    )
+
+    # WebSocket notification for cabinet
+    try:
+        from app.cabinet.routes.websocket import notify_user_traffic_purchased
+
+        await notify_user_traffic_purchased(
+            user_id=user.id,
+            traffic_gb_added=traffic_gb,
+            new_traffic_limit_gb=subscription.traffic_limit_gb or 0,
+            amount_kopeks=price_kopeks,
+        )
+    except Exception as ws_error:
+        logger.warning(
+            '⚠️ Автопокупка трафика: не удалось отправить WebSocket уведомление: %s',
+            ws_error,
+        )
+
+    # User notification
+    if bot and user.telegram_id:
+        texts = get_texts(getattr(user, 'language', 'ru'))
+        try:
+            message = texts.t(
+                'AUTO_PURCHASE_TRAFFIC_SUCCESS',
+                (
+                    '✅ <b>Трафик добавлен автоматически!</b>\n\n'
+                    '📈 Добавлено: {traffic_gb} ГБ\n'
+                    '📊 Новый лимит: {new_limit} ГБ\n'
+                    '💰 Списано: {price}'
+                ),
+            ).format(
+                traffic_gb=traffic_gb,
+                new_limit=subscription.traffic_limit_gb,
+                price=texts.format_price(price_kopeks),
+            )
+
+            keyboard = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
+                            callback_data='menu_subscription',
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '🏠 Главное меню'),
+                            callback_data='back_to_menu',
+                        )
+                    ],
+                ]
+            )
+
+            await bot.send_message(
+                chat_id=user.telegram_id,
+                text=message,
+                reply_markup=keyboard,
+                parse_mode='HTML',
+            )
+        except Exception as error:
+            logger.warning(
+                '⚠️ Автопокупка трафика: не удалось уведомить пользователя %s: %s',
+                user.telegram_id,
+                error,
+            )
+
+    # Admin notification
+    if bot:
+        try:
+            notification_service = AdminNotificationService(bot)
+            await notification_service.send_subscription_update_notification(
+                db,
+                user,
+                subscription,
+                'traffic',
+                old_traffic_limit,
+                subscription.traffic_limit_gb,
+                price_kopeks,
+            )
+        except Exception as error:
+            logger.warning(
+                '⚠️ Автопокупка трафика: не удалось уведомить админов: %s',
+                error,
+            )
+
+    return True
+
+
 async def auto_purchase_saved_cart_after_topup(
     db: AsyncSession,
     user: User,
@@ -1406,6 +1628,10 @@ async def auto_purchase_saved_cart_after_topup(
     # Обработка докупки устройств
     if cart_mode == 'add_devices':
         return await _auto_add_devices(db, user, cart_data, bot=bot)
+
+    # Обработка докупки трафика
+    if cart_mode == 'add_traffic':
+        return await _auto_add_traffic(db, user, cart_data, bot=bot)
 
     try:
         prepared = await _prepare_auto_purchase(db, user, cart_data)
