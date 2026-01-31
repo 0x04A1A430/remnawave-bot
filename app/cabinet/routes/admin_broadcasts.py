@@ -4,7 +4,7 @@ import logging
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
+from sqlalchemy import distinct, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import BroadcastHistory, Subscription, SubscriptionStatus, Tariff, User
@@ -13,7 +13,9 @@ from app.keyboards.admin import BROADCAST_BUTTONS, DEFAULT_BROADCAST_BUTTONS
 from app.services.broadcast_service import (
     BroadcastConfig,
     BroadcastMediaConfig,
+    EmailBroadcastConfig,
     broadcast_service,
+    email_broadcast_service,
 )
 
 from ..dependencies import get_cabinet_db, get_current_admin_user
@@ -28,6 +30,11 @@ from ..schemas.broadcasts import (
     BroadcastPreviewResponse,
     BroadcastResponse,
     BroadcastTariffsResponse,
+    CombinedBroadcastCreateRequest,
+    EmailFilterItem,
+    EmailFiltersResponse,
+    EmailPreviewRequest,
+    EmailPreviewResponse,
     TariffFilter,
     TariffForBroadcast,
 )
@@ -87,6 +94,25 @@ CUSTOM_FILTER_GROUPS = {
 }
 
 
+# ============ Email Filter Labels ============
+
+EMAIL_FILTER_LABELS = {
+    'all_email': 'Все с email',
+    'email_only': 'Только email-регистрация',
+    'telegram_with_email': 'Telegram с email',
+    'active_email': 'С активной подпиской',
+    'expired_email': 'С истекшей подпиской',
+}
+
+EMAIL_FILTER_GROUPS = {
+    'all_email': 'basic',
+    'email_only': 'auth_type',
+    'telegram_with_email': 'auth_type',
+    'active_email': 'subscription',
+    'expired_email': 'subscription',
+}
+
+
 # ============ Helper Functions ============
 
 
@@ -113,7 +139,71 @@ def _serialize_broadcast(broadcast: BroadcastHistory) -> BroadcastResponse:
         created_at=broadcast.created_at,
         completed_at=broadcast.completed_at,
         progress_percent=progress,
+        channel=getattr(broadcast, 'channel', 'telegram') or 'telegram',
+        email_subject=getattr(broadcast, 'email_subject', None),
+        email_html_content=getattr(broadcast, 'email_html_content', None),
     )
+
+
+async def _get_email_filter_count(db: AsyncSession, target: str) -> int:
+    """Get count of email users matching the filter."""
+    base_conditions = [
+        User.email.isnot(None),
+        User.email_verified == True,
+        User.status == 'active',
+    ]
+
+    if target == 'all_email':
+        query = select(func.count(User.id)).where(*base_conditions)
+
+    elif target == 'email_only':
+        query = select(func.count(User.id)).where(
+            *base_conditions,
+            User.auth_type == 'email',
+        )
+
+    elif target == 'telegram_with_email':
+        query = select(func.count(User.id)).where(
+            *base_conditions,
+            User.auth_type == 'telegram',
+            User.telegram_id.isnot(None),
+        )
+
+    elif target == 'active_email':
+        query = (
+            select(func.count(distinct(User.id)))
+            .join(Subscription, User.id == Subscription.user_id)
+            .where(
+                *base_conditions,
+                Subscription.status == SubscriptionStatus.ACTIVE.value,
+            )
+        )
+
+    elif target == 'expired_email':
+        query = (
+            select(func.count(distinct(User.id)))
+            .join(Subscription, User.id == Subscription.user_id)
+            .where(
+                *base_conditions,
+                Subscription.status.in_(
+                    [
+                        SubscriptionStatus.EXPIRED.value,
+                        SubscriptionStatus.DISABLED.value,
+                    ]
+                ),
+            )
+        )
+
+    else:
+        return 0
+
+    result = await db.execute(query)
+    return result.scalar() or 0
+
+
+def _validate_email_target(target: str) -> bool:
+    """Validate email target filter."""
+    return target in EMAIL_FILTER_LABELS
 
 
 async def _get_tariff_user_counts(db: AsyncSession) -> dict:
@@ -388,6 +478,194 @@ async def list_broadcasts(
     )
 
 
+# ============ Email Broadcast Endpoints ============
+
+
+@router.get('/email-filters', response_model=EmailFiltersResponse)
+async def get_email_filters(
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> EmailFiltersResponse:
+    """Get all available email filters with user counts."""
+    filters = []
+    total_with_email = 0
+
+    for key, label in EMAIL_FILTER_LABELS.items():
+        try:
+            count = await _get_email_filter_count(db, key)
+        except Exception as e:
+            logger.warning(f'Failed to get count for email filter {key}: {e}')
+            count = 0
+
+        filters.append(
+            EmailFilterItem(
+                key=key,
+                label=label,
+                count=count,
+                group=EMAIL_FILTER_GROUPS.get(key),
+            )
+        )
+
+        # Track total with email (all_email filter)
+        if key == 'all_email':
+            total_with_email = count
+
+    return EmailFiltersResponse(
+        filters=filters,
+        total_with_email=total_with_email,
+    )
+
+
+@router.post('/email-preview', response_model=EmailPreviewResponse)
+async def preview_email_broadcast(
+    request: EmailPreviewRequest,
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> EmailPreviewResponse:
+    """Preview email broadcast recipients count."""
+    if not _validate_email_target(request.target):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f'Invalid email target: {request.target}',
+        )
+
+    try:
+        count = await _get_email_filter_count(db, request.target)
+    except Exception as e:
+        logger.error(f'Failed to get email count for target {request.target}: {e}')
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail='Failed to count email recipients',
+        )
+
+    return EmailPreviewResponse(target=request.target, count=count)
+
+
+@router.post('/send', response_model=BroadcastResponse, status_code=status.HTTP_201_CREATED)
+async def create_combined_broadcast(
+    request: CombinedBroadcastCreateRequest,
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> BroadcastResponse:
+    """Create and start a combined broadcast (telegram/email/both)."""
+    # Get tariff IDs for target validation
+    result = await db.execute(select(Tariff.id))
+    tariff_ids = {row[0] for row in result.all()}
+
+    admin_name = admin.username or f'Admin #{admin.id}'
+
+    # Validate based on channel
+    if request.channel in ('telegram', 'both'):
+        # Validate telegram target
+        if not _validate_target(request.target, tariff_ids):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f'Invalid target: {request.target}',
+            )
+
+        # Validate telegram message
+        if not request.message_text or not request.message_text.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='Message text is required for Telegram broadcast',
+            )
+
+        # Validate buttons
+        if not _validate_buttons(request.selected_buttons):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='Invalid button key',
+            )
+
+    if request.channel in ('email', 'both'):
+        # For email channel, target must be email filter or we use telegram target for 'both'
+        if request.channel == 'email' and not _validate_email_target(request.target):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f'Invalid email target: {request.target}',
+            )
+
+        # Validate email fields
+        if not request.email_subject or not request.email_subject.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='Email subject is required for email broadcast',
+            )
+
+        if not request.email_html_content or not request.email_html_content.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='Email HTML content is required for email broadcast',
+            )
+
+    media_payload = request.media
+
+    # Create broadcast record
+    broadcast = BroadcastHistory(
+        target_type=request.target,
+        message_text=request.message_text.strip() if request.message_text else None,
+        has_media=media_payload is not None,
+        media_type=media_payload.type if media_payload else None,
+        media_file_id=media_payload.file_id if media_payload else None,
+        media_caption=media_payload.caption if media_payload else None,
+        total_count=0,
+        sent_count=0,
+        failed_count=0,
+        status='queued',
+        admin_id=admin.id,
+        admin_name=admin_name,
+        channel=request.channel,
+        email_subject=request.email_subject.strip() if request.email_subject else None,
+        email_html_content=request.email_html_content.strip() if request.email_html_content else None,
+    )
+    db.add(broadcast)
+    await db.commit()
+    await db.refresh(broadcast)
+
+    # Start broadcasts based on channel
+    if request.channel in ('telegram', 'both'):
+        # Prepare media config
+        media_config = None
+        if media_payload:
+            media_config = BroadcastMediaConfig(
+                type=media_payload.type,
+                file_id=media_payload.file_id,
+                caption=media_payload.caption or request.message_text,
+            )
+
+        # Create telegram broadcast config
+        telegram_config = BroadcastConfig(
+            target=request.target,
+            message_text=request.message_text.strip(),
+            selected_buttons=request.selected_buttons,
+            media=media_config,
+            initiator_name=admin_name,
+        )
+
+        await broadcast_service.start_broadcast(broadcast.id, telegram_config)
+
+    if request.channel in ('email', 'both'):
+        # For 'both' channel, we use 'all_email' as default email target
+        # since telegram target won't match email filters
+        email_target = request.target if request.channel == 'email' else 'all_email'
+
+        # Create email broadcast config
+        email_config = EmailBroadcastConfig(
+            target=email_target,
+            email_subject=request.email_subject.strip(),
+            email_html_content=request.email_html_content.strip(),
+            initiator_name=admin_name,
+        )
+
+        await email_broadcast_service.start_broadcast(broadcast.id, email_config)
+
+    await db.refresh(broadcast)
+
+    logger.info(f"Admin {admin.id} created {request.channel} broadcast {broadcast.id} for target '{request.target}'")
+
+    return _serialize_broadcast(broadcast)
+
+
 @router.get('/{broadcast_id}', response_model=BroadcastResponse)
 async def get_broadcast(
     broadcast_id: int,
@@ -410,7 +688,7 @@ async def stop_broadcast(
     admin: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> BroadcastResponse:
-    """Stop a running broadcast."""
+    """Stop a running broadcast (telegram or email)."""
     broadcast = await db.get(BroadcastHistory, broadcast_id)
     if not broadcast:
         raise HTTPException(
@@ -424,7 +702,15 @@ async def stop_broadcast(
             detail='Broadcast is not running',
         )
 
-    is_running = await broadcast_service.request_stop(broadcast_id)
+    # Try to stop both telegram and email broadcasts (one or both may be running)
+    channel = getattr(broadcast, 'channel', 'telegram') or 'telegram'
+
+    is_running = False
+    if channel in ('telegram', 'both'):
+        is_running = await broadcast_service.request_stop(broadcast_id) or is_running
+
+    if channel in ('email', 'both'):
+        is_running = await email_broadcast_service.request_stop(broadcast_id) or is_running
 
     if is_running:
         broadcast.status = 'cancelling'
