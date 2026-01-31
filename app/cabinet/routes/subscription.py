@@ -750,6 +750,31 @@ async def purchase_traffic(
     await db.refresh(user)
     await db.refresh(subscription)
 
+    # Отправляем уведомление админам
+    try:
+        from aiogram import Bot
+
+        from app.services.admin_notification_service import AdminNotificationService
+
+        if getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False) and settings.BOT_TOKEN:
+            bot = Bot(token=settings.BOT_TOKEN)
+            try:
+                notification_service = AdminNotificationService(bot)
+                old_traffic = subscription.traffic_limit_gb - request.gb
+                await notification_service.send_subscription_update_notification(
+                    db=db,
+                    user=user,
+                    subscription=subscription,
+                    update_type='traffic',
+                    old_value=old_traffic,
+                    new_value=subscription.traffic_limit_gb,
+                    price_paid=final_price,
+                )
+            finally:
+                await bot.session.close()
+    except Exception as e:
+        logger.error(f'Failed to send admin notification for traffic purchase: {e}')
+
     return {
         'success': True,
         'message': 'Traffic purchased successfully',
@@ -836,6 +861,31 @@ async def purchase_devices(
     user.subscription.device_limit = new_devices
 
     await db.commit()
+    await db.refresh(user)
+
+    # Отправляем уведомление админам
+    try:
+        from aiogram import Bot
+
+        from app.services.admin_notification_service import AdminNotificationService
+
+        if getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False) and settings.BOT_TOKEN:
+            bot = Bot(token=settings.BOT_TOKEN)
+            try:
+                notification_service = AdminNotificationService(bot)
+                await notification_service.send_subscription_update_notification(
+                    db=db,
+                    user=user,
+                    subscription=user.subscription,
+                    update_type='devices',
+                    old_value=current_devices,
+                    new_value=new_devices,
+                    price_paid=total_price,
+                )
+            finally:
+                await bot.session.close()
+    except Exception as e:
+        logger.error(f'Failed to send admin notification for device purchase: {e}')
 
     return {
         'message': 'Devices added successfully',
@@ -1944,6 +1994,30 @@ async def purchase_devices(
         await db.refresh(user)
 
         logger.info(f'User {user.id} purchased {request.devices} devices for {price_kopeks} kopeks')
+
+        # Отправляем уведомление админам
+        try:
+            from aiogram import Bot
+
+            from app.services.admin_notification_service import AdminNotificationService
+
+            if getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False) and settings.BOT_TOKEN:
+                bot = Bot(token=settings.BOT_TOKEN)
+                try:
+                    notification_service = AdminNotificationService(bot)
+                    await notification_service.send_subscription_update_notification(
+                        db=db,
+                        user=user,
+                        subscription=subscription,
+                        update_type='devices',
+                        old_value=current_devices,
+                        new_value=subscription.device_limit,
+                        price_paid=price_kopeks,
+                    )
+                finally:
+                    await bot.session.close()
+        except Exception as e:
+            logger.error(f'Failed to send admin notification for device purchase: {e}')
 
         return {
             'success': True,
