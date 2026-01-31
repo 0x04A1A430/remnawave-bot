@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -17,6 +17,7 @@ from app.handlers.admin.messages import (
     get_custom_users,
     get_target_users,
 )
+
 
 if TYPE_CHECKING:
     from app.cabinet.services.email_service import EmailService
@@ -619,7 +620,6 @@ class EmailBroadcastService:
     async def _fetch_email_recipients(self, target: str) -> list:
         """Fetch email recipients based on target filter."""
         from sqlalchemy import select
-        from sqlalchemy.orm import selectinload
 
         from app.database.models import Subscription, SubscriptionStatus, User
 
@@ -627,7 +627,7 @@ class EmailBroadcastService:
             # Base query: verified email users with active status
             base_conditions = [
                 User.email.isnot(None),
-                User.email_verified == True,  # noqa: E712
+                User.email_verified == True,
                 User.status == 'active',
             ]
 
@@ -668,10 +668,12 @@ class EmailBroadcastService:
                     .join(Subscription, User.id == Subscription.user_id)
                     .where(
                         *base_conditions,
-                        Subscription.status.in_([
-                            SubscriptionStatus.EXPIRED.value,
-                            SubscriptionStatus.DISABLED.value,
-                        ]),
+                        Subscription.status.in_(
+                            [
+                                SubscriptionStatus.EXPIRED.value,
+                                SubscriptionStatus.DISABLED.value,
+                            ]
+                        ),
                     )
                 )
 
@@ -685,9 +687,7 @@ class EmailBroadcastService:
             batch_size = 1000
 
             while True:
-                result = await session.execute(
-                    query.offset(offset).limit(batch_size)
-                )
+                result = await session.execute(query.offset(offset).limit(batch_size))
                 batch = result.scalars().all()
 
                 if not batch:
@@ -752,7 +752,7 @@ class EmailBroadcastService:
                 await self._mark_cancelled(broadcast_id, sent_count, failed_count)
                 return sent_count, failed_count, True
 
-            batch = recipients[i:i + EMAIL_BATCH_SIZE]
+            batch = recipients[i : i + EMAIL_BATCH_SIZE]
             tasks = [send_single_email(user) for user in batch]
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
