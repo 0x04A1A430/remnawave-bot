@@ -3793,6 +3793,30 @@ async def switch_tariff(
     await db.refresh(user)
     await db.refresh(user.subscription)
 
+    # Отправляем уведомление админам о смене тарифа
+    try:
+        from aiogram import Bot
+
+        from app.services.admin_notification_service import AdminNotificationService
+
+        if getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False) and settings.BOT_TOKEN:
+            bot = Bot(token=settings.BOT_TOKEN)
+            try:
+                notification_service = AdminNotificationService(bot)
+                await notification_service.send_subscription_purchase_notification(
+                    db=db,
+                    user=user,
+                    subscription=user.subscription,
+                    transaction=None,
+                    period_days=remaining_days if remaining_days > 0 else new_period_days,
+                    was_trial_conversion=False,
+                    amount_kopeks=upgrade_cost,
+                )
+            finally:
+                await bot.session.close()
+    except Exception as e:
+        logger.error(f'Failed to send admin notification for tariff switch: {e}')
+
     return {
         'success': True,
         'message': f"Switched from '{old_tariff_name}' to '{new_tariff.name}'"

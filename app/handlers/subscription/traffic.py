@@ -540,6 +540,9 @@ async def add_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSes
         await callback.answer()
         return
 
+    # Сохраняем старое значение трафика для уведомления
+    old_traffic_limit = subscription.traffic_limit_gb
+
     try:
         success = await subtract_user_balance(
             db,
@@ -579,6 +582,17 @@ async def add_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSes
 
         await db.refresh(db_user)
         await db.refresh(subscription)
+
+        # Отправляем уведомление админам о докупке трафика
+        try:
+            from app.services.admin_notification_service import AdminNotificationService
+
+            notification_service = AdminNotificationService(callback.bot)
+            await notification_service.send_subscription_update_notification(
+                db, db_user, subscription, 'traffic', old_traffic_limit, subscription.traffic_limit_gb, price
+            )
+        except Exception as e:
+            logger.error(f'Ошибка отправки уведомления о докупке трафика: {e}')
 
         success_text = '✅ Трафик успешно добавлен!\n\n'
         if traffic_gb == 0:

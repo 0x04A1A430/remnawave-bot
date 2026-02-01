@@ -1190,6 +1190,18 @@ async def confirm_add_devices(callback: types.CallbackQuery, db_user: User, db: 
         await db.refresh(db_user)
         await db.refresh(subscription)
 
+        # Отправляем уведомление админам о докупке устройств
+        try:
+            from app.services.admin_notification_service import AdminNotificationService
+
+            notification_service = AdminNotificationService(callback.bot)
+            old_device_limit = subscription.device_limit - devices_count
+            await notification_service.send_subscription_update_notification(
+                db, db_user, subscription, 'devices', old_device_limit, subscription.device_limit, price
+            )
+        except Exception as e:
+            logger.error(f'Ошибка отправки уведомления о докупке устройств: {e}')
+
         success_text = (
             '✅ Устройства успешно добавлены!\n\n'
             f'📱 Добавлено: {devices_count} устройств\n'
