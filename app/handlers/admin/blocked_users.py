@@ -76,8 +76,7 @@ class BlockedUsersText(Enum):
         '• Реферальные данные'
     )
     CLEANUP_CONFIRM_DELETE_REMNAWAVE = (
-        'Вы собираетесь <b>удалить из Remnawave</b> {count} пользователей.\n'
-        'Их VPN доступ будет полностью отключен.'
+        'Вы собираетесь <b>удалить из Remnawave</b> {count} пользователей.\nИх VPN доступ будет полностью отключен.'
     )
     CLEANUP_CONFIRM_DELETE_BOTH = (
         'Вы собираетесь <b>полностью удалить</b> {count} пользователей:\n'
@@ -160,21 +159,23 @@ def get_blocked_users_menu_keyboard(
     ]
 
     if scan_result and scan_result.blocked_count > 0:
-        buttons.append([
-            InlineKeyboardButton(
-                text=BlockedUsersText.BUTTON_VIEW_BLOCKED.value.format(
-                    count=scan_result.blocked_count
-                ),
-                callback_data=BlockedUsersCallback.VIEW_LIST.value,
-            )
-        ])
-
-    buttons.append([
-        InlineKeyboardButton(
-            text=BlockedUsersText.BUTTON_BACK_TO_USERS.value,
-            callback_data='admin_users',
+        buttons.append(
+            [
+                InlineKeyboardButton(
+                    text=BlockedUsersText.BUTTON_VIEW_BLOCKED.value.format(count=scan_result.blocked_count),
+                    callback_data=BlockedUsersCallback.VIEW_LIST.value,
+                )
+            ]
         )
-    ])
+
+    buttons.append(
+        [
+            InlineKeyboardButton(
+                text=BlockedUsersText.BUTTON_BACK_TO_USERS.value,
+                callback_data='admin_users',
+            )
+        ]
+    )
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -214,37 +215,41 @@ def get_blocked_list_keyboard(
 
     # Действия
     if has_blocked:
-        buttons.extend([
+        buttons.extend(
             [
-                InlineKeyboardButton(
-                    text=BlockedUsersText.BUTTON_DELETE_DB.value,
-                    callback_data=BlockedUsersCallback.ACTION_DELETE_DB.value,
-                ),
-                InlineKeyboardButton(
-                    text=BlockedUsersText.BUTTON_DELETE_REMNAWAVE.value,
-                    callback_data=BlockedUsersCallback.ACTION_DELETE_REMNAWAVE.value,
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    text=BlockedUsersText.BUTTON_DELETE_BOTH.value,
-                    callback_data=BlockedUsersCallback.ACTION_DELETE_BOTH.value,
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    text=BlockedUsersText.BUTTON_MARK_BLOCKED.value,
-                    callback_data=BlockedUsersCallback.ACTION_MARK.value,
-                ),
-            ],
-        ])
-
-    buttons.append([
-        InlineKeyboardButton(
-            text=BlockedUsersText.BUTTON_BACK.value,
-            callback_data=BlockedUsersCallback.MENU.value,
+                [
+                    InlineKeyboardButton(
+                        text=BlockedUsersText.BUTTON_DELETE_DB.value,
+                        callback_data=BlockedUsersCallback.ACTION_DELETE_DB.value,
+                    ),
+                    InlineKeyboardButton(
+                        text=BlockedUsersText.BUTTON_DELETE_REMNAWAVE.value,
+                        callback_data=BlockedUsersCallback.ACTION_DELETE_REMNAWAVE.value,
+                    ),
+                ],
+                [
+                    InlineKeyboardButton(
+                        text=BlockedUsersText.BUTTON_DELETE_BOTH.value,
+                        callback_data=BlockedUsersCallback.ACTION_DELETE_BOTH.value,
+                    ),
+                ],
+                [
+                    InlineKeyboardButton(
+                        text=BlockedUsersText.BUTTON_MARK_BLOCKED.value,
+                        callback_data=BlockedUsersCallback.ACTION_MARK.value,
+                    ),
+                ],
+            ]
         )
-    ])
+
+    buttons.append(
+        [
+            InlineKeyboardButton(
+                text=BlockedUsersText.BUTTON_BACK.value,
+                callback_data=BlockedUsersCallback.MENU.value,
+            )
+        ]
+    )
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
