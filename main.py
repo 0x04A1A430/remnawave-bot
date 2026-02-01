@@ -915,6 +915,30 @@ async def main():
         logger.info('✅ Завершение работы бота завершено')
 
 
+async def _send_crash_notification_on_error(error: Exception) -> None:
+    """Отправляет уведомление о падении бота в админский чат."""
+    import traceback
+
+    from app.config import settings
+
+    if not getattr(settings, 'BOT_TOKEN', None):
+        return
+
+    try:
+        from aiogram import Bot
+
+        from app.services.startup_notification_service import send_crash_notification
+
+        bot = Bot(token=settings.BOT_TOKEN)
+        try:
+            traceback_str = traceback.format_exc()
+            await send_crash_notification(bot, error, traceback_str)
+        finally:
+            await bot.session.close()
+    except Exception as notify_error:
+        print(f'⚠️ Не удалось отправить уведомление о падении: {notify_error}')
+
+
 if __name__ == '__main__':
     try:
         asyncio.run(main())
@@ -922,4 +946,12 @@ if __name__ == '__main__':
         print('\n🛑 Бот остановлен пользователем')
     except Exception as e:
         print(f'❌ Критическая ошибка: {e}')
+        import traceback
+
+        traceback.print_exc()
+        # Пытаемся отправить уведомление о падении
+        try:
+            asyncio.run(_send_crash_notification_on_error(e))
+        except Exception:
+            pass
         sys.exit(1)
