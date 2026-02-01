@@ -3388,26 +3388,45 @@ async def reduce_devices(
             detail=f'Cannot reduce below minimum device limit ({min_device_limit}) for your tariff',
         )
 
-    # Get connected devices count and reset if needed
+    # Get connected devices and remove excess (last connected ones)
     connected_devices_count = 0
-    devices_reset = False
+    devices_removed_count = 0
     if user.remnawave_uuid:
         try:
             service = RemnaWaveService()
             async with service.get_api_client() as api:
                 response = await api._make_request('GET', f'/api/hwid/devices/{user.remnawave_uuid}')
                 if response and 'response' in response:
-                    connected_devices_count = response['response'].get('total', 0)
+                    devices_list = response['response'].get('devices', [])
+                    connected_devices_count = len(devices_list)
 
-                # If connected devices exceed new limit, reset all devices
-                if connected_devices_count > new_device_limit:
-                    await api.reset_user_devices(user.remnawave_uuid)
-                    devices_reset = True
-                    logger.info(
-                        f'Reset devices for user {user.id}: had {connected_devices_count}, new limit {new_device_limit}'
-                    )
+                    # If connected devices exceed new limit, remove excess (last connected)
+                    if connected_devices_count > new_device_limit:
+                        devices_to_remove = connected_devices_count - new_device_limit
+                        logger.info(
+                            f'Removing {devices_to_remove} excess devices for user {user.id}: '
+                            f'had {connected_devices_count}, new limit {new_device_limit}'
+                        )
+
+                        # Sort by date (oldest first) and remove the last ones
+                        sorted_devices = sorted(
+                            devices_list,
+                            key=lambda d: d.get('updatedAt') or d.get('createdAt') or '',
+                        )
+                        devices_to_delete = sorted_devices[-devices_to_remove:]
+
+                        for device in devices_to_delete:
+                            device_hwid = device.get('hwid')
+                            if device_hwid:
+                                try:
+                                    delete_data = {'userUuid': user.remnawave_uuid, 'hwid': device_hwid}
+                                    await api._make_request('POST', '/api/hwid/devices/delete', data=delete_data)
+                                    devices_removed_count += 1
+                                    logger.info(f'Removed device {device_hwid} for user {user.id}')
+                                except Exception as del_error:
+                                    logger.error(f'Error removing device {device_hwid}: {del_error}')
         except Exception as e:
-            logger.error(f'Error checking/resetting devices: {e}')
+            logger.error(f'Error checking/removing devices: {e}')
 
     old_device_limit = current_device_limit
 
@@ -3425,14 +3444,16 @@ async def reduce_devices(
 
     logger.info(
         f'User {user.id} reduced device limit from {old_device_limit} to {new_device_limit}'
-        + (' (devices reset)' if devices_reset else '')
+        + (f' (removed {devices_removed_count} devices)' if devices_removed_count > 0 else '')
     )
 
     return {
         'success': True,
-        'message': 'Device limit reduced successfully' + (' (devices reset)' if devices_reset else ''),
+        'message': 'Device limit reduced successfully'
+        + (f' ({devices_removed_count} devices removed)' if devices_removed_count > 0 else ''),
         'old_device_limit': old_device_limit,
         'new_device_limit': new_device_limit,
+        'devices_removed': devices_removed_count,
     }
 
 
