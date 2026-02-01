@@ -539,7 +539,7 @@ class ReferralDiagnosticsService:
         users_map = {u.telegram_id: u for u in result.scalars().all()}
 
         # Получаем всех рефереров по кодам
-        codes = list(set(c.clean_code for c in clicks))
+        codes = list({c.clean_code for c in clicks})
         referrers_result = await db.execute(
             select(User).where(User.referral_code.in_(codes))
         )
@@ -706,7 +706,7 @@ class ReferralDiagnosticsService:
         result = await db.execute(select(User).where(User.telegram_id.in_(telegram_ids)))
         users_map = {u.telegram_id: u for u in result.scalars().all()}
 
-        referrer_ids = list(set(lr.expected_referrer_id for lr in lost_referrals if lr.expected_referrer_id))
+        referrer_ids = list({lr.expected_referrer_id for lr in lost_referrals if lr.expected_referrer_id})
         referrers_result = await db.execute(select(User).where(User.id.in_(referrer_ids)))
         referrers_map = {u.id: u for u in referrers_result.scalars().all()}
 
@@ -884,7 +884,7 @@ class ReferralDiagnosticsService:
             return report
 
         # 2. Собираем ID рефереров
-        referrer_ids = list(set(r.referred_by_id for r in referrals))
+        referrer_ids = list({r.referred_by_id for r in referrals})
         referrers_result = await db.execute(select(User).where(User.id.in_(referrer_ids)))
         referrers_map = {u.id: u for u in referrers_result.scalars().all()}
 

@@ -764,8 +764,8 @@ async def export_payments(
     db: AsyncSession,
 ) -> None:
     """Экспорт данных платежей в JSON файл."""
-    import io
     import json
+
     from aiogram.types import BufferedInputFile
 
     texts = get_texts(db_user.language)

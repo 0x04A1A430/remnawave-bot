@@ -312,7 +312,6 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
 
     # ИСПРАВЛЕНИЕ БАГА: используем .get() вместо .pop() для campaign_notification_sent
     # pending_start_payload обрабатывается отдельно ниже
-    had_campaign_notification_flag = 'campaign_notification_sent' in data
     campaign_notification_sent = data.get('campaign_notification_sent', False)
     state_needs_update = False
 
@@ -1804,14 +1803,12 @@ async def required_sub_channel_check(
 
                 if campaign:
                     state_data['campaign_id'] = campaign.id
-                    state_updated = True
                     logger.info(
                         '📣 CHANNEL CHECK: Кампания %s восстановлена из payload',
                         campaign.id,
                     )
                 else:
                     state_data['referral_code'] = pending_start_payload
-                    state_updated = True
                     logger.info(
                         '🎯 CHANNEL CHECK: Payload интерпретирован как реферальный код: %s',
                         pending_start_payload,
