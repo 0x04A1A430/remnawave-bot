@@ -423,13 +423,15 @@ class AdminNotificationService:
             if tariff_name:
                 message_lines.append(f'🏷️ Тариф: <b>{tariff_name}</b>')
 
-            message_lines.extend([
-                '',
-                f'💵 <b>{settings.format_price(total_amount)}</b> • {payment_method}',
-                f'📅 {period_days} дн. • до {format_local_datetime(subscription.end_date, "%d.%m.%Y")}',
-                f'📊 {self._format_traffic(subscription.traffic_limit_gb)} • 📱 {subscription.device_limit} устр.',
-                f'🌐 {servers_info}',
-            ])
+            message_lines.extend(
+                [
+                    '',
+                    f'💵 <b>{settings.format_price(total_amount)}</b> • {payment_method}',
+                    f'📅 {period_days} дн. • до {format_local_datetime(subscription.end_date, "%d.%m.%Y")}',
+                    f'📊 {self._format_traffic(subscription.traffic_limit_gb)} • 📱 {subscription.device_limit} устр.',
+                    f'🌐 {servers_info}',
+                ]
+            )
 
             # Баланс после покупки
             message_lines.append(f'💰 Баланс: {settings.format_price(user.balance_kopeks)}')
@@ -444,10 +446,12 @@ class AdminNotificationService:
             if transaction:
                 message_lines.append(f'🆔 #{transaction.id}')
 
-            message_lines.extend([
-                '',
-                f'<i>{format_local_datetime(datetime.utcnow(), "%d.%m.%Y %H:%M")}</i>',
-            ])
+            message_lines.extend(
+                [
+                    '',
+                    f'<i>{format_local_datetime(datetime.utcnow(), "%d.%m.%Y %H:%M")}</i>',
+                ]
+            )
 
             return await self._send_message('\n'.join(message_lines))
 
@@ -1458,11 +1462,13 @@ class AdminNotificationService:
             else:
                 message_lines.append('💸 Бесплатно')
 
-            message_lines.extend([
-                '',
-                f'📅 До {format_local_datetime(subscription.end_date, "%d.%m.%Y")}',
-                f'💰 Баланс: {settings.format_price(user.balance_kopeks)}',
-            ])
+            message_lines.extend(
+                [
+                    '',
+                    f'📅 До {format_local_datetime(subscription.end_date, "%d.%m.%Y")}',
+                    f'💰 Баланс: {settings.format_price(user.balance_kopeks)}',
+                ]
+            )
 
             # Реферер (только если есть)
             if user.referred_by_id:
@@ -1470,10 +1476,12 @@ class AdminNotificationService:
                 if referrer_info != 'Нет':
                     message_lines.append(f'🔗 Реф: {referrer_info}')
 
-            message_lines.extend([
-                '',
-                f'<i>{format_local_datetime(datetime.utcnow(), "%d.%m.%Y %H:%M")}</i>',
-            ])
+            message_lines.extend(
+                [
+                    '',
+                    f'<i>{format_local_datetime(datetime.utcnow(), "%d.%m.%Y %H:%M")}</i>',
+                ]
+            )
 
             return await self._send_message('\n'.join(message_lines))
 
