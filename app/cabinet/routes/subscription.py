@@ -462,6 +462,31 @@ async def renew_subscription(
 
     await db.commit()
 
+    # Отправляем уведомление админам о продлении подписки
+    try:
+        from aiogram import Bot
+
+        from app.services.admin_notification_service import AdminNotificationService
+
+        if getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False) and settings.BOT_TOKEN:
+            bot = Bot(token=settings.BOT_TOKEN)
+            try:
+                notification_service = AdminNotificationService(bot)
+                await notification_service.send_subscription_purchase_notification(
+                    db=db,
+                    user=user,
+                    subscription=user.subscription,
+                    transaction=None,
+                    period_days=request.period_days,
+                    was_trial_conversion=False,
+                    amount_kopeks=price_kopeks,
+                    purchase_type='renewal',
+                )
+            finally:
+                await bot.session.close()
+    except Exception as e:
+        logger.error(f'Failed to send admin notification for subscription renewal: {e}')
+
     response = {
         'message': 'Subscription renewed successfully',
         'new_end_date': user.subscription.end_date.isoformat(),
@@ -1439,6 +1464,32 @@ async def submit_purchase(
             except Exception as notif_error:
                 logger.warning(f'Failed to send subscription notification to {user.email}: {notif_error}')
 
+        # Отправляем уведомление админам о покупке подписки
+        try:
+            from aiogram import Bot
+
+            from app.services.admin_notification_service import AdminNotificationService
+
+            if getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False) and settings.BOT_TOKEN:
+                bot = Bot(token=settings.BOT_TOKEN)
+                try:
+                    notification_service = AdminNotificationService(bot)
+                    is_new_subscription = result.get('was_trial_conversion') or not context.subscription
+                    await notification_service.send_subscription_purchase_notification(
+                        db=db,
+                        user=user,
+                        subscription=subscription,
+                        transaction=None,
+                        period_days=selection.period_days,
+                        was_trial_conversion=result.get('was_trial_conversion', False),
+                        amount_kopeks=pricing.final_total,
+                        purchase_type='renewal' if not is_new_subscription else None,
+                    )
+                finally:
+                    await bot.session.close()
+        except Exception as e:
+            logger.error(f'Failed to send admin notification for subscription purchase: {e}')
+
         return {
             'success': True,
             'message': result['message'],
@@ -1849,6 +1900,35 @@ async def purchase_tariff(
                 )
             except Exception as notif_error:
                 logger.warning(f'Failed to send subscription notification to {user.email}: {notif_error}')
+
+        # Отправляем уведомление админам о покупке/продлении тарифа
+        try:
+            from aiogram import Bot
+
+            from app.services.admin_notification_service import AdminNotificationService
+
+            if getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False) and settings.BOT_TOKEN:
+                bot = Bot(token=settings.BOT_TOKEN)
+                try:
+                    notification_service = AdminNotificationService(bot)
+                    # Определяем тип покупки: новая подписка или продление
+                    was_new_subscription = (
+                        subscription.start_date and (datetime.utcnow() - subscription.start_date).total_seconds() < 60
+                    )
+                    await notification_service.send_subscription_purchase_notification(
+                        db=db,
+                        user=user,
+                        subscription=subscription,
+                        transaction=None,
+                        period_days=period_days,
+                        was_trial_conversion=False,
+                        amount_kopeks=price_kopeks,
+                        purchase_type='renewal' if not was_new_subscription else None,
+                    )
+                finally:
+                    await bot.session.close()
+        except Exception as e:
+            logger.error(f'Failed to send admin notification for tariff purchase: {e}')
 
         return response
 
