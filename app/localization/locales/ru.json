@@ -1674,6 +1674,7 @@
   "POLL_REWARD_GRANTED": "Награда {amount} зачислена на ваш баланс.",
   "ADMIN_USERS_BULK_BAN": "🛑 Массовый бан",
   "ADMIN_USERS_BLACKLIST": "🔐 Черный список",
+  "ADMIN_USERS_BLOCKED_CHECK": "🔒 Заблокировавшие бота",
   "CONTEST_START_ANNOUNCEMENT": "Стартует игра",
   "CONTEST_PRIZE": "Приз",
   "DAYS": "дн. подписки",

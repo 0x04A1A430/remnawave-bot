@@ -1653,6 +1653,7 @@
   "POLL_REWARD_GRANTED": "Reward {amount} has been credited to your balance.",
   "ADMIN_USERS_BULK_BAN": "🛑 Bulk Ban",
   "ADMIN_USERS_BLACKLIST": "🔐 Blacklist",
+  "ADMIN_USERS_BLOCKED_CHECK": "🔒 Blocked bot users",
   "CONTEST_START_ANNOUNCEMENT": "Game starts",
   "CONTEST_PRIZE": "Prize",
   "DAYS": "days subscription",
