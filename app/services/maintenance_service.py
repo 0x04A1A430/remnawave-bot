@@ -219,17 +219,8 @@ class MaintenanceService:
                 settings.get_maintenance_retry_attempts(),
             )
 
-            await self._notify_admins(
-                f"""Мониторинг технических работ запущен
-
-🔄 <b>Интервал проверки:</b> {settings.get_maintenance_check_interval()} секунд
-🤖 <b>Автовключение:</b> {'Включено' if settings.is_maintenance_auto_enable() else 'Отключено'}
-🎯 <b>Порог ошибок:</b> {self._max_consecutive_failures}
-🔁 <b>Повторных попыток:</b> {settings.get_maintenance_retry_attempts()}
-
-Система будет следить за доступностью API.""",
-                'info',
-            )
+            # Сообщение о запуске мониторинга убрано - теперь используется
+            # единое стартовое уведомление через StartupNotificationService
 
             return True
 
