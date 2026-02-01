@@ -219,6 +219,8 @@ class MaintenanceService:
                 settings.get_maintenance_retry_attempts(),
             )
 
+            # Сообщение о запуске мониторинга убрано - теперь используется
+            # единое стартовое уведомление через StartupNotificationService
 
             return True
 
