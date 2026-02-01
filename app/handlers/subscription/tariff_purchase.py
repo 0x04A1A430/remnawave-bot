@@ -2275,6 +2275,7 @@ async def confirm_tariff_switch(
                 days_for_new_tariff,  # Итоговый срок подписки
                 was_trial_conversion=False,
                 amount_kopeks=final_price,
+                purchase_type='tariff_switch',
             )
         except Exception as e:
             logger.error(f'Ошибка отправки уведомления админу: {e}')
@@ -2453,6 +2454,7 @@ async def confirm_daily_tariff_switch(
                 1,  # 1 день
                 was_trial_conversion=False,
                 amount_kopeks=daily_price,
+                purchase_type='tariff_switch',
             )
         except Exception as e:
             logger.error(f'Ошибка отправки уведомления админу: {e}')
@@ -3032,6 +3034,7 @@ async def confirm_instant_switch(
                     remaining_days,
                     was_trial_conversion=False,
                     amount_kopeks=upgrade_cost,
+                    purchase_type='tariff_switch',
                 )
             except Exception as e:
                 logger.error(f'Ошибка отправки уведомления админу: {e}')
