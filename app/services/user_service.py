@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from aiogram import Bot, types
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 

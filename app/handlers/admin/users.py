@@ -65,10 +65,6 @@ class UserFilterType(Enum):
     """Типы фильтрации пользователей."""
 
     BALANCE = 'balance'
-    TRAFFIC = 'traffic'
-    ACTIVITY = 'activity'
-    SPENDING = 'spending'
-    PURCHASES = 'purchases'
     CAMPAIGN = 'campaign'
     POTENTIAL_CUSTOMERS = 'potential_customers'
 
@@ -92,34 +88,6 @@ USER_FILTER_CONFIGS: dict[UserFilterType, UserFilterConfig] = {
         empty_message='👥 Пользователи не найдены',
         pagination_prefix='admin_users_balance_list',
         order_param='order_by_balance',
-    ),
-    UserFilterType.TRAFFIC: UserFilterConfig(
-        fsm_state=AdminStates.viewing_user_from_traffic_list,
-        title='👥 <b>Список пользователей по использованному трафику</b>',
-        empty_message='📶 Пользователи с трафиком не найдены',
-        pagination_prefix='admin_users_traffic_list',
-        order_param='order_by_traffic',
-    ),
-    UserFilterType.ACTIVITY: UserFilterConfig(
-        fsm_state=AdminStates.viewing_user_from_last_activity_list,
-        title='👥 <b>Пользователи по активности</b>',
-        empty_message='🕒 Пользователи с активностью не найдены',
-        pagination_prefix='admin_users_activity_list',
-        order_param='order_by_last_activity',
-    ),
-    UserFilterType.SPENDING: UserFilterConfig(
-        fsm_state=AdminStates.viewing_user_from_spending_list,
-        title='👥 <b>Пользователи по сумме трат</b>',
-        empty_message='💳 Пользователи с тратами не найдены',
-        pagination_prefix='admin_users_spending_list',
-        order_param='order_by_total_spent',
-    ),
-    UserFilterType.PURCHASES: UserFilterConfig(
-        fsm_state=AdminStates.viewing_user_from_purchases_list,
-        title='👥 <b>Пользователи по количеству покупок</b>',
-        empty_message='🛒 Пользователи с покупками не найдены',
-        pagination_prefix='admin_users_purchases_list',
-        order_param='order_by_purchase_count',
     ),
     UserFilterType.CAMPAIGN: UserFilterConfig(
         fsm_state=AdminStates.viewing_user_from_campaign_list,
@@ -181,34 +149,6 @@ def _build_user_button_text(
             days_left = (user.subscription.end_date - datetime.utcnow()).days
             button_text += f' | 📅 {days_left}д'
 
-    elif filter_type == UserFilterType.TRAFFIC:
-        if user.subscription:
-            sub = user.subscription
-            used = sub.traffic_used_gb or 0.0
-            if sub.traffic_limit_gb and sub.traffic_limit_gb > 0:
-                limit_display = f'{sub.traffic_limit_gb}'
-            else:
-                limit_display = '♾️'
-            traffic_display = f'{used:.1f}/{limit_display} ГБ'
-        else:
-            traffic_display = 'нет подписки'
-        button_text = f'{status_emoji} {sub_emoji} {user.full_name} | 📶 {traffic_display}'
-        if user.balance_kopeks > 0:
-            button_text += f' | 💰 {settings.format_price(user.balance_kopeks)}'
-
-    elif filter_type == UserFilterType.ACTIVITY:
-        activity_display = format_time_ago(user.last_activity, language) if user.last_activity else 'неизвестно'
-        button_text = f'{status_emoji} {sub_emoji} {user.full_name} | 🕒 {activity_display}'
-
-    elif filter_type in (UserFilterType.SPENDING, UserFilterType.PURCHASES):
-        stats = extra_data.get(user.id, {'total_spent': 0, 'purchase_count': 0}) if extra_data else {}
-        total_spent = stats.get('total_spent', 0)
-        purchases = stats.get('purchase_count', 0)
-        if filter_type == UserFilterType.SPENDING:
-            button_text = f'{status_emoji} {user.full_name} | 💳 {settings.format_price(total_spent)} | 🛒 {purchases}'
-        else:
-            button_text = f'{status_emoji} {user.full_name} | 🛒 {purchases} | 💳 {settings.format_price(total_spent)}'
-
     elif filter_type == UserFilterType.CAMPAIGN:
         info = extra_data.get(user.id, {}) if extra_data else {}
         campaign_name = info.get('campaign_name') or 'Без кампании'
@@ -227,18 +167,6 @@ def _build_user_button_text(
             button_text = f'{status_emoji} {sub_emoji} {short_name}'
             if user.balance_kopeks > 0:
                 button_text += f' | 💰 {settings.format_price(user.balance_kopeks)}'
-        elif filter_type == UserFilterType.TRAFFIC:
-            if user.subscription:
-                sub = user.subscription
-                used = sub.traffic_used_gb or 0.0
-                if sub.traffic_limit_gb and sub.traffic_limit_gb > 0:
-                    limit_display = f'{sub.traffic_limit_gb}'
-                else:
-                    limit_display = '♾️'
-                traffic_display = f'{used:.1f}/{limit_display} ГБ'
-            else:
-                traffic_display = 'нет'
-            button_text = f'{status_emoji} {sub_emoji} {short_name} | 📶 {traffic_display}'
         else:
             button_text = f'{status_emoji} {short_name}'
 
@@ -287,10 +215,6 @@ async def _show_users_list_filtered(
         await callback.message.edit_text(config.empty_message, reply_markup=get_admin_users_keyboard(db_user.language))
         await callback.answer()
         return
-
-    # Для spending/purchases нужны дополнительные данные
-    if filter_type in (UserFilterType.SPENDING, UserFilterType.PURCHASES):
-        extra_data = await user_service.get_user_spending_stats_map(db, [user.id for user in users])
 
     # Формируем текст заголовка
     text = f'{config.title} (стр. {page}/{users_data["total_pages"]})\n\n'
@@ -703,42 +627,6 @@ async def show_potential_customers(
 
 @admin_required
 @error_handler
-async def show_users_list_by_traffic(
-    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext, page: int = 1
-):
-    """Список пользователей, отсортированный по использованному трафику (убывание)."""
-    await _show_users_list_filtered(callback, db_user, db, state, UserFilterType.TRAFFIC, page)
-
-
-@admin_required
-@error_handler
-async def show_users_list_by_last_activity(
-    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext, page: int = 1
-):
-    """Список пользователей, отсортированный по последней активности."""
-    await _show_users_list_filtered(callback, db_user, db, state, UserFilterType.ACTIVITY, page)
-
-
-@admin_required
-@error_handler
-async def show_users_list_by_spending(
-    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext, page: int = 1
-):
-    """Список пользователей, отсортированный по сумме трат (убывание)."""
-    await _show_users_list_filtered(callback, db_user, db, state, UserFilterType.SPENDING, page)
-
-
-@admin_required
-@error_handler
-async def show_users_list_by_purchases(
-    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext, page: int = 1
-):
-    """Список пользователей, отсортированный по количеству покупок (убывание)."""
-    await _show_users_list_filtered(callback, db_user, db, state, UserFilterType.PURCHASES, page)
-
-
-@admin_required
-@error_handler
 async def show_users_list_by_campaign(
     callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext, page: int = 1
 ):
@@ -772,62 +660,6 @@ async def handle_users_balance_list_pagination(
     except (ValueError, IndexError) as e:
         logger.error(f'Ошибка парсинга номера страницы: {e}')
         await show_users_list_by_balance(callback, db_user, db, state, 1)
-
-
-@admin_required
-@error_handler
-async def handle_users_traffic_list_pagination(
-    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext
-):
-    try:
-        callback_parts = callback.data.split('_')
-        page = int(callback_parts[-1])
-        await show_users_list_by_traffic(callback, db_user, db, state, page)
-    except (ValueError, IndexError) as e:
-        logger.error(f'Ошибка парсинга номера страницы: {e}')
-        await show_users_list_by_traffic(callback, db_user, db, state, 1)
-
-
-@admin_required
-@error_handler
-async def handle_users_activity_list_pagination(
-    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext
-):
-    try:
-        callback_parts = callback.data.split('_')
-        page = int(callback_parts[-1])
-        await show_users_list_by_last_activity(callback, db_user, db, state, page)
-    except (ValueError, IndexError) as e:
-        logger.error(f'Ошибка парсинга номера страницы: {e}')
-        await show_users_list_by_last_activity(callback, db_user, db, state, 1)
-
-
-@admin_required
-@error_handler
-async def handle_users_spending_list_pagination(
-    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext
-):
-    try:
-        callback_parts = callback.data.split('_')
-        page = int(callback_parts[-1])
-        await show_users_list_by_spending(callback, db_user, db, state, page)
-    except (ValueError, IndexError) as e:
-        logger.error(f'Ошибка парсинга номера страницы: {e}')
-        await show_users_list_by_spending(callback, db_user, db, state, 1)
-
-
-@admin_required
-@error_handler
-async def handle_users_purchases_list_pagination(
-    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext
-):
-    try:
-        callback_parts = callback.data.split('_')
-        page = int(callback_parts[-1])
-        await show_users_list_by_purchases(callback, db_user, db, state, page)
-    except (ValueError, IndexError) as e:
-        logger.error(f'Ошибка парсинга номера страницы: {e}')
-        await show_users_list_by_purchases(callback, db_user, db, state, 1)
 
 
 @admin_required
@@ -1450,14 +1282,6 @@ async def show_user_management(callback: types.CallbackQuery, db_user: User, db:
     current_state = await state.get_state()
     if current_state == AdminStates.viewing_user_from_balance_list:
         back_callback = 'admin_users_balance_filter'
-    elif current_state == AdminStates.viewing_user_from_traffic_list:
-        back_callback = 'admin_users_traffic_filter'
-    elif current_state == AdminStates.viewing_user_from_last_activity_list:
-        back_callback = 'admin_users_activity_filter'
-    elif current_state == AdminStates.viewing_user_from_spending_list:
-        back_callback = 'admin_users_spending_filter'
-    elif current_state == AdminStates.viewing_user_from_purchases_list:
-        back_callback = 'admin_users_purchases_filter'
     elif current_state == AdminStates.viewing_user_from_campaign_list:
         back_callback = 'admin_users_campaign_filter'
     elif current_state == AdminStates.viewing_user_from_ready_to_renew_list:
@@ -5626,22 +5450,6 @@ def register_handlers(dp: Dispatcher):
     )
 
     dp.callback_query.register(
-        handle_users_traffic_list_pagination, F.data.startswith('admin_users_traffic_list_page_')
-    )
-
-    dp.callback_query.register(
-        handle_users_activity_list_pagination, F.data.startswith('admin_users_activity_list_page_')
-    )
-
-    dp.callback_query.register(
-        handle_users_spending_list_pagination, F.data.startswith('admin_users_spending_list_page_')
-    )
-
-    dp.callback_query.register(
-        handle_users_purchases_list_pagination, F.data.startswith('admin_users_purchases_list_page_')
-    )
-
-    dp.callback_query.register(
         handle_users_ready_to_renew_pagination, F.data.startswith('admin_users_ready_to_renew_list_page_')
     )
 
@@ -5804,14 +5612,6 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(show_users_filters, F.data == 'admin_users_filters')
 
     dp.callback_query.register(show_users_list_by_balance, F.data == 'admin_users_balance_filter')
-
-    dp.callback_query.register(show_users_list_by_traffic, F.data == 'admin_users_traffic_filter')
-
-    dp.callback_query.register(show_users_list_by_last_activity, F.data == 'admin_users_activity_filter')
-
-    dp.callback_query.register(show_users_list_by_spending, F.data == 'admin_users_spending_filter')
-
-    dp.callback_query.register(show_users_list_by_purchases, F.data == 'admin_users_purchases_filter')
 
     dp.callback_query.register(show_users_ready_to_renew, F.data == 'admin_users_ready_to_renew_filter')
 
