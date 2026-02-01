@@ -1,6 +1,7 @@
 """
 Сервис стартового уведомления бота.
 
+Отправляет красивое сообщение с информацией о системе при запуске бота.
 """
 
 import logging
@@ -8,12 +9,12 @@ import os
 from datetime import datetime
 
 from aiogram import Bot
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import BufferedInputFile, InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy import func, select
 
 from app.config import settings
 from app.database.database import AsyncSessionLocal
-from app.database.models import User, UserStatus
+from app.database.models import Subscription, SubscriptionStatus, Ticket, TicketStatus, User, UserStatus
 from app.external.remnawave_api import RemnaWaveAPI, test_api_connection
 from app.utils.timezone import format_local_datetime
 
@@ -61,9 +62,44 @@ class StartupNotificationService:
             logger.error(f'Ошибка получения суммы балансов: {e}')
             return 0
 
+    async def _get_open_tickets_count(self) -> int:
+        """Получает количество открытых тикетов."""
+        try:
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(select(func.count(Ticket.id)).where(Ticket.status == TicketStatus.OPEN.value))
+                return result.scalar() or 0
+        except Exception as e:
+            logger.error(f'Ошибка получения количества открытых тикетов: {e}')
+            return 0
+
+    async def _get_paid_subscriptions_count(self) -> int:
+        """Получает количество платных подписок (не триальных, активных)."""
+        try:
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(
+                    select(func.count(Subscription.id)).where(
+                        Subscription.is_trial == False,
+                        Subscription.status == SubscriptionStatus.ACTIVE.value,
+                    )
+                )
+                return result.scalar() or 0
+        except Exception as e:
+            logger.error(f'Ошибка получения количества платных подписок: {e}')
+            return 0
+
+    async def _get_trial_subscriptions_count(self) -> int:
+        """Получает количество триальных подписок."""
+        try:
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(select(func.count(Subscription.id)).where(Subscription.is_trial == True))
+                return result.scalar() or 0
+        except Exception as e:
+            logger.error(f'Ошибка получения количества триальных подписок: {e}')
+            return 0
+
     async def _check_remnawave_connection(self) -> tuple[bool, str]:
         """
-        Проверяет соединение с панелью RemnaWave.
+        Проверяет соединение с панелью Remnawave.
 
         Returns:
             Tuple[bool, str]: (is_connected, status_message)
@@ -99,7 +135,7 @@ class StartupNotificationService:
                 return False, 'Недоступна'
 
         except Exception as e:
-            logger.error(f'Ошибка проверки соединения с RemnaWave: {e}')
+            logger.error(f'Ошибка проверки соединения с Remnawave: {e}')
             return False, 'Ошибка подключения'
 
     def _format_balance(self, kopeks: int) -> str:
@@ -126,9 +162,12 @@ class StartupNotificationService:
             version = self._get_version()
             users_count = await self._get_users_count()
             total_balance_kopeks = await self._get_total_balance()
+            open_tickets_count = await self._get_open_tickets_count()
+            paid_subscriptions_count = await self._get_paid_subscriptions_count()
+            trial_subscriptions_count = await self._get_trial_subscriptions_count()
             remnawave_connected, remnawave_status = await self._check_remnawave_connection()
 
-            # Иконка статуса RemnaWave
+            # Иконка статуса Remnawave
             remnawave_icon = '🟢' if remnawave_connected else '🔴'
 
             # Формируем системную информацию для blockquote
@@ -136,7 +175,10 @@ class StartupNotificationService:
                 f'Версия: {version}',
                 f'Пользователей: {users_count:,}'.replace(',', ' '),
                 f'Сумма балансов: {self._format_balance(total_balance_kopeks)}',
-                f'{remnawave_icon} RemnaWave: {remnawave_status}',
+                f'Платных подписок: {paid_subscriptions_count:,}'.replace(',', ' '),
+                f'Триальных подписок: {trial_subscriptions_count:,}'.replace(',', ' '),
+                f'Открытых тикетов: {open_tickets_count:,}'.replace(',', ' '),
+                f'{remnawave_icon} Remnawave: {remnawave_status}',
             ]
             system_info = '\n'.join(system_info_lines)
 
@@ -144,6 +186,7 @@ class StartupNotificationService:
 
             message = (
                 f'<b>Remnawave Bedolaga Bot</b>\n\n'
+                f'✅ Бот успешно запущен\n\n'
                 f'<blockquote expandable>{system_info}</blockquote>\n\n'
                 f'<i>{timestamp}</i>'
             )
@@ -203,3 +246,76 @@ async def send_bot_startup_notification(bot: Bot) -> bool:
     """
     service = StartupNotificationService(bot)
     return await service.send_startup_notification()
+
+
+async def send_crash_notification(bot: Bot, error: Exception, traceback_str: str) -> bool:
+    """
+    Отправляет уведомление о падении бота с лог-файлом.
+
+    Args:
+        bot: Экземпляр бота aiogram
+        error: Исключение, вызвавшее падение
+        traceback_str: Строка с полным traceback
+
+    Returns:
+        bool: True если уведомление отправлено успешно
+    """
+    chat_id = getattr(settings, 'ADMIN_NOTIFICATIONS_CHAT_ID', None)
+    topic_id = getattr(settings, 'ADMIN_NOTIFICATIONS_TOPIC_ID', None)
+    enabled = getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False)
+
+    if not enabled or not chat_id:
+        logger.debug('Уведомление о падении отключено или chat_id не задан')
+        return False
+
+    try:
+        timestamp = format_local_datetime(datetime.utcnow(), '%d.%m.%Y %H:%M:%S')
+        error_type = type(error).__name__
+        error_message = str(error)
+
+        # Формируем содержимое лог-файла
+        log_content = (
+            f'CRASH REPORT\n'
+            f'{"=" * 50}\n\n'
+            f'Timestamp: {timestamp}\n'
+            f'Error Type: {error_type}\n'
+            f'Error Message: {error_message}\n\n'
+            f'{"=" * 50}\n'
+            f'TRACEBACK\n'
+            f'{"=" * 50}\n\n'
+            f'{traceback_str}\n'
+        )
+
+        # Создаем файл для отправки
+        file_name = f'crash_report_{datetime.utcnow().strftime("%Y%m%d_%H%M%S")}.txt'
+        file = BufferedInputFile(
+            file=log_content.encode('utf-8'),
+            filename=file_name,
+        )
+
+        # Текст сообщения
+        message_text = (
+            f'<b>Remnawave Bedolaga Bot</b>\n\n'
+            f'❌ Бот упал с ошибкой\n\n'
+            f'<b>Тип:</b> <code>{error_type}</code>\n'
+            f'<b>Сообщение:</b> <code>{error_message[:200]}</code>\n\n'
+            f'<i>{timestamp}</i>'
+        )
+
+        message_kwargs: dict = {
+            'chat_id': chat_id,
+            'document': file,
+            'caption': message_text,
+            'parse_mode': 'HTML',
+        }
+
+        if topic_id:
+            message_kwargs['message_thread_id'] = topic_id
+
+        await bot.send_document(**message_kwargs)
+        logger.info(f'Уведомление о падении отправлено в чат {chat_id}')
+        return True
+
+    except Exception as e:
+        logger.error(f'Ошибка отправки уведомления о падении: {e}')
+        return False
