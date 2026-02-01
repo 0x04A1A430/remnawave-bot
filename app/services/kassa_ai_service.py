@@ -246,7 +246,7 @@ class KassaAiService:
         }
         params['signature'] = self._generate_hmac_signature(params)
 
-        logger.debug(f'KassaAI get_order_status: order_id={order_id}')
+        logger.info(f'KassaAI get_order_status: order_id={order_id}')
 
         try:
             async with (
@@ -259,7 +259,7 @@ class KassaAiService:
                 ) as response,
             ):
                 text = await response.text()
-                logger.debug(f'KassaAI get_order_status response: {text}')
+                logger.info(f'KassaAI get_order_status response: {text}')
                 return await response.json()
         except aiohttp.ClientError as e:
             logger.exception(f'KassaAI API connection error: {e}')

@@ -164,42 +164,78 @@ async def ensure_payment_method_configs(db: AsyncSession) -> None:
     """Initialize payment method configs if they don't exist yet.
 
     Called on startup to seed defaults from env vars.
+    Also adds any missing methods that were added after initial setup.
     """
-    count_result = await db.execute(select(func.count()).select_from(PaymentMethodConfig))
-    count = count_result.scalar() or 0
+    # Get existing method IDs
+    existing_result = await db.execute(select(PaymentMethodConfig.method_id))
+    existing_method_ids = set(existing_result.scalars().all())
 
-    if count > 0:
-        return  # Already initialized
+    if not existing_method_ids:
+        # First-time initialization
+        logger.info('Initializing payment method configurations from env vars...')
+        defaults = _get_method_defaults()
 
-    logger.info('Initializing payment method configurations from env vars...')
+        for idx, method_id in enumerate(DEFAULT_METHOD_ORDER):
+            method_def = defaults.get(method_id, {})
+            is_configured = method_def.get('is_configured', False)
+            sub_options = None
+            available = method_def.get('available_sub_options')
+            if available:
+                # Enable all sub-options by default
+                sub_options = {opt['id']: True for opt in available}
 
+            config = PaymentMethodConfig(
+                method_id=method_id,
+                sort_order=idx,
+                is_enabled=is_configured,
+                display_name=None,
+                sub_options=sub_options,
+                min_amount_kopeks=None,
+                max_amount_kopeks=None,
+                user_type_filter='all',
+                first_topup_filter='any',
+                promo_group_filter_mode='all',
+            )
+            db.add(config)
+
+        await db.commit()
+        logger.info(f'Payment method configurations initialized ({len(DEFAULT_METHOD_ORDER)} methods).')
+        return
+
+    # Add missing methods (for cases when new methods are added to code)
     defaults = _get_method_defaults()
+    missing_methods = [m for m in DEFAULT_METHOD_ORDER if m not in existing_method_ids]
 
-    for idx, method_id in enumerate(DEFAULT_METHOD_ORDER):
-        method_def = defaults.get(method_id, {})
-        is_configured = method_def.get('is_configured', False)
-        sub_options = None
-        available = method_def.get('available_sub_options')
-        if available:
-            # Enable all sub-options by default
-            sub_options = {opt['id']: True for opt in available}
+    if missing_methods:
+        logger.info(f'Adding missing payment methods: {missing_methods}')
+        # Get max sort_order to append new methods at the end
+        max_order_result = await db.execute(select(func.max(PaymentMethodConfig.sort_order)))
+        max_order = max_order_result.scalar() or 0
 
-        config = PaymentMethodConfig(
-            method_id=method_id,
-            sort_order=idx,
-            is_enabled=is_configured,
-            display_name=None,
-            sub_options=sub_options,
-            min_amount_kopeks=None,
-            max_amount_kopeks=None,
-            user_type_filter='all',
-            first_topup_filter='any',
-            promo_group_filter_mode='all',
-        )
-        db.add(config)
+        for idx, method_id in enumerate(missing_methods, start=max_order + 1):
+            method_def = defaults.get(method_id, {})
+            is_configured = method_def.get('is_configured', False)
+            sub_options = None
+            available = method_def.get('available_sub_options')
+            if available:
+                sub_options = {opt['id']: True for opt in available}
 
-    await db.commit()
-    logger.info(f'Payment method configurations initialized ({len(DEFAULT_METHOD_ORDER)} methods).')
+            config = PaymentMethodConfig(
+                method_id=method_id,
+                sort_order=idx,
+                is_enabled=is_configured,
+                display_name=None,
+                sub_options=sub_options,
+                min_amount_kopeks=None,
+                max_amount_kopeks=None,
+                user_type_filter='all',
+                first_topup_filter='any',
+                promo_group_filter_mode='all',
+            )
+            db.add(config)
+
+        await db.commit()
+        logger.info(f'Added {len(missing_methods)} missing payment method(s).')
 
 
 # ============ CRUD ============

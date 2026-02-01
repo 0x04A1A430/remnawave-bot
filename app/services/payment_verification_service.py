@@ -71,6 +71,7 @@ SUPPORTED_MANUAL_CHECK_METHODS: frozenset[PaymentMethod] = frozenset(
         PaymentMethod.PLATEGA,
         PaymentMethod.CLOUDPAYMENTS,
         PaymentMethod.FREEKASSA,
+        PaymentMethod.KASSA_AI,
     }
 )
 
@@ -87,6 +88,7 @@ SUPPORTED_AUTO_CHECK_METHODS: frozenset[PaymentMethod] = frozenset(
         # WATA removed - API returns 429 "Use webhook – polling is rate-limited".
         # Payments are processed via webhook (wata_webhook.py).
         PaymentMethod.FREEKASSA,
+        PaymentMethod.KASSA_AI,
     }
 )
 
@@ -954,6 +956,9 @@ async def run_manual_check(
             payment = result.get('payment') if result else None
         elif method == PaymentMethod.FREEKASSA:
             result = await payment_service.get_freekassa_payment_status(db, local_payment_id)
+            payment = result.get('payment') if result else None
+        elif method == PaymentMethod.KASSA_AI:
+            result = await payment_service.get_kassa_ai_payment_status(db, local_payment_id)
             payment = result.get('payment') if result else None
         else:
             logger.warning('Manual check requested for unsupported method %s', method)

@@ -69,8 +69,13 @@ class KassaAiPaymentMixin:
             )
             return None
 
-        # Генерируем уникальный order_id
-        order_id = f'kai_{user_id}_{uuid.uuid4().hex[:12]}'
+        # Получаем telegram_id пользователя для order_id
+        payment_module = import_module('app.services.payment_service')
+        user = await payment_module.get_user_by_id(db, user_id)
+        tg_id = user.telegram_id if user else user_id
+
+        # Генерируем уникальный order_id с telegram_id для удобного поиска
+        order_id = f'k{tg_id}_{uuid.uuid4().hex[:6]}'
         amount_rubles = amount_kopeks / 100
         currency = settings.KASSA_AI_CURRENCY
 
@@ -487,3 +492,91 @@ class KassaAiPaymentMixin:
         except Exception as e:
             logger.exception('KassaAI: ошибка проверки статуса: %s', e)
             return None
+
+    async def get_kassa_ai_payment_status(
+        self,
+        db: AsyncSession,
+        local_payment_id: int,
+    ) -> dict[str, Any] | None:
+        """
+        Проверяет статус платежа KassaAI по локальному ID через API.
+        Если платёж оплачен — автоматически начисляет баланс.
+        """
+        logger.info('KassaAI: checking payment status for id=%s', local_payment_id)
+        kassa_ai_crud = import_module('app.database.crud.kassa_ai')
+
+        payment = await kassa_ai_crud.get_kassa_ai_payment_by_id(db, local_payment_id)
+        if not payment:
+            logger.warning('KassaAI payment not found: id=%s', local_payment_id)
+            return None
+
+        if payment.is_paid:
+            return {
+                'payment': payment,
+                'status': 'success',
+                'is_paid': True,
+            }
+
+        if not settings.KASSA_AI_API_KEY:
+            return {
+                'payment': payment,
+                'status': payment.status or 'pending',
+                'is_paid': payment.is_paid,
+            }
+
+        try:
+            # Запрашиваем статус заказа в KassaAI (api.fk.life)
+            response = await kassa_ai_service.get_order_status(payment.order_id)
+
+            # KassaAI возвращает список заказов (как Freekassa)
+            orders = response.get('orders', [])
+            target_order = None
+
+            # Ищем наш заказ в списке
+            for order in orders:
+                order_key = str(order.get('merchant_order_id') or order.get('paymentId'))
+                if order_key == str(payment.order_id):
+                    target_order = order
+                    break
+
+            if target_order:
+                # Статус 1 = Оплачен (как в Freekassa)
+                kai_status = int(target_order.get('status', 0))
+
+                if kai_status == 1:
+                    logger.info('KassaAI payment %s confirmed via API', payment.order_id)
+
+                    callback_payload = {
+                        'check_source': 'api',
+                        'kai_order_data': target_order,
+                    }
+
+                    # ID заказа на стороне KassaAI
+                    kai_intid = str(target_order.get('fk_order_id') or target_order.get('id'))
+
+                    # Обновляем статус
+                    payment = await kassa_ai_crud.update_kassa_ai_payment_status(
+                        db=db,
+                        payment=payment,
+                        status='success',
+                        is_paid=True,
+                        kassa_ai_order_id=kai_intid,
+                        payment_system_id=int(target_order.get('curID')) if target_order.get('curID') else None,
+                        callback_payload=callback_payload,
+                    )
+
+                    # Финализируем (начисляем баланс)
+                    await self._finalize_kassa_ai_payment(
+                        db,
+                        payment,
+                        intid=kai_intid,
+                        trigger='api_check',
+                    )
+        except Exception as e:
+            logger.error('Error checking KassaAI payment status: %s', e)
+
+        return {
+            'payment': payment,
+            'status': payment.status or 'pending',
+            'is_paid': payment.is_paid,
+        }
