@@ -7,6 +7,7 @@
 
 import asyncio
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -157,7 +158,7 @@ class BlockedUsersService:
         *,
         only_active: bool = True,
         batch_size: int = 100,
-        progress_callback: callable | None = None,
+        progress_callback: Callable | None = None,
     ) -> BlockedUsersScanResult:
         """
         Сканирует всех пользователей на предмет блокировки бота.
@@ -328,7 +329,7 @@ class BlockedUsersService:
         blocked_users: list[BlockCheckResult],
         action: BlockedUserAction,
         *,
-        progress_callback: callable | None = None,
+        progress_callback: Callable | None = None,
     ) -> CleanupResult:
         """
         Выполняет очистку заблокированных пользователей.
