@@ -2,6 +2,7 @@
 from . import (
     backup,
     blacklist,
+    blocked_users,
     bot_configuration,
     bulk_ban,
     campaigns,
