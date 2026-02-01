@@ -3253,6 +3253,189 @@ async def delete_all_devices(
         )
 
 
+# ============ Device Reduction ============
+
+
+@router.get('/devices/reduction-info')
+async def get_device_reduction_info(
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> dict[str, Any]:
+    """Get info about device limit reduction availability."""
+    from app.services.remnawave_service import RemnaWaveService
+
+    await db.refresh(user, ['subscription'])
+
+    if not user.subscription:
+        return {
+            'available': False,
+            'reason': 'No subscription found',
+            'current_device_limit': 0,
+            'min_device_limit': 1,
+            'can_reduce': 0,
+            'connected_devices_count': 0,
+        }
+
+    subscription = user.subscription
+
+    # Check if it's a trial subscription
+    if subscription.is_trial:
+        return {
+            'available': False,
+            'reason': 'Device reduction is not available for trial subscriptions',
+            'current_device_limit': subscription.device_limit or 1,
+            'min_device_limit': 1,
+            'can_reduce': 0,
+            'connected_devices_count': 0,
+        }
+
+    # Get tariff info for min device limit
+    tariff = None
+    min_device_limit = 1
+    if subscription.tariff_id:
+        tariff = await get_tariff_by_id(db, subscription.tariff_id)
+        if tariff:
+            min_device_limit = getattr(tariff, 'device_limit', 1) or 1
+
+    current_device_limit = subscription.device_limit or 1
+
+    # Can't reduce below minimum
+    if current_device_limit <= min_device_limit:
+        return {
+            'available': False,
+            'reason': 'Already at minimum device limit for your tariff',
+            'current_device_limit': current_device_limit,
+            'min_device_limit': min_device_limit,
+            'can_reduce': 0,
+            'connected_devices_count': 0,
+        }
+
+    # Get connected devices count
+    connected_devices_count = 0
+    if user.remnawave_uuid:
+        try:
+            service = RemnaWaveService()
+            async with service.get_api_client() as api:
+                response = await api._make_request('GET', f'/api/hwid/devices/{user.remnawave_uuid}')
+                if response and 'response' in response:
+                    connected_devices_count = response['response'].get('total', 0)
+        except Exception as e:
+            logger.error(f'Error getting connected devices count: {e}')
+
+    can_reduce = current_device_limit - min_device_limit
+
+    return {
+        'available': True,
+        'current_device_limit': current_device_limit,
+        'min_device_limit': min_device_limit,
+        'can_reduce': can_reduce,
+        'connected_devices_count': connected_devices_count,
+    }
+
+
+@router.post('/devices/reduce')
+async def reduce_devices(
+    request: dict[str, int],
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> dict[str, Any]:
+    """Reduce device limit (no refund)."""
+    from app.services.remnawave_service import RemnaWaveService
+
+    new_device_limit = request.get('new_device_limit')
+    if not new_device_limit or new_device_limit < 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Invalid new_device_limit',
+        )
+
+    await db.refresh(user, ['subscription'])
+
+    if not user.subscription:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='No subscription found',
+        )
+
+    subscription = user.subscription
+
+    if subscription.is_trial:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Device reduction is not available for trial subscriptions',
+        )
+
+    # Get tariff info for min device limit
+    tariff = None
+    min_device_limit = 1
+    if subscription.tariff_id:
+        tariff = await get_tariff_by_id(db, subscription.tariff_id)
+        if tariff:
+            min_device_limit = getattr(tariff, 'device_limit', 1) or 1
+
+    current_device_limit = subscription.device_limit or 1
+
+    # Validate new limit
+    if new_device_limit >= current_device_limit:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='New device limit must be less than current limit',
+        )
+
+    if new_device_limit < min_device_limit:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f'Cannot reduce below minimum device limit ({min_device_limit}) for your tariff',
+        )
+
+    # Get connected devices count and reset if needed
+    connected_devices_count = 0
+    devices_reset = False
+    if user.remnawave_uuid:
+        try:
+            service = RemnaWaveService()
+            async with service.get_api_client() as api:
+                response = await api._make_request('GET', f'/api/hwid/devices/{user.remnawave_uuid}')
+                if response and 'response' in response:
+                    connected_devices_count = response['response'].get('total', 0)
+
+                # If connected devices exceed new limit, reset all devices
+                if connected_devices_count > new_device_limit:
+                    await api.reset_user_devices(user.remnawave_uuid)
+                    devices_reset = True
+                    logger.info(
+                        f'Reset devices for user {user.id}: had {connected_devices_count}, new limit {new_device_limit}'
+                    )
+        except Exception as e:
+            logger.error(f'Error checking/resetting devices: {e}')
+
+    old_device_limit = current_device_limit
+
+    # Update subscription
+    subscription.device_limit = new_device_limit
+    subscription.updated_at = datetime.utcnow()
+    await db.commit()
+
+    # Update RemnaWave
+    try:
+        subscription_service = SubscriptionService()
+        await subscription_service.update_remnawave_user(db, subscription)
+    except Exception as e:
+        logger.error(f'Error updating RemnaWave user: {e}')
+
+    logger.info(
+        f'User {user.id} reduced device limit from {old_device_limit} to {new_device_limit}'
+        + (' (devices reset)' if devices_reset else '')
+    )
+
+    return {
+        'success': True,
+        'message': 'Device limit reduced successfully' + (' (devices reset)' if devices_reset else ''),
+        'old_device_limit': old_device_limit,
+        'new_device_limit': new_device_limit,
+    }
+
+
 # ============ Tariff Switch ============
 
 
