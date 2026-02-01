@@ -3778,12 +3778,25 @@ async def switch_tariff(
     except Exception as e:
         logger.error(f'Failed to sync tariff switch with RemnaWave: {e}')
 
+    # Reset all devices on tariff switch
+    devices_reset = False
+    if user.remnawave_uuid:
+        try:
+            service = RemnaWaveService()
+            async with service.get_api_client() as api:
+                await api.reset_user_devices(user.remnawave_uuid)
+                devices_reset = True
+                logger.info(f'Reset all devices for user {user.id} on tariff switch')
+        except Exception as e:
+            logger.error(f'Failed to reset devices on tariff switch: {e}')
+
     await db.refresh(user)
     await db.refresh(user.subscription)
 
     return {
         'success': True,
-        'message': f"Switched from '{old_tariff_name}' to '{new_tariff.name}'",
+        'message': f"Switched from '{old_tariff_name}' to '{new_tariff.name}'"
+        + (' (devices reset)' if devices_reset else ''),
         'subscription': _subscription_to_response(user.subscription),
         'old_tariff_name': old_tariff_name,
         'new_tariff_id': new_tariff.id,
