@@ -3084,8 +3084,8 @@ async def handle_subscription_settings(callback: types.CallbackQuery, db_user: U
 
     settings_text = settings_template.format(
         countries_count=len(subscription.connected_squads),
-        traffic_used=texts.format_traffic(subscription.traffic_used_gb),
-        traffic_limit=texts.format_traffic(subscription.traffic_limit_gb),
+        traffic_used=texts.format_traffic(subscription.traffic_used_gb, is_limit=False),
+        traffic_limit=texts.format_traffic(subscription.traffic_limit_gb, is_limit=True),
         devices_used=devices_used,
         devices_limit=devices_limit_display,
     )

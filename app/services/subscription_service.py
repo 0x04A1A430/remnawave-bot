@@ -446,6 +446,11 @@ class SubscriptionService:
                 return True
 
         except Exception as e:
+            error_msg = str(e).lower()
+            # "User already disabled" - считаем успехом
+            if 'already disabled' in error_msg:
+                logger.info(f'✅ RemnaWave пользователь {user_uuid} уже отключен')
+                return True
             logger.error(f'Ошибка отключения RemnaWave пользователя: {e}')
             return False
 
@@ -458,6 +463,11 @@ class SubscriptionService:
                 return True
 
         except Exception as e:
+            error_msg = str(e).lower()
+            # "User already enabled" - считаем успехом
+            if 'already enabled' in error_msg:
+                logger.info(f'✅ RemnaWave пользователь {user_uuid} уже включен')
+                return True
             logger.error(f'Ошибка включения RemnaWave пользователя: {e}')
             return False
 

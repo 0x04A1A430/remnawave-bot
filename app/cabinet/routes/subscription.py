@@ -666,9 +666,35 @@ async def purchase_traffic(
 
     # Проверяем баланс
     if user.balance_kopeks < final_price:
+        missing = final_price - user.balance_kopeks
+
+        # Save cart for auto-purchase after balance top-up
+        cart_data = {
+            'cart_mode': 'add_traffic',
+            'subscription_id': subscription.id,
+            'traffic_gb': request.gb,
+            'price_kopeks': final_price,
+            'base_price_kopeks': base_price_kopeks,
+            'discount_percent': traffic_discount_percent,
+            'source': 'cabinet',
+            'description': f'Докупка {request.gb} ГБ трафика',
+        }
+
+        try:
+            await user_cart_service.save_user_cart(user.id, cart_data)
+            logger.info(f'Cart saved for traffic purchase (cabinet) user {user.id}: +{request.gb} GB')
+        except Exception as e:
+            logger.error(f'Error saving cart for traffic purchase (cabinet): {e}')
+
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail=f'Insufficient balance. Need {final_price / 100:.2f} RUB, have {user.balance_kopeks / 100:.2f} RUB',
+            detail={
+                'code': 'insufficient_funds',
+                'message': f'Недостаточно средств. Не хватает {settings.format_price(missing)}',
+                'missing_amount': missing,
+                'cart_saved': True,
+                'cart_mode': 'add_traffic',
+            },
         )
 
     # Формируем описание
@@ -724,6 +750,31 @@ async def purchase_traffic(
     await db.refresh(user)
     await db.refresh(subscription)
 
+    # Отправляем уведомление админам
+    try:
+        from aiogram import Bot
+
+        from app.services.admin_notification_service import AdminNotificationService
+
+        if getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False) and settings.BOT_TOKEN:
+            bot = Bot(token=settings.BOT_TOKEN)
+            try:
+                notification_service = AdminNotificationService(bot)
+                old_traffic = subscription.traffic_limit_gb - request.gb
+                await notification_service.send_subscription_update_notification(
+                    db=db,
+                    user=user,
+                    subscription=subscription,
+                    update_type='traffic',
+                    old_value=old_traffic,
+                    new_value=subscription.traffic_limit_gb,
+                    price_paid=final_price,
+                )
+            finally:
+                await bot.session.close()
+    except Exception as e:
+        logger.error(f'Failed to send admin notification for traffic purchase: {e}')
+
     return {
         'success': True,
         'message': 'Traffic purchased successfully',
@@ -755,9 +806,31 @@ async def purchase_devices(
 
     # Check balance
     if user.balance_kopeks < total_price:
+        missing = total_price - user.balance_kopeks
+
+        # Сохраняем корзину для автопокупки после пополнения
+        try:
+            cart_data = {
+                'cart_mode': 'add_devices',
+                'devices_to_add': request.devices,
+                'price_kopeks': total_price,
+                'source': 'cabinet',
+            }
+            await user_cart_service.save_user_cart(user.id, cart_data)
+            logger.info(f'Cart saved for device purchase (cabinet /devices) user {user.id}: +{request.devices} devices')
+        except Exception as e:
+            logger.error(f'Error saving cart for device purchase (cabinet /devices): {e}')
+
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Insufficient balance',
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail={
+                'code': 'insufficient_funds',
+                'error': 'Insufficient balance',
+                'required_kopeks': total_price,
+                'current_kopeks': user.balance_kopeks,
+                'missing_kopeks': missing,
+                'cart_saved': True,
+            },
         )
 
     # Check max devices limit
@@ -771,11 +844,48 @@ async def purchase_devices(
             detail=f'Maximum device limit is {max_devices}',
         )
 
-    # Deduct balance and add devices
-    user.balance_kopeks -= total_price
+    # Deduct balance and create transaction
+    from app.database.crud.user import subtract_user_balance
+    from app.database.models import PaymentMethod
+
+    await subtract_user_balance(
+        db=db,
+        user=user,
+        amount_kopeks=total_price,
+        description=f'Покупка {request.devices} доп. устройств',
+        create_transaction=True,
+        payment_method=PaymentMethod.BALANCE,
+    )
+
+    # Add devices
     user.subscription.device_limit = new_devices
 
     await db.commit()
+    await db.refresh(user)
+
+    # Отправляем уведомление админам
+    try:
+        from aiogram import Bot
+
+        from app.services.admin_notification_service import AdminNotificationService
+
+        if getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False) and settings.BOT_TOKEN:
+            bot = Bot(token=settings.BOT_TOKEN)
+            try:
+                notification_service = AdminNotificationService(bot)
+                await notification_service.send_subscription_update_notification(
+                    db=db,
+                    user=user,
+                    subscription=user.subscription,
+                    update_type='devices',
+                    old_value=current_devices,
+                    new_value=new_devices,
+                    price_paid=total_price,
+                )
+            finally:
+                await bot.session.close()
+    except Exception as e:
+        logger.error(f'Failed to send admin notification for device purchase: {e}')
 
     return {
         'message': 'Devices added successfully',
@@ -1827,24 +1937,43 @@ async def purchase_devices(
         # Check balance
         if user.balance_kopeks < price_kopeks:
             missing = price_kopeks - user.balance_kopeks
+
+            # Сохраняем корзину для автопокупки после пополнения
+            try:
+                cart_data = {
+                    'cart_mode': 'add_devices',
+                    'devices_to_add': request.devices,
+                    'price_kopeks': price_kopeks,
+                    'source': 'cabinet',
+                }
+                await user_cart_service.save_user_cart(user.id, cart_data)
+                logger.info(f'Cart saved for device purchase (cabinet) user {user.id}: +{request.devices} devices')
+            except Exception as e:
+                logger.error(f'Error saving cart for device purchase (cabinet): {e}')
+
             raise HTTPException(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
                 detail={
+                    'code': 'insufficient_funds',
                     'error': 'Insufficient balance',
                     'required_kopeks': price_kopeks,
                     'current_kopeks': user.balance_kopeks,
                     'missing_kopeks': missing,
+                    'cart_saved': True,
                 },
             )
 
-        # Deduct balance
+        # Deduct balance and create transaction
         from app.database.crud.user import subtract_user_balance
+        from app.database.models import PaymentMethod
 
         await subtract_user_balance(
             db=db,
             user=user,
             amount_kopeks=price_kopeks,
             description=f'Покупка {request.devices} доп. устройств',
+            create_transaction=True,
+            payment_method=PaymentMethod.BALANCE,
         )
 
         # Increase device limit
@@ -1866,6 +1995,30 @@ async def purchase_devices(
 
         logger.info(f'User {user.id} purchased {request.devices} devices for {price_kopeks} kopeks')
 
+        # Отправляем уведомление админам
+        try:
+            from aiogram import Bot
+
+            from app.services.admin_notification_service import AdminNotificationService
+
+            if getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False) and settings.BOT_TOKEN:
+                bot = Bot(token=settings.BOT_TOKEN)
+                try:
+                    notification_service = AdminNotificationService(bot)
+                    await notification_service.send_subscription_update_notification(
+                        db=db,
+                        user=user,
+                        subscription=subscription,
+                        update_type='devices',
+                        old_value=current_devices,
+                        new_value=subscription.device_limit,
+                        price_paid=price_kopeks,
+                    )
+                finally:
+                    await bot.session.close()
+        except Exception as e:
+            logger.error(f'Failed to send admin notification for device purchase: {e}')
+
         return {
             'success': True,
             'message': f'Добавлено {request.devices} устройств',
@@ -1885,6 +2038,197 @@ async def purchase_devices(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Не удалось обработать покупку устройств',
         )
+
+
+@router.post('/traffic/save-cart')
+async def save_traffic_cart(
+    request: TrafficPurchaseRequest,
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> dict[str, bool]:
+    """Save cart for traffic purchase (for insufficient balance flow)."""
+    from app.utils.pricing_utils import calculate_prorated_price
+
+    await db.refresh(user, ['subscription'])
+    subscription = user.subscription
+
+    if not subscription:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='У вас нет активной подписки',
+        )
+
+    if subscription.status not in ['active', 'trial']:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Ваша подписка неактивна',
+        )
+
+    if subscription.is_trial:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Докупка трафика недоступна на пробном периоде',
+        )
+
+    if subscription.traffic_limit_gb == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='У вас уже безлимитный трафик',
+        )
+
+    # Get traffic price from tariff or settings
+    tariff = None
+    base_price_kopeks = 0
+    is_tariff_mode = settings.is_tariffs_mode() and subscription.tariff_id
+
+    if is_tariff_mode:
+        tariff = await get_tariff_by_id(db, subscription.tariff_id)
+        if not tariff:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail='Тариф не найден',
+            )
+
+        if not getattr(tariff, 'traffic_topup_enabled', False):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='Докупка трафика недоступна на вашем тарифе',
+            )
+
+        packages = tariff.get_traffic_topup_packages() if hasattr(tariff, 'get_traffic_topup_packages') else {}
+        if request.gb not in packages:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f'Пакет трафика {request.gb} ГБ недоступен',
+            )
+        base_price_kopeks = packages[request.gb]
+    else:
+        if not settings.is_traffic_topup_enabled():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='Докупка трафика отключена',
+            )
+
+        packages = settings.get_traffic_packages()
+        matching_pkg = next((pkg for pkg in packages if pkg['gb'] == request.gb and pkg.get('enabled', True)), None)
+        if not matching_pkg:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='Недоступный пакет трафика',
+            )
+        base_price_kopeks = matching_pkg['price']
+
+    # Apply promo group discount
+    traffic_discount_percent = 0
+    promo_group = (
+        user.get_primary_promo_group()
+        if hasattr(user, 'get_primary_promo_group')
+        else getattr(user, 'promo_group', None)
+    )
+    if promo_group:
+        apply_to_addons = getattr(promo_group, 'apply_discounts_to_addons', True)
+        if apply_to_addons:
+            traffic_discount_percent = max(0, min(100, int(getattr(promo_group, 'traffic_discount_percent', 0) or 0)))
+
+    if traffic_discount_percent > 0:
+        base_price_kopeks = int(base_price_kopeks * (100 - traffic_discount_percent) / 100)
+
+    # Calculate prorated price
+    final_price, _ = calculate_prorated_price(
+        base_price_kopeks,
+        subscription.end_date,
+    )
+
+    # Save cart for auto-purchase after balance top-up
+    cart_data = {
+        'cart_mode': 'add_traffic',
+        'subscription_id': subscription.id,
+        'traffic_gb': request.gb,
+        'price_kopeks': final_price,
+        'base_price_kopeks': base_price_kopeks,
+        'discount_percent': traffic_discount_percent,
+        'source': 'cabinet',
+        'description': f'Докупка {request.gb} ГБ трафика',
+    }
+    await user_cart_service.save_user_cart(user.id, cart_data)
+    logger.info(f'Cart saved for traffic purchase (cabinet save-cart) user {user.id}: +{request.gb} GB')
+
+    return {'success': True, 'cart_saved': True}
+
+
+@router.post('/devices/save-cart')
+async def save_devices_cart(
+    request: DevicePurchaseRequest,
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> dict[str, bool]:
+    """Save cart for device purchase (for insufficient balance flow)."""
+    await db.refresh(user, ['subscription'])
+    subscription = user.subscription
+
+    if not subscription:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='У вас нет активной подписки',
+        )
+
+    if subscription.status not in ['active', 'trial']:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Ваша подписка неактивна',
+        )
+
+    # Get tariff for device price (if exists)
+    tariff = None
+    if subscription.tariff_id:
+        tariff = await get_tariff_by_id(db, subscription.tariff_id)
+
+    # Determine device price and max limit from tariff or settings
+    if tariff and tariff.device_price_kopeks:
+        device_price = tariff.device_price_kopeks
+        max_device_limit = tariff.max_device_limit
+    else:
+        device_price = settings.PRICE_PER_DEVICE
+        max_device_limit = settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else None
+
+    if not device_price or device_price <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Докупка устройств недоступна',
+        )
+
+    # Check max device limit
+    current_devices = subscription.device_limit or 1
+    new_device_count = current_devices + request.devices
+    if max_device_limit and new_device_count > max_device_limit:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f'Максимальное количество устройств: {max_device_limit}',
+        )
+
+    # Calculate prorated price based on remaining days
+    now = datetime.now(UTC)
+    end_date = subscription.end_date
+    if end_date.tzinfo is None:
+        end_date = end_date.replace(tzinfo=UTC)
+
+    days_left = max(1, (end_date - now).days)
+    total_days = 30
+
+    price_kopeks = int(device_price * request.devices * days_left / total_days)
+    price_kopeks = max(100, price_kopeks)  # Minimum 1 ruble
+
+    # Save cart for auto-purchase after balance top-up
+    cart_data = {
+        'cart_mode': 'add_devices',
+        'devices_to_add': request.devices,
+        'price_kopeks': price_kopeks,
+        'source': 'cabinet',
+    }
+    await user_cart_service.save_user_cart(user.id, cart_data)
+    logger.info(f'Cart saved for device purchase (cabinet save-cart) user {user.id}: +{request.devices} devices')
+
+    return {'success': True, 'cart_saved': True}
 
 
 @router.get('/devices/price')
@@ -3284,6 +3628,11 @@ async def toggle_subscription_pause(
     new_paused_state = not is_currently_paused
     user.subscription.is_daily_paused = new_paused_state
 
+    # Сохраняем статус ДО изменения для проверки RemnaWave
+    from app.database.models import SubscriptionStatus
+
+    was_disabled = user.subscription.status == SubscriptionStatus.DISABLED.value
+
     # If resuming, check balance
     if not new_paused_state:
         daily_price = getattr(tariff, 'daily_price_kopeks', 0)
@@ -3299,9 +3648,7 @@ async def toggle_subscription_pause(
             )
 
         # Restore ACTIVE status if was DISABLED
-        from app.database.models import SubscriptionStatus
-
-        if user.subscription.status == SubscriptionStatus.DISABLED.value:
+        if was_disabled:
             user.subscription.status = SubscriptionStatus.ACTIVE.value
             user.subscription.last_daily_charge_at = datetime.utcnow()
             user.subscription.end_date = datetime.utcnow() + timedelta(days=1)
@@ -3310,14 +3657,15 @@ async def toggle_subscription_pause(
     await db.refresh(user.subscription)
     await db.refresh(user)
 
-    # Sync with RemnaWave when resuming
-    if not new_paused_state:
+    # Sync with RemnaWave only when resuming from DISABLED state
+    # При паузе НЕ отключаем - пользователь может пользоваться до конца оплаченного периода
+    # При возобновлении включаем только если подписка была отключена (DISABLED)
+    if not new_paused_state and user.remnawave_uuid and was_disabled:
         try:
             subscription_service = SubscriptionService()
-            if user.remnawave_uuid:
-                await subscription_service.enable_remnawave_user(user.remnawave_uuid)
+            await subscription_service.enable_remnawave_user(user.remnawave_uuid)
         except Exception as e:
-            logger.error(f'Error syncing with RemnaWave on resume: {e}')
+            logger.error(f'Error enabling RemnaWave user on resume: {e}')
 
     if new_paused_state:
         message = 'Daily subscription paused'

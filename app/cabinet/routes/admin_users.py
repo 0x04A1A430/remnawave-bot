@@ -276,6 +276,7 @@ async def list_users(
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     search: str | None = Query(None, max_length=255),
+    email: str | None = Query(None, max_length=255),
     status: UserStatusEnum | None = Query(None),
     sort_by: SortByEnum = Query(SortByEnum.CREATED_AT),
     admin: User = Depends(get_current_admin_user),
@@ -287,6 +288,7 @@ async def list_users(
     - **offset**: Pagination offset
     - **limit**: Number of users per page (max 200)
     - **search**: Search by telegram_id, username, first_name, last_name
+    - **email**: Search by email
     - **status**: Filter by user status (active, blocked, deleted)
     - **sort_by**: Sort field (created_at, balance, traffic, last_activity, total_spent, purchase_count)
     """
@@ -307,6 +309,7 @@ async def list_users(
         offset=offset,
         limit=limit,
         search=search,
+        email=email,
         status=user_status,
         order_by_balance=order_by_balance,
         order_by_traffic=order_by_traffic,
@@ -315,7 +318,7 @@ async def list_users(
         order_by_purchase_count=order_by_purchase_count,
     )
 
-    total = await get_users_count(db=db, status=user_status, search=search)
+    total = await get_users_count(db=db, status=user_status, search=search, email=email)
 
     # Get spending stats for all users
     user_ids = [u.id for u in users]

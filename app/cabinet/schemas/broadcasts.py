@@ -1,8 +1,14 @@
 """Pydantic schemas for cabinet broadcasts."""
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
+
+
+# ============ Channel Types ============
+
+BroadcastChannel = Literal['telegram', 'email', 'both']
 
 
 # ============ Filters ============
@@ -100,7 +106,7 @@ class BroadcastResponse(BaseModel):
 
     id: int
     target_type: str
-    message_text: str
+    message_text: str | None = None
     has_media: bool
     media_type: str | None = None
     media_file_id: str | None = None
@@ -114,6 +120,11 @@ class BroadcastResponse(BaseModel):
     created_at: datetime
     completed_at: datetime | None = None
     progress_percent: float = 0.0
+
+    # Email/channel fields
+    channel: str = 'telegram'  # telegram|email|both
+    email_subject: str | None = None
+    email_html_content: str | None = None
 
     class Config:
         from_attributes = True
@@ -139,6 +150,60 @@ class BroadcastPreviewRequest(BaseModel):
 
 class BroadcastPreviewResponse(BaseModel):
     """Preview response with recipients count."""
+
+    target: str
+    count: int
+
+
+# ============ Email Filters ============
+
+
+class EmailFilterItem(BaseModel):
+    """Single email filter with count."""
+
+    key: str
+    label: str
+    count: int
+    group: str | None = None
+
+
+class EmailFiltersResponse(BaseModel):
+    """Response with all email filters and their counts."""
+
+    filters: list[EmailFilterItem]
+    total_with_email: int
+
+
+# ============ Combined Broadcast ============
+
+
+class CombinedBroadcastCreateRequest(BaseModel):
+    """Request to create a combined (telegram/email/both) broadcast."""
+
+    channel: BroadcastChannel
+    target: str
+
+    # Telegram-specific fields
+    message_text: str | None = Field(default=None, max_length=4000)
+    selected_buttons: list[str] = Field(default_factory=lambda: ['home'])
+    media: BroadcastMediaRequest | None = None
+
+    # Email-specific fields
+    email_subject: str | None = Field(default=None, max_length=255)
+    email_html_content: str | None = Field(default=None, max_length=100000)
+
+
+# ============ Email Preview ============
+
+
+class EmailPreviewRequest(BaseModel):
+    """Request to preview email broadcast recipients."""
+
+    target: str
+
+
+class EmailPreviewResponse(BaseModel):
+    """Preview response for email broadcast."""
 
     target: str
     count: int
