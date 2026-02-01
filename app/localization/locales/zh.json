@@ -864,6 +864,7 @@
 "CHANGE_DEVICES_CONFIRM":"\n  📱<b>确认更改</b>\n\n  当前数量：{current_devices}台设备\n  新数量：{new_devices}台设备\n\n  操作：{action}\n  💰{cost}\n\n  确认更改吗？\n  ",
 "CHANGE_DEVICES_INFO":"\n  📱<b>更改设备数量</b>\n\n  当前限制：{current_devices}台设备\n\n  请选择新的设备数量：\n\n  💡<b>重要提示：</b>\n  •增加-按剩余时间比例补差价\n  •减少-不退款\n  ",
 "CHANGE_DEVICES_PROMPT":"📱<b>更改设备数量</b>\n\n当前限制：{current_devices}台设备\n请选择新的设备数量：\n\n💡<b>重要提示：</b>\n•增加-按剩余时间比例补差价\n•减少-不退款",
+"CHANGE_DEVICES_PROMPT_TARIFF":"📱<b>更改设备数量</b>\n\n当前限制：{current_devices}台设备\n每台额外设备价格：{price}/月\n请选择新的设备数量：\n\n💡<b>重要提示：</b>\n•增加-按剩余时间比例补差价\n•减少-不退款",
 "CHANGE_DEVICES_SUCCESS_DECREASE":"\n  ✅设备数量已减少！\n\n  📱之前：{old_count}→现在：{new_count}\n  ℹ️不退款\n  ",
 "CHANGE_DEVICES_SUCCESS_INCREASE":"\n  ✅设备数量已增加！\n\n  📱之前：{old_count}→现在：{new_count}\n  💰已扣除：{amount}\n  ",
 "CHANGE_DEVICES_TITLE":"📱更改设备数量",
