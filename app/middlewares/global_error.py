@@ -1,13 +1,25 @@
+import asyncio
 import logging
+import traceback
 from collections.abc import Awaitable, Callable
+from datetime import datetime, timedelta
 from typing import Any
 
-from aiogram import BaseMiddleware
+from aiogram import BaseMiddleware, Bot
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.types import CallbackQuery, TelegramObject
+from aiogram.types import BufferedInputFile, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, TelegramObject
+
+from app.config import settings
+from app.utils.timezone import format_local_datetime
 
 
 logger = logging.getLogger(__name__)
+
+# Троттлинг для предотвращения спама ошибками
+_last_error_notification: datetime | None = None
+_error_notification_cooldown = timedelta(minutes=5)  # Минимум 5 минут между уведомлениями
+_error_buffer: list[tuple[str, str, str]] = []  # (error_type, error_message, traceback)
+_max_buffer_size = 10
 
 
 class GlobalErrorMiddleware(BaseMiddleware):
@@ -23,6 +35,11 @@ class GlobalErrorMiddleware(BaseMiddleware):
             return await self._handle_telegram_error(event, e)
         except Exception as e:
             logger.error(f'Неожиданная ошибка в GlobalErrorMiddleware: {e}', exc_info=True)
+            # Отправляем уведомление об ошибке в админский чат
+            bot = data.get('bot')
+            if bot:
+                user_info = self._get_user_info(event)
+                schedule_error_notification(bot, e, f'Пользователь: {user_info}')
             raise
 
     async def _handle_telegram_error(self, event: TelegramObject, error: TelegramBadRequest):
@@ -147,3 +164,132 @@ class ErrorStatisticsMiddleware(BaseMiddleware):
     def reset_statistics(self):
         for key in self.error_counts:
             self.error_counts[key] = 0
+
+
+async def send_error_to_admin_chat(bot: Bot, error: Exception, context: str = '') -> bool:
+    """
+    Отправляет уведомление об ошибке в админский чат с троттлингом.
+
+    Args:
+        bot: Экземпляр бота
+        error: Исключение
+        context: Дополнительный контекст (например, информация о пользователе)
+
+    Returns:
+        bool: True если уведомление отправлено
+    """
+    global _last_error_notification
+
+    chat_id = getattr(settings, 'ADMIN_NOTIFICATIONS_CHAT_ID', None)
+    topic_id = getattr(settings, 'ADMIN_NOTIFICATIONS_TOPIC_ID', None)
+    enabled = getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False)
+
+    if not enabled or not chat_id:
+        return False
+
+    error_type = type(error).__name__
+    error_message = str(error)[:500]
+    tb_str = traceback.format_exc()
+
+    # Добавляем в буфер
+    _error_buffer.append((error_type, error_message, tb_str))
+    if len(_error_buffer) > _max_buffer_size:
+        _error_buffer.pop(0)
+
+    # Проверяем троттлинг
+    now = datetime.utcnow()
+    if _last_error_notification and (now - _last_error_notification) < _error_notification_cooldown:
+        logger.debug(f'Ошибка добавлена в буфер, троттлинг активен: {error_type}')
+        return False
+
+    _last_error_notification = now
+
+    try:
+        timestamp = format_local_datetime(now, '%d.%m.%Y %H:%M:%S')
+
+        # Формируем лог-файл со всеми ошибками из буфера
+        log_lines = [
+            'ERROR REPORT',
+            '=' * 50,
+            f'Timestamp: {timestamp}',
+            f'Errors in buffer: {len(_error_buffer)}',
+            '',
+        ]
+
+        for i, (err_type, err_msg, err_tb) in enumerate(_error_buffer, 1):
+            log_lines.extend(
+                [
+                    f'{"=" * 50}',
+                    f'ERROR #{i}: {err_type}',
+                    f'{"=" * 50}',
+                    f'Message: {err_msg}',
+                    '',
+                    'Traceback:',
+                    err_tb,
+                    '',
+                ]
+            )
+
+        log_content = '\n'.join(log_lines)
+
+        # Очищаем буфер после отправки
+        errors_count = len(_error_buffer)
+        _error_buffer.clear()
+
+        file_name = f'error_report_{now.strftime("%Y%m%d_%H%M%S")}.txt'
+        file = BufferedInputFile(
+            file=log_content.encode('utf-8'),
+            filename=file_name,
+        )
+
+        message_text = (
+            f'<b>Remnawave Bedolaga Bot</b>\n\n'
+            f'⚠️ Ошибка во время работы\n\n'
+            f'<b>Тип:</b> <code>{error_type}</code>\n'
+            f'<b>Ошибок в отчёте:</b> {errors_count}\n'
+        )
+        if context:
+            message_text += f'<b>Контекст:</b> {context}\n'
+        message_text += f'\n<i>{timestamp}</i>'
+
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text='💬 Сообщить разработчику',
+                        url='https://t.me/fringg',
+                    ),
+                ],
+            ]
+        )
+
+        message_kwargs: dict = {
+            'chat_id': chat_id,
+            'document': file,
+            'caption': message_text,
+            'parse_mode': 'HTML',
+            'reply_markup': keyboard,
+        }
+
+        if topic_id:
+            message_kwargs['message_thread_id'] = topic_id
+
+        await bot.send_document(**message_kwargs)
+        logger.info(f'Уведомление об ошибке отправлено в чат {chat_id}')
+        return True
+
+    except Exception as e:
+        logger.error(f'Ошибка отправки уведомления об ошибке: {e}')
+        return False
+
+
+def schedule_error_notification(bot: Bot, error: Exception, context: str = '') -> None:
+    """
+    Планирует отправку уведомления об ошибке в фоне (не блокирует).
+
+    Args:
+        bot: Экземпляр бота
+        error: Исключение
+        context: Дополнительный контекст
+    """
+    asyncio.create_task(send_error_to_admin_chat(bot, error, context))
