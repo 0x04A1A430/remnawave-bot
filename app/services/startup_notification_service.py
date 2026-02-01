@@ -249,6 +249,69 @@ async def send_bot_startup_notification(bot: Bot) -> bool:
     return await service.send_startup_notification()
 
 
+def _get_error_recommendations(error_message: str) -> str | None:
+    """
+    Возвращает рекомендации по исправлению ошибки на основе текста ошибки.
+
+    Args:
+        error_message: Текст ошибки
+
+    Returns:
+        Рекомендации в формате HTML blockquote или None
+    """
+    error_lower = error_message.lower()
+
+    # Ошибки вебхука
+    if 'webhook' in error_lower or 'failed to resolve host' in error_lower:
+        tips = [
+            '• Проверьте WEBHOOK_HOST в .env',
+            '• Убедитесь что домен доступен извне',
+            '• Проверьте SSL сертификат (должен быть валидный)',
+            '• Проверьте reverse proxy (nginx/caddy)',
+            '• Проверьте сеть Docker (docker network)',
+            '• Попробуйте: docker compose restart',
+        ]
+        return '<blockquote expandable>💡 <b>Рекомендации:</b>\n' + '\n'.join(tips) + '</blockquote>'
+
+    # Ошибки подключения к БД
+    if 'database' in error_lower or 'postgres' in error_lower or 'connection refused' in error_lower:
+        tips = [
+            '• Проверьте что PostgreSQL запущен',
+            '• Проверьте DATABASE_URL в .env',
+            '• Проверьте сеть Docker между контейнерами',
+            '• Попробуйте: docker compose restart db',
+        ]
+        return '<blockquote expandable>💡 <b>Рекомендации:</b>\n' + '\n'.join(tips) + '</blockquote>'
+
+    # Ошибки Redis
+    if 'redis' in error_lower:
+        tips = [
+            '• Проверьте что Redis запущен',
+            '• Проверьте REDIS_URL в .env',
+            '• Попробуйте: docker compose restart redis',
+        ]
+        return '<blockquote expandable>💡 <b>Рекомендации:</b>\n' + '\n'.join(tips) + '</blockquote>'
+
+    # Ошибки Remnawave API
+    if 'remnawave' in error_lower or 'panel' in error_lower:
+        tips = [
+            '• Проверьте REMNAWAVE_API_URL в .env',
+            '• Проверьте REMNAWAVE_API_KEY',
+            '• Убедитесь что панель Remnawave доступна',
+        ]
+        return '<blockquote expandable>💡 <b>Рекомендации:</b>\n' + '\n'.join(tips) + '</blockquote>'
+
+    # Ошибки токена бота
+    if 'unauthorized' in error_lower or 'bot token' in error_lower:
+        tips = [
+            '• Проверьте BOT_TOKEN в .env',
+            '• Убедитесь что токен актуален (@BotFather)',
+        ]
+        return '<blockquote expandable>💡 <b>Рекомендации:</b>\n' + '\n'.join(tips) + '</blockquote>'
+
+    return None
+
+
 async def send_crash_notification(bot: Bot, error: Exception, traceback_str: str) -> bool:
     """
     Отправляет уведомление о падении бота с лог-файлом.
@@ -299,9 +362,15 @@ async def send_crash_notification(bot: Bot, error: Exception, traceback_str: str
             f'<b>Remnawave Bedolaga Bot</b>\n\n'
             f'❌ Бот упал с ошибкой\n\n'
             f'<b>Тип:</b> <code>{error_type}</code>\n'
-            f'<b>Сообщение:</b> <code>{error_message[:200]}</code>\n\n'
-            f'<i>{timestamp}</i>'
+            f'<b>Сообщение:</b> <code>{error_message[:200]}</code>\n'
         )
+
+        # Добавляем рекомендации если есть
+        recommendations = _get_error_recommendations(error_message)
+        if recommendations:
+            message_text += f'\n{recommendations}\n'
+
+        message_text += f'\n<i>{timestamp}</i>'
 
         # Кнопка для связи с разработчиком
         keyboard = InlineKeyboardMarkup(
