@@ -11,6 +11,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import BufferedInputFile, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, TelegramObject
 
 from app.config import settings
+from app.services.startup_notification_service import _get_error_recommendations
 from app.utils.timezone import format_local_datetime
 
 
@@ -257,6 +258,12 @@ async def send_error_to_admin_chat(bot: Bot, error: Exception, context: str = ''
         )
         if context:
             message_text += f'<b>Контекст:</b> {context}\n'
+
+        # Добавляем рекомендации если есть
+        recommendations = _get_error_recommendations(error_message)
+        if recommendations:
+            message_text += f'\n{recommendations}\n'
+
         message_text += f'\n<i>{timestamp}</i>'
 
         keyboard = InlineKeyboardMarkup(
