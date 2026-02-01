@@ -52,6 +52,12 @@ DATABASE_ERROR_KEYWORDS: Final[tuple[str, ...]] = ('database', 'postgres', 'conn
 REDIS_ERROR_KEYWORD: Final[str] = 'redis'
 REMNAWAVE_ERROR_KEYWORDS: Final[tuple[str, ...]] = ('remnawave', 'panel')
 AUTH_ERROR_KEYWORDS: Final[tuple[str, ...]] = ('unauthorized', 'bot token')
+INLINE_BUTTON_URL_ERROR_KEYWORDS: Final[tuple[str, ...]] = (
+    'web app url',
+    'url host is empty',
+    'unsupported url protocol',
+    'button url',
+)
 
 
 class StartupNotificationService:
@@ -337,6 +343,16 @@ def _get_error_recommendations(error_message: str) -> str | None:
         tips = [
             '• Проверьте BOT_TOKEN в .env',
             '• Убедитесь что токен актуален (@BotFather)',
+        ]
+        return '<blockquote expandable>💡 <b>Рекомендации:</b>\n' + '\n'.join(tips) + '</blockquote>'
+
+    # Ошибки inline-кнопок с URL (WebApp, кастомные протоколы)
+    if any(keyword in error_lower for keyword in INLINE_BUTTON_URL_ERROR_KEYWORDS):
+        tips = [
+            '• Проверьте MINIAPP_CUSTOM_URL в .env',
+            '• Проверьте HAPP_CRYPTOLINK_REDIRECT_TEMPLATE',
+            '• Telegram не поддерживает кастомные схемы (happ://, v2ray://, ss://, и т.д.) в inline-кнопках',
+            '• Используйте HTTPS редирект для диплинков',
         ]
         return '<blockquote expandable>💡 <b>Рекомендации:</b>\n' + '\n'.join(tips) + '</blockquote>'
 
