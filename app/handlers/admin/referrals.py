@@ -83,6 +83,7 @@ async def show_referral_statistics(callback: types.CallbackQuery, db_user: User,
         keyboard_rows = [
             [types.InlineKeyboardButton(text='🔄 Обновить', callback_data='admin_referrals')],
             [types.InlineKeyboardButton(text='👥 Топ рефереров', callback_data='admin_referrals_top')],
+            [types.InlineKeyboardButton(text='🔍 Диагностика логов', callback_data='admin_referral_diagnostics')],
         ]
 
         # Кнопка заявок на вывод (если функция включена)
@@ -650,11 +651,812 @@ async def process_test_referral_earning(message: types.Message, db_user: User, d
     )
 
 
+def _get_period_dates(period: str) -> tuple[datetime.datetime, datetime.datetime]:
+    """Возвращает начальную и конечную даты для заданного периода."""
+    now = datetime.datetime.now()
+    today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    if period == 'today':
+        start_date = today
+        end_date = today + datetime.timedelta(days=1)
+    elif period == 'yesterday':
+        start_date = today - datetime.timedelta(days=1)
+        end_date = today
+    elif period == 'week':
+        start_date = today - datetime.timedelta(days=7)
+        end_date = today + datetime.timedelta(days=1)
+    elif period == 'month':
+        start_date = today - datetime.timedelta(days=30)
+        end_date = today + datetime.timedelta(days=1)
+    else:
+        # По умолчанию — сегодня
+        start_date = today
+        end_date = today + datetime.timedelta(days=1)
+
+    return start_date, end_date
+
+
+def _get_period_display_name(period: str) -> str:
+    """Возвращает человекочитаемое название периода."""
+    names = {'today': 'сегодня', 'yesterday': 'вчера', 'week': '7 дней', 'month': '30 дней'}
+    return names.get(period, 'сегодня')
+
+
+async def _show_diagnostics_for_period(callback: types.CallbackQuery, db: AsyncSession, state: FSMContext, period: str):
+    """Внутренняя функция для отображения диагностики за указанный период."""
+    try:
+        await callback.answer('Анализирую логи...')
+
+        from app.services.referral_diagnostics_service import referral_diagnostics_service
+
+        # Сохраняем период в state
+        await state.update_data(diagnostics_period=period)
+        from app.states import AdminStates
+
+        await state.set_state(AdminStates.referral_diagnostics_period)
+
+        # Получаем даты периода
+        start_date, end_date = _get_period_dates(period)
+
+        # Анализируем логи
+        report = await referral_diagnostics_service.analyze_period(db, start_date, end_date)
+
+        # Формируем отчёт
+        period_display = _get_period_display_name(period)
+
+        text = f"""
+🔍 <b>Диагностика рефералов — {period_display}</b>
+
+<b>📊 Статистика переходов:</b>
+• Всего кликов по реф-ссылкам: {report.total_ref_clicks}
+• Уникальных пользователей: {report.unique_users_clicked}
+• Потерянных рефералов: {len(report.lost_referrals)}
+"""
+
+        if report.lost_referrals:
+            text += '\n<b>❌ Потерянные рефералы:</b>\n'
+            text += '<i>(пришли по ссылке, но реферер не засчитался)</i>\n\n'
+
+            for i, lost in enumerate(report.lost_referrals[:15], 1):
+                # Статус пользователя
+                if not lost.registered:
+                    status = '⚠️ Не в БД'
+                elif not lost.has_referrer:
+                    status = '❌ Без реферера'
+                else:
+                    status = f'⚡ Другой реферер (ID{lost.current_referrer_id})'
+
+                # Имя или ID
+                user_name = lost.username or lost.full_name or f'ID{lost.telegram_id}'
+                if lost.username:
+                    user_name = f'@{lost.username}'
+
+                # Ожидаемый реферер
+                referrer_info = ''
+                if lost.expected_referrer_name:
+                    referrer_info = f' → {lost.expected_referrer_name}'
+                elif lost.expected_referrer_id:
+                    referrer_info = f' → ID{lost.expected_referrer_id}'
+
+                # Время
+                time_str = lost.click_time.strftime('%H:%M')
+
+                text += f'{i}. {user_name} — {status}\n'
+                text += f'   <code>{lost.referral_code}</code>{referrer_info} ({time_str})\n'
+
+            if len(report.lost_referrals) > 15:
+                text += f'\n<i>... и ещё {len(report.lost_referrals) - 15}</i>\n'
+        else:
+            text += '\n✅ <b>Все рефералы засчитаны!</b>\n'
+
+        # Информация о логах
+        log_path = referral_diagnostics_service.log_path
+        log_exists = log_path.exists()
+        log_size = log_path.stat().st_size if log_exists else 0
+
+        text += f'\n<i>📂 {log_path.name}'
+        if log_exists:
+            text += f' ({log_size / 1024:.0f} KB)'
+            text += f' | Строк: {report.lines_in_period}'
+        else:
+            text += ' (не найден!)'
+        text += '</i>'
+
+        # Кнопки: только "Сегодня" (текущий лог) и "Загрузить файл" (старые логи)
+        keyboard_rows = [
+            [
+                types.InlineKeyboardButton(text='📅 Сегодня (текущий лог)', callback_data='admin_ref_diag:today'),
+            ],
+            [types.InlineKeyboardButton(text='📤 Загрузить лог-файл', callback_data='admin_ref_diag_upload')],
+            [types.InlineKeyboardButton(text='🔍 Проверить бонусы (по БД)', callback_data='admin_ref_check_bonuses')],
+            [
+                types.InlineKeyboardButton(
+                    text='🏆 Синхронизировать с конкурсом', callback_data='admin_ref_sync_contest'
+                )
+            ],
+        ]
+
+        # Кнопки действий (только если есть потерянные рефералы)
+        if report.lost_referrals:
+            keyboard_rows.append(
+                [types.InlineKeyboardButton(text='📋 Предпросмотр исправлений', callback_data='admin_ref_fix_preview')]
+            )
+
+        keyboard_rows.extend(
+            [
+                [types.InlineKeyboardButton(text='🔄 Обновить', callback_data=f'admin_ref_diag:{period}')],
+                [types.InlineKeyboardButton(text='⬅️ К статистике', callback_data='admin_referrals')],
+            ]
+        )
+
+        keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
+
+        await callback.message.edit_text(text, reply_markup=keyboard)
+
+    except Exception as e:
+        logger.error(f'Ошибка в _show_diagnostics_for_period: {e}', exc_info=True)
+        await callback.answer('Ошибка при анализе логов', show_alert=True)
+
+
+@admin_required
+@error_handler
+async def show_referral_diagnostics(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
+    """Показывает диагностику реферальной системы по логам."""
+    # Определяем период из callback_data или используем "today" по умолчанию
+    if ':' in callback.data:
+        period = callback.data.split(':')[1]
+    else:
+        period = 'today'
+
+    await _show_diagnostics_for_period(callback, db, state, period)
+
+
+@admin_required
+@error_handler
+async def preview_referral_fixes(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
+    """Показывает предпросмотр исправлений потерянных рефералов."""
+    try:
+        await callback.answer('Анализирую...')
+
+        # Получаем период из state
+        state_data = await state.get_data()
+        period = state_data.get('diagnostics_period', 'today')
+
+        from app.services.referral_diagnostics_service import DiagnosticReport, referral_diagnostics_service
+
+        # Проверяем, работаем ли с загруженным файлом
+        if period == 'uploaded_file':
+            # Используем сохранённый отчёт из загруженного файла (десериализуем)
+            report_data = state_data.get('uploaded_file_report')
+            if not report_data:
+                await callback.answer('Отчёт загруженного файла не найден', show_alert=True)
+                return
+            report = DiagnosticReport.from_dict(report_data)
+            period_display = 'загруженный файл'
+        else:
+            # Получаем даты периода
+            start_date, end_date = _get_period_dates(period)
+
+            # Анализируем логи
+            report = await referral_diagnostics_service.analyze_period(db, start_date, end_date)
+            period_display = _get_period_display_name(period)
+
+        if not report.lost_referrals:
+            await callback.answer('Нет потерянных рефералов для исправления', show_alert=True)
+            return
+
+        # Запускаем предпросмотр исправлений
+        fix_report = await referral_diagnostics_service.fix_lost_referrals(db, report.lost_referrals, apply=False)
+
+        # Формируем отчёт
+        text = f"""
+📋 <b>Предпросмотр исправлений — {period_display}</b>
+
+<b>📊 Что будет сделано:</b>
+• Исправлено рефералов: {fix_report.users_fixed}
+• Бонусов рефералам: {settings.format_price(fix_report.bonuses_to_referrals)}
+• Бонусов рефереам: {settings.format_price(fix_report.bonuses_to_referrers)}
+• Ошибок: {fix_report.errors}
+
+<b>🔍 Детали:</b>
+"""
+
+        # Показываем первые 10 деталей
+        for i, detail in enumerate(fix_report.details[:10], 1):
+            user_name = detail.username or detail.full_name or f'ID{detail.telegram_id}'
+            if detail.username:
+                user_name = f'@{detail.username}'
+
+            if detail.error:
+                text += f'{i}. {user_name} — ❌ {detail.error}\n'
+            else:
+                text += f'{i}. {user_name}\n'
+                if detail.referred_by_set:
+                    text += f'   • Реферер: {detail.referrer_name or f"ID{detail.referrer_id}"}\n'
+                if detail.had_first_topup:
+                    text += f'   • Первое пополнение: {settings.format_price(detail.topup_amount_kopeks)}\n'
+                if detail.bonus_to_referral_kopeks > 0:
+                    text += f'   • Бонус рефералу: {settings.format_price(detail.bonus_to_referral_kopeks)}\n'
+                if detail.bonus_to_referrer_kopeks > 0:
+                    text += f'   • Бонус рефереру: {settings.format_price(detail.bonus_to_referrer_kopeks)}\n'
+
+        if len(fix_report.details) > 10:
+            text += f'\n<i>... и ещё {len(fix_report.details) - 10}</i>\n'
+
+        text += '\n⚠️ <b>Внимание!</b> Это только предпросмотр. Нажмите "Применить", чтобы выполнить исправления.'
+
+        # Кнопка назад зависит от источника
+        back_button_text = '⬅️ К диагностике'
+        back_button_callback = f'admin_ref_diag:{period}' if period != 'uploaded_file' else 'admin_referral_diagnostics'
+
+        keyboard = types.InlineKeyboardMarkup(
+            inline_keyboard=[
+                [types.InlineKeyboardButton(text='✅ Применить исправления', callback_data='admin_ref_fix_apply')],
+                [types.InlineKeyboardButton(text=back_button_text, callback_data=back_button_callback)],
+            ]
+        )
+
+        await callback.message.edit_text(text, reply_markup=keyboard)
+
+    except Exception as e:
+        logger.error(f'Ошибка в preview_referral_fixes: {e}', exc_info=True)
+        await callback.answer('Ошибка при создании предпросмотра', show_alert=True)
+
+
+@admin_required
+@error_handler
+async def apply_referral_fixes(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
+    """Применяет исправления потерянных рефералов."""
+    try:
+        await callback.answer('Применяю исправления...')
+
+        # Получаем период из state
+        state_data = await state.get_data()
+        period = state_data.get('diagnostics_period', 'today')
+
+        from app.services.referral_diagnostics_service import DiagnosticReport, referral_diagnostics_service
+
+        # Проверяем, работаем ли с загруженным файлом
+        if period == 'uploaded_file':
+            # Используем сохранённый отчёт из загруженного файла (десериализуем)
+            report_data = state_data.get('uploaded_file_report')
+            if not report_data:
+                await callback.answer('Отчёт загруженного файла не найден', show_alert=True)
+                return
+            report = DiagnosticReport.from_dict(report_data)
+            period_display = 'загруженный файл'
+        else:
+            # Получаем даты периода
+            start_date, end_date = _get_period_dates(period)
+
+            # Анализируем логи
+            report = await referral_diagnostics_service.analyze_period(db, start_date, end_date)
+            period_display = _get_period_display_name(period)
+
+        if not report.lost_referrals:
+            await callback.answer('Нет потерянных рефералов для исправления', show_alert=True)
+            return
+
+        # Применяем исправления
+        fix_report = await referral_diagnostics_service.fix_lost_referrals(db, report.lost_referrals, apply=True)
+
+        # Формируем отчёт
+        text = f"""
+✅ <b>Исправления применены — {period_display}</b>
+
+<b>📊 Результаты:</b>
+• Исправлено рефералов: {fix_report.users_fixed}
+• Бонусов рефералам: {settings.format_price(fix_report.bonuses_to_referrals)}
+• Бонусов рефереам: {settings.format_price(fix_report.bonuses_to_referrers)}
+• Ошибок: {fix_report.errors}
+
+<b>🔍 Детали:</b>
+"""
+
+        # Показываем первые 10 успешных деталей
+        success_count = 0
+        for detail in fix_report.details:
+            if not detail.error and success_count < 10:
+                success_count += 1
+                user_name = detail.username or detail.full_name or f'ID{detail.telegram_id}'
+                if detail.username:
+                    user_name = f'@{user_name}'
+
+                text += f'{success_count}. {user_name}\n'
+                if detail.referred_by_set:
+                    text += f'   • Реферер: {detail.referrer_name or f"ID{detail.referrer_id}"}\n'
+                if detail.bonus_to_referral_kopeks > 0:
+                    text += f'   • Бонус рефералу: {settings.format_price(detail.bonus_to_referral_kopeks)}\n'
+                if detail.bonus_to_referrer_kopeks > 0:
+                    text += f'   • Бонус рефереру: {settings.format_price(detail.bonus_to_referrer_kopeks)}\n'
+
+        if fix_report.users_fixed > 10:
+            text += f'\n<i>... и ещё {fix_report.users_fixed - 10} исправлений</i>\n'
+
+        # Показываем ошибки
+        if fix_report.errors > 0:
+            text += '\n<b>❌ Ошибки:</b>\n'
+            error_count = 0
+            for detail in fix_report.details:
+                if detail.error and error_count < 5:
+                    error_count += 1
+                    user_name = detail.username or detail.full_name or f'ID{detail.telegram_id}'
+                    text += f'• {user_name}: {detail.error}\n'
+            if fix_report.errors > 5:
+                text += f'<i>... и ещё {fix_report.errors - 5} ошибок</i>\n'
+
+        # Кнопки зависят от источника
+        keyboard_rows = []
+        if period != 'uploaded_file':
+            keyboard_rows.append(
+                [types.InlineKeyboardButton(text='🔄 Обновить диагностику', callback_data=f'admin_ref_diag:{period}')]
+            )
+        keyboard_rows.append([types.InlineKeyboardButton(text='⬅️ К статистике', callback_data='admin_referrals')])
+
+        keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
+
+        await callback.message.edit_text(text, reply_markup=keyboard)
+
+        # Очищаем сохранённый отчёт из state
+        if period == 'uploaded_file':
+            await state.update_data(uploaded_file_report=None)
+
+    except Exception as e:
+        logger.error(f'Ошибка в apply_referral_fixes: {e}', exc_info=True)
+        await callback.answer('Ошибка при применении исправлений', show_alert=True)
+
+
+# =============================================================================
+# Проверка бонусов по БД
+# =============================================================================
+
+
+@admin_required
+@error_handler
+async def check_missing_bonuses(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
+    """Проверяет по БД — всем ли рефералам начислены бонусы."""
+    from app.services.referral_diagnostics_service import (
+        referral_diagnostics_service,
+    )
+
+    await callback.answer('🔍 Проверяю бонусы...')
+
+    try:
+        report = await referral_diagnostics_service.check_missing_bonuses(db)
+
+        # Сохраняем отчёт в state для последующего применения
+        await state.update_data(missing_bonuses_report=report.to_dict())
+
+        text = f"""
+🔍 <b>Проверка бонусов по БД</b>
+
+📊 <b>Статистика:</b>
+• Всего рефералов: {report.total_referrals_checked}
+• С пополнением ≥ минимума: {report.referrals_with_topup}
+• <b>Без бонусов: {len(report.missing_bonuses)}</b>
+"""
+
+        if report.missing_bonuses:
+            text += f"""
+💰 <b>Требуется начислить:</b>
+• Рефералам: {report.total_missing_to_referrals / 100:.0f}₽
+• Рефереерам: {report.total_missing_to_referrers / 100:.0f}₽
+• <b>Итого: {(report.total_missing_to_referrals + report.total_missing_to_referrers) / 100:.0f}₽</b>
+
+👤 <b>Список ({len(report.missing_bonuses)} чел.):</b>
+"""
+            for i, mb in enumerate(report.missing_bonuses[:15], 1):
+                referral_name = mb.referral_full_name or mb.referral_username or str(mb.referral_telegram_id)
+                referrer_name = mb.referrer_full_name or mb.referrer_username or str(mb.referrer_telegram_id)
+                text += f'\n{i}. <b>{referral_name}</b>'
+                text += f'\n   └ Пригласил: {referrer_name}'
+                text += f'\n   └ Пополнение: {mb.first_topup_amount_kopeks / 100:.0f}₽'
+                text += f'\n   └ Бонусы: {mb.referral_bonus_amount / 100:.0f}₽ + {mb.referrer_bonus_amount / 100:.0f}₽'
+
+            if len(report.missing_bonuses) > 15:
+                text += f'\n\n<i>... и ещё {len(report.missing_bonuses) - 15} чел.</i>'
+
+            keyboard = types.InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [types.InlineKeyboardButton(text='✅ Начислить все бонусы', callback_data='admin_ref_bonus_apply')],
+                    [types.InlineKeyboardButton(text='🔄 Обновить', callback_data='admin_ref_check_bonuses')],
+                    [types.InlineKeyboardButton(text='⬅️ К диагностике', callback_data='admin_referral_diagnostics')],
+                ]
+            )
+        else:
+            text += '\n✅ <b>Все бонусы начислены!</b>'
+            keyboard = types.InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [types.InlineKeyboardButton(text='🔄 Обновить', callback_data='admin_ref_check_bonuses')],
+                    [types.InlineKeyboardButton(text='⬅️ К диагностике', callback_data='admin_referral_diagnostics')],
+                ]
+            )
+
+        await callback.message.edit_text(text, reply_markup=keyboard)
+
+    except Exception as e:
+        logger.error(f'Ошибка в check_missing_bonuses: {e}', exc_info=True)
+        await callback.answer('Ошибка при проверке бонусов', show_alert=True)
+
+
+@admin_required
+@error_handler
+async def apply_missing_bonuses(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
+    """Применяет начисление пропущенных бонусов."""
+    from app.services.referral_diagnostics_service import (
+        MissingBonusReport,
+        referral_diagnostics_service,
+    )
+
+    await callback.answer('💰 Начисляю бонусы...')
+
+    try:
+        # Получаем сохранённый отчёт
+        data = await state.get_data()
+        report_dict = data.get('missing_bonuses_report')
+
+        if not report_dict:
+            await callback.answer('❌ Отчёт не найден. Обновите проверку.', show_alert=True)
+            return
+
+        report = MissingBonusReport.from_dict(report_dict)
+
+        if not report.missing_bonuses:
+            await callback.answer('✅ Нет бонусов для начисления', show_alert=True)
+            return
+
+        # Применяем исправления
+        fix_report = await referral_diagnostics_service.fix_missing_bonuses(db, report.missing_bonuses, apply=True)
+
+        text = f"""
+✅ <b>Бонусы начислены!</b>
+
+📊 <b>Результат:</b>
+• Обработано: {fix_report.users_fixed} пользователей
+• Начислено рефералам: {fix_report.bonuses_to_referrals / 100:.0f}₽
+• Начислено рефереерам: {fix_report.bonuses_to_referrers / 100:.0f}₽
+• <b>Итого: {(fix_report.bonuses_to_referrals + fix_report.bonuses_to_referrers) / 100:.0f}₽</b>
+"""
+
+        if fix_report.errors > 0:
+            text += f'\n⚠️ Ошибок: {fix_report.errors}'
+
+        # Очищаем отчёт из state
+        await state.update_data(missing_bonuses_report=None)
+
+        keyboard = types.InlineKeyboardMarkup(
+            inline_keyboard=[
+                [types.InlineKeyboardButton(text='🔍 Проверить снова', callback_data='admin_ref_check_bonuses')],
+                [types.InlineKeyboardButton(text='⬅️ К диагностике', callback_data='admin_referral_diagnostics')],
+            ]
+        )
+
+        await callback.message.edit_text(text, reply_markup=keyboard)
+
+    except Exception as e:
+        logger.error(f'Ошибка в apply_missing_bonuses: {e}', exc_info=True)
+        await callback.answer('Ошибка при начислении бонусов', show_alert=True)
+
+
+@admin_required
+@error_handler
+async def sync_referrals_with_contest(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext
+):
+    """Синхронизирует всех рефералов с активными конкурсами."""
+    from app.database.crud.referral_contest import get_contests_for_events
+    from app.services.referral_contest_service import referral_contest_service
+
+    await callback.answer('🏆 Синхронизирую с конкурсами...')
+
+    try:
+        from datetime import datetime
+
+        now_utc = datetime.utcnow()
+
+        # Получаем активные конкурсы
+        paid_contests = await get_contests_for_events(db, now_utc, contest_types=['referral_paid'])
+        reg_contests = await get_contests_for_events(db, now_utc, contest_types=['referral_registered'])
+
+        all_contests = list(paid_contests) + list(reg_contests)
+
+        if not all_contests:
+            await callback.message.edit_text(
+                '❌ <b>Нет активных конкурсов рефералов</b>\n\n'
+                'Создайте конкурс в разделе "Конкурсы" для синхронизации.',
+                reply_markup=types.InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [types.InlineKeyboardButton(text='⬅️ К диагностике', callback_data='admin_referral_diagnostics')]
+                    ]
+                ),
+            )
+            return
+
+        # Синхронизируем каждый конкурс
+        total_created = 0
+        total_updated = 0
+        total_skipped = 0
+        contest_results = []
+
+        for contest in all_contests:
+            stats = await referral_contest_service.sync_contest(db, contest.id)
+            if 'error' not in stats:
+                total_created += stats.get('created', 0)
+                total_updated += stats.get('updated', 0)
+                total_skipped += stats.get('skipped', 0)
+                contest_results.append(f'• {contest.title}: +{stats.get("created", 0)} новых')
+            else:
+                contest_results.append(f'• {contest.title}: ошибка')
+
+        text = f"""
+🏆 <b>Синхронизация с конкурсами завершена!</b>
+
+📊 <b>Результат:</b>
+• Конкурсов обработано: {len(all_contests)}
+• Новых событий добавлено: {total_created}
+• Обновлено: {total_updated}
+• Пропущено (уже есть): {total_skipped}
+
+📋 <b>По конкурсам:</b>
+"""
+        text += '\n'.join(contest_results)
+
+        keyboard = types.InlineKeyboardMarkup(
+            inline_keyboard=[
+                [types.InlineKeyboardButton(text='🔄 Синхронизировать снова', callback_data='admin_ref_sync_contest')],
+                [types.InlineKeyboardButton(text='⬅️ К диагностике', callback_data='admin_referral_diagnostics')],
+            ]
+        )
+
+        await callback.message.edit_text(text, reply_markup=keyboard)
+
+    except Exception as e:
+        logger.error(f'Ошибка в sync_referrals_with_contest: {e}', exc_info=True)
+        await callback.answer('Ошибка при синхронизации', show_alert=True)
+
+
+@admin_required
+@error_handler
+async def request_log_file_upload(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
+    """Запрашивает загрузку лог-файла для анализа."""
+    await state.set_state(AdminStates.waiting_for_log_file)
+
+    text = """
+📤 <b>Загрузка лог-файла для анализа</b>
+
+Отправьте файл лога (расширение .log или .txt).
+
+Файл будет проанализирован на наличие потерянных рефералов за ВСЕ время, записанное в логе.
+
+⚠️ <b>Важно:</b>
+• Файл должен быть текстовым (.log, .txt)
+• Максимальный размер: 50 MB
+• После анализа файл будет автоматически удалён
+
+Если ротация логов удалила старые данные — загрузите резервную копию.
+"""
+
+    keyboard = types.InlineKeyboardMarkup(
+        inline_keyboard=[[types.InlineKeyboardButton(text='❌ Отмена', callback_data='admin_referral_diagnostics')]]
+    )
+
+    await callback.message.edit_text(text, reply_markup=keyboard)
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def receive_log_file(message: types.Message, db_user: User, db: AsyncSession, state: FSMContext):
+    """Получает и анализирует загруженный лог-файл."""
+    import tempfile
+    from pathlib import Path
+
+    if not message.document:
+        await message.answer(
+            '❌ Пожалуйста, отправьте файл документом.',
+            reply_markup=types.InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [types.InlineKeyboardButton(text='❌ Отмена', callback_data='admin_referral_diagnostics')]
+                ]
+            ),
+        )
+        return
+
+    # Проверяем расширение файла
+    file_name = message.document.file_name or 'unknown'
+    file_ext = Path(file_name).suffix.lower()
+
+    if file_ext not in ['.log', '.txt']:
+        await message.answer(
+            f'❌ Неверный формат файла: {file_ext}\n\nПоддерживаются только текстовые файлы (.log, .txt)',
+            reply_markup=types.InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [types.InlineKeyboardButton(text='❌ Отмена', callback_data='admin_referral_diagnostics')]
+                ]
+            ),
+        )
+        return
+
+    # Проверяем размер файла
+    max_size = 50 * 1024 * 1024  # 50 MB
+    if message.document.file_size > max_size:
+        await message.answer(
+            f'❌ Файл слишком большой: {message.document.file_size / 1024 / 1024:.1f} MB\n\nМаксимальный размер: 50 MB',
+            reply_markup=types.InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [types.InlineKeyboardButton(text='❌ Отмена', callback_data='admin_referral_diagnostics')]
+                ]
+            ),
+        )
+        return
+
+    # Информируем о начале загрузки
+    status_message = await message.answer(
+        f'📥 Загружаю файл {file_name} ({message.document.file_size / 1024 / 1024:.1f} MB)...'
+    )
+
+    temp_file_path = None
+
+    try:
+        # Скачиваем файл во временную директорию
+        temp_dir = tempfile.gettempdir()
+        temp_file_path = str(Path(temp_dir) / f'ref_diagnostics_{message.from_user.id}_{file_name}')
+
+        # Скачиваем файл
+        file = await message.bot.get_file(message.document.file_id)
+        await message.bot.download_file(file.file_path, temp_file_path)
+
+        logger.info(f'📥 Файл загружен: {temp_file_path} ({message.document.file_size} байт)')
+
+        # Обновляем статус
+        await status_message.edit_text(f'🔍 Анализирую файл {file_name}...\n\nЭто может занять некоторое время.')
+
+        # Анализируем файл
+        from app.services.referral_diagnostics_service import referral_diagnostics_service
+
+        report = await referral_diagnostics_service.analyze_file(db, temp_file_path)
+
+        # Формируем отчёт
+        text = f"""
+🔍 <b>Анализ лог-файла: {file_name}</b>
+
+<b>📊 Статистика переходов:</b>
+• Всего кликов по реф-ссылкам: {report.total_ref_clicks}
+• Уникальных пользователей: {report.unique_users_clicked}
+• Потерянных рефералов: {len(report.lost_referrals)}
+• Строк в файле: {report.lines_in_period}
+"""
+
+        if report.lost_referrals:
+            text += '\n<b>❌ Потерянные рефералы:</b>\n'
+            text += '<i>(пришли по ссылке, но реферер не засчитался)</i>\n\n'
+
+            for i, lost in enumerate(report.lost_referrals[:15], 1):
+                # Статус пользователя
+                if not lost.registered:
+                    status = '⚠️ Не в БД'
+                elif not lost.has_referrer:
+                    status = '❌ Без реферера'
+                else:
+                    status = f'⚡ Другой реферер (ID{lost.current_referrer_id})'
+
+                # Имя или ID
+                user_name = lost.username or lost.full_name or f'ID{lost.telegram_id}'
+                if lost.username:
+                    user_name = f'@{lost.username}'
+
+                # Ожидаемый реферер
+                referrer_info = ''
+                if lost.expected_referrer_name:
+                    referrer_info = f' → {lost.expected_referrer_name}'
+                elif lost.expected_referrer_id:
+                    referrer_info = f' → ID{lost.expected_referrer_id}'
+
+                # Время
+                time_str = lost.click_time.strftime('%d.%m.%Y %H:%M')
+
+                text += f'{i}. {user_name} — {status}\n'
+                text += f'   <code>{lost.referral_code}</code>{referrer_info} ({time_str})\n'
+
+            if len(report.lost_referrals) > 15:
+                text += f'\n<i>... и ещё {len(report.lost_referrals) - 15}</i>\n'
+        else:
+            text += '\n✅ <b>Все рефералы засчитаны!</b>\n'
+
+        # Сохраняем отчёт в state для дальнейшего использования (сериализуем в dict)
+        await state.update_data(
+            diagnostics_period='uploaded_file',
+            uploaded_file_report=report.to_dict(),
+        )
+
+        # Кнопки действий
+        keyboard_rows = []
+
+        if report.lost_referrals:
+            keyboard_rows.append(
+                [types.InlineKeyboardButton(text='📋 Предпросмотр исправлений', callback_data='admin_ref_fix_preview')]
+            )
+
+        keyboard_rows.extend(
+            [
+                [types.InlineKeyboardButton(text='⬅️ К диагностике', callback_data='admin_referral_diagnostics')],
+                [types.InlineKeyboardButton(text='⬅️ К статистике', callback_data='admin_referrals')],
+            ]
+        )
+
+        keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
+
+        # Удаляем статусное сообщение
+        await status_message.delete()
+
+        # Отправляем результат
+        await message.answer(text, reply_markup=keyboard)
+
+        # Очищаем состояние
+        await state.set_state(AdminStates.referral_diagnostics_period)
+
+    except Exception as e:
+        logger.error(f'❌ Ошибка при обработке файла: {e}', exc_info=True)
+
+        try:
+            await status_message.edit_text(
+                f'❌ <b>Ошибка при анализе файла</b>\n\n'
+                f'Файл: {file_name}\n'
+                f'Ошибка: {e!s}\n\n'
+                f'Проверьте, что файл является текстовым логом бота.',
+                reply_markup=types.InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            types.InlineKeyboardButton(
+                                text='🔄 Попробовать снова', callback_data='admin_ref_diag_upload'
+                            )
+                        ],
+                        [
+                            types.InlineKeyboardButton(
+                                text='⬅️ К диагностике', callback_data='admin_referral_diagnostics'
+                            )
+                        ],
+                    ]
+                ),
+            )
+        except:
+            await message.answer(
+                f'❌ Ошибка при анализе файла: {e!s}',
+                reply_markup=types.InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [types.InlineKeyboardButton(text='⬅️ Назад', callback_data='admin_referral_diagnostics')]
+                    ]
+                ),
+            )
+
+    finally:
+        # Удаляем временный файл
+        if temp_file_path and Path(temp_file_path).exists():
+            try:
+                Path(temp_file_path).unlink()
+                logger.info(f'🗑️ Временный файл удалён: {temp_file_path}')
+            except Exception as e:
+                logger.error(f'Ошибка удаления временного файла: {e}')
+
+
 def register_handlers(dp: Dispatcher):
     dp.callback_query.register(show_referral_statistics, F.data == 'admin_referrals')
     dp.callback_query.register(show_top_referrers, F.data == 'admin_referrals_top')
     dp.callback_query.register(show_top_referrers_filtered, F.data.startswith('admin_top_ref:'))
     dp.callback_query.register(show_referral_settings, F.data == 'admin_referrals_settings')
+    dp.callback_query.register(show_referral_diagnostics, F.data == 'admin_referral_diagnostics')
+    dp.callback_query.register(show_referral_diagnostics, F.data.startswith('admin_ref_diag:'))
+    dp.callback_query.register(preview_referral_fixes, F.data == 'admin_ref_fix_preview')
+    dp.callback_query.register(apply_referral_fixes, F.data == 'admin_ref_fix_apply')
+
+    # Загрузка лог-файла
+    dp.callback_query.register(request_log_file_upload, F.data == 'admin_ref_diag_upload')
+    dp.message.register(receive_log_file, AdminStates.waiting_for_log_file)
+
+    # Проверка бонусов по БД
+    dp.callback_query.register(check_missing_bonuses, F.data == 'admin_ref_check_bonuses')
+    dp.callback_query.register(apply_missing_bonuses, F.data == 'admin_ref_bonus_apply')
+    dp.callback_query.register(sync_referrals_with_contest, F.data == 'admin_ref_sync_contest')
 
     # Хендлеры заявок на вывод
     dp.callback_query.register(show_pending_withdrawal_requests, F.data == 'admin_withdrawal_requests')

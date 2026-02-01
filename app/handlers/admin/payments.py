@@ -42,6 +42,10 @@ def _method_display(method: PaymentMethod) -> str:
         return 'CryptoBot'
     if method == PaymentMethod.TELEGRAM_STARS:
         return 'Telegram Stars'
+    if method == PaymentMethod.KASSA_AI:
+        return settings.get_kassa_ai_display_name()
+    if method == PaymentMethod.FREEKASSA:
+        return settings.get_freekassa_display_name()
     return method.value
 
 
@@ -144,6 +148,18 @@ def _status_info(
         }
         return mapping.get(status, ('❓', texts.t('ADMIN_PAYMENT_STATUS_UNKNOWN', '❓ Unknown')))
 
+    if record.method == PaymentMethod.KASSA_AI:
+        mapping = {
+            'pending': ('⏳', texts.t('ADMIN_PAYMENT_STATUS_PENDING', '⏳ Pending')),
+            'created': ('⏳', texts.t('ADMIN_PAYMENT_STATUS_PENDING', '⏳ Pending')),
+            'processing': ('⌛', texts.t('ADMIN_PAYMENT_STATUS_PROCESSING', '⌛ Processing')),
+            'success': ('✅', texts.t('ADMIN_PAYMENT_STATUS_PAID', '✅ Paid')),
+            'paid': ('✅', texts.t('ADMIN_PAYMENT_STATUS_PAID', '✅ Paid')),
+            'canceled': ('❌', texts.t('ADMIN_PAYMENT_STATUS_CANCELED', '❌ Cancelled')),
+            'error': ('❌', texts.t('ADMIN_PAYMENT_STATUS_FAILED', '❌ Failed')),
+        }
+        return mapping.get(status, ('❓', texts.t('ADMIN_PAYMENT_STATUS_UNKNOWN', '❓ Unknown')))
+
     return '❓', texts.t('ADMIN_PAYMENT_STATUS_UNKNOWN', '❓ Unknown')
 
 
@@ -168,7 +184,9 @@ def _is_checkable(record: PendingPayment) -> bool:
     if record.method == PaymentMethod.CRYPTOBOT:
         return status in {'active'}
     if record.method == PaymentMethod.FREEKASSA:
-        return status in {'pending', ''}
+        return status in {'pending', 'created', ''}
+    if record.method == PaymentMethod.KASSA_AI:
+        return status in {'pending', 'created', 'processing', ''}
     return False
 
 
@@ -184,6 +202,7 @@ def _build_list_keyboard(
     page: int,
     total_pages: int,
     language: str,
+    has_checkable: bool = False,
 ) -> InlineKeyboardMarkup:
     buttons: list[list[InlineKeyboardButton]] = []
     texts = get_texts(language)
@@ -200,6 +219,28 @@ def _build_list_keyboard(
                 InlineKeyboardButton(
                     text=button_text,
                     callback_data=f'admin_payment_{record.method.value}_{record.local_id}',
+                )
+            ]
+        )
+
+    # Кнопка "Проверить все" если есть что проверять
+    if has_checkable:
+        buttons.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('ADMIN_PAYMENTS_CHECK_ALL', '🔄 Проверить все'),
+                    callback_data='admin_payments_check_all',
+                )
+            ]
+        )
+
+    # Кнопка экспорта если есть платежи
+    if records:
+        buttons.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('ADMIN_PAYMENTS_EXPORT', '📥 Выгрузить в файл'),
+                    callback_data='admin_payments_export',
                 )
             ]
         )
@@ -485,11 +526,22 @@ async def show_payments_overview(
 
     lines = [header, '', description]
 
+    # Проверяем есть ли платежи для массовой проверки
+    checkable_records = [r for r in records if _is_checkable(r) and not r.is_paid]
+    has_checkable = len(checkable_records) > 0
+
     if page_records:
         for idx, record in enumerate(page_records, start=start_index + 1):
             lines.extend(_build_record_lines(record, index=idx, texts=texts, language=db_user.language))
             lines.append('')
         lines.append(notice)
+        if has_checkable:
+            lines.append('')
+            lines.append(
+                texts.t('ADMIN_PAYMENTS_CHECKABLE_COUNT', '🔄 Доступно для проверки: {count}').format(
+                    count=len(checkable_records)
+                )
+            )
     else:
         empty_text = texts.t('ADMIN_PAYMENTS_EMPTY', 'No pending top-ups in the last 24 hours.')
         lines.append('')
@@ -500,6 +552,7 @@ async def show_payments_overview(
         page=page,
         total_pages=total_pages,
         language=db_user.language,
+        has_checkable=has_checkable,
     )
 
     await callback.message.edit_text(
@@ -550,28 +603,42 @@ async def manual_check_payment(
     db_user: User,
     db: AsyncSession,
 ) -> None:
+    import logging
+
+    logger = logging.getLogger(__name__)
+    logger.info('manual_check_payment called: %s', callback.data)
+
     parsed = _parse_method_and_id(callback.data, prefix='admin_payment_check_')
     if not parsed:
+        logger.warning('Failed to parse: %s', callback.data)
         await callback.answer('❌ Invalid payment reference', show_alert=True)
         return
 
     method, payment_id = parsed
+    logger.info('Checking payment: method=%s, id=%s', method, payment_id)
+
     record = await get_payment_record(db, method, payment_id)
     texts = get_texts(db_user.language)
 
     if not record:
+        logger.warning('Payment not found: method=%s, id=%s', method, payment_id)
         await callback.answer(texts.t('ADMIN_PAYMENT_NOT_FOUND', 'Payment not found.'), show_alert=True)
         return
 
+    logger.info('Record found: status=%s, is_paid=%s', record.status, record.is_paid)
+
     if not _is_checkable(record):
+        logger.info('Payment not checkable: method=%s, status=%s', method, record.status)
         await callback.answer(
             texts.t('ADMIN_PAYMENT_CHECK_NOT_AVAILABLE', 'Manual check is not available for this invoice.'),
             show_alert=True,
         )
         return
 
+    logger.info('Running manual check...')
     payment_service = PaymentService(callback.bot)
     updated = await run_manual_check(db, method, payment_id, payment_service)
+    logger.info('Check result: updated=%s', updated is not None)
 
     if not updated:
         await callback.answer(
@@ -597,7 +664,189 @@ async def manual_check_payment(
     await callback.answer(message, show_alert=True)
 
 
+@admin_required
+@error_handler
+async def check_all_payments(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+) -> None:
+    """Массовая проверка всех ожидающих платежей."""
+    import logging
+
+    logger = logging.getLogger(__name__)
+    logger.info('check_all_payments called')
+
+    texts = get_texts(db_user.language)
+
+    # Получаем все ожидающие платежи
+    records = await list_recent_pending_payments(db)
+    logger.info('Found %d total records', len(records))
+
+    checkable_records = [r for r in records if _is_checkable(r) and not r.is_paid]
+    logger.info('Found %d checkable records', len(checkable_records))
+
+    if not checkable_records:
+        await callback.answer(
+            texts.t('ADMIN_PAYMENTS_NO_CHECKABLE', 'Нет платежей для проверки'),
+            show_alert=True,
+        )
+        return
+
+    await callback.answer(
+        texts.t('ADMIN_PAYMENTS_CHECKING_ALL', '🔄 Проверяю {count} платежей...').format(count=len(checkable_records)),
+    )
+
+    payment_service = PaymentService(callback.bot)
+    checked = 0
+    confirmed = 0
+    failed = 0
+
+    for record in checkable_records:
+        try:
+            logger.info('Checking %s payment id=%s', record.method.value, record.local_id)
+            updated = await run_manual_check(db, record.method, record.local_id, payment_service)
+            checked += 1
+            logger.info('Check result: is_paid=%s', updated.is_paid if updated else None)
+            if updated and updated.is_paid and not record.is_paid:
+                confirmed += 1
+        except Exception as e:
+            logger.error('Check failed for %s id=%s: %s', record.method.value, record.local_id, e, exc_info=True)
+            failed += 1
+
+    logger.info('Check complete: checked=%d, confirmed=%d, failed=%d', checked, confirmed, failed)
+
+    # Показываем результат
+    result_lines = [
+        texts.t('ADMIN_PAYMENTS_CHECK_ALL_RESULT', '🔄 <b>Результат проверки</b>'),
+        '',
+        texts.t('ADMIN_PAYMENTS_CHECK_ALL_CHECKED', '✅ Проверено: {count}').format(count=checked),
+        texts.t('ADMIN_PAYMENTS_CHECK_ALL_CONFIRMED', '💰 Подтверждено: {count}').format(count=confirmed),
+    ]
+    if failed:
+        result_lines.append(texts.t('ADMIN_PAYMENTS_CHECK_ALL_FAILED', '❌ Ошибок: {count}').format(count=failed))
+
+    # Перезагружаем список платежей
+    records = await list_recent_pending_payments(db)
+    total = len(records)
+    total_pages = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
+    page_records = records[:PAGE_SIZE]
+    checkable_records = [r for r in records if _is_checkable(r) and not r.is_paid]
+
+    result_lines.append('')
+    result_lines.append(texts.t('ADMIN_PAYMENTS_TITLE', '💳 <b>Top-up verification</b>'))
+
+    if page_records:
+        result_lines.append('')
+        for idx, record in enumerate(page_records, start=1):
+            result_lines.extend(_build_record_lines(record, index=idx, texts=texts, language=db_user.language))
+            result_lines.append('')
+
+    keyboard = _build_list_keyboard(
+        page_records,
+        page=1,
+        total_pages=total_pages,
+        language=db_user.language,
+        has_checkable=len(checkable_records) > 0,
+    )
+
+    logger.info('Updating message with results...')
+    try:
+        await callback.message.edit_text(
+            '\n'.join(result_lines),
+            parse_mode='HTML',
+            reply_markup=keyboard,
+        )
+        logger.info('Message updated successfully')
+    except Exception as e:
+        logger.error('Failed to update message: %s', e, exc_info=True)
+
+
+@admin_required
+@error_handler
+async def export_payments(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+) -> None:
+    """Экспорт данных платежей в JSON файл."""
+    import json
+
+    from aiogram.types import BufferedInputFile
+
+    texts = get_texts(db_user.language)
+
+    records = await list_recent_pending_payments(db)
+
+    if not records:
+        await callback.answer(
+            texts.t('ADMIN_PAYMENTS_EXPORT_EMPTY', 'Нет платежей для экспорта'),
+            show_alert=True,
+        )
+        return
+
+    # Формируем данные для экспорта
+    export_data = []
+    for record in records:
+        payment = record.payment
+        user = record.user
+
+        payment_data = {
+            'id': record.local_id,
+            'method': record.method.value,
+            'method_display': _method_display(record.method),
+            'identifier': record.identifier,
+            'amount_kopeks': record.amount_kopeks,
+            'amount_rubles': record.amount_kopeks / 100,
+            'status': record.status,
+            'is_paid': record.is_paid,
+            'created_at': record.created_at.isoformat() if record.created_at else None,
+            'expires_at': record.expires_at.isoformat() if record.expires_at else None,
+            'user': {
+                'id': user.id,
+                'telegram_id': user.telegram_id,
+                'username': user.username,
+                'full_name': user.full_name,
+            },
+        }
+
+        # Добавляем специфичные поля в зависимости от метода
+        if hasattr(payment, 'order_id'):
+            payment_data['order_id'] = payment.order_id
+        if hasattr(payment, 'payment_url'):
+            payment_data['payment_url'] = payment.payment_url
+        if hasattr(payment, 'callback_payload'):
+            payment_data['callback_payload'] = payment.callback_payload
+
+        export_data.append(payment_data)
+
+    # Создаём JSON файл
+    json_content = json.dumps(export_data, ensure_ascii=False, indent=2, default=str)
+    file_bytes = json_content.encode('utf-8')
+
+    # Отправляем файл
+    from datetime import datetime
+
+    filename = f'payments_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json'
+
+    await callback.message.answer_document(
+        document=BufferedInputFile(file_bytes, filename=filename),
+        caption=texts.t(
+            'ADMIN_PAYMENTS_EXPORT_CAPTION',
+            '📥 Экспорт платежей\n\n📊 Всего записей: {count}\n💰 Оплачено: {paid}\n⏳ Ожидают: {pending}',
+        ).format(
+            count=len(export_data),
+            paid=sum(1 for r in export_data if r['is_paid']),
+            pending=sum(1 for r in export_data if not r['is_paid']),
+        ),
+    )
+
+    await callback.answer(texts.t('ADMIN_PAYMENTS_EXPORT_SUCCESS', '✅ Файл отправлен'))
+
+
 def register_handlers(dp: Dispatcher) -> None:
+    dp.callback_query.register(check_all_payments, F.data == 'admin_payments_check_all')
+    dp.callback_query.register(export_payments, F.data == 'admin_payments_export')
     dp.callback_query.register(manual_check_payment, F.data.startswith('admin_payment_check_'))
     dp.callback_query.register(
         show_payment_details,

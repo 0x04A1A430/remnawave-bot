@@ -309,24 +309,27 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
     logger.info(f'🚀 START: Обработка /start от {message.from_user.id}')
 
     data = await state.get_data() or {}
-    had_pending_payload = 'pending_start_payload' in data
-    pending_start_payload = data.pop('pending_start_payload', None)
-    had_campaign_notification_flag = 'campaign_notification_sent' in data
-    campaign_notification_sent = data.pop('campaign_notification_sent', False)
-    state_needs_update = had_pending_payload or had_campaign_notification_flag
+
+    # ИСПРАВЛЕНИЕ БАГА: используем .get() вместо .pop() для campaign_notification_sent
+    # pending_start_payload обрабатывается отдельно ниже
+    campaign_notification_sent = data.get('campaign_notification_sent', False)
+    state_needs_update = False
+
+    # Получаем payload из state или Redis
+    pending_start_payload = data.get('pending_start_payload', None)
 
     # Если в FSM state нет payload, пробуем получить из Redis (резервный механизм)
     if not pending_start_payload:
         redis_payload = await get_pending_payload_from_redis(message.from_user.id)
         if redis_payload:
             pending_start_payload = redis_payload
+            data['pending_start_payload'] = redis_payload
             state_needs_update = True
             logger.info(
                 "📦 START: Payload '%s' восстановлен из Redis (fallback)",
                 pending_start_payload,
             )
-            # Очищаем Redis после получения
-            await delete_pending_payload_from_redis(message.from_user.id)
+            # НЕ удаляем Redis payload здесь - удаление только после успешной регистрации
 
     referral_code = None
     campaign = None
@@ -1167,6 +1170,12 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
             refresh_subscription_error,
         )
 
+    # ИСПРАВЛЕНИЕ БАГА: Очищаем Redis payload после успешной регистрации
+    await delete_pending_payload_from_redis(callback.from_user.id)
+    logger.info(
+        '🗑️ COMPLETE_FROM_CALLBACK: Redis payload удален после успешной регистрации пользователя %s', user.telegram_id
+    )
+
     await state.clear()
 
     if campaign_message:
@@ -1454,6 +1463,10 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
             refresh_subscription_error,
         )
 
+    # ИСПРАВЛЕНИЕ БАГА: Очищаем Redis payload после успешной регистрации
+    await delete_pending_payload_from_redis(message.from_user.id)
+    logger.info('🗑️ COMPLETE: Redis payload удален после успешной регистрации пользователя %s', user.telegram_id)
+
     await state.clear()
 
     if campaign_message:
@@ -1725,6 +1738,7 @@ async def required_sub_channel_check(
             redis_payload = await get_pending_payload_from_redis(query.from_user.id)
             if redis_payload:
                 pending_start_payload = redis_payload
+                state_data['pending_start_payload'] = redis_payload
                 logger.info(
                     "📦 CHANNEL CHECK: Payload '%s' восстановлен из Redis (fallback)",
                     pending_start_payload,
@@ -1780,16 +1794,31 @@ async def required_sub_channel_check(
                 only_active=True,
             )
 
-            if campaign:
-                state_data['campaign_id'] = campaign.id
-                logger.info(
-                    '📣 CHANNEL CHECK: Кампания %s восстановлена из payload',
-                    campaign.id,
+            # Обрабатываем payload только если ещё не обработан
+            # (проверяем по наличию referral_code или campaign_id в state)
+            if not state_data.get('referral_code') and not state_data.get('campaign_id'):
+                campaign = await get_campaign_by_start_parameter(
+                    db,
+                    pending_start_payload,
+                    only_active=True,
                 )
+
+                if campaign:
+                    state_data['campaign_id'] = campaign.id
+                    logger.info(
+                        '📣 CHANNEL CHECK: Кампания %s восстановлена из payload',
+                        campaign.id,
+                    )
+                else:
+                    state_data['referral_code'] = pending_start_payload
+                    logger.info(
+                        '🎯 CHANNEL CHECK: Payload интерпретирован как реферальный код: %s',
+                        pending_start_payload,
+                    )
             else:
-                state_data['referral_code'] = pending_start_payload
                 logger.info(
-                    '🎯 CHANNEL CHECK: Payload интерпретирован как реферальный код',
+                    '✅ CHANNEL CHECK: Реферальный код уже сохранен в state: %s',
+                    state_data.get('referral_code') or f'campaign_id={state_data.get("campaign_id")}',
                 )
 
             await state.set_data(state_data)
@@ -1828,6 +1857,12 @@ async def required_sub_channel_check(
             await query.message.delete()
         except Exception as e:
             logger.warning(f'Не удалось удалить сообщение: {e}')
+
+        # ИСПРАВЛЕНИЕ БАГА: Очищаем Redis payload ТОЛЬКО после успешной проверки подписки
+        # и перед показом главного меню или завершением регистрации
+        if pending_start_payload:
+            await delete_pending_payload_from_redis(query.from_user.id)
+            logger.info('🗑️ CHANNEL CHECK: Redis payload удален после успешной проверки подписки')
 
         if user and user.status != UserStatus.DELETED.value:
             has_active_subscription, subscription_is_active = _calculate_subscription_flags(user.subscription)
@@ -1910,6 +1945,11 @@ async def required_sub_channel_check(
                         referred_by_id=referrer_id,
                     )
                     await db.refresh(user, ['subscription'])
+
+                    # ИСПРАВЛЕНИЕ БАГА: Очищаем pending_start_payload из state после создания пользователя
+                    state_data.pop('pending_start_payload', None)
+                    await state.set_data(state_data)
+                    logger.info('✅ CHANNEL CHECK: pending_start_payload удален из state после создания пользователя')
 
                     # Обрабатываем реферальную регистрацию
                     if referrer_id:
