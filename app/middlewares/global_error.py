@@ -3,7 +3,7 @@ import logging
 import traceback
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, Final
 
 from aiogram import BaseMiddleware, Bot
 from aiogram.enums import ParseMode
@@ -11,16 +11,49 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import BufferedInputFile, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, TelegramObject
 
 from app.config import settings
+from app.services.startup_notification_service import _get_error_recommendations
 from app.utils.timezone import format_local_datetime
 
 
 logger = logging.getLogger(__name__)
 
+# Константы
+ERROR_NOTIFICATION_COOLDOWN_MINUTES: Final[int] = 5
+ERROR_BUFFER_MAX_SIZE: Final[int] = 10
+ERROR_MESSAGE_MAX_LENGTH: Final[int] = 500
+REPORT_SEPARATOR_WIDTH: Final[int] = 50
+DATETIME_FORMAT: Final[str] = '%d.%m.%Y %H:%M:%S'
+DATETIME_FORMAT_FILENAME: Final[str] = '%Y%m%d_%H%M%S'
+DEVELOPER_CONTACT_URL: Final[str] = 'https://t.me/fringg'
+
+# Фразы ошибок Telegram API
+OLD_QUERY_PHRASES: Final[tuple[str, ...]] = (
+    'query is too old',
+    'query id is invalid',
+    'response timeout expired',
+)
+BAD_REQUEST_PHRASES: Final[tuple[str, ...]] = (
+    'message not found',
+    'chat not found',
+    'bot was blocked by the user',
+    'user is deactivated',
+)
+TOPIC_ERROR_PHRASES: Final[tuple[str, ...]] = (
+    'topic must be specified',
+    'topic_closed',
+    'topic_deleted',
+    'forum_closed',
+)
+MESSAGE_NOT_MODIFIED_PHRASE: Final[str] = 'message is not modified'
+BOT_BLOCKED_PHRASE: Final[str] = 'bot was blocked'
+USER_DEACTIVATED_PHRASE: Final[str] = 'user is deactivated'
+CHAT_NOT_FOUND_PHRASE: Final[str] = 'chat not found'
+MESSAGE_NOT_FOUND_PHRASE: Final[str] = 'message not found'
+
 # Троттлинг для предотвращения спама ошибками
 _last_error_notification: datetime | None = None
-_error_notification_cooldown = timedelta(minutes=5)  # Минимум 5 минут между уведомлениями
+_error_notification_cooldown = timedelta(minutes=ERROR_NOTIFICATION_COOLDOWN_MINUTES)
 _error_buffer: list[tuple[str, str, str]] = []  # (error_type, error_message, traceback)
-_max_buffer_size = 10
 
 
 class GlobalErrorMiddleware(BaseMiddleware):
@@ -66,25 +99,16 @@ class GlobalErrorMiddleware(BaseMiddleware):
         raise error
 
     def _is_old_query_error(self, error_message: str) -> bool:
-        return any(
-            phrase in error_message
-            for phrase in ['query is too old', 'query id is invalid', 'response timeout expired']
-        )
+        return any(phrase in error_message for phrase in OLD_QUERY_PHRASES)
 
     def _is_message_not_modified_error(self, error_message: str) -> bool:
-        return 'message is not modified' in error_message
+        return MESSAGE_NOT_MODIFIED_PHRASE in error_message
 
     def _is_bad_request_error(self, error_message: str) -> bool:
-        return any(
-            phrase in error_message
-            for phrase in ['message not found', 'chat not found', 'bot was blocked by the user', 'user is deactivated']
-        )
+        return any(phrase in error_message for phrase in BAD_REQUEST_PHRASES)
 
     def _is_topic_required_error(self, error_message: str) -> bool:
-        return any(
-            phrase in error_message
-            for phrase in ['topic must be specified', 'topic_closed', 'topic_deleted', 'forum_closed']
-        )
+        return any(phrase in error_message for phrase in TOPIC_ERROR_PHRASES)
 
     async def _handle_old_query(self, event: TelegramObject, error: TelegramBadRequest):
         if isinstance(event, CallbackQuery):
@@ -107,15 +131,15 @@ class GlobalErrorMiddleware(BaseMiddleware):
     async def _handle_bad_request(self, event: TelegramObject, error: TelegramBadRequest):
         error_message = str(error).lower()
 
-        if 'bot was blocked' in error_message:
+        if BOT_BLOCKED_PHRASE in error_message:
             user_info = self._get_user_info(event) if hasattr(event, 'from_user') else 'Unknown'
             logger.info('[GlobalErrorMiddleware] Бот заблокирован пользователем %s', user_info)
             return
-        if 'user is deactivated' in error_message:
+        if USER_DEACTIVATED_PHRASE in error_message:
             user_info = self._get_user_info(event) if hasattr(event, 'from_user') else 'Unknown'
             logger.info('[GlobalErrorMiddleware] Пользователь деактивирован %s', user_info)
             return
-        if 'chat not found' in error_message or 'message not found' in error_message:
+        if CHAT_NOT_FOUND_PHRASE in error_message or MESSAGE_NOT_FOUND_PHRASE in error_message:
             logger.warning('[GlobalErrorMiddleware] Чат или сообщение не найдено: %s', error)
             return
         logger.error('[GlobalErrorMiddleware] Неизвестная bad request ошибка: %s', error)
@@ -154,13 +178,13 @@ class ErrorStatisticsMiddleware(BaseMiddleware):
     def _count_error(self, error: TelegramBadRequest):
         error_message = str(error).lower()
 
-        if 'query is too old' in error_message:
+        if OLD_QUERY_PHRASES[0] in error_message:
             self.error_counts['old_queries'] += 1
-        elif 'message is not modified' in error_message:
+        elif MESSAGE_NOT_MODIFIED_PHRASE in error_message:
             self.error_counts['message_not_modified'] += 1
-        elif 'bot was blocked' in error_message:
+        elif BOT_BLOCKED_PHRASE in error_message:
             self.error_counts['bot_blocked'] += 1
-        elif 'user is deactivated' in error_message:
+        elif USER_DEACTIVATED_PHRASE in error_message:
             self.error_counts['user_deactivated'] += 1
         else:
             self.error_counts['other_errors'] += 1
@@ -195,12 +219,12 @@ async def send_error_to_admin_chat(bot: Bot, error: Exception, context: str = ''
         return False
 
     error_type = type(error).__name__
-    error_message = str(error)[:500]
+    error_message = str(error)[:ERROR_MESSAGE_MAX_LENGTH]
     tb_str = traceback.format_exc()
 
     # Добавляем в буфер
     _error_buffer.append((error_type, error_message, tb_str))
-    if len(_error_buffer) > _max_buffer_size:
+    if len(_error_buffer) > ERROR_BUFFER_MAX_SIZE:
         _error_buffer.pop(0)
 
     # Проверяем троттлинг
@@ -212,12 +236,13 @@ async def send_error_to_admin_chat(bot: Bot, error: Exception, context: str = ''
     _last_error_notification = now
 
     try:
-        timestamp = format_local_datetime(now, '%d.%m.%Y %H:%M:%S')
+        timestamp = format_local_datetime(now, DATETIME_FORMAT)
+        separator = '=' * REPORT_SEPARATOR_WIDTH
 
         # Формируем лог-файл со всеми ошибками из буфера
         log_lines = [
             'ERROR REPORT',
-            '=' * 50,
+            separator,
             f'Timestamp: {timestamp}',
             f'Errors in buffer: {len(_error_buffer)}',
             '',
@@ -226,9 +251,9 @@ async def send_error_to_admin_chat(bot: Bot, error: Exception, context: str = ''
         for i, (err_type, err_msg, err_tb) in enumerate(_error_buffer):
             log_lines.extend(
                 [
-                    f'{"=" * 50}',
+                    separator,
                     f'ERROR #{i}: {err_type}',
-                    f'{"=" * 50}',
+                    separator,
                     f'Message: {err_msg}',
                     '',
                     'Traceback:',
@@ -243,7 +268,7 @@ async def send_error_to_admin_chat(bot: Bot, error: Exception, context: str = ''
         errors_count = len(_error_buffer)
         _error_buffer.clear()
 
-        file_name = f'error_report_{now.strftime("%Y%m%d_%H%M%S")}.txt'
+        file_name = f'error_report_{now.strftime(DATETIME_FORMAT_FILENAME)}.txt'
         file = BufferedInputFile(
             file=log_content.encode('utf-8'),
             filename=file_name,
@@ -257,6 +282,12 @@ async def send_error_to_admin_chat(bot: Bot, error: Exception, context: str = ''
         )
         if context:
             message_text += f'<b>Контекст:</b> {context}\n'
+
+        # Добавляем рекомендации если есть
+        recommendations = _get_error_recommendations(error_message)
+        if recommendations:
+            message_text += f'\n{recommendations}\n'
+
         message_text += f'\n<i>{timestamp}</i>'
 
         keyboard = InlineKeyboardMarkup(
@@ -264,7 +295,7 @@ async def send_error_to_admin_chat(bot: Bot, error: Exception, context: str = ''
                 [
                     InlineKeyboardButton(
                         text='💬 Сообщить разработчику',
-                        url='https://t.me/fringg',
+                        url=DEVELOPER_CONTACT_URL,
                     ),
                 ],
             ]

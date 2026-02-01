@@ -7,6 +7,7 @@
 import logging
 import os
 from datetime import datetime
+from typing import Final
 
 from aiogram import Bot
 from aiogram.enums import ParseMode
@@ -22,6 +23,36 @@ from app.utils.timezone import format_local_datetime
 
 logger = logging.getLogger(__name__)
 
+# Константы
+VERSION_ENV_VAR: Final[str] = 'VERSION'
+DEFAULT_VERSION: Final[str] = 'dev'
+DEFAULT_AUTH_TYPE: Final[str] = 'api_key'
+
+# Форматирование
+KOPEKS_IN_RUBLE: Final[int] = 100
+MILLION: Final[int] = 1_000_000
+THOUSAND: Final[int] = 1_000
+DATETIME_FORMAT: Final[str] = '%d.%m.%Y %H:%M:%S'
+DATETIME_FORMAT_FILENAME: Final[str] = '%Y%m%d_%H%M%S'
+REPORT_SEPARATOR_WIDTH: Final[int] = 50
+
+# Лимиты сообщений
+CRASH_ERROR_MESSAGE_MAX_LENGTH: Final[int] = 1000
+CRASH_ERROR_PREVIEW_LENGTH: Final[int] = 200
+
+# URL-ы
+GITHUB_BOT_URL: Final[str] = 'https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot'
+GITHUB_CABINET_URL: Final[str] = 'https://github.com/BEDOLAGA-DEV/bedolaga-cabinet'
+COMMUNITY_URL: Final[str] = 'https://t.me/+wTdMtSWq8YdmZmVi'
+DEVELOPER_CONTACT_URL: Final[str] = 'https://t.me/fringg'
+
+# Ключевые слова для определения типа ошибки
+WEBHOOK_ERROR_KEYWORDS: Final[tuple[str, ...]] = ('webhook', 'failed to resolve host')
+DATABASE_ERROR_KEYWORDS: Final[tuple[str, ...]] = ('database', 'postgres', 'connection refused')
+REDIS_ERROR_KEYWORD: Final[str] = 'redis'
+REMNAWAVE_ERROR_KEYWORDS: Final[tuple[str, ...]] = ('remnawave', 'panel')
+AUTH_ERROR_KEYWORDS: Final[tuple[str, ...]] = ('unauthorized', 'bot token')
+
 
 class StartupNotificationService:
     """Сервис для отправки стартового уведомления в админский чат."""
@@ -34,10 +65,10 @@ class StartupNotificationService:
 
     def _get_version(self) -> str:
         """Получает версию из переменной окружения VERSION."""
-        version = os.getenv('VERSION', '').strip()
+        version = os.getenv(VERSION_ENV_VAR, '').strip()
         if version:
             return version
-        return 'dev'
+        return DEFAULT_VERSION
 
     async def _get_users_count(self) -> int:
         """Получает количество активных пользователей в базе."""
@@ -117,7 +148,7 @@ class StartupNotificationService:
             username = (auth_params.get('username') or '').strip() or None
             password = (auth_params.get('password') or '').strip() or None
             caddy_token = (auth_params.get('caddy_token') or '').strip() or None
-            auth_type = (auth_params.get('auth_type') or 'api_key').strip()
+            auth_type = (auth_params.get('auth_type') or DEFAULT_AUTH_TYPE).strip()
 
             api = RemnaWaveAPI(
                 base_url=base_url,
@@ -141,11 +172,11 @@ class StartupNotificationService:
 
     def _format_balance(self, kopeks: int) -> str:
         """Форматирует баланс в рублях."""
-        rubles = kopeks / 100
-        if rubles >= 1_000_000:
-            return f'{rubles / 1_000_000:.2f}M RUB'
-        if rubles >= 1_000:
-            return f'{rubles / 1_000:.1f}K RUB'
+        rubles = kopeks / KOPEKS_IN_RUBLE
+        if rubles >= MILLION:
+            return f'{rubles / MILLION:.2f}M RUB'
+        if rubles >= THOUSAND:
+            return f'{rubles / THOUSAND:.1f}K RUB'
         return f'{rubles:.2f} RUB'
 
     async def send_startup_notification(self) -> bool:
@@ -183,7 +214,7 @@ class StartupNotificationService:
             ]
             system_info = '\n'.join(system_info_lines)
 
-            timestamp = format_local_datetime(datetime.utcnow(), '%d.%m.%Y %H:%M:%S')
+            timestamp = format_local_datetime(datetime.utcnow(), DATETIME_FORMAT)
 
             message = (
                 f'<b>Remnawave Bedolaga Bot</b>\n\n'
@@ -197,19 +228,19 @@ class StartupNotificationService:
                     [
                         InlineKeyboardButton(
                             text='Поставить звезду',
-                            url='https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot',
+                            url=GITHUB_BOT_URL,
                         ),
                     ],
                     [
                         InlineKeyboardButton(
                             text='Вебкабинет',
-                            url='https://github.com/BEDOLAGA-DEV/bedolaga-cabinet',
+                            url=GITHUB_CABINET_URL,
                         ),
                     ],
                     [
                         InlineKeyboardButton(
                             text='Сообщество',
-                            url='https://t.me/+wTdMtSWq8YdmZmVi',
+                            url=COMMUNITY_URL,
                         ),
                     ],
                 ]
@@ -249,6 +280,69 @@ async def send_bot_startup_notification(bot: Bot) -> bool:
     return await service.send_startup_notification()
 
 
+def _get_error_recommendations(error_message: str) -> str | None:
+    """
+    Возвращает рекомендации по исправлению ошибки на основе текста ошибки.
+
+    Args:
+        error_message: Текст ошибки
+
+    Returns:
+        Рекомендации в формате HTML blockquote или None
+    """
+    error_lower = error_message.lower()
+
+    # Ошибки вебхука
+    if any(keyword in error_lower for keyword in WEBHOOK_ERROR_KEYWORDS):
+        tips = [
+            '• Проверьте WEBHOOK_HOST в .env',
+            '• Убедитесь что домен доступен извне',
+            '• Проверьте SSL сертификат (должен быть валидный)',
+            '• Проверьте reverse proxy (nginx/caddy)',
+            '• Проверьте сеть Docker (docker network)',
+            '• Попробуйте: docker compose restart',
+        ]
+        return '<blockquote expandable>💡 <b>Рекомендации:</b>\n' + '\n'.join(tips) + '</blockquote>'
+
+    # Ошибки подключения к БД
+    if any(keyword in error_lower for keyword in DATABASE_ERROR_KEYWORDS):
+        tips = [
+            '• Проверьте что PostgreSQL запущен',
+            '• Проверьте DATABASE_URL в .env',
+            '• Проверьте сеть Docker между контейнерами',
+            '• Попробуйте: docker compose restart db',
+        ]
+        return '<blockquote expandable>💡 <b>Рекомендации:</b>\n' + '\n'.join(tips) + '</blockquote>'
+
+    # Ошибки Redis
+    if REDIS_ERROR_KEYWORD in error_lower:
+        tips = [
+            '• Проверьте что Redis запущен',
+            '• Проверьте REDIS_URL в .env',
+            '• Попробуйте: docker compose restart redis',
+        ]
+        return '<blockquote expandable>💡 <b>Рекомендации:</b>\n' + '\n'.join(tips) + '</blockquote>'
+
+    # Ошибки Remnawave API
+    if any(keyword in error_lower for keyword in REMNAWAVE_ERROR_KEYWORDS):
+        tips = [
+            '• Проверьте REMNAWAVE_API_URL в .env',
+            '• Проверьте REMNAWAVE_API_KEY',
+            '• Убедитесь что панель Remnawave доступна',
+        ]
+        return '<blockquote expandable>💡 <b>Рекомендации:</b>\n' + '\n'.join(tips) + '</blockquote>'
+
+    # Ошибки токена бота
+    if any(keyword in error_lower for keyword in AUTH_ERROR_KEYWORDS):
+        tips = [
+            '• Проверьте BOT_TOKEN в .env',
+            '• Убедитесь что токен актуален (@BotFather)',
+        ]
+        return '<blockquote expandable>💡 <b>Рекомендации:</b>\n' + '\n'.join(tips) + '</blockquote>'
+
+    return None
+
+
 async def send_crash_notification(bot: Bot, error: Exception, traceback_str: str) -> bool:
     """
     Отправляет уведомление о падении бота с лог-файлом.
@@ -270,25 +364,26 @@ async def send_crash_notification(bot: Bot, error: Exception, traceback_str: str
         return False
 
     try:
-        timestamp = format_local_datetime(datetime.utcnow(), '%d.%m.%Y %H:%M:%S')
+        timestamp = format_local_datetime(datetime.utcnow(), DATETIME_FORMAT)
         error_type = type(error).__name__
-        error_message = str(error)[:1000]  # Ограничиваем длину сообщения
+        error_message = str(error)[:CRASH_ERROR_MESSAGE_MAX_LENGTH]
+        separator = '=' * REPORT_SEPARATOR_WIDTH
 
         # Формируем содержимое лог-файла
         log_content = (
             f'CRASH REPORT\n'
-            f'{"=" * 50}\n\n'
+            f'{separator}\n\n'
             f'Timestamp: {timestamp}\n'
             f'Error Type: {error_type}\n'
             f'Error Message: {error_message}\n\n'
-            f'{"=" * 50}\n'
+            f'{separator}\n'
             f'TRACEBACK\n'
-            f'{"=" * 50}\n\n'
+            f'{separator}\n\n'
             f'{traceback_str}\n'
         )
 
         # Создаем файл для отправки
-        file_name = f'crash_report_{datetime.utcnow().strftime("%Y%m%d_%H%M%S")}.txt'
+        file_name = f'crash_report_{datetime.utcnow().strftime(DATETIME_FORMAT_FILENAME)}.txt'
         file = BufferedInputFile(
             file=log_content.encode('utf-8'),
             filename=file_name,
@@ -299,9 +394,15 @@ async def send_crash_notification(bot: Bot, error: Exception, traceback_str: str
             f'<b>Remnawave Bedolaga Bot</b>\n\n'
             f'❌ Бот упал с ошибкой\n\n'
             f'<b>Тип:</b> <code>{error_type}</code>\n'
-            f'<b>Сообщение:</b> <code>{error_message[:200]}</code>\n\n'
-            f'<i>{timestamp}</i>'
+            f'<b>Сообщение:</b> <code>{error_message[:CRASH_ERROR_PREVIEW_LENGTH]}</code>\n'
         )
+
+        # Добавляем рекомендации если есть
+        recommendations = _get_error_recommendations(error_message)
+        if recommendations:
+            message_text += f'\n{recommendations}\n'
+
+        message_text += f'\n<i>{timestamp}</i>'
 
         # Кнопка для связи с разработчиком
         keyboard = InlineKeyboardMarkup(
@@ -309,7 +410,7 @@ async def send_crash_notification(bot: Bot, error: Exception, traceback_str: str
                 [
                     InlineKeyboardButton(
                         text='💬 Сообщить разработчику',
-                        url='https://t.me/fringg',
+                        url=DEVELOPER_CONTACT_URL,
                     ),
                 ],
             ]
