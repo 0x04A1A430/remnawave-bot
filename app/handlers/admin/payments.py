@@ -537,7 +537,11 @@ async def show_payments_overview(
         lines.append(notice)
         if has_checkable:
             lines.append('')
-            lines.append(texts.t('ADMIN_PAYMENTS_CHECKABLE_COUNT', '🔄 Доступно для проверки: {count}').format(count=len(checkable_records)))
+            lines.append(
+                texts.t('ADMIN_PAYMENTS_CHECKABLE_COUNT', '🔄 Доступно для проверки: {count}').format(
+                    count=len(checkable_records)
+                )
+            )
     else:
         empty_text = texts.t('ADMIN_PAYMENTS_EMPTY', 'No pending top-ups in the last 24 hours.')
         lines.append('')
@@ -600,6 +604,7 @@ async def manual_check_payment(
     db: AsyncSession,
 ) -> None:
     import logging
+
     logger = logging.getLogger(__name__)
     logger.info('manual_check_payment called: %s', callback.data)
 
@@ -668,6 +673,7 @@ async def check_all_payments(
 ) -> None:
     """Массовая проверка всех ожидающих платежей."""
     import logging
+
     logger = logging.getLogger(__name__)
     logger.info('check_all_payments called')
 
@@ -820,16 +826,14 @@ async def export_payments(
 
     # Отправляем файл
     from datetime import datetime
+
     filename = f'payments_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json'
 
     await callback.message.answer_document(
         document=BufferedInputFile(file_bytes, filename=filename),
         caption=texts.t(
             'ADMIN_PAYMENTS_EXPORT_CAPTION',
-            '📥 Экспорт платежей\n\n'
-            '📊 Всего записей: {count}\n'
-            '💰 Оплачено: {paid}\n'
-            '⏳ Ожидают: {pending}'
+            '📥 Экспорт платежей\n\n📊 Всего записей: {count}\n💰 Оплачено: {paid}\n⏳ Ожидают: {pending}',
         ).format(
             count=len(export_data),
             paid=sum(1 for r in export_data if r['is_paid']),

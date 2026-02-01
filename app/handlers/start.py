@@ -1172,7 +1172,9 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
 
     # ИСПРАВЛЕНИЕ БАГА: Очищаем Redis payload после успешной регистрации
     await delete_pending_payload_from_redis(callback.from_user.id)
-    logger.info('🗑️ COMPLETE_FROM_CALLBACK: Redis payload удален после успешной регистрации пользователя %s', user.telegram_id)
+    logger.info(
+        '🗑️ COMPLETE_FROM_CALLBACK: Redis payload удален после успешной регистрации пользователя %s', user.telegram_id
+    )
 
     await state.clear()
 
@@ -1816,7 +1818,7 @@ async def required_sub_channel_check(
             else:
                 logger.info(
                     '✅ CHANNEL CHECK: Реферальный код уже сохранен в state: %s',
-                    state_data.get('referral_code') or f"campaign_id={state_data.get('campaign_id')}",
+                    state_data.get('referral_code') or f'campaign_id={state_data.get("campaign_id")}',
                 )
 
             await state.set_data(state_data)

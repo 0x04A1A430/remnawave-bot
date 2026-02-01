@@ -568,15 +568,16 @@ async def show_potential_customers(
                 subscription_emoji = '⏰'
 
         button_text = (
-            f'{status_emoji} {subscription_emoji} {user.full_name}'
-            f' | 💰 {settings.format_price(user.balance_kopeks)}'
+            f'{status_emoji} {subscription_emoji} {user.full_name} | 💰 {settings.format_price(user.balance_kopeks)}'
         )
 
         if len(button_text) > 60:
             short_name = user.full_name
             if len(short_name) > 20:
                 short_name = short_name[:17] + '...'
-            button_text = f'{status_emoji} {subscription_emoji} {short_name} | 💰 {settings.format_price(user.balance_kopeks)}'
+            button_text = (
+                f'{status_emoji} {subscription_emoji} {short_name} | 💰 {settings.format_price(user.balance_kopeks)}'
+            )
 
         keyboard.append(
             [

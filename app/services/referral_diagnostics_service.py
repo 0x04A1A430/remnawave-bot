@@ -131,9 +131,7 @@ class DiagnosticReport:
         if end and isinstance(end, str):
             end = datetime.fromisoformat(end)
 
-        lost_referrals = [
-            LostReferral.from_dict(lr) for lr in data.get('lost_referrals', [])
-        ]
+        lost_referrals = [LostReferral.from_dict(lr) for lr in data.get('lost_referrals', [])]
 
         return cls(
             total_ref_clicks=data.get('total_ref_clicks', 0),
@@ -278,9 +276,7 @@ class MissingBonusReport:
     @classmethod
     def from_dict(cls, data: dict) -> 'MissingBonusReport':
         """Десериализация из dict."""
-        missing_bonuses = [
-            MissingBonus.from_dict(mb) for mb in data.get('missing_bonuses', [])
-        ]
+        missing_bonuses = [MissingBonus.from_dict(mb) for mb in data.get('missing_bonuses', [])]
         return cls(
             total_referrals_checked=data.get('total_referrals_checked', 0),
             referrals_with_topup=data.get('referrals_with_topup', 0),
@@ -347,9 +343,7 @@ class ReferralDiagnosticsService:
         tomorrow = today + timedelta(days=1)
         return await self.analyze_period(db, today, tomorrow)
 
-    async def analyze_period(
-        self, db: AsyncSession, start_date: datetime, end_date: datetime
-    ) -> DiagnosticReport:
+    async def analyze_period(self, db: AsyncSession, start_date: datetime, end_date: datetime) -> DiagnosticReport:
         """Анализирует реферальные события за указанный период."""
 
         # 1. Парсим логи — находим все переходы по реф-ссылкам
@@ -397,9 +391,7 @@ class ReferralDiagnosticsService:
 
         try:
             # skip_date_filter=True — парсим ВСЕ строки без фильтра по дате
-            clicks, total_lines, lines_in_period = await self._parse_clicks(
-                start_date, end_date, skip_date_filter=True
-            )
+            clicks, total_lines, lines_in_period = await self._parse_clicks(start_date, end_date, skip_date_filter=True)
 
             # Группируем по telegram_id (берём последний клик)
             user_clicks: dict[int, ReferralClick] = {}
@@ -444,9 +436,7 @@ class ReferralDiagnosticsService:
         logger.info(f'📂 Читаю лог-файл: {self.log_path} ({file_size / 1024 / 1024:.2f} MB)')
 
         # Паттерн timestamp
-        timestamp_pattern = re.compile(
-            r'^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}),\d+ - .+ - .+ - (.+)$'
-        )
+        timestamp_pattern = re.compile(r'^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}),\d+ - .+ - .+ - (.+)$')
 
         # Паттерны для поиска реф-кликов
         # /start refXXX или /start ref_refXXX
@@ -503,27 +493,24 @@ class ReferralDiagnosticsService:
 
                             clean_code = self.clean_referral_code(raw_code)
 
-                            clicks.append(ReferralClick(
-                                timestamp=timestamp,
-                                telegram_id=telegram_id,
-                                raw_code=raw_code,
-                                clean_code=clean_code,
-                                log_line=line,
-                            ))
+                            clicks.append(
+                                ReferralClick(
+                                    timestamp=timestamp,
+                                    telegram_id=telegram_id,
+                                    raw_code=raw_code,
+                                    clean_code=clean_code,
+                                    log_line=line,
+                                )
+                            )
                             break
 
         except Exception as e:
             logger.error(f'Ошибка парсинга логов: {e}', exc_info=True)
 
-        logger.info(
-            f'📊 Парсинг: строк={total_lines}, за период={lines_in_period}, '
-            f'реф-кликов={len(clicks)}'
-        )
+        logger.info(f'📊 Парсинг: строк={total_lines}, за период={lines_in_period}, реф-кликов={len(clicks)}')
         return clicks, total_lines, lines_in_period
 
-    async def _find_lost_referrals(
-        self, db: AsyncSession, clicks: list[ReferralClick]
-    ) -> list[LostReferral]:
+    async def _find_lost_referrals(self, db: AsyncSession, clicks: list[ReferralClick]) -> list[LostReferral]:
         """Находит потерянных рефералов — пришли по ссылке, но реферер не засчитался."""
 
         if not clicks:
@@ -533,16 +520,12 @@ class ReferralDiagnosticsService:
         telegram_ids = [c.telegram_id for c in clicks]
 
         # Получаем пользователей из БД
-        result = await db.execute(
-            select(User).where(User.telegram_id.in_(telegram_ids))
-        )
+        result = await db.execute(select(User).where(User.telegram_id.in_(telegram_ids)))
         users_map = {u.telegram_id: u for u in result.scalars().all()}
 
         # Получаем всех рефереров по кодам
         codes = list({c.clean_code for c in clicks})
-        referrers_result = await db.execute(
-            select(User).where(User.referral_code.in_(codes))
-        )
+        referrers_result = await db.execute(select(User).where(User.referral_code.in_(codes)))
         referrers_map = {u.referral_code: u for u in referrers_result.scalars().all()}
 
         for click in clicks:
@@ -559,9 +542,7 @@ class ReferralDiagnosticsService:
                 # Пользователь был создан ДО клика по реф-ссылке
                 # Это старый пользователь, который просто зашёл по чужой ссылке
                 is_lost = False
-                logger.debug(
-                    f'⏭️ Пропускаем {click.telegram_id}: создан {user.created_at} < клик {click.timestamp}'
-                )
+                logger.debug(f'⏭️ Пропускаем {click.telegram_id}: создан {user.created_at} < клик {click.timestamp}')
             elif user.referred_by_id is None:
                 # Пользователь в БД, но без реферера (и создан после клика)
                 is_lost = True
@@ -570,19 +551,21 @@ class ReferralDiagnosticsService:
                 is_lost = True
 
             if is_lost:
-                lost.append(LostReferral(
-                    telegram_id=click.telegram_id,
-                    username=user.username if user else None,
-                    full_name=user.full_name if user else None,
-                    referral_code=click.clean_code,
-                    expected_referrer_code=click.clean_code,
-                    expected_referrer_id=referrer.id if referrer else None,
-                    expected_referrer_name=referrer.full_name if referrer else None,
-                    click_time=click.timestamp,
-                    registered=user is not None,
-                    has_referrer=user.referred_by_id is not None if user else False,
-                    current_referrer_id=user.referred_by_id if user else None,
-                ))
+                lost.append(
+                    LostReferral(
+                        telegram_id=click.telegram_id,
+                        username=user.username if user else None,
+                        full_name=user.full_name if user else None,
+                        referral_code=click.clean_code,
+                        expected_referrer_code=click.clean_code,
+                        expected_referrer_id=referrer.id if referrer else None,
+                        expected_referrer_name=referrer.full_name if referrer else None,
+                        click_time=click.timestamp,
+                        registered=user is not None,
+                        has_referrer=user.referred_by_id is not None if user else False,
+                        current_referrer_id=user.referred_by_id if user else None,
+                    )
+                )
 
         logger.info(f'🔍 Найдено потерянных рефералов: {len(lost)}')
         return lost
@@ -627,9 +610,7 @@ class ReferralDiagnosticsService:
                 contest_end = contest.end_at if contest.end_at.tzinfo is None else contest.end_at.replace(tzinfo=None)
 
                 if user_created_at < contest_start or user_created_at > contest_end:
-                    logger.debug(
-                        f'Реферал {referral.id} зарегистрирован вне периода конкурса {contest.id}'
-                    )
+                    logger.debug(f'Реферал {referral.id} зарегистрирован вне периода конкурса {contest.id}')
                     continue
 
                 event = await add_contest_event(
@@ -675,9 +656,7 @@ class ReferralDiagnosticsService:
                     event_type='restored_referral_registration',
                 )
                 if event:
-                    logger.info(
-                        f'🏆 Восстановленный реферал (регистрация) добавлен в конкурс {contest.id}'
-                    )
+                    logger.info(f'🏆 Восстановленный реферал (регистрация) добавлен в конкурс {contest.id}')
             except Exception as exc:
                 logger.error(f'Не удалось добавить в конкурс регистрации {contest.id}: {exc}')
 
@@ -830,9 +809,7 @@ class ReferralDiagnosticsService:
                                 )
 
                                 # Добавляем в активные конкурсы рефералов
-                                await self._add_to_active_contests(
-                                    db, user, referrer, first_topup.amount_kopeks
-                                )
+                                await self._add_to_active_contests(db, user, referrer, first_topup.amount_kopeks)
                     else:
                         detail.error = 'Бонусы уже начислены ранее'
 
@@ -873,9 +850,7 @@ class ReferralDiagnosticsService:
         report = MissingBonusReport()
 
         # 1. Находим всех рефералов (у кого есть referred_by_id)
-        referrals_result = await db.execute(
-            select(User).where(User.referred_by_id.isnot(None))
-        )
+        referrals_result = await db.execute(select(User).where(User.referred_by_id.isnot(None)))
         referrals = referrals_result.scalars().all()
         report.total_referrals_checked = len(referrals)
 
@@ -989,9 +964,7 @@ class ReferralDiagnosticsService:
         referral_ids = [mb.referral_id for mb in missing_bonuses]
         referrer_ids = [mb.referrer_id for mb in missing_bonuses]
 
-        users_result = await db.execute(
-            select(User).where(User.id.in_(referral_ids + referrer_ids))
-        )
+        users_result = await db.execute(select(User).where(User.id.in_(referral_ids + referrer_ids)))
         users_map = {u.id: u for u in users_result.scalars().all()}
 
         for missing in missing_bonuses:
@@ -1034,8 +1007,7 @@ class ReferralDiagnosticsService:
                         )
                         referral.has_made_first_topup = True
                         logger.info(
-                            f'💰 Начислен бонус рефералу {referral.telegram_id}: '
-                            f'{missing.referral_bonus_amount / 100}₽'
+                            f'💰 Начислен бонус рефералу {referral.telegram_id}: {missing.referral_bonus_amount / 100}₽'
                         )
 
                 # Начисляем бонус рефереру
@@ -1062,14 +1034,11 @@ class ReferralDiagnosticsService:
                             reason='referral_first_topup',
                         )
                         logger.info(
-                            f'💰 Начислен бонус рефереру {referrer.telegram_id}: '
-                            f'{missing.referrer_bonus_amount / 100}₽'
+                            f'💰 Начислен бонус рефереру {referrer.telegram_id}: {missing.referrer_bonus_amount / 100}₽'
                         )
 
                         # Добавляем в активные конкурсы рефералов
-                        await self._add_to_active_contests(
-                            db, referral, referrer, missing.first_topup_amount_kopeks
-                        )
+                        await self._add_to_active_contests(db, referral, referrer, missing.first_topup_amount_kopeks)
 
                 report.users_fixed += 1
                 report.details.append(detail)

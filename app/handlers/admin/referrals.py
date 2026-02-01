@@ -682,9 +682,7 @@ def _get_period_display_name(period: str) -> str:
     return names.get(period, 'сегодня')
 
 
-async def _show_diagnostics_for_period(
-    callback: types.CallbackQuery, db: AsyncSession, state: FSMContext, period: str
-):
+async def _show_diagnostics_for_period(callback: types.CallbackQuery, db: AsyncSession, state: FSMContext, period: str):
     """Внутренняя функция для отображения диагностики за указанный период."""
     try:
         await callback.answer('Анализирую логи...')
@@ -767,18 +765,14 @@ async def _show_diagnostics_for_period(
         # Кнопки: только "Сегодня" (текущий лог) и "Загрузить файл" (старые логи)
         keyboard_rows = [
             [
+                types.InlineKeyboardButton(text='📅 Сегодня (текущий лог)', callback_data='admin_ref_diag:today'),
+            ],
+            [types.InlineKeyboardButton(text='📤 Загрузить лог-файл', callback_data='admin_ref_diag_upload')],
+            [types.InlineKeyboardButton(text='🔍 Проверить бонусы (по БД)', callback_data='admin_ref_check_bonuses')],
+            [
                 types.InlineKeyboardButton(
-                    text='📅 Сегодня (текущий лог)', callback_data='admin_ref_diag:today'
-                ),
-            ],
-            [
-                types.InlineKeyboardButton(text='📤 Загрузить лог-файл', callback_data='admin_ref_diag_upload')
-            ],
-            [
-                types.InlineKeyboardButton(text='🔍 Проверить бонусы (по БД)', callback_data='admin_ref_check_bonuses')
-            ],
-            [
-                types.InlineKeyboardButton(text='🏆 Синхронизировать с конкурсом', callback_data='admin_ref_sync_contest')
+                    text='🏆 Синхронизировать с конкурсом', callback_data='admin_ref_sync_contest'
+                )
             ],
         ]
 
@@ -1019,9 +1013,7 @@ async def apply_referral_fixes(callback: types.CallbackQuery, db_user: User, db:
 
 @admin_required
 @error_handler
-async def check_missing_bonuses(
-    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext
-):
+async def check_missing_bonuses(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
     """Проверяет по БД — всем ли рефералам начислены бонусы."""
     from app.services.referral_diagnostics_service import (
         referral_diagnostics_service,
@@ -1089,9 +1081,7 @@ async def check_missing_bonuses(
 
 @admin_required
 @error_handler
-async def apply_missing_bonuses(
-    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext
-):
+async def apply_missing_bonuses(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
     """Применяет начисление пропущенных бонусов."""
     from app.services.referral_diagnostics_service import (
         MissingBonusReport,
@@ -1116,9 +1106,7 @@ async def apply_missing_bonuses(
             return
 
         # Применяем исправления
-        fix_report = await referral_diagnostics_service.fix_missing_bonuses(
-            db, report.missing_bonuses, apply=True
-        )
+        fix_report = await referral_diagnostics_service.fix_missing_bonuses(db, report.missing_bonuses, apply=True)
 
         text = f"""
 ✅ <b>Бонусы начислены!</b>
@@ -1196,7 +1184,7 @@ async def sync_referrals_with_contest(
                 total_created += stats.get('created', 0)
                 total_updated += stats.get('updated', 0)
                 total_skipped += stats.get('skipped', 0)
-                contest_results.append(f"• {contest.title}: +{stats.get('created', 0)} новых")
+                contest_results.append(f'• {contest.title}: +{stats.get("created", 0)} новых')
             else:
                 contest_results.append(f'• {contest.title}: ошибка')
 
@@ -1229,9 +1217,7 @@ async def sync_referrals_with_contest(
 
 @admin_required
 @error_handler
-async def request_log_file_upload(
-    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext
-):
+async def request_log_file_upload(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
     """Запрашивает загрузку лог-файла для анализа."""
     await state.set_state(AdminStates.waiting_for_log_file)
 
@@ -1262,8 +1248,8 @@ async def request_log_file_upload(
 @error_handler
 async def receive_log_file(message: types.Message, db_user: User, db: AsyncSession, state: FSMContext):
     """Получает и анализирует загруженный лог-файл."""
-    import os
     import tempfile
+    from pathlib import Path
 
     if not message.document:
         await message.answer(
@@ -1278,12 +1264,11 @@ async def receive_log_file(message: types.Message, db_user: User, db: AsyncSessi
 
     # Проверяем расширение файла
     file_name = message.document.file_name or 'unknown'
-    file_ext = os.path.splitext(file_name)[1].lower()
+    file_ext = Path(file_name).suffix.lower()
 
     if file_ext not in ['.log', '.txt']:
         await message.answer(
-            f'❌ Неверный формат файла: {file_ext}\n\n'
-            f'Поддерживаются только текстовые файлы (.log, .txt)',
+            f'❌ Неверный формат файла: {file_ext}\n\nПоддерживаются только текстовые файлы (.log, .txt)',
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [types.InlineKeyboardButton(text='❌ Отмена', callback_data='admin_referral_diagnostics')]
@@ -1296,8 +1281,7 @@ async def receive_log_file(message: types.Message, db_user: User, db: AsyncSessi
     max_size = 50 * 1024 * 1024  # 50 MB
     if message.document.file_size > max_size:
         await message.answer(
-            f'❌ Файл слишком большой: {message.document.file_size / 1024 / 1024:.1f} MB\n\n'
-            f'Максимальный размер: 50 MB',
+            f'❌ Файл слишком большой: {message.document.file_size / 1024 / 1024:.1f} MB\n\nМаксимальный размер: 50 MB',
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [types.InlineKeyboardButton(text='❌ Отмена', callback_data='admin_referral_diagnostics')]
@@ -1316,7 +1300,7 @@ async def receive_log_file(message: types.Message, db_user: User, db: AsyncSessi
     try:
         # Скачиваем файл во временную директорию
         temp_dir = tempfile.gettempdir()
-        temp_file_path = os.path.join(temp_dir, f'ref_diagnostics_{message.from_user.id}_{file_name}')
+        temp_file_path = str(Path(temp_dir) / f'ref_diagnostics_{message.from_user.id}_{file_name}')
 
         # Скачиваем файл
         file = await message.bot.get_file(message.document.file_id)
@@ -1422,8 +1406,16 @@ async def receive_log_file(message: types.Message, db_user: User, db: AsyncSessi
                 f'Проверьте, что файл является текстовым логом бота.',
                 reply_markup=types.InlineKeyboardMarkup(
                     inline_keyboard=[
-                        [types.InlineKeyboardButton(text='🔄 Попробовать снова', callback_data='admin_ref_diag_upload')],
-                        [types.InlineKeyboardButton(text='⬅️ К диагностике', callback_data='admin_referral_diagnostics')],
+                        [
+                            types.InlineKeyboardButton(
+                                text='🔄 Попробовать снова', callback_data='admin_ref_diag_upload'
+                            )
+                        ],
+                        [
+                            types.InlineKeyboardButton(
+                                text='⬅️ К диагностике', callback_data='admin_referral_diagnostics'
+                            )
+                        ],
                     ]
                 ),
             )
@@ -1439,9 +1431,9 @@ async def receive_log_file(message: types.Message, db_user: User, db: AsyncSessi
 
     finally:
         # Удаляем временный файл
-        if temp_file_path and os.path.exists(temp_file_path):
+        if temp_file_path and Path(temp_file_path).exists():
             try:
-                os.remove(temp_file_path)
+                Path(temp_file_path).unlink()
                 logger.info(f'🗑️ Временный файл удалён: {temp_file_path}')
             except Exception as e:
                 logger.error(f'Ошибка удаления временного файла: {e}')

@@ -75,6 +75,7 @@ async def test_analyze_period_with_issues(temp_log_file, sample_log_content):
 
     # Используем None вместо db для базового теста парсинга
     from unittest.mock import AsyncMock
+
     mock_db = AsyncMock()
     mock_db.execute.return_value.scalar_one_or_none.return_value = None
 
@@ -87,8 +88,9 @@ async def test_analyze_period_with_issues(temp_log_file, sample_log_content):
 
     # Проверяем что нашлись проблемные случаи
     # (987654321 применил код, но не завершил регистрацию)
-    assert 987654321 in report.users_applied_no_registration, \
+    assert 987654321 in report.users_applied_no_registration, (
         f'Expected 987654321 in problems, got: {report.users_applied_no_registration}'
+    )
 
 
 @pytest.mark.asyncio
@@ -102,6 +104,7 @@ async def test_empty_log_file(temp_log_file):
     tomorrow = today + timedelta(days=1)
 
     from unittest.mock import AsyncMock
+
     mock_db = AsyncMock()
 
     report = await service.analyze_period(mock_db, today, tomorrow)
@@ -122,6 +125,7 @@ async def test_nonexistent_log_file():
     tomorrow = today + timedelta(days=1)
 
     from unittest.mock import AsyncMock
+
     mock_db = AsyncMock()
 
     # Не должно быть исключений
@@ -139,6 +143,7 @@ async def test_analyze_today(temp_log_file, sample_log_content):
     service = ReferralDiagnosticsService(log_path=str(temp_log_file))
 
     from unittest.mock import AsyncMock
+
     mock_db = AsyncMock()
 
     report = await service.analyze_today(mock_db)
