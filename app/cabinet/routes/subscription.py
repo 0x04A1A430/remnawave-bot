@@ -3811,6 +3811,7 @@ async def switch_tariff(
                     period_days=remaining_days if remaining_days > 0 else new_period_days,
                     was_trial_conversion=False,
                     amount_kopeks=upgrade_cost,
+                    purchase_type='tariff_switch',
                 )
             finally:
                 await bot.session.close()
