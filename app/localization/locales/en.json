@@ -925,6 +925,7 @@
   "CHANGE_DEVICES_CONFIRM": "\n📱 <b>Confirm change</b>\n\nCurrent amount: {current_devices} devices\nNew amount: {new_devices} devices\n\nAction: {action}\n💰 {cost}\n\nApply this change?\n",
   "CHANGE_DEVICES_INFO": "\n📱 <b>Adjust device limit</b>\n\nCurrent limit: {current_devices} devices\n\nChoose the new number of devices:\n\n💡 <b>Important:</b>\n• Increasing — extra charge proportional to the remaining time\n• Decreasing — funds are not refunded\n",
   "CHANGE_DEVICES_PROMPT": "📱 <b>Adjust device limit</b>\n\nCurrent limit: {current_devices} devices\nChoose the new number of devices:\n\n💡 <b>Important:</b>\n• Increasing — extra cost prorated by remaining time\n• Decreasing — payments are not refunded",
+  "CHANGE_DEVICES_PROMPT_TARIFF": "📱 <b>Adjust device limit</b>\n\nCurrent limit: {current_devices} devices\nPrice per extra device: {price}/mo\nChoose the new number of devices:\n\n💡 <b>Important:</b>\n• Increasing — extra cost prorated by remaining time\n• Decreasing — payments are not refunded",
   "CHANGE_DEVICES_SUCCESS_DECREASE": "\n✅ Device limit decreased!\n\n📱 Was: {old_count} → Now: {new_count}\nℹ️ Payments are not refunded\n",
   "CHANGE_DEVICES_SUCCESS_INCREASE": "\n✅ Device limit increased!\n\n📱 Was: {old_count} → Now: {new_count}\n💰 Charged: {amount}\n",
   "CHANGE_DEVICES_TITLE": "📱 Change device limit",
