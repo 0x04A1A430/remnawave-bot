@@ -407,16 +407,17 @@ async def add_user_balance(
 
         # Автоматическое возобновление приостановленной суточной подписки
         try:
-            from app.database.crud.subscription import resume_daily_subscription
+            from app.database.crud.subscription import get_subscription_by_user_id, resume_daily_subscription
             from app.database.crud.tariff import get_tariff_by_id
             from app.database.models import SubscriptionStatus
 
-            subscription = user.subscription
+            # Загружаем подписку явно, чтобы избежать lazy loading
+            subscription = await get_subscription_by_user_id(db, user.id)
             if subscription and subscription.status == SubscriptionStatus.DISABLED.value:
                 # Проверяем что это суточный тариф
                 is_daily = getattr(subscription, 'is_daily_tariff', False)
                 if is_daily and subscription.tariff_id:
-                    # Загружаем тариф явно, чтобы избежать lazy loading
+                    # Загружаем тариф явно
                     tariff = await get_tariff_by_id(db, subscription.tariff_id)
                     if tariff:
                         daily_price = getattr(tariff, 'daily_price_kopeks', 0)
