@@ -24,6 +24,7 @@ from app.handlers import (
 from app.handlers.admin import (
     backup as admin_backup,
     blacklist as admin_blacklist,
+    blocked_users as admin_blocked_users,
     bot_configuration as admin_bot_configuration,
     bulk_ban as admin_bulk_ban,
     campaigns as admin_campaigns,
@@ -189,6 +190,7 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     admin_tariffs.register_handlers(dp)
     admin_bulk_ban.register_bulk_ban_handlers(dp)
     admin_blacklist.register_blacklist_handlers(dp)
+    admin_blocked_users.register_handlers(dp)
     common.register_handlers(dp)
     register_stars_handlers(dp)
     user_contests.register_handlers(dp)
