@@ -186,18 +186,29 @@ async def handle_change_devices(callback: types.CallbackQuery, db_user: User, db
     if tariff:
         price_per_device = tariff_device_price
         price_text = texts.format_price(price_per_device)
+        tariff_min_devices = getattr(tariff, 'device_limit', 1) or 1
+
+        # Добавляем информацию о минимальном лимите если он больше 1
+        min_devices_info = ''
+        if tariff_min_devices > 1:
+            min_devices_info = texts.t(
+                'CHANGE_DEVICES_MIN_LIMIT_INFO',
+                '\nМинимум для тарифа: {min_devices} устройств\n',
+            ).format(min_devices=tariff_min_devices)
+
         prompt_text = texts.t(
             'CHANGE_DEVICES_PROMPT_TARIFF',
             (
                 '📱 <b>Изменение количества устройств</b>\n\n'
                 'Текущий лимит: {current_devices} устройств\n'
                 'Цена за доп. устройство: {price}/мес\n'
+                '{min_devices_info}'
                 'Выберите новое количество устройств:\n\n'
                 '💡 <b>Важно:</b>\n'
                 '• При увеличении - доплата пропорционально оставшемуся времени\n'
                 '• При уменьшении - возврат средств не производится'
             ),
-        ).format(current_devices=current_devices, price=price_text)
+        ).format(current_devices=current_devices, price=price_text, min_devices_info=min_devices_info)
     else:
         prompt_text = texts.t(
             'CHANGE_DEVICES_PROMPT',
@@ -272,6 +283,18 @@ async def confirm_change_devices(callback: types.CallbackQuery, db_user: User, d
                 'DEVICES_LIMIT_EXCEEDED',
                 '⚠️ Превышен максимальный лимит устройств ({limit})',
             ).format(limit=settings.MAX_DEVICES_LIMIT),
+            show_alert=True,
+        )
+        return
+
+    # Проверяем минимальное количество устройств на тарифе
+    tariff_min_devices = (getattr(tariff, 'device_limit', 1) or 1) if tariff else 1
+    if new_devices_count < tariff_min_devices:
+        await callback.answer(
+            texts.t(
+                'DEVICES_MIN_LIMIT_REACHED',
+                '⚠️ Минимальное количество устройств для вашего тарифа: {limit}',
+            ).format(limit=tariff_min_devices),
             show_alert=True,
         )
         return
@@ -473,9 +496,37 @@ async def execute_change_devices(callback: types.CallbackQuery, db_user: User, d
     subscription = db_user.subscription
     current_devices = subscription.device_limit
 
-    if not settings.is_devices_selection_enabled():
+    # Проверяем тариф подписки
+    tariff = None
+    if subscription.tariff_id:
+        from app.database.crud.tariff import get_tariff_by_id
+
+        tariff = await get_tariff_by_id(db, subscription.tariff_id)
+
+    # Для тарифов - проверяем разрешено ли изменение устройств
+    if tariff:
+        tariff_device_price = getattr(tariff, 'device_price_kopeks', None)
+        if tariff_device_price is None or tariff_device_price <= 0:
+            await callback.answer(
+                texts.t('TARIFF_DEVICES_DISABLED', '⚠️ Изменение устройств недоступно для вашего тарифа'),
+                show_alert=True,
+            )
+            return
+    elif not settings.is_devices_selection_enabled():
         await callback.answer(
             texts.t('DEVICES_SELECTION_DISABLED', '⚠️ Изменение количества устройств недоступно'),
+            show_alert=True,
+        )
+        return
+
+    # Проверяем минимальное количество устройств на тарифе
+    tariff_min_devices = (getattr(tariff, 'device_limit', 1) or 1) if tariff else 1
+    if new_devices_count < tariff_min_devices:
+        await callback.answer(
+            texts.t(
+                'DEVICES_MIN_LIMIT_REACHED',
+                '⚠️ Минимальное количество устройств для вашего тарифа: {limit}',
+            ).format(limit=tariff_min_devices),
             show_alert=True,
         )
         return
