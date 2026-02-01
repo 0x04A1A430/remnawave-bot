@@ -33,7 +33,7 @@ class GlobalErrorMiddleware(BaseMiddleware):
         try:
             return await handler(event, data)
         except TelegramBadRequest as e:
-            return await self._handle_telegram_error(event, e)
+            return await self._handle_telegram_error(event, e, data)
         except Exception as e:
             logger.error('Неожиданная ошибка в GlobalErrorMiddleware: %s', e, exc_info=True)
             # Отправляем уведомление об ошибке в админский чат
@@ -43,7 +43,7 @@ class GlobalErrorMiddleware(BaseMiddleware):
                 schedule_error_notification(bot, e, f'Пользователь: {user_info}')
             raise
 
-    async def _handle_telegram_error(self, event: TelegramObject, error: TelegramBadRequest):
+    async def _handle_telegram_error(self, event: TelegramObject, error: TelegramBadRequest, data: dict[str, Any]):
         error_message = str(error).lower()
 
         if self._is_old_query_error(error_message):
@@ -56,7 +56,13 @@ class GlobalErrorMiddleware(BaseMiddleware):
             return None
         if self._is_bad_request_error(error_message):
             return await self._handle_bad_request(event, error)
+
+        # Неизвестная ошибка — логируем и отправляем уведомление
         logger.error('Неизвестная Telegram API ошибка: %s', error)
+        bot = data.get('bot')
+        if bot:
+            user_info = self._get_user_info(event)
+            schedule_error_notification(bot, error, f'Пользователь: {user_info}')
         raise error
 
     def _is_old_query_error(self, error_message: str) -> bool:
