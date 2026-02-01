@@ -6,7 +6,7 @@
 """
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -21,7 +21,6 @@ from app.database.models import User
 from app.services.blocked_users_service import (
     BlockCheckResult,
     BlockedUserAction,
-    BlockedUsersScanResult,
     BlockedUsersService,
 )
 from app.utils.decorators import admin_required, error_handler
@@ -146,7 +145,7 @@ class BlockedUsersStates(StatesGroup):
 
 
 def get_blocked_users_menu_keyboard(
-    scan_result: BlockedUsersScanResult | None = None,
+    scan_result: dict[str, Any] | None = None,
 ) -> InlineKeyboardMarkup:
     """Клавиатура главного меню модуля."""
     buttons = [
@@ -158,11 +157,12 @@ def get_blocked_users_menu_keyboard(
         ]
     ]
 
-    if scan_result and scan_result.blocked_count > 0:
+    blocked_count = scan_result.get('blocked_count', 0) if scan_result else 0
+    if blocked_count > 0:
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=BlockedUsersText.BUTTON_VIEW_BLOCKED.value.format(count=scan_result.blocked_count),
+                    text=BlockedUsersText.BUTTON_VIEW_BLOCKED.value.format(count=blocked_count),
                     callback_data=BlockedUsersCallback.VIEW_LIST.value,
                 )
             ]
@@ -300,8 +300,8 @@ async def show_blocked_users_menu(
     if scan_result:
         text += (
             f'\n\n📊 <b>Последнее сканирование:</b>\n'
-            f'• Заблокированных: {scan_result.blocked_count}\n'
-            f'• Активных: {scan_result.active_users}'
+            f'• Заблокированных: {scan_result.get("blocked_count", 0)}\n'
+            f'• Активных: {scan_result.get("active_users", 0)}'
         )
 
     await callback.message.edit_text(
@@ -331,11 +331,11 @@ async def start_scan(
     )
 
     service = BlockedUsersService(bot)
-    last_update_time = datetime.utcnow()
+    last_update_time = datetime.now(tz=UTC)
 
     async def progress_callback(checked: int, total: int) -> None:
         nonlocal last_update_time
-        now = datetime.utcnow()
+        now = datetime.now(tz=UTC)
         # Обновляем сообщение не чаще раза в 3 секунды
         if (now - last_update_time).total_seconds() >= 3:
             last_update_time = now
@@ -359,9 +359,16 @@ async def start_scan(
         progress_callback=progress_callback,
     )
 
-    # Сохраняем результат в state
+    # Сохраняем результат в state (сериализуем в dict для Redis)
     await state.update_data(
-        blocked_users_scan_result=result,
+        blocked_users_scan_result={
+            'total_checked': result.total_checked,
+            'blocked_count': result.blocked_count,
+            'active_users': result.active_users,
+            'errors': result.errors,
+            'skipped_no_telegram': result.skipped_no_telegram,
+            'scan_duration_seconds': result.scan_duration_seconds,
+        },
         blocked_users_list=[
             {
                 'user_id': u.user_id,
@@ -585,11 +592,11 @@ async def handle_confirm_action(
     ]
 
     service = BlockedUsersService(bot)
-    last_update_time = datetime.utcnow()
+    last_update_time = datetime.now(tz=UTC)
 
     async def progress_callback(processed: int, total_count: int) -> None:
         nonlocal last_update_time
-        now = datetime.utcnow()
+        now = datetime.now(tz=UTC)
         if (now - last_update_time).total_seconds() >= 2:
             last_update_time = now
             try:

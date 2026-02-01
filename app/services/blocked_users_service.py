@@ -9,7 +9,7 @@ import asyncio
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 
 from aiogram import Bot
@@ -172,7 +172,7 @@ class BlockedUsersService:
         Returns:
             Результат сканирования
         """
-        start_time = datetime.utcnow()
+        start_time = datetime.now(tz=UTC)
         result = BlockedUsersScanResult()
 
         # Формируем запрос
@@ -224,7 +224,7 @@ class BlockedUsersService:
             if progress_callback:
                 await progress_callback(checked, total_users)
 
-        result.scan_duration_seconds = (datetime.utcnow() - start_time).total_seconds()
+        result.scan_duration_seconds = (datetime.now(tz=UTC) - start_time).total_seconds()
 
         logger.info(
             f'Сканирование завершено: {result.blocked_count} заблокированных '
@@ -312,7 +312,7 @@ class BlockedUsersService:
                 return False
 
             user.status = UserStatus.BLOCKED.value
-            user.updated_at = datetime.utcnow()
+            user.updated_at = datetime.now(tz=UTC)
             await db.commit()
 
             logger.info(f'Пользователь {user.telegram_id or user.id} помечен как заблокированный')
