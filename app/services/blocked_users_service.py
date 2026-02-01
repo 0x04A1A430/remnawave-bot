@@ -198,7 +198,7 @@ class BlockedUsersService:
 
         checked = 0
         for i in range(0, total_users, batch_size):
-            batch = all_users[i:i + batch_size]
+            batch = all_users[i : i + batch_size]
             tasks = [check_with_semaphore(user) for user in batch]
             batch_results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -261,9 +261,7 @@ class BlockedUsersService:
         try:
             # Получаем пользователя
             user_result = await db.execute(
-                select(User)
-                .options(selectinload(User.subscription))
-                .where(User.id == user_id)
+                select(User).options(selectinload(User.subscription)).where(User.id == user_id)
             )
             user = user_result.scalar_one_or_none()
 
@@ -276,13 +274,9 @@ class BlockedUsersService:
             # Удаляем связанные записи
             if user.subscription:
                 await db.execute(
-                    delete(SubscriptionServer).where(
-                        SubscriptionServer.subscription_id == user.subscription.id
-                    )
+                    delete(SubscriptionServer).where(SubscriptionServer.subscription_id == user.subscription.id)
                 )
-                await db.execute(
-                    delete(Subscription).where(Subscription.user_id == user.id)
-                )
+                await db.execute(delete(Subscription).where(Subscription.user_id == user.id))
 
             await db.execute(delete(Transaction).where(Transaction.user_id == user.id))
             await db.execute(delete(ReferralEarning).where(ReferralEarning.user_id == user.id))
@@ -359,27 +353,21 @@ class BlockedUsersService:
                         if success:
                             result.deleted_from_remnawave += 1
                         else:
-                            result.errors.append(
-                                f'Ошибка удаления {user_result.telegram_id} из Remnawave'
-                            )
+                            result.errors.append(f'Ошибка удаления {user_result.telegram_id} из Remnawave')
 
                 if action in (BlockedUserAction.DELETE_FROM_DB, BlockedUserAction.DELETE_BOTH):
                     success = await self.delete_user_from_db(db, user_result.user_id)
                     if success:
                         result.deleted_from_db += 1
                     else:
-                        result.errors.append(
-                            f'Ошибка удаления {user_result.telegram_id} из БД'
-                        )
+                        result.errors.append(f'Ошибка удаления {user_result.telegram_id} из БД')
 
                 if action == BlockedUserAction.MARK_AS_BLOCKED:
                     success = await self.mark_user_as_blocked(db, user_result.user_id)
                     if success:
                         result.marked_as_blocked += 1
                     else:
-                        result.errors.append(
-                            f'Ошибка пометки {user_result.telegram_id}'
-                        )
+                        result.errors.append(f'Ошибка пометки {user_result.telegram_id}')
 
                 if progress_callback:
                     await progress_callback(i + 1, total)
