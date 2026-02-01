@@ -3357,6 +3357,54 @@ async def add_media_fields_to_broadcast_history():
         return False
 
 
+async def add_email_fields_to_broadcast_history():
+    """Добавление полей для email-рассылки в broadcast_history."""
+    logger.info('=== ДОБАВЛЕНИЕ ПОЛЕЙ EMAIL В BROADCAST_HISTORY ===')
+
+    email_fields = {
+        'channel': "VARCHAR(20) DEFAULT 'telegram'",
+        'email_subject': 'VARCHAR(255)',
+        'email_html_content': 'TEXT',
+    }
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            # Добавление новых полей
+            for field_name, field_type in email_fields.items():
+                field_exists = await check_column_exists('broadcast_history', field_name)
+
+                if not field_exists:
+                    logger.info(f'Добавление поля {field_name} в таблицу broadcast_history')
+
+                    alter_sql = f'ALTER TABLE broadcast_history ADD COLUMN {field_name} {field_type}'
+                    await conn.execute(text(alter_sql))
+                    logger.info(f'✅ Поле {field_name} успешно добавлено')
+                else:
+                    logger.info(f'Поле {field_name} уже существует в broadcast_history')
+
+            # Сделать message_text nullable для email-only рассылок
+            try:
+                if db_type == 'postgresql':
+                    await conn.execute(text('ALTER TABLE broadcast_history ALTER COLUMN message_text DROP NOT NULL'))
+                    logger.info('✅ Колонка message_text теперь nullable')
+                elif db_type == 'mysql':
+                    await conn.execute(text('ALTER TABLE broadcast_history MODIFY COLUMN message_text TEXT NULL'))
+                    logger.info('✅ Колонка message_text теперь nullable')
+                # SQLite не поддерживает ALTER COLUMN, но там по умолчанию nullable
+            except Exception as e:
+                # Игнорируем если уже nullable или другая ошибка
+                logger.debug(f'message_text nullable: {e}')
+
+            logger.info('✅ Все поля email в broadcast_history готовы')
+            return True
+
+    except Exception as e:
+        logger.error(f'Ошибка при добавлении полей email в broadcast_history: {e}')
+        return False
+
+
 async def add_ticket_reply_block_columns():
     try:
         col_perm_exists = await check_column_exists('tickets', 'user_reply_block_permanent')
@@ -6701,6 +6749,13 @@ async def run_universal_migration():
         else:
             logger.warning('⚠️ Проблемы с добавлением медиа полей')
 
+        logger.info('=== ДОБАВЛЕНИЕ EMAIL ПОЛЕЙ В BROADCAST_HISTORY ===')
+        email_fields_added = await add_email_fields_to_broadcast_history()
+        if email_fields_added:
+            logger.info('✅ Email поля в broadcast_history готовы')
+        else:
+            logger.warning('⚠️ Проблемы с добавлением email полей')
+
         logger.info('=== ДОБАВЛЕНИЕ ПОЛЕЙ БЛОКИРОВКИ В TICKETS ===')
         tickets_block_cols_added = await add_ticket_reply_block_columns()
         if tickets_block_cols_added:
@@ -7055,6 +7110,7 @@ async def check_migration_status():
             'pinned_messages_start_mode_column': False,
             'users_last_pinned_column': False,
             'broadcast_history_media_fields': False,
+            'broadcast_history_email_fields': False,
             'subscription_duplicates': False,
             'subscription_conversions_table': False,
             'subscription_events_table': False,
@@ -7202,6 +7258,13 @@ async def check_migration_status():
         )
         status['broadcast_history_media_fields'] = media_fields_exist
 
+        email_fields_exist = (
+            await check_column_exists('broadcast_history', 'channel')
+            and await check_column_exists('broadcast_history', 'email_subject')
+            and await check_column_exists('broadcast_history', 'email_html_content')
+        )
+        status['broadcast_history_email_fields'] = email_fields_exist
+
         pinned_media_columns_exist = (
             status['pinned_messages_table']
             and await check_column_exists('pinned_messages', 'media_type')
@@ -7254,6 +7317,7 @@ async def check_migration_status():
             'pinned_messages_start_mode_column': 'Режим отправки закрепа при /start',
             'users_last_pinned_column': 'Колонка last_pinned_message_id у пользователей',
             'broadcast_history_media_fields': 'Медиа поля в broadcast_history',
+            'broadcast_history_email_fields': 'Email поля в broadcast_history',
             'subscription_conversions_table': 'Таблица конверсий подписок',
             'subscription_events_table': 'Таблица событий подписок',
             'subscription_duplicates': 'Отсутствие дубликатов подписок',

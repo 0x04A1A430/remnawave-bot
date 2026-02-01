@@ -287,6 +287,12 @@ async def main():
         traffic_monitoring_scheduler.set_bot(bot)
         daily_subscription_service.set_bot(bot)
 
+        # Initialize email broadcast service
+        from app.cabinet.services.email_service import email_service
+        from app.services.broadcast_service import email_broadcast_service
+
+        email_broadcast_service.set_email_service(email_service)
+
         from app.services.admin_notification_service import AdminNotificationService
 
         async with timeline.stage(

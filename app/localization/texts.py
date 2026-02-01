@@ -190,9 +190,15 @@ class Texts:
         return settings.format_price(kopeks)
 
     @staticmethod
-    def format_traffic(gb: float) -> str:
+    def format_traffic(gb: float, is_limit: bool = True) -> str:
+        """Format traffic value.
+
+        Args:
+            gb: Traffic in gigabytes
+            is_limit: If True, 0 means unlimited. If False, 0 means zero used.
+        """
         if gb == 0:
-            return '∞ (безлимит)'
+            return '∞ (безлимит)' if is_limit else '0 ГБ'
         if gb >= 1024:
             return f'{gb / 1024:.1f} ТБ'
         return f'{gb:.0f} ГБ'

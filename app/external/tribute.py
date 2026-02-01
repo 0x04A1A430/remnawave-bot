@@ -91,7 +91,7 @@ class TributeService:
                 amount_kopeks = data.get('amount', 0)
                 telegram_user_id = data.get('telegram_user_id')
 
-                if event_name == 'new_donation':
+                if event_name in ('new_donation', 'recurrent_donation'):
                     status = 'paid'
                 elif event_name == 'cancelled_subscription':
                     status = 'cancelled'
