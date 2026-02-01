@@ -300,8 +300,8 @@ async def show_blocked_users_menu(
     if scan_result:
         text += (
             f'\n\n📊 <b>Последнее сканирование:</b>\n'
-            f"• Заблокированных: {scan_result.get('blocked_count', 0)}\n"
-            f"• Активных: {scan_result.get('active_users', 0)}"
+            f'• Заблокированных: {scan_result.get("blocked_count", 0)}\n'
+            f'• Активных: {scan_result.get("active_users", 0)}'
         )
 
     await callback.message.edit_text(
