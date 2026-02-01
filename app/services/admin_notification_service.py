@@ -335,6 +335,21 @@ class AdminNotificationService:
             logger.error(f'Ошибка отправки уведомления о триале: {e}')
             return False
 
+    async def _get_tariff_name(self, db: AsyncSession, subscription: Subscription) -> str | None:
+        """Получает название тарифа подписки, если он есть."""
+        if not subscription.tariff_id:
+            return None
+
+        try:
+            from app.database.crud.tariff import get_tariff_by_id
+
+            tariff = await get_tariff_by_id(db, subscription.tariff_id)
+            if tariff:
+                return tariff.name
+        except Exception:
+            pass
+        return None
+
     async def send_subscription_purchase_notification(
         self,
         db: AsyncSession,
@@ -371,53 +386,74 @@ class AdminNotificationService:
             if not self._is_enabled():
                 return False
 
-            event_type = '🔄 КОНВЕРСИЯ ИЗ ТРИАЛА' if was_trial_conversion else '💎 ПОКУПКА ПОДПИСКИ'
-
+            # Определяем тип операции и заголовок
             if was_trial_conversion:
-                user_status = '🎯 Конверсия из триала'
+                event_title = '🔄 КОНВЕРСИЯ ИЗ ТРИАЛА'
+                user_status = 'Конверсия'
             elif user.has_had_paid_subscription:
-                user_status = '🔄 Продление/Обновление'
+                event_title = '💎 ПРОДЛЕНИЕ ПОДПИСКИ'
+                user_status = 'Продление'
             else:
-                user_status = '🆕 Первая покупка'
+                event_title = '💎 ПОКУПКА ПОДПИСКИ'
+                user_status = 'Первая покупка'
+
+            # Получаем название тарифа
+            tariff_name = await self._get_tariff_name(db, subscription)
 
             servers_info = await self._get_servers_info(subscription.connected_squads)
             payment_method = self._get_payment_method_display(transaction.payment_method) if transaction else 'Баланс'
-            referrer_info = await self._get_referrer_info(db, user.referred_by_id)
-            promo_group = await self._get_user_promo_group(db, user)
-            promo_block = self._format_promo_group_block(promo_group)
             user_display = self._get_user_display(user)
-
-            transaction_id = transaction.id if transaction else '—'
-            user_id_label = self._get_user_identifier_label(user)
             user_id_display = self._get_user_identifier_display(user)
 
-            message = f"""💎 <b>{event_type}</b>
+            # Формируем компактное сообщение
+            message_lines = [
+                f'<b>{event_title}</b>',
+                '',
+                f'👤 {user_display} ({user_id_display})',
+            ]
 
-👤 <b>Пользователь:</b> {user_display}
-🆔 <b>{user_id_label}:</b> {user_id_display}
-📱 <b>Username:</b> @{getattr(user, 'username', None) or 'отсутствует'}
-👥 <b>Статус:</b> {user_status}
+            # Добавляем username только если есть
+            username = getattr(user, 'username', None)
+            if username:
+                message_lines.append(f'📱 @{username}')
 
-{promo_block}
+            message_lines.append(f'📋 {user_status}')
 
-💰 <b>Платеж:</b>
-💵 Сумма: {settings.format_price(total_amount)}
-💳 Способ: {payment_method}
-🆔 ID транзакции: {transaction_id}
+            # Тариф (если есть)
+            if tariff_name:
+                message_lines.append(f'🏷️ Тариф: <b>{tariff_name}</b>')
 
-📱 <b>Параметры подписки:</b>
-📅 Период: {period_days} дней
-📊 Трафик: {self._format_traffic(subscription.traffic_limit_gb)}
-📱 Устройства: {subscription.device_limit}
-🌐 Серверы: {servers_info}
+            message_lines.extend(
+                [
+                    '',
+                    f'💵 <b>{settings.format_price(total_amount)}</b> • {payment_method}',
+                    f'📅 {period_days} дн. • до {format_local_datetime(subscription.end_date, "%d.%m.%Y")}',
+                    f'📊 {self._format_traffic(subscription.traffic_limit_gb)} • 📱 {subscription.device_limit} устр.',
+                    f'🌐 {servers_info}',
+                ]
+            )
 
-📆 <b>Действует до:</b> {format_local_datetime(subscription.end_date, '%d.%m.%Y %H:%M')}
-💰 <b>Баланс после покупки:</b> {settings.format_price(user.balance_kopeks)}
-🔗 <b>Реферер:</b> {referrer_info}
+            # Баланс после покупки
+            message_lines.append(f'💰 Баланс: {settings.format_price(user.balance_kopeks)}')
 
-⏰ <i>{format_local_datetime(datetime.utcnow(), '%d.%m.%Y %H:%M:%S')}</i>"""
+            # Реферер (только если есть)
+            if user.referred_by_id:
+                referrer_info = await self._get_referrer_info(db, user.referred_by_id)
+                if referrer_info != 'Нет':
+                    message_lines.append(f'🔗 Реф: {referrer_info}')
 
-            return await self._send_message(message)
+            # ID транзакции (только если есть)
+            if transaction:
+                message_lines.append(f'🆔 #{transaction.id}')
+
+            message_lines.extend(
+                [
+                    '',
+                    f'<i>{format_local_datetime(datetime.utcnow(), "%d.%m.%Y %H:%M")}</i>',
+                ]
+            )
+
+            return await self._send_message('\n'.join(message_lines))
 
         except Exception as e:
             logger.error(f'Ошибка отправки уведомления о покупке: {e}')
@@ -1369,65 +1405,81 @@ class AdminNotificationService:
             return False
 
         try:
-            referrer_info = await self._get_referrer_info(db, user.referred_by_id)
-            promo_group = await self._get_user_promo_group(db, user)
-            promo_block = self._format_promo_group_block(promo_group)
             user_display = self._get_user_display(user)
-
-            update_types = {
-                'traffic': ('📊 ИЗМЕНЕНИЕ ТРАФИКА', 'трафик'),
-                'devices': ('📱 ИЗМЕНЕНИЕ УСТРОЙСТВ', 'количество устройств'),
-                'servers': ('🌐 ИЗМЕНЕНИЕ СЕРВЕРОВ', 'серверы'),
-                'modem': ('📡 ИЗМЕНЕНИЕ МОДЕМА', 'модем'),
-            }
-
-            title, param_name = update_types.get(update_type, ('⚙️ ИЗМЕНЕНИЕ ПОДПИСКИ', 'параметры'))
-            user_id_label = self._get_user_identifier_label(user)
             user_id_display = self._get_user_identifier_display(user)
 
+            # Определяем заголовок по типу операции
+            update_titles = {
+                'traffic': '📊 ДОКУПКА ТРАФИКА',
+                'devices': '📱 ДОКУПКА УСТРОЙСТВ',
+                'servers': '🌐 СМЕНА СЕРВЕРОВ',
+                'modem': '📡 МОДЕМ',
+            }
+            title = update_titles.get(update_type, '⚙️ ИЗМЕНЕНИЕ ПОДПИСКИ')
+
+            # Получаем название тарифа
+            tariff_name = await self._get_tariff_name(db, subscription)
+
+            # Формируем компактное сообщение
             message_lines = [
-                f'{title}',
+                f'<b>{title}</b>',
                 '',
-                f'👤 <b>Пользователь:</b> {user_display}',
-                f'🆔 <b>{user_id_label}:</b> {user_id_display}',
-                f'📱 <b>Username:</b> @{getattr(user, "username", None) or "отсутствует"}',
-                '',
-                promo_block,
-                '',
-                '🔧 <b>Изменение:</b>',
-                f'📋 Параметр: {param_name}',
+                f'👤 {user_display} ({user_id_display})',
             ]
 
+            # Добавляем username только если есть
+            username = getattr(user, 'username', None)
+            if username:
+                message_lines.append(f'📱 @{username}')
+
+            # Тариф (если есть)
+            if tariff_name:
+                message_lines.append(f'🏷️ Тариф: <b>{tariff_name}</b>')
+
+            message_lines.append('')
+
+            # Форматируем изменение в зависимости от типа
             if update_type == 'servers':
                 old_servers_info = await self._format_servers_detailed(old_value)
                 new_servers_info = await self._format_servers_detailed(new_value)
-                message_lines.extend(
-                    [
-                        f'📉 Было: {old_servers_info}',
-                        f'📈 Стало: {new_servers_info}',
-                    ]
-                )
+                message_lines.append(f'🔄 {old_servers_info} → {new_servers_info}')
+            elif update_type == 'traffic':
+                old_formatted = self._format_update_value(old_value, update_type)
+                new_formatted = self._format_update_value(new_value, update_type)
+                message_lines.append(f'🔄 {old_formatted} → {new_formatted}')
+            elif update_type == 'devices':
+                message_lines.append(f'🔄 {old_value} → {new_value} устр.')
+            elif update_type == 'modem':
+                old_state = '✅ Вкл' if old_value else '❌ Выкл'
+                new_state = '✅ Вкл' if new_value else '❌ Выкл'
+                message_lines.append(f'🔄 {old_state} → {new_state}')
             else:
-                message_lines.extend(
-                    [
-                        f'📉 Было: {self._format_update_value(old_value, update_type)}',
-                        f'📈 Стало: {self._format_update_value(new_value, update_type)}',
-                    ]
-                )
+                message_lines.append(f'🔄 {old_value} → {new_value}')
 
+            # Стоимость операции
             if price_paid > 0:
-                message_lines.append(f'💰 Доплачено: {settings.format_price(price_paid)}')
+                message_lines.append(f'💵 <b>{settings.format_price(price_paid)}</b>')
             else:
                 message_lines.append('💸 Бесплатно')
 
             message_lines.extend(
                 [
                     '',
-                    f'📅 <b>Подписка действует до:</b> {format_local_datetime(subscription.end_date, "%d.%m.%Y %H:%M")}',
-                    f'💰 <b>Баланс после операции:</b> {settings.format_price(user.balance_kopeks)}',
-                    f'🔗 <b>Рефер:</b> {referrer_info}',
+                    f'📅 До {format_local_datetime(subscription.end_date, "%d.%m.%Y")}',
+                    f'💰 Баланс: {settings.format_price(user.balance_kopeks)}',
+                ]
+            )
+
+            # Реферер (только если есть)
+            if user.referred_by_id:
+                referrer_info = await self._get_referrer_info(db, user.referred_by_id)
+                if referrer_info != 'Нет':
+                    message_lines.append(f'🔗 Реф: {referrer_info}')
+
+            message_lines.extend(
+                [
                     '',
-                    f'⏰ <i>{format_local_datetime(datetime.utcnow(), "%d.%m.%Y %H:%M:%S")}</i>',
+                    f'<i>{format_local_datetime(datetime.utcnow(), "%d.%m.%Y %H:%M")}</i>',
                 ]
             )
 
