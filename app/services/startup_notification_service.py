@@ -9,6 +9,7 @@ import os
 from datetime import datetime
 
 from aiogram import Bot
+from aiogram.enums import ParseMode
 from aiogram.types import BufferedInputFile, InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy import func, select
 
@@ -45,7 +46,7 @@ class StartupNotificationService:
                 result = await db.execute(select(func.count(User.id)).where(User.status == UserStatus.ACTIVE.value))
                 return result.scalar() or 0
         except Exception as e:
-            logger.error(f'Ошибка получения количества пользователей: {e}')
+            logger.error('Ошибка получения количества пользователей: %s', e)
             return 0
 
     async def _get_total_balance(self) -> int:
@@ -59,7 +60,7 @@ class StartupNotificationService:
                 )
                 return result.scalar() or 0
         except Exception as e:
-            logger.error(f'Ошибка получения суммы балансов: {e}')
+            logger.error('Ошибка получения суммы балансов: %s', e)
             return 0
 
     async def _get_open_tickets_count(self) -> int:
@@ -69,7 +70,7 @@ class StartupNotificationService:
                 result = await db.execute(select(func.count(Ticket.id)).where(Ticket.status == TicketStatus.OPEN.value))
                 return result.scalar() or 0
         except Exception as e:
-            logger.error(f'Ошибка получения количества открытых тикетов: {e}')
+            logger.error('Ошибка получения количества открытых тикетов: %s', e)
             return 0
 
     async def _get_paid_subscriptions_count(self) -> int:
@@ -84,7 +85,7 @@ class StartupNotificationService:
                 )
                 return result.scalar() or 0
         except Exception as e:
-            logger.error(f'Ошибка получения количества платных подписок: {e}')
+            logger.error('Ошибка получения количества платных подписок: %s', e)
             return 0
 
     async def _get_trial_subscriptions_count(self) -> int:
@@ -94,7 +95,7 @@ class StartupNotificationService:
                 result = await db.execute(select(func.count(Subscription.id)).where(Subscription.is_trial == True))
                 return result.scalar() or 0
         except Exception as e:
-            logger.error(f'Ошибка получения количества триальных подписок: {e}')
+            logger.error('Ошибка получения количества триальных подписок: %s', e)
             return 0
 
     async def _check_remnawave_connection(self) -> tuple[bool, str]:
@@ -135,7 +136,7 @@ class StartupNotificationService:
                 return False, 'Недоступна'
 
         except Exception as e:
-            logger.error(f'Ошибка проверки соединения с Remnawave: {e}')
+            logger.error('Ошибка проверки соединения с Remnawave: %s', e)
             return False, 'Ошибка подключения'
 
     def _format_balance(self, kopeks: int) -> str:
@@ -217,7 +218,7 @@ class StartupNotificationService:
             message_kwargs: dict = {
                 'chat_id': self.chat_id,
                 'text': message,
-                'parse_mode': 'HTML',
+                'parse_mode': ParseMode.HTML,
                 'reply_markup': keyboard,
                 'disable_web_page_preview': True,
             }
@@ -226,11 +227,11 @@ class StartupNotificationService:
                 message_kwargs['message_thread_id'] = self.topic_id
 
             await self.bot.send_message(**message_kwargs)
-            logger.info(f'Стартовое уведомление отправлено в чат {self.chat_id}')
+            logger.info('Стартовое уведомление отправлено в чат %s', self.chat_id)
             return True
 
         except Exception as e:
-            logger.error(f'Ошибка отправки стартового уведомления: {e}')
+            logger.error('Ошибка отправки стартового уведомления: %s', e)
             return False
 
 
@@ -271,7 +272,7 @@ async def send_crash_notification(bot: Bot, error: Exception, traceback_str: str
     try:
         timestamp = format_local_datetime(datetime.utcnow(), '%d.%m.%Y %H:%M:%S')
         error_type = type(error).__name__
-        error_message = str(error)
+        error_message = str(error)[:1000]  # Ограничиваем длину сообщения
 
         # Формируем содержимое лог-файла
         log_content = (
@@ -302,20 +303,33 @@ async def send_crash_notification(bot: Bot, error: Exception, traceback_str: str
             f'<i>{timestamp}</i>'
         )
 
+        # Кнопка для связи с разработчиком
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text='💬 Сообщить разработчику',
+                        url='https://t.me/fringg',
+                    ),
+                ],
+            ]
+        )
+
         message_kwargs: dict = {
             'chat_id': chat_id,
             'document': file,
             'caption': message_text,
-            'parse_mode': 'HTML',
+            'parse_mode': ParseMode.HTML,
+            'reply_markup': keyboard,
         }
 
         if topic_id:
             message_kwargs['message_thread_id'] = topic_id
 
         await bot.send_document(**message_kwargs)
-        logger.info(f'Уведомление о падении отправлено в чат {chat_id}')
+        logger.info('Уведомление о падении отправлено в чат %s', chat_id)
         return True
 
     except Exception as e:
-        logger.error(f'Ошибка отправки уведомления о падении: {e}')
+        logger.error('Ошибка отправки уведомления о падении: %s', e)
         return False
