@@ -19,9 +19,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database.models import (
+    CabinetRefreshToken,
     PromoCodeUse,
     ReferralEarning,
     Subscription,
+    SubscriptionEvent,
     SubscriptionServer,
     Transaction,
     User,
@@ -97,6 +99,8 @@ class BlockedUsersService:
     CHECK_DELAY_SECONDS: float = 0.05
     # Максимальное количество параллельных проверок
     MAX_CONCURRENT_CHECKS: int = 10
+    # Задержка между API запросами к Remnawave (rate limit protection)
+    API_DELAY_SECONDS: float = 0.15
 
     def __init__(self, bot: Bot):
         self.bot = bot
@@ -283,6 +287,8 @@ class BlockedUsersService:
             await db.execute(delete(ReferralEarning).where(ReferralEarning.user_id == user.id))
             await db.execute(delete(ReferralEarning).where(ReferralEarning.referral_id == user.id))
             await db.execute(delete(PromoCodeUse).where(PromoCodeUse.user_id == user.id))
+            await db.execute(delete(SubscriptionEvent).where(SubscriptionEvent.user_id == user.id))
+            await db.execute(delete(CabinetRefreshToken).where(CabinetRefreshToken.user_id == user.id))
 
             # Обнуляем referred_by_id у рефералов этого пользователя
             referrals_query = select(User).where(User.referred_by_id == user.id)
@@ -355,6 +361,8 @@ class BlockedUsersService:
                             result.deleted_from_remnawave += 1
                         else:
                             result.errors.append(f'Ошибка удаления {user_result.telegram_id} из Remnawave')
+                        # Задержка для избежания rate limit
+                        await asyncio.sleep(self.API_DELAY_SECONDS)
 
                 if action in (BlockedUserAction.DELETE_FROM_DB, BlockedUserAction.DELETE_BOTH):
                     success = await self.delete_user_from_db(db, user_result.user_id)
