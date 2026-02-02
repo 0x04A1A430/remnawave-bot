@@ -1096,9 +1096,7 @@ async def activate_trial(
             tariff_trial_days = getattr(trial_tariff, 'trial_duration_days', None)
             if tariff_trial_days:
                 trial_duration = tariff_trial_days
-            logger.info(
-                f'Using trial tariff {trial_tariff.name} (ID: {trial_tariff.id}) with squads: {trial_squads}'
-            )
+            logger.info(f'Using trial tariff {trial_tariff.name} (ID: {trial_tariff.id}) with squads: {trial_squads}')
     except Exception as e:
         logger.error(f'Error getting trial tariff: {e}')
 
