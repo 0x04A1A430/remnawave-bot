@@ -359,16 +359,19 @@ async def start_scan(
         progress_callback=progress_callback,
     )
 
-    # Сохраняем результат в state (сериализуем в dict для Redis)
+    # Сериализуем результат в dict для Redis и keyboard
+    scan_result_dict = {
+        'total_checked': result.total_checked,
+        'blocked_count': result.blocked_count,
+        'active_users': result.active_users,
+        'errors': result.errors,
+        'skipped_no_telegram': result.skipped_no_telegram,
+        'scan_duration_seconds': result.scan_duration_seconds,
+    }
+
+    # Сохраняем результат в state
     await state.update_data(
-        blocked_users_scan_result={
-            'total_checked': result.total_checked,
-            'blocked_count': result.blocked_count,
-            'active_users': result.active_users,
-            'errors': result.errors,
-            'skipped_no_telegram': result.skipped_no_telegram,
-            'scan_duration_seconds': result.scan_duration_seconds,
-        },
+        blocked_users_scan_result=scan_result_dict,
         blocked_users_list=[
             {
                 'user_id': u.user_id,
@@ -399,7 +402,7 @@ async def start_scan(
     await callback.message.edit_text(
         text,
         parse_mode=ParseMode.HTML,
-        reply_markup=get_blocked_users_menu_keyboard(result),
+        reply_markup=get_blocked_users_menu_keyboard(scan_result_dict),
     )
     await callback.answer()
 
