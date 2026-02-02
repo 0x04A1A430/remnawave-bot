@@ -19,15 +19,39 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database.models import (
+    AdvertisingCampaignRegistration,
+    ButtonClickLog,
     CabinetRefreshToken,
+    CloudPaymentsPayment,
+    ContestAttempt,
+    CryptoBotPayment,
+    DiscountOffer,
+    FreekassaPayment,
+    HeleketPayment,
+    KassaAiPayment,
+    MulenPayPayment,
+    Pal24Payment,
+    PlategaPayment,
+    PollResponse,
     PromoCodeUse,
+    ReferralContestEvent,
     ReferralEarning,
+    SentNotification,
     Subscription,
+    SubscriptionConversion,
     SubscriptionEvent,
     SubscriptionServer,
+    Ticket,
+    TicketMessage,
+    TicketNotification,
     Transaction,
     User,
+    UserPromoGroup,
     UserStatus,
+    WataPayment,
+    WheelSpin,
+    WithdrawalRequest,
+    YooKassaPayment,
 )
 from app.services.remnawave_service import RemnaWaveService
 
@@ -276,19 +300,55 @@ class BlockedUsersService:
 
             user_display = user.telegram_id or user.email or f'#{user.id}'
 
-            # Удаляем связанные записи
+            # Удаляем связанные записи (порядок важен из-за foreign keys)
+
+            # 1. Платежные системы (до транзакций, т.к. ссылаются на них)
+            await db.execute(delete(YooKassaPayment).where(YooKassaPayment.user_id == user.id))
+            await db.execute(delete(CryptoBotPayment).where(CryptoBotPayment.user_id == user.id))
+            await db.execute(delete(HeleketPayment).where(HeleketPayment.user_id == user.id))
+            await db.execute(delete(MulenPayPayment).where(MulenPayPayment.user_id == user.id))
+            await db.execute(delete(Pal24Payment).where(Pal24Payment.user_id == user.id))
+            await db.execute(delete(WataPayment).where(WataPayment.user_id == user.id))
+            await db.execute(delete(PlategaPayment).where(PlategaPayment.user_id == user.id))
+            await db.execute(delete(CloudPaymentsPayment).where(CloudPaymentsPayment.user_id == user.id))
+            await db.execute(delete(FreekassaPayment).where(FreekassaPayment.user_id == user.id))
+            await db.execute(delete(KassaAiPayment).where(KassaAiPayment.user_id == user.id))
+
+            # 2. Транзакции (после платежей)
+            await db.execute(delete(Transaction).where(Transaction.user_id == user.id))
+
+            # 3. Подписки
             if user.subscription:
                 await db.execute(
                     delete(SubscriptionServer).where(SubscriptionServer.subscription_id == user.subscription.id)
                 )
                 await db.execute(delete(Subscription).where(Subscription.user_id == user.id))
+            await db.execute(delete(SubscriptionConversion).where(SubscriptionConversion.user_id == user.id))
+            await db.execute(delete(SubscriptionEvent).where(SubscriptionEvent.user_id == user.id))
 
-            await db.execute(delete(Transaction).where(Transaction.user_id == user.id))
+            # 4. Тикеты (сначала зависимые)
+            await db.execute(delete(TicketNotification).where(TicketNotification.user_id == user.id))
+            await db.execute(delete(TicketMessage).where(TicketMessage.user_id == user.id))
+            await db.execute(delete(Ticket).where(Ticket.user_id == user.id))
+
+            # 5. Остальные связи
             await db.execute(delete(ReferralEarning).where(ReferralEarning.user_id == user.id))
             await db.execute(delete(ReferralEarning).where(ReferralEarning.referral_id == user.id))
+            await db.execute(delete(WithdrawalRequest).where(WithdrawalRequest.user_id == user.id))
             await db.execute(delete(PromoCodeUse).where(PromoCodeUse.user_id == user.id))
-            await db.execute(delete(SubscriptionEvent).where(SubscriptionEvent.user_id == user.id))
+            await db.execute(delete(DiscountOffer).where(DiscountOffer.user_id == user.id))
+            await db.execute(delete(SentNotification).where(SentNotification.user_id == user.id))
+            await db.execute(delete(PollResponse).where(PollResponse.user_id == user.id))
+            await db.execute(delete(ContestAttempt).where(ContestAttempt.user_id == user.id))
+            await db.execute(delete(ReferralContestEvent).where(ReferralContestEvent.referrer_id == user.id))
+            await db.execute(delete(ReferralContestEvent).where(ReferralContestEvent.referral_id == user.id))
+            await db.execute(
+                delete(AdvertisingCampaignRegistration).where(AdvertisingCampaignRegistration.user_id == user.id)
+            )
+            await db.execute(delete(UserPromoGroup).where(UserPromoGroup.user_id == user.id))
             await db.execute(delete(CabinetRefreshToken).where(CabinetRefreshToken.user_id == user.id))
+            await db.execute(delete(ButtonClickLog).where(ButtonClickLog.user_id == user.id))
+            await db.execute(delete(WheelSpin).where(WheelSpin.user_id == user.id))
 
             # Обнуляем referred_by_id у рефералов этого пользователя
             referrals_query = select(User).where(User.referred_by_id == user.id)
