@@ -1993,6 +1993,15 @@ async def process_edit_traffic_topup_packages(
         await state.clear()
         return
 
+    if not message.text:
+        await message.answer(
+            'Пожалуйста, отправьте текстовое сообщение.\n\n'
+            'Формат: <code>ГБ:цена_в_копейках</code>\n'
+            'Пример: <code>5:5000, 10:9000, 20:15000</code>',
+            parse_mode='HTML',
+        )
+        return
+
     packages = _parse_traffic_topup_packages(message.text.strip())
 
     if not packages:
