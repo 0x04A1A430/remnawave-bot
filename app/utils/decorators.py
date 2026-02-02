@@ -9,6 +9,7 @@ from aiogram.fsm.context import FSMContext
 
 from app.config import settings
 from app.localization.texts import get_texts
+from app.middlewares.global_error import schedule_error_notification
 
 
 logger = logging.getLogger(__name__)
@@ -97,7 +98,7 @@ def error_handler(func: Callable) -> Callable:
 
         except Exception as e:
             logger.error(f'Ошибка в {func.__name__}: {e}', exc_info=True)
-            await _send_error_message(args, kwargs, e)
+            await _send_error_message(args, kwargs, e, func.__name__)
 
     return wrapper
 
@@ -109,11 +110,21 @@ def _extract_event(args) -> types.TelegramObject:
     return None
 
 
-async def _send_error_message(args, kwargs, original_error):
-    try:
-        event = _extract_event(args)
-        db_user = kwargs.get('db_user')
+async def _send_error_message(args, kwargs, original_error, func_name: str = 'unknown'):
+    event = _extract_event(args)
+    db_user = kwargs.get('db_user')
 
+    # Отправляем уведомление в админский чат
+    bot = kwargs.get('bot') or (event.bot if event else None)
+    if bot:
+        user_info = 'Unknown'
+        if event and hasattr(event, 'from_user') and event.from_user:
+            user_info = f'@{event.from_user.username}' if event.from_user.username else f'ID:{event.from_user.id}'
+        context = f'Функция: {func_name}\nПользователь: {user_info}'
+        schedule_error_notification(bot, original_error, context)
+
+    # Отправляем сообщение пользователю
+    try:
         if not event:
             return
 
