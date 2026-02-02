@@ -2069,7 +2069,7 @@ def get_reset_traffic_confirm_keyboard(
             [
                 InlineKeyboardButton(
                     text=texts.t('TOPUP_BALANCE_BUTTON', '💳 Пополнить баланс'),
-                    callback_data=f'topup_amount_{missing_kopeks}',
+                    callback_data='balance_topup',
                 )
             ]
         )
