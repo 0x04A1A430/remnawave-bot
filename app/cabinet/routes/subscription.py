@@ -2524,37 +2524,55 @@ def _convert_remnawave_block_to_step(block: dict[str, Any], url_scheme: str = ''
     return step
 
 
-def _extract_scheme_from_buttons(buttons: list[dict[str, Any]]) -> str:
-    """Extract URL scheme from buttons list."""
+def _extract_scheme_from_buttons(buttons: list[dict[str, Any]]) -> tuple[str, bool]:
+    """Extract URL scheme from buttons list.
+
+    Returns:
+        Tuple of (scheme, uses_crypto_link).
+        uses_crypto_link=True when the template is {{HAPP_CRYPT4_LINK}},
+        meaning subscription_crypto_link should be used as payload.
+    """
     for btn in buttons:
         if not isinstance(btn, dict):
             continue
         link = btn.get('link', '') or btn.get('url', '') or btn.get('buttonLink', '')
         if not link:
             continue
-        # Check for subscription link placeholder (case-insensitive)
         link_upper = link.upper()
+
+        # Check for {{HAPP_CRYPT4_LINK}} -- uses crypto link as payload
+        if '{{HAPP_CRYPT4_LINK}}' in link_upper or 'HAPP_CRYPT4_LINK' in link_upper:
+            scheme = re.sub(r'\{\{HAPP_CRYPT4_LINK\}\}', '', link, flags=re.IGNORECASE)
+            if scheme and '://' in scheme:
+                return scheme, True
+
+        # Check for {{SUBSCRIPTION_LINK}} -- uses plain subscription_url as payload
         if '{{SUBSCRIPTION_LINK}}' in link_upper or 'SUBSCRIPTION_LINK' in link_upper:
-            # Extract scheme: "prizrak-box://install-config?url={{SUBSCRIPTION_LINK}}" -> "prizrak-box://install-config?url="
             scheme = re.sub(r'\{\{SUBSCRIPTION_LINK\}\}', '', link, flags=re.IGNORECASE)
             if scheme and '://' in scheme:
-                return scheme
+                return scheme, False
+
         # Also check for type="subscriptionLink" buttons with custom schemes
         btn_type = btn.get('type', '')
         if btn_type == 'subscriptionLink' and '://' in link and not link.startswith('http'):
-            # Extract base scheme from link like "prizrak-box://install-config?url="
             scheme = link.split('{{')[0] if '{{' in link else link
             if scheme and '://' in scheme:
-                return scheme
-    return ''
+                return scheme, False
+    return '', False
 
 
-def _get_url_scheme_for_app(app: dict[str, Any]) -> str:
-    """Get URL scheme for app - from config, buttons, or fallback by name."""
-    # 1. Check urlScheme field
+def _get_url_scheme_for_app(app: dict[str, Any]) -> tuple[str, bool]:
+    """Get URL scheme for app - from config, buttons, or fallback by name.
+
+    Returns:
+        Tuple of (scheme, uses_crypto_link).
+        uses_crypto_link=True means the app template uses {{HAPP_CRYPT4_LINK}},
+        so subscription_crypto_link should be used as the deep link payload.
+    """
+    # 1. Check urlScheme field (legacy/local config -- always plain subscription_url)
     scheme = str(app.get('urlScheme', '')).strip()
     if scheme:
-        return scheme
+        return scheme, False
 
     # 2. Extract from buttons in blocks (RemnaWave format)
     blocks = app.get('blocks', [])
@@ -2562,25 +2580,25 @@ def _get_url_scheme_for_app(app: dict[str, Any]) -> str:
         if not isinstance(block, dict):
             continue
         buttons = block.get('buttons', [])
-        scheme = _extract_scheme_from_buttons(buttons)
+        scheme, uses_crypto = _extract_scheme_from_buttons(buttons)
         if scheme:
-            return scheme
+            return scheme, uses_crypto
 
     # 3. Check buttons directly in app (alternative structure)
     direct_buttons = app.get('buttons', [])
     if direct_buttons:
-        scheme = _extract_scheme_from_buttons(direct_buttons)
+        scheme, uses_crypto = _extract_scheme_from_buttons(direct_buttons)
         if scheme:
-            return scheme
+            return scheme, uses_crypto
 
     # 4. Check in step structures (cabinet format)
     for step_key in ['installationStep', 'addSubscriptionStep', 'connectAndUseStep']:
         step = app.get(step_key, {})
         if isinstance(step, dict):
             step_buttons = step.get('buttons', [])
-            scheme = _extract_scheme_from_buttons(step_buttons)
+            scheme, uses_crypto = _extract_scheme_from_buttons(step_buttons)
             if scheme:
-                return scheme
+                return scheme, uses_crypto
 
     # No scheme found
     logger.debug(
@@ -2589,7 +2607,7 @@ def _get_url_scheme_for_app(app: dict[str, Any]) -> str:
         f'has buttons: {bool(app.get("buttons"))}, '
         f'has urlScheme: {bool(app.get("urlScheme"))}'
     )
-    return ''
+    return '', False
 
 
 def _find_subscription_block(blocks: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -2601,10 +2619,11 @@ def _find_subscription_block(blocks: list[dict[str, Any]]) -> dict[str, Any] | N
         for btn in buttons:
             if not isinstance(btn, dict):
                 continue
-            # Check for subscriptionLink type or {{SUBSCRIPTION_LINK}} in link
+            # Check for subscriptionLink type, {{SUBSCRIPTION_LINK}}, or {{HAPP_CRYPT4_LINK}} in link
             btn_type = btn.get('type', '')
             link = btn.get('link', '') or btn.get('url', '')
-            if btn_type == 'subscriptionLink' or (link and 'SUBSCRIPTION_LINK' in link.upper()):
+            link_upper = link.upper() if link else ''
+            if btn_type == 'subscriptionLink' or 'SUBSCRIPTION_LINK' in link_upper or 'HAPP_CRYPT4_LINK' in link_upper:
                 return block
     return None
 
@@ -2627,7 +2646,7 @@ def _find_connect_block(blocks: list[dict[str, Any]]) -> dict[str, Any] | None:
 def _convert_remnawave_app_to_cabinet(app: dict[str, Any]) -> dict[str, Any]:
     """Convert RemnaWave app format to cabinet app format."""
     blocks = app.get('blocks', [])
-    url_scheme = _get_url_scheme_for_app(app)
+    url_scheme, _uses_crypto = _get_url_scheme_for_app(app)
 
     # Debug log for conversion (не логируем отсутствие urlScheme - для Happ это нормально)
     app_name = app.get('name', 'unknown')
@@ -2764,44 +2783,50 @@ def _load_app_config() -> dict[str, Any]:
     return _load_app_config_from_file()
 
 
-def _is_happ_app(app: dict[str, Any]) -> bool:
-    """Check if app is Happ (uses happ_cryptolink scheme)."""
-    name = str(app.get('name', '')).lower()
-    svg_icon_key = str(app.get('svgIconKey', '')).lower()
-    return name == 'happ' or svg_icon_key == 'happ'
-
-
 def _create_deep_link(
     app: dict[str, Any], subscription_url: str, subscription_crypto_link: str | None = None
 ) -> str | None:
     """Create deep link for app with subscription URL.
 
-    Uses urlScheme from RemnaWave config or fallback by app name.
-    For Happ apps, uses subscription_crypto_link directly (contains happ:// scheme).
+    Uses urlScheme from RemnaWave config (e.g. "happ://add/", "v2rayng://install-config?url=")
+    combined with the appropriate payload URL.
+
+    Two Happ schemes exist in RemnaWave:
+      - happ://add/{{SUBSCRIPTION_LINK}}       -> uses plain subscription_url
+      - happ://crypt4/{{HAPP_CRYPT4_LINK}}     -> uses subscription_crypto_link
     """
     if not isinstance(app, dict):
         return None
 
-    # For Happ, use crypto_link directly if available (already has happ:// scheme)
-    if _is_happ_app(app) and subscription_crypto_link:
-        return subscription_crypto_link
-
-    if not subscription_url:
+    if not subscription_url and not subscription_crypto_link:
         return None
 
-    scheme = _get_url_scheme_for_app(app)
+    scheme, uses_crypto = _get_url_scheme_for_app(app)
     if not scheme:
         logger.debug(f"_create_deep_link: no urlScheme for app '{app.get('name', 'unknown')}'")
         return None
 
-    payload = subscription_url
+    # Pick the correct payload based on which template the app uses
+    if uses_crypto:
+        if not subscription_crypto_link:
+            logger.debug(
+                f"_create_deep_link: app '{app.get('name', 'unknown')}' requires crypto link but none available"
+            )
+            return None
+        payload = subscription_crypto_link
+    else:
+        if not subscription_url:
+            logger.debug(
+                f"_create_deep_link: app '{app.get('name', 'unknown')}' requires subscription_url but none available"
+            )
+            return None
+        payload = subscription_url
 
     if app.get('isNeedBase64Encoding'):
         try:
-            payload = base64.b64encode(subscription_url.encode('utf-8')).decode('utf-8')
+            payload = base64.b64encode(payload.encode('utf-8')).decode('utf-8')
         except Exception as e:
-            logger.warning(f'Failed to encode subscription URL to base64: {e}')
-            payload = subscription_url
+            logger.warning(f'Failed to encode payload to base64: {e}')
 
     return f'{scheme}{payload}'
 
