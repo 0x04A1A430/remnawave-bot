@@ -153,7 +153,7 @@ async def show_main_menu(
 ):
     if db_user is None:
         # Пользователь не найден, используем язык по умолчанию
-        texts = get_texts(settings.DEFAULT_LANGUAGE_CODE)
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
         await callback.answer(
             texts.t(
                 'USER_NOT_FOUND_ERROR',
@@ -243,7 +243,7 @@ async def handle_profile_unavailable(callback: types.CallbackQuery) -> None:
 async def show_service_rules(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     if db_user is None:
         # Пользователь не найден, используем язык по умолчанию
-        texts = get_texts(settings.DEFAULT_LANGUAGE_CODE)
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
         await callback.answer(
             texts.t(
                 'USER_NOT_FOUND_ERROR',
@@ -277,7 +277,7 @@ async def show_info_menu(
 ):
     if db_user is None:
         # Пользователь не найден, используем язык по умолчанию
-        texts = get_texts(settings.DEFAULT_LANGUAGE_CODE)
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
         await callback.answer(
             texts.t(
                 'USER_NOT_FOUND_ERROR',
@@ -320,7 +320,7 @@ async def show_promo_groups_info(
 ):
     if db_user is None:
         # Пользователь не найден, используем язык по умолчанию
-        texts = get_texts(settings.DEFAULT_LANGUAGE_CODE)
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
         await callback.answer(
             texts.t(
                 'USER_NOT_FOUND_ERROR',
@@ -468,7 +468,7 @@ async def show_faq_pages(
 ):
     if db_user is None:
         # Пользователь не найден, используем язык по умолчанию
-        texts = get_texts(settings.DEFAULT_LANGUAGE_CODE)
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
         await callback.answer(
             texts.t(
                 'USER_NOT_FOUND_ERROR',
@@ -525,7 +525,7 @@ async def show_faq_page(
 ):
     if db_user is None:
         # Пользователь не найден, используем язык по умолчанию
-        texts = get_texts(settings.DEFAULT_LANGUAGE_CODE)
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
         await callback.answer(
             texts.t(
                 'USER_NOT_FOUND_ERROR',
@@ -662,7 +662,7 @@ async def show_privacy_policy(
 ):
     if db_user is None:
         # Пользователь не найден, используем язык по умолчанию
-        texts = get_texts(settings.DEFAULT_LANGUAGE_CODE)
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
         await callback.answer(
             texts.t(
                 'USER_NOT_FOUND_ERROR',
@@ -779,7 +779,7 @@ async def show_public_offer(
 ):
     if db_user is None:
         # Пользователь не найден, используем язык по умолчанию
-        texts = get_texts(settings.DEFAULT_LANGUAGE_CODE)
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
         await callback.answer(
             texts.t(
                 'USER_NOT_FOUND_ERROR',
@@ -896,7 +896,7 @@ async def show_language_menu(
 ):
     if db_user is None:
         # Пользователь не найден, используем язык по умолчанию
-        texts = get_texts(settings.DEFAULT_LANGUAGE_CODE)
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
         await callback.answer(
             texts.t(
                 'USER_NOT_FOUND_ERROR',
@@ -938,7 +938,7 @@ async def process_language_change(
 ):
     if db_user is None:
         # Пользователь не найден, используем язык по умолчанию
-        texts = get_texts(settings.DEFAULT_LANGUAGE_CODE)
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
         await callback.answer(
             texts.t(
                 'USER_NOT_FOUND_ERROR',
@@ -1000,7 +1000,7 @@ async def process_language_change(
 async def handle_back_to_menu(callback: types.CallbackQuery, state: FSMContext, db_user: User, db: AsyncSession):
     if db_user is None:
         # Пользователь не найден, используем язык по умолчанию
-        texts = get_texts(settings.DEFAULT_LANGUAGE_CODE)
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
         await callback.answer(
             texts.t(
                 'USER_NOT_FOUND_ERROR',
