@@ -38,6 +38,7 @@ from app.keyboards.inline import (
     get_updated_subscription_settings_keyboard,
 )
 from app.localization.texts import get_texts
+from app.middlewares.global_error import schedule_error_notification
 from app.services.admin_notification_service import AdminNotificationService
 from app.services.blacklist_service import blacklist_service
 from app.services.remnawave_service import RemnaWaveConfigurationError
@@ -56,7 +57,6 @@ from app.services.trial_activation_service import (
     rollback_trial_subscription_activation,
 )
 from app.services.user_cart_service import user_cart_service
-from app.middlewares.global_error import schedule_error_notification
 from app.utils.decorators import error_handler
 
 
