@@ -1860,16 +1860,7 @@ def get_add_traffic_keyboard_from_tariff(
         subscription_end_date: Дата окончания подписки для расчета цены
         discount_percent: Процент скидки
     """
-    from app.utils.pricing_utils import get_remaining_months
-
     texts = get_texts(language)
-
-    months_multiplier = 1
-    period_text = ''
-    if subscription_end_date:
-        months_multiplier = get_remaining_months(subscription_end_date)
-        if months_multiplier > 1:
-            period_text = f' (за {months_multiplier} мес)'
 
     if not packages:
         return InlineKeyboardMarkup(
@@ -1889,21 +1880,23 @@ def get_add_traffic_keyboard_from_tariff(
     # Сортируем пакеты по размеру
     sorted_packages = sorted(packages.items(), key=lambda x: x[0])
 
+    # Пакеты трафика на тарифах покупаются на 1 месяц (30 дней),
+    # цена в тарифе уже месячная — не умножаем на оставшиеся месяцы подписки
     for gb, price_per_month in sorted_packages:
-        discounted_per_month, discount_per_month = apply_percentage_discount(
+        discounted_price, discount_value = apply_percentage_discount(
             price_per_month,
             discount_percent,
         )
-        total_price = discounted_per_month * months_multiplier
-        total_discount = discount_per_month * months_multiplier
+
+        period_text = ' /мес' if language == 'ru' else ' /mo'
 
         if language == 'ru':
-            text = f'📊 +{gb} ГБ трафика - {total_price // 100} ₽{period_text}'
+            text = f'📊 +{gb} ГБ трафика - {discounted_price // 100} ₽{period_text}'
         else:
-            text = f'📊 +{gb} GB traffic - {total_price // 100} ₽{period_text}'
+            text = f'📊 +{gb} GB traffic - {discounted_price // 100} ₽{period_text}'
 
-        if discount_percent > 0 and total_discount > 0:
-            text += f' (скидка {discount_percent}%: -{total_discount // 100}₽)'
+        if discount_percent > 0 and discount_value > 0:
+            text += f' (скидка {discount_percent}%: -{discount_value // 100}₽)'
 
         buttons.append([InlineKeyboardButton(text=text, callback_data=f'add_traffic_{gb}')])
 
