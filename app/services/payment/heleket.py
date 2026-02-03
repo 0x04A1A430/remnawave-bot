@@ -95,11 +95,15 @@ class HeleketPaymentMixin:
 
         if not response:
             logger.error('Heleket API вернул пустой ответ при создании платежа')
+            error = ValueError('Heleket API returned empty response')
+            self._schedule_error_notification(error, f'Heleket payment creation error: user_id={user_id}')
             return None
 
         payment_result = response.get('result') if isinstance(response, dict) else None
         if not payment_result:
             logger.error('Некорректный ответ Heleket API: %s', response)
+            error = ValueError(f'Invalid Heleket API response: {response}')
+            self._schedule_error_notification(error, f'Heleket payment creation error: user_id={user_id}')
             return None
 
         uuid = str(payment_result.get('uuid'))
@@ -181,6 +185,8 @@ class HeleketPaymentMixin:
     ) -> HeleketPayment | None:
         if not isinstance(payload, dict):
             logger.error('Heleket webhook payload не является словарём: %s', payload)
+            error = ValueError(f'Heleket webhook payload is not a dict: {type(payload)}')
+            self._schedule_error_notification(error, 'Heleket webhook error: invalid payload type')
             return None
 
         heleket_crud = import_module('app.database.crud.heleket')
@@ -192,6 +198,8 @@ class HeleketPaymentMixin:
 
         if not uuid and not order_id:
             logger.error('Heleket webhook без uuid/order_id: %s', payload)
+            error = ValueError('Heleket webhook missing uuid and order_id')
+            self._schedule_error_notification(error, 'Heleket webhook error: missing identifiers')
             return None
 
         payment = None
@@ -206,6 +214,8 @@ class HeleketPaymentMixin:
                 uuid,
                 order_id,
             )
+            error = ValueError(f'Heleket payment not found: uuid={uuid}, order_id={order_id}')
+            self._schedule_error_notification(error, f'Heleket webhook error: payment not found uuid={uuid}')
             return None
 
         payer_amount = payload.get('payer_amount') or payload.get('payment_amount')
@@ -309,6 +319,10 @@ class HeleketPaymentMixin:
         amount_kopeks = updated_payment.amount_kopeks
         if amount_kopeks <= 0:
             logger.error('Heleket платеж %s имеет некорректную сумму: %s', updated_payment.uuid, updated_payment.amount)
+            error = ValueError(f'Heleket payment has invalid amount: {updated_payment.amount}')
+            self._schedule_error_notification(
+                error, f'Heleket webhook error: invalid amount for uuid={updated_payment.uuid}'
+            )
             return None
 
         transaction = await payment_module.create_transaction(
@@ -338,6 +352,10 @@ class HeleketPaymentMixin:
         user = await get_user_by_id(db, updated_payment.user_id)
         if not user:
             logger.error('Пользователь %s не найден для Heleket платежа', updated_payment.user_id)
+            error = ValueError(f'User not found: {updated_payment.user_id}')
+            self._schedule_error_notification(
+                error, f'Heleket webhook error: user not found for uuid={updated_payment.uuid}'
+            )
             return None
 
         old_balance = user.balance_kopeks

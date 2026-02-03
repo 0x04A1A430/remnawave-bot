@@ -1,6 +1,6 @@
 import logging
 
-from aiogram import types
+from aiogram import Bot, types
 from aiohttp import web
 
 from app.config import settings
@@ -9,9 +9,19 @@ from app.database.crud.user import add_user_balance, get_user_by_id
 from app.database.database import AsyncSessionLocal
 from app.database.models import PaymentMethod, TransactionType
 from app.external.tribute import TributeService
+from app.middlewares.global_error import schedule_error_notification
 
 
 logger = logging.getLogger(__name__)
+
+# Глобальная ссылка на бота для отправки уведомлений
+_bot_instance: Bot | None = None
+
+
+def set_webhook_bot(bot: Bot) -> None:
+    """Устанавливает экземпляр бота для отправки уведомлений об ошибках в webhook."""
+    global _bot_instance
+    _bot_instance = bot
 
 
 async def tribute_webhook(request):
@@ -30,6 +40,12 @@ async def tribute_webhook(request):
 
         if not processed_data:
             logger.error('Ошибка обработки Tribute webhook')
+            if _bot_instance:
+                schedule_error_notification(
+                    _bot_instance,
+                    ValueError('Invalid webhook data'),
+                    'Tribute webhook: processed_data is None',
+                )
             return web.Response(status=400, text='Invalid webhook data')
 
         async with AsyncSessionLocal() as db:
@@ -70,11 +86,15 @@ async def tribute_webhook(request):
 
             except Exception as e:
                 logger.error(f'Ошибка обработки Tribute webhook: {e}')
+                if _bot_instance:
+                    schedule_error_notification(_bot_instance, e, 'Tribute webhook DB error')
                 await db.rollback()
                 return web.Response(status=500, text='Internal error')
 
     except Exception as e:
         logger.error(f'Ошибка в Tribute webhook: {e}')
+        if _bot_instance:
+            schedule_error_notification(_bot_instance, e, 'Tribute webhook general error')
         return web.Response(status=500, text='Internal error')
 
 
@@ -126,10 +146,14 @@ async def handle_successful_payment(message: types.Message):
 
                 except Exception as e:
                     logger.error(f'Ошибка обработки Stars платежа: {e}')
+                    if message.bot:
+                        schedule_error_notification(message.bot, e, 'Stars payment DB error')
                     await db.rollback()
 
     except Exception as e:
         logger.error(f'Ошибка в обработчике Stars платежа: {e}')
+        if message.bot:
+            schedule_error_notification(message.bot, e, 'Stars payment general error')
 
 
 async def handle_pre_checkout_query(pre_checkout_query: types.PreCheckoutQuery):
@@ -139,4 +163,6 @@ async def handle_pre_checkout_query(pre_checkout_query: types.PreCheckoutQuery):
 
     except Exception as e:
         logger.error(f'Ошибка в pre-checkout query: {e}')
+        if pre_checkout_query.bot:
+            schedule_error_notification(pre_checkout_query.bot, e, 'Pre-checkout query error')
         await pre_checkout_query.answer(ok=False, error_message='Ошибка обработки платежа')

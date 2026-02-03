@@ -18,6 +18,7 @@ from app.config import settings
 from app.database.crud.user import get_user_by_telegram_id
 from app.database.database import get_db
 from app.localization.texts import get_texts
+from app.middlewares.global_error import schedule_error_notification
 from app.services.subscription_checkout_service import (
     has_subscription_checkout_draft,
     should_offer_checkout_resume,
@@ -29,6 +30,22 @@ from app.utils.payment_logger import payment_logger as logger
 
 class PaymentCommonMixin:
     """Mixin с базовой логикой, которую используют остальные платёжные блоки."""
+
+    def _schedule_error_notification(self, error: Exception, context: str) -> None:
+        """Безопасно планирует отправку уведомления об ошибке в админский чат.
+
+        Этот метод можно вызывать из любого mixin, т.к. он использует self.bot
+        из PaymentService.
+        """
+        bot = getattr(self, 'bot', None)
+        if bot:
+            schedule_error_notification(bot, error, context)
+        else:
+            logger.warning(
+                'Bot instance not available for error notification: %s - %s',
+                context,
+                error,
+            )
 
     async def build_topup_success_keyboard(self, user: Any) -> InlineKeyboardMarkup:
         """Формирует клавиатуру по завершении платежа, подстраиваясь под пользователя."""

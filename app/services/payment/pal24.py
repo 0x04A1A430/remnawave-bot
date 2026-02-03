@@ -83,15 +83,20 @@ class Pal24PaymentMixin:
             )
         except Pal24APIError as error:
             logger.error('Ошибка Pal24 API при создании счета: %s', error)
+            self._schedule_error_notification(error, f'Pal24 payment creation API error: user_id={user_id}')
             return None
 
         if not response.get('success', True):
             logger.error('Pal24 вернул ошибку при создании счета: %s', response)
+            error = ValueError(f'Pal24 payment creation failed: {response}')
+            self._schedule_error_notification(error, f'Pal24 payment creation error: user_id={user_id}')
             return None
 
         bill_id = response.get('bill_id')
         if not bill_id:
             logger.error('Pal24 не вернул bill_id: %s', response)
+            error = ValueError(f'Pal24 missing bill_id: {response}')
+            self._schedule_error_notification(error, f'Pal24 payment creation error: user_id={user_id}')
             return None
 
         def _pick_url(*keys: str) -> str | None:
@@ -232,6 +237,8 @@ class Pal24PaymentMixin:
 
             if not bill_id and not order_id:
                 logger.error('Pal24 callback без идентификаторов: %s', callback)
+                error = ValueError('Pal24 callback missing identifiers')
+                self._schedule_error_notification(error, 'Pal24 webhook error: missing identifiers')
                 return False
 
             payment = None
@@ -242,6 +249,8 @@ class Pal24PaymentMixin:
 
             if not payment:
                 logger.error('Pal24 платеж не найден: %s / %s', bill_id, order_id)
+                error = ValueError(f'Pal24 payment not found: bill_id={bill_id}, order_id={order_id}')
+                self._schedule_error_notification(error, f'Pal24 webhook error: payment not found bill_id={bill_id}')
                 return False
 
             if payment.is_paid:
@@ -310,6 +319,7 @@ class Pal24PaymentMixin:
 
         except Exception as error:
             logger.error('Ошибка обработки Pal24 callback: %s', error, exc_info=True)
+            self._schedule_error_notification(error, 'Pal24 webhook processing exception')
             return False
 
     async def _finalize_pal24_payment(
@@ -374,6 +384,10 @@ class Pal24PaymentMixin:
                 payment.user_id,
                 payment.bill_id,
                 trigger,
+            )
+            error = ValueError(f'User not found: {payment.user_id}')
+            self._schedule_error_notification(
+                error, f'Pal24 finalize error: user not found for bill_id={payment.bill_id}'
             )
             return False
 

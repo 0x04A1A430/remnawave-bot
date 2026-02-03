@@ -1174,7 +1174,11 @@ async def _build_tariff_response(
                 )
 
     # Get promo group for discount calculation
+    # Use get_primary_promo_group() for correct promo group resolution
     promo_group = user.get_primary_promo_group() if user and hasattr(user, 'get_primary_promo_group') else None
+    if promo_group is None and user:
+        # Fallback to legacy promo_group attribute
+        promo_group = getattr(user, 'promo_group', None)
     promo_group_name = promo_group.name if promo_group else None
 
     # Вычисляем доп. устройства для текущего тарифа (при продлении)
@@ -1351,13 +1355,25 @@ async def get_purchase_options(
 
         # Tariffs mode - return list of tariffs
         if settings.is_tariffs_mode():
-            promo_group = getattr(user, 'promo_group', None)
+            # Use get_primary_promo_group() for correct promo group resolution
+            # (handles both legacy promo_group FK and new user_promo_groups M2M)
+            promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else None
+            if promo_group is None:
+                # Fallback to legacy promo_group attribute
+                promo_group = getattr(user, 'promo_group', None)
             promo_group_id = promo_group.id if promo_group else None
             tariffs = await get_tariffs_for_user(db, promo_group_id)
 
             subscription = await get_subscription_by_user_id(db, user.id)
             current_tariff_id = subscription.tariff_id if subscription else None
             language = getattr(user, 'language', 'ru') or 'ru'
+
+            # Determine subscription status for frontend to decide purchase vs switch flow
+            subscription_status = None
+            subscription_is_expired = False
+            if subscription:
+                subscription_status = subscription.actual_status
+                subscription_is_expired = subscription_status == 'expired'
 
             tariff_responses = []
             for tariff in tariffs:
@@ -1370,6 +1386,10 @@ async def get_purchase_options(
                 'current_tariff_id': current_tariff_id,
                 'balance_kopeks': user.balance_kopeks,
                 'balance_label': settings.format_price(user.balance_kopeks),
+                # Include subscription status info for frontend decision making
+                'subscription_status': subscription_status,
+                'subscription_is_expired': subscription_is_expired,
+                'has_subscription': subscription is not None,
             }
 
         # Classic mode - return periods
@@ -3590,10 +3610,26 @@ async def preview_tariff_switch(
             detail='No active subscription with tariff',
         )
 
-    if user.subscription.status not in ('active', 'trial'):
+    # Use actual_status for correct status check (handles time-based expiration)
+    actual_status = user.subscription.actual_status
+    if actual_status == 'expired':
+        # For expired subscriptions, user should purchase a new tariff, not switch
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Subscription is not active',
+            detail={
+                'code': 'subscription_expired',
+                'message': 'Subscription is expired. Please purchase a new tariff instead of switching.',
+                'use_purchase_flow': True,
+            },
+        )
+    if actual_status not in ('active', 'trial'):
+        # For disabled/pending subscriptions, block switching with generic error
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                'code': 'subscription_not_active',
+                'message': f'Subscription is not active (status: {actual_status}). Cannot switch tariff.',
+            },
         )
 
     current_tariff = await get_tariff_by_id(db, user.subscription.tariff_id)
@@ -3612,7 +3648,10 @@ async def preview_tariff_switch(
         )
 
     # Check tariff availability for user's promo group
-    promo_group = getattr(user, 'promo_group', None)
+    # Use get_primary_promo_group() for correct promo group resolution
+    promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else None
+    if promo_group is None:
+        promo_group = getattr(user, 'promo_group', None)
     promo_group_id = promo_group.id if promo_group else None
     if not new_tariff.is_available_for_promo_group(promo_group_id):
         raise HTTPException(
@@ -3724,10 +3763,26 @@ async def switch_tariff(
             detail='No active subscription with tariff',
         )
 
-    if user.subscription.status not in ('active', 'trial'):
+    # Use actual_status for correct status check (handles time-based expiration)
+    actual_status = user.subscription.actual_status
+    if actual_status == 'expired':
+        # For expired subscriptions, user should purchase a new tariff, not switch
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Subscription is not active',
+            detail={
+                'code': 'subscription_expired',
+                'message': 'Subscription is expired. Please purchase a new tariff instead of switching.',
+                'use_purchase_flow': True,
+            },
+        )
+    if actual_status not in ('active', 'trial'):
+        # For disabled/pending subscriptions, block switching with generic error
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                'code': 'subscription_not_active',
+                'message': f'Subscription is not active (status: {actual_status}). Cannot switch tariff.',
+            },
         )
 
     current_tariff = await get_tariff_by_id(db, user.subscription.tariff_id)
@@ -3746,7 +3801,10 @@ async def switch_tariff(
         )
 
     # Check tariff availability
-    promo_group = getattr(user, 'promo_group', None)
+    # Use get_primary_promo_group() for correct promo group resolution
+    promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else None
+    if promo_group is None:
+        promo_group = getattr(user, 'promo_group', None)
     promo_group_id = promo_group.id if promo_group else None
     if not new_tariff.is_available_for_promo_group(promo_group_id):
         raise HTTPException(
