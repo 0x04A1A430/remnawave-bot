@@ -2082,9 +2082,7 @@ async def confirm_extend_subscription(callback: types.CallbackQuery, db_user: Us
 
         # Уведомляем админов о критической ошибке
         if callback.bot:
-            schedule_error_notification(
-                callback.bot, e, f'КРИТИЧЕСКАЯ ОШИБКА ПРОДЛЕНИЯ: user={db_user.telegram_id}'
-            )
+            schedule_error_notification(callback.bot, e, f'КРИТИЧЕСКАЯ ОШИБКА ПРОДЛЕНИЯ: user={db_user.telegram_id}')
 
         await callback.message.edit_text(
             '⚠ Произошла ошибка при продлении подписки. Обратитесь в поддержку.',
@@ -2951,9 +2949,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
     except Exception as e:
         logger.error(f'Ошибка покупки подписки: {e}')
         if callback.bot:
-            schedule_error_notification(
-                callback.bot, e, f'Ошибка покупки подписки: user={db_user.telegram_id}'
-            )
+            schedule_error_notification(callback.bot, e, f'Ошибка покупки подписки: user={db_user.telegram_id}')
         await callback.message.edit_text(texts.ERROR, reply_markup=get_back_keyboard(db_user.language))
 
     if purchase_completed:

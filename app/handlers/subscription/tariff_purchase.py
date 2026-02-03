@@ -1243,9 +1243,7 @@ async def confirm_tariff_purchase(
     except Exception as e:
         logger.error(f'Ошибка при покупке тарифа: {e}', exc_info=True)
         if callback.bot:
-            schedule_error_notification(
-                callback.bot, e, f'Ошибка покупки тарифа: user={db_user.telegram_id}'
-            )
+            schedule_error_notification(callback.bot, e, f'Ошибка покупки тарифа: user={db_user.telegram_id}')
         await callback.answer('Произошла ошибка при оформлении подписки', show_alert=True)
 
 
@@ -1428,9 +1426,7 @@ async def confirm_daily_tariff_purchase(
     except Exception as e:
         logger.error(f'Ошибка при покупке суточного тарифа: {e}', exc_info=True)
         if callback.bot:
-            schedule_error_notification(
-                callback.bot, e, f'Ошибка покупки суточного тарифа: user={db_user.telegram_id}'
-            )
+            schedule_error_notification(callback.bot, e, f'Ошибка покупки суточного тарифа: user={db_user.telegram_id}')
         await callback.answer('Произошла ошибка при оформлении подписки', show_alert=True)
 
 
@@ -1753,9 +1749,7 @@ async def confirm_tariff_extend(
     except Exception as e:
         logger.error(f'Ошибка при продлении тарифа: {e}', exc_info=True)
         if callback.bot:
-            schedule_error_notification(
-                callback.bot, e, f'Ошибка продления тарифа: user={db_user.telegram_id}'
-            )
+            schedule_error_notification(callback.bot, e, f'Ошибка продления тарифа: user={db_user.telegram_id}')
         await callback.answer('Произошла ошибка при продлении подписки', show_alert=True)
 
 
@@ -2332,9 +2326,7 @@ async def confirm_tariff_switch(
     except Exception as e:
         logger.error(f'Ошибка при переключении тарифа: {e}', exc_info=True)
         if callback.bot:
-            schedule_error_notification(
-                callback.bot, e, f'Ошибка переключения тарифа: user={db_user.telegram_id}'
-            )
+            schedule_error_notification(callback.bot, e, f'Ошибка переключения тарифа: user={db_user.telegram_id}')
         await callback.answer('Произошла ошибка при переключении тарифа', show_alert=True)
 
 
@@ -2505,9 +2497,7 @@ async def confirm_daily_tariff_switch(
     except Exception as e:
         logger.error(f'Ошибка при смене на суточный тариф: {e}', exc_info=True)
         if callback.bot:
-            schedule_error_notification(
-                callback.bot, e, f'Ошибка смены на суточный тариф: user={db_user.telegram_id}'
-            )
+            schedule_error_notification(callback.bot, e, f'Ошибка смены на суточный тариф: user={db_user.telegram_id}')
         await callback.answer('Произошла ошибка при смене тарифа', show_alert=True)
 
 
