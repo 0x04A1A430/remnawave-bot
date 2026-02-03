@@ -91,6 +91,8 @@ class CryptoBotPaymentMixin:
 
             if not invoice_data:
                 logger.error('Ошибка создания CryptoBot invoice')
+                error = ValueError('CryptoBot invoice creation returned empty result')
+                self._schedule_error_notification(error, f'CryptoBot invoice creation error: user_id={user_id}, amount={amount_usd}')
                 return None
 
             cryptobot_crud = import_module('app.database.crud.cryptobot')
@@ -131,6 +133,7 @@ class CryptoBotPaymentMixin:
 
         except Exception as error:
             logger.error('Ошибка создания CryptoBot платежа: %s', error)
+            self._schedule_error_notification(error, f'CryptoBot payment creation exception: user_id={user_id}')
             return None
 
     async def process_cryptobot_webhook(
@@ -152,12 +155,16 @@ class CryptoBotPaymentMixin:
 
             if not invoice_id:
                 logger.error('CryptoBot webhook без invoice_id')
+                error = ValueError('CryptoBot webhook missing invoice_id')
+                self._schedule_error_notification(error, 'CryptoBot webhook error: missing invoice_id')
                 return False
 
             cryptobot_crud = import_module('app.database.crud.cryptobot')
             payment = await cryptobot_crud.get_cryptobot_payment_by_invoice_id(db, invoice_id)
             if not payment:
                 logger.error('CryptoBot платеж не найден в БД: %s', invoice_id)
+                error = ValueError(f'CryptoBot payment not found: {invoice_id}')
+                self._schedule_error_notification(error, f'CryptoBot webhook error: payment not found for invoice_id={invoice_id}')
                 return False
 
             if payment.status == 'paid':
@@ -237,6 +244,8 @@ class CryptoBotPaymentMixin:
                         amount_kopeks,
                         invoice_id,
                     )
+                    error = ValueError(f'Invalid amount after conversion: {amount_kopeks} kopeks')
+                    self._schedule_error_notification(error, f'CryptoBot webhook error: invalid amount for invoice_id={invoice_id}')
                     return False
 
                 payment_service_module = import_module('app.services.payment_service')
@@ -263,6 +272,8 @@ class CryptoBotPaymentMixin:
                         'Пользователь с ID %s не найден при пополнении баланса',
                         updated_payment.user_id,
                     )
+                    error = ValueError(f'User not found: {updated_payment.user_id}')
+                    self._schedule_error_notification(error, f'CryptoBot webhook error: user not found for invoice_id={invoice_id}')
                     return False
 
                 old_balance = user.balance_kopeks
@@ -433,6 +444,7 @@ class CryptoBotPaymentMixin:
 
         except Exception as error:
             logger.error('Ошибка обработки CryptoBot webhook: %s', error, exc_info=True)
+            self._schedule_error_notification(error, 'CryptoBot webhook processing exception')
             return False
 
     async def _process_subscription_renewal_payment(

@@ -75,10 +75,13 @@ class PlategaPaymentMixin:
             )
         except Exception as error:  # pragma: no cover - network errors
             logger.exception('Ошибка Platega при создании платежа: %s', error)
+            self._schedule_error_notification(error, f'Platega payment creation exception: user_id={user_id}')
             return None
 
         if not response:
             logger.error('Platega вернул пустой ответ при создании платежа')
+            error = ValueError('Platega payment creation returned empty response')
+            self._schedule_error_notification(error, f'Platega payment creation error: user_id={user_id}')
             return None
 
         transaction_id = response.get('transactionId') or response.get('id')
@@ -320,6 +323,8 @@ class PlategaPaymentMixin:
         user = await payment_module.get_user_by_id(db, payment.user_id)
         if not user:
             logger.error('Пользователь %s не найден для Platega', payment.user_id)
+            error = ValueError(f'User not found: {payment.user_id}')
+            self._schedule_error_notification(error, f'Platega finalize error: user not found for correlation_id={payment.correlation_id}')
             return payment
 
         # Убеждаемся, что промогруппы загружены в асинхронном контексте,

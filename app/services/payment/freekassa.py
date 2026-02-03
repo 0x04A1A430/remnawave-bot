@@ -268,6 +268,8 @@ class FreekassaPaymentMixin:
                 payment.order_id,
                 trigger,
             )
+            error = ValueError(f'User not found: {payment.user_id}')
+            self._schedule_error_notification(error, f'Freekassa finalize error: user not found for order_id={payment.order_id}')
             return False
 
         # Создаем транзакцию

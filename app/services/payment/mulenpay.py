@@ -81,6 +81,8 @@ class MulenPayPaymentMixin:
 
             if not response:
                 logger.error('Ошибка создания %s платежа', display_name)
+                error = ValueError(f'{display_name} payment creation returned empty response')
+                self._schedule_error_notification(error, f'{display_name} payment creation error: user_id={user_id}')
                 return None
 
             mulen_payment_id = response.get('id')
@@ -124,6 +126,7 @@ class MulenPayPaymentMixin:
 
         except Exception as error:
             logger.error('Ошибка создания %s платежа: %s', display_name, error)
+            self._schedule_error_notification(error, f'{display_name} payment creation exception: user_id={user_id}')
             return None
 
     async def process_mulenpay_callback(
@@ -159,6 +162,8 @@ class MulenPayPaymentMixin:
 
             if not uuid_value and mulen_payment_id_raw is None:
                 logger.error('%s callback без uuid и id', display_name)
+                error = ValueError(f'{display_name} callback missing uuid and id')
+                self._schedule_error_notification(error, f'{display_name} webhook error: missing identifiers')
                 return False
 
             payment = None
@@ -175,6 +180,8 @@ class MulenPayPaymentMixin:
                     uuid_value,
                     mulen_payment_id_raw,
                 )
+                error = ValueError(f'{display_name} payment not found: uuid={uuid_value}, id={mulen_payment_id_raw}')
+                self._schedule_error_notification(error, f'{display_name} webhook error: payment not found')
                 return False
 
             metadata = dict(getattr(payment, 'metadata_json', {}) or {})
@@ -269,6 +276,8 @@ class MulenPayPaymentMixin:
                         payment.user_id,
                         display_name,
                     )
+                    error = ValueError(f'User not found: {payment.user_id}')
+                    self._schedule_error_notification(error, f'{display_name} webhook error: user not found for uuid={payment.uuid}')
                     return False
 
                 old_balance = user.balance_kopeks
@@ -495,6 +504,7 @@ class MulenPayPaymentMixin:
                 error,
                 exc_info=True,
             )
+            self._schedule_error_notification(error, f'{display_name} webhook processing exception')
             return False
 
     def _map_mulenpay_status(self, status_code: int | None) -> str:

@@ -111,9 +111,11 @@ class WataPaymentMixin:
             )
         except WataAPIError as error:
             logger.error('Ошибка создания WATA платежа: %s', error)
+            self._schedule_error_notification(error, f'WATA payment creation API error: user_id={user_id}')
             return None
         except Exception as error:  # pragma: no cover - safety net
             logger.exception('Непредвиденная ошибка при создании WATA платежа: %s', error)
+            self._schedule_error_notification(error, f'WATA payment creation exception: user_id={user_id}')
             return None
 
         payment_link_id = response.get('id')
@@ -125,6 +127,8 @@ class WataPaymentMixin:
 
         if not payment_link_id:
             logger.error('WATA API не вернула идентификатор платежной ссылки: %s', response)
+            error = ValueError(f'WATA API missing payment_link_id: {response}')
+            self._schedule_error_notification(error, f'WATA payment creation error: user_id={user_id}')
             return None
 
         expiration_raw = response.get('expirationDateTime')
@@ -179,6 +183,8 @@ class WataPaymentMixin:
 
         if not isinstance(payload, dict):
             logger.error('WATA webhook payload не является словарём: %s', payload)
+            error = ValueError(f'WATA webhook payload is not a dict: {type(payload)}')
+            self._schedule_error_notification(error, 'WATA webhook error: invalid payload type')
             return False
 
         order_id_raw = payload.get('orderId')
@@ -194,10 +200,14 @@ class WataPaymentMixin:
                 'WATA webhook без orderId и paymentLinkId: %s',
                 payload,
             )
+            error = ValueError('WATA webhook missing orderId and paymentLinkId')
+            self._schedule_error_notification(error, 'WATA webhook error: missing identifiers')
             return False
 
         if not transaction_status:
             logger.error('WATA webhook без статуса транзакции: %s', payload)
+            error = ValueError('WATA webhook missing transactionStatus')
+            self._schedule_error_notification(error, 'WATA webhook error: missing status')
             return False
 
         payment = None
@@ -212,6 +222,8 @@ class WataPaymentMixin:
                 order_id,
                 payment_link_id,
             )
+            error = ValueError(f'WATA payment not found: order_id={order_id}, payment_link_id={payment_link_id}')
+            self._schedule_error_notification(error, f'WATA webhook error: payment not found order_id={order_id}')
             return False
 
         status_lower = transaction_status.lower()
@@ -448,6 +460,8 @@ class WataPaymentMixin:
         user = await payment_module.get_user_by_id(db, payment.user_id)
         if not user:
             logger.error('Пользователь %s не найден при обработке WATA', payment.user_id)
+            error = ValueError(f'User not found: {payment.user_id}')
+            self._schedule_error_notification(error, f'WATA finalize error: user not found for payment_link_id={payment.payment_link_id}')
             return payment
 
         transaction_external_id = str(transaction_payload.get('id') or transaction_payload.get('transactionId') or '')
