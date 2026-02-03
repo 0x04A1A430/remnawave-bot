@@ -264,9 +264,7 @@ async def _handle_trial_payment(
     except Exception as e:
         logger.error(f'Ошибка обработки trial payment: {e}', exc_info=True)
         if message.bot:
-            schedule_error_notification(
-                message.bot, e, f'Trial payment error: user={user.id if user else "unknown"}'
-            )
+            schedule_error_notification(message.bot, e, f'Trial payment error: user={user.id if user else "unknown"}')
         await message.answer(
             '❌ Произошла ошибка при активации пробной подписки. Обратитесь в поддержку.',
         )
@@ -313,9 +311,7 @@ async def handle_pre_checkout_query(query: types.PreCheckoutQuery):
         except Exception as db_error:
             logger.error(f'Ошибка подключения к БД в pre_checkout_query: {db_error}')
             if query.bot:
-                schedule_error_notification(
-                    query.bot, db_error, f'Pre-checkout DB error: user={query.from_user.id}'
-                )
+                schedule_error_notification(query.bot, db_error, f'Pre-checkout DB error: user={query.from_user.id}')
             await query.answer(
                 ok=False,
                 error_message=texts.t(
@@ -331,9 +327,7 @@ async def handle_pre_checkout_query(query: types.PreCheckoutQuery):
     except Exception as e:
         logger.error(f'Ошибка в pre_checkout_query: {e}', exc_info=True)
         if query.bot:
-            schedule_error_notification(
-                query.bot, e, f'Pre-checkout query error: user={query.from_user.id}'
-            )
+            schedule_error_notification(query.bot, e, f'Pre-checkout query error: user={query.from_user.id}')
         await query.answer(
             ok=False,
             error_message=texts.t(
