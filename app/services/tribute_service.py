@@ -69,7 +69,9 @@ class TributeService:
 
         except Exception as e:
             logger.error(f'Ошибка создания Tribute платежа: {e}')
-            schedule_error_notification(self.bot, e, f'Tribute payment creation error: user_id={user_id}, amount={amount_kopeks}')
+            schedule_error_notification(
+                self.bot, e, f'Tribute payment creation error: user_id={user_id}, amount={amount_kopeks}'
+            )
             return None
 
     async def process_webhook(self, payload: str) -> dict[str, Any]:
