@@ -374,11 +374,17 @@ class CloudPaymentsPaymentMixin:
         transaction: Any,
     ) -> None:
         """Send success notification to user via Telegram."""
-        from app.bot import bot
+        from aiogram import Bot
+        from aiogram.client.default import DefaultBotProperties
+        from aiogram.enums import ParseMode
+
+        from app.config import settings
         from app.localization.texts import get_texts
 
-        if not bot:
-            return
+        bot = Bot(
+            token=settings.BOT_TOKEN,
+            default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+        )
 
         # Skip email-only users (no telegram_id)
         if not user.telegram_id:
@@ -424,10 +430,16 @@ class CloudPaymentsPaymentMixin:
         message: str,
     ) -> None:
         """Send failure notification to user via Telegram."""
-        from app.bot import bot
+        from aiogram import Bot
+        from aiogram.client.default import DefaultBotProperties
+        from aiogram.enums import ParseMode
 
-        if not bot:
-            return
+        from app.config import settings
+
+        bot = Bot(
+            token=settings.BOT_TOKEN,
+            default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+        )
 
         text = f'❌ <b>Оплата не прошла</b>\n\n{message}'
 
