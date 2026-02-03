@@ -38,9 +38,17 @@ from ..dependencies import get_cabinet_db, get_current_admin_user
 from ..schemas.users import (
     DeleteUserRequest,
     DeleteUserResponse,
+    DisableUserRequest,
+    DisableUserResponse,
+    FullDeleteUserRequest,
+    FullDeleteUserResponse,
     PanelSyncStatusResponse,
     PanelUserInfo,
     PeriodPriceInfo,
+    ResetSubscriptionRequest,
+    ResetSubscriptionResponse,
+    ResetTrialRequest,
+    ResetTrialResponse,
     SortByEnum,
     SyncFromPanelRequest,
     SyncFromPanelResponse,
@@ -1192,6 +1200,245 @@ async def delete_user(
     return DeleteUserResponse(
         success=True,
         message=f'User {action} successfully',
+    )
+
+
+@router.delete('/{user_id}/full', response_model=FullDeleteUserResponse)
+async def full_delete_user(
+    user_id: int,
+    request: FullDeleteUserRequest = FullDeleteUserRequest(),
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """
+    Full user deletion - removes from bot database AND Remnawave panel.
+
+    Uses UserService.delete_user_account() which handles:
+    - Deleting/disabling user in Remnawave panel
+    - Removing all related records (payments, transactions, etc.)
+    - Removing user from database
+    """
+    from app.services.user_service import UserService
+
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='User not found',
+        )
+
+    panel_error: str | None = None
+    deleted_from_panel = False
+
+    # UserService.delete_user_account handles both bot DB and Remnawave panel
+    user_service = UserService()
+    success = await user_service.delete_user_account(db, user_id, admin.id)
+
+    if success:
+        deleted_from_panel = request.delete_from_panel and user.remnawave_uuid is not None
+
+    reason_text = f' (reason: {request.reason})' if request.reason else ''
+    logger.info(f'Admin {admin.id} fully deleted user {user_id}{reason_text}')
+
+    return FullDeleteUserResponse(
+        success=success,
+        message='User fully deleted from bot and panel' if success else 'Failed to delete user',
+        deleted_from_bot=success,
+        deleted_from_panel=deleted_from_panel,
+        panel_error=panel_error,
+    )
+
+
+@router.post('/{user_id}/reset-trial', response_model=ResetTrialResponse)
+async def reset_user_trial(
+    user_id: int,
+    request: ResetTrialRequest = ResetTrialRequest(),
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """
+    Reset user trial - allows user to activate trial again.
+
+    Actions:
+    - Delete current subscription if exists
+    - Reset has_used_trial flag to False
+    - User can now activate a new trial
+    """
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='User not found',
+        )
+
+    subscription_deleted = False
+
+    # Delete subscription if exists
+    if user.subscription:
+        # Deactivate in Remnawave panel first
+        if user.remnawave_uuid:
+            try:
+                from app.services.subscription_service import SubscriptionService
+
+                subscription_service = SubscriptionService()
+                await subscription_service.disable_remnawave_user(user.remnawave_uuid)
+                logger.info(f'Disabled Remnawave user {user.remnawave_uuid} for trial reset')
+            except Exception as e:
+                logger.warning(f'Failed to disable Remnawave user during trial reset: {e}')
+
+        # Delete subscription from database
+        from sqlalchemy import delete
+
+        await db.execute(delete(Subscription).where(Subscription.user_id == user_id))
+        subscription_deleted = True
+
+    # Reset trial flag
+    user.has_used_trial = False
+    user.updated_at = datetime.utcnow()
+
+    await db.commit()
+
+    reason_text = f' (reason: {request.reason})' if request.reason else ''
+    logger.info(f'Admin {admin.id} reset trial for user {user_id}{reason_text}')
+
+    return ResetTrialResponse(
+        success=True,
+        message='Trial reset successfully. User can now activate a new trial.',
+        subscription_deleted=subscription_deleted,
+        has_used_trial_reset=True,
+    )
+
+
+@router.post('/{user_id}/reset-subscription', response_model=ResetSubscriptionResponse)
+async def reset_user_subscription(
+    user_id: int,
+    request: ResetSubscriptionRequest = ResetSubscriptionRequest(),
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """
+    Reset user subscription - removes/deactivates subscription.
+
+    Actions:
+    - Delete subscription from bot database
+    - Optionally deactivate in Remnawave panel
+    - User will have no active subscription
+    """
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='User not found',
+        )
+
+    subscription_deleted = False
+    panel_deactivated = False
+    panel_error: str | None = None
+
+    if not user.subscription:
+        return ResetSubscriptionResponse(
+            success=True,
+            message='User has no subscription to reset',
+            subscription_deleted=False,
+            panel_deactivated=False,
+        )
+
+    # Deactivate in Remnawave panel if requested
+    if request.deactivate_in_panel and user.remnawave_uuid:
+        try:
+            from app.services.subscription_service import SubscriptionService
+
+            subscription_service = SubscriptionService()
+            panel_deactivated = await subscription_service.disable_remnawave_user(user.remnawave_uuid)
+            if panel_deactivated:
+                logger.info(f'Disabled Remnawave user {user.remnawave_uuid} for subscription reset')
+        except Exception as e:
+            panel_error = str(e)
+            logger.warning(f'Failed to disable Remnawave user during subscription reset: {e}')
+
+    # Delete subscription from database
+    from sqlalchemy import delete
+
+    await db.execute(delete(Subscription).where(Subscription.user_id == user_id))
+    subscription_deleted = True
+
+    user.updated_at = datetime.utcnow()
+    await db.commit()
+
+    reason_text = f' (reason: {request.reason})' if request.reason else ''
+    logger.info(f'Admin {admin.id} reset subscription for user {user_id}{reason_text}')
+
+    return ResetSubscriptionResponse(
+        success=True,
+        message='Subscription reset successfully',
+        subscription_deleted=subscription_deleted,
+        panel_deactivated=panel_deactivated,
+        panel_error=panel_error,
+    )
+
+
+@router.post('/{user_id}/disable', response_model=DisableUserResponse)
+async def disable_user(
+    user_id: int,
+    request: DisableUserRequest = DisableUserRequest(),
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """
+    Disable user - deactivates subscription and blocks access.
+
+    Actions:
+    - Deactivate subscription in bot database
+    - Deactivate in Remnawave panel
+    - Block user account
+    """
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='User not found',
+        )
+
+    subscription_deactivated = False
+    panel_deactivated = False
+    panel_error: str | None = None
+
+    # Deactivate subscription in panel
+    if user.remnawave_uuid:
+        try:
+            from app.services.subscription_service import SubscriptionService
+
+            subscription_service = SubscriptionService()
+            panel_deactivated = await subscription_service.disable_remnawave_user(user.remnawave_uuid)
+            if panel_deactivated:
+                logger.info(f'Disabled Remnawave user {user.remnawave_uuid}')
+        except Exception as e:
+            panel_error = str(e)
+            logger.warning(f'Failed to disable Remnawave user: {e}')
+
+    # Deactivate subscription in bot database
+    if user.subscription:
+        from app.database.crud.subscription import deactivate_subscription
+
+        await deactivate_subscription(db, user.subscription)
+        subscription_deactivated = True
+        logger.info(f'Deactivated subscription for user {user_id}')
+
+    # Block user account
+    user.status = UserStatus.BLOCKED.value
+    user.updated_at = datetime.utcnow()
+    await db.commit()
+
+    reason_text = f' (reason: {request.reason})' if request.reason else ''
+    logger.info(f'Admin {admin.id} disabled user {user_id}{reason_text}')
+
+    return DisableUserResponse(
+        success=True,
+        message='User disabled successfully',
+        subscription_deactivated=subscription_deactivated,
+        panel_deactivated=panel_deactivated,
+        user_blocked=True,
+        panel_error=panel_error,
     )
 
 

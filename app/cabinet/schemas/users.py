@@ -498,3 +498,72 @@ class PanelSyncStatusResponse(BaseModel):
     # Differences
     has_differences: bool = False
     differences: list[str] = []
+
+
+# === Admin User Management Actions ===
+
+
+class FullDeleteUserRequest(BaseModel):
+    """Request for full user deletion (bot + panel)."""
+
+    delete_from_panel: bool = Field(default=True, description='Also delete user from Remnawave panel')
+    reason: str | None = Field(None, max_length=500, description='Reason for deletion')
+
+
+class FullDeleteUserResponse(BaseModel):
+    """Response after full user deletion."""
+
+    success: bool
+    message: str
+    deleted_from_bot: bool = False
+    deleted_from_panel: bool = False
+    panel_error: str | None = None
+
+
+class ResetTrialRequest(BaseModel):
+    """Request to reset user trial."""
+
+    reason: str | None = Field(None, max_length=500, description='Reason for trial reset')
+
+
+class ResetTrialResponse(BaseModel):
+    """Response after trial reset."""
+
+    success: bool
+    message: str
+    subscription_deleted: bool = False
+    has_used_trial_reset: bool = False
+
+
+class ResetSubscriptionRequest(BaseModel):
+    """Request to reset user subscription."""
+
+    deactivate_in_panel: bool = Field(default=True, description='Also deactivate in Remnawave panel')
+    reason: str | None = Field(None, max_length=500, description='Reason for subscription reset')
+
+
+class ResetSubscriptionResponse(BaseModel):
+    """Response after subscription reset."""
+
+    success: bool
+    message: str
+    subscription_deleted: bool = False
+    panel_deactivated: bool = False
+    panel_error: str | None = None
+
+
+class DisableUserRequest(BaseModel):
+    """Request to disable user."""
+
+    reason: str | None = Field(None, max_length=500, description='Reason for disabling')
+
+
+class DisableUserResponse(BaseModel):
+    """Response after user disable."""
+
+    success: bool
+    message: str
+    subscription_deactivated: bool = False
+    panel_deactivated: bool = False
+    user_blocked: bool = False
+    panel_error: str | None = None
