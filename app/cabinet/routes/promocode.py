@@ -33,6 +33,15 @@ class PromocodeActivateResponse(BaseModel):
     bonus_description: str | None = None
 
 
+class PromocodeDeactivateResponse(BaseModel):
+    """Response after deactivating a discount promo code."""
+
+    success: bool
+    message: str
+    deactivated_code: str | None = None
+    discount_percent: int = 0
+
+
 @router.post('/activate', response_model=PromocodeActivateResponse)
 async def activate_promocode(
     request: PromocodeActivateRequest,
@@ -62,12 +71,52 @@ async def activate_promocode(
         'expired': 'Promo code has expired',
         'used': 'Promo code has been fully used',
         'already_used_by_user': 'You have already used this promo code',
+        'active_discount_exists': 'You already have an active discount. Deactivate it first via /deactivate-discount',
+        'not_first_purchase': 'This promo code is only available for first purchase',
         'user_not_found': 'User not found',
         'server_error': 'Server error occurred',
     }
 
     error_code = result.get('error', 'server_error')
     error_message = error_messages.get(error_code, 'Failed to activate promo code')
+
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail=error_message,
+    )
+
+
+@router.post('/deactivate-discount', response_model=PromocodeDeactivateResponse)
+async def deactivate_discount_promocode(
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> PromocodeDeactivateResponse:
+    """Deactivate the currently active discount promo code for the current user."""
+    promocode_service = PromoCodeService()
+
+    result = await promocode_service.deactivate_discount_promocode(
+        db=db,
+        user_id=user.id,
+        admin_initiated=False,
+    )
+
+    if result['success']:
+        return PromocodeDeactivateResponse(
+            success=True,
+            message='Discount promo code deactivated successfully',
+            deactivated_code=result.get('deactivated_code'),
+            discount_percent=result.get('discount_percent', 0),
+        )
+
+    error_messages = {
+        'user_not_found': 'User not found',
+        'no_active_discount_promocode': 'No active discount promo code found',
+        'discount_already_expired': 'Discount has already expired',
+        'server_error': 'Server error occurred',
+    }
+
+    error_code = result.get('error', 'server_error')
+    error_message = error_messages.get(error_code, 'Failed to deactivate promo code')
 
     raise HTTPException(
         status_code=status.HTTP_400_BAD_REQUEST,
