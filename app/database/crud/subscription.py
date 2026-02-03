@@ -258,6 +258,10 @@ async def replace_subscription(
     await db.commit()
     await db.refresh(subscription)
 
+    # Очищаем старые записи об отправленных уведомлениях при замене подписки
+    # (аналогично extend_subscription), чтобы новые уведомления отправлялись корректно
+    await clear_notifications(db, subscription.id)
+
     if update_server_counters:
         try:
             from app.database.crud.server_squad import (
