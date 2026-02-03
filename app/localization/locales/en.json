@@ -978,7 +978,7 @@
   "DEVICE_CHANGE_CONFIRMATION": "📱 <b>Confirm change</b>\n\nCurrent amount: {current} devices\nNew amount: {new} devices\n\nAction: {action}\n💰 {cost}\n\nApply this change?",
   "DEVICE_CHANGE_DECREASE_SUCCESS": "✅ Device limit decreased!\n\n",
   "DEVICE_CHANGE_DISCOUNT_INFO": " (discount {percent}%: -{amount})",
-  "DEVICE_CHANGE_EXTRA_COST": "Extra payment: {amount} (for {months} mo)",
+  "DEVICE_CHANGE_EXTRA_COST": "Extra payment: {amount} (for {period})",
   "DEVICE_CHANGE_FREE": "Free",
   "DEVICE_CHANGE_INCREASE_SUCCESS": "✅ Device limit increased!\n\n",
   "DEVICE_CHANGE_NO_REFUND": "Payments are not refunded",

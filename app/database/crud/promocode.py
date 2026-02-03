@@ -192,6 +192,36 @@ async def delete_promocode(db: AsyncSession, promocode: PromoCode) -> bool:
         return False
 
 
+async def get_active_discount_promocode_for_user(
+    db: AsyncSession, user_id: int
+) -> tuple[PromoCode | None, PromoCodeUse | None]:
+    """
+    Находит активный промокод на скидку, который сейчас действует у пользователя.
+    Ищет по source-полю пользователя (формат 'promocode:CODE').
+
+    Returns:
+        Кортеж (PromoCode, PromoCodeUse) или (None, None) если ничего не найдено.
+    """
+    from app.database.models import User as UserModel
+
+    user_result = await db.execute(select(UserModel).where(UserModel.id == user_id))
+    user = user_result.scalar_one_or_none()
+    if not user:
+        return None, None
+
+    source = getattr(user, 'promo_offer_discount_source', None)
+    if not source or not source.startswith('promocode:'):
+        return None, None
+
+    code = source.split(':', 1)[1]
+    promocode = await get_promocode_by_code(db, code)
+    if not promocode:
+        return None, None
+
+    use = await get_promocode_use_by_user_and_code(db, user_id, promocode.id)
+    return promocode, use
+
+
 async def get_promocode_statistics(db: AsyncSession, promocode_id: int) -> dict:
     total_uses_result = await db.execute(
         select(func.count(PromoCodeUse.id)).where(PromoCodeUse.promocode_id == promocode_id)
