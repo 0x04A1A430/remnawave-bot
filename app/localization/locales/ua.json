@@ -918,7 +918,7 @@
  "DEVICE_CHANGE_CONFIRMATION": "📱 <b>Підтвердження зміни</b>\n\nПоточна кількість: {current} пристроїв\nНова кількість: {new} пристроїв\n\nДія: {action}\n💰 {cost}\n\nПідтвердити зміну?",
  "DEVICE_CHANGE_DECREASE_SUCCESS": "✅ Кількість пристроїв зменшено!\n\n",
  "DEVICE_CHANGE_DISCOUNT_INFO": " (знижка {percent}%: -{amount})",
- "DEVICE_CHANGE_EXTRA_COST": "Доплата: {amount} (за {months} міс)",
+ "DEVICE_CHANGE_EXTRA_COST": "Доплата: {amount} (за {period})",
  "DEVICE_CHANGE_FREE": "Безкоштовно",
  "DEVICE_CHANGE_INCREASE_SUCCESS": "✅ Кількість пристроїв збільшено!\n\n",
  "DEVICE_CHANGE_NO_REFUND": "Повернення коштів не здійснюється",

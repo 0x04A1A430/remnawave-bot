@@ -916,7 +916,7 @@
 "DEVICE_CHANGE_CONFIRMATION":"📱<b>确认更改</b>\n\n当前数量：{current}台设备\n新数量：{new}台设备\n\n操作：{action}\n💰{cost}\n\n确认更改吗？",
 "DEVICE_CHANGE_DECREASE_SUCCESS":"✅设备数量已减少！\n\n",
 "DEVICE_CHANGE_DISCOUNT_INFO":"(折扣{percent}%:-{amount})",
-"DEVICE_CHANGE_EXTRA_COST":"补差价：{amount}(共{months}个月)",
+"DEVICE_CHANGE_EXTRA_COST":"补差价：{amount}({period})",
 "DEVICE_CHANGE_FREE":"免费",
 "DEVICE_CHANGE_INCREASE_SUCCESS":"✅设备数量已增加！\n\n",
 "DEVICE_CHANGE_NO_REFUND":"不退款",
