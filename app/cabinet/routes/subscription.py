@@ -2569,10 +2569,11 @@ def _get_url_scheme_for_app(app: dict[str, Any]) -> tuple[str, bool]:
         uses_crypto_link=True means the app template uses {{HAPP_CRYPT4_LINK}},
         so subscription_crypto_link should be used as the deep link payload.
     """
-    # 1. Check urlScheme field (legacy/local config -- always plain subscription_url)
+    # 1. Check urlScheme field (cabinet format stores usesCryptoLink alongside)
     scheme = str(app.get('urlScheme', '')).strip()
     if scheme:
-        return scheme, False
+        uses_crypto = bool(app.get('usesCryptoLink', False))
+        return scheme, uses_crypto
 
     # 2. Extract from buttons in blocks (RemnaWave format)
     blocks = app.get('blocks', [])
@@ -2646,7 +2647,7 @@ def _find_connect_block(blocks: list[dict[str, Any]]) -> dict[str, Any] | None:
 def _convert_remnawave_app_to_cabinet(app: dict[str, Any]) -> dict[str, Any]:
     """Convert RemnaWave app format to cabinet app format."""
     blocks = app.get('blocks', [])
-    url_scheme, _uses_crypto = _get_url_scheme_for_app(app)
+    url_scheme, uses_crypto = _get_url_scheme_for_app(app)
 
     # Debug log for conversion (не логируем отсутствие urlScheme - для Happ это нормально)
     app_name = app.get('name', 'unknown')
@@ -2699,6 +2700,7 @@ def _convert_remnawave_app_to_cabinet(app: dict[str, Any]) -> dict[str, Any]:
         'name': app.get('name', ''),
         'isFeatured': app.get('featured', False),
         'urlScheme': url_scheme,
+        'usesCryptoLink': uses_crypto,
         'isNeedBase64Encoding': app.get('isNeedBase64Encoding', False),
         'installationStep': installation_step,
         'addSubscriptionStep': subscription_step,
