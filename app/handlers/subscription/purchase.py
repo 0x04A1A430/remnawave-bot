@@ -56,6 +56,7 @@ from app.services.trial_activation_service import (
     rollback_trial_subscription_activation,
 )
 from app.services.user_cart_service import user_cart_service
+from app.middlewares.global_error import schedule_error_notification
 from app.utils.decorators import error_handler
 
 
@@ -2079,6 +2080,12 @@ async def confirm_extend_subscription(callback: types.CallbackQuery, db_user: Us
 
         logger.error(f'TRACEBACK: {traceback.format_exc()}')
 
+        # Уведомляем админов о критической ошибке
+        if callback.bot:
+            schedule_error_notification(
+                callback.bot, e, f'КРИТИЧЕСКАЯ ОШИБКА ПРОДЛЕНИЯ: user={db_user.telegram_id}'
+            )
+
         await callback.message.edit_text(
             '⚠ Произошла ошибка при продлении подписки. Обратитесь в поддержку.',
             reply_markup=get_back_keyboard(db_user.language),
@@ -2943,6 +2950,10 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
 
     except Exception as e:
         logger.error(f'Ошибка покупки подписки: {e}')
+        if callback.bot:
+            schedule_error_notification(
+                callback.bot, e, f'Ошибка покупки подписки: user={db_user.telegram_id}'
+            )
         await callback.message.edit_text(texts.ERROR, reply_markup=get_back_keyboard(db_user.language))
 
     if purchase_completed:
