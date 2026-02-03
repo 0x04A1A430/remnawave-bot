@@ -220,6 +220,116 @@ async def get_ticket_stats(
     )
 
 
+@router.get('/settings', response_model=TicketSettingsResponse)
+async def get_ticket_settings(
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Get ticket system settings."""
+    from app.services.support_settings_service import SupportSettingsService
+
+    return TicketSettingsResponse(
+        sla_enabled=settings.SUPPORT_TICKET_SLA_ENABLED,
+        sla_minutes=settings.SUPPORT_TICKET_SLA_MINUTES,
+        sla_check_interval_seconds=settings.SUPPORT_TICKET_SLA_CHECK_INTERVAL_SECONDS,
+        sla_reminder_cooldown_minutes=settings.SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES,
+        support_system_mode=settings.get_support_system_mode(),
+        cabinet_user_notifications_enabled=SupportSettingsService.get_cabinet_user_notifications_enabled(),
+        cabinet_admin_notifications_enabled=SupportSettingsService.get_cabinet_admin_notifications_enabled(),
+    )
+
+
+@router.patch('/settings', response_model=TicketSettingsResponse)
+async def update_ticket_settings(
+    request: TicketSettingsUpdateRequest,
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Update ticket system settings."""
+    from pathlib import Path
+
+    from app.services.support_settings_service import SupportSettingsService
+
+    # Validate support_system_mode
+    if request.support_system_mode is not None:
+        mode = request.support_system_mode.strip().lower()
+        if mode not in {'tickets', 'contact', 'both'}:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='Invalid support_system_mode. Must be: tickets, contact, or both',
+            )
+
+    # Update in-memory settings
+    if request.sla_enabled is not None:
+        settings.SUPPORT_TICKET_SLA_ENABLED = request.sla_enabled
+    if request.sla_minutes is not None:
+        settings.SUPPORT_TICKET_SLA_MINUTES = request.sla_minutes
+    if request.sla_check_interval_seconds is not None:
+        settings.SUPPORT_TICKET_SLA_CHECK_INTERVAL_SECONDS = request.sla_check_interval_seconds
+    if request.sla_reminder_cooldown_minutes is not None:
+        settings.SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES = request.sla_reminder_cooldown_minutes
+    if request.support_system_mode is not None:
+        settings.SUPPORT_SYSTEM_MODE = request.support_system_mode.strip().lower()
+
+    # Update cabinet notification settings
+    if request.cabinet_user_notifications_enabled is not None:
+        SupportSettingsService.set_cabinet_user_notifications_enabled(request.cabinet_user_notifications_enabled)
+    if request.cabinet_admin_notifications_enabled is not None:
+        SupportSettingsService.set_cabinet_admin_notifications_enabled(request.cabinet_admin_notifications_enabled)
+
+    # Try to persist to .env file
+    try:
+        env_file = Path('.env')
+        if env_file.exists():
+            lines = env_file.read_text().splitlines()
+            updates = {}
+
+            if request.sla_enabled is not None:
+                updates['SUPPORT_TICKET_SLA_ENABLED'] = str(request.sla_enabled).lower()
+            if request.sla_minutes is not None:
+                updates['SUPPORT_TICKET_SLA_MINUTES'] = str(request.sla_minutes)
+            if request.sla_check_interval_seconds is not None:
+                updates['SUPPORT_TICKET_SLA_CHECK_INTERVAL_SECONDS'] = str(request.sla_check_interval_seconds)
+            if request.sla_reminder_cooldown_minutes is not None:
+                updates['SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES'] = str(request.sla_reminder_cooldown_minutes)
+            if request.support_system_mode is not None:
+                updates['SUPPORT_SYSTEM_MODE'] = request.support_system_mode.strip().lower()
+
+            new_lines = []
+            updated_keys = set()
+
+            for line in lines:
+                updated = False
+                for key, value in updates.items():
+                    if line.startswith(f'{key}='):
+                        new_lines.append(f'{key}={value}')
+                        updated_keys.add(key)
+                        updated = True
+                        break
+                if not updated:
+                    new_lines.append(line)
+
+            # Add any keys that weren't found
+            for key, value in updates.items():
+                if key not in updated_keys:
+                    new_lines.append(f'{key}={value}')
+
+            env_file.write_text('\n'.join(new_lines) + '\n')
+            logger.info('Updated ticket settings in .env file')
+    except Exception as e:
+        logger.warning(f'Failed to update .env file: {e}')
+
+    return TicketSettingsResponse(
+        sla_enabled=settings.SUPPORT_TICKET_SLA_ENABLED,
+        sla_minutes=settings.SUPPORT_TICKET_SLA_MINUTES,
+        sla_check_interval_seconds=settings.SUPPORT_TICKET_SLA_CHECK_INTERVAL_SECONDS,
+        sla_reminder_cooldown_minutes=settings.SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES,
+        support_system_mode=settings.get_support_system_mode(),
+        cabinet_user_notifications_enabled=SupportSettingsService.get_cabinet_user_notifications_enabled(),
+        cabinet_admin_notifications_enabled=SupportSettingsService.get_cabinet_admin_notifications_enabled(),
+    )
+
+
 @router.get('', response_model=AdminTicketListResponse)
 async def get_all_tickets(
     page: int = Query(1, ge=1, description='Page number'),
@@ -489,114 +599,4 @@ async def update_ticket_priority(
         is_reply_blocked=ticket.is_reply_blocked if hasattr(ticket, 'is_reply_blocked') else False,
         user=user_info,
         messages=messages_response,
-    )
-
-
-@router.get('/settings', response_model=TicketSettingsResponse)
-async def get_ticket_settings(
-    admin: User = Depends(get_current_admin_user),
-    db: AsyncSession = Depends(get_cabinet_db),
-):
-    """Get ticket system settings."""
-    from app.services.support_settings_service import SupportSettingsService
-
-    return TicketSettingsResponse(
-        sla_enabled=settings.SUPPORT_TICKET_SLA_ENABLED,
-        sla_minutes=settings.SUPPORT_TICKET_SLA_MINUTES,
-        sla_check_interval_seconds=settings.SUPPORT_TICKET_SLA_CHECK_INTERVAL_SECONDS,
-        sla_reminder_cooldown_minutes=settings.SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES,
-        support_system_mode=settings.get_support_system_mode(),
-        cabinet_user_notifications_enabled=SupportSettingsService.get_cabinet_user_notifications_enabled(),
-        cabinet_admin_notifications_enabled=SupportSettingsService.get_cabinet_admin_notifications_enabled(),
-    )
-
-
-@router.patch('/settings', response_model=TicketSettingsResponse)
-async def update_ticket_settings(
-    request: TicketSettingsUpdateRequest,
-    admin: User = Depends(get_current_admin_user),
-    db: AsyncSession = Depends(get_cabinet_db),
-):
-    """Update ticket system settings."""
-    from pathlib import Path
-
-    from app.services.support_settings_service import SupportSettingsService
-
-    # Validate support_system_mode
-    if request.support_system_mode is not None:
-        mode = request.support_system_mode.strip().lower()
-        if mode not in {'tickets', 'contact', 'both'}:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail='Invalid support_system_mode. Must be: tickets, contact, or both',
-            )
-
-    # Update in-memory settings
-    if request.sla_enabled is not None:
-        settings.SUPPORT_TICKET_SLA_ENABLED = request.sla_enabled
-    if request.sla_minutes is not None:
-        settings.SUPPORT_TICKET_SLA_MINUTES = request.sla_minutes
-    if request.sla_check_interval_seconds is not None:
-        settings.SUPPORT_TICKET_SLA_CHECK_INTERVAL_SECONDS = request.sla_check_interval_seconds
-    if request.sla_reminder_cooldown_minutes is not None:
-        settings.SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES = request.sla_reminder_cooldown_minutes
-    if request.support_system_mode is not None:
-        settings.SUPPORT_SYSTEM_MODE = request.support_system_mode.strip().lower()
-
-    # Update cabinet notification settings
-    if request.cabinet_user_notifications_enabled is not None:
-        SupportSettingsService.set_cabinet_user_notifications_enabled(request.cabinet_user_notifications_enabled)
-    if request.cabinet_admin_notifications_enabled is not None:
-        SupportSettingsService.set_cabinet_admin_notifications_enabled(request.cabinet_admin_notifications_enabled)
-
-    # Try to persist to .env file
-    try:
-        env_file = Path('.env')
-        if env_file.exists():
-            lines = env_file.read_text().splitlines()
-            updates = {}
-
-            if request.sla_enabled is not None:
-                updates['SUPPORT_TICKET_SLA_ENABLED'] = str(request.sla_enabled).lower()
-            if request.sla_minutes is not None:
-                updates['SUPPORT_TICKET_SLA_MINUTES'] = str(request.sla_minutes)
-            if request.sla_check_interval_seconds is not None:
-                updates['SUPPORT_TICKET_SLA_CHECK_INTERVAL_SECONDS'] = str(request.sla_check_interval_seconds)
-            if request.sla_reminder_cooldown_minutes is not None:
-                updates['SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES'] = str(request.sla_reminder_cooldown_minutes)
-            if request.support_system_mode is not None:
-                updates['SUPPORT_SYSTEM_MODE'] = request.support_system_mode.strip().lower()
-
-            new_lines = []
-            updated_keys = set()
-
-            for line in lines:
-                updated = False
-                for key, value in updates.items():
-                    if line.startswith(f'{key}='):
-                        new_lines.append(f'{key}={value}')
-                        updated_keys.add(key)
-                        updated = True
-                        break
-                if not updated:
-                    new_lines.append(line)
-
-            # Add any keys that weren't found
-            for key, value in updates.items():
-                if key not in updated_keys:
-                    new_lines.append(f'{key}={value}')
-
-            env_file.write_text('\n'.join(new_lines) + '\n')
-            logger.info('Updated ticket settings in .env file')
-    except Exception as e:
-        logger.warning(f'Failed to update .env file: {e}')
-
-    return TicketSettingsResponse(
-        sla_enabled=settings.SUPPORT_TICKET_SLA_ENABLED,
-        sla_minutes=settings.SUPPORT_TICKET_SLA_MINUTES,
-        sla_check_interval_seconds=settings.SUPPORT_TICKET_SLA_CHECK_INTERVAL_SECONDS,
-        sla_reminder_cooldown_minutes=settings.SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES,
-        support_system_mode=settings.get_support_system_mode(),
-        cabinet_user_notifications_enabled=SupportSettingsService.get_cabinet_user_notifications_enabled(),
-        cabinet_admin_notifications_enabled=SupportSettingsService.get_cabinet_admin_notifications_enabled(),
     )
