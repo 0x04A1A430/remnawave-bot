@@ -342,7 +342,11 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                     return JSONResponse({'status': 'ok'})
 
                 error = ValueError('CryptoBot webhook processing returned False')
-                schedule_error_notification(bot, error, f'CryptoBot webhook processing failed: invoice_id={payload.get("payload", {}).get("invoice_id")}')
+                schedule_error_notification(
+                    bot,
+                    error,
+                    f'CryptoBot webhook processing failed: invoice_id={payload.get("payload", {}).get("invoice_id")}',
+                )
                 return JSONResponse(
                     {'status': 'error', 'reason': 'processing_failed'},
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -726,7 +730,9 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
                 error = ValueError('Platega webhook processing returned False')
                 transaction_id = payload.get('transactionId', 'unknown')
-                schedule_error_notification(bot, error, f'Platega webhook processing failed: transactionId={transaction_id}')
+                schedule_error_notification(
+                    bot, error, f'Platega webhook processing failed: transactionId={transaction_id}'
+                )
                 return JSONResponse(
                     {'status': 'error', 'reason': 'not_processed'},
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -1041,7 +1047,9 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                     return Response('YES', status_code=status.HTTP_200_OK)
 
                 error = ValueError('Freekassa webhook processing returned False')
-                schedule_error_notification(bot, error, f'Freekassa webhook processing failed: order_id={order_id}, intid={intid}')
+                schedule_error_notification(
+                    bot, error, f'Freekassa webhook processing failed: order_id={order_id}, intid={intid}'
+                )
                 return Response('Error', status_code=status.HTTP_400_BAD_REQUEST)
             except Exception as e:
                 logger.exception('Freekassa webhook processing error: %s', e)
@@ -1120,7 +1128,9 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                     return Response('YES', status_code=status.HTTP_200_OK)
 
                 error = ValueError('KassaAI webhook processing returned False')
-                schedule_error_notification(bot, error, f'KassaAI webhook processing failed: order_id={order_id}, intid={intid}')
+                schedule_error_notification(
+                    bot, error, f'KassaAI webhook processing failed: order_id={order_id}, intid={intid}'
+                )
                 return Response('Error', status_code=status.HTTP_400_BAD_REQUEST)
             except Exception as e:
                 logger.exception('KassaAI webhook processing error: %s', e)

@@ -169,9 +169,7 @@ class TelegramWebhookProcessor:
                 except Exception as error:  # pragma: no cover - логируем сбой обработчика
                     logger.exception('Ошибка обработки Telegram update в worker %s: %s', worker_id, error)
                     # Отправляем уведомление в админский чат
-                    schedule_error_notification(
-                        self._bot, error, f'Telegram webhook worker {worker_id}'
-                    )
+                    schedule_error_notification(self._bot, error, f'Telegram webhook worker {worker_id}')
                 finally:
                     self._queue.task_done()
         finally:
