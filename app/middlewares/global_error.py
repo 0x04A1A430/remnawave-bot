@@ -9,6 +9,7 @@ from aiogram import BaseMiddleware, Bot
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import BufferedInputFile, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, TelegramObject
+from sqlalchemy.exc import InterfaceError, OperationalError
 
 from app.config import settings
 from app.services.startup_notification_service import _get_error_recommendations
@@ -67,6 +68,10 @@ class GlobalErrorMiddleware(BaseMiddleware):
             return await handler(event, data)
         except TelegramBadRequest as e:
             return await self._handle_telegram_error(event, e, data)
+        except (InterfaceError, OperationalError) as e:
+            # Ошибки соединения с БД (таймаут после долгих операций) - логируем, но не спамим админам
+            logger.warning('⚠️ Ошибка соединения с БД в GlobalErrorMiddleware: %s', e)
+            raise
         except Exception as e:
             logger.error('Неожиданная ошибка в GlobalErrorMiddleware: %s', e, exc_info=True)
             # Отправляем уведомление об ошибке в админский чат
@@ -82,13 +87,13 @@ class GlobalErrorMiddleware(BaseMiddleware):
         if self._is_old_query_error(error_message):
             return await self._handle_old_query(event, error)
         if self._is_message_not_modified_error(error_message):
-            return await self._handle_message_not_modified(event, error)
+            return await self._handle_message_not_modified(event, error, data)
         if self._is_topic_required_error(error_message):
             # Канал с топиками — просто игнорируем
             logger.debug('[GlobalErrorMiddleware] Игнорируем ошибку топика: %s', error)
             return None
         if self._is_bad_request_error(error_message):
-            return await self._handle_bad_request(event, error)
+            return await self._handle_bad_request(event, error, data)
 
         # Неизвестная ошибка — логируем и отправляем уведомление
         logger.error('Неизвестная Telegram API ошибка: %s', error)
@@ -117,7 +122,9 @@ class GlobalErrorMiddleware(BaseMiddleware):
         else:
             logger.warning('[GlobalErrorMiddleware] Игнорируем устаревший запрос: %s', error)
 
-    async def _handle_message_not_modified(self, event: TelegramObject, error: TelegramBadRequest):
+    async def _handle_message_not_modified(
+        self, event: TelegramObject, error: TelegramBadRequest, data: dict[str, Any]
+    ):
         logger.debug('[GlobalErrorMiddleware] Сообщение не было изменено: %s', error)
 
         if isinstance(event, CallbackQuery):
@@ -127,8 +134,13 @@ class GlobalErrorMiddleware(BaseMiddleware):
             except TelegramBadRequest as answer_error:
                 if not self._is_old_query_error(str(answer_error).lower()):
                     logger.error('Ошибка при ответе на callback: %s', answer_error)
+                    # Отправляем уведомление в админский чат
+                    bot = data.get('bot')
+                    if bot:
+                        user_info = self._get_user_info(event)
+                        schedule_error_notification(bot, answer_error, f'Callback answer error: {user_info}')
 
-    async def _handle_bad_request(self, event: TelegramObject, error: TelegramBadRequest):
+    async def _handle_bad_request(self, event: TelegramObject, error: TelegramBadRequest, data: dict[str, Any]):
         error_message = str(error).lower()
 
         if BOT_BLOCKED_PHRASE in error_message:
@@ -143,6 +155,11 @@ class GlobalErrorMiddleware(BaseMiddleware):
             logger.warning('[GlobalErrorMiddleware] Чат или сообщение не найдено: %s', error)
             return
         logger.error('[GlobalErrorMiddleware] Неизвестная bad request ошибка: %s', error)
+        # Отправляем уведомление перед raise
+        bot = data.get('bot')
+        if bot:
+            user_info = self._get_user_info(event)
+            schedule_error_notification(bot, error, f'Bad request: {user_info}')
         raise error
 
     def _get_user_info(self, event: TelegramObject) -> str:
