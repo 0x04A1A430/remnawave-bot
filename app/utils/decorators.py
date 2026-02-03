@@ -94,7 +94,9 @@ def error_handler(func: Callable) -> Callable:
                             # Отправляем уведомление в админский чат
                             bot = kwargs.get('bot') or (event.bot if event else None)
                             if bot:
-                                schedule_error_notification(bot, answer_error, f'Callback answer error в {func.__name__}')
+                                schedule_error_notification(
+                                    bot, answer_error, f'Callback answer error в {func.__name__}'
+                                )
                 return None
 
             logger.error(f'Telegram API error в {func.__name__}: {e}')
