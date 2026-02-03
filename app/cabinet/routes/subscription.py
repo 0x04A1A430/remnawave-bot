@@ -1174,7 +1174,11 @@ async def _build_tariff_response(
                 )
 
     # Get promo group for discount calculation
+    # Use get_primary_promo_group() for correct promo group resolution
     promo_group = user.get_primary_promo_group() if user and hasattr(user, 'get_primary_promo_group') else None
+    if promo_group is None and user:
+        # Fallback to legacy promo_group attribute
+        promo_group = getattr(user, 'promo_group', None)
     promo_group_name = promo_group.name if promo_group else None
 
     # Вычисляем доп. устройства для текущего тарифа (при продлении)
@@ -1351,13 +1355,25 @@ async def get_purchase_options(
 
         # Tariffs mode - return list of tariffs
         if settings.is_tariffs_mode():
-            promo_group = getattr(user, 'promo_group', None)
+            # Use get_primary_promo_group() for correct promo group resolution
+            # (handles both legacy promo_group FK and new user_promo_groups M2M)
+            promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else None
+            if promo_group is None:
+                # Fallback to legacy promo_group attribute
+                promo_group = getattr(user, 'promo_group', None)
             promo_group_id = promo_group.id if promo_group else None
             tariffs = await get_tariffs_for_user(db, promo_group_id)
 
             subscription = await get_subscription_by_user_id(db, user.id)
             current_tariff_id = subscription.tariff_id if subscription else None
             language = getattr(user, 'language', 'ru') or 'ru'
+
+            # Determine subscription status for frontend to decide purchase vs switch flow
+            subscription_status = None
+            subscription_is_expired = False
+            if subscription:
+                subscription_status = subscription.actual_status
+                subscription_is_expired = subscription_status == 'expired'
 
             tariff_responses = []
             for tariff in tariffs:
@@ -1370,6 +1386,10 @@ async def get_purchase_options(
                 'current_tariff_id': current_tariff_id,
                 'balance_kopeks': user.balance_kopeks,
                 'balance_label': settings.format_price(user.balance_kopeks),
+                # Include subscription status info for frontend decision making
+                'subscription_status': subscription_status,
+                'subscription_is_expired': subscription_is_expired,
+                'has_subscription': subscription is not None,
             }
 
         # Classic mode - return periods
