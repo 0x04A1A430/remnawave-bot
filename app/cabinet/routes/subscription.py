@@ -3612,7 +3612,7 @@ async def preview_tariff_switch(
 
     # Use actual_status for correct status check (handles time-based expiration)
     actual_status = user.subscription.actual_status
-    if actual_status not in ('active', 'trial'):
+    if actual_status == 'expired':
         # For expired subscriptions, user should purchase a new tariff, not switch
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -3620,6 +3620,15 @@ async def preview_tariff_switch(
                 'code': 'subscription_expired',
                 'message': 'Subscription is expired. Please purchase a new tariff instead of switching.',
                 'use_purchase_flow': True,
+            },
+        )
+    if actual_status not in ('active', 'trial'):
+        # For disabled/pending subscriptions, block switching with generic error
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                'code': 'subscription_not_active',
+                'message': f'Subscription is not active (status: {actual_status}). Cannot switch tariff.',
             },
         )
 
@@ -3756,7 +3765,7 @@ async def switch_tariff(
 
     # Use actual_status for correct status check (handles time-based expiration)
     actual_status = user.subscription.actual_status
-    if actual_status not in ('active', 'trial'):
+    if actual_status == 'expired':
         # For expired subscriptions, user should purchase a new tariff, not switch
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -3764,6 +3773,15 @@ async def switch_tariff(
                 'code': 'subscription_expired',
                 'message': 'Subscription is expired. Please purchase a new tariff instead of switching.',
                 'use_purchase_flow': True,
+            },
+        )
+    if actual_status not in ('active', 'trial'):
+        # For disabled/pending subscriptions, block switching with generic error
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                'code': 'subscription_not_active',
+                'message': f'Subscription is not active (status: {actual_status}). Cannot switch tariff.',
             },
         )
 
