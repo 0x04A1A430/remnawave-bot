@@ -12,6 +12,7 @@ from app.database.crud.user import get_user_by_telegram_id
 from app.database.database import get_db
 from app.database.models import PaymentMethod, TransactionType
 from app.external.tribute import TributeService as TributeAPI
+from app.middlewares.global_error import schedule_error_notification
 from app.services.payment_service import PaymentService
 from app.services.subscription_auto_purchase_service import (
     auto_activate_subscription_after_topup,
@@ -68,6 +69,7 @@ class TributeService:
 
         except Exception as e:
             logger.error(f'Ошибка создания Tribute платежа: {e}')
+            schedule_error_notification(self.bot, e, f'Tribute payment creation error: user_id={user_id}, amount={amount_kopeks}')
             return None
 
     async def process_webhook(self, payload: str) -> dict[str, Any]:
@@ -198,7 +200,8 @@ class TributeService:
                 break
 
         except Exception as e:
-            logger.error(f'⌘ Ошибка обработки успешного Tribute платежа: {e}', exc_info=True)
+            logger.error(f'Ошибка обработки успешного Tribute платежа: {e}', exc_info=True)
+            schedule_error_notification(self.bot, e, 'Tribute successful payment processing error')
 
     async def _handle_failed_payment(self, payment_data: dict[str, Any]):
         try:
@@ -221,6 +224,7 @@ class TributeService:
 
         except Exception as e:
             logger.error(f'Ошибка обработки неудачного Tribute платежа: {e}')
+            schedule_error_notification(self.bot, e, 'Tribute failed payment processing error')
 
     async def _handle_refund(self, refund_data: dict[str, Any]):
         try:
@@ -252,6 +256,7 @@ class TributeService:
 
         except Exception as e:
             logger.error(f'Ошибка обработки возврата Tribute: {e}')
+            schedule_error_notification(self.bot, e, 'Tribute refund processing error')
 
     async def _send_success_notification(self, user_id: int, amount_kopeks: int):
         # Skip if no telegram_id (email-only user)
@@ -466,7 +471,8 @@ class TributeService:
                 return True
 
         except Exception as e:
-            logger.error(f'⌘ Ошибка принудительной обработки: {e}', exc_info=True)
+            logger.error(f'Ошибка принудительной обработки: {e}', exc_info=True)
+            schedule_error_notification(self.bot, e, f'Tribute force processing error: payment_id={payment_id}')
             return False
 
     async def get_payment_status(self, payment_id: str) -> dict[str, Any] | None:

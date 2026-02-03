@@ -54,6 +54,7 @@ from app.external.remnawave_api import (
     UserStatus,
 )
 from app.localization.texts import get_texts
+from app.middlewares.global_error import schedule_error_notification
 from app.services.notification_delivery_service import (
     notification_delivery_service,
 )
@@ -84,6 +85,11 @@ class MonitoringService:
         self._notified_users: set[str] = set()
         self._last_cleanup = datetime.utcnow()
         self._sla_task = None
+
+    def _notify_error(self, error: Exception, context: str) -> None:
+        """Отправляет уведомление об ошибке в админский чат."""
+        if self.bot:
+            schedule_error_notification(self.bot, error, f'MonitoringService: {context}')
 
     async def _send_message_with_logo(
         self,
@@ -171,6 +177,7 @@ class MonitoringService:
                 self._sla_task = asyncio.create_task(self._sla_loop())
         except Exception as e:
             logger.error(f'Не удалось запустить SLA-мониторинг: {e}')
+            self._notify_error(e, 'SLA-мониторинг не запустился')
 
         while self.is_running:
             try:
@@ -179,6 +186,7 @@ class MonitoringService:
 
             except Exception as e:
                 logger.error(f'Ошибка в цикле мониторинга: {e}')
+                self._notify_error(e, 'Ошибка в главном цикле мониторинга')
                 await asyncio.sleep(60)
 
     def stop_monitoring(self):
@@ -231,6 +239,7 @@ class MonitoringService:
 
             except Exception as e:
                 logger.error(f'Ошибка в цикле мониторинга: {e}')
+                self._notify_error(e, 'Ошибка в _monitoring_cycle')
                 try:
                     await self._log_monitoring_event(
                         db,
