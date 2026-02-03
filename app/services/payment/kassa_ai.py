@@ -264,7 +264,9 @@ class KassaAiPaymentMixin:
                 trigger,
             )
             error = ValueError(f'User not found: {payment.user_id}')
-            self._schedule_error_notification(error, f'KassaAI finalize error: user not found for order_id={payment.order_id}')
+            self._schedule_error_notification(
+                error, f'KassaAI finalize error: user not found for order_id={payment.order_id}'
+            )
             return False
 
         # Создаем транзакцию

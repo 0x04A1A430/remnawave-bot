@@ -92,7 +92,9 @@ class CryptoBotPaymentMixin:
             if not invoice_data:
                 logger.error('Ошибка создания CryptoBot invoice')
                 error = ValueError('CryptoBot invoice creation returned empty result')
-                self._schedule_error_notification(error, f'CryptoBot invoice creation error: user_id={user_id}, amount={amount_usd}')
+                self._schedule_error_notification(
+                    error, f'CryptoBot invoice creation error: user_id={user_id}, amount={amount_usd}'
+                )
                 return None
 
             cryptobot_crud = import_module('app.database.crud.cryptobot')
@@ -164,7 +166,9 @@ class CryptoBotPaymentMixin:
             if not payment:
                 logger.error('CryptoBot платеж не найден в БД: %s', invoice_id)
                 error = ValueError(f'CryptoBot payment not found: {invoice_id}')
-                self._schedule_error_notification(error, f'CryptoBot webhook error: payment not found for invoice_id={invoice_id}')
+                self._schedule_error_notification(
+                    error, f'CryptoBot webhook error: payment not found for invoice_id={invoice_id}'
+                )
                 return False
 
             if payment.status == 'paid':
@@ -245,7 +249,9 @@ class CryptoBotPaymentMixin:
                         invoice_id,
                     )
                     error = ValueError(f'Invalid amount after conversion: {amount_kopeks} kopeks')
-                    self._schedule_error_notification(error, f'CryptoBot webhook error: invalid amount for invoice_id={invoice_id}')
+                    self._schedule_error_notification(
+                        error, f'CryptoBot webhook error: invalid amount for invoice_id={invoice_id}'
+                    )
                     return False
 
                 payment_service_module = import_module('app.services.payment_service')
@@ -273,7 +279,9 @@ class CryptoBotPaymentMixin:
                         updated_payment.user_id,
                     )
                     error = ValueError(f'User not found: {updated_payment.user_id}')
-                    self._schedule_error_notification(error, f'CryptoBot webhook error: user not found for invoice_id={invoice_id}')
+                    self._schedule_error_notification(
+                        error, f'CryptoBot webhook error: user not found for invoice_id={invoice_id}'
+                    )
                     return False
 
                 old_balance = user.balance_kopeks

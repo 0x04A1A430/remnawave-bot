@@ -277,7 +277,9 @@ class MulenPayPaymentMixin:
                         display_name,
                     )
                     error = ValueError(f'User not found: {payment.user_id}')
-                    self._schedule_error_notification(error, f'{display_name} webhook error: user not found for uuid={payment.uuid}')
+                    self._schedule_error_notification(
+                        error, f'{display_name} webhook error: user not found for uuid={payment.uuid}'
+                    )
                     return False
 
                 old_balance = user.balance_kopeks

@@ -324,7 +324,9 @@ class PlategaPaymentMixin:
         if not user:
             logger.error('Пользователь %s не найден для Platega', payment.user_id)
             error = ValueError(f'User not found: {payment.user_id}')
-            self._schedule_error_notification(error, f'Platega finalize error: user not found for correlation_id={payment.correlation_id}')
+            self._schedule_error_notification(
+                error, f'Platega finalize error: user not found for correlation_id={payment.correlation_id}'
+            )
             return payment
 
         # Убеждаемся, что промогруппы загружены в асинхронном контексте,

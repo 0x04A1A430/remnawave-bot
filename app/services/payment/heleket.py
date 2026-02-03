@@ -320,7 +320,9 @@ class HeleketPaymentMixin:
         if amount_kopeks <= 0:
             logger.error('Heleket платеж %s имеет некорректную сумму: %s', updated_payment.uuid, updated_payment.amount)
             error = ValueError(f'Heleket payment has invalid amount: {updated_payment.amount}')
-            self._schedule_error_notification(error, f'Heleket webhook error: invalid amount for uuid={updated_payment.uuid}')
+            self._schedule_error_notification(
+                error, f'Heleket webhook error: invalid amount for uuid={updated_payment.uuid}'
+            )
             return None
 
         transaction = await payment_module.create_transaction(
@@ -351,7 +353,9 @@ class HeleketPaymentMixin:
         if not user:
             logger.error('Пользователь %s не найден для Heleket платежа', updated_payment.user_id)
             error = ValueError(f'User not found: {updated_payment.user_id}')
-            self._schedule_error_notification(error, f'Heleket webhook error: user not found for uuid={updated_payment.uuid}')
+            self._schedule_error_notification(
+                error, f'Heleket webhook error: user not found for uuid={updated_payment.uuid}'
+            )
             return None
 
         old_balance = user.balance_kopeks

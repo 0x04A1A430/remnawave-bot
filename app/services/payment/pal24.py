@@ -386,7 +386,9 @@ class Pal24PaymentMixin:
                 trigger,
             )
             error = ValueError(f'User not found: {payment.user_id}')
-            self._schedule_error_notification(error, f'Pal24 finalize error: user not found for bill_id={payment.bill_id}')
+            self._schedule_error_notification(
+                error, f'Pal24 finalize error: user not found for bill_id={payment.bill_id}'
+            )
             return False
 
         transaction = await payment_module.create_transaction(

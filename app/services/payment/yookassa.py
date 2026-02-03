@@ -146,7 +146,9 @@ class YooKassaPaymentMixin:
             if not yookassa_response or yookassa_response.get('error'):
                 logger.error('Ошибка создания платежа YooKassa: %s', yookassa_response)
                 error = ValueError(f'YooKassa payment creation failed: {yookassa_response}')
-                self._schedule_error_notification(error, f'YooKassa payment creation error: user_id={user_id}, amount={amount_kopeks}')
+                self._schedule_error_notification(
+                    error, f'YooKassa payment creation error: user_id={user_id}, amount={amount_kopeks}'
+                )
                 return None
 
             yookassa_created_at: datetime | None = None
@@ -1114,7 +1116,9 @@ class YooKassaPaymentMixin:
                 payment.yookassa_payment_id,
                 error,
             )
-            self._schedule_error_notification(error, f'YooKassa successful payment processing error: payment_id={payment.yookassa_payment_id}')
+            self._schedule_error_notification(
+                error, f'YooKassa successful payment processing error: payment_id={payment.yookassa_payment_id}'
+            )
             return False
 
     async def _mark_yookassa_payment_processing_completed(

@@ -461,7 +461,9 @@ class WataPaymentMixin:
         if not user:
             logger.error('Пользователь %s не найден при обработке WATA', payment.user_id)
             error = ValueError(f'User not found: {payment.user_id}')
-            self._schedule_error_notification(error, f'WATA finalize error: user not found for payment_link_id={payment.payment_link_id}')
+            self._schedule_error_notification(
+                error, f'WATA finalize error: user not found for payment_link_id={payment.payment_link_id}'
+            )
             return payment
 
         transaction_external_id = str(transaction_payload.get('id') or transaction_payload.get('transactionId') or '')
