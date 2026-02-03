@@ -3610,10 +3610,17 @@ async def preview_tariff_switch(
             detail='No active subscription with tariff',
         )
 
-    if user.subscription.status not in ('active', 'trial'):
+    # Use actual_status for correct status check (handles time-based expiration)
+    actual_status = user.subscription.actual_status
+    if actual_status not in ('active', 'trial'):
+        # For expired subscriptions, user should purchase a new tariff, not switch
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Subscription is not active',
+            detail={
+                'code': 'subscription_expired',
+                'message': 'Subscription is expired. Please purchase a new tariff instead of switching.',
+                'use_purchase_flow': True,
+            },
         )
 
     current_tariff = await get_tariff_by_id(db, user.subscription.tariff_id)
@@ -3632,7 +3639,10 @@ async def preview_tariff_switch(
         )
 
     # Check tariff availability for user's promo group
-    promo_group = getattr(user, 'promo_group', None)
+    # Use get_primary_promo_group() for correct promo group resolution
+    promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else None
+    if promo_group is None:
+        promo_group = getattr(user, 'promo_group', None)
     promo_group_id = promo_group.id if promo_group else None
     if not new_tariff.is_available_for_promo_group(promo_group_id):
         raise HTTPException(
@@ -3744,10 +3754,17 @@ async def switch_tariff(
             detail='No active subscription with tariff',
         )
 
-    if user.subscription.status not in ('active', 'trial'):
+    # Use actual_status for correct status check (handles time-based expiration)
+    actual_status = user.subscription.actual_status
+    if actual_status not in ('active', 'trial'):
+        # For expired subscriptions, user should purchase a new tariff, not switch
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Subscription is not active',
+            detail={
+                'code': 'subscription_expired',
+                'message': 'Subscription is expired. Please purchase a new tariff instead of switching.',
+                'use_purchase_flow': True,
+            },
         )
 
     current_tariff = await get_tariff_by_id(db, user.subscription.tariff_id)
@@ -3766,7 +3783,10 @@ async def switch_tariff(
         )
 
     # Check tariff availability
-    promo_group = getattr(user, 'promo_group', None)
+    # Use get_primary_promo_group() for correct promo group resolution
+    promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else None
+    if promo_group is None:
+        promo_group = getattr(user, 'promo_group', None)
     promo_group_id = promo_group.id if promo_group else None
     if not new_tariff.is_available_for_promo_group(promo_group_id):
         raise HTTPException(
