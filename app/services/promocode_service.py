@@ -7,6 +7,7 @@ from app.database.crud.promo_group import get_promo_group_by_id
 from app.database.crud.promocode import (
     check_user_promocode_usage,
     create_promocode_use,
+    get_active_discount_promocode_for_user,
     get_promocode_by_code,
 )
 from app.database.crud.subscription import extend_subscription, get_subscription_by_user_id
@@ -300,3 +301,102 @@ class PromoCodeService:
                 effects.append('ℹ️ У вас уже есть активная подписка')
 
         return '\n'.join(effects) if effects else '✅ Промокод активирован'
+
+    async def deactivate_discount_promocode(
+        self,
+        db: AsyncSession,
+        user_id: int,
+        *,
+        admin_initiated: bool = False,
+    ) -> dict[str, Any]:
+        """
+        Деактивирует активный промокод на процентную скидку у пользователя.
+
+        Действия:
+        - Сбрасывает promo_offer_discount_percent / source / expires_at на пользователе
+        - Удаляет запись PromoCodeUse (чтобы промокод мог быть повторно использован, если max_uses > current_uses)
+        - Декрементирует current_uses на промокоде
+        - Если промокод назначил промогруппу -- снимает её с пользователя
+
+        Args:
+            db: Сессия БД
+            user_id: ID пользователя
+            admin_initiated: True если деактивацию инициировал админ
+
+        Returns:
+            dict с ключами success, error (опционально), deactivated_code (опционально)
+        """
+        try:
+            user = await get_user_by_id(db, user_id)
+            if not user:
+                return {'success': False, 'error': 'user_not_found'}
+
+            current_discount = getattr(user, 'promo_offer_discount_percent', 0) or 0
+            source = getattr(user, 'promo_offer_discount_source', None)
+
+            if current_discount <= 0 or not source or not source.startswith('promocode:'):
+                return {'success': False, 'error': 'no_active_discount_promocode'}
+
+            from datetime import datetime
+
+            expires_at = getattr(user, 'promo_offer_discount_expires_at', None)
+            # Если скидка уже истекла по времени -- тоже нечего деактивировать
+            if expires_at is not None and expires_at <= datetime.utcnow():
+                # Просто зачистим протухшие данные
+                user.promo_offer_discount_percent = 0
+                user.promo_offer_discount_source = None
+                user.promo_offer_discount_expires_at = None
+                user.updated_at = datetime.utcnow()
+                await db.commit()
+                return {'success': False, 'error': 'discount_already_expired'}
+
+            promocode, promo_use = await get_active_discount_promocode_for_user(db, user_id)
+
+            deactivated_code = source.split(':', 1)[1]
+
+            # 1. Сбрасываем скидку на пользователе
+            user.promo_offer_discount_percent = 0
+            user.promo_offer_discount_source = None
+            user.promo_offer_discount_expires_at = None
+            user.updated_at = datetime.utcnow()
+
+            # 2. Откатываем использование промокода (если нашли запись)
+            if promocode and promo_use:
+                await db.delete(promo_use)
+                if promocode.current_uses > 0:
+                    promocode.current_uses -= 1
+                    promocode.updated_at = datetime.utcnow()
+
+                # 3. Если промокод назначал промогруппу -- снимаем её
+                if promocode.promo_group_id:
+                    from app.database.crud.user_promo_group import (
+                        has_user_promo_group,
+                        remove_user_from_promo_group,
+                    )
+
+                    has_group = await has_user_promo_group(db, user_id, promocode.promo_group_id)
+                    if has_group:
+                        await remove_user_from_promo_group(db, user_id, promocode.promo_group_id)
+                        logger.info(
+                            f'Снята промогруппа ID {promocode.promo_group_id} у пользователя '
+                            f'{self._format_user_log(user)} при деактивации промокода {deactivated_code}'
+                        )
+
+            await db.commit()
+
+            initiator = 'администратором' if admin_initiated else 'пользователем'
+            logger.info(
+                f'Промокод {deactivated_code} (скидка {current_discount}%) деактивирован '
+                f'{initiator} для пользователя {self._format_user_log(user)}'
+            )
+
+            return {
+                'success': True,
+                'deactivated_code': deactivated_code,
+                'discount_percent': current_discount,
+            }
+
+        except Exception as e:
+            logger.error(f'Ошибка деактивации промокода для пользователя {user_id}: {e}')
+            await db.rollback()
+            return {'success': False, 'error': 'server_error'}
