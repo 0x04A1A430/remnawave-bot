@@ -100,6 +100,17 @@ class WataPaymentMixin:
 
         payment_module = import_module('app.services.payment_service')
 
+        # Добавляем идентификатор плательщика (telegram_id или email) в описание
+        try:
+            user = await payment_module.get_user_by_id(db, user_id)
+            if user:
+                if user.telegram_id:
+                    description = f'{description} | ID: {user.telegram_id}'
+                elif user.email:
+                    description = f'{description} | {user.email}'
+        except Exception as error:
+            logger.debug('Не удалось получить данные пользователя для описания WATA: %s', error)
+
         order_id = f'wata_{user_id}_{uuid.uuid4().hex[:12]}'
 
         try:
