@@ -412,10 +412,10 @@ async def confirm_change_devices(callback: types.CallbackQuery, db_user: User, d
         if price > 0:
             cost_text = texts.t(
                 'DEVICE_CHANGE_EXTRA_COST',
-                'Доплата: {amount} (за {months} мес)',
+                'Доплата: {amount} (за {period})',
             ).format(
                 amount=texts.format_price(price),
-                months=charged_months,
+                period=period_label,
             )
             if total_discount > 0:
                 cost_text += texts.t(
