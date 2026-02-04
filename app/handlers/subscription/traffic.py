@@ -484,7 +484,14 @@ async def add_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSes
     discount_per_month = discount_result['discount']
     charged_months = 1
 
-    if subscription:
+    # На тарифах пакеты трафика покупаются на 1 месяц (30 дней),
+    # цена в тарифе уже месячная — не умножаем на оставшиеся месяцы подписки.
+    # Пропорциональный расчёт применяем только в классическом режиме.
+    is_tariff_mode = settings.is_tariffs_mode() and subscription and subscription.tariff_id
+
+    if is_tariff_mode:
+        price = discounted_per_month
+    elif subscription:
         price, charged_months = calculate_prorated_price(
             discounted_per_month,
             subscription.end_date,

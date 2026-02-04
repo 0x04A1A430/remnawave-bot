@@ -683,11 +683,17 @@ async def purchase_traffic(
     if traffic_discount_percent > 0:
         base_price_kopeks = int(base_price_kopeks * (100 - traffic_discount_percent) / 100)
 
-    # Пропорциональный расчёт цены
-    final_price, months_charged = calculate_prorated_price(
-        base_price_kopeks,
-        subscription.end_date,
-    )
+    # На тарифах пакеты трафика покупаются на 1 месяц (30 дней),
+    # цена в тарифе уже месячная — не умножаем на оставшиеся месяцы подписки.
+    # Пропорциональный расчёт применяем только в классическом режиме.
+    if is_tariff_mode:
+        final_price = base_price_kopeks
+        months_charged = 1
+    else:
+        final_price, months_charged = calculate_prorated_price(
+            base_price_kopeks,
+            subscription.end_date,
+        )
 
     # Проверяем баланс
     if user.balance_kopeks < final_price:
