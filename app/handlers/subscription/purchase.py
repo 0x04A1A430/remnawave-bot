@@ -38,7 +38,6 @@ from app.keyboards.inline import (
     get_updated_subscription_settings_keyboard,
 )
 from app.localization.texts import get_texts
-from app.middlewares.global_error import schedule_error_notification
 from app.services.admin_notification_service import AdminNotificationService
 from app.services.blacklist_service import blacklist_service
 from app.services.remnawave_service import RemnaWaveConfigurationError
@@ -2080,10 +2079,6 @@ async def confirm_extend_subscription(callback: types.CallbackQuery, db_user: Us
 
         logger.error(f'TRACEBACK: {traceback.format_exc()}')
 
-        # Уведомляем админов о критической ошибке
-        if callback.bot:
-            schedule_error_notification(callback.bot, e, f'КРИТИЧЕСКАЯ ОШИБКА ПРОДЛЕНИЯ: user={db_user.telegram_id}')
-
         await callback.message.edit_text(
             '⚠ Произошла ошибка при продлении подписки. Обратитесь в поддержку.',
             reply_markup=get_back_keyboard(db_user.language),
@@ -2948,8 +2943,6 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
 
     except Exception as e:
         logger.error(f'Ошибка покупки подписки: {e}')
-        if callback.bot:
-            schedule_error_notification(callback.bot, e, f'Ошибка покупки подписки: user={db_user.telegram_id}')
         await callback.message.edit_text(texts.ERROR, reply_markup=get_back_keyboard(db_user.language))
 
     if purchase_completed:

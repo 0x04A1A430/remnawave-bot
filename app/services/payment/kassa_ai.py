@@ -104,8 +104,6 @@ class KassaAiPaymentMixin:
             payment_url = result.get('location')
             if not payment_url:
                 logger.error('KassaAI API не вернул URL платежа')
-                error = ValueError(f'KassaAI API missing payment URL: {result}')
-                self._schedule_error_notification(error, f'KassaAI payment creation error: user_id={user_id}')
                 return None
 
             logger.info(
@@ -262,10 +260,6 @@ class KassaAiPaymentMixin:
                 payment.user_id,
                 payment.order_id,
                 trigger,
-            )
-            error = ValueError(f'User not found: {payment.user_id}')
-            self._schedule_error_notification(
-                error, f'KassaAI finalize error: user not found for order_id={payment.order_id}'
             )
             return False
 

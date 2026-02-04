@@ -145,10 +145,6 @@ class YooKassaPaymentMixin:
 
             if not yookassa_response or yookassa_response.get('error'):
                 logger.error('Ошибка создания платежа YooKassa: %s', yookassa_response)
-                error = ValueError(f'YooKassa payment creation failed: {yookassa_response}')
-                self._schedule_error_notification(
-                    error, f'YooKassa payment creation error: user_id={user_id}, amount={amount_kopeks}'
-                )
                 return None
 
             yookassa_created_at: datetime | None = None
@@ -194,7 +190,6 @@ class YooKassaPaymentMixin:
 
         except Exception as error:
             logger.error('Ошибка создания платежа YooKassa: %s', error)
-            self._schedule_error_notification(error, f'YooKassa payment creation exception: user_id={user_id}')
             return None
 
     async def create_yookassa_sbp_payment(
@@ -255,8 +250,6 @@ class YooKassaPaymentMixin:
                     'Ошибка создания платежа YooKassa СБП: %s',
                     yookassa_response,
                 )
-                error = ValueError(f'YooKassa SBP payment creation failed: {yookassa_response}')
-                self._schedule_error_notification(error, f'YooKassa SBP payment creation error: user_id={user_id}')
                 return None
 
             local_payment = await payment_module.create_yookassa_payment(
@@ -297,7 +290,6 @@ class YooKassaPaymentMixin:
 
         except Exception as error:
             logger.error('Ошибка создания платежа YooKassa СБП: %s', error)
-            self._schedule_error_notification(error, f'YooKassa SBP payment creation exception: user_id={user_id}')
             return None
 
     async def get_yookassa_payment_status(
@@ -1115,9 +1107,6 @@ class YooKassaPaymentMixin:
                 'Ошибка обработки успешного платежа YooKassa %s: %s',
                 payment.yookassa_payment_id,
                 error,
-            )
-            self._schedule_error_notification(
-                error, f'YooKassa successful payment processing error: payment_id={payment.yookassa_payment_id}'
             )
             return False
 

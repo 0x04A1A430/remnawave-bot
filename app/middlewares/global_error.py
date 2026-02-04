@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import traceback
 from collections.abc import Awaitable, Callable
@@ -73,12 +72,8 @@ class GlobalErrorMiddleware(BaseMiddleware):
             logger.warning('⚠️ Ошибка соединения с БД в GlobalErrorMiddleware: %s', e)
             raise
         except Exception as e:
-            logger.error('Неожиданная ошибка в GlobalErrorMiddleware: %s', e, exc_info=True)
-            # Отправляем уведомление об ошибке в админский чат
-            bot = data.get('bot')
-            if bot:
-                user_info = self._get_user_info(event)
-                schedule_error_notification(bot, e, f'Пользователь: {user_info}')
+            user_info = self._get_user_info(event)
+            logger.error('Неожиданная ошибка в GlobalErrorMiddleware (user=%s): %s', user_info, e, exc_info=True)
             raise
 
     async def _handle_telegram_error(self, event: TelegramObject, error: TelegramBadRequest, data: dict[str, Any]):
@@ -95,12 +90,9 @@ class GlobalErrorMiddleware(BaseMiddleware):
         if self._is_bad_request_error(error_message):
             return await self._handle_bad_request(event, error, data)
 
-        # Неизвестная ошибка — логируем и отправляем уведомление
-        logger.error('Неизвестная Telegram API ошибка: %s', error)
-        bot = data.get('bot')
-        if bot:
-            user_info = self._get_user_info(event)
-            schedule_error_notification(bot, error, f'Пользователь: {user_info}')
+        # Неизвестная ошибка — логируем
+        user_info = self._get_user_info(event)
+        logger.error('Неизвестная Telegram API ошибка (user=%s): %s', user_info, error)
         raise error
 
     def _is_old_query_error(self, error_message: str) -> bool:
@@ -133,12 +125,7 @@ class GlobalErrorMiddleware(BaseMiddleware):
                 logger.debug("Успешно ответили на callback после 'message not modified'")
             except TelegramBadRequest as answer_error:
                 if not self._is_old_query_error(str(answer_error).lower()):
-                    logger.error('Ошибка при ответе на callback: %s', answer_error)
-                    # Отправляем уведомление в админский чат
-                    bot = data.get('bot')
-                    if bot:
-                        user_info = self._get_user_info(event)
-                        schedule_error_notification(bot, answer_error, f'Callback answer error: {user_info}')
+                    logger.warning('Ошибка при ответе на callback: %s', answer_error)
 
     async def _handle_bad_request(self, event: TelegramObject, error: TelegramBadRequest, data: dict[str, Any]):
         error_message = str(error).lower()
@@ -154,12 +141,8 @@ class GlobalErrorMiddleware(BaseMiddleware):
         if CHAT_NOT_FOUND_PHRASE in error_message or MESSAGE_NOT_FOUND_PHRASE in error_message:
             logger.warning('[GlobalErrorMiddleware] Чат или сообщение не найдено: %s', error)
             return
-        logger.error('[GlobalErrorMiddleware] Неизвестная bad request ошибка: %s', error)
-        # Отправляем уведомление перед raise
-        bot = data.get('bot')
-        if bot:
-            user_info = self._get_user_info(event)
-            schedule_error_notification(bot, error, f'Bad request: {user_info}')
+        user_info = self._get_user_info(event)
+        logger.error('[GlobalErrorMiddleware] Неизвестная bad request ошибка (user=%s): %s', user_info, error)
         raise error
 
     def _get_user_info(self, event: TelegramObject) -> str:
@@ -214,7 +197,9 @@ class ErrorStatisticsMiddleware(BaseMiddleware):
             self.error_counts[key] = 0
 
 
-async def send_error_to_admin_chat(bot: Bot, error: Exception, context: str = '') -> bool:
+async def send_error_to_admin_chat(
+    bot: Bot, error: Exception, context: str = '', tb_override: str | None = None
+) -> bool:
     """
     Отправляет уведомление об ошибке в админский чат с троттлингом.
 
@@ -222,6 +207,7 @@ async def send_error_to_admin_chat(bot: Bot, error: Exception, context: str = ''
         bot: Экземпляр бота
         error: Исключение
         context: Дополнительный контекст (например, информация о пользователе)
+        tb_override: Готовый traceback (если вызывается не из except-блока)
 
     Returns:
         bool: True если уведомление отправлено
@@ -237,7 +223,9 @@ async def send_error_to_admin_chat(bot: Bot, error: Exception, context: str = ''
 
     error_type = type(error).__name__
     error_message = str(error)[:ERROR_MESSAGE_MAX_LENGTH]
-    tb_str = traceback.format_exc()
+    tb_str = tb_override or traceback.format_exc()
+    if tb_str == 'NoneType: None\n' or tb_str == 'NoneType: None':
+        tb_str = '(no traceback available)'
 
     # Добавляем в буфер
     _error_buffer.append((error_type, error_message, tb_str))
@@ -334,17 +322,5 @@ async def send_error_to_admin_chat(bot: Bot, error: Exception, context: str = ''
         return True
 
     except Exception as e:
-        logger.error('Ошибка отправки уведомления об ошибке: %s', e)
+        logger.error('Ошибка отправки уведомления об ошибке: %s', e, extra={'_admin_notified': True})
         return False
-
-
-def schedule_error_notification(bot: Bot, error: Exception, context: str = '') -> None:
-    """
-    Планирует отправку уведомления об ошибке в фоне (не блокирует).
-
-    Args:
-        bot: Экземпляр бота
-        error: Исключение
-        context: Дополнительный контекст
-    """
-    asyncio.create_task(send_error_to_admin_chat(bot, error, context))

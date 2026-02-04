@@ -85,11 +85,9 @@ class CloudPaymentsPaymentMixin:
             )
         except CloudPaymentsAPIError as error:
             logger.error('Ошибка создания CloudPayments платежа: %s', error)
-            self._schedule_error_notification(error, f'CloudPayments payment creation API error: user_id={user_id}')
             return None
         except Exception as error:
             logger.exception('Непредвиденная ошибка при создании CloudPayments платежа: %s', error)
-            self._schedule_error_notification(error, f'CloudPayments payment creation exception: user_id={user_id}')
             return None
 
         metadata = {
@@ -111,10 +109,6 @@ class CloudPaymentsPaymentMixin:
 
         if not local_payment:
             logger.error('Не удалось создать локальную запись CloudPayments платежа')
-            error = ValueError('Failed to create local CloudPayments payment record')
-            self._schedule_error_notification(
-                error, f'CloudPayments payment creation error: user_id={user_id}, invoice_id={invoice_id}'
-            )
             return None
 
         logger.info(
@@ -155,8 +149,6 @@ class CloudPaymentsPaymentMixin:
 
         if not invoice_id:
             logger.error('CloudPayments webhook без invoice_id')
-            error = ValueError('CloudPayments webhook missing invoice_id')
-            self._schedule_error_notification(error, 'CloudPayments webhook error: missing invoice_id')
             return False
 
         payment_module = import_module('app.services.payment_service')
@@ -177,10 +169,6 @@ class CloudPaymentsPaymentMixin:
 
             if not user_id:
                 logger.error('Не удалось определить user_id из account_id: %s', account_id)
-                error = ValueError(f'CloudPayments cannot determine user_id from account_id: {account_id}')
-                self._schedule_error_notification(
-                    error, f'CloudPayments webhook error: cannot determine user, invoice_id={invoice_id}'
-                )
                 return False
 
             # Get user by ID
@@ -189,10 +177,6 @@ class CloudPaymentsPaymentMixin:
             user = await get_user_by_id(db, user_id)
             if not user:
                 logger.error('Пользователь не найден: id=%s', user_id)
-                error = ValueError(f'User not found: {user_id}')
-                self._schedule_error_notification(
-                    error, f'CloudPayments webhook error: user not found, invoice_id={invoice_id}'
-                )
                 return False
 
             # Create payment record
@@ -207,10 +191,6 @@ class CloudPaymentsPaymentMixin:
 
             if not payment:
                 logger.error('Не удалось создать запись платежа')
-                error = ValueError('Failed to create CloudPayments payment record from webhook')
-                self._schedule_error_notification(
-                    error, f'CloudPayments webhook error: failed to create payment, invoice_id={invoice_id}'
-                )
                 return False
 
         # Check if already processed
@@ -241,10 +221,6 @@ class CloudPaymentsPaymentMixin:
 
         if not user:
             logger.error('Пользователь не найден: id=%s', payment.user_id)
-            error = ValueError(f'User not found: {payment.user_id}')
-            self._schedule_error_notification(
-                error, f'CloudPayments finalize error: user not found, invoice_id={invoice_id}'
-            )
             return False
 
         # Add balance (без автоматической транзакции - создадим ниже с external_id)
