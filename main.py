@@ -14,6 +14,7 @@ from app.database.database import init_db
 from app.database.models import PaymentMethod
 from app.database.universal_migration import run_universal_migration
 from app.localization.loader import ensure_locale_templates
+from app.logging_handler import TelegramErrorHandler
 from app.services.backup_service import backup_service
 from app.services.ban_notification_service import ban_notification_service
 from app.services.broadcast_service import broadcast_service
@@ -139,6 +140,11 @@ async def main():
             level=getattr(logging, settings.LOG_LEVEL),
             handlers=log_handlers,
         )
+
+    # === TelegramErrorHandler: отправка ERROR/CRITICAL в админский чат ===
+    telegram_error_handler = TelegramErrorHandler(level=logging.ERROR)
+    telegram_error_handler.setFormatter(formatter)
+    logging.getLogger().addHandler(telegram_error_handler)
 
     # Установим более высокий уровень логирования для "мусорных" логов
     logging.getLogger('aiohttp.access').setLevel(logging.ERROR)
@@ -286,6 +292,7 @@ async def main():
         ban_notification_service.set_bot(bot)
         traffic_monitoring_scheduler.set_bot(bot)
         daily_subscription_service.set_bot(bot)
+        telegram_error_handler.set_bot(bot)
 
         # Initialize email broadcast service
         from app.cabinet.services.email_service import email_service
