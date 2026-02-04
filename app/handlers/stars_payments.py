@@ -10,7 +10,6 @@ from app.database.crud.user import get_user_by_telegram_id
 from app.external.telegram_stars import TelegramStarsService
 from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
-from app.middlewares.global_error import schedule_error_notification
 from app.services.payment_service import PaymentService
 
 
@@ -114,10 +113,6 @@ async def _handle_wheel_spin_payment(
 
     except Exception as e:
         logger.error(f'Ошибка обработки wheel spin payment: {e}', exc_info=True)
-        if message.bot:
-            schedule_error_notification(
-                message.bot, e, f'Wheel spin payment error: user={user.id if user else "unknown"}'
-            )
         await message.answer(
             '❌ Произошла ошибка при обработке спина. Обратитесь в поддержку.',
         )
@@ -144,12 +139,6 @@ async def _handle_trial_payment(
         parts = payload.split('_')
         if len(parts) < 2:
             logger.error(f'Невалидный trial payload: {payload}')
-            if message.bot:
-                schedule_error_notification(
-                    message.bot,
-                    ValueError(f'Invalid trial payload: {payload}'),
-                    f'Trial payment: invalid payload format, user={user.id if user else "unknown"}',
-                )
             await message.answer(
                 '❌ Ошибка: неверный формат платежа. Обратитесь в поддержку.',
             )
@@ -159,12 +148,6 @@ async def _handle_trial_payment(
             subscription_id = int(parts[1])
         except ValueError:
             logger.error(f'Невалидный subscription_id в trial payload: {payload}')
-            if message.bot:
-                schedule_error_notification(
-                    message.bot,
-                    ValueError(f'Invalid subscription_id in payload: {payload}'),
-                    f'Trial payment: invalid subscription_id, user={user.id if user else "unknown"}',
-                )
             await message.answer(
                 '❌ Ошибка: неверный ID подписки. Обратитесь в поддержку.',
             )
@@ -195,12 +178,6 @@ async def _handle_trial_payment(
 
         if not subscription:
             logger.error(f'Не удалось активировать триальную подписку {subscription_id} для пользователя {user.id}')
-            if message.bot:
-                schedule_error_notification(
-                    message.bot,
-                    RuntimeError(f'Failed to activate trial subscription {subscription_id}'),
-                    f'Trial activation failed: subscription_id={subscription_id}, user={user.id}',
-                )
             # Возвращаем деньги на баланс
             from app.database.crud.user import add_user_balance
 
@@ -223,12 +200,6 @@ async def _handle_trial_payment(
         except Exception as rw_error:
             logger.error(f'Ошибка создания пользователя RemnaWave для триала: {rw_error}')
             # Не откатываем подписку, просто логируем - RemnaWave может быть временно недоступен
-            if message.bot:
-                schedule_error_notification(
-                    message.bot,
-                    rw_error,
-                    f'RemnaWave trial user creation failed: subscription={subscription_id}, user={user.id}',
-                )
 
         await db.commit()
         await db.refresh(user)
@@ -263,8 +234,6 @@ async def _handle_trial_payment(
 
     except Exception as e:
         logger.error(f'Ошибка обработки trial payment: {e}', exc_info=True)
-        if message.bot:
-            schedule_error_notification(message.bot, e, f'Trial payment error: user={user.id if user else "unknown"}')
         await message.answer(
             '❌ Произошла ошибка при активации пробной подписки. Обратитесь в поддержку.',
         )
@@ -310,8 +279,6 @@ async def handle_pre_checkout_query(query: types.PreCheckoutQuery):
                 texts = get_texts(user.language or DEFAULT_LANGUAGE)
         except Exception as db_error:
             logger.error(f'Ошибка подключения к БД в pre_checkout_query: {db_error}')
-            if query.bot:
-                schedule_error_notification(query.bot, db_error, f'Pre-checkout DB error: user={query.from_user.id}')
             await query.answer(
                 ok=False,
                 error_message=texts.t(
@@ -326,8 +293,6 @@ async def handle_pre_checkout_query(query: types.PreCheckoutQuery):
 
     except Exception as e:
         logger.error(f'Ошибка в pre_checkout_query: {e}', exc_info=True)
-        if query.bot:
-            schedule_error_notification(query.bot, e, f'Pre-checkout query error: user={query.from_user.id}')
         await query.answer(
             ok=False,
             error_message=texts.t(
@@ -356,12 +321,6 @@ async def handle_successful_payment(message: types.Message, db: AsyncSession, st
 
         if not user:
             logger.error(f'Пользователь {user_id} не найден при обработке Stars платежа')
-            if message.bot:
-                schedule_error_notification(
-                    message.bot,
-                    RuntimeError(f'User {user_id} not found for Stars payment'),
-                    f'Stars payment: user not found, telegram_id={user_id}',
-                )
             await message.answer(
                 texts.t(
                     'STARS_PAYMENT_USER_NOT_FOUND',
@@ -469,12 +428,6 @@ async def handle_successful_payment(message: types.Message, db: AsyncSession, st
             )
         else:
             logger.error(f'Ошибка обработки Stars платежа для пользователя {user.id}')
-            if message.bot:
-                schedule_error_notification(
-                    message.bot,
-                    RuntimeError(f'Stars payment processing failed for user {user.id}'),
-                    f'Stars payment enrollment error: user={user.id}, stars={payment.total_amount}',
-                )
             await message.answer(
                 texts.t(
                     'STARS_PAYMENT_ENROLLMENT_ERROR',
@@ -485,8 +438,6 @@ async def handle_successful_payment(message: types.Message, db: AsyncSession, st
 
     except Exception as e:
         logger.error(f'Ошибка в successful_payment: {e}', exc_info=True)
-        if message.bot:
-            schedule_error_notification(message.bot, e, f'Stars successful_payment error: user={user_id}')
         await message.answer(
             texts.t(
                 'STARS_PAYMENT_PROCESSING_ERROR',
