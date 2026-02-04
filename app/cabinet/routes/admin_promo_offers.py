@@ -575,9 +575,24 @@ async def broadcast_offer(
     notifications_failed = 0
 
     if payload.send_notification and offers_to_notify:
+        # Render placeholders in custom message text
+        rendered_message_text = payload.message_text
+        if rendered_message_text:
+            extra = payload.extra_data or {}
+            try:
+                rendered_message_text = rendered_message_text.format(
+                    discount_percent=payload.discount_percent,
+                    valid_hours=payload.valid_hours,
+                    active_discount_hours=extra.get('active_discount_hours') or payload.valid_hours,
+                    test_duration_hours=extra.get('test_duration_hours') or 0,
+                    server_name=extra.get('server_name', ''),
+                )
+            except (KeyError, ValueError, IndexError):
+                logger.warning('Failed to render promo message placeholders')
+
         notifications_sent, notifications_failed = await _send_promo_notifications(
             offers_to_notify=offers_to_notify,
-            message_text=payload.message_text,
+            message_text=rendered_message_text,
             button_text=payload.button_text,
             discount_percent=payload.discount_percent,
             bonus_amount_kopeks=payload.bonus_amount_kopeks,
