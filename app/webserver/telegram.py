@@ -10,7 +10,6 @@ from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
 from app.config import settings
-from app.middlewares.global_error import schedule_error_notification
 
 
 logger = logging.getLogger(__name__)
@@ -168,8 +167,6 @@ class TelegramWebhookProcessor:
                     raise
                 except Exception as error:  # pragma: no cover - логируем сбой обработчика
                     logger.exception('Ошибка обработки Telegram update в worker %s: %s', worker_id, error)
-                    # Отправляем уведомление в админский чат
-                    schedule_error_notification(self._bot, error, f'Telegram webhook worker {worker_id}')
                 finally:
                     self._queue.task_done()
         finally:
@@ -191,7 +188,6 @@ async def _dispatch_update(
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail='webhook_queue_full') from error
         except TelegramWebhookProcessorNotRunningError as error:
             logger.error('Telegram webhook processor неактивен: %s', error)
-            schedule_error_notification(bot, error, 'Telegram webhook processor unavailable')
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail='webhook_processor_unavailable'
             ) from error
@@ -226,14 +222,12 @@ def create_telegram_router(
             payload: Any = await request.json()
         except Exception as error:  # pragma: no cover - defensive logging
             logger.error('Ошибка чтения Telegram webhook: %s', error)
-            schedule_error_notification(bot, error, 'Telegram webhook JSON parse error')
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='invalid_payload') from error
 
         try:
             update = Update.model_validate(payload)
         except Exception as error:  # pragma: no cover - defensive logging
             logger.error('Ошибка валидации Telegram update: %s', error)
-            schedule_error_notification(bot, error, 'Telegram update validation error')
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='invalid_update') from error
 
         await _dispatch_update(update, dispatcher=dispatcher, bot=bot, processor=processor)
