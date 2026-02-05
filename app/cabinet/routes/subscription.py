@@ -3326,13 +3326,20 @@ def _resolve_button_url(
     subscription_url: str | None,
     subscription_crypto_link: str | None,
 ) -> str:
-    """Resolve ``{{SUBSCRIPTION_LINK}}`` / ``{{HAPP_CRYPT4_LINK}}`` templates in a button URL."""
+    """Resolve template variables in button URLs.
+
+    Matches remnawave/subscription-page frontend TemplateEngine:
+    - {{SUBSCRIPTION_LINK}} -> plain subscription URL
+    - {{HAPP_CRYPT3_LINK}} -> crypto link
+    - {{HAPP_CRYPT4_LINK}} -> crypto link
+    """
     if not url:
         return url
     result = url
     if subscription_url:
         result = result.replace('{{SUBSCRIPTION_LINK}}', subscription_url)
     if subscription_crypto_link:
+        result = result.replace('{{HAPP_CRYPT3_LINK}}', subscription_crypto_link)
         result = result.replace('{{HAPP_CRYPT4_LINK}}', subscription_crypto_link)
     return result
 
@@ -3398,20 +3405,22 @@ async def get_app_config(
                     deep_link = _create_deep_link(app, subscription_url, subscription_crypto_link)
                 app['deepLink'] = deep_link
 
-                # Resolve templates inside block button URLs
+                # Resolve templates only for subscriptionLink and copyButton (not external)
                 for block in app.get('blocks', []):
                     if not isinstance(block, dict):
                         continue
                     for btn in block.get('buttons', []):
                         if not isinstance(btn, dict):
                             continue
-                        url = btn.get('url', '') or btn.get('link', '')
-                        if url and '{{' in url:
-                            btn['resolvedUrl'] = _resolve_button_url(
-                                url,
-                                subscription_url,
-                                subscription_crypto_link,
-                            )
+                        btn_type = btn.get('type', '')
+                        if btn_type in ('subscriptionLink', 'copyButton'):
+                            url = btn.get('url', '') or btn.get('link', '')
+                            if url and '{{' in url:
+                                btn['resolvedUrl'] = _resolve_button_url(
+                                    url,
+                                    subscription_url,
+                                    subscription_crypto_link,
+                                )
 
                 enriched_apps.append(app)
 
@@ -3427,10 +3436,11 @@ async def get_app_config(
             'svgLibrary': config.get('svgLibrary', {}),
             'baseTranslations': config.get('baseTranslations'),
             'baseSettings': config.get('baseSettings'),
+            'uiConfig': config.get('uiConfig', {}),
             'platformNames': platform_names,
             'hasSubscription': bool(subscription_url or subscription_crypto_link),
-            'subscriptionUrl': subscription_url if not hide_link else None,
-            'subscriptionCryptoLink': subscription_crypto_link if not hide_link else None,
+            'subscriptionUrl': subscription_url,
+            'subscriptionCryptoLink': subscription_crypto_link,
             'hideLink': hide_link,
             'branding': config.get('brandingSettings', {}),
         }
