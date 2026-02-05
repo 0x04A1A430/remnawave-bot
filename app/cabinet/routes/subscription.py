@@ -2917,7 +2917,12 @@ def _convert_remnawave_config_to_cabinet(config: dict[str, Any]) -> dict[str, An
 
 
 async def _load_app_config_async() -> dict[str, Any]:
-    """Load app config from RemnaWave (if configured) or local file."""
+    """Load app config from RemnaWave (if configured) or local file.
+
+    When config comes from RemnaWave, returns the original format with
+    ``_isRemnawave`` flag so the caller can serve it as-is (enriched with
+    deep links) instead of converting to the legacy step-based format.
+    """
     remnawave_uuid = _get_remnawave_config_uuid()
 
     if remnawave_uuid:
@@ -2927,22 +2932,9 @@ async def _load_app_config_async() -> dict[str, Any]:
                 config = await api.get_subscription_page_config(remnawave_uuid)
                 if config and config.config:
                     logger.debug(f'Loaded app config from RemnaWave: {remnawave_uuid}')
-                    # Debug: log raw RemnaWave config structure
-                    import json
-
-                    logger.debug(
-                        f'RemnaWave raw config: {json.dumps(config.config, ensure_ascii=False, indent=2)[:2000]}'
-                    )
-                    converted = _convert_remnawave_config_to_cabinet(config.config)
-                    logger.debug(f'Converted config platforms: {list(converted.get("platforms", {}).keys())}')
-                    # Log first app from each platform
-                    for platform, apps in converted.get('platforms', {}).items():
-                        if apps:
-                            first_app = apps[0]
-                            logger.debug(
-                                f'Platform {platform} first app: name={first_app.get("name")}, urlScheme={first_app.get("urlScheme")}'
-                            )
-                    return converted
+                    raw = dict(config.config)
+                    raw['_isRemnawave'] = True
+                    return raw
         except Exception as e:
             logger.warning(f'Failed to load RemnaWave config, falling back to file: {e}')
 
@@ -3329,6 +3321,22 @@ async def get_happ_downloads(
     }
 
 
+def _resolve_button_url(
+    url: str,
+    subscription_url: str | None,
+    subscription_crypto_link: str | None,
+) -> str:
+    """Resolve ``{{SUBSCRIPTION_LINK}}`` / ``{{HAPP_CRYPT4_LINK}}`` templates in a button URL."""
+    if not url:
+        return url
+    result = url
+    if subscription_url:
+        result = result.replace('{{SUBSCRIPTION_LINK}}', subscription_url)
+    if subscription_crypto_link:
+        result = result.replace('{{HAPP_CRYPT4_LINK}}', subscription_crypto_link)
+    return result
+
+
 @router.get('/app-config')
 async def get_app_config(
     user: User = Depends(get_current_cabinet_user),
@@ -3345,13 +3353,83 @@ async def get_app_config(
 
     # Load config from RemnaWave (if configured) or local file
     config = await _load_app_config_async()
-    platforms_raw = config.get('platforms', {})
 
+    is_remnawave = config.pop('_isRemnawave', False)
+    hide_link = settings.should_hide_subscription_link()
+
+    # Platform display names for UI (fallback)
+    platform_names = {
+        'ios': {'ru': 'iPhone/iPad', 'en': 'iPhone/iPad'},
+        'android': {'ru': 'Android', 'en': 'Android'},
+        'macos': {'ru': 'macOS', 'en': 'macOS'},
+        'windows': {'ru': 'Windows', 'en': 'Windows'},
+        'linux': {'ru': 'Linux', 'en': 'Linux'},
+        'androidTV': {'ru': 'Android TV', 'en': 'Android TV'},
+        'appleTV': {'ru': 'Apple TV', 'en': 'Apple TV'},
+    }
+
+    if is_remnawave:
+        # ── RemnaWave original format ──
+        # Serve original blocks/svgLibrary enriched with deep links and resolved URLs.
+        platforms: dict[str, Any] = {}
+        for platform_key, platform_data in config.get('platforms', {}).items():
+            if not isinstance(platform_data, dict):
+                continue
+            apps = platform_data.get('apps', [])
+            if not isinstance(apps, list):
+                continue
+
+            enriched_apps = []
+            for app in apps:
+                if not isinstance(app, dict):
+                    continue
+
+                # Generate deep link
+                deep_link = None
+                if subscription_url or subscription_crypto_link:
+                    deep_link = _create_deep_link(app, subscription_url, subscription_crypto_link)
+                app['deepLink'] = deep_link
+
+                # Resolve templates inside block button URLs
+                for block in app.get('blocks', []):
+                    if not isinstance(block, dict):
+                        continue
+                    for btn in block.get('buttons', []):
+                        if not isinstance(btn, dict):
+                            continue
+                        url = btn.get('url', '') or btn.get('link', '')
+                        if url and '{{' in url:
+                            btn['resolvedUrl'] = _resolve_button_url(
+                                url,
+                                subscription_url,
+                                subscription_crypto_link,
+                            )
+
+                enriched_apps.append(app)
+
+            if enriched_apps:
+                platforms[platform_key] = {'apps': enriched_apps}
+
+        return {
+            'isRemnawave': True,
+            'platforms': platforms,
+            'svgLibrary': config.get('svgLibrary', {}),
+            'baseTranslations': config.get('baseTranslations'),
+            'baseSettings': config.get('baseSettings'),
+            'platformNames': platform_names,
+            'hasSubscription': bool(subscription_url or subscription_crypto_link),
+            'subscriptionUrl': subscription_url if not hide_link else None,
+            'subscriptionCryptoLink': subscription_crypto_link if not hide_link else None,
+            'hideLink': hide_link,
+            'branding': config.get('brandingSettings', {}),
+        }
+
+    # ── Legacy file-based format ──
+    platforms_raw = config.get('platforms', {})
     if not isinstance(platforms_raw, dict):
         platforms_raw = {}
 
-    # Build response with deep links
-    platforms = {}
+    platforms_legacy: dict[str, Any] = {}
     for platform_key, apps in platforms_raw.items():
         if not isinstance(apps, list):
             continue
@@ -3379,23 +3457,10 @@ async def get_app_config(
             platform_apps.append(app_data)
 
         if platform_apps:
-            platforms[platform_key] = platform_apps
-
-    # Platform display names for UI
-    platform_names = {
-        'ios': {'ru': 'iPhone/iPad', 'en': 'iPhone/iPad'},
-        'android': {'ru': 'Android', 'en': 'Android'},
-        'macos': {'ru': 'macOS', 'en': 'macOS'},
-        'windows': {'ru': 'Windows', 'en': 'Windows'},
-        'linux': {'ru': 'Linux', 'en': 'Linux'},
-        'androidTV': {'ru': 'Android TV', 'en': 'Android TV'},
-        'appleTV': {'ru': 'Apple TV', 'en': 'Apple TV'},
-    }
-
-    hide_link = settings.should_hide_subscription_link()
+            platforms_legacy[platform_key] = platform_apps
 
     return {
-        'platforms': platforms,
+        'platforms': platforms_legacy,
         'platformNames': platform_names,
         'hasSubscription': bool(subscription_url or subscription_crypto_link),
         'subscriptionUrl': subscription_url if not hide_link else None,
