@@ -1038,6 +1038,16 @@ async def update_autopay(
             detail='No subscription found',
         )
 
+    # Суточные подписки имеют свой механизм продления (DailySubscriptionService),
+    # глобальный autopay для них запрещён
+    if request.enabled:
+        await db.refresh(user.subscription, ['tariff'])
+        if user.subscription.tariff and getattr(user.subscription.tariff, 'is_daily', False):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='Autopay is not available for daily subscriptions',
+            )
+
     user.subscription.autopay_enabled = request.enabled
 
     if request.days_before is not None:

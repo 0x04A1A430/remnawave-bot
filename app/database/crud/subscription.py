@@ -714,7 +714,10 @@ async def get_subscriptions_for_autopay(db: AsyncSession) -> list[Subscription]:
 
     result = await db.execute(
         select(Subscription)
-        .options(selectinload(Subscription.user))
+        .options(
+            selectinload(Subscription.user),
+            selectinload(Subscription.tariff),
+        )
         .where(
             and_(
                 Subscription.status == SubscriptionStatus.ACTIVE.value,
@@ -727,6 +730,11 @@ async def get_subscriptions_for_autopay(db: AsyncSession) -> list[Subscription]:
 
     ready_for_autopay = []
     for subscription in all_autopay_subscriptions:
+        # Суточные подписки имеют свой механизм продления (DailySubscriptionService),
+        # глобальный autopay на них не распространяется
+        if subscription.tariff and getattr(subscription.tariff, 'is_daily', False):
+            continue
+
         days_until_expiry = (subscription.end_date - current_time).days
 
         if days_until_expiry <= subscription.autopay_days_before and subscription.end_date > current_time:

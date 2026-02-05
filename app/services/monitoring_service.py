@@ -966,7 +966,8 @@ class MonitoringService:
                     selectinload(Subscription.user).options(
                         selectinload(User.promo_group),
                         selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
-                    )
+                    ),
+                    selectinload(Subscription.tariff),
                 )
                 .where(
                     and_(
@@ -980,6 +981,16 @@ class MonitoringService:
 
             autopay_subscriptions = []
             for sub in all_autopay_subscriptions:
+                # Суточные подписки имеют свой собственный механизм продления
+                # (DailySubscriptionService), глобальный autopay на них не распространяется
+                if sub.tariff and getattr(sub.tariff, 'is_daily', False):
+                    logger.debug(
+                        'Пропускаем суточную подписку %s (тариф %s) в глобальном autopay',
+                        sub.id,
+                        sub.tariff.name,
+                    )
+                    continue
+
                 days_before_expiry = (sub.end_date - current_time).days
                 if days_before_expiry <= min(sub.autopay_days_before, 3):
                     autopay_subscriptions.append(sub)
