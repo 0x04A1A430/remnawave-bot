@@ -1146,7 +1146,10 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
     admin_language: str = db_user.language
 
     await safe_edit_or_send_text(
-        callback, '📨 Начинаю рассылку...\n\n⏳ Это может занять несколько минут.', reply_markup=None, parse_mode='HTML'
+        callback,
+        '📨 <b>Подготовка рассылки...</b>\n\n⏳ Загружаю список получателей...',
+        reply_markup=None,
+        parse_mode='HTML',
     )
 
     # Загружаем пользователей и сразу извлекаем telegram_id в список
@@ -1193,93 +1196,198 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
 
     broadcast_keyboard = create_broadcast_keyboard(selected_buttons, admin_language)
 
-    # Ограничение на количество одновременных отправок и базовая задержка между сообщениями,
-    # чтобы избежать перегрузки бота и лимитов Telegram при больших рассылках
-    max_concurrent_sends = 5
-    per_message_delay = 0.05
-    semaphore = asyncio.Semaphore(max_concurrent_sends)
+    # =========================================================================
+    # Rate limiting: Telegram допускает ~30 msg/sec для бота.
+    # Используем batch_size=25 + 1 сек задержка между батчами = ~25 msg/sec
+    # с запасом, чтобы не получать FloodWait.
+    # Semaphore=25 — все сообщения батча отправляются параллельно.
+    # =========================================================================
+    _BATCH_SIZE = 25
+    _BATCH_DELAY = 1.0  # секунда между батчами
+    _MAX_SEND_RETRIES = 3
+    # Обновляем прогресс каждые N батчей (не каждое сообщение — иначе FloodWait на edit_text)
+    _PROGRESS_UPDATE_INTERVAL = max(1, 500 // _BATCH_SIZE)  # ~каждые 500 сообщений
+    # Минимальный интервал между обновлениями прогресса (секунды)
+    _PROGRESS_MIN_INTERVAL = 5.0
 
-    async def send_single_broadcast(telegram_id: int) -> tuple[bool, int]:
-        """Отправляет одно сообщение рассылки с семафором ограничения."""
-        async with semaphore:
-            for attempt in range(3):
-                try:
-                    if has_media and media_file_id:
-                        if media_type == 'photo':
-                            await callback.bot.send_photo(
-                                chat_id=telegram_id,
-                                photo=media_file_id,
-                                caption=message_text,
-                                parse_mode='HTML',
-                                reply_markup=broadcast_keyboard,
-                            )
-                        elif media_type == 'video':
-                            await callback.bot.send_video(
-                                chat_id=telegram_id,
-                                video=media_file_id,
-                                caption=message_text,
-                                parse_mode='HTML',
-                                reply_markup=broadcast_keyboard,
-                            )
-                        elif media_type == 'document':
-                            await callback.bot.send_document(
-                                chat_id=telegram_id,
-                                document=media_file_id,
-                                caption=message_text,
-                                parse_mode='HTML',
-                                reply_markup=broadcast_keyboard,
-                            )
+    # Глобальная пауза при FloodWait — тормозим ВСЕ отправки, а не один слот семафора
+    flood_wait_until: float = 0.0
+
+    async def send_single_broadcast(telegram_id: int) -> bool:
+        """Отправляет одно сообщение. Возвращает True при успехе."""
+        nonlocal flood_wait_until
+
+        for attempt in range(_MAX_SEND_RETRIES):
+            # Глобальная пауза при FloodWait
+            now = asyncio.get_event_loop().time()
+            if flood_wait_until > now:
+                await asyncio.sleep(flood_wait_until - now)
+
+            try:
+                if has_media and media_file_id:
+                    send_method = {
+                        'photo': callback.bot.send_photo,
+                        'video': callback.bot.send_video,
+                        'document': callback.bot.send_document,
+                    }.get(media_type)
+                    if send_method:
+                        media_kwarg = {
+                            'photo': 'photo',
+                            'video': 'video',
+                            'document': 'document',
+                        }[media_type]
+                        await send_method(
+                            chat_id=telegram_id,
+                            **{media_kwarg: media_file_id},
+                            caption=message_text,
+                            parse_mode='HTML',
+                            reply_markup=broadcast_keyboard,
+                        )
                     else:
+                        # Неизвестный media_type — отправляем как текст
                         await callback.bot.send_message(
                             chat_id=telegram_id,
                             text=message_text,
                             parse_mode='HTML',
                             reply_markup=broadcast_keyboard,
                         )
+                else:
+                    await callback.bot.send_message(
+                        chat_id=telegram_id,
+                        text=message_text,
+                        parse_mode='HTML',
+                        reply_markup=broadcast_keyboard,
+                    )
+                return True
 
-                    await asyncio.sleep(per_message_delay)
-                    return True, telegram_id
-                except TelegramRetryAfter as e:
-                    retry_delay = min(e.retry_after + 1, 30)
-                    logger.warning(f'Превышен лимит Telegram для {telegram_id}, ожидание {retry_delay} сек.')
-                    await asyncio.sleep(retry_delay)
-                except TelegramForbiddenError:
-                    # Пользователь мог удалить бота или запретить сообщения
-                    logger.info(f'Рассылка недоступна для пользователя {telegram_id}: Forbidden')
-                    return False, telegram_id
-                except TelegramBadRequest as e:
-                    logger.error(f'Некорректный запрос при рассылке пользователю {telegram_id}: {e}')
-                    return False, telegram_id
-                except Exception as e:
-                    logger.error(f'Ошибка отправки рассылки пользователю {telegram_id} (попытка {attempt + 1}/3): {e}')
+            except TelegramRetryAfter as e:
+                # Глобальная пауза — тормозим все корутины
+                wait_seconds = e.retry_after + 1
+                flood_wait_until = asyncio.get_event_loop().time() + wait_seconds
+                logger.warning(
+                    'FloodWait: Telegram просит подождать %d сек (пользователь %d, попытка %d/%d)',
+                    e.retry_after,
+                    telegram_id,
+                    attempt + 1,
+                    _MAX_SEND_RETRIES,
+                )
+                await asyncio.sleep(wait_seconds)
+
+            except TelegramForbiddenError:
+                return False
+
+            except TelegramBadRequest as e:
+                logger.debug('BadRequest при рассылке пользователю %d: %s', telegram_id, e)
+                return False
+
+            except Exception as e:
+                logger.error(
+                    'Ошибка отправки пользователю %d (попытка %d/%d): %s',
+                    telegram_id,
+                    attempt + 1,
+                    _MAX_SEND_RETRIES,
+                    e,
+                )
+                if attempt < _MAX_SEND_RETRIES - 1:
                     await asyncio.sleep(0.5 * (attempt + 1))
 
-            return False, telegram_id
+        return False
 
-    # Отправляем сообщения пакетами для эффективности
-    batch_size = 50
-    for i in range(0, len(recipient_telegram_ids), batch_size):
-        batch = recipient_telegram_ids[i : i + batch_size]
-        tasks = [send_single_broadcast(tid) for tid in batch]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+    # =========================================================================
+    # Прогресс-бар в реальном времени (как в сканере заблокированных)
+    # =========================================================================
+    total_recipients = len(recipient_telegram_ids)
+    last_progress_update: float = 0.0
+    # ID сообщения, которое обновляем (может быть заменено при ошибке)
+    progress_message = callback.message
+
+    def _build_progress_text(
+        current_sent: int,
+        current_failed: int,
+        total: int,
+        phase: str = 'sending',
+    ) -> str:
+        processed = current_sent + current_failed
+        percent = round(processed / total * 100, 1) if total > 0 else 0
+        bar_length = 20
+        filled = int(bar_length * processed / total) if total > 0 else 0
+        bar = '█' * filled + '░' * (bar_length - filled)
+
+        if phase == 'sending':
+            return (
+                f'📨 <b>Рассылка в процессе...</b>\n\n'
+                f'[{bar}] {percent}%\n\n'
+                f'📊 <b>Прогресс:</b>\n'
+                f'• Отправлено: {current_sent}\n'
+                f'• Ошибок: {current_failed}\n'
+                f'• Обработано: {processed}/{total}\n\n'
+                f'⏳ Не закрывайте диалог — рассылка продолжается...'
+            )
+        return ''
+
+    async def _update_progress_message(current_sent: int, current_failed: int) -> None:
+        """Безопасно обновляет сообщение с прогрессом."""
+        nonlocal last_progress_update, progress_message
+        now = asyncio.get_event_loop().time()
+        if now - last_progress_update < _PROGRESS_MIN_INTERVAL:
+            return
+        last_progress_update = now
+
+        text = _build_progress_text(current_sent, current_failed, total_recipients)
+        try:
+            await progress_message.edit_text(text, parse_mode='HTML')
+        except TelegramRetryAfter as e:
+            # Не паникуем — пропускаем обновление прогресса
+            logger.debug('FloodWait при обновлении прогресса, пропускаем: %d сек', e.retry_after)
+        except TelegramBadRequest:
+            # Сообщение удалено или контент не изменился — отправляем новое
+            try:
+                progress_message = await callback.bot.send_message(
+                    chat_id=callback.message.chat.id,
+                    text=text,
+                    parse_mode='HTML',
+                )
+            except Exception:
+                pass
+        except Exception:
+            pass  # Не ломаем рассылку из-за ошибок обновления прогресса
+
+    # Первое обновление прогресса
+    await _update_progress_message(0, 0)
+
+    # =========================================================================
+    # Основной цикл рассылки — батчами по _BATCH_SIZE
+    # =========================================================================
+    for batch_idx, i in enumerate(range(0, total_recipients, _BATCH_SIZE)):
+        batch = recipient_telegram_ids[i : i + _BATCH_SIZE]
+
+        # Отправляем батч параллельно
+        results = await asyncio.gather(
+            *[send_single_broadcast(tid) for tid in batch],
+            return_exceptions=True,
+        )
 
         for result in results:
-            if isinstance(result, tuple):  # (success, telegram_id)
-                success, _ = result
-                if success:
+            if isinstance(result, bool):
+                if result:
                     sent_count += 1
                 else:
                     failed_count += 1
             elif isinstance(result, Exception):
                 failed_count += 1
+                logger.error('Необработанное исключение в рассылке: %s', result)
 
-        # Небольшая задержка между пакетами для снижения нагрузки на API
-        await asyncio.sleep(0.25)
+        # Обновляем прогресс каждые _PROGRESS_UPDATE_INTERVAL батчей
+        if batch_idx % _PROGRESS_UPDATE_INTERVAL == 0:
+            await _update_progress_message(sent_count, failed_count)
+
+        # Задержка между батчами для соблюдения rate limits
+        await asyncio.sleep(_BATCH_DELAY)
 
     # Учитываем пропущенных email-only пользователей
-    skipped_email_users = total_users_count - len(recipient_telegram_ids)
+    skipped_email_users = total_users_count - total_recipients
     if skipped_email_users > 0:
-        logger.info(f'Пропущено {skipped_email_users} email-only пользователей при рассылке')
+        logger.info('Пропущено %d email-only пользователей при рассылке', skipped_email_users)
 
     status = 'completed' if failed_count == 0 else 'partial'
 
@@ -1291,31 +1399,25 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
         status=status,
     )
 
-    media_info = ''
-    if has_media:
-        media_info = f'\n🖼️ <b>Медиафайл:</b> {media_type}'
+    success_rate = round(sent_count / total_users_count * 100, 1) if total_users_count else 0
+    media_info = f'\n🖼️ <b>Медиафайл:</b> {media_type}' if has_media else ''
 
-    # Используем заранее сохранённое имя админа
-    result_text = f"""
-✅ <b>Рассылка завершена!</b>
+    result_text = (
+        f'✅ <b>Рассылка завершена!</b>\n\n'
+        f'📊 <b>Результат:</b>\n'
+        f'• Отправлено: {sent_count}\n'
+        f'• Не доставлено: {failed_count}\n'
+        f'• Всего пользователей: {total_users_count}\n'
+        f'• Успешность: {success_rate}%{media_info}\n\n'
+        f'<b>Администратор:</b> {admin_name}'
+    )
 
-📊 <b>Результат:</b>
-- Отправлено: {sent_count}
-- Не доставлено: {failed_count}
-- Всего пользователей: {total_users_count}
-- Успешность: {round(sent_count / total_users_count * 100, 1) if total_users_count else 0}%{media_info}
-
-<b>Администратор:</b> {admin_name}
-"""
+    back_keyboard = types.InlineKeyboardMarkup(
+        inline_keyboard=[[types.InlineKeyboardButton(text='📨 К рассылкам', callback_data='admin_messages')]]
+    )
 
     try:
-        await callback.message.edit_text(
-            result_text,
-            reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text='📨 К рассылкам', callback_data='admin_messages')]]
-            ),
-            parse_mode='HTML',
-        )
+        await progress_message.edit_text(result_text, reply_markup=back_keyboard, parse_mode='HTML')
     except TelegramBadRequest as e:
         error_msg = str(e).lower()
         if (
@@ -1323,15 +1425,10 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
             or 'there is no text' in error_msg
             or "message can't be edited" in error_msg
         ):
-            # Сообщение удалено или это медиа - отправляем новое
             await callback.bot.send_message(
                 chat_id=callback.message.chat.id,
                 text=result_text,
-                reply_markup=types.InlineKeyboardMarkup(
-                    inline_keyboard=[
-                        [types.InlineKeyboardButton(text='📨 К рассылкам', callback_data='admin_messages')]
-                    ]
-                ),
+                reply_markup=back_keyboard,
                 parse_mode='HTML',
             )
         else:
@@ -1339,7 +1436,12 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
 
     await state.clear()
     logger.info(
-        f'Рассылка выполнена админом {admin_telegram_id}: {sent_count}/{total_users_count} (медиа: {has_media})'
+        'Рассылка завершена админом %s: sent=%d, failed=%d, total=%d (медиа: %s)',
+        admin_telegram_id,
+        sent_count,
+        failed_count,
+        total_users_count,
+        has_media,
     )
 
 
