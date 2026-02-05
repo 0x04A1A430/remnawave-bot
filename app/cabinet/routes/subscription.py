@@ -3357,16 +3357,24 @@ async def get_app_config(
     is_remnawave = config.pop('_isRemnawave', False)
     hide_link = settings.should_hide_subscription_link()
 
-    # Platform display names for UI (fallback)
-    platform_names = {
-        'ios': {'ru': 'iPhone/iPad', 'en': 'iPhone/iPad'},
-        'android': {'ru': 'Android', 'en': 'Android'},
-        'macos': {'ru': 'macOS', 'en': 'macOS'},
-        'windows': {'ru': 'Windows', 'en': 'Windows'},
-        'linux': {'ru': 'Linux', 'en': 'Linux'},
-        'androidTV': {'ru': 'Android TV', 'en': 'Android TV'},
-        'appleTV': {'ru': 'Apple TV', 'en': 'Apple TV'},
+    # Строим platformNames из displayName каждой платформы RemnaWave
+    platform_names: dict[str, Any] = {}
+    for pk, pd in config.get('platforms', {}).items():
+        if isinstance(pd, dict) and 'displayName' in pd:
+            platform_names[pk] = pd['displayName']
+    # Фоллбэк для платформ без displayName (en достаточно)
+    fallback_names = {
+        'ios': {'en': 'iPhone/iPad'},
+        'android': {'en': 'Android'},
+        'macos': {'en': 'macOS'},
+        'windows': {'en': 'Windows'},
+        'linux': {'en': 'Linux'},
+        'androidTV': {'en': 'Android TV'},
+        'appleTV': {'en': 'Apple TV'},
     }
+    for k, v in fallback_names.items():
+        if k not in platform_names:
+            platform_names[k] = v
 
     if is_remnawave:
         # ── RemnaWave original format ──
@@ -3408,7 +3416,10 @@ async def get_app_config(
                 enriched_apps.append(app)
 
             if enriched_apps:
-                platforms[platform_key] = {'apps': enriched_apps}
+                # Сохраняем platform-level поля (svgIconKey, displayName и т.д.)
+                platform_output = {k: v for k, v in platform_data.items() if k != 'apps'}
+                platform_output['apps'] = enriched_apps
+                platforms[platform_key] = platform_output
 
         return {
             'isRemnawave': True,
