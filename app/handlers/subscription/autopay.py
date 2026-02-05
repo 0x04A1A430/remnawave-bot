@@ -39,6 +39,21 @@ async def handle_autopay_menu(callback: types.CallbackQuery, db_user: User, db: 
         )
         return
 
+    # Суточные подписки имеют свой механизм продления, глобальный autopay не применяется
+    try:
+        await db.refresh(subscription, ['tariff'])
+    except Exception:
+        pass
+    if subscription.tariff and getattr(subscription.tariff, 'is_daily', False):
+        await callback.answer(
+            texts.t(
+                'AUTOPAY_NOT_AVAILABLE_FOR_DAILY',
+                'Автоплатеж недоступен для суточных тарифов. Списание происходит автоматически раз в сутки.',
+            ),
+            show_alert=True,
+        )
+        return
+
     status = (
         texts.t('AUTOPAY_STATUS_ENABLED', 'включен')
         if subscription.autopay_enabled
@@ -67,6 +82,24 @@ async def handle_autopay_menu(callback: types.CallbackQuery, db_user: User, db: 
 async def toggle_autopay(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     subscription = db_user.subscription
     enable = callback.data == 'autopay_enable'
+
+    # Суточные подписки имеют свой механизм продления (DailySubscriptionService),
+    # глобальный autopay для них запрещён
+    if enable:
+        try:
+            await db.refresh(subscription, ['tariff'])
+        except Exception:
+            pass
+        if subscription.tariff and getattr(subscription.tariff, 'is_daily', False):
+            texts = get_texts(db_user.language)
+            await callback.answer(
+                texts.t(
+                    'AUTOPAY_NOT_AVAILABLE_FOR_DAILY',
+                    'Автоплатеж недоступен для суточных тарифов. Списание происходит автоматически раз в сутки.',
+                ),
+                show_alert=True,
+            )
+            return
 
     await update_subscription_autopay(db, subscription, enable)
 
