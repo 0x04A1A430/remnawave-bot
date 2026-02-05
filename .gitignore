@@ -17,6 +17,8 @@
 !requirements.txt
 !alembic.ini
 !app-config.json
+!release-please-config.json
+!.release-please-manifest.json
 
 # Документация
 !README.md
