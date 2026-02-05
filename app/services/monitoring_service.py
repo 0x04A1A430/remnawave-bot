@@ -61,12 +61,17 @@ from app.services.notification_settings_service import NotificationSettingsServi
 from app.services.payment_service import PaymentService
 from app.services.promo_offer_service import promo_offer_service
 from app.services.subscription_service import SubscriptionService
+from app.utils.cache import cache
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button
 from app.utils.pricing_utils import apply_percentage_discount
 from app.utils.subscription_utils import (
     resolve_hwid_device_limit_for_payload,
 )
 from app.utils.timezone import format_local_datetime
+
+
+# Кулдаун между повторными уведомлениями об автоплатеже с недостаточным балансом (6 часов)
+AUTOPAY_INSUFFICIENT_BALANCE_COOLDOWN_SECONDS: int = 21600
 
 
 logger = logging.getLogger(__name__)
@@ -966,7 +971,8 @@ class MonitoringService:
                     selectinload(Subscription.user).options(
                         selectinload(User.promo_group),
                         selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
-                    )
+                    ),
+                    selectinload(Subscription.tariff),
                 )
                 .where(
                     and_(
@@ -980,6 +986,16 @@ class MonitoringService:
 
             autopay_subscriptions = []
             for sub in all_autopay_subscriptions:
+                # Суточные подписки имеют свой собственный механизм продления
+                # (DailySubscriptionService), глобальный autopay на них не распространяется
+                if sub.tariff and getattr(sub.tariff, 'is_daily', False):
+                    logger.debug(
+                        'Пропускаем суточную подписку %s (тариф %s) в глобальном autopay',
+                        sub.id,
+                        sub.tariff.name,
+                    )
+                    continue
+
                 days_before_expiry = (sub.end_date - current_time).days
                 if days_before_expiry <= min(sub.autopay_days_before, 3):
                     autopay_subscriptions.append(sub)
@@ -1056,13 +1072,50 @@ class MonitoringService:
                         logger.warning(f'💳 Ошибка списания средств для автопродления пользователя {user_identifier}')
                 else:
                     failed_count += 1
-                    if user.telegram_id and self.bot:
-                        await self._send_autopay_failed_notification(user, user.balance_kopeks, charge_amount)
-                    elif not user.telegram_id:
-                        await notification_delivery_service.notify_autopay_failed(
-                            user=user,
-                            reason='Недостаточно средств на балансе',
+
+                    # Проверяем кулдаун уведомления через Redis, чтобы не спамить
+                    # при каждом срабатывании мониторинга
+                    cooldown_key = f'autopay_insufficient_balance_notified:{user.id}'
+                    should_notify = True
+
+                    try:
+                        if await cache.exists(cooldown_key):
+                            should_notify = False
+                            logger.debug(
+                                '💳 Пропуск уведомления о недостаточном балансе для пользователя %s — кулдаун активен',
+                                user_identifier,
+                            )
+                    except Exception as redis_err:
+                        # Fallback: если Redis недоступен — отправляем уведомление
+                        logger.warning(
+                            '⚠️ Ошибка проверки кулдауна в Redis для пользователя %s: %s. Отправляем уведомление.',
+                            user_identifier,
+                            redis_err,
                         )
+
+                    if should_notify:
+                        if user.telegram_id and self.bot:
+                            await self._send_autopay_failed_notification(user, user.balance_kopeks, charge_amount)
+                        elif not user.telegram_id:
+                            await notification_delivery_service.notify_autopay_failed(
+                                user=user,
+                                reason='Недостаточно средств на балансе',
+                            )
+
+                        # Ставим ключ кулдауна после отправки
+                        try:
+                            await cache.set(
+                                cooldown_key,
+                                1,
+                                expire=AUTOPAY_INSUFFICIENT_BALANCE_COOLDOWN_SECONDS,
+                            )
+                        except Exception as redis_err:
+                            logger.warning(
+                                '⚠️ Не удалось установить кулдаун в Redis для пользователя %s: %s',
+                                user_identifier,
+                                redis_err,
+                            )
+
                     logger.warning(f'💳 Недостаточно средств для автопродления у пользователя {user_identifier}')
 
             if processed_count > 0 or failed_count > 0:

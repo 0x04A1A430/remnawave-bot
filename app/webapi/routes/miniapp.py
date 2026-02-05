@@ -3698,7 +3698,22 @@ async def update_subscription_autopay_endpoint(
     subscription = _ensure_paid_subscription(user)
     _validate_subscription_id(payload.subscription_id, subscription)
 
+    # Суточные подписки имеют свой механизм продления (DailySubscriptionService),
+    # глобальный autopay для них запрещён
     target_enabled = bool(payload.enabled) if payload.enabled is not None else bool(subscription.autopay_enabled)
+    if target_enabled:
+        try:
+            await db.refresh(subscription, ['tariff'])
+        except Exception:
+            pass
+        if subscription.tariff and getattr(subscription.tariff, 'is_daily', False):
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail={
+                    'code': 'autopay_not_available_for_daily',
+                    'message': 'Autopay is not available for daily subscriptions',
+                },
+            )
 
     requested_days = payload.days_before
     normalized_days = _normalize_autopay_days(requested_days)

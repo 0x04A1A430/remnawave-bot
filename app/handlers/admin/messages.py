@@ -127,58 +127,78 @@ def create_broadcast_keyboard(selected_buttons: list, language: str = 'ru') -> t
 
 
 async def _persist_broadcast_result(
-    db: AsyncSession,
-    broadcast_history: BroadcastHistory,
+    broadcast_id: int,
     sent_count: int,
     failed_count: int,
     status: str,
 ) -> None:
-    """Сохраняет результаты рассылки с повторной попыткой при обрыве соединения."""
+    """
+    Сохраняет результаты рассылки в НОВОЙ сессии.
 
-    # Сохраняем ID и время завершения в локальные переменные ДО операций с БД,
-    # чтобы избежать обращения к атрибутам отсоединенного объекта при потере соединения
-    broadcast_id = broadcast_history.id
+    ВАЖНО: Используем свежую сессию вместо переданной, потому что за время
+    долгой рассылки (минуты/часы) оригинальное соединение гарантированно
+    закроется по таймауту PostgreSQL (idle_in_transaction_session_timeout).
+
+    Args:
+        broadcast_id: ID записи BroadcastHistory (не ORM-объект!)
+        sent_count: Количество успешно отправленных сообщений
+        failed_count: Количество неудачных отправок
+        status: Финальный статус рассылки ('completed', 'partial', 'failed')
+    """
     completed_at = datetime.utcnow()
+    max_retries = 3
+    retry_delay = 1.0
 
-    broadcast_history.sent_count = sent_count
-    broadcast_history.failed_count = failed_count
-    broadcast_history.status = status
-    broadcast_history.completed_at = completed_at
+    for attempt in range(1, max_retries + 1):
+        try:
+            async with AsyncSessionLocal() as session:
+                broadcast_history = await session.get(BroadcastHistory, broadcast_id)
+                if not broadcast_history:
+                    logger.critical(
+                        'Не удалось найти запись BroadcastHistory #%s для записи результатов',
+                        broadcast_id,
+                    )
+                    return
 
-    try:
-        await db.commit()
-        return
-    except InterfaceError as error:
-        logger.warning(
-            'Соединение с БД потеряно при сохранении результатов рассылки, пробуем еще раз',
-            exc_info=error,
-        )
-        await db.rollback()
+                broadcast_history.sent_count = sent_count
+                broadcast_history.failed_count = failed_count
+                broadcast_history.status = status
+                broadcast_history.completed_at = completed_at
+                await session.commit()
 
-    try:
-        async with AsyncSessionLocal() as retry_session:
-            retry_history = await retry_session.get(BroadcastHistory, broadcast_id)
-            if not retry_history:
-                logger.critical(
-                    'Не удалось найти запись BroadcastHistory #%s для повторной записи результатов',
+                logger.info(
+                    'Результаты рассылки сохранены (id=%s, sent=%d, failed=%d, status=%s)',
                     broadcast_id,
+                    sent_count,
+                    failed_count,
+                    status,
                 )
                 return
 
-            retry_history.sent_count = sent_count
-            retry_history.failed_count = failed_count
-            retry_history.status = status
-            retry_history.completed_at = completed_at
-            await retry_session.commit()
-            logger.info(
-                'Результаты рассылки успешно сохранены после повторного подключения к БД (id=%s)',
-                broadcast_id,
+        except InterfaceError as error:
+            logger.warning(
+                'Ошибка соединения при сохранении результатов рассылки (попытка %d/%d): %s',
+                attempt,
+                max_retries,
+                error,
             )
-    except Exception as retry_error:
-        logger.critical(
-            'Не удалось сохранить результаты рассылки после восстановления подключения',
-            exc_info=retry_error,
-        )
+            if attempt < max_retries:
+                await asyncio.sleep(retry_delay)
+                retry_delay *= 2
+            else:
+                logger.critical(
+                    'Не удалось сохранить результаты рассылки после %d попыток (id=%s)',
+                    max_retries,
+                    broadcast_id,
+                )
+
+        except Exception as error:
+            logger.critical(
+                'Неожиданная ошибка при сохранении результатов рассылки (id=%s)',
+                broadcast_id,
+                exc_info=error,
+            )
+            return
 
 
 @admin_required
@@ -1113,15 +1133,38 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
     media_file_id = data.get('media_file_id')
     media_caption = data.get('media_caption')
 
+    # =========================================================================
+    # КРИТИЧНО: Извлекаем ВСЕ скалярные значения из ORM-объектов СЕЙЧАС,
+    # пока сессия активна. После начала рассылки соединение с БД может
+    # закрыться по таймауту, и любое обращение к атрибутам ORM вызовет:
+    # - MissingGreenlet (lazy loading вне async контекста)
+    # - InterfaceError (соединение закрыто)
+    # =========================================================================
+    admin_id: int = db_user.id
+    admin_name: str = db_user.full_name  # property, читает first_name/last_name
+    admin_telegram_id: int | None = db_user.telegram_id
+    admin_language: str = db_user.language
+
     await safe_edit_or_send_text(
-        callback, '📨 Начинаю рассылку...\n\n⏳ Это может занять несколько минут.', reply_markup=None, parse_mode='HTML'
+        callback,
+        '📨 <b>Подготовка рассылки...</b>\n\n⏳ Загружаю список получателей...',
+        reply_markup=None,
+        parse_mode='HTML',
     )
 
+    # Загружаем пользователей и сразу извлекаем telegram_id в список
+    # чтобы не обращаться к ORM-объектам во время долгой рассылки
     if target.startswith('custom_'):
-        users = await get_custom_users(db, target.replace('custom_', ''))
+        users_orm = await get_custom_users(db, target.replace('custom_', ''))
     else:
-        users = await get_target_users(db, target)
+        users_orm = await get_target_users(db, target)
 
+    # Извлекаем только telegram_id - это всё что нужно для отправки
+    # Фильтруем None (email-only пользователи)
+    recipient_telegram_ids: list[int] = [user.telegram_id for user in users_orm if user.telegram_id is not None]
+    total_users_count = len(users_orm)
+
+    # Создаём запись истории рассылки
     broadcast_history = BroadcastHistory(
         target_type=target,
         message_text=message_text,
@@ -1129,145 +1172,252 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
         media_type=media_type,
         media_file_id=media_file_id,
         media_caption=media_caption,
-        total_count=len(users),
+        total_count=total_users_count,
         sent_count=0,
         failed_count=0,
-        admin_id=db_user.id,
-        admin_name=db_user.full_name,
+        admin_id=admin_id,
+        admin_name=admin_name,
         status='in_progress',
     )
     db.add(broadcast_history)
     await db.commit()
     await db.refresh(broadcast_history)
 
+    # Сохраняем ID - это единственное что нам нужно после коммита
+    broadcast_id: int = broadcast_history.id
+
+    # =========================================================================
+    # С этого момента НЕ используем db сессию и ORM-объекты!
+    # Работаем только со скалярными значениями.
+    # =========================================================================
+
     sent_count = 0
     failed_count = 0
 
-    broadcast_keyboard = create_broadcast_keyboard(selected_buttons, db_user.language)
+    broadcast_keyboard = create_broadcast_keyboard(selected_buttons, admin_language)
 
-    # Ограничение на количество одновременных отправок и базовая задержка между сообщениями,
-    # чтобы избежать перегрузки бота и лимитов Telegram при больших рассылках
-    max_concurrent_sends = 5
-    per_message_delay = 0.05
-    semaphore = asyncio.Semaphore(max_concurrent_sends)
+    # =========================================================================
+    # Rate limiting: Telegram допускает ~30 msg/sec для бота.
+    # Используем batch_size=25 + 1 сек задержка между батчами = ~25 msg/sec
+    # с запасом, чтобы не получать FloodWait.
+    # Semaphore=25 — все сообщения батча отправляются параллельно.
+    # =========================================================================
+    _BATCH_SIZE = 25
+    _BATCH_DELAY = 1.0  # секунда между батчами
+    _MAX_SEND_RETRIES = 3
+    # Обновляем прогресс каждые N батчей (не каждое сообщение — иначе FloodWait на edit_text)
+    _PROGRESS_UPDATE_INTERVAL = max(1, 500 // _BATCH_SIZE)  # ~каждые 500 сообщений
+    # Минимальный интервал между обновлениями прогресса (секунды)
+    _PROGRESS_MIN_INTERVAL = 5.0
 
-    async def send_single_broadcast(user):
-        """Отправляет одно сообщение рассылки с семафором ограничения"""
-        # Skip email-only users (no telegram_id)
-        if not user.telegram_id:
-            logger.debug('Пропуск email-пользователя %s при рассылке', user.id)
-            return False, None
+    # Глобальная пауза при FloodWait — тормозим ВСЕ отправки, а не один слот семафора
+    flood_wait_until: float = 0.0
 
-        async with semaphore:
-            for attempt in range(3):
-                try:
-                    if has_media and media_file_id:
-                        if media_type == 'photo':
-                            await callback.bot.send_photo(
-                                chat_id=user.telegram_id,
-                                photo=media_file_id,
-                                caption=message_text,
-                                parse_mode='HTML',
-                                reply_markup=broadcast_keyboard,
-                            )
-                        elif media_type == 'video':
-                            await callback.bot.send_video(
-                                chat_id=user.telegram_id,
-                                video=media_file_id,
-                                caption=message_text,
-                                parse_mode='HTML',
-                                reply_markup=broadcast_keyboard,
-                            )
-                        elif media_type == 'document':
-                            await callback.bot.send_document(
-                                chat_id=user.telegram_id,
-                                document=media_file_id,
-                                caption=message_text,
-                                parse_mode='HTML',
-                                reply_markup=broadcast_keyboard,
-                            )
+    async def send_single_broadcast(telegram_id: int) -> bool:
+        """Отправляет одно сообщение. Возвращает True при успехе."""
+        nonlocal flood_wait_until
+
+        for attempt in range(_MAX_SEND_RETRIES):
+            # Глобальная пауза при FloodWait
+            now = asyncio.get_event_loop().time()
+            if flood_wait_until > now:
+                await asyncio.sleep(flood_wait_until - now)
+
+            try:
+                if has_media and media_file_id:
+                    send_method = {
+                        'photo': callback.bot.send_photo,
+                        'video': callback.bot.send_video,
+                        'document': callback.bot.send_document,
+                    }.get(media_type)
+                    if send_method:
+                        media_kwarg = {
+                            'photo': 'photo',
+                            'video': 'video',
+                            'document': 'document',
+                        }[media_type]
+                        await send_method(
+                            chat_id=telegram_id,
+                            **{media_kwarg: media_file_id},
+                            caption=message_text,
+                            parse_mode='HTML',
+                            reply_markup=broadcast_keyboard,
+                        )
                     else:
+                        # Неизвестный media_type — отправляем как текст
                         await callback.bot.send_message(
-                            chat_id=user.telegram_id,
+                            chat_id=telegram_id,
                             text=message_text,
                             parse_mode='HTML',
                             reply_markup=broadcast_keyboard,
                         )
-
-                    await asyncio.sleep(per_message_delay)
-                    return True, user.telegram_id
-                except TelegramRetryAfter as e:
-                    retry_delay = min(e.retry_after + 1, 30)
-                    logger.warning(f'Превышен лимит Telegram для {user.telegram_id}, ожидание {retry_delay} сек.')
-                    await asyncio.sleep(retry_delay)
-                except TelegramForbiddenError:
-                    # Пользователь мог удалить бота или запретить сообщения
-                    logger.info(f'Рассылка недоступна для пользователя {user.telegram_id}: Forbidden')
-                    return False, user.telegram_id
-                except TelegramBadRequest as e:
-                    logger.error(f'Некорректный запрос при рассылке пользователю {user.telegram_id}: {e}')
-                    return False, user.telegram_id
-                except Exception as e:
-                    logger.error(
-                        f'Ошибка отправки рассылки пользователю {user.telegram_id} (попытка {attempt + 1}/3): {e}'
+                else:
+                    await callback.bot.send_message(
+                        chat_id=telegram_id,
+                        text=message_text,
+                        parse_mode='HTML',
+                        reply_markup=broadcast_keyboard,
                     )
+                return True
+
+            except TelegramRetryAfter as e:
+                # Глобальная пауза — тормозим все корутины
+                wait_seconds = e.retry_after + 1
+                flood_wait_until = asyncio.get_event_loop().time() + wait_seconds
+                logger.warning(
+                    'FloodWait: Telegram просит подождать %d сек (пользователь %d, попытка %d/%d)',
+                    e.retry_after,
+                    telegram_id,
+                    attempt + 1,
+                    _MAX_SEND_RETRIES,
+                )
+                await asyncio.sleep(wait_seconds)
+
+            except TelegramForbiddenError:
+                return False
+
+            except TelegramBadRequest as e:
+                logger.debug('BadRequest при рассылке пользователю %d: %s', telegram_id, e)
+                return False
+
+            except Exception as e:
+                logger.error(
+                    'Ошибка отправки пользователю %d (попытка %d/%d): %s',
+                    telegram_id,
+                    attempt + 1,
+                    _MAX_SEND_RETRIES,
+                    e,
+                )
+                if attempt < _MAX_SEND_RETRIES - 1:
                     await asyncio.sleep(0.5 * (attempt + 1))
 
-            return False, user.telegram_id
+        return False
 
-    # Отправляем сообщения пакетами для эффективности
-    batch_size = 50
-    for i in range(0, len(users), batch_size):
-        batch = users[i : i + batch_size]
-        tasks = [send_single_broadcast(user) for user in batch]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+    # =========================================================================
+    # Прогресс-бар в реальном времени (как в сканере заблокированных)
+    # =========================================================================
+    total_recipients = len(recipient_telegram_ids)
+    last_progress_update: float = 0.0
+    # ID сообщения, которое обновляем (может быть заменено при ошибке)
+    progress_message = callback.message
+
+    def _build_progress_text(
+        current_sent: int,
+        current_failed: int,
+        total: int,
+        phase: str = 'sending',
+    ) -> str:
+        processed = current_sent + current_failed
+        percent = round(processed / total * 100, 1) if total > 0 else 0
+        bar_length = 20
+        filled = int(bar_length * processed / total) if total > 0 else 0
+        bar = '█' * filled + '░' * (bar_length - filled)
+
+        if phase == 'sending':
+            return (
+                f'📨 <b>Рассылка в процессе...</b>\n\n'
+                f'[{bar}] {percent}%\n\n'
+                f'📊 <b>Прогресс:</b>\n'
+                f'• Отправлено: {current_sent}\n'
+                f'• Ошибок: {current_failed}\n'
+                f'• Обработано: {processed}/{total}\n\n'
+                f'⏳ Не закрывайте диалог — рассылка продолжается...'
+            )
+        return ''
+
+    async def _update_progress_message(current_sent: int, current_failed: int) -> None:
+        """Безопасно обновляет сообщение с прогрессом."""
+        nonlocal last_progress_update, progress_message
+        now = asyncio.get_event_loop().time()
+        if now - last_progress_update < _PROGRESS_MIN_INTERVAL:
+            return
+        last_progress_update = now
+
+        text = _build_progress_text(current_sent, current_failed, total_recipients)
+        try:
+            await progress_message.edit_text(text, parse_mode='HTML')
+        except TelegramRetryAfter as e:
+            # Не паникуем — пропускаем обновление прогресса
+            logger.debug('FloodWait при обновлении прогресса, пропускаем: %d сек', e.retry_after)
+        except TelegramBadRequest:
+            # Сообщение удалено или контент не изменился — отправляем новое
+            try:
+                progress_message = await callback.bot.send_message(
+                    chat_id=callback.message.chat.id,
+                    text=text,
+                    parse_mode='HTML',
+                )
+            except Exception:
+                pass
+        except Exception:
+            pass  # Не ломаем рассылку из-за ошибок обновления прогресса
+
+    # Первое обновление прогресса
+    await _update_progress_message(0, 0)
+
+    # =========================================================================
+    # Основной цикл рассылки — батчами по _BATCH_SIZE
+    # =========================================================================
+    for batch_idx, i in enumerate(range(0, total_recipients, _BATCH_SIZE)):
+        batch = recipient_telegram_ids[i : i + _BATCH_SIZE]
+
+        # Отправляем батч параллельно
+        results = await asyncio.gather(
+            *[send_single_broadcast(tid) for tid in batch],
+            return_exceptions=True,
+        )
 
         for result in results:
-            if isinstance(result, tuple):  # (success, telegram_id)
-                success, _ = result
-                if success:
+            if isinstance(result, bool):
+                if result:
                     sent_count += 1
                 else:
                     failed_count += 1
             elif isinstance(result, Exception):
                 failed_count += 1
+                logger.error('Необработанное исключение в рассылке: %s', result)
 
-        # Небольшая задержка между пакетами для снижения нагрузки на API
-        await asyncio.sleep(0.25)
+        # Обновляем прогресс каждые _PROGRESS_UPDATE_INTERVAL батчей
+        if batch_idx % _PROGRESS_UPDATE_INTERVAL == 0:
+            await _update_progress_message(sent_count, failed_count)
+
+        # Задержка между батчами для соблюдения rate limits
+        await asyncio.sleep(_BATCH_DELAY)
+
+    # Учитываем пропущенных email-only пользователей
+    skipped_email_users = total_users_count - total_recipients
+    if skipped_email_users > 0:
+        logger.info('Пропущено %d email-only пользователей при рассылке', skipped_email_users)
 
     status = 'completed' if failed_count == 0 else 'partial'
+
+    # Сохраняем результат в НОВОЙ сессии (старая уже мертва)
     await _persist_broadcast_result(
-        db=db,
-        broadcast_history=broadcast_history,
+        broadcast_id=broadcast_id,
         sent_count=sent_count,
         failed_count=failed_count,
         status=status,
     )
 
-    media_info = ''
-    if has_media:
-        media_info = f'\n🖼️ <b>Медиафайл:</b> {media_type}'
+    success_rate = round(sent_count / total_users_count * 100, 1) if total_users_count else 0
+    media_info = f'\n🖼️ <b>Медиафайл:</b> {media_type}' if has_media else ''
 
-    result_text = f"""
-✅ <b>Рассылка завершена!</b>
+    result_text = (
+        f'✅ <b>Рассылка завершена!</b>\n\n'
+        f'📊 <b>Результат:</b>\n'
+        f'• Отправлено: {sent_count}\n'
+        f'• Не доставлено: {failed_count}\n'
+        f'• Всего пользователей: {total_users_count}\n'
+        f'• Успешность: {success_rate}%{media_info}\n\n'
+        f'<b>Администратор:</b> {admin_name}'
+    )
 
-📊 <b>Результат:</b>
-- Отправлено: {sent_count}
-- Не доставлено: {failed_count}
-- Всего пользователей: {len(users)}
-- Успешность: {round(sent_count / len(users) * 100, 1) if users else 0}%{media_info}
-
-<b>Администратор:</b> {db_user.full_name}
-"""
+    back_keyboard = types.InlineKeyboardMarkup(
+        inline_keyboard=[[types.InlineKeyboardButton(text='📨 К рассылкам', callback_data='admin_messages')]]
+    )
 
     try:
-        await callback.message.edit_text(
-            result_text,
-            reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text='📨 К рассылкам', callback_data='admin_messages')]]
-            ),
-            parse_mode='HTML',
-        )
+        await progress_message.edit_text(result_text, reply_markup=back_keyboard, parse_mode='HTML')
     except TelegramBadRequest as e:
         error_msg = str(e).lower()
         if (
@@ -1275,22 +1425,24 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
             or 'there is no text' in error_msg
             or "message can't be edited" in error_msg
         ):
-            # Сообщение удалено или это медиа - отправляем новое
             await callback.bot.send_message(
                 chat_id=callback.message.chat.id,
                 text=result_text,
-                reply_markup=types.InlineKeyboardMarkup(
-                    inline_keyboard=[
-                        [types.InlineKeyboardButton(text='📨 К рассылкам', callback_data='admin_messages')]
-                    ]
-                ),
+                reply_markup=back_keyboard,
                 parse_mode='HTML',
             )
         else:
             raise
 
     await state.clear()
-    logger.info(f'Рассылка выполнена админом {db_user.telegram_id}: {sent_count}/{len(users)} (медиа: {has_media})')
+    logger.info(
+        'Рассылка завершена админом %s: sent=%d, failed=%d, total=%d (медиа: %s)',
+        admin_telegram_id,
+        sent_count,
+        failed_count,
+        total_users_count,
+        has_media,
+    )
 
 
 async def get_target_users_count(db: AsyncSession, target: str) -> int:

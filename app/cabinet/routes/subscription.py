@@ -63,6 +63,71 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix='/subscription', tags=['Cabinet Subscription'])
 
 
+def _get_addon_discount_percent(
+    user: User,
+    category: str,
+    period_days: int | None = None,
+) -> int:
+    """Get addon discount percent for user from promo group.
+
+    Mirrors logic from app/handlers/subscription/common.py:_get_addon_discount_percent_for_user
+    """
+    promo_group = (
+        user.get_primary_promo_group()
+        if hasattr(user, 'get_primary_promo_group')
+        else getattr(user, 'promo_group', None)
+    )
+    if promo_group is None:
+        return 0
+
+    if not getattr(promo_group, 'apply_discounts_to_addons', True):
+        return 0
+
+    try:
+        return user.get_promo_discount(category, period_days)
+    except AttributeError:
+        return 0
+
+
+def _apply_addon_discount(
+    user: User,
+    category: str,
+    amount: int,
+    period_days: int | None = None,
+) -> dict[str, int]:
+    """Apply addon discount to amount.
+
+    Returns dict with keys: discounted, discount, percent
+    """
+    percent = _get_addon_discount_percent(user, category, period_days)
+    if percent <= 0 or amount <= 0:
+        return {'discounted': amount, 'discount': 0, 'percent': 0}
+
+    discount_value = int(amount * percent / 100)
+    discounted_amount = amount - discount_value
+    return {
+        'discounted': discounted_amount,
+        'discount': discount_value,
+        'percent': percent,
+    }
+
+
+def _get_period_discount_percent(user: User, period_days: int | None = None) -> int:
+    """Get period discount percent for tariff switch calculations."""
+    promo_group = (
+        user.get_primary_promo_group()
+        if hasattr(user, 'get_primary_promo_group')
+        else getattr(user, 'promo_group', None)
+    )
+    if promo_group is None:
+        return 0
+
+    try:
+        return user.get_promo_discount('period', period_days)
+    except AttributeError:
+        return 0
+
+
 def _subscription_to_response(
     subscription: Subscription,
     servers: list[ServerInfo] | None = None,
@@ -668,32 +733,28 @@ async def purchase_traffic(
             )
         base_price_kopeks = matching_pkg['price']
 
-    # Применяем скидку промогруппы
-    traffic_discount_percent = 0
-    promo_group = (
-        user.get_primary_promo_group()
-        if hasattr(user, 'get_primary_promo_group')
-        else getattr(user, 'promo_group', None)
-    )
-    if promo_group:
-        apply_to_addons = getattr(promo_group, 'apply_discounts_to_addons', True)
-        if apply_to_addons:
-            traffic_discount_percent = max(0, min(100, int(getattr(promo_group, 'traffic_discount_percent', 0) or 0)))
-
-    if traffic_discount_percent > 0:
-        base_price_kopeks = int(base_price_kopeks * (100 - traffic_discount_percent) / 100)
-
     # На тарифах пакеты трафика покупаются на 1 месяц (30 дней),
     # цена в тарифе уже месячная — не умножаем на оставшиеся месяцы подписки.
     # Пропорциональный расчёт применяем только в классическом режиме.
     if is_tariff_mode:
-        final_price = base_price_kopeks
+        prorated_price = base_price_kopeks
         months_charged = 1
     else:
-        final_price, months_charged = calculate_prorated_price(
+        prorated_price, months_charged = calculate_prorated_price(
             base_price_kopeks,
             subscription.end_date,
         )
+
+    # Apply discount from promo group using proper method
+    period_hint_days = months_charged * 30 if months_charged > 0 else 30
+    discount_result = _apply_addon_discount(user, 'traffic', prorated_price, period_hint_days)
+    final_price = discount_result['discounted']
+    traffic_discount_percent = discount_result['percent']
+    discount_value = discount_result['discount']
+
+    # Ensure minimum price after discount (except for 100% discount)
+    if traffic_discount_percent < 100 and final_price > 0:
+        final_price = max(100, final_price)
 
     # Проверяем баланс
     if user.balance_kopeks < final_price:
@@ -705,7 +766,7 @@ async def purchase_traffic(
             'subscription_id': subscription.id,
             'traffic_gb': request.gb,
             'price_kopeks': final_price,
-            'base_price_kopeks': base_price_kopeks,
+            'base_price_kopeks': prorated_price,
             'discount_percent': traffic_discount_percent,
             'source': 'cabinet',
             'description': f'Докупка {request.gb} ГБ трафика',
@@ -713,7 +774,10 @@ async def purchase_traffic(
 
         try:
             await user_cart_service.save_user_cart(user.id, cart_data)
-            logger.info(f'Cart saved for traffic purchase (cabinet) user {user.id}: +{request.gb} GB')
+            logger.info(
+                f'Cart saved for traffic purchase (cabinet) user {user.id}: '
+                f'+{request.gb} GB, discount {traffic_discount_percent}%'
+            )
         except Exception as e:
             logger.error(f'Error saving cart for traffic purchase (cabinet): {e}')
 
@@ -806,24 +870,33 @@ async def purchase_traffic(
     except Exception as e:
         logger.error(f'Failed to send admin notification for traffic purchase: {e}')
 
-    return {
+    response = {
         'success': True,
         'message': 'Traffic purchased successfully',
         'gb_added': request.gb,
         'new_traffic_limit_gb': subscription.traffic_limit_gb,
         'amount_paid_kopeks': final_price,
-        'discount_percent': traffic_discount_percent,
         'new_balance_kopeks': user.balance_kopeks,
     }
 
+    if traffic_discount_percent > 0:
+        response['discount_percent'] = traffic_discount_percent
+        response['discount_kopeks'] = discount_value
+        response['base_price_kopeks'] = prorated_price
+
+    return response
+
 
 @router.post('/devices')
-async def purchase_devices(
+async def purchase_devices_legacy(
     request: DevicePurchaseRequest,
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
-    """Purchase additional device slots."""
+    """Purchase additional device slots (legacy endpoint without tariff support).
+
+    DEPRECATED: Use /devices/purchase instead for full tariff and discount support.
+    """
     await db.refresh(user, ['subscription'])
 
     if not user.subscription:
@@ -833,7 +906,16 @@ async def purchase_devices(
         )
 
     price_per_device = settings.PRICE_PER_DEVICE
-    total_price = price_per_device * request.devices
+    base_total_price = price_per_device * request.devices
+
+    # Apply discount from promo group
+    discount_result = _apply_addon_discount(user, 'devices', base_total_price, 30)
+    total_price = discount_result['discounted']
+    devices_discount_percent = discount_result['percent']
+
+    # Ensure minimum price after discount (except for 100% discount)
+    if devices_discount_percent < 100 and total_price > 0:
+        total_price = max(100, total_price)
 
     # Check balance
     if user.balance_kopeks < total_price:
@@ -845,6 +927,8 @@ async def purchase_devices(
                 'cart_mode': 'add_devices',
                 'devices_to_add': request.devices,
                 'price_kopeks': total_price,
+                'base_price_kopeks': base_total_price,
+                'discount_percent': devices_discount_percent,
                 'source': 'cabinet',
             }
             await user_cart_service.save_user_cart(user.id, cart_data)
@@ -879,11 +963,17 @@ async def purchase_devices(
     from app.database.crud.user import subtract_user_balance
     from app.database.models import PaymentMethod
 
+    # Build description with discount info
+    if devices_discount_percent > 0:
+        description = f'Покупка {request.devices} доп. устройств (скидка {devices_discount_percent}%)'
+    else:
+        description = f'Покупка {request.devices} доп. устройств'
+
     await subtract_user_balance(
         db=db,
         user=user,
         amount_kopeks=total_price,
-        description=f'Покупка {request.devices} доп. устройств',
+        description=description,
         create_transaction=True,
         payment_method=PaymentMethod.BALANCE,
     )
@@ -918,12 +1008,19 @@ async def purchase_devices(
     except Exception as e:
         logger.error(f'Failed to send admin notification for device purchase: {e}')
 
-    return {
+    response = {
         'message': 'Devices added successfully',
         'devices_added': request.devices,
         'new_device_limit': new_devices,
         'amount_paid_kopeks': total_price,
     }
+
+    if devices_discount_percent > 0:
+        response['discount_percent'] = devices_discount_percent
+        response['discount_kopeks'] = discount_result['discount']
+        response['base_price_kopeks'] = base_total_price
+
+    return response
 
 
 @router.patch('/autopay')
@@ -940,6 +1037,16 @@ async def update_autopay(
             status_code=status.HTTP_404_NOT_FOUND,
             detail='No subscription found',
         )
+
+    # Суточные подписки имеют свой механизм продления (DailySubscriptionService),
+    # глобальный autopay для них запрещён
+    if request.enabled:
+        await db.refresh(user.subscription, ['tariff'])
+        if user.subscription.tariff and getattr(user.subscription.tariff, 'is_daily', False):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='Autopay is not available for daily subscriptions',
+            )
 
     user.subscription.autopay_enabled = request.enabled
 
@@ -2065,9 +2172,21 @@ async def purchase_devices(
         days_left = max(1, (end_date - now).days)
         total_days = 30  # Base period for device price calculation
 
-        # Price = device_price * devices * (days_left / 30)
-        price_kopeks = int(device_price * request.devices * days_left / total_days)
-        price_kopeks = max(100, price_kopeks)  # Minimum 1 ruble
+        # Calculate base price before discount
+        base_price_per_month = device_price * request.devices
+        base_price_prorated = int(base_price_per_month * days_left / total_days)
+        base_price_prorated = max(100, base_price_prorated)  # Minimum 1 ruble
+
+        # Apply discount from promo group
+        period_hint_days = days_left
+        discount_result = _apply_addon_discount(user, 'devices', base_price_prorated, period_hint_days)
+        price_kopeks = discount_result['discounted']
+        devices_discount_percent = discount_result['percent']
+        discount_value = discount_result['discount']
+
+        # Ensure minimum price after discount (except for 100% discount)
+        if devices_discount_percent < 100:
+            price_kopeks = max(100, price_kopeks)
 
         # Check balance
         if user.balance_kopeks < price_kopeks:
@@ -2079,10 +2198,15 @@ async def purchase_devices(
                     'cart_mode': 'add_devices',
                     'devices_to_add': request.devices,
                     'price_kopeks': price_kopeks,
+                    'base_price_kopeks': base_price_prorated,
+                    'discount_percent': devices_discount_percent,
                     'source': 'cabinet',
                 }
                 await user_cart_service.save_user_cart(user.id, cart_data)
-                logger.info(f'Cart saved for device purchase (cabinet) user {user.id}: +{request.devices} devices')
+                logger.info(
+                    f'Cart saved for device purchase (cabinet) user {user.id}: '
+                    f'+{request.devices} devices, discount {devices_discount_percent}%'
+                )
             except Exception as e:
                 logger.error(f'Error saving cart for device purchase (cabinet): {e}')
 
@@ -2102,11 +2226,17 @@ async def purchase_devices(
         from app.database.crud.user import subtract_user_balance
         from app.database.models import PaymentMethod
 
+        # Build description with discount info
+        if devices_discount_percent > 0:
+            description = f'Покупка {request.devices} доп. устройств (скидка {devices_discount_percent}%)'
+        else:
+            description = f'Покупка {request.devices} доп. устройств'
+
         await subtract_user_balance(
             db=db,
             user=user,
             amount_kopeks=price_kopeks,
-            description=f'Покупка {request.devices} доп. устройств',
+            description=description,
             create_transaction=True,
             payment_method=PaymentMethod.BALANCE,
         )
@@ -2128,7 +2258,13 @@ async def purchase_devices(
 
         await db.refresh(user)
 
-        logger.info(f'User {user.id} purchased {request.devices} devices for {price_kopeks} kopeks')
+        if devices_discount_percent > 0:
+            logger.info(
+                f'User {user.id} purchased {request.devices} devices for {price_kopeks} kopeks '
+                f'(discount {devices_discount_percent}%, saved {discount_value} kopeks)'
+            )
+        else:
+            logger.info(f'User {user.id} purchased {request.devices} devices for {price_kopeks} kopeks')
 
         # Отправляем уведомление админам
         try:
@@ -2154,7 +2290,7 @@ async def purchase_devices(
         except Exception as e:
             logger.error(f'Failed to send admin notification for device purchase: {e}')
 
-        return {
+        response = {
             'success': True,
             'message': f'Добавлено {request.devices} устройств',
             'devices_added': request.devices,
@@ -2164,6 +2300,13 @@ async def purchase_devices(
             'balance_kopeks': user.balance_kopeks,
             'balance_label': settings.format_price(user.balance_kopeks),
         }
+
+        if devices_discount_percent > 0:
+            response['discount_percent'] = devices_discount_percent
+            response['discount_kopeks'] = discount_value
+            response['base_price_kopeks'] = base_price_prorated
+
+        return response
 
     except HTTPException:
         raise
@@ -2435,11 +2578,24 @@ async def get_device_price(
     days_left = max(1, (end_date - now).days)
     total_days = 30
 
-    price_per_device_kopeks = int(device_price * days_left / total_days)
-    price_per_device_kopeks = max(100, price_per_device_kopeks)
-    total_price_kopeks = price_per_device_kopeks * devices
+    # Calculate base price before discount
+    base_price_per_device = int(device_price * days_left / total_days)
+    base_price_per_device = max(100, base_price_per_device)
+    base_total_price = base_price_per_device * devices
 
-    return {
+    # Apply discount from promo group
+    period_hint_days = days_left
+    discount_result = _apply_addon_discount(user, 'devices', base_total_price, period_hint_days)
+    total_price_kopeks = discount_result['discounted']
+    devices_discount_percent = discount_result['percent']
+    discount_value = discount_result['discount']
+
+    # Calculate per-device price after discount
+    if devices_discount_percent < 100 and total_price_kopeks > 0:
+        total_price_kopeks = max(100, total_price_kopeks)
+    price_per_device_kopeks = total_price_kopeks // devices if devices > 0 else 0
+
+    response = {
         'available': True,
         'devices': devices,
         'price_per_device_kopeks': price_per_device_kopeks,
@@ -2452,6 +2608,14 @@ async def get_device_price(
         'days_left': days_left,
         'base_device_price_kopeks': device_price,
     }
+
+    # Add discount info if applicable
+    if devices_discount_percent > 0:
+        response['discount_percent'] = devices_discount_percent
+        response['discount_kopeks'] = discount_value
+        response['base_total_price_kopeks'] = base_total_price
+
+    return response
 
 
 # ============ App Config for Connection ============
@@ -3723,18 +3887,35 @@ async def preview_tariff_switch(
             return int(min_price * 30 / min_period)
         return 0
 
+    # Get period discount percent for cost calculation
+    period_discount_percent = _get_period_discount_percent(user, remaining_days if remaining_days > 0 else 30)
+    base_upgrade_cost = 0
+    discount_value = 0
+
     if switching_to_daily:
         # Switching TO daily - pay first day price
         daily_price = getattr(new_tariff, 'daily_price_kopeks', 0)
-        upgrade_cost = daily_price
-        is_upgrade = daily_price > 0
+        base_upgrade_cost = daily_price
+        # Apply discount to daily price
+        if period_discount_percent > 0 and base_upgrade_cost > 0:
+            discount_value = int(base_upgrade_cost * period_discount_percent / 100)
+            upgrade_cost = base_upgrade_cost - discount_value
+        else:
+            upgrade_cost = base_upgrade_cost
+        is_upgrade = upgrade_cost > 0
     elif switching_from_daily:
         # Switching FROM daily TO periodic - full payment for new tariff
         min_period_price = 0
         if new_tariff.period_prices:
             min_period_price = min(new_tariff.period_prices.values())
-        upgrade_cost = min_period_price
-        is_upgrade = min_period_price > 0
+        base_upgrade_cost = min_period_price
+        # Apply discount
+        if period_discount_percent > 0 and base_upgrade_cost > 0:
+            discount_value = int(base_upgrade_cost * period_discount_percent / 100)
+            upgrade_cost = base_upgrade_cost - discount_value
+        else:
+            upgrade_cost = base_upgrade_cost
+        is_upgrade = upgrade_cost > 0
     else:
         # Calculate proportional cost difference using monthly prices
         current_monthly = get_monthly_price(current_tariff)
@@ -3744,18 +3925,25 @@ async def preview_tariff_switch(
 
         if price_diff > 0:
             # Upgrade - pay proportional difference
-            upgrade_cost = int(price_diff * remaining_days / 30)
+            base_upgrade_cost = int(price_diff * remaining_days / 30)
+            # Apply discount to upgrade cost
+            if period_discount_percent > 0 and base_upgrade_cost > 0:
+                discount_value = int(base_upgrade_cost * period_discount_percent / 100)
+                upgrade_cost = base_upgrade_cost - discount_value
+            else:
+                upgrade_cost = base_upgrade_cost
             is_upgrade = True
         else:
             # Downgrade or same - free
             upgrade_cost = 0
+            base_upgrade_cost = 0
             is_upgrade = False
 
     balance = user.balance_kopeks or 0
     has_enough = balance >= upgrade_cost
     missing = max(0, upgrade_cost - balance) if not has_enough else 0
 
-    return {
+    response = {
         'can_switch': has_enough,
         'current_tariff_id': current_tariff.id if current_tariff else None,
         'current_tariff_name': current_tariff.name if current_tariff else None,
@@ -3771,6 +3959,14 @@ async def preview_tariff_switch(
         'missing_amount_label': settings.format_price(missing) if missing > 0 else '',
         'is_upgrade': is_upgrade,
     }
+
+    # Add discount info if applicable
+    if period_discount_percent > 0 and discount_value > 0:
+        response['discount_percent'] = period_discount_percent
+        response['discount_kopeks'] = discount_value
+        response['base_upgrade_cost_kopeks'] = base_upgrade_cost
+
+    return response
 
 
 @router.post('/tariff/switch')
@@ -3857,6 +4053,11 @@ async def switch_tariff(
     switching_from_daily = current_is_daily and not new_is_daily
     switching_to_daily = not current_is_daily and new_is_daily
 
+    # Get period discount percent for cost calculation
+    period_discount_percent = _get_period_discount_percent(user, remaining_days if remaining_days > 0 else 30)
+    base_upgrade_cost = 0
+    discount_value = 0
+
     if switching_to_daily:
         # Switching TO daily tariff - charge first day price
         daily_price = getattr(new_tariff, 'daily_price_kopeks', 0)
@@ -3865,7 +4066,13 @@ async def switch_tariff(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail='Daily tariff has invalid price',
             )
-        upgrade_cost = daily_price
+        base_upgrade_cost = daily_price
+        # Apply discount
+        if period_discount_percent > 0 and base_upgrade_cost > 0:
+            discount_value = int(base_upgrade_cost * period_discount_percent / 100)
+            upgrade_cost = base_upgrade_cost - discount_value
+        else:
+            upgrade_cost = base_upgrade_cost
         new_period_days = 1  # Daily tariff starts with 1 day
     elif switching_from_daily:
         # Switch FROM daily to regular tariff - pay for minimum period
@@ -3874,7 +4081,13 @@ async def switch_tariff(
         if new_tariff.period_prices:
             min_period_days = min(int(k) for k in new_tariff.period_prices.keys())
             min_period_price = new_tariff.period_prices.get(str(min_period_days), 0)
-        upgrade_cost = min_period_price
+        base_upgrade_cost = min_period_price
+        # Apply discount
+        if period_discount_percent > 0 and base_upgrade_cost > 0:
+            discount_value = int(base_upgrade_cost * period_discount_percent / 100)
+            upgrade_cost = base_upgrade_cost - discount_value
+        else:
+            upgrade_cost = base_upgrade_cost
         new_period_days = min_period_days
     else:
         # Regular tariff switch - calculate proportional cost difference using monthly prices
@@ -3899,9 +4112,16 @@ async def switch_tariff(
         price_diff = new_monthly - current_monthly
 
         if price_diff > 0:
-            upgrade_cost = int(price_diff * remaining_days / 30)
+            base_upgrade_cost = int(price_diff * remaining_days / 30)
+            # Apply discount
+            if period_discount_percent > 0 and base_upgrade_cost > 0:
+                discount_value = int(base_upgrade_cost * period_discount_percent / 100)
+                upgrade_cost = base_upgrade_cost - discount_value
+            else:
+                upgrade_cost = base_upgrade_cost
         else:
             upgrade_cost = 0
+            base_upgrade_cost = 0
         new_period_days = 0
 
     # Charge if upgrade
@@ -3923,6 +4143,10 @@ async def switch_tariff(
             description = f"Переход с суточного на тариф '{new_tariff.name}' ({new_period_days} дней)"
         else:
             description = f"Переход на тариф '{new_tariff.name}' (доплата за {remaining_days} дней)"
+
+        # Add discount info to description if applicable
+        if period_discount_percent > 0 and discount_value > 0:
+            description += f' (скидка {period_discount_percent}%)'
 
         success = await subtract_user_balance(db, user, upgrade_cost, description)
         if not success:
@@ -4018,7 +4242,7 @@ async def switch_tariff(
     except Exception as e:
         logger.error(f'Failed to send admin notification for tariff switch: {e}')
 
-    return {
+    response = {
         'success': True,
         'message': f"Switched from '{old_tariff_name}' to '{new_tariff.name}'"
         + (' (devices reset)' if devices_reset else ''),
@@ -4030,6 +4254,14 @@ async def switch_tariff(
         'balance_kopeks': user.balance_kopeks,
         'balance_label': settings.format_price(user.balance_kopeks),
     }
+
+    # Add discount info if applicable
+    if period_discount_percent > 0 and discount_value > 0:
+        response['discount_percent'] = period_discount_percent
+        response['discount_kopeks'] = discount_value
+        response['base_charged_kopeks'] = base_upgrade_cost
+
+    return response
 
 
 # ============ Daily Subscription Pause ============

@@ -123,7 +123,15 @@ async def broadcast_pinned_message(
     db: AsyncSession,
     pinned_message: PinnedMessage,
 ) -> tuple[int, int]:
-    users: list[User] = []
+    """
+    Рассылает закреплённое сообщение всем активным пользователям.
+
+    ВАЖНО: Извлекаем telegram_id в список ДО начала долгой рассылки,
+    чтобы избежать обращения к ORM-объектам после истечения таймаута
+    соединения с БД.
+    """
+    # Собираем telegram_id всех активных пользователей
+    recipient_telegram_ids: list[int] = []
     offset = 0
     batch_size = 5000
 
@@ -138,27 +146,26 @@ async def broadcast_pinned_message(
         if not batch:
             break
 
-        users.extend(batch)
+        # Извлекаем только telegram_id, фильтруем email-only пользователей
+        for user in batch:
+            if user.telegram_id is not None:
+                recipient_telegram_ids.append(user.telegram_id)
+
         offset += batch_size
 
     sent_count = 0
     failed_count = 0
     semaphore = asyncio.Semaphore(3)
 
-    async def send_to_user(user: User) -> None:
+    async def send_to_telegram_id(telegram_id: int) -> None:
         nonlocal sent_count, failed_count
-
-        # Skip email-only users (no telegram_id)
-        if not user.telegram_id:
-            failed_count += 1
-            return
 
         async with semaphore:
             for attempt in range(3):
                 try:
                     success = await _send_and_pin_message(
                         bot,
-                        user.telegram_id,
+                        telegram_id,
                         pinned_message,
                     )
                     if success:
@@ -170,22 +177,22 @@ async def broadcast_pinned_message(
                     delay = min(retry_error.retry_after + 1, 30)
                     logger.warning(
                         'RetryAfter for user %s, waiting %s seconds',
-                        user.telegram_id,
+                        telegram_id,
                         delay,
                     )
                     await asyncio.sleep(delay)
                 except Exception as send_error:
                     logger.error(
                         'Ошибка отправки закрепленного сообщения пользователю %s: %s',
-                        user.telegram_id,
+                        telegram_id,
                         send_error,
                     )
                     failed_count += 1
                     break
 
-    for i in range(0, len(users), 30):
-        batch = users[i : i + 30]
-        tasks = [send_to_user(user) for user in batch]
+    for i in range(0, len(recipient_telegram_ids), 30):
+        batch = recipient_telegram_ids[i : i + 30]
+        tasks = [send_to_telegram_id(tid) for tid in batch]
         await asyncio.gather(*tasks)
         await asyncio.sleep(0.05)
 
@@ -196,11 +203,19 @@ async def unpin_active_pinned_message(
     bot: Bot,
     db: AsyncSession,
 ) -> tuple[int, int, bool]:
+    """
+    Открепляет активное сообщение у всех пользователей.
+
+    ВАЖНО: Извлекаем telegram_id в список ДО начала долгой операции,
+    чтобы избежать обращения к ORM-объектам после истечения таймаута
+    соединения с БД.
+    """
     pinned_message = await deactivate_active_pinned_message(db)
     if not pinned_message:
         return 0, 0, False
 
-    users: list[User] = []
+    # Собираем telegram_id всех активных пользователей
+    recipient_telegram_ids: list[int] = []
     offset = 0
     batch_size = 5000
 
@@ -215,24 +230,23 @@ async def unpin_active_pinned_message(
         if not batch:
             break
 
-        users.extend(batch)
+        # Извлекаем только telegram_id, фильтруем email-only пользователей
+        for user in batch:
+            if user.telegram_id is not None:
+                recipient_telegram_ids.append(user.telegram_id)
+
         offset += batch_size
 
     unpinned_count = 0
     failed_count = 0
     semaphore = asyncio.Semaphore(5)
 
-    async def unpin_for_user(user: User) -> None:
+    async def unpin_for_telegram_id(telegram_id: int) -> None:
         nonlocal unpinned_count, failed_count
-
-        # Skip email-only users (no telegram_id)
-        if not user.telegram_id:
-            failed_count += 1
-            return
 
         async with semaphore:
             try:
-                success = await _unpin_message_for_user(bot, user.telegram_id)
+                success = await _unpin_message_for_user(bot, telegram_id)
                 if success:
                     unpinned_count += 1
                 else:
@@ -241,22 +255,30 @@ async def unpin_active_pinned_message(
                 delay = min(retry_error.retry_after + 1, 30)
                 logger.warning(
                     'RetryAfter while unpinning for user %s, waiting %s seconds',
-                    user.telegram_id,
+                    telegram_id,
                     delay,
                 )
                 await asyncio.sleep(delay)
-                await unpin_for_user(user)
+                # Повторная попытка после ожидания
+                try:
+                    success = await _unpin_message_for_user(bot, telegram_id)
+                    if success:
+                        unpinned_count += 1
+                    else:
+                        failed_count += 1
+                except Exception:
+                    failed_count += 1
             except Exception as error:
                 logger.error(
                     'Ошибка открепления сообщения у пользователя %s: %s',
-                    user.telegram_id,
+                    telegram_id,
                     error,
                 )
                 failed_count += 1
 
-    for i in range(0, len(users), 40):
-        batch = users[i : i + 40]
-        tasks = [unpin_for_user(user) for user in batch]
+    for i in range(0, len(recipient_telegram_ids), 40):
+        batch = recipient_telegram_ids[i : i + 40]
+        tasks = [unpin_for_telegram_id(tid) for tid in batch]
         await asyncio.gather(*tasks)
         await asyncio.sleep(0.05)
 
