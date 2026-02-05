@@ -493,40 +493,61 @@ class AdminNotificationService:
             return False
 
     async def send_version_update_notification(self, current_version: str, latest_version, total_updates: int) -> bool:
-        """Отправляет уведомление о новых обновлениях"""
+        """Отправляет уведомление о новых обновлениях."""
         if not self._is_enabled():
             return False
 
         try:
+            from app.utils.markdown_to_telegram import github_markdown_to_telegram_html, truncate_for_blockquote
+
+            repo = getattr(settings, 'VERSION_CHECK_REPO', 'fr1ngg/remnawave-bedolaga-telegram-bot')
+            release_url = f'https://github.com/{repo}/releases/tag/{latest_version.tag_name}'
+            repo_url = f'https://github.com/{repo}'
+            timestamp = format_local_datetime(datetime.utcnow(), '%d.%m.%Y %H:%M:%S')
+
             if latest_version.prerelease:
-                update_type = '🧪 ПРЕДВАРИТЕЛЬНАЯ ВЕРСИЯ'
-                type_icon = '🧪'
+                header = '🧪 <b>Pre-release</b>'
             elif latest_version.is_dev:
-                update_type = '🔧 DEV ВЕРСИЯ'
-                type_icon = '🔧'
+                header = '🔧 <b>Dev build</b>'
             else:
-                update_type = '📦 НОВАЯ ВЕРСИЯ'
-                type_icon = '📦'
+                header = '🆕 <b>Доступно обновление</b>'
 
-            description = latest_version.short_description
-            if len(description) > 200:
-                description = description[:197] + '...'
+            # -- message prefix (everything before blockquote) --
+            prefix_lines = [
+                header,
+                '',
+                f'<code>{current_version}</code>  →  <b><a href="{release_url}">{latest_version.tag_name}</a></b>',
+                f'📅 {latest_version.formatted_date}',
+                '',
+            ]
+            message_prefix = '\n'.join(prefix_lines)
 
-            message = f"""{type_icon} <b>{update_type} ДОСТУПНА</b>
+            # -- message suffix (everything after blockquote) --
+            suffix_lines = ['']
+            if total_updates > 1:
+                suffix_lines.append(f'Доступно обновлений: <b>{total_updates}</b>')
+            suffix_lines.extend(
+                [
+                    f'<a href="{repo_url}">Репозиторий</a>',
+                    '',
+                    f'<i>{timestamp}</i>',
+                ]
+            )
+            message_suffix = '\n'.join(suffix_lines)
 
-    📦 <b>Текущая версия:</b> <code>{current_version}</code>
-    🆕 <b>Новая версия:</b> <code>{latest_version.tag_name}</code>
-    📅 <b>Дата релиза:</b> {latest_version.formatted_date}
+            # -- description in blockquote --
+            raw_description = getattr(latest_version, 'full_description', '') or latest_version.short_description
+            description_html = github_markdown_to_telegram_html(raw_description)
 
-    📝 <b>Описание:</b>
-    {description}
-
-    🔢 <b>Всего доступно обновлений:</b> {total_updates}
-    🔗 <b>Репозиторий:</b> https://github.com/{getattr(self, 'repo', 'fr1ngg/remnawave-bedolaga-telegram-bot')}
-
-    ℹ️ Для обновления перезапустите контейнер с новым тегом или обновите код из репозитория.
-
-    ⚙️ <i>Автоматическая проверка обновлений • {format_local_datetime(datetime.utcnow(), '%d.%m.%Y %H:%M:%S')}</i>"""
+            if description_html:
+                description_html = truncate_for_blockquote(
+                    description_html,
+                    message_prefix=message_prefix,
+                    message_suffix=message_suffix,
+                )
+                message = f'{message_prefix}<blockquote expandable>{description_html}</blockquote>{message_suffix}'
+            else:
+                message = f'{message_prefix}{message_suffix}'
 
             return await self._send_message(message)
 

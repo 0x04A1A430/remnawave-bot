@@ -51,6 +51,13 @@ class VersionInfo:
 
         return description
 
+    @property
+    def full_description(self) -> str:
+        """Full release body text, stripped of leading/trailing whitespace."""
+        if not self.body:
+            return ''
+        return self.body.strip()
+
 
 class VersionService:
     def __init__(self, bot=None):
