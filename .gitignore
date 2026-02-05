@@ -1,49 +1,100 @@
 # Игнорируем все файлы и папки по умолчанию
 *
-docker-compose.override.yml
 
-# Исключения: разрешаем только нужные файлы
+# ========== WHITELIST: разрешённые файлы ==========
+
+# Конфигурация проекта
 !.dockerignore
 !.env.example
-!install_bot.sh
+!.gitignore
+!.python-version
 !Dockerfile
-!app-config.json
-!main.py
-!requirements.txt
+!docker-compose.yml
+!docker-compose.local.yml
+!Makefile
 !pyproject.toml
 !uv.lock
-!.python-version
-!docs/
-!docs/**
-!migrations/
-!migrations/**
+!requirements.txt
+!alembic.ini
+!app-config.json
 
-# Разрешаем папку app/ и все её содержимое рекурсивно
+# Документация
+!README.md
+!LICENSE
+!CONTRIBUTING.md
+!SECURITY.md
+
+# Скрипты
+!install_bot.sh
+!main.py
+
+# Статические файлы
+!vpn_logo.png
+
+# ========== WHITELIST: разрешённые папки ==========
+
 !app/
 !app/**
 !tests/
 !tests/**
-
-# Дополнительно разрешаем README и лицензию (опционально)
-!README.md
-!LICENSE
-
-# Разрешаем .gitignore чтобы он попал в репозиторий
-!.gitignore
-
-# Разрешаем .github/ (workflows, pre-commit и т.д.)
+!migrations/
+!migrations/**
+!docs/
+!docs/**
+!assets/
+!assets/**
+!locales/
+!locales/**
 !.github/
 !.github/**
 
-# Разрешаем Makefile
-!Makefile
+# ========== BLACKLIST: игнорируемые внутри папок ==========
 
-# Внутри разрешенных папок игнорируем служебные файлы
-app/__pycache__/
-app/**/__pycache__/
-app/**/*.pyc
-app/**/*.pyo
-app/**/*.pyd
-*.pyc
-*.pyo
-*.pyd
+# Python
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Build/dist
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Testing/coverage
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local overrides (не коммитить!)
+docker-compose.override.yml
+.env
+.env.local
+.env.*.local
+
+# Runtime data
+logs/
+data/
+*.log
+*.db
+*.sqlite3
+
+# OS files
+.DS_Store
+Thumbs.db
