@@ -237,6 +237,8 @@ class Settings(BaseSettings):
     BLACKLIST_UPDATE_INTERVAL_HOURS: int = 24
     BLACKLIST_IGNORE_ADMINS: bool = True
 
+    DISPOSABLE_EMAIL_CHECK_ENABLED: bool = True
+
     # Настройки простой покупки
     SIMPLE_SUBSCRIPTION_ENABLED: bool = False
     SIMPLE_SUBSCRIPTION_PERIOD_DAYS: int = 30
