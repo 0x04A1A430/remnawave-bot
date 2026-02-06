@@ -8,7 +8,6 @@ from app.database.models import User
 from app.external.telegram_stars import TelegramStarsService
 from app.keyboards.inline import get_back_keyboard
 from app.localization.texts import get_texts
-from app.services.blacklist_service import blacklist_service
 from app.services.payment_service import PaymentService
 from app.states import BalanceStates
 from app.utils.decorators import error_handler
@@ -92,23 +91,6 @@ async def process_stars_payment_amount(message: types.Message, db_user: User, am
             parse_mode='HTML',
         )
         await state.clear()
-        return
-
-    # Проверяем, находится ли пользователь в черном списке
-    is_blacklisted, blacklist_reason = await blacklist_service.is_user_blacklisted(
-        message.from_user.id, message.from_user.username
-    )
-
-    if is_blacklisted:
-        logger.warning(f'🚫 Пользователь {message.from_user.id} находится в черном списке: {blacklist_reason}')
-        try:
-            await message.answer(
-                f'🚫 Оплата невозможна\n\n'
-                f'Причина: {blacklist_reason}\n\n'
-                f'Если вы считаете, что это ошибка, обратитесь в поддержку.'
-            )
-        except Exception as e:
-            logger.error(f'Ошибка при отправке сообщения о блокировке: {e}')
         return
 
     texts = get_texts(db_user.language)

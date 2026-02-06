@@ -35,7 +35,6 @@ from app.middlewares.channel_checker import (
     get_pending_payload_from_redis,
 )
 from app.services.admin_notification_service import AdminNotificationService
-from app.services.blacklist_service import blacklist_service
 from app.services.campaign_service import AdvertisingCampaignService
 from app.services.main_menu_button_service import MainMenuButtonService
 from app.services.pinned_message_service import (
@@ -993,25 +992,6 @@ async def process_referral_code_skip(callback: types.CallbackQuery, state: FSMCo
 async def complete_registration_from_callback(callback: types.CallbackQuery, state: FSMContext, db: AsyncSession):
     logger.info(f'🎯 COMPLETE: Завершение регистрации для пользователя {callback.from_user.id}')
 
-    # Проверяем, находится ли пользователь в черном списке
-    is_blacklisted, blacklist_reason = await blacklist_service.is_user_blacklisted(
-        callback.from_user.id, callback.from_user.username
-    )
-
-    if is_blacklisted:
-        logger.warning(f'🚫 Пользователь {callback.from_user.id} находится в черном списке: {blacklist_reason}')
-        try:
-            await callback.message.answer(
-                f'🚫 Регистрация невозможна\n\n'
-                f'Причина: {blacklist_reason}\n\n'
-                f'Если вы считаете, что это ошибка, обратитесь в поддержку.'
-            )
-        except Exception as e:
-            logger.error(f'Ошибка при отправке сообщения о блокировке: {e}')
-
-        await state.clear()
-        return
-
     existing_user = await get_user_by_telegram_id(db, callback.from_user.id)
 
     if existing_user and existing_user.status == UserStatus.ACTIVE.value:
@@ -1261,25 +1241,6 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
 
 async def complete_registration(message: types.Message, state: FSMContext, db: AsyncSession):
     logger.info(f'🎯 COMPLETE: Завершение регистрации для пользователя {message.from_user.id}')
-
-    # Проверяем, находится ли пользователь в черном списке
-    is_blacklisted, blacklist_reason = await blacklist_service.is_user_blacklisted(
-        message.from_user.id, message.from_user.username
-    )
-
-    if is_blacklisted:
-        logger.warning(f'🚫 Пользователь {message.from_user.id} находится в черном списке: {blacklist_reason}')
-        try:
-            await message.answer(
-                f'🚫 Регистрация невозможна\n\n'
-                f'Причина: {blacklist_reason}\n\n'
-                f'Если вы считаете, что это ошибка, обратитесь в поддержку.'
-            )
-        except Exception as e:
-            logger.error(f'Ошибка при отправке сообщения о блокировке: {e}')
-
-        await state.clear()
-        return
 
     existing_user = await get_user_by_telegram_id(db, message.from_user.id)
 
