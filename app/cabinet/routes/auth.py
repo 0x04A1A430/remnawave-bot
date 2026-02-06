@@ -22,6 +22,7 @@ from app.database.crud.user import (
     verify_and_apply_email_change,
 )
 from app.database.models import CabinetRefreshToken, User
+from app.services.disposable_email_service import disposable_email_service
 from app.services.referral_service import process_referral_registration
 from app.utils.timezone import panel_datetime_to_naive_utc
 
@@ -385,6 +386,13 @@ async def register_email(
     Requires valid JWT token from Telegram authentication.
     Sends verification email to the provided address.
     """
+    # Check for disposable email
+    if disposable_email_service.is_disposable(request.email):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Disposable email addresses are not allowed',
+        )
+
     # Check if email already exists
     existing_user = await db.execute(select(User).where(User.email == request.email))
     if existing_user.scalar_one_or_none():
@@ -477,6 +485,13 @@ async def register_email_standalone(
                 detail='Invalid test email password',
             )
         logger.info(f'Test email registration: {request.email}')
+
+    # Check for disposable email
+    if disposable_email_service.is_disposable(request.email):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Disposable email addresses are not allowed',
+        )
 
     # Проверить что email не занят
     existing = await db.execute(select(User).where(User.email == request.email))
@@ -969,6 +984,13 @@ async def request_email_change(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='New email is the same as current email',
+        )
+
+    # Check for disposable email
+    if disposable_email_service.is_disposable(request.new_email):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Disposable email addresses are not allowed',
         )
 
     # Check if new email is already taken

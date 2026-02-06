@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.cabinet.routes import router as cabinet_router
 from app.config import settings
+from app.services.disposable_email_service import disposable_email_service
 from app.services.payment_service import PaymentService
 from app.webapi.app import create_web_api_app
 from app.webapi.docs import add_redoc_endpoint
@@ -143,6 +144,14 @@ def create_unified_app(
         app.include_router(telegram.create_telegram_router(bot, dispatcher, processor=telegram_processor))
     else:
         telegram_processor = None
+
+    @app.on_event('startup')
+    async def start_disposable_email_service() -> None:  # pragma: no cover - event hook
+        await disposable_email_service.start()
+
+    @app.on_event('shutdown')
+    async def stop_disposable_email_service() -> None:  # pragma: no cover - event hook
+        await disposable_email_service.stop()
 
     miniapp_mounted, miniapp_path = _mount_miniapp_static(app)
 
