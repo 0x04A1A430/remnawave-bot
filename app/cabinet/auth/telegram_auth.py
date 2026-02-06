@@ -73,6 +73,7 @@ def validate_telegram_init_data(init_data: str, max_age_seconds: int = 86400) ->
         parsed = dict(parse_qsl(init_data, keep_blank_values=True))
 
         received_hash = parsed.pop('hash', None)
+        parsed.pop('signature', None)
         if not received_hash:
             return None
 
@@ -105,7 +106,7 @@ def validate_telegram_init_data(init_data: str, max_age_seconds: int = 86400) ->
         # Parse user data from the validated data
         user_data_str = parsed.get('user')
         if user_data_str:
-            user_data = json.loads(unquote(user_data_str))
+            user_data = json.loads(user_data_str)
             return user_data
 
         return parsed
