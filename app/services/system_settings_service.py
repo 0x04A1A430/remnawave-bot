@@ -465,6 +465,12 @@ class BotConfigurationService:
             ChoiceOption('ERROR', '❌ Error'),
             ChoiceOption('CRITICAL', '🔥 Critical'),
         ],
+        'TRIAL_DISABLED_FOR': [
+            ChoiceOption('none', '✅ Включён для всех'),
+            ChoiceOption('email', '📧 Отключён для Email'),
+            ChoiceOption('telegram', '📱 Отключён для Telegram'),
+            ChoiceOption('all', '🚫 Отключён для всех'),
+        ],
     }
 
     SETTING_HINTS: dict[str, dict[str, str]] = {

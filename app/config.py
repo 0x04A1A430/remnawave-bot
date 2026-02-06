@@ -112,6 +112,7 @@ class Settings(BaseSettings):
     TRIAL_PAYMENT_ENABLED: bool = False
     TRIAL_ACTIVATION_PRICE: int = 0
     TRIAL_USER_TAG: str | None = None
+    TRIAL_DISABLED_FOR: str = 'none'  # none, email, telegram, all
     DEFAULT_TRAFFIC_LIMIT_GB: int = 100
     DEFAULT_DEVICE_LIMIT: int = 1
     DEFAULT_TRAFFIC_RESET_STRATEGY: str = 'MONTH'
@@ -1308,6 +1309,16 @@ class Settings(BaseSettings):
 
     def get_trial_user_tag(self) -> str | None:
         return self._normalize_user_tag(self.TRIAL_USER_TAG, 'TRIAL_USER_TAG')
+
+    def is_trial_disabled_for_user(self, auth_type: str | None) -> bool:
+        disabled_for = self.TRIAL_DISABLED_FOR
+        if disabled_for == 'all':
+            return True
+        if disabled_for == 'email' and auth_type == 'email':
+            return True
+        if disabled_for == 'telegram' and (auth_type is None or auth_type == 'telegram'):
+            return True
+        return False
 
     def get_paid_subscription_user_tag(self) -> str | None:
         return self._normalize_user_tag(
