@@ -14,6 +14,7 @@ from app.database.crud.user import (
     get_user_by_oauth_provider,
     set_user_oauth_provider_id,
 )
+from app.database.models import User
 
 from ..auth.oauth_providers import (
     OAuthUserInfo,
@@ -29,6 +30,15 @@ from .auth import _create_auth_response, _store_refresh_token
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix='/auth/oauth', tags=['Cabinet OAuth'])
+
+
+async def _finalize_oauth_login(db: AsyncSession, user: User, provider: str) -> AuthResponse:
+    """Update last login, create tokens, store refresh token."""
+    user.cabinet_last_login = datetime.now(UTC).replace(tzinfo=None)
+    await db.commit()
+    auth_response = _create_auth_response(user)
+    await _store_refresh_token(db, user.id, auth_response.refresh_token, device_info=f'oauth:{provider}')
+    return auth_response
 
 
 # --- Schemas ---
@@ -129,24 +139,16 @@ async def oauth_callback(
     # 5. Find user by provider ID
     user = await get_user_by_oauth_provider(db, provider, user_info.provider_id)
     if user:
-        user.cabinet_last_login = datetime.now(UTC).replace(tzinfo=None)
-        await db.commit()
-        auth_response = _create_auth_response(user)
-        await _store_refresh_token(db, user.id, auth_response.refresh_token, device_info=f'oauth:{provider}')
         logger.info('OAuth login via %s for existing user %s', provider, user.id)
-        return auth_response
+        return await _finalize_oauth_login(db, user, provider)
 
     # 6. Find user by email (if verified) and link provider
     if user_info.email and user_info.email_verified:
         user = await get_user_by_email(db, user_info.email)
         if user:
             await set_user_oauth_provider_id(db, user, provider, user_info.provider_id)
-            user.cabinet_last_login = datetime.now(UTC).replace(tzinfo=None)
-            await db.commit()
-            auth_response = _create_auth_response(user)
-            await _store_refresh_token(db, user.id, auth_response.refresh_token, device_info=f'oauth:{provider}')
             logger.info('OAuth login via %s linked to existing email user %s', provider, user.id)
-            return auth_response
+            return await _finalize_oauth_login(db, user, provider)
 
     # 7. Create new user
     user = await create_user_by_oauth(
@@ -159,10 +161,5 @@ async def oauth_callback(
         last_name=user_info.last_name,
         username=user_info.username,
     )
-    user.cabinet_last_login = datetime.now(UTC).replace(tzinfo=None)
-    await db.commit()
-
-    auth_response = _create_auth_response(user)
-    await _store_refresh_token(db, user.id, auth_response.refresh_token, device_info=f'oauth:{provider}')
     logger.info('OAuth new user created via %s with id=%s', provider, user.id)
-    return auth_response
+    return await _finalize_oauth_login(db, user, provider)

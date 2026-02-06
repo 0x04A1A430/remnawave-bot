@@ -5132,7 +5132,7 @@ async def add_oauth_provider_columns() -> bool:
         for col in ('google_id', 'yandex_id', 'discord_id', 'vk_id'):
             try:
                 async with engine.begin() as conn:
-                    if db_type == 'postgresql' or db_type == 'sqlite':
+                    if db_type in ('postgresql', 'sqlite'):
                         await conn.execute(text(f'CREATE UNIQUE INDEX IF NOT EXISTS uq_users_{col} ON users ({col})'))
                     else:
                         await conn.execute(text(f'CREATE UNIQUE INDEX uq_users_{col} ON users ({col})'))

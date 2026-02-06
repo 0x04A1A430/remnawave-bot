@@ -1,7 +1,7 @@
 import logging
 import secrets
 import string
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import and_, case, func, nullslast, or_, select, text
 from sqlalchemy.exc import IntegrityError
@@ -1266,8 +1266,7 @@ async def set_user_oauth_provider_id(db: AsyncSession, user: User, provider: str
         return
     value: str | int = int(provider_id) if provider == 'vk' else provider_id
     setattr(user, column_name, value)
-    user.updated_at = datetime.utcnow()
-    await db.commit()
+    user.updated_at = datetime.now(UTC).replace(tzinfo=None)
     logger.info(f'Linked {provider} (id={provider_id}) to user {user.id}')
 
 
@@ -1309,7 +1308,7 @@ async def create_user_by_oauth(
         setattr(user, column_name, provider_value)
 
     db.add(user)
-    await db.commit()
+    await db.flush()
     await db.refresh(user)
 
     user.promo_group = default_group
