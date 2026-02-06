@@ -486,8 +486,6 @@ async def reorder_tariffs(
     for order, tariff_id in enumerate(tariff_order):
         await db.execute(update(Tariff).where(Tariff.id == tariff_id).values(display_order=order))
 
-    await db.commit()
-
     logger.info('Изменен порядок тарифов: %s', tariff_order)
 
 

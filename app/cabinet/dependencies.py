@@ -12,6 +12,7 @@ from app.config import settings
 from app.database.crud.user import get_user_by_id
 from app.database.database import AsyncSessionLocal
 from app.database.models import User
+from app.services.blacklist_service import blacklist_service
 from app.services.maintenance_service import maintenance_service
 
 from .auth.jwt_handler import get_token_payload
@@ -103,6 +104,18 @@ async def get_current_cabinet_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail='User account is not active',
         )
+
+    # Check blacklist
+    if user.telegram_id is not None:
+        is_blacklisted, reason = await blacklist_service.is_user_blacklisted(user.telegram_id, user.username)
+        if is_blacklisted:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    'code': 'blacklisted',
+                    'message': reason or 'Доступ запрещен',
+                },
+            )
 
     # Check maintenance mode (allow admins to pass)
     if maintenance_service.is_maintenance_active():
