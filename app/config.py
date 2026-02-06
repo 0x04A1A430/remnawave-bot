@@ -2547,7 +2547,7 @@ class Settings(BaseSettings):
         return self.SMTP_USER
 
     # OAuth helpers
-    def get_oauth_providers_config(self) -> dict[str, dict]:
+    def get_oauth_providers_config(self) -> dict[str, dict[str, str | bool]]:
         """Return config for all OAuth providers (enabled or not)."""
         return {
             'google': {

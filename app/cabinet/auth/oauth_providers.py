@@ -4,7 +4,7 @@ import logging
 import secrets
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from urllib.parse import urlencode
+from typing import Any, TypedDict
 
 import httpx
 
@@ -15,6 +15,70 @@ from app.utils.cache import cache, cache_key
 logger = logging.getLogger(__name__)
 
 STATE_TTL_SECONDS = 600  # 10 minutes
+
+
+# --- Typed dicts for provider API responses ---
+
+
+class OAuthProviderConfig(TypedDict):
+    client_id: str
+    client_secret: str
+    enabled: bool
+    display_name: str
+
+
+class OAuthTokenResponse(TypedDict, total=False):
+    access_token: str
+    token_type: str
+    expires_in: int
+    refresh_token: str
+    scope: str
+    # VK-specific: email and user_id come in token response
+    email: str
+    user_id: int
+
+
+class GoogleUserInfoResponse(TypedDict, total=False):
+    sub: str
+    email: str
+    email_verified: bool
+    given_name: str
+    family_name: str
+    picture: str
+    name: str
+
+
+class YandexUserInfoResponse(TypedDict, total=False):
+    id: str
+    login: str
+    default_email: str
+    emails: list[str]
+    first_name: str
+    last_name: str
+    default_avatar_id: str
+
+
+class DiscordUserInfoResponse(TypedDict, total=False):
+    id: str
+    username: str
+    global_name: str
+    email: str
+    verified: bool
+    avatar: str
+
+
+class VKUserInfoItem(TypedDict, total=False):
+    id: int
+    first_name: str
+    last_name: str
+    photo_200: str
+
+
+class VKUserInfoResponse(TypedDict, total=False):
+    response: list[VKUserInfoItem]
+
+
+# --- Data classes ---
 
 
 @dataclass
@@ -31,6 +95,9 @@ class OAuthUserInfo:
     avatar_url: str | None = None
 
 
+# --- CSRF state management (Redis) ---
+
+
 async def generate_oauth_state(provider: str) -> str:
     """Generate a CSRF state token for OAuth flow. Stored in Redis with TTL."""
     state = secrets.token_urlsafe(32)
@@ -41,7 +108,7 @@ async def generate_oauth_state(provider: str) -> str:
 async def validate_oauth_state(state: str, provider: str) -> bool:
     """Validate and consume a CSRF state token from Redis."""
     key = cache_key('oauth_state', state)
-    stored_provider = await cache.get(key)
+    stored_provider: str | None = await cache.get(key)
     if stored_provider is None:
         return False
     await cache.delete(key)
@@ -50,13 +117,16 @@ async def validate_oauth_state(state: str, provider: str) -> bool:
     return True
 
 
+# --- Provider implementations ---
+
+
 class OAuthProvider(ABC):
     """Base class for OAuth 2.0 providers."""
 
     name: str
     display_name: str
 
-    def __init__(self, client_id: str, client_secret: str, redirect_uri: str):
+    def __init__(self, client_id: str, client_secret: str, redirect_uri: str) -> None:
         self.client_id = client_id
         self.client_secret = client_secret
         self.redirect_uri = redirect_uri
@@ -66,11 +136,11 @@ class OAuthProvider(ABC):
         """Build the authorization URL for the provider."""
 
     @abstractmethod
-    async def exchange_code(self, code: str) -> dict:
+    async def exchange_code(self, code: str) -> OAuthTokenResponse:
         """Exchange authorization code for tokens."""
 
     @abstractmethod
-    async def get_user_info(self, token_data: dict) -> OAuthUserInfo:
+    async def get_user_info(self, token_data: OAuthTokenResponse) -> OAuthUserInfo:
         """Fetch user info from the provider."""
 
 
@@ -78,8 +148,12 @@ class GoogleProvider(OAuthProvider):
     name = 'google'
     display_name = 'Google'
 
+    AUTHORIZE_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
+    TOKEN_URL = 'https://oauth2.googleapis.com/token'
+    USERINFO_URL = 'https://www.googleapis.com/oauth2/v3/userinfo'
+
     def get_authorization_url(self, state: str) -> str:
-        params = {
+        params: dict[str, str] = {
             'client_id': self.client_id,
             'redirect_uri': self.redirect_uri,
             'response_type': 'code',
@@ -88,12 +162,13 @@ class GoogleProvider(OAuthProvider):
             'access_type': 'offline',
             'prompt': 'select_account',
         }
-        return f'https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}'
+        request = httpx.Request('GET', self.AUTHORIZE_URL, params=params)
+        return str(request.url)
 
-    async def exchange_code(self, code: str) -> dict:
+    async def exchange_code(self, code: str) -> OAuthTokenResponse:
         async with httpx.AsyncClient(timeout=15) as client:
             response = await client.post(
-                'https://oauth2.googleapis.com/token',
+                self.TOKEN_URL,
                 json={
                     'client_id': self.client_id,
                     'client_secret': self.client_secret,
@@ -103,17 +178,18 @@ class GoogleProvider(OAuthProvider):
                 },
             )
             response.raise_for_status()
-            return response.json()
+            data: OAuthTokenResponse = response.json()
+            return data
 
-    async def get_user_info(self, token_data: dict) -> OAuthUserInfo:
+    async def get_user_info(self, token_data: OAuthTokenResponse) -> OAuthUserInfo:
         access_token = token_data['access_token']
         async with httpx.AsyncClient(timeout=15) as client:
             response = await client.get(
-                'https://www.googleapis.com/oauth2/v3/userinfo',
+                self.USERINFO_URL,
                 headers={'Authorization': f'Bearer {access_token}'},
             )
             response.raise_for_status()
-            data = response.json()
+            data: GoogleUserInfoResponse = response.json()
 
         return OAuthUserInfo(
             provider='google',
@@ -130,8 +206,12 @@ class YandexProvider(OAuthProvider):
     name = 'yandex'
     display_name = 'Yandex'
 
+    AUTHORIZE_URL = 'https://oauth.yandex.com/authorize'
+    TOKEN_URL = 'https://oauth.yandex.com/token'
+    USERINFO_URL = 'https://login.yandex.ru/info'
+
     def get_authorization_url(self, state: str) -> str:
-        params = {
+        params: dict[str, str] = {
             'client_id': self.client_id,
             'redirect_uri': self.redirect_uri,
             'response_type': 'code',
@@ -139,32 +219,34 @@ class YandexProvider(OAuthProvider):
             'state': state,
             'force_confirm': 'yes',
         }
-        return f'https://oauth.yandex.com/authorize?{urlencode(params)}'
+        request = httpx.Request('GET', self.AUTHORIZE_URL, params=params)
+        return str(request.url)
 
-    async def exchange_code(self, code: str) -> dict:
+    async def exchange_code(self, code: str) -> OAuthTokenResponse:
         async with httpx.AsyncClient(timeout=15) as client:
             response = await client.post(
-                'https://oauth.yandex.com/token',
+                self.TOKEN_URL,
                 data={
                     'client_id': self.client_id,
                     'client_secret': self.client_secret,
                     'code': code,
                     'grant_type': 'authorization_code',
                 },
-                headers={'Content-Type': 'application/x-www-form-urlencoded'},
             )
             response.raise_for_status()
-            return response.json()
+            data: OAuthTokenResponse = response.json()
+            return data
 
-    async def get_user_info(self, token_data: dict) -> OAuthUserInfo:
+    async def get_user_info(self, token_data: OAuthTokenResponse) -> OAuthUserInfo:
         access_token = token_data['access_token']
         async with httpx.AsyncClient(timeout=15) as client:
             response = await client.get(
-                'https://login.yandex.ru/info?format=json',
+                self.USERINFO_URL,
+                params={'format': 'json'},
                 headers={'Authorization': f'OAuth {access_token}'},
             )
             response.raise_for_status()
-            data = response.json()
+            data: YandexUserInfoResponse = response.json()
 
         default_email = data.get('default_email')
         emails = data.get('emails', [])
@@ -190,8 +272,12 @@ class DiscordProvider(OAuthProvider):
     name = 'discord'
     display_name = 'Discord'
 
+    AUTHORIZE_URL = 'https://discord.com/api/oauth2/authorize'
+    TOKEN_URL = 'https://discord.com/api/oauth2/token'
+    USERINFO_URL = 'https://discord.com/api/v10/users/@me'
+
     def get_authorization_url(self, state: str) -> str:
-        params = {
+        params: dict[str, str] = {
             'client_id': self.client_id,
             'redirect_uri': self.redirect_uri,
             'response_type': 'code',
@@ -199,12 +285,13 @@ class DiscordProvider(OAuthProvider):
             'state': state,
             'prompt': 'consent',
         }
-        return f'https://discord.com/api/oauth2/authorize?{urlencode(params)}'
+        request = httpx.Request('GET', self.AUTHORIZE_URL, params=params)
+        return str(request.url)
 
-    async def exchange_code(self, code: str) -> dict:
+    async def exchange_code(self, code: str) -> OAuthTokenResponse:
         async with httpx.AsyncClient(timeout=15) as client:
             response = await client.post(
-                'https://discord.com/api/oauth2/token',
+                self.TOKEN_URL,
                 data={
                     'client_id': self.client_id,
                     'client_secret': self.client_secret,
@@ -212,22 +299,22 @@ class DiscordProvider(OAuthProvider):
                     'grant_type': 'authorization_code',
                     'redirect_uri': self.redirect_uri,
                 },
-                headers={'Content-Type': 'application/x-www-form-urlencoded'},
             )
             response.raise_for_status()
-            return response.json()
+            data: OAuthTokenResponse = response.json()
+            return data
 
-    async def get_user_info(self, token_data: dict) -> OAuthUserInfo:
+    async def get_user_info(self, token_data: OAuthTokenResponse) -> OAuthUserInfo:
         access_token = token_data['access_token']
         async with httpx.AsyncClient(timeout=15) as client:
             response = await client.get(
-                'https://discord.com/api/v10/users/@me',
+                self.USERINFO_URL,
                 headers={'Authorization': f'Bearer {access_token}'},
             )
             response.raise_for_status()
-            data = response.json()
+            data: DiscordUserInfoResponse = response.json()
 
-        avatar_url = None
+        avatar_url: str | None = None
         if data.get('avatar'):
             avatar_url = f'https://cdn.discordapp.com/avatars/{data["id"]}/{data["avatar"]}.png'
 
@@ -246,21 +333,27 @@ class VKProvider(OAuthProvider):
     name = 'vk'
     display_name = 'VK'
 
+    AUTHORIZE_URL = 'https://oauth.vk.com/authorize'
+    TOKEN_URL = 'https://oauth.vk.com/access_token'
+    USERINFO_URL = 'https://api.vk.com/method/users.get'
+    API_VERSION = '5.131'
+
     def get_authorization_url(self, state: str) -> str:
-        params = {
+        params: dict[str, str] = {
             'client_id': self.client_id,
             'redirect_uri': self.redirect_uri,
             'response_type': 'code',
             'scope': 'email',
             'state': state,
-            'v': '5.131',
+            'v': self.API_VERSION,
         }
-        return f'https://oauth.vk.com/authorize?{urlencode(params)}'
+        request = httpx.Request('GET', self.AUTHORIZE_URL, params=params)
+        return str(request.url)
 
-    async def exchange_code(self, code: str) -> dict:
+    async def exchange_code(self, code: str) -> OAuthTokenResponse:
         async with httpx.AsyncClient(timeout=15) as client:
             response = await client.get(
-                'https://oauth.vk.com/access_token',
+                self.TOKEN_URL,
                 params={
                     'client_id': self.client_id,
                     'client_secret': self.client_secret,
@@ -269,27 +362,29 @@ class VKProvider(OAuthProvider):
                 },
             )
             response.raise_for_status()
-            return response.json()
+            data: OAuthTokenResponse = response.json()
+            return data
 
-    async def get_user_info(self, token_data: dict) -> OAuthUserInfo:
+    async def get_user_info(self, token_data: OAuthTokenResponse) -> OAuthUserInfo:
         access_token = token_data['access_token']
-        user_id = token_data.get('user_id')
+        user_id: int | None = token_data.get('user_id')
         # VK returns email in token response, not in userinfo
-        email = token_data.get('email')
+        email: str | None = token_data.get('email')
 
         async with httpx.AsyncClient(timeout=15) as client:
             response = await client.get(
-                'https://api.vk.com/method/users.get',
+                self.USERINFO_URL,
                 params={
                     'access_token': access_token,
                     'fields': 'photo_200',
-                    'v': '5.131',
+                    'v': self.API_VERSION,
                 },
             )
             response.raise_for_status()
-            data = response.json()
+            data: VKUserInfoResponse = response.json()
 
-        user_data = data.get('response', [{}])[0]
+        users: list[Any] = data.get('response', [])
+        user_data: VKUserInfoItem = users[0] if users else {}  # type: ignore[assignment]
 
         return OAuthUserInfo(
             provider='vk',
@@ -301,6 +396,8 @@ class VKProvider(OAuthProvider):
             avatar_url=user_data.get('photo_200'),
         )
 
+
+# --- Provider factory ---
 
 _PROVIDERS: dict[str, type[OAuthProvider]] = {
     'google': GoogleProvider,
@@ -315,7 +412,7 @@ def get_provider(name: str) -> OAuthProvider | None:
 
     Returns None if the provider is not enabled or not found.
     """
-    providers_config = settings.get_oauth_providers_config()
+    providers_config: dict[str, OAuthProviderConfig] = settings.get_oauth_providers_config()
     config = providers_config.get(name)
     if not config or not config['enabled']:
         return None
