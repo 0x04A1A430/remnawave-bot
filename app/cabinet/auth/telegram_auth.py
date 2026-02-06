@@ -5,7 +5,7 @@ import hmac
 import json
 from datetime import datetime
 from typing import Any
-from urllib.parse import parse_qsl, unquote
+from urllib.parse import parse_qsl
 
 from app.config import settings
 
