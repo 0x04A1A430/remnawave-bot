@@ -194,6 +194,12 @@ class TariffUpdateRequest(BaseModel):
     traffic_reset_mode: str | None = None  # DAY, WEEK, MONTH, NO_RESET, None = глобальная настройка
 
 
+class TariffSortOrderRequest(BaseModel):
+    """Request to reorder tariffs."""
+
+    tariff_ids: list[int] = Field(..., min_length=1, description='Ordered list of tariff IDs')
+
+
 class TariffToggleResponse(BaseModel):
     """Response after toggling tariff."""
 
