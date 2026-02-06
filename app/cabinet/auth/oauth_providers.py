@@ -166,7 +166,7 @@ class GoogleProvider(OAuthProvider):
         return str(request.url)
 
     async def exchange_code(self, code: str) -> OAuthTokenResponse:
-        async with httpx.AsyncClient(timeout=15) as client:
+        async with httpx.AsyncClient(timeout=30) as client:
             response = await client.post(
                 self.TOKEN_URL,
                 json={
@@ -183,7 +183,7 @@ class GoogleProvider(OAuthProvider):
 
     async def get_user_info(self, token_data: OAuthTokenResponse) -> OAuthUserInfo:
         access_token = token_data['access_token']
-        async with httpx.AsyncClient(timeout=15) as client:
+        async with httpx.AsyncClient(timeout=30) as client:
             response = await client.get(
                 self.USERINFO_URL,
                 headers={'Authorization': f'Bearer {access_token}'},
@@ -223,7 +223,7 @@ class YandexProvider(OAuthProvider):
         return str(request.url)
 
     async def exchange_code(self, code: str) -> OAuthTokenResponse:
-        async with httpx.AsyncClient(timeout=15) as client:
+        async with httpx.AsyncClient(timeout=30) as client:
             response = await client.post(
                 self.TOKEN_URL,
                 data={
@@ -239,7 +239,7 @@ class YandexProvider(OAuthProvider):
 
     async def get_user_info(self, token_data: OAuthTokenResponse) -> OAuthUserInfo:
         access_token = token_data['access_token']
-        async with httpx.AsyncClient(timeout=15) as client:
+        async with httpx.AsyncClient(timeout=30) as client:
             response = await client.get(
                 self.USERINFO_URL,
                 params={'format': 'json'},
@@ -289,7 +289,7 @@ class DiscordProvider(OAuthProvider):
         return str(request.url)
 
     async def exchange_code(self, code: str) -> OAuthTokenResponse:
-        async with httpx.AsyncClient(timeout=15) as client:
+        async with httpx.AsyncClient(timeout=30) as client:
             response = await client.post(
                 self.TOKEN_URL,
                 data={
@@ -306,7 +306,7 @@ class DiscordProvider(OAuthProvider):
 
     async def get_user_info(self, token_data: OAuthTokenResponse) -> OAuthUserInfo:
         access_token = token_data['access_token']
-        async with httpx.AsyncClient(timeout=15) as client:
+        async with httpx.AsyncClient(timeout=30) as client:
             response = await client.get(
                 self.USERINFO_URL,
                 headers={'Authorization': f'Bearer {access_token}'},
@@ -351,7 +351,7 @@ class VKProvider(OAuthProvider):
         return str(request.url)
 
     async def exchange_code(self, code: str) -> OAuthTokenResponse:
-        async with httpx.AsyncClient(timeout=15) as client:
+        async with httpx.AsyncClient(timeout=30) as client:
             response = await client.get(
                 self.TOKEN_URL,
                 params={
@@ -371,7 +371,7 @@ class VKProvider(OAuthProvider):
         # VK returns email in token response, not in userinfo
         email: str | None = token_data.get('email')
 
-        async with httpx.AsyncClient(timeout=15) as client:
+        async with httpx.AsyncClient(timeout=30) as client:
             response = await client.get(
                 self.USERINFO_URL,
                 params={
