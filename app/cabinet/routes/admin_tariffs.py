@@ -388,7 +388,7 @@ async def update_existing_tariff(
 
     # Update promo groups separately
     if request.promo_group_ids is not None:
-        await set_tariff_promo_groups(db, tariff_id, request.promo_group_ids)
+        await set_tariff_promo_groups(db, tariff, request.promo_group_ids)
 
     logger.info(f'Admin {admin.id} updated tariff {tariff_id}')
 
