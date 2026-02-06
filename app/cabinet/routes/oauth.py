@@ -14,10 +14,7 @@ from app.database.crud.user import (
     get_user_by_oauth_provider,
     set_user_oauth_provider_id,
 )
-from app.database.models import User
 
-from ..auth import create_access_token, create_refresh_token
-from ..auth.jwt_handler import get_refresh_token_expires_at
 from ..auth.oauth_providers import (
     OAuthUserInfo,
     generate_oauth_state,
@@ -25,7 +22,8 @@ from ..auth.oauth_providers import (
     validate_oauth_state,
 )
 from ..dependencies import get_cabinet_db
-from ..schemas.auth import AuthResponse, UserResponse
+from ..schemas.auth import AuthResponse
+from .auth import _create_auth_response, _store_refresh_token
 
 
 logger = logging.getLogger(__name__)
@@ -53,76 +51,6 @@ class OAuthAuthorizeResponse(BaseModel):
 class OAuthCallbackRequest(BaseModel):
     code: str = Field(..., description='Authorization code from provider')
     state: str = Field(..., description='CSRF state token')
-
-
-# --- Helpers ---
-
-
-def _user_to_response(user: User) -> UserResponse:
-    """Convert User model to UserResponse."""
-    return UserResponse(
-        id=user.id,
-        telegram_id=user.telegram_id,
-        username=user.username,
-        first_name=user.first_name,
-        last_name=user.last_name,
-        email=user.email,
-        email_verified=user.email_verified,
-        balance_kopeks=user.balance_kopeks,
-        balance_rubles=user.balance_rubles,
-        referral_code=user.referral_code,
-        language=user.language,
-        created_at=user.created_at,
-        auth_type=getattr(user, 'auth_type', 'telegram'),
-    )
-
-
-def _create_auth_response(user: User) -> AuthResponse:
-    """Create full auth response with tokens."""
-    access_token = create_access_token(user.id, user.telegram_id)
-    refresh_token = create_refresh_token(user.id)
-    expires_in = settings.get_cabinet_access_token_expire_minutes() * 60
-
-    return AuthResponse(
-        access_token=access_token,
-        refresh_token=refresh_token,
-        token_type='bearer',
-        expires_in=expires_in,
-        user=_user_to_response(user),
-    )
-
-
-async def _store_refresh_token(
-    db: AsyncSession,
-    user_id: int,
-    refresh_token: str,
-    device_info: str | None = None,
-) -> None:
-    """Store refresh token hash in database."""
-    import hashlib
-
-    from app.database.models import CabinetRefreshToken
-
-    token_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
-    expires_at = get_refresh_token_expires_at()
-
-    from sqlalchemy import select
-
-    existing = await db.execute(select(CabinetRefreshToken).where(CabinetRefreshToken.token_hash == token_hash))
-    if existing.scalar_one_or_none():
-        return
-
-    token_record = CabinetRefreshToken(
-        user_id=user_id,
-        token_hash=token_hash,
-        device_info=device_info,
-        expires_at=expires_at,
-    )
-    db.add(token_record)
-    try:
-        await db.commit()
-    except Exception:
-        await db.rollback()
 
 
 # --- Endpoints ---
