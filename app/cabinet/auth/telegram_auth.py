@@ -5,7 +5,7 @@ import hmac
 import json
 from datetime import datetime
 from typing import Any
-from urllib.parse import parse_qsl
+from urllib.parse import parse_qsl, unquote
 
 from app.config import settings
 
@@ -106,7 +106,7 @@ def validate_telegram_init_data(init_data: str, max_age_seconds: int = 86400) ->
         # Parse user data from the validated data
         user_data_str = parsed.get('user')
         if user_data_str:
-            user_data = json.loads(user_data_str)
+            user_data = json.loads(unquote(user_data_str))
             return user_data
 
         return parsed
