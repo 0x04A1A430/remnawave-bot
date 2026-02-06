@@ -160,8 +160,9 @@ class BlacklistService:
 
         # Проверяем по username, если он передан
         if username:
+            username_lower = username.lower().lstrip('@')
             for bl_id, bl_username, bl_reason in self.blacklist_data:
-                if bl_username and (bl_username == username or bl_username == f'@{username}'):
+                if bl_username and bl_username.lower().lstrip('@') == username_lower:
                     logger.info(
                         f'Пользователь {username} ({telegram_id}) найден в черном списке по username: {bl_reason}'
                     )

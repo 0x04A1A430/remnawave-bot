@@ -39,7 +39,6 @@ from app.keyboards.inline import (
 )
 from app.localization.texts import get_texts
 from app.services.admin_notification_service import AdminNotificationService
-from app.services.blacklist_service import blacklist_service
 from app.services.remnawave_service import RemnaWaveConfigurationError
 from app.services.subscription_checkout_service import (
     clear_subscription_checkout_draft,
@@ -1724,24 +1723,6 @@ async def handle_extend_subscription(callback: types.CallbackQuery, db_user: Use
 
 
 async def confirm_extend_subscription(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
-    # Проверяем, находится ли пользователь в черном списке
-    is_blacklisted, blacklist_reason = await blacklist_service.is_user_blacklisted(
-        callback.from_user.id, callback.from_user.username
-    )
-
-    if is_blacklisted:
-        logger.warning(f'🚫 Пользователь {callback.from_user.id} находится в черном списке: {blacklist_reason}')
-        try:
-            await callback.answer(
-                f'🚫 Продление подписки невозможно\n\n'
-                f'Причина: {blacklist_reason}\n\n'
-                f'Если вы считаете, что это ошибка, обратитесь в поддержку.',
-                show_alert=True,
-            )
-        except Exception as e:
-            logger.error(f'Ошибка при отправке сообщения о блокировке: {e}')
-        return
-
     days = int(callback.data.split('_')[2])
     texts = get_texts(db_user.language)
 
@@ -2228,24 +2209,6 @@ async def devices_continue(callback: types.CallbackQuery, state: FSMContext, db_
 
 
 async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_user: User, db: AsyncSession):
-    # Проверяем, находится ли пользователь в черном списке
-    is_blacklisted, blacklist_reason = await blacklist_service.is_user_blacklisted(
-        callback.from_user.id, callback.from_user.username
-    )
-
-    if is_blacklisted:
-        logger.warning(f'🚫 Пользователь {callback.from_user.id} находится в черном списке: {blacklist_reason}')
-        try:
-            await callback.answer(
-                f'🚫 Покупка подписки невозможна\n\n'
-                f'Причина: {blacklist_reason}\n\n'
-                f'Если вы считаете, что это ошибка, обратитесь в поддержку.',
-                show_alert=True,
-            )
-        except Exception as e:
-            logger.error(f'Ошибка при отправке сообщения о блокировке: {e}')
-        return
-
     # Проверка ограничения на покупку/продление подписки
     if getattr(db_user, 'restriction_subscription', False):
         reason = getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором'
@@ -4134,24 +4097,6 @@ async def handle_simple_subscription_purchase(
     db: AsyncSession,
 ):
     """Обрабатывает простую покупку подписки."""
-    # Проверяем, находится ли пользователь в черном списке
-    is_blacklisted, blacklist_reason = await blacklist_service.is_user_blacklisted(
-        callback.from_user.id, callback.from_user.username
-    )
-
-    if is_blacklisted:
-        logger.warning(f'🚫 Пользователь {callback.from_user.id} находится в черном списке: {blacklist_reason}')
-        try:
-            await callback.answer(
-                f'🚫 Простая покупка подписки невозможна\n\n'
-                f'Причина: {blacklist_reason}\n\n'
-                f'Если вы считаете, что это ошибка, обратитесь в поддержку.',
-                show_alert=True,
-            )
-        except Exception as e:
-            logger.error(f'Ошибка при отправке сообщения о блокировке: {e}')
-        return
-
     texts = get_texts(db_user.language)
 
     if not settings.SIMPLE_SUBSCRIPTION_ENABLED:

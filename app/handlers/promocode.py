@@ -9,7 +9,6 @@ from app.database.models import User
 from app.keyboards.inline import get_back_keyboard
 from app.localization.texts import get_texts
 from app.services.admin_notification_service import AdminNotificationService
-from app.services.blacklist_service import blacklist_service
 from app.services.promocode_service import PromoCodeService
 from app.states import PromoCodeStates
 from app.utils.decorators import error_handler
@@ -71,23 +70,6 @@ async def activate_promocode_for_registration(db: AsyncSession, user_id: int, co
 
 @error_handler
 async def process_promocode(message: types.Message, db_user: User, state: FSMContext, db: AsyncSession):
-    # Проверяем, находится ли пользователь в черном списке
-    is_blacklisted, blacklist_reason = await blacklist_service.is_user_blacklisted(
-        message.from_user.id, message.from_user.username
-    )
-
-    if is_blacklisted:
-        logger.warning(f'🚫 Пользователь {message.from_user.id} находится в черном списке: {blacklist_reason}')
-        try:
-            await message.answer(
-                f'🚫 Активация промокода невозможна\n\n'
-                f'Причина: {blacklist_reason}\n\n'
-                f'Если вы считаете, что это ошибка, обратитесь в поддержку.'
-            )
-        except Exception as e:
-            logger.error(f'Ошибка при отправке сообщения о блокировке: {e}')
-        return
-
     texts = get_texts(db_user.language)
 
     code = message.text.strip()
