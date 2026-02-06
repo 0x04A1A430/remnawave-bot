@@ -44,7 +44,6 @@ def parse_webapp_init_data(
     data: dict[str, Any] = {key: value for key, value in parsed_pairs}
 
     received_hash = data.pop('hash', None)
-    data.pop('signature', None)
     if not received_hash:
         raise TelegramWebAppAuthError('Missing init data signature')
 
