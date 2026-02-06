@@ -14,6 +14,7 @@ from app.database.crud.tariff import (
     get_tariff_by_id,
     get_tariff_subscriptions_count,
     load_period_prices_from_db,
+    reorder_tariffs,
     set_tariff_promo_groups,
     update_tariff,
 )
@@ -29,6 +30,7 @@ from ..schemas.tariffs import (
     TariffDetailResponse,
     TariffListItem,
     TariffListResponse,
+    TariffSortOrderRequest,
     TariffStatsResponse,
     TariffToggleResponse,
     TariffTrialResponse,
@@ -155,6 +157,21 @@ async def get_available_servers(
         )
         for server in servers
     ]
+
+
+@router.put('/order')
+async def update_tariff_order(
+    request: TariffSortOrderRequest,
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Update the display order of tariffs."""
+    await reorder_tariffs(db, request.tariff_ids)
+    await db.commit()
+
+    logger.info(f'Admin {admin.id} updated tariff order: {request.tariff_ids}')
+
+    return {'message': 'Tariff order updated successfully'}
 
 
 @router.get('/{tariff_id}', response_model=TariffDetailResponse)
