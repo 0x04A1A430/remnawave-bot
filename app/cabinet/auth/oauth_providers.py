@@ -3,10 +3,10 @@
 import logging
 import secrets
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from typing import Any, TypedDict
 
 import httpx
+from pydantic import BaseModel
 
 from app.config import settings
 from app.utils.cache import cache, cache_key
@@ -78,11 +78,10 @@ class VKUserInfoResponse(TypedDict, total=False):
     response: list[VKUserInfoItem]
 
 
-# --- Data classes ---
+# --- Models ---
 
 
-@dataclass
-class OAuthUserInfo:
+class OAuthUserInfo(BaseModel):
     """Normalized user info from OAuth provider."""
 
     provider: str
