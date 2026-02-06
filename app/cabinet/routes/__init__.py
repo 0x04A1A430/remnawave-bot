@@ -26,6 +26,7 @@ from .contests import router as contests_router
 from .info import router as info_router
 from .media import router as media_router
 from .notifications import router as notifications_router
+from .oauth import router as oauth_router
 from .polls import router as polls_router
 from .promo import router as promo_router
 from .promocode import router as promocode_router
@@ -45,6 +46,7 @@ router = APIRouter(prefix='/cabinet', tags=['Cabinet'])
 
 # Include all sub-routers
 router.include_router(auth_router)
+router.include_router(oauth_router)
 router.include_router(subscription_router)
 router.include_router(balance_router)
 router.include_router(referral_router)

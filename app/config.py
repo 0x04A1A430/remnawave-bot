@@ -698,6 +698,23 @@ class Settings(BaseSettings):
     CABINET_EMAIL_AUTH_ENABLED: bool = True  # Enable email registration/login in cabinet
     CABINET_URL: str = 'https://example.com/cabinet'  # Base URL for cabinet (used in verification emails)
 
+    # OAuth 2.0 provider settings for cabinet
+    OAUTH_GOOGLE_CLIENT_ID: str = ''
+    OAUTH_GOOGLE_CLIENT_SECRET: str = ''
+    OAUTH_GOOGLE_ENABLED: bool = False
+
+    OAUTH_YANDEX_CLIENT_ID: str = ''
+    OAUTH_YANDEX_CLIENT_SECRET: str = ''
+    OAUTH_YANDEX_ENABLED: bool = False
+
+    OAUTH_DISCORD_CLIENT_ID: str = ''
+    OAUTH_DISCORD_CLIENT_SECRET: str = ''
+    OAUTH_DISCORD_ENABLED: bool = False
+
+    OAUTH_VK_CLIENT_ID: str = ''
+    OAUTH_VK_CLIENT_SECRET: str = ''
+    OAUTH_VK_ENABLED: bool = False
+
     # SMTP settings for cabinet email
     SMTP_HOST: str | None = None
     SMTP_PORT: int = 587
@@ -1316,7 +1333,8 @@ class Settings(BaseSettings):
         disabled_for = self.TRIAL_DISABLED_FOR
         if disabled_for == 'all':
             return True
-        if disabled_for == 'email' and auth_type == 'email':
+        # 'email' means all non-Telegram users (email, google, yandex, discord, vk, etc.)
+        if disabled_for == 'email' and auth_type not in (None, 'telegram'):
             return True
         if disabled_for == 'telegram' and (auth_type is None or auth_type == 'telegram'):
             return True
@@ -2527,6 +2545,40 @@ class Settings(BaseSettings):
         if self.SMTP_FROM_EMAIL:
             return self.SMTP_FROM_EMAIL
         return self.SMTP_USER
+
+    # OAuth helpers
+    def get_oauth_providers_config(self) -> dict[str, dict[str, str | bool]]:
+        """Return config for all OAuth providers (enabled or not)."""
+        return {
+            'google': {
+                'client_id': self.OAUTH_GOOGLE_CLIENT_ID,
+                'client_secret': self.OAUTH_GOOGLE_CLIENT_SECRET,
+                'enabled': self.OAUTH_GOOGLE_ENABLED,
+                'display_name': 'Google',
+            },
+            'yandex': {
+                'client_id': self.OAUTH_YANDEX_CLIENT_ID,
+                'client_secret': self.OAUTH_YANDEX_CLIENT_SECRET,
+                'enabled': self.OAUTH_YANDEX_ENABLED,
+                'display_name': 'Yandex',
+            },
+            'discord': {
+                'client_id': self.OAUTH_DISCORD_CLIENT_ID,
+                'client_secret': self.OAUTH_DISCORD_CLIENT_SECRET,
+                'enabled': self.OAUTH_DISCORD_ENABLED,
+                'display_name': 'Discord',
+            },
+            'vk': {
+                'client_id': self.OAUTH_VK_CLIENT_ID,
+                'client_secret': self.OAUTH_VK_CLIENT_SECRET,
+                'enabled': self.OAUTH_VK_ENABLED,
+                'display_name': 'VK',
+            },
+        }
+
+    def get_enabled_oauth_provider_names(self) -> list[str]:
+        """Return list of enabled OAuth provider names."""
+        return [name for name, cfg in self.get_oauth_providers_config().items() if cfg['enabled']]
 
     # Ban System helpers
     def is_ban_system_enabled(self) -> bool:

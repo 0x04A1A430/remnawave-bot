@@ -5094,6 +5094,58 @@ async def add_transaction_receipt_columns() -> bool:
         return False
 
 
+async def add_oauth_provider_columns() -> bool:
+    """Добавить колонки OAuth провайдеров (google_id, yandex_id, discord_id, vk_id) в users."""
+    try:
+        google_exists = await check_column_exists('users', 'google_id')
+        yandex_exists = await check_column_exists('users', 'yandex_id')
+        discord_exists = await check_column_exists('users', 'discord_id')
+        vk_exists = await check_column_exists('users', 'vk_id')
+
+        if google_exists and yandex_exists and discord_exists and vk_exists:
+            logger.info('Колонки OAuth провайдеров уже существуют в users')
+            return True
+
+        db_type = await get_database_type()
+
+        async with engine.begin() as conn:
+            if not google_exists:
+                await conn.execute(text('ALTER TABLE users ADD COLUMN google_id VARCHAR(255)'))
+                logger.info('✅ Добавлена колонка google_id в users')
+
+            if not yandex_exists:
+                await conn.execute(text('ALTER TABLE users ADD COLUMN yandex_id VARCHAR(255)'))
+                logger.info('✅ Добавлена колонка yandex_id в users')
+
+            if not discord_exists:
+                await conn.execute(text('ALTER TABLE users ADD COLUMN discord_id VARCHAR(255)'))
+                logger.info('✅ Добавлена колонка discord_id в users')
+
+            if not vk_exists:
+                if db_type == 'postgresql':
+                    await conn.execute(text('ALTER TABLE users ADD COLUMN vk_id BIGINT'))
+                else:
+                    await conn.execute(text('ALTER TABLE users ADD COLUMN vk_id INTEGER'))
+                logger.info('✅ Добавлена колонка vk_id в users')
+
+        # Создаём уникальные индексы
+        for col in ('google_id', 'yandex_id', 'discord_id', 'vk_id'):
+            try:
+                async with engine.begin() as conn:
+                    if db_type in ('postgresql', 'sqlite'):
+                        await conn.execute(text(f'CREATE UNIQUE INDEX IF NOT EXISTS uq_users_{col} ON users ({col})'))
+                    else:
+                        await conn.execute(text(f'CREATE UNIQUE INDEX uq_users_{col} ON users ({col})'))
+            except Exception as idx_error:
+                logger.warning(f'Индекс uq_users_{col} возможно уже существует: {idx_error}')
+
+        return True
+
+    except Exception as error:
+        logger.error(f'❌ Ошибка добавления колонок OAuth провайдеров в users: {error}')
+        return False
+
+
 async def create_withdrawal_requests_table() -> bool:
     """Создаёт таблицу для заявок на вывод реферального баланса."""
     try:
@@ -7045,6 +7097,13 @@ async def run_universal_migration():
         else:
             logger.warning('⚠️ Проблемы с миграцией transaction_id_cp')
 
+        logger.info('=== ДОБАВЛЕНИЕ КОЛОНОК OAUTH ПРОВАЙДЕРОВ ===')
+        oauth_columns_ready = await add_oauth_provider_columns()
+        if oauth_columns_ready:
+            logger.info('✅ Колонки OAuth провайдеров (google_id, yandex_id, discord_id, vk_id) готовы')
+        else:
+            logger.warning('⚠️ Проблемы с колонками OAuth провайдеров')
+
         async with engine.begin() as conn:
             total_subs = await conn.execute(text('SELECT COUNT(*) FROM subscriptions'))
             unique_users = await conn.execute(text('SELECT COUNT(DISTINCT user_id) FROM subscriptions'))
@@ -7157,6 +7216,10 @@ async def check_migration_status():
             'campaign_tariff_duration_days_column': False,
             'campaign_registration_tariff_id_column': False,
             'campaign_registration_tariff_duration_days_column': False,
+            'users_google_id_column': False,
+            'users_yandex_id_column': False,
+            'users_discord_id_column': False,
+            'users_vk_id_column': False,
         }
 
         status['has_made_first_topup_column'] = await check_column_exists('users', 'has_made_first_topup')
@@ -7288,6 +7351,12 @@ async def check_migration_status():
             'transactions', 'receipt_created_at'
         )
 
+        # Колонки OAuth провайдеров в users
+        status['users_google_id_column'] = await check_column_exists('users', 'google_id')
+        status['users_yandex_id_column'] = await check_column_exists('users', 'yandex_id')
+        status['users_discord_id_column'] = await check_column_exists('users', 'discord_id')
+        status['users_vk_id_column'] = await check_column_exists('users', 'vk_id')
+
         async with engine.begin() as conn:
             duplicates_check = await conn.execute(
                 text("""
@@ -7358,6 +7427,10 @@ async def check_migration_status():
             'subscription_temporary_access_table': 'Таблица subscription_temporary_access',
             'transactions_receipt_uuid_column': 'Колонка receipt_uuid в transactions',
             'transactions_receipt_created_at_column': 'Колонка receipt_created_at в transactions',
+            'users_google_id_column': 'Колонка google_id в users',
+            'users_yandex_id_column': 'Колонка yandex_id в users',
+            'users_discord_id_column': 'Колонка discord_id в users',
+            'users_vk_id_column': 'Колонка vk_id в users',
         }
 
         for check_key, check_status in status.items():
