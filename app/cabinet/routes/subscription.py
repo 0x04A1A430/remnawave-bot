@@ -1070,6 +1070,19 @@ async def get_trial_info(
     """Get trial subscription info and availability."""
     await db.refresh(user, ['subscription'])
 
+    # Проверяем, отключён ли триал для этого типа пользователя
+    if settings.is_trial_disabled_for_user(getattr(user, 'auth_type', 'telegram')):
+        return TrialInfoResponse(
+            is_available=False,
+            duration_days=settings.TRIAL_DURATION_DAYS,
+            traffic_limit_gb=settings.TRIAL_TRAFFIC_LIMIT_GB,
+            device_limit=settings.TRIAL_DEVICE_LIMIT,
+            requires_payment=bool(settings.TRIAL_PAYMENT_ENABLED),
+            price_kopeks=0,
+            price_rubles=0,
+            reason_unavailable='Trial is not available for your account type',
+        )
+
     duration_days = settings.TRIAL_DURATION_DAYS
     traffic_limit_gb = settings.TRIAL_TRAFFIC_LIMIT_GB
     device_limit = settings.TRIAL_DEVICE_LIMIT
@@ -1147,6 +1160,13 @@ async def activate_trial(
 ):
     """Activate trial subscription."""
     await db.refresh(user, ['subscription'])
+
+    # Проверяем, отключён ли триал для этого типа пользователя
+    if settings.is_trial_disabled_for_user(getattr(user, 'auth_type', 'telegram')):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Trial is not available for your account type',
+        )
 
     # Check if user already has an active subscription
     if user.subscription:
