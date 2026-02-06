@@ -150,7 +150,7 @@ async def get_oauth_authorize_url(provider: str):
             detail=f'OAuth provider "{provider}" is not enabled',
         )
 
-    state = generate_oauth_state(provider)
+    state = await generate_oauth_state(provider)
     authorize_url = oauth_provider.get_authorization_url(state)
 
     return OAuthAuthorizeResponse(authorize_url=authorize_url, state=state)
@@ -164,7 +164,7 @@ async def oauth_callback(
 ):
     """Handle OAuth callback: exchange code, find/create user, return JWT."""
     # 1. Validate CSRF state
-    if not validate_oauth_state(request.state, provider):
+    if not await validate_oauth_state(request.state, provider):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Invalid or expired OAuth state',

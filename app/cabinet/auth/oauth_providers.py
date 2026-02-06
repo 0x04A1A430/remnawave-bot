@@ -2,7 +2,6 @@
 
 import logging
 import secrets
-import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from urllib.parse import urlencode
@@ -10,12 +9,11 @@ from urllib.parse import urlencode
 import httpx
 
 from app.config import settings
+from app.utils.cache import cache, cache_key
 
 
 logger = logging.getLogger(__name__)
 
-# In-memory CSRF state store with TTL
-_oauth_states: dict[str, tuple[str, float]] = {}
 STATE_TTL_SECONDS = 600  # 10 minutes
 
 
@@ -33,33 +31,23 @@ class OAuthUserInfo:
     avatar_url: str | None = None
 
 
-def generate_oauth_state(provider: str) -> str:
-    """Generate a CSRF state token for OAuth flow."""
+async def generate_oauth_state(provider: str) -> str:
+    """Generate a CSRF state token for OAuth flow. Stored in Redis with TTL."""
     state = secrets.token_urlsafe(32)
-    _oauth_states[state] = (provider, time.time())
-    _cleanup_expired_states()
+    await cache.set(cache_key('oauth_state', state), provider, expire=STATE_TTL_SECONDS)
     return state
 
 
-def validate_oauth_state(state: str, provider: str) -> bool:
-    """Validate and consume a CSRF state token."""
-    entry = _oauth_states.pop(state, None)
-    if entry is None:
+async def validate_oauth_state(state: str, provider: str) -> bool:
+    """Validate and consume a CSRF state token from Redis."""
+    key = cache_key('oauth_state', state)
+    stored_provider = await cache.get(key)
+    if stored_provider is None:
         return False
-    stored_provider, created_at = entry
+    await cache.delete(key)
     if stored_provider != provider:
         return False
-    if time.time() - created_at > STATE_TTL_SECONDS:
-        return False
     return True
-
-
-def _cleanup_expired_states() -> None:
-    """Remove expired state tokens."""
-    now = time.time()
-    expired = [k for k, (_, ts) in _oauth_states.items() if now - ts > STATE_TTL_SECONDS]
-    for k in expired:
-        _oauth_states.pop(k, None)
 
 
 class OAuthProvider(ABC):
