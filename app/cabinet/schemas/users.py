@@ -229,6 +229,7 @@ class UserNodeUsageItem(BaseModel):
 
     node_uuid: str
     node_name: str
+    country_code: str = ''
     total_bytes: int
 
 
