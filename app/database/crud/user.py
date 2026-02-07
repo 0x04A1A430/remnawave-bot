@@ -1,7 +1,7 @@
 import logging
 import secrets
 import string
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import and_, case, func, nullslast, or_, select, text
 from sqlalchemy.exc import IntegrityError
@@ -1235,3 +1235,100 @@ async def clear_email_change_pending(db: AsyncSession, user: User) -> None:
 
     await db.commit()
     logger.info(f'Email change cancelled for user {user.id}')
+
+
+# --- OAuth provider functions ---
+
+_OAUTH_PROVIDER_COLUMNS = {
+    'google': 'google_id',
+    'yandex': 'yandex_id',
+    'discord': 'discord_id',
+    'vk': 'vk_id',
+}
+
+
+async def get_user_by_oauth_provider(db: AsyncSession, provider: str, provider_id: str) -> User | None:
+    """Find a user by OAuth provider ID."""
+    column_name = _OAUTH_PROVIDER_COLUMNS.get(provider)
+    if not column_name:
+        return None
+    column = getattr(User, column_name)
+    # VK uses BigInteger, so convert
+    value: str | int = int(provider_id) if provider == 'vk' else provider_id
+    result = await db.execute(select(User).where(column == value))
+    return result.scalar_one_or_none()
+
+
+async def set_user_oauth_provider_id(db: AsyncSession, user: User, provider: str, provider_id: str) -> None:
+    """Link an OAuth provider ID to an existing user."""
+    column_name = _OAUTH_PROVIDER_COLUMNS.get(provider)
+    if not column_name:
+        return
+    value: str | int = int(provider_id) if provider == 'vk' else provider_id
+    setattr(user, column_name, value)
+    user.updated_at = datetime.now(UTC).replace(tzinfo=None)
+    logger.info(f'Linked {provider} (id={provider_id}) to user {user.id}')
+
+
+async def create_user_by_oauth(
+    db: AsyncSession,
+    provider: str,
+    provider_id: str,
+    email: str | None = None,
+    email_verified: bool = False,
+    first_name: str | None = None,
+    last_name: str | None = None,
+    username: str | None = None,
+    language: str = 'ru',
+) -> User:
+    """Create a new user via OAuth provider."""
+    referral_code = await create_unique_referral_code(db)
+    default_group = await _get_or_create_default_promo_group(db)
+
+    column_name = _OAUTH_PROVIDER_COLUMNS.get(provider)
+    provider_value: str | int = int(provider_id) if provider == 'vk' else provider_id
+
+    user = User(
+        telegram_id=None,
+        auth_type=provider,
+        email=email,
+        email_verified=email_verified,
+        password_hash=None,
+        username=sanitize_telegram_name(username) if username else None,
+        first_name=sanitize_telegram_name(first_name) if first_name else None,
+        last_name=sanitize_telegram_name(last_name) if last_name else None,
+        language=language,
+        referral_code=referral_code,
+        balance_kopeks=0,
+        has_had_paid_subscription=False,
+        has_made_first_topup=False,
+        promo_group_id=default_group.id,
+    )
+    if column_name:
+        setattr(user, column_name, provider_value)
+
+    db.add(user)
+    await db.flush()
+    await db.refresh(user)
+
+    user.promo_group = default_group
+    logger.info(f'Created OAuth user via {provider} (provider_id={provider_id}) with id={user.id}')
+
+    try:
+        from app.services.event_emitter import event_emitter
+
+        await event_emitter.emit(
+            'user.created',
+            {
+                'user_id': user.id,
+                'email': user.email,
+                'auth_type': provider,
+                'first_name': user.first_name,
+                'referral_code': user.referral_code,
+            },
+            db=db,
+        )
+    except Exception as error:
+        logger.warning('Failed to emit user.created event: %s', error)
+
+    return user

@@ -564,6 +564,33 @@ class RemnaWaveAPI:
         user = self._parse_user(response['response'])
         return await self.enrich_user_with_happ_link(user)
 
+    async def get_user_accessible_nodes(self, uuid: str) -> list[RemnaWaveAccessibleNode]:
+        """Получает список доступных нод для пользователя"""
+        try:
+            response = await self._make_request('GET', f'/api/users/{uuid}/accessible-nodes')
+            nodes_data = response.get('response', {}).get('activeNodes', [])
+            result = []
+            for node in nodes_data:
+                # Collect inbounds from activeSquads
+                inbounds: list[str] = []
+                for squad in node.get('activeSquads', []):
+                    inbounds.extend(squad.get('activeInbounds', []))
+                result.append(
+                    RemnaWaveAccessibleNode(
+                        uuid=node['uuid'],
+                        node_name=node['nodeName'],
+                        country_code=node['countryCode'],
+                        config_profile_uuid=node.get('configProfileUuid', ''),
+                        config_profile_name=node.get('configProfileName', ''),
+                        active_inbounds=inbounds,
+                    )
+                )
+            return result
+        except RemnaWaveAPIError as e:
+            if e.status_code == 404:
+                return []
+            raise
+
     async def get_all_users(self, start: int = 0, size: int = 100, enrich_happ_links: bool = False) -> dict[str, Any]:
         params = {'start': start, 'size': size}
         response = await self._make_request('GET', '/api/users', params=params)

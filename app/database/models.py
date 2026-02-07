@@ -995,6 +995,11 @@ class User(Base):
     email_change_new = Column(String(255), nullable=True)  # New email pending verification
     email_change_code = Column(String(6), nullable=True)  # 6-digit verification code
     email_change_expires = Column(DateTime, nullable=True)  # Code expiration
+    # OAuth provider IDs
+    google_id = Column(String(255), unique=True, nullable=True, index=True)
+    yandex_id = Column(String(255), unique=True, nullable=True, index=True)
+    discord_id = Column(String(255), unique=True, nullable=True, index=True)
+    vk_id = Column(BigInteger, unique=True, nullable=True, index=True)
     broadcasts = relationship('BroadcastHistory', back_populates='admin')
     referrals = relationship('User', backref='referrer', remote_side=[id], foreign_keys='User.referred_by_id')
     subscription = relationship('Subscription', back_populates='user', uselist=False)
@@ -1054,6 +1059,11 @@ class User(Base):
     def is_email_user(self) -> bool:
         """Пользователь зарегистрирован через email (без Telegram)."""
         return self.auth_type == 'email' and self.telegram_id is None
+
+    @property
+    def is_web_user(self) -> bool:
+        """Пользователь без Telegram (email, OAuth и т.д.)."""
+        return self.telegram_id is None
 
     def get_primary_promo_group(self):
         """Возвращает промогруппу с максимальным приоритетом."""
