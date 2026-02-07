@@ -690,48 +690,43 @@ async def get_user_node_usage(
         async with service.get_api_client() as api:
             # Get user's accessible nodes (1 API call)
             accessible_nodes = await api.get_user_accessible_nodes(user.remnawave_uuid)
-            node_name_map = {n.uuid: n.node_name for n in accessible_nodes}
 
             # Get user bandwidth stats (1 API call)
+            # Response: {categories: [dates], series: [{uuid, name, countryCode, total, data}, ...]}
             stats = await api.get_bandwidth_stats_user(user.remnawave_uuid, start_str, end_str)
-            logger.info(f'Bandwidth stats for user {user_id}: type={type(stats).__name__}, value={str(stats)[:500]}')
 
-            node_bytes: dict[str, int] = {}
-            if isinstance(stats, list):
-                for entry in stats:
-                    nid = entry.get('nodeUuid') or entry.get('node_uuid', '')
-                    total = entry.get('total', 0) or entry.get('totalBytes', 0)
-                    if nid:
-                        node_bytes[nid] = node_bytes.get(nid, 0) + int(total)
-            elif isinstance(stats, dict):
-                for key, val in stats.items():
-                    if isinstance(val, dict):
-                        total = val.get('total', 0) or val.get('totalBytes', 0)
-                        node_bytes[key] = int(total)
-                    elif isinstance(val, (int, float)):
-                        node_bytes[key] = int(val)
+            # Parse series into per-node totals
+            series_map: dict[str, dict] = {}
+            if isinstance(stats, dict) and 'series' in stats:
+                for s in stats['series']:
+                    series_map[s['uuid']] = {
+                        'name': s.get('name', ''),
+                        'country_code': s.get('countryCode', ''),
+                        'total': int(s.get('total', 0)),
+                    }
 
-            # Build items from accessible nodes
+            # Build items: accessible nodes + any extra from stats
             items = []
+            seen_uuids: set[str] = set()
             for node in accessible_nodes:
+                seen_uuids.add(node.uuid)
+                sr = series_map.get(node.uuid)
                 items.append(
                     UserNodeUsageItem(
                         node_uuid=node.uuid,
-                        node_name=node.node_name,
-                        country_code=node.country_code,
-                        total_bytes=node_bytes.get(node.uuid, 0),
+                        node_name=sr['name'] if sr else node.node_name,
+                        country_code=sr['country_code'] if sr else node.country_code,
+                        total_bytes=sr['total'] if sr else 0,
                     )
                 )
-
-            # Add any nodes from stats not in accessible nodes
-            for nid, total in node_bytes.items():
-                if nid not in node_name_map:
+            for nid, sr in series_map.items():
+                if nid not in seen_uuids:
                     items.append(
                         UserNodeUsageItem(
                             node_uuid=nid,
-                            node_name=nid[:8],
-                            country_code='',
-                            total_bytes=total,
+                            node_name=sr['name'],
+                            country_code=sr['country_code'],
+                            total_bytes=sr['total'],
                         )
                     )
 
