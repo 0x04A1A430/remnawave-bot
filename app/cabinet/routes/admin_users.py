@@ -660,11 +660,10 @@ async def get_user_panel_info(
 @router.get('/{user_id}/node-usage', response_model=UserNodeUsageResponse)
 async def get_user_node_usage(
     user_id: int,
-    days: int = Query(7, ge=1, le=30),
     admin: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
-    """Get user per-node traffic usage for a given period."""
+    """Get user per-node traffic usage (always 30 days with daily breakdown)."""
     user = await get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(
@@ -673,17 +672,17 @@ async def get_user_node_usage(
         )
 
     if not user.remnawave_uuid:
-        return UserNodeUsageResponse(items=[], period_days=days)
+        return UserNodeUsageResponse(items=[])
 
     try:
         from app.services.remnawave_service import RemnaWaveService
 
         service = RemnaWaveService()
         if not service.is_configured:
-            return UserNodeUsageResponse(items=[], period_days=days)
+            return UserNodeUsageResponse(items=[])
 
         end_date = datetime.utcnow()
-        start_date = end_date - timedelta(days=days)
+        start_date = end_date - timedelta(days=30)
         start_str = start_date.strftime('%Y-%m-%d')
         end_str = end_date.strftime('%Y-%m-%d')
 
@@ -692,17 +691,19 @@ async def get_user_node_usage(
             accessible_nodes = await api.get_user_accessible_nodes(user.remnawave_uuid)
 
             # Get user bandwidth stats (1 API call)
-            # Response: {categories: [dates], series: [{uuid, name, countryCode, total, data}, ...]}
+            # Response: {categories: [dates], series: [{uuid, name, countryCode, total, data: [daily]}, ...]}
             stats = await api.get_bandwidth_stats_user(user.remnawave_uuid, start_str, end_str)
 
-            # Parse series into per-node totals
+            categories: list[str] = []
             series_map: dict[str, dict] = {}
-            if isinstance(stats, dict) and 'series' in stats:
-                for s in stats['series']:
+            if isinstance(stats, dict):
+                categories = stats.get('categories', [])
+                for s in stats.get('series', []):
                     series_map[s['uuid']] = {
                         'name': s.get('name', ''),
                         'country_code': s.get('countryCode', ''),
                         'total': int(s.get('total', 0)),
+                        'daily': [int(v) for v in s.get('data', [])],
                     }
 
             # Build items: accessible nodes + any extra from stats
@@ -717,6 +718,7 @@ async def get_user_node_usage(
                         node_name=sr['name'] if sr else node.node_name,
                         country_code=sr['country_code'] if sr else node.country_code,
                         total_bytes=sr['total'] if sr else 0,
+                        daily_bytes=sr['daily'] if sr else [],
                     )
                 )
             for nid, sr in series_map.items():
@@ -727,15 +729,16 @@ async def get_user_node_usage(
                             node_name=sr['name'],
                             country_code=sr['country_code'],
                             total_bytes=sr['total'],
+                            daily_bytes=sr['daily'],
                         )
                     )
 
             items.sort(key=lambda x: x.total_bytes, reverse=True)
-            return UserNodeUsageResponse(items=items, period_days=days)
+            return UserNodeUsageResponse(items=items, categories=categories)
 
     except Exception as e:
         logger.error(f'Error getting node usage for user {user_id}: {e}')
-        return UserNodeUsageResponse(items=[], period_days=days)
+        return UserNodeUsageResponse(items=[])
 
 
 # === Balance Management ===
