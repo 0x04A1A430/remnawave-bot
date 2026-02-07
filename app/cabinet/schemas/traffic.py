@@ -29,6 +29,7 @@ class TrafficUsageResponse(BaseModel):
     offset: int
     limit: int
     period_days: int
+    available_tariffs: list[str]
 
 
 class ExportCsvRequest(BaseModel):
