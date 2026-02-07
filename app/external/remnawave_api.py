@@ -386,10 +386,14 @@ class RemnaWaveAPI:
                         response_data = {'raw_response': response_text}
 
                     if response.status == 429 and attempt < max_retries:
-                        retry_after = float(response.headers.get('Retry-After', base_delay * (2 ** attempt)))
+                        retry_after = float(response.headers.get('Retry-After', base_delay * (2**attempt)))
                         logger.warning(
                             'Rate limited (429) on %s %s, retry %d/%d after %.1fs',
-                            method, endpoint, attempt + 1, max_retries, retry_after,
+                            method,
+                            endpoint,
+                            attempt + 1,
+                            max_retries,
+                            retry_after,
                         )
                         await asyncio.sleep(retry_after)
                         continue
@@ -404,8 +408,16 @@ class RemnaWaveAPI:
 
             except aiohttp.ClientError as e:
                 if attempt < max_retries:
-                    delay = base_delay * (2 ** attempt)
-                    logger.warning('Request failed on %s %s: %s, retry %d/%d after %.1fs', method, endpoint, e, attempt + 1, max_retries, delay)
+                    delay = base_delay * (2**attempt)
+                    logger.warning(
+                        'Request failed on %s %s: %s, retry %d/%d after %.1fs',
+                        method,
+                        endpoint,
+                        e,
+                        attempt + 1,
+                        max_retries,
+                        delay,
+                    )
                     await asyncio.sleep(delay)
                     continue
                 logger.error(f'Request failed: {e}')

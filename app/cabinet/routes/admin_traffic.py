@@ -101,7 +101,10 @@ async def _aggregate_traffic(
                 async with semaphore:
                     try:
                         stats = await api.get_bandwidth_stats_node_users(
-                            node.uuid, start_str, end_str, top_users_limit=9999,
+                            node.uuid,
+                            start_str,
+                            end_str,
+                            top_users_limit=9999,
                         )
                         return node.uuid, stats
                     except Exception:
@@ -127,9 +130,7 @@ async def _aggregate_traffic(
                 uid = user_entry.get('uuid', '')
                 total = int(user_entry.get('total', 0))
                 if uid and total > 0 and uid in user_uuids_set:
-                    user_traffic.setdefault(uid, {})[node_uuid] = (
-                        user_traffic.get(uid, {}).get(node_uuid, 0) + total
-                    )
+                    user_traffic.setdefault(uid, {})[node_uuid] = user_traffic.get(uid, {}).get(node_uuid, 0) + total
 
         _traffic_cache[period_days] = (now, user_traffic, nodes_info)
         return user_traffic, nodes_info
