@@ -30,10 +30,16 @@ class TrafficUsageResponse(BaseModel):
     limit: int
     period_days: int
     available_tariffs: list[str]
+    available_statuses: list[str]
 
 
 class ExportCsvRequest(BaseModel):
     period: int = Field(30, ge=1, le=30)
+    start_date: str | None = None
+    end_date: str | None = None
+    tariffs: str | None = None
+    statuses: str | None = None
+    nodes: str | None = None
 
 
 class ExportCsvResponse(BaseModel):
