@@ -691,54 +691,33 @@ async def get_user_node_usage(
             if not accessible_nodes:
                 return UserNodeUsageResponse(items=[], period_days=days)
 
-            node_name_map = {n.uuid: n.node_name for n in accessible_nodes}
-            node_cc_map = {n.uuid: n.country_code for n in accessible_nodes}
-
-            # Get bandwidth stats for user (use date-only format)
-            start_str = start_date.strftime('%Y-%m-%d')
-            end_str = end_date.strftime('%Y-%m-%d')
+            # Query per-node usage via legacy endpoint (proven format)
+            start_str = start_date.isoformat() + 'Z'
+            end_str = end_date.isoformat() + 'Z'
 
             items = []
-            try:
-                stats = await api.get_bandwidth_stats_user(user.remnawave_uuid, start_str, end_str)
-
-                if isinstance(stats, list):
-                    for entry in stats:
-                        node_uuid = entry.get('nodeUuid', '')
-                        total = entry.get('totalBytes', 0) or entry.get('total', 0)
-                        if node_uuid and total > 0:
-                            items.append(
-                                UserNodeUsageItem(
-                                    node_uuid=node_uuid,
-                                    node_name=node_name_map.get(node_uuid, node_uuid[:8]),
-                                    country_code=node_cc_map.get(node_uuid, ''),
-                                    total_bytes=total,
-                                )
-                            )
-                elif isinstance(stats, dict):
-                    for node_uuid, data in stats.items():
-                        if isinstance(data, dict):
-                            total = data.get('totalBytes', 0) or data.get('total', 0)
-                        elif isinstance(data, (int, float)):
-                            total = int(data)
-                        else:
-                            continue
-                        if total > 0:
-                            items.append(
-                                UserNodeUsageItem(
-                                    node_uuid=node_uuid,
-                                    node_name=node_name_map.get(node_uuid, node_uuid[:8]),
-                                    country_code=node_cc_map.get(node_uuid, ''),
-                                    total_bytes=total,
-                                )
-                            )
-            except Exception:
-                logger.warning(f'Failed to get bandwidth stats for user {user_id}, returning nodes without traffic')
-
-            # Add accessible nodes with zero traffic if not in stats
-            seen_uuids = {item.node_uuid for item in items}
             for node in accessible_nodes:
-                if node.uuid not in seen_uuids:
+                try:
+                    node_stats = await api.get_bandwidth_stats_node_users_legacy(
+                        node.uuid, start_str, end_str,
+                    )
+                    # Find our user in node's user list
+                    user_bytes = 0
+                    if isinstance(node_stats, list):
+                        for entry in node_stats:
+                            if entry.get('userUuid') == user.remnawave_uuid:
+                                user_bytes = entry.get('total', 0) or entry.get('totalBytes', 0)
+                                break
+                    items.append(
+                        UserNodeUsageItem(
+                            node_uuid=node.uuid,
+                            node_name=node.node_name,
+                            country_code=node.country_code,
+                            total_bytes=user_bytes,
+                        )
+                    )
+                except Exception:
+                    logger.warning(f'Failed to get stats for node {node.uuid} user {user_id}')
                     items.append(
                         UserNodeUsageItem(
                             node_uuid=node.uuid,
