@@ -17,6 +17,7 @@ from .admin_settings import router as admin_settings_router
 from .admin_stats import router as admin_stats_router
 from .admin_tariffs import router as admin_tariffs_router
 from .admin_tickets import router as admin_tickets_router
+from .admin_traffic import router as admin_traffic_router
 from .admin_users import router as admin_users_router
 from .admin_wheel import router as admin_wheel_router
 from .auth import router as auth_router
@@ -85,6 +86,7 @@ router.include_router(admin_payments_router)
 router.include_router(admin_promo_offers_router)
 router.include_router(admin_remnawave_router)
 router.include_router(admin_email_templates_router)
+router.include_router(admin_traffic_router)
 
 # WebSocket route
 router.include_router(websocket_router)
