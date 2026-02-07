@@ -686,48 +686,67 @@ async def get_user_node_usage(
         start_date = end_date - timedelta(days=days)
 
         async with service.get_api_client() as api:
-            # Get bandwidth stats for user
-            stats = await api.get_bandwidth_stats_user(
-                user.remnawave_uuid,
-                start_date.strftime('%Y-%m-%dT%H:%M:%S.000Z'),
-                end_date.strftime('%Y-%m-%dT%H:%M:%S.000Z'),
-            )
+            # Get user's accessible nodes
+            accessible_nodes = await api.get_user_accessible_nodes(user.remnawave_uuid)
+            if not accessible_nodes:
+                return UserNodeUsageResponse(items=[], period_days=days)
 
-            # Get all nodes for name resolution
-            nodes = await api.get_all_nodes()
-            node_map = {n.uuid: n.name for n in nodes}
+            node_name_map = {n.uuid: n.node_name for n in accessible_nodes}
+            node_cc_map = {n.uuid: n.country_code for n in accessible_nodes}
+
+            # Get bandwidth stats for user (use date-only format)
+            start_str = start_date.strftime('%Y-%m-%d')
+            end_str = end_date.strftime('%Y-%m-%d')
 
             items = []
-            # Stats response contains per-node breakdown
-            if isinstance(stats, list):
-                for entry in stats:
-                    node_uuid = entry.get('nodeUuid', '')
-                    total = entry.get('totalBytes', 0) or entry.get('total', 0)
-                    if node_uuid and total > 0:
-                        items.append(
-                            UserNodeUsageItem(
-                                node_uuid=node_uuid,
-                                node_name=node_map.get(node_uuid, node_uuid[:8]),
-                                total_bytes=total,
+            try:
+                stats = await api.get_bandwidth_stats_user(user.remnawave_uuid, start_str, end_str)
+
+                if isinstance(stats, list):
+                    for entry in stats:
+                        node_uuid = entry.get('nodeUuid', '')
+                        total = entry.get('totalBytes', 0) or entry.get('total', 0)
+                        if node_uuid and total > 0:
+                            items.append(
+                                UserNodeUsageItem(
+                                    node_uuid=node_uuid,
+                                    node_name=node_name_map.get(node_uuid, node_uuid[:8]),
+                                    country_code=node_cc_map.get(node_uuid, ''),
+                                    total_bytes=total,
+                                )
                             )
-                        )
-            elif isinstance(stats, dict):
-                # Handle dict format with node entries
-                for node_uuid, data in stats.items():
-                    if isinstance(data, dict):
-                        total = data.get('totalBytes', 0) or data.get('total', 0)
-                    elif isinstance(data, (int, float)):
-                        total = int(data)
-                    else:
-                        continue
-                    if total > 0:
-                        items.append(
-                            UserNodeUsageItem(
-                                node_uuid=node_uuid,
-                                node_name=node_map.get(node_uuid, node_uuid[:8]),
-                                total_bytes=total,
+                elif isinstance(stats, dict):
+                    for node_uuid, data in stats.items():
+                        if isinstance(data, dict):
+                            total = data.get('totalBytes', 0) or data.get('total', 0)
+                        elif isinstance(data, (int, float)):
+                            total = int(data)
+                        else:
+                            continue
+                        if total > 0:
+                            items.append(
+                                UserNodeUsageItem(
+                                    node_uuid=node_uuid,
+                                    node_name=node_name_map.get(node_uuid, node_uuid[:8]),
+                                    country_code=node_cc_map.get(node_uuid, ''),
+                                    total_bytes=total,
+                                )
                             )
+            except Exception:
+                logger.warning(f'Failed to get bandwidth stats for user {user_id}, returning nodes without traffic')
+
+            # Add accessible nodes with zero traffic if not in stats
+            seen_uuids = {item.node_uuid for item in items}
+            for node in accessible_nodes:
+                if node.uuid not in seen_uuids:
+                    items.append(
+                        UserNodeUsageItem(
+                            node_uuid=node.uuid,
+                            node_name=node.node_name,
+                            country_code=node.country_code,
+                            total_bytes=0,
                         )
+                    )
 
             # Sort by traffic descending
             items.sort(key=lambda x: x.total_bytes, reverse=True)
