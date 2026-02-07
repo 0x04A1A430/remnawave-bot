@@ -231,13 +231,15 @@ class UserNodeUsageItem(BaseModel):
     node_name: str
     country_code: str = ''
     total_bytes: int
+    daily_bytes: list[int] = []
 
 
 class UserNodeUsageResponse(BaseModel):
-    """Node usage response."""
+    """Node usage response with 30-day daily breakdown."""
 
     items: list[UserNodeUsageItem]
-    period_days: int
+    categories: list[str] = []
+    period_days: int = 30
 
 
 # === User Actions ===
