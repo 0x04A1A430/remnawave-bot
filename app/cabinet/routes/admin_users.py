@@ -622,16 +622,16 @@ async def get_user_panel_info(
 
             panel_user = panel_users[0]
 
-            # Resolve last connected node name
+            # Resolve last connected node name via accessible nodes (lighter than get_all_nodes)
             last_node_name = None
             last_node_uuid = None
             if panel_user.user_traffic and panel_user.user_traffic.last_connected_node_uuid:
                 last_node_uuid = panel_user.user_traffic.last_connected_node_uuid
                 try:
-                    nodes = await api.get_all_nodes()
-                    for node in nodes:
+                    accessible = await api.get_user_accessible_nodes(panel_user.uuid)
+                    for node in accessible:
                         if node.uuid == last_node_uuid:
-                            last_node_name = node.name
+                            last_node_name = node.node_name
                             break
                 except Exception:
                     logger.warning(f'Failed to resolve node name for user {user_id}')
@@ -684,52 +684,58 @@ async def get_user_node_usage(
 
         end_date = datetime.utcnow()
         start_date = end_date - timedelta(days=days)
+        start_str = start_date.strftime('%Y-%m-%d')
+        end_str = end_date.strftime('%Y-%m-%d')
 
         async with service.get_api_client() as api:
-            # Get user's accessible nodes
+            # Get user's accessible nodes (1 API call)
             accessible_nodes = await api.get_user_accessible_nodes(user.remnawave_uuid)
-            if not accessible_nodes:
-                return UserNodeUsageResponse(items=[], period_days=days)
+            node_name_map = {n.uuid: n.node_name for n in accessible_nodes}
 
-            # Query per-node usage via legacy endpoint (proven format)
-            start_str = start_date.isoformat() + 'Z'
-            end_str = end_date.isoformat() + 'Z'
+            # Get user bandwidth stats (1 API call)
+            stats = await api.get_bandwidth_stats_user(user.remnawave_uuid, start_str, end_str)
+            logger.info(f'Bandwidth stats for user {user_id}: type={type(stats).__name__}, value={str(stats)[:500]}')
 
+            node_bytes: dict[str, int] = {}
+            if isinstance(stats, list):
+                for entry in stats:
+                    nid = entry.get('nodeUuid') or entry.get('node_uuid', '')
+                    total = entry.get('total', 0) or entry.get('totalBytes', 0)
+                    if nid:
+                        node_bytes[nid] = node_bytes.get(nid, 0) + int(total)
+            elif isinstance(stats, dict):
+                for key, val in stats.items():
+                    if isinstance(val, dict):
+                        total = val.get('total', 0) or val.get('totalBytes', 0)
+                        node_bytes[key] = int(total)
+                    elif isinstance(val, (int, float)):
+                        node_bytes[key] = int(val)
+
+            # Build items from accessible nodes
             items = []
             for node in accessible_nodes:
-                try:
-                    node_stats = await api.get_bandwidth_stats_node_users_legacy(
-                        node.uuid, start_str, end_str,
+                items.append(
+                    UserNodeUsageItem(
+                        node_uuid=node.uuid,
+                        node_name=node.node_name,
+                        country_code=node.country_code,
+                        total_bytes=node_bytes.get(node.uuid, 0),
                     )
-                    # Find our user in node's user list
-                    user_bytes = 0
-                    if isinstance(node_stats, list):
-                        for entry in node_stats:
-                            if entry.get('userUuid') == user.remnawave_uuid:
-                                user_bytes = entry.get('total', 0) or entry.get('totalBytes', 0)
-                                break
+                )
+
+            # Add any nodes from stats not in accessible nodes
+            for nid, total in node_bytes.items():
+                if nid not in node_name_map:
                     items.append(
                         UserNodeUsageItem(
-                            node_uuid=node.uuid,
-                            node_name=node.node_name,
-                            country_code=node.country_code,
-                            total_bytes=user_bytes,
-                        )
-                    )
-                except Exception:
-                    logger.warning(f'Failed to get stats for node {node.uuid} user {user_id}')
-                    items.append(
-                        UserNodeUsageItem(
-                            node_uuid=node.uuid,
-                            node_name=node.node_name,
-                            country_code=node.country_code,
-                            total_bytes=0,
+                            node_uuid=nid,
+                            node_name=nid[:8],
+                            country_code='',
+                            total_bytes=total,
                         )
                     )
 
-            # Sort by traffic descending
             items.sort(key=lambda x: x.total_bytes, reverse=True)
-
             return UserNodeUsageResponse(items=items, period_days=days)
 
     except Exception as e:
