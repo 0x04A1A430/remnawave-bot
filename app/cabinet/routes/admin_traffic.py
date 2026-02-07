@@ -417,6 +417,16 @@ async def export_traffic_csv(
     # Determine which nodes to include in CSV columns
     csv_nodes = [n for n in nodes_info if n.node_uuid in node_filter] if node_filter else nodes_info
 
+    # Compute period days for risk calculation
+    if request.start_date and request.end_date:
+        period_days = max((end_dt - start_dt).days, 1)
+    else:
+        period_days = request.period
+
+    total_thr = request.total_threshold_gb or 0
+    node_thr = request.node_threshold_gb or 0
+    has_risk = total_thr > 0 or node_thr > 0
+
     # Build CSV rows
     rows: list[dict] = []
     for item in items:
@@ -434,6 +444,37 @@ async def export_traffic_csv(
             row[f'{node.node_name} (bytes)'] = item.node_traffic.get(node.node_uuid, 0)
         row['Total (bytes)'] = item.total_bytes
         row['Total (GB)'] = round(item.total_bytes / (1024**3), 2) if item.total_bytes else 0
+
+        if has_risk:
+            daily_total = item.total_bytes / period_days / (1024**3) if period_days > 0 else 0
+            row['Total GB/day'] = round(daily_total, 4)
+
+            total_ratio = daily_total / total_thr if total_thr > 0 else 0
+
+            max_node_ratio = 0.0
+            worst_node_daily = 0.0
+            for node_bytes in item.node_traffic.values():
+                if node_bytes > 0 and node_thr > 0:
+                    daily_node = node_bytes / period_days / (1024**3) if period_days > 0 else 0
+                    ratio = daily_node / node_thr
+                    if ratio > max_node_ratio:
+                        max_node_ratio = ratio
+                        worst_node_daily = daily_node
+
+            ratio = max(total_ratio, max_node_ratio)
+            if ratio < 0.5:
+                risk_level = 'low'
+            elif ratio < 0.8:
+                risk_level = 'medium'
+            elif ratio < 1.2:
+                risk_level = 'high'
+            else:
+                risk_level = 'critical'
+
+            row['Risk Level'] = risk_level
+            row['Risk Ratio'] = round(ratio, 3)
+            row['Risk GB/day'] = round(daily_total if total_ratio >= max_node_ratio else worst_node_daily, 4)
+
         rows.append(row)
 
     # Generate CSV
