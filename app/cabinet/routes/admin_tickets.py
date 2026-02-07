@@ -336,6 +336,7 @@ async def get_all_tickets(
     per_page: int = Query(20, ge=1, le=100, description='Items per page'),
     status_filter: str | None = Query(None, alias='status', description='Filter by status'),
     priority_filter: str | None = Query(None, alias='priority', description='Filter by priority'),
+    user_id: int | None = Query(None, description='Filter by user ID'),
     admin: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
@@ -354,6 +355,10 @@ async def get_all_tickets(
     if priority_filter:
         query = query.where(Ticket.priority == priority_filter)
         count_query = count_query.where(Ticket.priority == priority_filter)
+
+    if user_id:
+        query = query.where(Ticket.user_id == user_id)
+        count_query = count_query.where(Ticket.user_id == user_id)
 
     # Get total count
     total_result = await db.execute(count_query)
