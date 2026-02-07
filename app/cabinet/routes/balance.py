@@ -23,7 +23,6 @@ from app.services.payment_verification_service import (
     method_display_name,
     run_manual_check,
 )
-from app.services.yookassa_service import YooKassaService
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 from ..schemas.balance import (
@@ -341,13 +340,11 @@ async def create_topup(
 
     try:
         if request.payment_method == 'yookassa':
-            yookassa_service = YooKassaService()
+            payment_service = PaymentService()
             yookassa_metadata = {
-                'user_id': str(user.id),
                 'user_telegram_id': str(user.telegram_id) if user.telegram_id else '',
                 'user_username': user.username or '',
-                'amount_kopeks': str(request.amount_kopeks),
-                'type': 'balance_topup',
+                'purpose': 'balance_topup',
                 'source': 'cabinet',
             }
 
@@ -358,25 +355,25 @@ async def create_topup(
                 request.amount_kopeks, telegram_user_id=user.telegram_id
             )
             if option == 'sbp':
-                # Create SBP payment with QR code
-                result = await yookassa_service.create_sbp_payment(
-                    amount=amount_rubles,
-                    currency='RUB',
+                result = await payment_service.create_yookassa_sbp_payment(
+                    db=db,
+                    user_id=user.id,
+                    amount_kopeks=request.amount_kopeks,
                     description=description,
                     metadata=yookassa_metadata,
                 )
             else:
-                # Default: card payment
-                result = await yookassa_service.create_payment(
-                    amount=amount_rubles,
-                    currency='RUB',
+                result = await payment_service.create_yookassa_payment(
+                    db=db,
+                    user_id=user.id,
+                    amount_kopeks=request.amount_kopeks,
                     description=description,
                     metadata=yookassa_metadata,
                 )
 
-            if result and not result.get('error'):
+            if result:
                 payment_url = result.get('confirmation_url')
-                payment_id = result.get('id')
+                payment_id = result.get('yookassa_payment_id')
             else:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
