@@ -153,6 +153,26 @@ def github_markdown_to_telegram_html(text: str) -> str:
     return result.strip()
 
 
+def _close_open_tags(html: str) -> str:
+    """Find unclosed HTML tags and append closing tags in reverse order."""
+    open_tags: list[str] = []
+    for match in _HTML_TAG_RE.finditer(html):
+        is_closing = match.group(1) == '/'
+        is_self_closing = match.group(4) == '/'
+        tag_name = match.group(2).lower()
+        if is_self_closing:
+            continue
+        if is_closing:
+            if open_tags and open_tags[-1] == tag_name:
+                open_tags.pop()
+        else:
+            open_tags.append(tag_name)
+    # Close remaining open tags in reverse order
+    for tag in reversed(open_tags):
+        html += f'</{tag}>'
+    return html
+
+
 def truncate_for_blockquote(
     description_html: str,
     *,
@@ -191,8 +211,10 @@ def truncate_for_blockquote(
     if len(description_html) <= available:
         return description_html
 
-    # Truncate, trying not to break mid-tag
-    truncated = description_html[: available - len(ellipsis)]
+    # Reserve space for ellipsis, then iteratively truncate until
+    # the result (with closing tags) fits within the budget.
+    budget = available - len(ellipsis)
+    truncated = description_html[:budget]
 
     # If we broke an HTML tag, backtrack to before it
     last_open = truncated.rfind('<')
@@ -200,4 +222,16 @@ def truncate_for_blockquote(
     if last_open > last_close:
         truncated = truncated[:last_open]
 
-    return truncated.rstrip() + ellipsis
+    # Close any unclosed HTML tags to avoid Telegram parse errors
+    closed = _close_open_tags(truncated)
+
+    # If closing tags pushed us over budget, trim more text
+    while len(closed) + len(ellipsis) > available and len(truncated) > 0:
+        truncated = truncated[:-20] if len(truncated) > 20 else ''
+        last_open = truncated.rfind('<')
+        last_close = truncated.rfind('>')
+        if last_open > last_close:
+            truncated = truncated[:last_open]
+        closed = _close_open_tags(truncated)
+
+    return closed.rstrip() + ellipsis
