@@ -189,8 +189,54 @@ class UserDetailResponse(BaseModel):
     promo_offer_discount_source: str | None = None
     promo_offer_discount_expires_at: datetime | None = None
 
+    # Campaign
+    campaign_name: str | None = None
+    campaign_id: int | None = None
+
     # Recent transactions
     recent_transactions: list[UserTransactionItem] = []
+
+    # Remnawave UUID
+    remnawave_uuid: str | None = None
+
+
+# === Panel Info ===
+
+
+class UserPanelInfoResponse(BaseModel):
+    """Panel info for user from Remnawave."""
+
+    found: bool = False
+    trojan_password: str | None = None
+    vless_uuid: str | None = None
+    ss_password: str | None = None
+    subscription_url: str | None = None
+    happ_link: str | None = None
+    used_traffic_bytes: int = 0
+    lifetime_used_traffic_bytes: int = 0
+    traffic_limit_bytes: int = 0
+    first_connected_at: datetime | None = None
+    online_at: datetime | None = None
+    last_connected_node_uuid: str | None = None
+    last_connected_node_name: str | None = None
+
+
+# === Node Usage ===
+
+
+class UserNodeUsageItem(BaseModel):
+    """Per-node traffic usage item."""
+
+    node_uuid: str
+    node_name: str
+    total_bytes: int
+
+
+class UserNodeUsageResponse(BaseModel):
+    """Node usage response."""
+
+    items: list[UserNodeUsageItem]
+    period_days: int
 
 
 # === User Actions ===

@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import Integer, and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.database.crud.campaign import get_campaign_registration_by_user
 from app.database.crud.subscription import (
     extend_subscription,
 )
@@ -68,6 +69,9 @@ from ..schemas.users import (
     UserAvailableTariffsResponse,
     UserDetailResponse,
     UserListItem,
+    UserNodeUsageItem,
+    UserNodeUsageResponse,
+    UserPanelInfoResponse,
     UserPromoGroupInfo,
     UserReferralInfo,
     UsersListResponse,
@@ -525,6 +529,14 @@ async def get_user_detail(
         for t in transactions
     ]
 
+    # Get campaign info
+    campaign_name = None
+    campaign_id = None
+    campaign_reg = await get_campaign_registration_by_user(db, user.id)
+    if campaign_reg and campaign_reg.campaign:
+        campaign_name = campaign_reg.campaign.name
+        campaign_id = campaign_reg.campaign.id
+
     return UserDetailResponse(
         id=user.id,
         telegram_id=user.telegram_id,
@@ -550,6 +562,8 @@ async def get_user_detail(
         used_promocodes=user.used_promocodes,
         has_had_paid_subscription=user.has_had_paid_subscription,
         lifetime_used_traffic_bytes=user.lifetime_used_traffic_bytes or 0,
+        campaign_name=campaign_name,
+        campaign_id=campaign_id,
         restriction_topup=user.restriction_topup,
         restriction_subscription=user.restriction_subscription,
         restriction_reason=user.restriction_reason,
@@ -575,6 +589,154 @@ async def get_user_by_telegram(
             detail='User not found',
         )
     return await get_user_detail(user.id, admin, db)
+
+
+# === Panel Info ===
+
+
+@router.get('/{user_id}/panel-info', response_model=UserPanelInfoResponse)
+async def get_user_panel_info(
+    user_id: int,
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Get user panel info from Remnawave (config links, traffic, connection data)."""
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='User not found',
+        )
+
+    try:
+        from app.services.remnawave_service import RemnaWaveService
+
+        service = RemnaWaveService()
+        if not service.is_configured or not user.telegram_id:
+            return UserPanelInfoResponse(found=False)
+
+        async with service.get_api_client() as api:
+            panel_users = await api.get_user_by_telegram_id(user.telegram_id)
+            if not panel_users:
+                return UserPanelInfoResponse(found=False)
+
+            panel_user = panel_users[0]
+
+            # Resolve last connected node name
+            last_node_name = None
+            last_node_uuid = None
+            if panel_user.user_traffic and panel_user.user_traffic.last_connected_node_uuid:
+                last_node_uuid = panel_user.user_traffic.last_connected_node_uuid
+                try:
+                    nodes = await api.get_all_nodes()
+                    for node in nodes:
+                        if node.uuid == last_node_uuid:
+                            last_node_name = node.name
+                            break
+                except Exception:
+                    logger.warning(f'Failed to resolve node name for user {user_id}')
+
+            return UserPanelInfoResponse(
+                found=True,
+                trojan_password=panel_user.trojan_password,
+                vless_uuid=panel_user.vless_uuid,
+                ss_password=panel_user.ss_password,
+                subscription_url=panel_user.subscription_url,
+                happ_link=panel_user.happ_link,
+                used_traffic_bytes=panel_user.used_traffic_bytes,
+                lifetime_used_traffic_bytes=panel_user.lifetime_used_traffic_bytes,
+                traffic_limit_bytes=panel_user.traffic_limit_bytes,
+                first_connected_at=panel_user.first_connected_at,
+                online_at=panel_user.online_at,
+                last_connected_node_uuid=last_node_uuid,
+                last_connected_node_name=last_node_name,
+            )
+
+    except Exception as e:
+        logger.error(f'Error getting panel info for user {user_id}: {e}')
+        return UserPanelInfoResponse(found=False)
+
+
+@router.get('/{user_id}/node-usage', response_model=UserNodeUsageResponse)
+async def get_user_node_usage(
+    user_id: int,
+    days: int = Query(7, ge=1, le=30),
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Get user per-node traffic usage for a given period."""
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='User not found',
+        )
+
+    if not user.remnawave_uuid:
+        return UserNodeUsageResponse(items=[], period_days=days)
+
+    try:
+        from app.services.remnawave_service import RemnaWaveService
+
+        service = RemnaWaveService()
+        if not service.is_configured:
+            return UserNodeUsageResponse(items=[], period_days=days)
+
+        end_date = datetime.utcnow()
+        start_date = end_date - timedelta(days=days)
+
+        async with service.get_api_client() as api:
+            # Get bandwidth stats for user
+            stats = await api.get_bandwidth_stats_user(
+                user.remnawave_uuid,
+                start_date.strftime('%Y-%m-%dT%H:%M:%S.000Z'),
+                end_date.strftime('%Y-%m-%dT%H:%M:%S.000Z'),
+            )
+
+            # Get all nodes for name resolution
+            nodes = await api.get_all_nodes()
+            node_map = {n.uuid: n.name for n in nodes}
+
+            items = []
+            # Stats response contains per-node breakdown
+            if isinstance(stats, list):
+                for entry in stats:
+                    node_uuid = entry.get('nodeUuid', '')
+                    total = entry.get('totalBytes', 0) or entry.get('total', 0)
+                    if node_uuid and total > 0:
+                        items.append(
+                            UserNodeUsageItem(
+                                node_uuid=node_uuid,
+                                node_name=node_map.get(node_uuid, node_uuid[:8]),
+                                total_bytes=total,
+                            )
+                        )
+            elif isinstance(stats, dict):
+                # Handle dict format with node entries
+                for node_uuid, data in stats.items():
+                    if isinstance(data, dict):
+                        total = data.get('totalBytes', 0) or data.get('total', 0)
+                    elif isinstance(data, (int, float)):
+                        total = int(data)
+                    else:
+                        continue
+                    if total > 0:
+                        items.append(
+                            UserNodeUsageItem(
+                                node_uuid=node_uuid,
+                                node_name=node_map.get(node_uuid, node_uuid[:8]),
+                                total_bytes=total,
+                            )
+                        )
+
+            # Sort by traffic descending
+            items.sort(key=lambda x: x.total_bytes, reverse=True)
+
+            return UserNodeUsageResponse(items=items, period_days=days)
+
+    except Exception as e:
+        logger.error(f'Error getting node usage for user {user_id}: {e}')
+        return UserNodeUsageResponse(items=[], period_days=days)
 
 
 # === Balance Management ===
