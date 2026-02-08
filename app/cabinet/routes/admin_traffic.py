@@ -408,43 +408,61 @@ async def get_traffic_enrichment(
         node_uuid_to_name: dict[str, str] = {}
 
         if service.is_configured:
-            try:
-                async with service.get_api_client() as api:
-                    devices_task = api.get_all_hwid_devices()
-                    subs_task = api.get_all_panel_subscriptions()
-                    nodes_task = api.get_all_nodes()
-                    devices_data, subs_data, nodes_list = await asyncio.gather(devices_task, subs_task, nodes_task)
-            except Exception:
-                logger.warning('Failed to fetch enrichment data from panel', exc_info=True)
-                devices_data = {'devices': []}
-                subs_data = []
-                nodes_list = []
+            async with service.get_api_client() as api:
+                # Fetch all panel users (paginated) + nodes in parallel
+                try:
+                    nodes_list = await api.get_all_nodes()
+                except Exception:
+                    logger.warning('Failed to fetch nodes for enrichment', exc_info=True)
+                    nodes_list = []
 
-            # Build node name map
-            for node in nodes_list:
-                node_uuid_to_name[node.uuid] = node.name
+                for node in nodes_list:
+                    node_uuid_to_name[node.uuid] = node.name
 
-            # Count devices per user
-            for device in devices_data.get('devices', []):
-                user_uuid = device.get('userUuid', '')
-                uid = uuid_to_user_id.get(user_uuid)
-                if uid is not None:
-                    devices_by_user[uid] = devices_by_user.get(uid, 0) + 1
+                # Fetch all panel users to get last_connected_node + device counts
+                panel_users = []
+                try:
+                    first_page = await api.get_all_users(start=0, size=500)
+                    panel_users.extend(first_page['users'])
+                    total_panel = first_page['total']
 
-            # Extract last connected node from panel subscriptions
-            if isinstance(subs_data, list):
-                for sub in subs_data:
-                    sub_user = sub.get('user') or sub
-                    short_uuid = sub_user.get('shortUuid', '')
-                    uid = short_uuid_to_user_id.get(short_uuid)
+                    if total_panel > 500:
+                        remaining_tasks = [
+                            api.get_all_users(start=offset, size=500) for offset in range(500, total_panel, 500)
+                        ]
+                        pages = await asyncio.gather(*remaining_tasks, return_exceptions=True)
+                        for page in pages:
+                            if isinstance(page, dict):
+                                panel_users.extend(page['users'])
+                except Exception:
+                    logger.warning('Failed to fetch panel users for enrichment', exc_info=True)
+
+                # Extract last connected node from panel users
+                for pu in panel_users:
+                    uid = uuid_to_user_id.get(pu.uuid)
                     if uid is None:
-                        user_uuid = sub_user.get('uuid', '')
+                        continue
+                    if pu.user_traffic and pu.user_traffic.last_connected_node_uuid:
+                        last_node_uuid_by_user[uid] = pu.user_traffic.last_connected_node_uuid
+
+                # Fetch device counts per user in parallel
+                user_uuids_with_ids = [(uuid, uid) for uuid, uid in uuid_to_user_id.items()]
+                semaphore = asyncio.Semaphore(_CONCURRENCY_LIMIT)
+
+                async def fetch_device_count(user_uuid: str) -> tuple[str, int]:
+                    async with semaphore:
+                        try:
+                            result = await api.get_user_devices(user_uuid)
+                            return user_uuid, result.get('total', 0)
+                        except Exception:
+                            return user_uuid, 0
+
+                device_results = await asyncio.gather(*(fetch_device_count(uuid) for uuid, _ in user_uuids_with_ids))
+                for user_uuid, count in device_results:
+                    if count > 0:
                         uid = uuid_to_user_id.get(user_uuid)
-                    if uid is not None:
-                        user_traffic = sub_user.get('userTraffic') or {}
-                        last_node = user_traffic.get('lastConnectedNodeUuid')
-                        if last_node:
-                            last_node_uuid_by_user[uid] = last_node
+                        if uid is not None:
+                            devices_by_user[uid] = count
 
         # Bulk spending stats
         all_user_ids = [u.id for u in user_map.values()]
