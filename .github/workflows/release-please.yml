@@ -20,6 +20,5 @@ jobs:
       - uses: googleapis/release-please-action@v4
         id: release
         with:
-          release-type: python
-          extra-files: |
-            pyproject.toml
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
