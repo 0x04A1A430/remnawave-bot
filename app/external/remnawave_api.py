@@ -627,45 +627,7 @@ class RemnaWaveAPI:
         params = {'start': start, 'size': size}
         response = await self._make_request('GET', '/api/users', params=params)
 
-        raw_users = response['response']['users']
-        if raw_users:
-            sample = raw_users[0]
-            extra_keys = set(sample.keys()) - {
-                'uuid',
-                'shortUuid',
-                'username',
-                'status',
-                'trafficLimitBytes',
-                'trafficLimitStrategy',
-                'expireAt',
-                'telegramId',
-                'email',
-                'hwidDeviceLimit',
-                'description',
-                'tag',
-                'subscriptionUrl',
-                'activeInternalSquads',
-                'createdAt',
-                'updatedAt',
-                'userTraffic',
-                'subLastUserAgent',
-                'subLastOpenedAt',
-                'subRevokedAt',
-                'lastTrafficResetAt',
-                'trojanPassword',
-                'vlessUuid',
-                'ssPassword',
-                'lastTriggeredThreshold',
-                'happ',
-                'externalSquadUuid',
-                'id',
-            }
-            if extra_keys:
-                logger.info('Panel user extra keys: %s', extra_keys)
-                for ek in list(extra_keys)[:5]:
-                    logger.info('  %s = %s', ek, sample.get(ek))
-
-        users = [self._parse_user(user) for user in raw_users]
+        users = [self._parse_user(user) for user in response['response']['users']]
 
         if enrich_happ_links:
             users = [await self.enrich_user_with_happ_link(u) for u in users]
@@ -1038,9 +1000,23 @@ class RemnaWaveAPI:
         )
 
     async def get_all_hwid_devices(self) -> dict[str, Any]:
-        """GET /api/hwid/devices — all devices for all users."""
-        response = await self._make_request('GET', '/api/hwid/devices')
-        return response.get('response', {'devices': [], 'total': 0})
+        """GET /api/hwid/devices — all devices for all users (paginated, max 1000/page)."""
+        all_devices: list[dict[str, Any]] = []
+        start = 0
+        page_size = 1000
+
+        while True:
+            response = await self._make_request('GET', '/api/hwid/devices', params={'start': start, 'size': page_size})
+            data = response.get('response', {'devices': [], 'total': 0})
+            devices = data.get('devices', [])
+            total = data.get('total', 0)
+            all_devices.extend(devices)
+
+            if len(all_devices) >= total or not devices:
+                break
+            start += len(devices)
+
+        return {'devices': all_devices, 'total': len(all_devices)}
 
     async def get_all_panel_subscriptions(self) -> list[dict[str, Any]]:
         """GET /api/subscriptions — all panel subscriptions."""
