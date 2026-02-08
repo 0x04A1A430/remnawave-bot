@@ -198,12 +198,16 @@ async def _sync_subscription_to_panel(db: AsyncSession, user: User, subscription
             full_name=user.full_name,
             username=user.username,
             telegram_id=user.telegram_id,
+            email=user.email,
+            user_id=user.id,
         )
 
         description = settings.format_remnawave_user_description(
             full_name=user.full_name,
             username=user.username,
             telegram_id=user.telegram_id,
+            email=user.email,
+            user_id=user.id,
         )
 
         hwid_limit = resolve_hwid_device_limit_for_payload(subscription)
@@ -213,9 +217,25 @@ async def _sync_subscription_to_panel(db: AsyncSession, user: User, subscription
         async with service.get_api_client() as api:
             panel_uuid = user.remnawave_uuid
 
-            # Try to find existing user
+            # Try to find existing user by UUID first
+            if panel_uuid:
+                existing_user = await api.get_user_by_uuid(panel_uuid)
+                if not existing_user:
+                    logger.warning(f'User {user.id} has stale remnawave_uuid {panel_uuid}, clearing')
+                    panel_uuid = None
+                    user.remnawave_uuid = None
+
+            # Fallback: search by telegram_id
             if not panel_uuid and user.telegram_id:
                 existing_users = await api.get_user_by_telegram_id(user.telegram_id)
+                if existing_users:
+                    panel_uuid = existing_users[0].uuid
+                    user.remnawave_uuid = panel_uuid
+                    changes['remnawave_uuid_discovered'] = panel_uuid
+
+            # Fallback: search by email (for OAuth users without telegram_id)
+            if not panel_uuid and user.email:
+                existing_users = await api.get_user_by_email(user.email)
                 if existing_users:
                     panel_uuid = existing_users[0].uuid
                     user.remnawave_uuid = panel_uuid
@@ -256,6 +276,7 @@ async def _sync_subscription_to_panel(db: AsyncSession, user: User, subscription
                     'traffic_limit_bytes': traffic_limit_bytes,
                     'traffic_limit_strategy': TrafficLimitStrategy.MONTH,
                     'telegram_id': user.telegram_id,
+                    'email': user.email,
                     'description': description,
                     'active_internal_squads': subscription.connected_squads or [],
                 }
@@ -612,15 +633,30 @@ async def get_user_panel_info(
         from app.services.remnawave_service import RemnaWaveService
 
         service = RemnaWaveService()
-        if not service.is_configured or not user.telegram_id:
+        if not service.is_configured:
             return UserPanelInfoResponse(found=False)
 
         async with service.get_api_client() as api:
-            panel_users = await api.get_user_by_telegram_id(user.telegram_id)
-            if not panel_users:
-                return UserPanelInfoResponse(found=False)
+            panel_user = None
 
-            panel_user = panel_users[0]
+            # Try by UUID first (works for all users including OAuth)
+            if user.remnawave_uuid:
+                panel_user = await api.get_user_by_uuid(user.remnawave_uuid)
+
+            # Fallback: search by telegram_id
+            if not panel_user and user.telegram_id:
+                panel_users = await api.get_user_by_telegram_id(user.telegram_id)
+                if panel_users:
+                    panel_user = panel_users[0]
+
+            # Fallback: search by email (OAuth users)
+            if not panel_user and user.email:
+                panel_users_by_email = await api.get_user_by_email(user.email)
+                if panel_users_by_email:
+                    panel_user = panel_users_by_email[0]
+
+            if not panel_user:
+                return UserPanelInfoResponse(found=False)
 
             # Resolve last connected node name via accessible nodes (lighter than get_all_nodes)
             last_node_name = None
@@ -1754,11 +1790,27 @@ async def get_user_sync_status(
         from app.services.remnawave_service import RemnaWaveService
 
         service = RemnaWaveService()
-        if service.is_configured and user.telegram_id:
+        if service.is_configured:
             async with service.get_api_client() as api:
-                panel_users = await api.get_user_by_telegram_id(user.telegram_id)
-                if panel_users:
-                    panel_user = panel_users[0]
+                panel_user = None
+
+                # Try by UUID first (works for all users including OAuth)
+                if user.remnawave_uuid:
+                    panel_user = await api.get_user_by_uuid(user.remnawave_uuid)
+
+                # Fallback: search by telegram_id
+                if not panel_user and user.telegram_id:
+                    panel_users = await api.get_user_by_telegram_id(user.telegram_id)
+                    if panel_users:
+                        panel_user = panel_users[0]
+
+                # Fallback: search by email (OAuth users)
+                if not panel_user and user.email:
+                    panel_users_by_email = await api.get_user_by_email(user.email)
+                    if panel_users_by_email:
+                        panel_user = panel_users_by_email[0]
+
+                if panel_user:
                     panel_found = True
                     panel_status = panel_user.status.value if panel_user.status else None
                     panel_expire_at = panel_user.expire_at
@@ -1884,26 +1936,29 @@ async def sync_user_from_panel(
         errors = []
         panel_info = None
 
-        # Email-only users cannot be synced from panel by telegram_id
-        if not user.telegram_id:
-            return SyncFromPanelResponse(
-                success=False,
-                message='Cannot sync email-only user',
-                errors=["Email-only users don't have telegram_id for panel lookup"],
-            )
-
         async with service.get_api_client() as api:
-            # Find user in panel
-            panel_users = await api.get_user_by_telegram_id(user.telegram_id)
+            # Find user in panel: UUID → telegram_id → email
+            panel_user = None
 
-            if not panel_users:
+            if user.remnawave_uuid:
+                panel_user = await api.get_user_by_uuid(user.remnawave_uuid)
+
+            if not panel_user and user.telegram_id:
+                panel_users = await api.get_user_by_telegram_id(user.telegram_id)
+                if panel_users:
+                    panel_user = panel_users[0]
+
+            if not panel_user and user.email:
+                panel_users_by_email = await api.get_user_by_email(user.email)
+                if panel_users_by_email:
+                    panel_user = panel_users_by_email[0]
+
+            if not panel_user:
                 return SyncFromPanelResponse(
                     success=False,
                     message='User not found in panel',
-                    errors=['No user with this telegram_id found in Remnawave panel'],
+                    errors=['No user found in Remnawave panel by UUID, telegram_id, or email'],
                 )
-
-            panel_user = panel_users[0]
 
             # Build panel info
             active_squads = []
@@ -2113,21 +2168,41 @@ async def sync_user_to_panel(
             full_name=user.full_name,
             username=user.username,
             telegram_id=user.telegram_id,
+            email=user.email,
+            user_id=user.id,
         )
 
         description = settings.format_remnawave_user_description(
             full_name=user.full_name,
             username=user.username,
             telegram_id=user.telegram_id,
+            email=user.email,
+            user_id=user.id,
         )
 
         hwid_limit = resolve_hwid_device_limit_for_payload(sub)
         traffic_limit_bytes = sub.traffic_limit_gb * (1024**3) if sub.traffic_limit_gb > 0 else 0
 
         async with service.get_api_client() as api:
-            # Try to find existing user in panel
+            # Validate existing UUID
+            if panel_uuid:
+                existing_user = await api.get_user_by_uuid(panel_uuid)
+                if not existing_user:
+                    logger.warning(f'User {user.id} has stale remnawave_uuid {panel_uuid}, clearing')
+                    panel_uuid = None
+                    user.remnawave_uuid = None
+
+            # Fallback: search by telegram_id
             if not panel_uuid and user.telegram_id:
                 existing_users = await api.get_user_by_telegram_id(user.telegram_id)
+                if existing_users:
+                    panel_uuid = existing_users[0].uuid
+                    user.remnawave_uuid = panel_uuid
+                    changes['remnawave_uuid_discovered'] = panel_uuid
+
+            # Fallback: search by email (OAuth users)
+            if not panel_uuid and user.email:
+                existing_users = await api.get_user_by_email(user.email)
                 if existing_users:
                     panel_uuid = existing_users[0].uuid
                     user.remnawave_uuid = panel_uuid
@@ -2178,6 +2253,7 @@ async def sync_user_to_panel(
                     'traffic_limit_bytes': traffic_limit_bytes,
                     'traffic_limit_strategy': TrafficLimitStrategy.MONTH,
                     'telegram_id': user.telegram_id,
+                    'email': user.email,
                     'description': description,
                     'active_internal_squads': sub.connected_squads or [],
                 }
