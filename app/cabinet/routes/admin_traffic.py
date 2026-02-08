@@ -188,9 +188,14 @@ def _build_traffic_items(
 
         full_name = user.full_name
         username = user.username
+        email = user.email
 
         if search_lower:
-            if search_lower not in (full_name or '').lower() and search_lower not in (username or '').lower():
+            if (
+                search_lower not in (full_name or '').lower()
+                and search_lower not in (username or '').lower()
+                and search_lower not in (email or '').lower()
+            ):
                 continue
 
         sub = user.subscription
@@ -225,6 +230,7 @@ def _build_traffic_items(
                 user_id=user.id,
                 telegram_id=user.telegram_id,
                 username=username,
+                email=email,
                 full_name=full_name,
                 tariff_name=tariff_name,
                 subscription_status=subscription_status,
@@ -593,6 +599,7 @@ async def export_traffic_csv(
             'User ID': item.user_id,
             'Telegram ID': item.telegram_id or '',
             'Username': item.username or '',
+            'Email': item.email or '',
             'Full Name': item.full_name,
             'Tariff': item.tariff_name or '',
             'Status': item.subscription_status or '',

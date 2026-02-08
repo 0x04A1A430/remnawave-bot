@@ -13,6 +13,7 @@ class UserTrafficItem(BaseModel):
     user_id: int
     telegram_id: int | None
     username: str | None
+    email: str | None
     full_name: str
     tariff_name: str | None
     subscription_status: str | None
