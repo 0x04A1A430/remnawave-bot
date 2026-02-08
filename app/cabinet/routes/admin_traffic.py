@@ -379,6 +379,99 @@ async def _get_bulk_spending(db: AsyncSession, user_ids: list[int]) -> dict[int,
     return {row[0]: int(row[1]) for row in result.all()}
 
 
+async def _build_enrichment(db: AsyncSession, user_map: dict[str, User]) -> dict[int, UserTrafficEnrichment]:
+    """Build enrichment data for all users: devices, spending, dates, last node."""
+    uuid_to_user_id: dict[str, int] = {}
+    for uuid, user in user_map.items():
+        uuid_to_user_id[uuid] = user.id
+
+    service = RemnaWaveService()
+    devices_by_user: dict[int, int] = {}
+    last_node_uuid_by_user: dict[int, str] = {}
+    node_uuid_to_name: dict[str, str] = {}
+
+    if service.is_configured:
+        async with service.get_api_client() as api:
+            # 3 bulk calls: nodes + users (paginated) + devices
+            try:
+                nodes_list = await api.get_all_nodes()
+            except Exception:
+                logger.warning('Failed to fetch nodes for enrichment', exc_info=True)
+                nodes_list = []
+
+            for node in nodes_list:
+                node_uuid_to_name[node.uuid] = node.name
+
+            # Fetch all panel users (paginated) for last connected node
+            panel_users = []
+            try:
+                first_page = await api.get_all_users(start=0, size=500)
+                panel_users.extend(first_page['users'])
+                total_panel = first_page['total']
+
+                if total_panel > 500:
+                    remaining_tasks = [
+                        api.get_all_users(start=offset, size=500) for offset in range(500, total_panel, 500)
+                    ]
+                    pages = await asyncio.gather(*remaining_tasks, return_exceptions=True)
+                    for page in pages:
+                        if isinstance(page, dict):
+                            panel_users.extend(page['users'])
+            except Exception:
+                logger.warning('Failed to fetch panel users for enrichment', exc_info=True)
+
+            for pu in panel_users:
+                uid = uuid_to_user_id.get(pu.uuid)
+                if uid is None:
+                    continue
+                if pu.user_traffic and pu.user_traffic.last_connected_node_uuid:
+                    last_node_uuid_by_user[uid] = pu.user_traffic.last_connected_node_uuid
+
+            # Bulk device fetch — single API call (paginated with start/size)
+            try:
+                devices_data = await api.get_all_hwid_devices()
+                for device in devices_data.get('devices', []):
+                    user_uuid = device.get('userUuid', '')
+                    uid = uuid_to_user_id.get(user_uuid)
+                    if uid is not None:
+                        devices_by_user[uid] = devices_by_user.get(uid, 0) + 1
+            except Exception:
+                logger.warning('Failed to fetch bulk devices for enrichment', exc_info=True)
+
+    # Bulk spending stats
+    all_user_ids = [u.id for u in user_map.values()]
+    spending_map = await _get_bulk_spending(db, all_user_ids)
+
+    # Build enrichment data
+    enrichment: dict[int, UserTrafficEnrichment] = {}
+    for uuid, user in user_map.items():
+        uid = user.id
+        sub = user.subscription
+
+        start_date = None
+        end_date = None
+        if sub:
+            if sub.start_date:
+                start_date = sub.start_date.isoformat()
+            if sub.end_date:
+                end_date = sub.end_date.isoformat()
+
+        last_node_name = None
+        last_uuid = last_node_uuid_by_user.get(uid)
+        if last_uuid:
+            last_node_name = node_uuid_to_name.get(last_uuid)
+
+        enrichment[uid] = UserTrafficEnrichment(
+            devices_connected=devices_by_user.get(uid, 0),
+            total_spent_kopeks=spending_map.get(uid, 0),
+            subscription_start_date=start_date,
+            subscription_end_date=end_date,
+            last_node_name=last_node_name,
+        )
+
+    return enrichment
+
+
 @router.get('/enrichment', response_model=TrafficEnrichmentResponse)
 async def get_traffic_enrichment(
     admin: User = Depends(get_current_admin_user),
@@ -399,98 +492,7 @@ async def get_traffic_enrichment(
             return TrafficEnrichmentResponse(data=cached[1])
 
         user_map = await _load_user_map(db)
-
-        # Build uuid -> user_id and short_uuid -> user_id maps
-        uuid_to_user_id: dict[str, int] = {}
-        short_uuid_to_user_id: dict[str, int] = {}
-        for uuid, user in user_map.items():
-            uuid_to_user_id[uuid] = user.id
-            if user.subscription and user.subscription.remnawave_short_uuid:
-                short_uuid_to_user_id[user.subscription.remnawave_short_uuid] = user.id
-
-        service = RemnaWaveService()
-        devices_by_user: dict[int, int] = {}
-        last_node_uuid_by_user: dict[int, str] = {}
-        node_uuid_to_name: dict[str, str] = {}
-
-        if service.is_configured:
-            async with service.get_api_client() as api:
-                # 3 bulk calls: nodes + users (paginated) + devices
-                try:
-                    nodes_list = await api.get_all_nodes()
-                except Exception:
-                    logger.warning('Failed to fetch nodes for enrichment', exc_info=True)
-                    nodes_list = []
-
-                for node in nodes_list:
-                    node_uuid_to_name[node.uuid] = node.name
-
-                # Fetch all panel users (paginated) for last connected node
-                panel_users = []
-                try:
-                    first_page = await api.get_all_users(start=0, size=500)
-                    panel_users.extend(first_page['users'])
-                    total_panel = first_page['total']
-
-                    if total_panel > 500:
-                        remaining_tasks = [
-                            api.get_all_users(start=offset, size=500) for offset in range(500, total_panel, 500)
-                        ]
-                        pages = await asyncio.gather(*remaining_tasks, return_exceptions=True)
-                        for page in pages:
-                            if isinstance(page, dict):
-                                panel_users.extend(page['users'])
-                except Exception:
-                    logger.warning('Failed to fetch panel users for enrichment', exc_info=True)
-
-                for pu in panel_users:
-                    uid = uuid_to_user_id.get(pu.uuid)
-                    if uid is None:
-                        continue
-                    if pu.user_traffic and pu.user_traffic.last_connected_node_uuid:
-                        last_node_uuid_by_user[uid] = pu.user_traffic.last_connected_node_uuid
-
-                # Bulk device fetch — single API call (paginated with start/size)
-                try:
-                    devices_data = await api.get_all_hwid_devices()
-                    for device in devices_data.get('devices', []):
-                        user_uuid = device.get('userUuid', '')
-                        uid = uuid_to_user_id.get(user_uuid)
-                        if uid is not None:
-                            devices_by_user[uid] = devices_by_user.get(uid, 0) + 1
-                except Exception:
-                    logger.warning('Failed to fetch bulk devices for enrichment', exc_info=True)
-
-        # Bulk spending stats
-        all_user_ids = [u.id for u in user_map.values()]
-        spending_map = await _get_bulk_spending(db, all_user_ids)
-
-        # Build enrichment data
-        enrichment: dict[int, UserTrafficEnrichment] = {}
-        for uuid, user in user_map.items():
-            uid = user.id
-            sub = user.subscription
-
-            start_date = None
-            end_date = None
-            if sub:
-                if sub.start_date:
-                    start_date = sub.start_date.isoformat()
-                if sub.end_date:
-                    end_date = sub.end_date.isoformat()
-
-            last_node_name = None
-            last_uuid = last_node_uuid_by_user.get(uid)
-            if last_uuid:
-                last_node_name = node_uuid_to_name.get(last_uuid)
-
-            enrichment[uid] = UserTrafficEnrichment(
-                devices_connected=devices_by_user.get(uid, 0),
-                total_spent_kopeks=spending_map.get(uid, 0),
-                subscription_start_date=start_date,
-                subscription_end_date=end_date,
-                last_node_name=last_node_name,
-            )
+        enrichment = await _build_enrichment(db, user_map)
 
         _enrichment_cache[cache_key] = (now, enrichment)
 
@@ -542,6 +544,7 @@ async def export_traffic_csv(
 
     user_map = await _load_user_map(db)
     user_traffic, nodes_info = await _aggregate_traffic(start_str, end_str, list(user_map.keys()))
+    enrichment = await _build_enrichment(db, user_map)
 
     # Parse filters
     tariff_filter: set[str] | None = None
@@ -595,8 +598,16 @@ async def export_traffic_csv(
             'Tariff': item.tariff_name or '',
             'Status': item.subscription_status or '',
             'Traffic Limit (GB)': item.traffic_limit_gb,
-            'Devices': item.device_limit,
+            'Device Limit': item.device_limit,
         }
+        # Enrichment columns
+        enr = enrichment.get(item.user_id)
+        row['Connected Devices'] = enr.devices_connected if enr else 0
+        row['Total Spent (RUB)'] = round(enr.total_spent_kopeks / 100, 2) if enr else 0
+        row['Sub Start'] = enr.subscription_start_date or '' if enr else ''
+        row['Sub End'] = enr.subscription_end_date or '' if enr else ''
+        row['Last Node'] = enr.last_node_name or '' if enr else ''
+
         for node in csv_nodes:
             row[f'{node.node_name} (bytes)'] = item.node_traffic.get(node.node_uuid, 0)
         row['Total (bytes)'] = item.total_bytes
