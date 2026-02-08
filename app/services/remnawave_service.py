@@ -1902,7 +1902,9 @@ class RemnaWaveService:
                                     existing_users = await api.get_user_by_email(user.email)
                                     if existing_users:
                                         panel_uuid = existing_users[0].uuid
-                                        logger.debug(f'Найден пользователь {user.email} в панели по email: {panel_uuid}')
+                                        logger.debug(
+                                            f'Найден пользователь {user.email} в панели по email: {panel_uuid}'
+                                        )
 
                                 if panel_uuid:
                                     update_kwargs = dict(

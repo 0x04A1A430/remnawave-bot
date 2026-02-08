@@ -351,7 +351,9 @@ class UpdatePromoGroupResponse(BaseModel):
 class UpdateReferralCommissionRequest(BaseModel):
     """Request to update user referral commission percent."""
 
-    commission_percent: int | None = Field(None, ge=0, le=100, description='Referral commission percent (null for default)')
+    commission_percent: int | None = Field(
+        None, ge=0, le=100, description='Referral commission percent (null for default)'
+    )
 
 
 class UpdateReferralCommissionResponse(BaseModel):
