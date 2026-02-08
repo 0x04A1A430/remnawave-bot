@@ -521,7 +521,9 @@ async def sync_default_tariff_from_config(db: AsyncSession) -> Tariff | None:
     if existing_tariff:
         # Тариф уже существует — НЕ перезаписываем настройки из конфига.
         # Админ управляет тарифом через кабинет, синхронизация не нужна.
-        logger.info("Дефолтный тариф 'Стандартный' (id=%s) уже существует, пропускаем sync из конфига", existing_tariff.id)
+        logger.info(
+            "Дефолтный тариф 'Стандартный' (id=%s) уже существует, пропускаем sync из конфига", existing_tariff.id
+        )
         return existing_tariff
 
     if tariff_count == 0:
