@@ -365,6 +365,39 @@ class UpdateReferralCommissionResponse(BaseModel):
     message: str
 
 
+class DeviceInfo(BaseModel):
+    """Individual device info."""
+
+    hwid: str
+    platform: str = ''
+    device_model: str = ''
+    created_at: str | None = None
+
+
+class UserDevicesResponse(BaseModel):
+    """User devices from panel."""
+
+    devices: list[DeviceInfo] = []
+    total: int = 0
+    device_limit: int = 0
+
+
+class DeleteDeviceResponse(BaseModel):
+    """Response after device deletion."""
+
+    success: bool
+    message: str
+    deleted_hwid: str | None = None
+
+
+class ResetDevicesResponse(BaseModel):
+    """Response after resetting all devices."""
+
+    success: bool
+    message: str
+    deleted_count: int = 0
+
+
 class DeleteUserRequest(BaseModel):
     """Request to delete user."""
 

@@ -37,8 +37,10 @@ from app.utils.timezone import panel_datetime_to_naive_utc
 
 from ..dependencies import get_cabinet_db, get_current_admin_user
 from ..schemas.users import (
+    DeleteDeviceResponse,
     DeleteUserRequest,
     DeleteUserResponse,
+    DeviceInfo,
     DisableUserRequest,
     DisableUserResponse,
     FullDeleteUserRequest,
@@ -46,6 +48,7 @@ from ..schemas.users import (
     PanelSyncStatusResponse,
     PanelUserInfo,
     PeriodPriceInfo,
+    ResetDevicesResponse,
     ResetSubscriptionRequest,
     ResetSubscriptionResponse,
     ResetTrialRequest,
@@ -70,6 +73,7 @@ from ..schemas.users import (
     UserAvailableTariffItem,
     UserAvailableTariffsResponse,
     UserDetailResponse,
+    UserDevicesResponse,
     UserListItem,
     UserNodeUsageItem,
     UserNodeUsageResponse,
@@ -1397,6 +1401,138 @@ async def update_user_referral_commission(
         new_commission_percent=request.commission_percent,
         message='Referral commission updated',
     )
+
+
+# === Devices ===
+
+
+@router.get('/{user_id}/devices', response_model=UserDevicesResponse)
+async def get_user_devices(
+    user_id: int,
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Get user devices from Remnawave panel."""
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
+
+    if not user.remnawave_uuid:
+        return UserDevicesResponse()
+
+    try:
+        from app.services.remnawave_service import RemnaWaveService
+
+        service = RemnaWaveService()
+        if not service.is_configured:
+            return UserDevicesResponse()
+
+        async with service.get_api_client() as api:
+            response = await api.get_user_devices(user.remnawave_uuid)
+
+            devices = []
+            for d in response.get('devices', []):
+                hwid = d.get('hwid') or d.get('deviceId') or d.get('id')
+                if not hwid:
+                    continue
+                devices.append(
+                    DeviceInfo(
+                        hwid=hwid,
+                        platform=d.get('platform') or d.get('platformType') or '',
+                        device_model=d.get('deviceModel') or d.get('model') or d.get('name') or '',
+                        created_at=d.get('updatedAt') or d.get('lastSeen') or d.get('createdAt'),
+                    )
+                )
+
+            device_limit = 0
+            if user.subscription:
+                device_limit = user.subscription.device_limit or 0
+
+            return UserDevicesResponse(
+                devices=devices,
+                total=response.get('total', len(devices)),
+                device_limit=device_limit,
+            )
+
+    except Exception as e:
+        logger.error(f'Error fetching devices for user {user_id}: {e}')
+        return UserDevicesResponse()
+
+
+@router.delete('/{user_id}/devices/{hwid}', response_model=DeleteDeviceResponse)
+async def delete_user_device(
+    user_id: int,
+    hwid: str,
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Delete a single device for user."""
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
+
+    if not user.remnawave_uuid:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='User has no panel account')
+
+    try:
+        from app.services.remnawave_service import RemnaWaveService
+
+        service = RemnaWaveService()
+        async with service.get_api_client() as api:
+            success = await api.remove_device(user.remnawave_uuid, hwid)
+
+        if success:
+            logger.info(f'Admin {admin.id} deleted device {hwid} for user {user_id}')
+            return DeleteDeviceResponse(success=True, message='Device deleted', deleted_hwid=hwid)
+        return DeleteDeviceResponse(success=False, message='Failed to delete device')
+
+    except Exception as e:
+        logger.error(f'Error deleting device {hwid} for user {user_id}: {e}')
+        return DeleteDeviceResponse(success=False, message=str(e))
+
+
+@router.delete('/{user_id}/devices', response_model=ResetDevicesResponse)
+async def reset_user_devices(
+    user_id: int,
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Reset all devices for user."""
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
+
+    if not user.remnawave_uuid:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='User has no panel account')
+
+    try:
+        from app.services.remnawave_service import RemnaWaveService
+
+        service = RemnaWaveService()
+        async with service.get_api_client() as api:
+            devices_info = await api.get_user_devices(user.remnawave_uuid)
+            devices = devices_info.get('devices', [])
+            total = len(devices)
+
+            if total == 0:
+                return ResetDevicesResponse(success=True, message='No devices to reset', deleted_count=0)
+
+            deleted = 0
+            for d in devices:
+                device_hwid = d.get('hwid') or d.get('deviceId') or d.get('id')
+                if device_hwid:
+                    try:
+                        await api.remove_device(user.remnawave_uuid, device_hwid)
+                        deleted += 1
+                    except Exception:
+                        pass
+
+        logger.info(f'Admin {admin.id} reset devices for user {user_id}: {deleted}/{total}')
+        return ResetDevicesResponse(success=True, message=f'Deleted {deleted}/{total} devices', deleted_count=deleted)
+
+    except Exception as e:
+        logger.error(f'Error resetting devices for user {user_id}: {e}')
+        return ResetDevicesResponse(success=False, message=str(e))
 
 
 # === Delete User ===
