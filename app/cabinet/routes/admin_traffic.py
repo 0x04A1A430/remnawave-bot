@@ -46,6 +46,7 @@ _cache_lock = asyncio.Lock()
 
 # Valid sort fields for the GET endpoint
 _SORT_FIELDS = frozenset({'total_bytes', 'full_name', 'tariff_name', 'device_limit', 'traffic_limit_gb'})
+_ENRICHMENT_SORT_FIELDS = frozenset({'connected', 'total_spent', 'sub_start', 'sub_end', 'last_node'})
 
 
 def _get_status(sub) -> str | None:
@@ -330,14 +331,30 @@ async def get_traffic_usage(
         if not node_filter:
             node_filter = None  # No valid nodes matched, treat as "all nodes"
 
-    # Validate sort_by: allow known fields + 'node_<uuid>' for dynamic node columns
+    # Validate sort_by: allow known fields + enrichment fields + 'node_<uuid>'
     is_node_sort = sort_by.startswith('node_') and sort_by[5:] in all_node_uuids
-    if sort_by not in _SORT_FIELDS and not is_node_sort:
+    is_enrichment_sort = sort_by in _ENRICHMENT_SORT_FIELDS
+    if sort_by not in _SORT_FIELDS and not is_node_sort and not is_enrichment_sort:
         sort_by = 'total_bytes'
 
+    # For enrichment sort, build items unsorted then sort by enrichment field
+    effective_sort = 'total_bytes' if is_enrichment_sort else sort_by
     items = _build_traffic_items(
-        user_traffic, user_map, nodes_info, search, sort_by, sort_desc, tariff_filter, status_filter, node_filter
+        user_traffic, user_map, nodes_info, search, effective_sort, sort_desc, tariff_filter, status_filter, node_filter
     )
+
+    if is_enrichment_sort:
+        enrichment_data = await _build_enrichment(db, user_map)
+        enr_key_map = {
+            'connected': lambda e: e.devices_connected,
+            'total_spent': lambda e: e.total_spent_kopeks,
+            'sub_start': lambda e: e.subscription_start_date or '',
+            'sub_end': lambda e: e.subscription_end_date or '',
+            'last_node': lambda e: e.last_node_name or '',
+        }
+        key_fn = enr_key_map[sort_by]
+        empty = UserTrafficEnrichment()
+        items.sort(key=lambda x: key_fn(enrichment_data.get(x.user_id, empty)), reverse=sort_desc)
 
     total = len(items)
     paginated = items[offset : offset + limit]
