@@ -999,6 +999,16 @@ class RemnaWaveAPI:
             uuid=data['uuid'], name=data['name'], view_position=data['viewPosition'], config=data.get('config')
         )
 
+    async def get_all_hwid_devices(self) -> dict[str, Any]:
+        """GET /api/hwid/devices — all devices for all users."""
+        response = await self._make_request('GET', '/api/hwid/devices')
+        return response.get('response', {'devices': [], 'total': 0})
+
+    async def get_all_panel_subscriptions(self) -> list[dict[str, Any]]:
+        """GET /api/subscriptions — all panel subscriptions."""
+        response = await self._make_request('GET', '/api/subscriptions')
+        return response.get('response') or []
+
     async def get_user_devices(self, user_uuid: str) -> dict[str, Any]:
         try:
             response = await self._make_request('GET', f'/api/hwid/devices/{user_uuid}')

@@ -33,6 +33,18 @@ class TrafficUsageResponse(BaseModel):
     available_statuses: list[str]
 
 
+class UserTrafficEnrichment(BaseModel):
+    devices_connected: int = 0
+    total_spent_kopeks: int = 0
+    subscription_start_date: str | None = None
+    subscription_end_date: str | None = None
+    last_node_name: str | None = None
+
+
+class TrafficEnrichmentResponse(BaseModel):
+    data: dict[int, UserTrafficEnrichment]
+
+
 class ExportCsvRequest(BaseModel):
     period: int = Field(30, ge=1, le=30)
     start_date: str | None = None
