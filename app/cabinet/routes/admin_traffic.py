@@ -453,11 +453,29 @@ async def get_traffic_enrichment(
                 # Bulk device fetch — single API call
                 try:
                     devices_data = await api.get_all_hwid_devices()
-                    for device in devices_data.get('devices', []):
+                    all_devices = devices_data.get('devices', [])
+                    unmatched_uuids = []
+                    for device in all_devices:
                         user_uuid = device.get('userUuid', '')
                         uid = uuid_to_user_id.get(user_uuid)
                         if uid is not None:
                             devices_by_user[uid] = devices_by_user.get(uid, 0) + 1
+                        elif user_uuid:
+                            unmatched_uuids.append(user_uuid)
+                    logger.info(
+                        'Enrichment devices: %d total, %d matched to %d users, %d unmatched uuids',
+                        len(all_devices),
+                        sum(devices_by_user.values()),
+                        len(devices_by_user),
+                        len(unmatched_uuids),
+                    )
+                    if unmatched_uuids:
+                        logger.info('Unmatched device uuids: %s', unmatched_uuids[:10])
+                    if devices_by_user:
+                        logger.info(
+                            'Device counts: %s',
+                            {uid: cnt for uid, cnt in sorted(devices_by_user.items()) if cnt > 1},
+                        )
                 except Exception:
                     logger.warning('Failed to fetch bulk devices for enrichment', exc_info=True)
 
