@@ -59,6 +59,8 @@ from ..schemas.users import (
     UpdateBalanceResponse,
     UpdatePromoGroupRequest,
     UpdatePromoGroupResponse,
+    UpdateReferralCommissionRequest,
+    UpdateReferralCommissionResponse,
     UpdateRestrictionsRequest,
     UpdateRestrictionsResponse,
     UpdateSubscriptionRequest,
@@ -1359,6 +1361,41 @@ async def update_user_promo_group(
         new_promo_group_id=new_promo_group_id,
         promo_group_name=promo_group_name,
         message='Promo group updated',
+    )
+
+
+# === Referral Commission ===
+
+
+@router.post('/{user_id}/referral-commission', response_model=UpdateReferralCommissionResponse)
+async def update_user_referral_commission(
+    user_id: int,
+    request: UpdateReferralCommissionRequest,
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Update user's individual referral commission percentage."""
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='User not found',
+        )
+
+    old_commission = user.referral_commission_percent
+    user.referral_commission_percent = request.commission_percent
+    user.updated_at = datetime.utcnow()
+    await db.commit()
+
+    logger.info(
+        f'Admin {admin.id} changed referral commission for user {user_id}: {old_commission} -> {request.commission_percent}'
+    )
+
+    return UpdateReferralCommissionResponse(
+        success=True,
+        old_commission_percent=old_commission,
+        new_commission_percent=request.commission_percent,
+        message='Referral commission updated',
     )
 
 

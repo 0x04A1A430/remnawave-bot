@@ -348,6 +348,21 @@ class UpdatePromoGroupResponse(BaseModel):
     message: str
 
 
+class UpdateReferralCommissionRequest(BaseModel):
+    """Request to update user referral commission percent."""
+
+    commission_percent: int | None = Field(None, ge=0, le=100, description='Referral commission percent (null for default)')
+
+
+class UpdateReferralCommissionResponse(BaseModel):
+    """Response after referral commission update."""
+
+    success: bool
+    old_commission_percent: int | None = None
+    new_commission_percent: int | None = None
+    message: str
+
+
 class DeleteUserRequest(BaseModel):
     """Request to delete user."""
 
