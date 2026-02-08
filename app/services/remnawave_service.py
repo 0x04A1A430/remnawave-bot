@@ -1861,6 +1861,8 @@ class RemnaWaveService:
                                     full_name=user.full_name,
                                     username=user.username,
                                     telegram_id=user.telegram_id,
+                                    email=user.email,
+                                    user_id=user.id,
                                 )
 
                                 create_kwargs = dict(
@@ -1894,6 +1896,15 @@ class RemnaWaveService:
                                     if existing_users:
                                         panel_uuid = existing_users[0].uuid
                                         logger.debug(f'Найден пользователь {user.telegram_id} в панели: {panel_uuid}')
+
+                                # Fallback: поиск по email (для OAuth юзеров без telegram_id)
+                                if not panel_uuid and user.email:
+                                    existing_users = await api.get_user_by_email(user.email)
+                                    if existing_users:
+                                        panel_uuid = existing_users[0].uuid
+                                        logger.debug(
+                                            f'Найден пользователь {user.email} в панели по email: {panel_uuid}'
+                                        )
 
                                 if panel_uuid:
                                     update_kwargs = dict(
