@@ -1439,12 +1439,14 @@ class RemnaWaveService:
 
                 # Используем один API клиент для всех операций сброса HWID
                 hwid_api_client = None
+                hwid_api_cm = None
                 try:
-                    hwid_api_client = self.get_api_client()
-                    await hwid_api_client.__aenter__()
+                    hwid_api_cm = self.get_api_client()
+                    hwid_api_client = await hwid_api_cm.__aenter__()
                 except Exception as api_init_error:
                     logger.warning(f'⚠️ Не удалось создать API клиент для сброса HWID: {api_init_error}')
                     hwid_api_client = None
+                    hwid_api_cm = None
 
                 try:
                     for telegram_id, db_user in users_to_deactivate:
@@ -1565,9 +1567,9 @@ class RemnaWaveService:
 
                 finally:
                     # Закрываем API клиент
-                    if hwid_api_client:
+                    if hwid_api_cm:
                         try:
-                            await hwid_api_client.__aexit__(None, None, None)
+                            await hwid_api_cm.__aexit__(None, None, None)
                         except Exception:
                             pass
 
