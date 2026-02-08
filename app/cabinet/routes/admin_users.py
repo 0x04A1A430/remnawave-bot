@@ -28,6 +28,7 @@ from app.database.models import (
     PromoGroup,
     Subscription,
     SubscriptionStatus,
+    TrafficPurchase,
     Transaction,
     TransactionType,
     User,
@@ -58,6 +59,7 @@ from ..schemas.users import (
     SyncFromPanelResponse,
     SyncToPanelRequest,
     SyncToPanelResponse,
+    TrafficPurchaseItem,
     UpdateBalanceRequest,
     UpdateBalanceResponse,
     UpdatePromoGroupRequest,
@@ -163,13 +165,43 @@ def _build_subscription_info(subscription: Subscription, tariff_name: str | None
 
 
 async def _build_subscription_info_async(db: AsyncSession, subscription: Subscription) -> UserSubscriptionInfo:
-    """Build UserSubscriptionInfo from Subscription model, fetching tariff name asynchronously."""
+    """Build UserSubscriptionInfo from Subscription model, fetching tariff name and traffic purchases."""
     tariff_name = None
     if subscription.tariff_id:
         tariff = await get_tariff_by_id(db, subscription.tariff_id)
         if tariff:
             tariff_name = tariff.name
-    return _build_subscription_info(subscription, tariff_name=tariff_name)
+
+    # Fetch traffic purchases
+    now = datetime.utcnow()
+    tp_query = (
+        select(TrafficPurchase)
+        .where(TrafficPurchase.subscription_id == subscription.id)
+        .order_by(TrafficPurchase.created_at.desc())
+    )
+    tp_result = await db.execute(tp_query)
+    purchases = tp_result.scalars().all()
+
+    traffic_purchase_items = []
+    for p in purchases:
+        delta = p.expires_at - now
+        days_remaining = max(0, delta.days)
+        is_expired = now >= p.expires_at
+        traffic_purchase_items.append(
+            TrafficPurchaseItem(
+                id=p.id,
+                traffic_gb=p.traffic_gb,
+                expires_at=p.expires_at,
+                created_at=p.created_at,
+                days_remaining=days_remaining,
+                is_expired=is_expired,
+            )
+        )
+
+    info = _build_subscription_info(subscription, tariff_name=tariff_name)
+    info.purchased_traffic_gb = getattr(subscription, 'purchased_traffic_gb', 0) or 0
+    info.traffic_purchases = traffic_purchase_items
+    return info
 
 
 async def _sync_subscription_to_panel(db: AsyncSession, user: User, subscription: Subscription) -> dict:
@@ -1102,6 +1134,113 @@ async def update_user_subscription(
             subscription=await _build_subscription_info_async(db, subscription),
         )
 
+    if request.action == 'add_traffic':
+        if not request.traffic_gb:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='traffic_gb parameter is required for add_traffic action',
+            )
+
+        from app.database.crud.subscription import add_subscription_traffic
+
+        await add_subscription_traffic(db, subscription, request.traffic_gb)
+        await db.commit()
+        await db.refresh(subscription)
+
+        # Sync to Remnawave panel
+        await _sync_subscription_to_panel(db, user, subscription)
+
+        logger.info(f'Admin {admin.id} added {request.traffic_gb} GB traffic for user {user_id}')
+
+        return UpdateSubscriptionResponse(
+            success=True,
+            message=f'Added {request.traffic_gb} GB traffic (30 days)',
+            subscription=await _build_subscription_info_async(db, subscription),
+        )
+
+    if request.action == 'remove_traffic':
+        if not request.traffic_purchase_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='traffic_purchase_id parameter is required for remove_traffic action',
+            )
+
+        # Find the traffic purchase
+        tp_query = select(TrafficPurchase).where(
+            TrafficPurchase.id == request.traffic_purchase_id,
+            TrafficPurchase.subscription_id == subscription.id,
+        )
+        tp_result = await db.execute(tp_query)
+        traffic_purchase = tp_result.scalar_one_or_none()
+        if not traffic_purchase:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail='Traffic purchase not found',
+            )
+
+        removed_gb = traffic_purchase.traffic_gb
+
+        # Decrement counters
+        subscription.traffic_limit_gb = max(0, subscription.traffic_limit_gb - removed_gb)
+        current_purchased = getattr(subscription, 'purchased_traffic_gb', 0) or 0
+        subscription.purchased_traffic_gb = max(0, current_purchased - removed_gb)
+
+        # Delete the purchase record
+        await db.delete(traffic_purchase)
+
+        # Recalculate traffic_reset_at from remaining active purchases
+        now = datetime.utcnow()
+        remaining_query = select(TrafficPurchase).where(
+            TrafficPurchase.subscription_id == subscription.id,
+            TrafficPurchase.expires_at > now,
+            TrafficPurchase.id != request.traffic_purchase_id,
+        )
+        remaining_result = await db.execute(remaining_query)
+        remaining_purchases = remaining_result.scalars().all()
+
+        if remaining_purchases:
+            subscription.traffic_reset_at = min(p.expires_at for p in remaining_purchases)
+        else:
+            subscription.traffic_reset_at = None
+
+        await db.commit()
+        await db.refresh(subscription)
+
+        # Sync to Remnawave panel
+        await _sync_subscription_to_panel(db, user, subscription)
+
+        logger.info(
+            f'Admin {admin.id} removed traffic purchase {request.traffic_purchase_id} ({removed_gb} GB) for user {user_id}'
+        )
+
+        return UpdateSubscriptionResponse(
+            success=True,
+            message=f'Removed {removed_gb} GB traffic package',
+            subscription=await _build_subscription_info_async(db, subscription),
+        )
+
+    if request.action == 'set_device_limit':
+        if request.device_limit is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='device_limit parameter is required for set_device_limit action',
+            )
+
+        subscription.device_limit = request.device_limit
+        await db.commit()
+        await db.refresh(subscription)
+
+        # Sync to Remnawave panel
+        await _sync_subscription_to_panel(db, user, subscription)
+
+        logger.info(f'Admin {admin.id} set device limit to {request.device_limit} for user {user_id}')
+
+        return UpdateSubscriptionResponse(
+            success=True,
+            message=f'Device limit set to {request.device_limit}',
+            subscription=await _build_subscription_info_async(db, subscription),
+        )
+
     raise HTTPException(
         status_code=status.HTTP_400_BAD_REQUEST,
         detail=f'Unknown action: {request.action}',
@@ -1182,6 +1321,11 @@ async def get_user_available_tariffs(
                 price_per_day_kopeks=tariff.price_per_day_kopeks,
                 min_days=tariff.min_days,
                 max_days=tariff.max_days,
+                device_price_kopeks=tariff.device_price_kopeks,
+                max_device_limit=tariff.max_device_limit,
+                traffic_topup_enabled=tariff.traffic_topup_enabled,
+                traffic_topup_packages=tariff.traffic_topup_packages or {},
+                max_topup_traffic_gb=tariff.max_topup_traffic_gb,
                 is_available=is_available,
                 requires_promo_group=requires_promo_group,
             )

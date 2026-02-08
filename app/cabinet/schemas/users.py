@@ -39,6 +39,17 @@ class SortByEnum(str, Enum):
 # === User Subscription Info ===
 
 
+class TrafficPurchaseItem(BaseModel):
+    """Individual traffic purchase record."""
+
+    id: int
+    traffic_gb: int
+    expires_at: datetime
+    created_at: datetime
+    days_remaining: int
+    is_expired: bool
+
+
 class UserSubscriptionInfo(BaseModel):
     """User subscription information."""
 
@@ -55,6 +66,8 @@ class UserSubscriptionInfo(BaseModel):
     autopay_enabled: bool = False
     is_active: bool = False
     days_remaining: int = 0
+    purchased_traffic_gb: int = 0
+    traffic_purchases: list[TrafficPurchaseItem] = []
 
 
 class UserPromoGroupInfo(BaseModel):
@@ -285,6 +298,12 @@ class UpdateSubscriptionRequest(BaseModel):
     # For toggle_autopay
     autopay_enabled: bool | None = Field(None, description='Enable/disable autopay')
 
+    # For add_traffic action
+    traffic_gb: int | None = Field(None, ge=1, description='Traffic GB to add')
+
+    # For remove_traffic action
+    traffic_purchase_id: int | None = Field(None, description='Traffic purchase ID to remove')
+
     # For create new subscription
     is_trial: bool | None = Field(None, description='Is trial subscription')
     device_limit: int | None = Field(None, ge=1, description='Device limit')
@@ -490,6 +509,15 @@ class UserAvailableTariffItem(BaseModel):
     price_per_day_kopeks: int = 0
     min_days: int = 1
     max_days: int = 365
+
+    # Device limits
+    device_price_kopeks: int | None = None
+    max_device_limit: int | None = None
+
+    # Traffic topup
+    traffic_topup_enabled: bool = False
+    traffic_topup_packages: dict[str, int] = {}
+    max_topup_traffic_gb: int = 0
 
     # Access info
     is_available: bool = True  # Available for this user's promo group
