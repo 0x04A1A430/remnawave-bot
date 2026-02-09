@@ -412,21 +412,14 @@ async def delete_existing_tariff(
             detail='Tariff not found',
         )
 
-    # Check if tariff has subscriptions
     subs_count = await get_tariff_subscriptions_count(db, tariff_id)
-    if subs_count > 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'Cannot delete tariff with {subs_count} active subscriptions',
-        )
-
     await delete_tariff(db, tariff)
-    logger.info(f'Admin {admin.id} deleted tariff {tariff_id}: {tariff.name}')
+    logger.info(f'Admin {admin.id} deleted tariff {tariff_id}: {tariff.name} (affected subscriptions: {subs_count})')
 
     # Перезагружаем периоды из БД для синхронизации с ботом
     await load_period_prices_from_db(db)
 
-    return {'message': 'Tariff deleted successfully'}
+    return {'message': 'Tariff deleted successfully', 'affected_subscriptions': subs_count}
 
 
 @router.post('/{tariff_id}/toggle', response_model=TariffToggleResponse)
