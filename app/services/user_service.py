@@ -1145,25 +1145,41 @@ class UserService:
                 'new_month': 0,
             }
 
-    async def cleanup_inactive_users(self, db: AsyncSession, months: int = None) -> int:
+    async def cleanup_inactive_users(self, db: AsyncSession, months: int = None) -> tuple[int, int]:
+        """Clean up inactive users, skipping those with active subscriptions.
+
+        Returns:
+            Tuple of (deleted_count, skipped_active_sub_count).
+        """
         try:
             if months is None:
                 months = settings.INACTIVE_USER_DELETE_MONTHS
 
             inactive_users = await get_inactive_users(db, months)
             deleted_count = 0
+            skipped_active_sub = 0
 
             for user in inactive_users:
+                # Skip users with active paid subscriptions
+                if user.subscription and user.subscription.is_active:
+                    skipped_active_sub += 1
+                    continue
+
                 success = await self.delete_user_account(db, user.id, 0)
                 if success:
                     deleted_count += 1
 
-            logger.info(f'Удалено {deleted_count} неактивных пользователей')
-            return deleted_count
+            if skipped_active_sub > 0:
+                logger.info(
+                    'Пропущено %d неактивных пользователей с активной подпиской',
+                    skipped_active_sub,
+                )
+            logger.info('Удалено %d неактивных пользователей', deleted_count)
+            return deleted_count, skipped_active_sub
 
         except Exception as e:
-            logger.error(f'Ошибка очистки неактивных пользователей: {e}')
-            return 0
+            logger.error('Ошибка очистки неактивных пользователей: %s', e)
+            return 0, 0
 
     async def get_user_activity_summary(self, db: AsyncSession, user_id: int) -> dict[str, Any]:
         try:

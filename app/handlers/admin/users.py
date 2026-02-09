@@ -2602,8 +2602,15 @@ async def show_inactive_users(callback: types.CallbackQuery, db_user: User, db: 
         await callback.answer()
         return
 
+    with_active_sub = sum(1 for u in inactive_users if u.subscription and u.subscription.is_active)
+    will_delete = len(inactive_users) - with_active_sub
+
     text = '🗑️ <b>Неактивные пользователи</b>\n'
-    text += f'Без активности более {settings.INACTIVE_USER_DELETE_MONTHS} месяцев: {len(inactive_users)}\n\n'
+    text += f'Без активности более {settings.INACTIVE_USER_DELETE_MONTHS} месяцев: {len(inactive_users)}\n'
+    if with_active_sub > 0:
+        text += f'🛡️ С активной подпиской (не будут удалены): {with_active_sub}\n'
+        text += f'🗑️ Будет удалено: {will_delete}\n'
+    text += '\n'
 
     for user in inactive_users[:10]:
         if user.telegram_id:
@@ -2612,7 +2619,9 @@ async def show_inactive_users(callback: types.CallbackQuery, db_user: User, db: 
         else:
             user_link = f'<b>{user.full_name}</b>'
             user_id_display = user.email or f'#{user.id}'
-        text += f'👤 {user_link}\n'
+        has_active = user.subscription and user.subscription.is_active
+        sub_badge = ' 🛡️' if has_active else ''
+        text += f'👤 {user_link}{sub_badge}\n'
         text += f'🆔 <code>{user_id_display}</code>\n'
         last_activity_display = (
             format_time_ago(user.last_activity, db_user.language) if user.last_activity else 'Никогда'
@@ -4255,10 +4264,14 @@ async def _calculate_subscription_period_price(
 @error_handler
 async def cleanup_inactive_users(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     user_service = UserService()
-    deleted_count = await user_service.cleanup_inactive_users(db)
+    deleted_count, skipped_count = await user_service.cleanup_inactive_users(db)
+
+    text = f'✅ Очистка завершена\n\nУдалено неактивных пользователей: {deleted_count}'
+    if skipped_count > 0:
+        text += f'\n⏭️ Пропущено (активная подписка): {skipped_count}'
 
     await callback.message.edit_text(
-        f'✅ Очистка завершена\n\nУдалено неактивных пользователей: {deleted_count}',
+        text,
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[[types.InlineKeyboardButton(text='⬅️ Назад', callback_data='admin_users')]]
         ),
