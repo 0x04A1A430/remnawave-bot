@@ -119,7 +119,7 @@ class EmailService:
             verification_token: Verification token
             verification_url: Base URL for verification (token will be appended)
             username: User's name for personalization
-            language: Language code (ru, en, zh, ua)
+            language: Language code (ru, en, zh, ua, fa)
             custom_subject: Override subject from admin template
             custom_body_html: Override body HTML from admin template (already wrapped in base template)
 
@@ -173,6 +173,16 @@ class EmailService:
                 'expires': f'Посилання дійсне протягом {expire_hours} годин.',
                 'ignore': 'Якщо ви не створювали акаунт, просто проігноруйте цей лист.',
                 'regards': 'З повагою,',
+            },
+            'fa': {
+                'greeting': f'سلام{", " + username if username else ""}!',
+                'subject': 'تایید آدرس ایمیل',
+                'intro': 'از ثبت‌نام شما سپاسگزاریم! لطفاً با کلیک روی دکمه زیر ایمیل خود را تایید کنید:',
+                'button': 'تایید ایمیل',
+                'or_copy': 'یا این لینک را در مرورگر خود کپی و باز کنید:',
+                'expires': f'این لینک تا {expire_hours} ساعت معتبر است.',
+                'ignore': 'اگر شما این حساب را ایجاد نکرده‌اید، این ایمیل را نادیده بگیرید.',
+                'regards': 'با احترام،',
             },
         }
 
@@ -236,7 +246,7 @@ class EmailService:
             reset_token: Password reset token
             reset_url: Base URL for password reset (token will be appended)
             username: User's name for personalization
-            language: Language code (ru, en, zh, ua)
+            language: Language code (ru, en, zh, ua, fa)
             custom_subject: Override subject from admin template
             custom_body_html: Override body HTML from admin template (already wrapped in base template)
 
@@ -290,6 +300,16 @@ class EmailService:
                 'expires': f'Посилання дійсне протягом {expire_hours} годин.',
                 'warning': "Якщо ви не запитували скидання пароля, проігноруйте цей лист або зв'яжіться з підтримкою.",
                 'regards': 'З повагою,',
+            },
+            'fa': {
+                'greeting': f'سلام{", " + username if username else ""}!',
+                'subject': 'بازنشانی رمز عبور',
+                'intro': 'درخواستی برای بازنشانی رمز عبور شما دریافت شد. برای تعیین رمز جدید روی دکمه زیر بزنید:',
+                'button': 'بازنشانی رمز عبور',
+                'or_copy': 'یا این لینک را در مرورگر خود کپی و باز کنید:',
+                'expires': f'این لینک تا {expire_hours} ساعت معتبر است.',
+                'warning': 'اگر شما درخواست بازنشانی رمز عبور نداده‌اید، این ایمیل را نادیده بگیرید یا با پشتیبانی تماس بگیرید.',
+                'regards': 'با احترام،',
             },
         }
 
@@ -352,7 +372,7 @@ class EmailService:
             to_email: New email address
             code: 6-digit verification code
             username: User's name for personalization
-            language: Language code (ru, en, zh, ua)
+            language: Language code (ru, en, zh, ua, fa)
             custom_subject: Override subject from admin template
             custom_body_html: Override body HTML from admin template
 
@@ -400,6 +420,15 @@ class EmailService:
                 'expires': f'Код дійсний протягом {expire_minutes} хвилин.',
                 'ignore': 'Якщо ви не запитували зміну email, просто проігноруйте цей лист.',
                 'regards': 'З повагою,',
+            },
+            'fa': {
+                'greeting': f'سلام{", " + username if username else ""}!',
+                'subject': 'کد تایید تغییر ایمیل',
+                'intro': 'شما درخواست تغییر ایمیل داده‌اید. برای تایید از کد زیر استفاده کنید:',
+                'code_label': 'کد تایید شما:',
+                'expires': f'این کد تا {expire_minutes} دقیقه معتبر است.',
+                'ignore': 'اگر شما درخواست تغییر ایمیل نداده‌اید، این ایمیل را نادیده بگیرید.',
+                'regards': 'با احترام،',
             },
         }
 

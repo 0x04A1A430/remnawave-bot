@@ -337,7 +337,7 @@ SAMPLE_CONTEXTS: dict[str, dict[str, Any]] = {
     'password_reset': {'username': 'John', 'reset_url': 'https://example.com/reset?token=abc123', 'expire_hours': 1},
 }
 
-AVAILABLE_LANGUAGES = ['ru', 'en', 'zh', 'ua']
+AVAILABLE_LANGUAGES = ['ru', 'en', 'zh', 'ua', 'fa']
 
 
 # ============ Schemas ============
