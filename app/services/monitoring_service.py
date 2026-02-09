@@ -6,7 +6,6 @@ from typing import Any
 
 from aiogram.enums import ChatMemberStatus
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
-from aiogram.types import FSInputFile
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -108,13 +107,17 @@ class MonitoringService:
 
         if settings.ENABLE_LOGO_MODE and LOGO_PATH.exists() and (text is None or len(text) <= 1000):
             try:
-                return await self.bot.send_photo(
+                from app.utils.message_patch import _cache_logo_file_id, get_logo_media
+
+                result = await self.bot.send_photo(
                     chat_id=chat_id,
-                    photo=FSInputFile(LOGO_PATH),
+                    photo=get_logo_media(),
                     caption=text,
                     reply_markup=reply_markup,
                     parse_mode=parse_mode,
                 )
+                _cache_logo_file_id(result)
+                return result
             except TelegramBadRequest as exc:
                 logger.warning(
                     'Не удалось отправить сообщение с логотипом пользователю %s: %s. Отправляем текстовое сообщение.',

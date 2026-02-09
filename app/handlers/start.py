@@ -1880,9 +1880,7 @@ async def required_sub_channel_check(
 
             menu_text = await get_main_menu_text(user, texts, db)
 
-            from aiogram.types import FSInputFile
-
-            from app.utils.message_patch import LOGO_PATH
+            from app.utils.message_patch import _cache_logo_file_id, get_logo_media
 
             is_admin = settings.is_admin(user.telegram_id)
             is_moderator = (not is_admin) and SupportSettingsService.is_moderator(user.telegram_id)
@@ -1909,13 +1907,14 @@ async def required_sub_channel_check(
             )
 
             if settings.ENABLE_LOGO_MODE:
-                await bot.send_photo(
+                _result = await bot.send_photo(
                     chat_id=query.from_user.id,
-                    photo=FSInputFile(LOGO_PATH),
+                    photo=get_logo_media(),
                     caption=menu_text,
                     reply_markup=keyboard,
                     parse_mode='HTML',
                 )
+                _cache_logo_file_id(_result)
             else:
                 await bot.send_message(
                     chat_id=query.from_user.id,
@@ -1975,9 +1974,7 @@ async def required_sub_channel_check(
 
                     menu_text = await get_main_menu_text(user, texts, db)
 
-                    from aiogram.types import FSInputFile
-
-                    from app.utils.message_patch import LOGO_PATH
+                    from app.utils.message_patch import _cache_logo_file_id, get_logo_media
 
                     is_admin = settings.is_admin(user.telegram_id)
                     is_moderator = (not is_admin) and SupportSettingsService.is_moderator(user.telegram_id)
@@ -2004,13 +2001,14 @@ async def required_sub_channel_check(
                     )
 
                     if settings.ENABLE_LOGO_MODE:
-                        await bot.send_photo(
+                        _result = await bot.send_photo(
                             chat_id=query.from_user.id,
-                            photo=FSInputFile(LOGO_PATH),
+                            photo=get_logo_media(),
                             caption=menu_text,
                             reply_markup=keyboard,
                             parse_mode='HTML',
                         )
+                        _cache_logo_file_id(_result)
                     else:
                         await bot.send_message(
                             chat_id=query.from_user.id,
@@ -2030,19 +2028,18 @@ async def required_sub_channel_check(
                     )
                     await state.set_state(RegistrationStates.waiting_for_referral_code)
             else:
-                from aiogram.types import FSInputFile
-
-                from app.utils.message_patch import LOGO_PATH
+                from app.utils.message_patch import _cache_logo_file_id, get_logo_media
 
                 rules_text = await get_rules(language)
 
                 if settings.ENABLE_LOGO_MODE:
-                    await bot.send_photo(
+                    _result = await bot.send_photo(
                         chat_id=query.from_user.id,
-                        photo=FSInputFile(LOGO_PATH),
+                        photo=get_logo_media(),
                         caption=rules_text,
                         reply_markup=get_rules_keyboard(language),
                     )
+                    _cache_logo_file_id(_result)
                 else:
                     await bot.send_message(
                         chat_id=query.from_user.id,
