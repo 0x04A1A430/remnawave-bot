@@ -486,9 +486,24 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
         logger.info(f'🔄 Удаленный пользователь {user.telegram_id} начинает повторную регистрацию')
 
         try:
-            from sqlalchemy import delete
+            from sqlalchemy import delete, update as sa_update
 
-            from app.database.models import PromoCodeUse, ReferralEarning, SubscriptionServer, Transaction
+            from app.database.models import (
+                CloudPaymentsPayment,
+                CryptoBotPayment,
+                FreekassaPayment,
+                HeleketPayment,
+                KassaAiPayment,
+                MulenPayPayment,
+                Pal24Payment,
+                PlategaPayment,
+                PromoCodeUse,
+                ReferralEarning,
+                SubscriptionServer,
+                Transaction,
+                WataPayment,
+                YooKassaPayment,
+            )
 
             if user.subscription:
                 await decrement_subscription_server_counts(db, user.subscription)
@@ -503,8 +518,36 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
 
             await db.execute(delete(PromoCodeUse).where(PromoCodeUse.user_id == user.id))
 
+            await db.execute(
+                sa_update(ReferralEarning)
+                .where(ReferralEarning.user_id == user.id)
+                .values(referral_transaction_id=None)
+            )
+            await db.execute(
+                sa_update(ReferralEarning)
+                .where(ReferralEarning.referral_id == user.id)
+                .values(referral_transaction_id=None)
+            )
             await db.execute(delete(ReferralEarning).where(ReferralEarning.user_id == user.id))
             await db.execute(delete(ReferralEarning).where(ReferralEarning.referral_id == user.id))
+
+            # Обнуляем transaction_id во всех таблицах платежей перед удалением транзакций
+            payment_models = [
+                YooKassaPayment,
+                CryptoBotPayment,
+                HeleketPayment,
+                MulenPayPayment,
+                Pal24Payment,
+                WataPayment,
+                PlategaPayment,
+                CloudPaymentsPayment,
+                FreekassaPayment,
+                KassaAiPayment,
+            ]
+            for payment_model in payment_models:
+                await db.execute(
+                    sa_update(payment_model).where(payment_model.user_id == user.id).values(transaction_id=None)
+                )
 
             await db.execute(delete(Transaction).where(Transaction.user_id == user.id))
 
