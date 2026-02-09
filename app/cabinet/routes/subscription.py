@@ -1662,7 +1662,7 @@ async def submit_purchase(
                         user=user,
                         subscription=subscription,
                         transaction=None,
-                        period_days=selection.period_days,
+                        period_days=selection.period.days,
                         was_trial_conversion=result.get('was_trial_conversion', False),
                         amount_kopeks=pricing.final_total,
                         purchase_type='renewal' if not is_new_subscription else None,
