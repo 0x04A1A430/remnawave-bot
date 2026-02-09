@@ -22,6 +22,7 @@ from app.database.crud.user import (
 from app.database.crud.user_message import get_random_active_message
 from app.database.models import PinnedMessage, SubscriptionStatus, UserStatus
 from app.keyboards.inline import (
+    get_back_keyboard,
     get_language_selection_keyboard,
     get_main_menu_keyboard_async,
     get_post_registration_keyboard,
@@ -1450,9 +1451,16 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
 
     if offer_text and not skip_welcome_offer:
         try:
+            # Если у пользователя уже есть подписка (например, от промокода), не предлагаем триал
+            user_has_subscription = user.subscription and getattr(user.subscription, 'is_active', False)
+            if user_has_subscription:
+                keyboard = get_back_keyboard(user.language, callback_data='back_to_menu')
+            else:
+                keyboard = get_post_registration_keyboard(user.language)
+
             await message.answer(
                 offer_text,
-                reply_markup=get_post_registration_keyboard(user.language),
+                reply_markup=keyboard,
             )
             logger.info(f'✅ Приветственное сообщение отправлено пользователю {user.telegram_id}')
             await _send_pinned_message(message.bot, db, user)
