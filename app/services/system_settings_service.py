@@ -260,7 +260,6 @@ class BotConfigurationService:
         'PAYMENT_BALANCE_TEMPLATE': 'PAYMENT',
         'PAYMENT_SUBSCRIPTION_TEMPLATE': 'PAYMENT',
         'AUTO_PURCHASE_AFTER_TOPUP_ENABLED': 'PAYMENT',
-        'SHOW_ACTIVATION_PROMPT_AFTER_TOPUP': 'PAYMENT',
         'SIMPLE_SUBSCRIPTION_ENABLED': 'SIMPLE_SUBSCRIPTION',
         'SIMPLE_SUBSCRIPTION_PERIOD_DAYS': 'SIMPLE_SUBSCRIPTION',
         'SIMPLE_SUBSCRIPTION_DEVICE_LIMIT': 'SIMPLE_SUBSCRIPTION',
@@ -584,19 +583,6 @@ class BotConfigurationService:
             'format': 'Булево значение.',
             'example': 'true',
             'warning': ('Используйте с осторожностью: средства будут списаны мгновенно, если корзина найдена.'),
-        },
-        'SHOW_ACTIVATION_PROMPT_AFTER_TOPUP': {
-            'description': (
-                'Включает режим яркого промпта активации подписки после пополнения баланса. '
-                'Вместо обычного уведомления пользователь получит яркое сообщение с восклицательными знаками '
-                'и кнопками для активации/продления подписки или изменения количества устройств.'
-            ),
-            'format': 'Булево значение.',
-            'example': 'true',
-            'warning': (
-                'При включении пользователи будут получать только яркое уведомление без кнопок баланса и главного меню. '
-                'Эти кнопки появятся после выполнения действия (активация/продление/изменение устройств).'
-            ),
         },
         'SUPPORT_TICKET_SLA_MINUTES': {
             'description': 'Лимит времени для ответа модераторов на тикет в минутах.',

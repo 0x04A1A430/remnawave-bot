@@ -19,7 +19,6 @@ from app.database.crud.user import get_user_by_id
 from app.database.models import PaymentMethod, TransactionType
 from app.external.telegram_stars import TelegramStarsService
 from app.services.subscription_auto_purchase_service import (
-    auto_activate_subscription_after_topup,
     auto_purchase_saved_cart_after_topup,
 )
 from app.utils.payment_logger import payment_logger as logger
@@ -534,26 +533,7 @@ class TelegramStarsMixin:
                 if auto_purchase_success:
                     has_saved_cart = False
 
-            # Умная автоактивация если автопокупка не сработала
-            activation_notification_sent = False
-            if not auto_purchase_success:
-                try:
-                    _, activation_notification_sent = await auto_activate_subscription_after_topup(
-                        db,
-                        user,
-                        bot=getattr(self, 'bot', None),
-                        topup_amount=amount_kopeks,
-                    )
-                except Exception as auto_activate_error:
-                    logger.error(
-                        'Ошибка умной автоактивации для пользователя %s: %s',
-                        user.id,
-                        auto_activate_error,
-                        exc_info=True,
-                    )
-
-            # Отправляем уведомление только если его ещё не отправили
-            if has_saved_cart and getattr(self, 'bot', None) and not activation_notification_sent and user.telegram_id:
+            if has_saved_cart and getattr(self, 'bot', None) and user.telegram_id:
                 texts = get_texts(user.language)
                 cart_message = texts.t(
                     'BALANCE_TOPUP_CART_REMINDER_DETAILED',

@@ -14,7 +14,6 @@ from app.config import settings
 from app.database.models import PaymentMethod, TransactionType
 from app.services.kassa_ai_service import kassa_ai_service
 from app.services.subscription_auto_purchase_service import (
-    auto_activate_subscription_after_topup,
     auto_purchase_saved_cart_after_topup,
 )
 from app.utils.payment_logger import payment_logger as logger
@@ -339,34 +338,14 @@ class KassaAiPaymentMixin:
             try:
                 display_name = settings.get_kassa_ai_display_name()
 
-                if settings.SHOW_ACTIVATION_PROMPT_AFTER_TOPUP:
-                    # Яркое сообщение для тупых
-                    from aiogram import types
-
-                    message = (
-                        '✅ <b>Платеж успешно завершен!</b>\n\n'
-                        f'💰 Сумма: {settings.format_price(payment.amount_kopeks)}\n'
-                        f'💳 Способ: {display_name}\n\n'
-                        '💎 Средства зачислены на ваш баланс!\n\n'
-                        '‼️ <b>ВНИМАНИЕ! ОБЯЗАТЕЛЬНО АКТИВИРУЙТЕ ПОДПИСКУ!</b> ‼️\n\n'
-                        '⚠️ Пополнение баланса <b>НЕ АКТИВИРУЕТ</b> подписку автоматически!\n\n'
-                        '👇 <b>НАЖМИТЕ КНОПКУ НИЖЕ ДЛЯ АКТИВАЦИИ</b> 👇'
-                    )
-                    keyboard = types.InlineKeyboardMarkup(
-                        inline_keyboard=[
-                            [types.InlineKeyboardButton(text='🔥 АКТИВИРОВАТЬ ПОДПИСКУ', callback_data='menu_buy')],
-                        ]
-                    )
-                else:
-                    # Стандартное сообщение (как было раньше)
-                    keyboard = await self.build_topup_success_keyboard(user)
-                    message = (
-                        '✅ <b>Пополнение успешно!</b>\n\n'
-                        f'💰 Сумма: {settings.format_price(payment.amount_kopeks)}\n'
-                        f'💳 Способ: {display_name}\n'
-                        f'🆔 Транзакция: {transaction.id}\n\n'
-                        'Баланс пополнен автоматически!'
-                    )
+                keyboard = await self.build_topup_success_keyboard(user)
+                message = (
+                    '✅ <b>Пополнение успешно!</b>\n\n'
+                    f'💰 Сумма: {settings.format_price(payment.amount_kopeks)}\n'
+                    f'💳 Способ: {display_name}\n'
+                    f'🆔 Транзакция: {transaction.id}\n\n'
+                    'Баланс пополнен автоматически!'
+                )
 
                 await self.bot.send_message(
                     user.telegram_id,
@@ -404,23 +383,7 @@ class KassaAiPaymentMixin:
                 if auto_purchase_success:
                     has_saved_cart = False
 
-            # Умная автоактивация если автопокупка не сработала
-            activation_notification_sent = False
-            if not auto_purchase_success:
-                try:
-                    _, activation_notification_sent = await auto_activate_subscription_after_topup(
-                        db, user, bot=getattr(self, 'bot', None), topup_amount=payment.amount_kopeks
-                    )
-                except Exception as auto_activate_error:
-                    logger.error(
-                        'Ошибка умной автоактивации для пользователя %s: %s',
-                        user.id,
-                        auto_activate_error,
-                        exc_info=True,
-                    )
-
-            # Отправляем уведомление только если его ещё не отправили
-            if has_saved_cart and getattr(self, 'bot', None) and not activation_notification_sent and user.telegram_id:
+            if has_saved_cart and getattr(self, 'bot', None) and user.telegram_id:
                 from app.localization.texts import get_texts
 
                 texts = get_texts(user.language)

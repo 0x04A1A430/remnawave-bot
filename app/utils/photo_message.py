@@ -2,7 +2,7 @@ import asyncio
 import logging
 
 from aiogram import types
-from aiogram.exceptions import TelegramBadRequest, TelegramNetworkError
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError, TelegramNetworkError
 from aiogram.types import InaccessibleMessage, InputMediaPhoto
 
 from app.config import settings
@@ -126,6 +126,8 @@ async def edit_or_answer_photo(
                     reply_markup=keyboard,
                     parse_mode=resolved_parse_mode,
                 )
+        except TelegramForbiddenError:
+            logger.debug('Пользователь заблокировал бота, пропускаем')
         except TelegramBadRequest as error:
             try:
                 await callback.message.delete()
@@ -140,6 +142,8 @@ async def edit_or_answer_photo(
             if callback.message.photo:
                 await callback.message.delete()
             await _answer_text(callback, caption, keyboard, resolved_parse_mode)
+        except TelegramForbiddenError:
+            logger.debug('Пользователь заблокировал бота, пропускаем')
         except TelegramBadRequest as error:
             await _answer_text(callback, caption, keyboard, resolved_parse_mode, error)
         return
@@ -167,6 +171,10 @@ async def edit_or_answer_photo(
                 pass
             await _answer_text(callback, caption, keyboard, resolved_parse_mode)
             return
+        except TelegramForbiddenError:
+            # Пользователь заблокировал бота — молча игнорируем
+            logger.debug('Пользователь заблокировал бота, пропускаем edit_media')
+            return
         except TelegramBadRequest as error:
             if is_privacy_restricted_error(error):
                 try:
@@ -189,7 +197,7 @@ async def edit_or_answer_photo(
                     parse_mode=resolved_parse_mode,
                 )
                 _cache_logo_file_id(result)
-            except TelegramBadRequest as photo_error:
+            except (TelegramBadRequest, TelegramForbiddenError) as photo_error:
                 await _answer_text(callback, caption, keyboard, resolved_parse_mode, photo_error)
             except Exception:
                 # Последний фоллбек — обычный текст

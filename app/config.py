@@ -339,12 +339,6 @@ class Settings(BaseSettings):
     NALOGO_STORAGE_PATH: str = './nalogo_tokens.json'
 
     AUTO_PURCHASE_AFTER_TOPUP_ENABLED: bool = False
-    AUTO_ACTIVATE_AFTER_TOPUP_ENABLED: bool = False
-
-    # Показывать предупреждение об активации подписки после пополнения баланса
-    # Если True - после пополнения показывает большое сообщение с кнопками:
-    # "Активировать", "Продлить", "Добавить устройства"
-    SHOW_ACTIVATION_PROMPT_AFTER_TOPUP: bool = False
 
     # Отключение превью ссылок в сообщениях бота
     DISABLE_WEB_PAGE_PREVIEW: bool = False
@@ -1176,16 +1170,6 @@ class Settings(BaseSettings):
 
     def is_auto_purchase_after_topup_enabled(self) -> bool:
         value = getattr(self, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', False)
-
-        if isinstance(value, str):
-            normalized = value.strip().lower()
-            return normalized in {'1', 'true', 'yes', 'on'}
-
-        return bool(value)
-
-    def is_auto_activate_after_topup_enabled(self) -> bool:
-        """Умная автоактивация после пополнения баланса (без корзины)."""
-        value = getattr(self, 'AUTO_ACTIVATE_AFTER_TOPUP_ENABLED', False)
 
         if isinstance(value, str):
             normalized = value.strip().lower()

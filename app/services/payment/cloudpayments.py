@@ -12,7 +12,6 @@ from app.config import settings
 from app.database.models import PaymentMethod, TransactionType
 from app.services.cloudpayments_service import CloudPaymentsAPIError
 from app.services.subscription_auto_purchase_service import (
-    auto_activate_subscription_after_topup,
     auto_purchase_saved_cart_after_topup,
 )
 from app.utils.payment_logger import payment_logger as logger
@@ -262,21 +261,10 @@ class CloudPaymentsPaymentMixin:
             logger.exception('Ошибка отправки уведомления CloudPayments: %s', error)
 
         # Auto-purchase if enabled
-        auto_purchase_success = False
         try:
-            auto_purchase_success = await auto_purchase_saved_cart_after_topup(db, user, bot=getattr(self, 'bot', None))
+            await auto_purchase_saved_cart_after_topup(db, user, bot=getattr(self, 'bot', None))
         except Exception as error:
             logger.exception('Ошибка автопокупки после CloudPayments: %s', error)
-
-        # Умная автоактивация если автопокупка не сработала
-        if not auto_purchase_success:
-            try:
-                # Игнорируем notification_sent т.к. здесь нет дополнительных уведомлений
-                await auto_activate_subscription_after_topup(
-                    db, user, bot=getattr(self, 'bot', None), topup_amount=amount_kopeks
-                )
-            except Exception as error:
-                logger.exception('Ошибка умной автоактивации после CloudPayments: %s', error)
 
         return True
 

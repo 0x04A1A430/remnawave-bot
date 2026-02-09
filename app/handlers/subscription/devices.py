@@ -416,6 +416,7 @@ async def confirm_change_devices(callback: types.CallbackQuery, db_user: User, d
             ).format(
                 amount=texts.format_price(price),
                 period=period_label,
+                months=period_label,
             )
             if total_discount > 0:
                 cost_text += texts.t(

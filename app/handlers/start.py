@@ -2048,9 +2048,22 @@ async def required_sub_channel_check(
                     )
                 await state.set_state(RegistrationStates.waiting_for_rules_accept)
 
+    except TelegramBadRequest as e:
+        error_msg = str(e).lower()
+        if 'query is too old' in error_msg or 'query id is invalid' in error_msg:
+            logger.debug('Устаревший callback в required_sub_channel_check, игнорируем')
+        else:
+            logger.error(f'Ошибка Telegram API в required_sub_channel_check: {e}')
+            try:
+                await query.answer(f'{texts.ERROR}!', show_alert=True)
+            except Exception:
+                pass
     except Exception as e:
         logger.error(f'Ошибка в required_sub_channel_check: {e}')
-        await query.answer(f'{texts.ERROR}!', show_alert=True)
+        try:
+            await query.answer(f'{texts.ERROR}!', show_alert=True)
+        except Exception:
+            pass
 
 
 def register_handlers(dp: Dispatcher):

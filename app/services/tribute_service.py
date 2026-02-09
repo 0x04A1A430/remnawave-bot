@@ -14,7 +14,6 @@ from app.database.models import PaymentMethod, TransactionType
 from app.external.tribute import TributeService as TributeAPI
 from app.services.payment_service import PaymentService
 from app.services.subscription_auto_purchase_service import (
-    auto_activate_subscription_after_topup,
     auto_purchase_saved_cart_after_topup,
 )
 from app.utils.user_utils import format_referrer_info
@@ -307,23 +306,8 @@ class TributeService:
                 if auto_purchase_success:
                     has_saved_cart = False
 
-            # Умная автоактивация если автопокупка не сработала
-            activation_notification_sent = False
-            if not auto_purchase_success:
-                try:
-                    _, activation_notification_sent = await auto_activate_subscription_after_topup(
-                        session, user, bot=self.bot, topup_amount=amount_kopeks
-                    )
-                except Exception as auto_activate_error:
-                    logger.error(
-                        'Ошибка умной автоактивации для пользователя %s: %s',
-                        user.id,
-                        auto_activate_error,
-                        exc_info=True,
-                    )
-
-            # Отправляем уведомление только если его ещё не отправили и есть telegram_id
-            if has_saved_cart and self.bot and not activation_notification_sent and user_id:
+            # Отправляем уведомление только если есть сохранённая корзина и telegram_id
+            if has_saved_cart and self.bot and user_id:
                 # Если у пользователя есть сохраненная корзина,
                 # отправляем ему уведомление с кнопкой вернуться к оформлению
                 from aiogram import types
