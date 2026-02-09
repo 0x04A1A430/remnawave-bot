@@ -81,7 +81,6 @@ class PaymentLogFilter(logging.Filter):
         'app.external.heleket',
         'app.external.tribute',
         'app.external.yookassa_webhook',
-        'app.external.pal24_webhook',
         'app.external.wata_webhook',
         'app.external.heleket_webhook',
     )

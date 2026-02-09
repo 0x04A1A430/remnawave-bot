@@ -46,8 +46,5 @@ packaging==23.2
 
 aiofiles==23.2.1
 
-# Вебхуки PayPalych (Flask)
-Flask==3.1.0
-
 # Архивирование с паролем
 pyzipper==0.3.6

@@ -403,7 +403,6 @@ class Settings(BaseSettings):
     PAL24_SIGNATURE_TOKEN: str | None = None
     PAL24_BASE_URL: str = 'https://pal24.pro/api/v1/'
     PAL24_WEBHOOK_PATH: str = '/pal24-webhook'
-    PAL24_WEBHOOK_PORT: int = 8084
     PAL24_PAYMENT_DESCRIPTION: str = 'Пополнение баланса'
     PAL24_MIN_AMOUNT_KOPEKS: int = 10000
     PAL24_MAX_AMOUNT_KOPEKS: int = 100000000

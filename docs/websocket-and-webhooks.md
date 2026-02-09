@@ -254,31 +254,31 @@ setInterval(() => {
 ### Python Webhook receiver
 
 ```python
-from flask import Flask, request
+from fastapi import FastAPI, Request, HTTPException
 import hmac
 import hashlib
 import json
 
-app = Flask(__name__)
+app = FastAPI()
 WEBHOOK_SECRET = "your-secret"
 
-@app.route('/webhook', methods=['POST'])
-def webhook():
+@app.post('/webhook')
+async def webhook(request: Request):
     signature = request.headers.get('X-Webhook-Signature', '')
     event_type = request.headers.get('X-Webhook-Event')
-    payload = request.json
-    
+    payload = await request.json()
+
     # Проверка подписи
     if not verify_signature(payload, signature, WEBHOOK_SECRET):
-        return {'error': 'Invalid signature'}, 401
-    
+        raise HTTPException(status_code=401, detail='Invalid signature')
+
     # Обработка события
     if event_type == 'user.created':
         handle_new_user(payload)
     elif event_type == 'payment.completed':
         handle_payment(payload)
-    
-    return {'status': 'ok'}, 200
+
+    return {'status': 'ok'}
 
 def verify_signature(payload, signature, secret):
     payload_json = json.dumps(payload, sort_keys=True)
