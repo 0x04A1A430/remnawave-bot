@@ -170,9 +170,6 @@
 - `app/external/pal24_client.py` — Async client for PayPalych (Pal24) API.
   Классы: `Pal24APIError` — Base error for Pal24 API operations., `Pal24Response` (2 методов) — Wrapper for Pal24 API responses., `Pal24Client` (5 методов) — Async client implementing PayPalych API methods.
   Функции: нет
-- `app/external/pal24_webhook.py` — Flask webhook server for PayPalych callbacks.
-  Классы: `Pal24WebhookServer` (3 методов) — Threaded Flask server for Pal24 callbacks.
-  Функции: `_normalize_payload`, `create_pal24_flask_app`
 - `app/external/remnawave_api.py` — Python-модуль
   Классы: `UserStatus`, `TrafficLimitStrategy`, `RemnaWaveUser`, `RemnaWaveInternalSquad`, `RemnaWaveNode`, `SubscriptionInfo`, `RemnaWaveAPIError` (1 методов), `RemnaWaveAPI` (8 методов)
   Функции: `format_bytes`, `parse_bytes`

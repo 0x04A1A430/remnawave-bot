@@ -517,8 +517,8 @@ async def main():
                 logger.error('❌ Ошибка подготовки внешней админки: %s', error)
 
         bot_run_mode = settings.get_bot_run_mode()
-        polling_enabled = bot_run_mode in {'polling', 'both'}
-        telegram_webhook_enabled = bot_run_mode in {'webhook', 'both'}
+        polling_enabled = bot_run_mode == 'polling'
+        telegram_webhook_enabled = bot_run_mode == 'webhook'
 
         payment_webhooks_enabled = any(
             [

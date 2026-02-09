@@ -339,12 +339,6 @@ class Settings(BaseSettings):
     NALOGO_STORAGE_PATH: str = './nalogo_tokens.json'
 
     AUTO_PURCHASE_AFTER_TOPUP_ENABLED: bool = False
-    AUTO_ACTIVATE_AFTER_TOPUP_ENABLED: bool = False
-
-    # Показывать предупреждение об активации подписки после пополнения баланса
-    # Если True - после пополнения показывает большое сообщение с кнопками:
-    # "Активировать", "Продлить", "Добавить устройства"
-    SHOW_ACTIVATION_PROMPT_AFTER_TOPUP: bool = False
 
     # Отключение превью ссылок в сообщениях бота
     DISABLE_WEB_PAGE_PREVIEW: bool = False
@@ -409,7 +403,6 @@ class Settings(BaseSettings):
     PAL24_SIGNATURE_TOKEN: str | None = None
     PAL24_BASE_URL: str = 'https://pal24.pro/api/v1/'
     PAL24_WEBHOOK_PATH: str = '/pal24-webhook'
-    PAL24_WEBHOOK_PORT: int = 8084
     PAL24_PAYMENT_DESCRIPTION: str = 'Пополнение баланса'
     PAL24_MIN_AMOUNT_KOPEKS: int = 10000
     PAL24_MAX_AMOUNT_KOPEKS: int = 100000000
@@ -531,7 +524,7 @@ class Settings(BaseSettings):
     SKIP_REFERRAL_CODE: bool = False
 
     DEFAULT_LANGUAGE: str = 'ru'
-    AVAILABLE_LANGUAGES: str = 'ru,en'
+    AVAILABLE_LANGUAGES: str = 'ru,en,ua,zh,fa'
     LANGUAGE_SELECTION_ENABLED: bool = True
 
     # Округление цен при отображении (≤50 коп вниз, >50 коп вверх)
@@ -1183,22 +1176,12 @@ class Settings(BaseSettings):
 
         return bool(value)
 
-    def is_auto_activate_after_topup_enabled(self) -> bool:
-        """Умная автоактивация после пополнения баланса (без корзины)."""
-        value = getattr(self, 'AUTO_ACTIVATE_AFTER_TOPUP_ENABLED', False)
-
-        if isinstance(value, str):
-            normalized = value.strip().lower()
-            return normalized in {'1', 'true', 'yes', 'on'}
-
-        return bool(value)
-
     def is_quick_amount_buttons_enabled(self) -> bool:
         """Показывать ли кнопки быстрого выбора суммы пополнения."""
         return self.YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED and not self.DISABLE_TOPUP_BUTTONS
 
     def get_available_languages(self) -> list[str]:
-        defaults = ['ru', 'en', 'ua', 'zh']
+        defaults = ['ru', 'en', 'ua', 'zh', 'fa']
 
         try:
             langs = self.AVAILABLE_LANGUAGES
@@ -2449,7 +2432,7 @@ class Settings(BaseSettings):
 
     def get_bot_run_mode(self) -> str:
         mode = (self.BOT_RUN_MODE or 'polling').strip().lower()
-        if mode not in {'polling', 'webhook', 'both'}:
+        if mode not in {'polling', 'webhook'}:
             return 'polling'
         return mode
 

@@ -31,6 +31,12 @@ def test_format_days_declension_handles_russian_rules() -> None:
     assert formatters.format_days_declension(10) == '10 дней'
 
 
+def test_format_days_declension_uses_russian_fallback_for_fa() -> None:
+    """Для fa используем fallback на русские формы до полной локализации."""
+    assert formatters.format_days_declension(1, language='fa') == '1 день'
+    assert formatters.format_days_declension(3, language='fa') == '3 дня'
+
+
 def test_format_duration_switches_units() -> None:
     """В зависимости от длины интервала выбирается подходящая единица измерения."""
     assert formatters.format_duration(45) == '45 сек.'
@@ -102,3 +108,9 @@ def test_format_boolean_localises_output() -> None:
     """Булевые значения отображаются локализованными словами."""
     assert formatters.format_boolean(True, language='ru') == '✅ Да'
     assert formatters.format_boolean(False, language='en') == '❌ No'
+
+
+def test_format_boolean_uses_russian_fallback_for_fa() -> None:
+    """Для fa булевы значения пока используют базовый ru fallback."""
+    assert formatters.format_boolean(True, language='fa') == '✅ Да'
+    assert formatters.format_boolean(False, language='fa') == '❌ Нет'

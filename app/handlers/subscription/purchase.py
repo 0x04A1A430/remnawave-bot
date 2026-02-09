@@ -3227,6 +3227,9 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
 
     await db.refresh(db_user)
 
+    # Сохраняем ID до начала транзакции (на случай detached session)
+    user_id_snapshot = db_user.id
+
     # Создаем триальную подписку
     subscription: Subscription | None = None
     remnawave_user = None
@@ -3388,22 +3391,33 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
     except Exception as error:
         logger.error(
             'Unexpected error during paid trial activation for user %s: %s',
-            db_user.id,
+            user_id_snapshot,
             error,
         )
-        # Пытаемся откатить и вернуть деньги
-        if subscription:
-            await rollback_trial_subscription_activation(db, subscription)
-        from app.database.crud.user import add_user_balance
+        # Откатываем сессию чтобы очистить PendingRollbackError
+        try:
+            await db.rollback()
+        except Exception:
+            pass
 
-        await add_user_balance(
-            db,
-            db_user,
-            trial_price_kopeks,
-            texts.t('TRIAL_REFUND_DESCRIPTION', 'Возврат за неудачную активацию триала'),
-            transaction_type=TransactionType.REFUND,
-        )
-        await db.refresh(db_user)
+        # Пытаемся вернуть деньги
+        try:
+            from app.database.crud.user import add_user_balance
+
+            await add_user_balance(
+                db,
+                db_user,
+                trial_price_kopeks,
+                texts.t('TRIAL_REFUND_DESCRIPTION', 'Возврат за неудачную активацию триала'),
+                transaction_type=TransactionType.REFUND,
+            )
+            await db.refresh(db_user)
+        except Exception as refund_error:
+            logger.error(
+                'Failed to refund trial payment for user %s: %s',
+                user_id_snapshot,
+                refund_error,
+            )
 
         await callback.message.edit_text(
             texts.t(

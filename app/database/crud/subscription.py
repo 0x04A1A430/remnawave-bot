@@ -95,6 +95,25 @@ async def create_trial_subscription(
 
     end_date = datetime.utcnow() + timedelta(days=duration_days)
 
+    # Check for existing PENDING trial subscription (retry after failed payment)
+    existing = await get_subscription_by_user_id(db, user_id)
+    if existing and existing.is_trial and existing.status == SubscriptionStatus.PENDING.value:
+        existing.status = SubscriptionStatus.ACTIVE.value
+        existing.start_date = datetime.utcnow()
+        existing.end_date = end_date
+        existing.traffic_limit_gb = traffic_limit_gb
+        existing.device_limit = device_limit
+        existing.connected_squads = final_squads
+        existing.tariff_id = tariff_id
+        await db.commit()
+        await db.refresh(existing)
+        logger.info(
+            '🎁 Обновлена PENDING триальная подписка %s для пользователя %s',
+            existing.id,
+            user_id,
+        )
+        return existing
+
     subscription = Subscription(
         user_id=user_id,
         status=SubscriptionStatus.ACTIVE.value,

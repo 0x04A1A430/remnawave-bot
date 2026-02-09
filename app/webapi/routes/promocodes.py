@@ -190,13 +190,16 @@ async def create_promocode_endpoint(
 
     creator_id = payload.created_by if payload.created_by is not None and payload.created_by > 0 else None
 
+    # 0 means unlimited — convert to large number for is_valid check (current_uses < max_uses)
+    effective_max_uses = 999999 if payload.max_uses == 0 else payload.max_uses
+
     promocode = await create_promocode(
         db,
         code=normalized_code,
         type=payload.type,
         balance_bonus_kopeks=payload.balance_bonus_kopeks,
         subscription_days=payload.subscription_days,
-        max_uses=payload.max_uses,
+        max_uses=effective_max_uses,
         valid_until=normalized_valid_until,
         created_by=creator_id,
     )
@@ -248,7 +251,7 @@ async def update_promocode_endpoint(
         updates['subscription_days'] = payload.subscription_days
 
     if payload.max_uses is not None:
-        updates['max_uses'] = payload.max_uses
+        updates['max_uses'] = 999999 if payload.max_uses == 0 else payload.max_uses
 
     if payload.valid_from is not None:
         updates['valid_from'] = _normalize_datetime(payload.valid_from)

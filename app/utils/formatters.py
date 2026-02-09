@@ -87,7 +87,8 @@ def format_time_ago(dt: datetime | str, language: str = 'ru') -> str:
 
 
 def format_days_declension(days: int, language: str = 'ru') -> str:
-    if language != 'ru':
+    language_code = (language or 'ru').split('-')[0].lower()
+    if language_code not in {'ru', 'fa'}:
         return f'{days} day{"s" if days != 1 else ""}'
 
     if days % 10 == 1 and days % 100 != 11:
@@ -180,42 +181,49 @@ def format_subscription_status(is_active: bool, is_trial: bool, end_date: dateti
         except (ValueError, AttributeError):
             end_date = datetime.now()
 
+    language_code = (language or 'ru').split('-')[0].lower()
+    use_russian_fallback = language_code in {'ru', 'fa'}
+
     if not is_active:
-        return '❌ Неактивна' if language == 'ru' else '❌ Inactive'
+        return '❌ Неактивна' if use_russian_fallback else '❌ Inactive'
 
     if is_trial:
-        status = '🎁 Тестовая' if language == 'ru' else '🎁 Trial'
+        status = '🎁 Тестовая' if use_russian_fallback else '🎁 Trial'
     else:
-        status = '✅ Активна' if language == 'ru' else '✅ Active'
+        status = '✅ Активна' if use_russian_fallback else '✅ Active'
 
     now = datetime.utcnow()
     if end_date > now:
         days_left = (end_date - now).days
         if days_left > 0:
-            status += f' ({days_left} дн.)' if language == 'ru' else f' ({days_left} days)'
+            status += f' ({days_left} дн.)' if use_russian_fallback else f' ({days_left} days)'
         else:
             hours_left = (end_date - now).seconds // 3600
-            status += f' ({hours_left} ч.)' if language == 'ru' else f' ({hours_left} hrs)'
+            status += f' ({hours_left} ч.)' if use_russian_fallback else f' ({hours_left} hrs)'
     else:
-        status = '⏰ Истекла' if language == 'ru' else '⏰ Expired'
+        status = '⏰ Истекла' if use_russian_fallback else '⏰ Expired'
 
     return status
 
 
 def format_traffic_usage(used_gb: float, limit_gb: int, language: str = 'ru') -> str:
+    language_code = (language or 'ru').split('-')[0].lower()
+    use_russian_fallback = language_code in {'ru', 'fa'}
+
     if limit_gb == 0:
-        if language == 'ru':
+        if use_russian_fallback:
             return f'{used_gb:.1f} ГБ / ∞'
         return f'{used_gb:.1f} GB / ∞'
 
     percentage = (used_gb / limit_gb) * 100 if limit_gb > 0 else 0
 
-    if language == 'ru':
+    if use_russian_fallback:
         return f'{used_gb:.1f} ГБ / {limit_gb} ГБ ({percentage:.1f}%)'
     return f'{used_gb:.1f} GB / {limit_gb} GB ({percentage:.1f}%)'
 
 
 def format_boolean(value: bool, language: str = 'ru') -> str:
-    if language == 'ru':
+    language_code = (language or 'ru').split('-')[0].lower()
+    if language_code in {'ru', 'fa'}:
         return '✅ Да' if value else '❌ Нет'
     return '✅ Yes' if value else '❌ No'

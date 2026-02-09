@@ -416,8 +416,14 @@ def get_traffic_switch_keyboard(
 
         buttons.append([InlineKeyboardButton(text=button_text, callback_data=f'switch_traffic_{gb}')])
 
+    language_code = (language or 'ru').split('-')[0].lower()
     buttons.append(
-        [InlineKeyboardButton(text='⬅️ Назад' if language == 'ru' else '⬅️ Back', callback_data='subscription_settings')]
+        [
+            InlineKeyboardButton(
+                text='⬅️ Назад' if language_code in {'ru', 'fa'} else '⬅️ Back',
+                callback_data='subscription_settings',
+            )
+        ]
     )
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)

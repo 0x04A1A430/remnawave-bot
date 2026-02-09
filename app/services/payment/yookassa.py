@@ -16,7 +16,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.models import PaymentMethod, TransactionType
 from app.services.subscription_auto_purchase_service import (
-    auto_activate_subscription_after_topup,
     auto_purchase_saved_cart_after_topup,
 )
 from app.utils.payment_logger import payment_logger as logger
@@ -847,78 +846,59 @@ class YooKassaPaymentMixin:
                             if auto_purchase_success:
                                 has_saved_cart = False
 
-                        # Умная автоактивация если автопокупка не сработала
-                        if not auto_purchase_success:
-                            try:
-                                await auto_activate_subscription_after_topup(
-                                    db,
-                                    user,
-                                    bot=getattr(self, 'bot', None),
-                                )
-                            except Exception as auto_activate_error:
-                                logger.error(
-                                    'Ошибка умной автоактивации для пользователя %s: %s',
-                                    user.id,
-                                    auto_activate_error,
-                                    exc_info=True,
-                                )
+                        if has_saved_cart and getattr(self, 'bot', None) and user.telegram_id:
+                            # Если у пользователя есть сохраненная корзина,
+                            # отправляем ему уведомление с кнопкой вернуться к оформлению
+                            from aiogram import types
 
-                        # Если включен яркий промпт активации, пропускаем старое уведомление
-                        # т.к. оно будет отправлено через _send_payment_success_notification
-                        if not settings.SHOW_ACTIVATION_PROMPT_AFTER_TOPUP:
-                            if has_saved_cart and getattr(self, 'bot', None) and user.telegram_id:
-                                # Если у пользователя есть сохраненная корзина,
-                                # отправляем ему уведомление с кнопкой вернуться к оформлению
-                                from aiogram import types
+                            from app.localization.texts import get_texts
 
-                                from app.localization.texts import get_texts
+                            texts = get_texts(user.language)
+                            cart_message = texts.BALANCE_TOPUP_CART_REMINDER_DETAILED.format(
+                                total_amount=settings.format_price(payment.amount_kopeks)
+                            )
 
-                                texts = get_texts(user.language)
-                                cart_message = texts.BALANCE_TOPUP_CART_REMINDER_DETAILED.format(
-                                    total_amount=settings.format_price(payment.amount_kopeks)
-                                )
+                            # Создаем клавиатуру с кнопками
+                            keyboard = types.InlineKeyboardMarkup(
+                                inline_keyboard=[
+                                    [
+                                        types.InlineKeyboardButton(
+                                            text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
+                                            callback_data='return_to_saved_cart',
+                                        )
+                                    ],
+                                    [
+                                        types.InlineKeyboardButton(
+                                            text='💰 Мой баланс',
+                                            callback_data='menu_balance',
+                                        )
+                                    ],
+                                    [
+                                        types.InlineKeyboardButton(
+                                            text='🏠 Главное меню',
+                                            callback_data='back_to_menu',
+                                        )
+                                    ],
+                                ]
+                            )
 
-                                # Создаем клавиатуру с кнопками
-                                keyboard = types.InlineKeyboardMarkup(
-                                    inline_keyboard=[
-                                        [
-                                            types.InlineKeyboardButton(
-                                                text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
-                                                callback_data='return_to_saved_cart',
-                                            )
-                                        ],
-                                        [
-                                            types.InlineKeyboardButton(
-                                                text='💰 Мой баланс',
-                                                callback_data='menu_balance',
-                                            )
-                                        ],
-                                        [
-                                            types.InlineKeyboardButton(
-                                                text='🏠 Главное меню',
-                                                callback_data='back_to_menu',
-                                            )
-                                        ],
-                                    ]
-                                )
-
-                                await self.bot.send_message(
-                                    chat_id=user.telegram_id,
-                                    text=f'✅ Баланс пополнен на {settings.format_price(payment.amount_kopeks)}!\n\n'
-                                    f'⚠️ <b>Важно:</b> Пополнение баланса не активирует подписку автоматически. '
-                                    f'Обязательно активируйте подписку отдельно!\n\n'
-                                    f'🔄 При наличии сохранённой корзины подписки и включенной автопокупке, '
-                                    f'подписка будет приобретена автоматически после пополнения баланса.\n\n{cart_message}',
-                                    reply_markup=keyboard,
-                                )
-                                logger.info(
-                                    f'Отправлено уведомление с кнопкой возврата к оформлению подписки пользователю {user.id}'
-                                )
-                            else:
-                                logger.info(
-                                    'У пользователя %s нет сохраненной корзины, бот недоступен или покупка уже выполнена',
-                                    user.id,
-                                )
+                            await self.bot.send_message(
+                                chat_id=user.telegram_id,
+                                text=f'✅ Баланс пополнен на {settings.format_price(payment.amount_kopeks)}!\n\n'
+                                f'⚠️ <b>Важно:</b> Пополнение баланса не активирует подписку автоматически. '
+                                f'Обязательно активируйте подписку отдельно!\n\n'
+                                f'🔄 При наличии сохранённой корзины подписки и включенной автопокупке, '
+                                f'подписка будет приобретена автоматически после пополнения баланса.\n\n{cart_message}',
+                                reply_markup=keyboard,
+                            )
+                            logger.info(
+                                f'Отправлено уведомление с кнопкой возврата к оформлению подписки пользователю {user.id}'
+                            )
+                        else:
+                            logger.info(
+                                'У пользователя %s нет сохраненной корзины, бот недоступен или покупка уже выполнена',
+                                user.id,
+                            )
                     except Exception as e:
                         logger.error(
                             f'Критическая ошибка при работе с сохраненной корзиной для пользователя {user.id}: {e}',

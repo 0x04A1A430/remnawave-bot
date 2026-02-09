@@ -2,14 +2,16 @@ import asyncio
 import logging
 
 from aiogram import types
-from aiogram.exceptions import TelegramBadRequest, TelegramNetworkError
-from aiogram.types import FSInputFile, InaccessibleMessage, InputMediaPhoto
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError, TelegramNetworkError
+from aiogram.types import InaccessibleMessage, InputMediaPhoto
 
 from app.config import settings
 
 from .message_patch import (
     LOGO_PATH,
+    _cache_logo_file_id,
     append_privacy_hint,
+    get_logo_media,
     is_privacy_restricted_error,
     is_qr_message,
     prepare_privacy_safe_kwargs,
@@ -23,17 +25,13 @@ RETRY_DELAY = 0.5
 
 
 def _resolve_media(message: types.Message):
-    # Если сообщение недоступно, возвращаем логотип по умолчанию
     if isinstance(message, InaccessibleMessage):
-        return FSInputFile(LOGO_PATH)
-    # Всегда используем логотип если включен режим логотипа,
-    # кроме специальных случаев (QR сообщения)
+        return get_logo_media()
     if settings.ENABLE_LOGO_MODE and not is_qr_message(message):
-        return FSInputFile(LOGO_PATH)
-    # Только если режим логотипа выключен, используем фото из сообщения
+        return get_logo_media()
     if message.photo:
         return message.photo[-1].file_id
-    return FSInputFile(LOGO_PATH)
+    return get_logo_media()
 
 
 def _get_language(callback: types.CallbackQuery) -> str | None:
@@ -91,12 +89,13 @@ async def edit_or_answer_photo(
     if isinstance(callback.message, InaccessibleMessage):
         try:
             if settings.ENABLE_LOGO_MODE and LOGO_PATH.exists():
-                await callback.message.answer_photo(
-                    photo=FSInputFile(LOGO_PATH),
+                result = await callback.message.answer_photo(
+                    photo=get_logo_media(),
                     caption=caption,
                     reply_markup=keyboard,
                     parse_mode=resolved_parse_mode,
                 )
+                _cache_logo_file_id(result)
             else:
                 await callback.message.answer(
                     caption,
@@ -127,6 +126,8 @@ async def edit_or_answer_photo(
                     reply_markup=keyboard,
                     parse_mode=resolved_parse_mode,
                 )
+        except TelegramForbiddenError:
+            logger.debug('Пользователь заблокировал бота, пропускаем')
         except TelegramBadRequest as error:
             try:
                 await callback.message.delete()
@@ -141,6 +142,8 @@ async def edit_or_answer_photo(
             if callback.message.photo:
                 await callback.message.delete()
             await _answer_text(callback, caption, keyboard, resolved_parse_mode)
+        except TelegramForbiddenError:
+            logger.debug('Пользователь заблокировал бота, пропускаем')
         except TelegramBadRequest as error:
             await _answer_text(callback, caption, keyboard, resolved_parse_mode, error)
         return
@@ -168,6 +171,10 @@ async def edit_or_answer_photo(
                 pass
             await _answer_text(callback, caption, keyboard, resolved_parse_mode)
             return
+        except TelegramForbiddenError:
+            # Пользователь заблокировал бота — молча игнорируем
+            logger.debug('Пользователь заблокировал бота, пропускаем edit_media')
+            return
         except TelegramBadRequest as error:
             if is_privacy_restricted_error(error):
                 try:
@@ -183,13 +190,14 @@ async def edit_or_answer_photo(
                 pass
             try:
                 # Отправим как фото с логотипом
-                await callback.message.answer_photo(
-                    photo=media if isinstance(media, FSInputFile) else FSInputFile(LOGO_PATH),
+                result = await callback.message.answer_photo(
+                    photo=get_logo_media(),
                     caption=caption,
                     reply_markup=keyboard,
                     parse_mode=resolved_parse_mode,
                 )
-            except TelegramBadRequest as photo_error:
+                _cache_logo_file_id(result)
+            except (TelegramBadRequest, TelegramForbiddenError) as photo_error:
                 await _answer_text(callback, caption, keyboard, resolved_parse_mode, photo_error)
             except Exception:
                 # Последний фоллбек — обычный текст

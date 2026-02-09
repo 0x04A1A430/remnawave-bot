@@ -247,6 +247,8 @@ _LANGUAGE_DISPLAY_NAMES = {
     'zh-hant': '🇹🇼 中文 (繁體)',
     'vi': '🇻🇳 Tiếng Việt',
     'vi-vn': '🇻🇳 Tiếng Việt',
+    'fa': '🇮🇷 فارسی',
+    'fa-ir': '🇮🇷 فارسی',
 }
 
 
@@ -1789,6 +1791,8 @@ def get_add_traffic_keyboard(
     from app.utils.pricing_utils import get_remaining_months
 
     texts = get_texts(language)
+    language_code = (language or DEFAULT_LANGUAGE).split('-')[0].lower()
+    use_russian_fallback = language_code in {'ru', 'fa'}
 
     months_multiplier = 1
     period_text = ''
@@ -1826,17 +1830,20 @@ def get_add_traffic_keyboard(
         total_discount = discount_per_month * months_multiplier
 
         if gb == 0:
-            if language == 'ru':
+            if use_russian_fallback:
                 text = f'♾️ Безлимитный трафик - {total_price // 100} ₽{period_text}'
             else:
                 text = f'♾️ Unlimited traffic - {total_price // 100} ₽{period_text}'
-        elif language == 'ru':
+        elif use_russian_fallback:
             text = f'📊 +{gb} ГБ трафика - {total_price // 100} ₽{period_text}'
         else:
             text = f'📊 +{gb} GB traffic - {total_price // 100} ₽{period_text}'
 
         if discount_percent > 0 and total_discount > 0:
-            text += f' (скидка {discount_percent}%: -{total_discount // 100}₽)'
+            if use_russian_fallback:
+                text += f' (скидка {discount_percent}%: -{total_discount // 100}₽)'
+            else:
+                text += f' (discount {discount_percent}%: -{total_discount // 100}₽)'
 
         buttons.append([InlineKeyboardButton(text=text, callback_data=f'add_traffic_{gb}')])
 
@@ -1861,6 +1868,8 @@ def get_add_traffic_keyboard_from_tariff(
         discount_percent: Процент скидки
     """
     texts = get_texts(language)
+    language_code = (language or DEFAULT_LANGUAGE).split('-')[0].lower()
+    use_russian_fallback = language_code in {'ru', 'fa'}
 
     if not packages:
         return InlineKeyboardMarkup(
@@ -1888,15 +1897,18 @@ def get_add_traffic_keyboard_from_tariff(
             discount_percent,
         )
 
-        period_text = ' /мес' if language == 'ru' else ' /mo'
+        period_text = ' /мес' if use_russian_fallback else ' /mo'
 
-        if language == 'ru':
+        if use_russian_fallback:
             text = f'📊 +{gb} ГБ трафика - {discounted_price // 100} ₽{period_text}'
         else:
             text = f'📊 +{gb} GB traffic - {discounted_price // 100} ₽{period_text}'
 
         if discount_percent > 0 and discount_value > 0:
-            text += f' (скидка {discount_percent}%: -{discount_value // 100}₽)'
+            if use_russian_fallback:
+                text += f' (скидка {discount_percent}%: -{discount_value // 100}₽)'
+            else:
+                text += f' (discount {discount_percent}%: -{discount_value // 100}₽)'
 
         buttons.append([InlineKeyboardButton(text=text, callback_data=f'add_traffic_{gb}')])
 

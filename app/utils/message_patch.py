@@ -10,6 +10,28 @@ from app.localization.texts import get_texts
 
 LOGO_PATH = Path(settings.LOGO_FILE)
 _PRIVACY_RESTRICTED_CODE = 'BUTTON_USER_PRIVACY_RESTRICTED'
+
+# Кеш file_id логотипа: после первой загрузки Telegram возвращает file_id,
+# который можно переиспользовать без повторной загрузки файла (экономит 3-4 сек)
+_logo_file_id: str | None = None
+
+
+def get_logo_media():
+    """Возвращает кешированный file_id или FSInputFile для логотипа."""
+    if _logo_file_id:
+        return _logo_file_id
+    return FSInputFile(LOGO_PATH)
+
+
+def _cache_logo_file_id(result: Message | None) -> None:
+    """Извлекает и кеширует file_id логотипа из ответа Telegram."""
+    global _logo_file_id
+    if _logo_file_id or result is None:
+        return
+    if hasattr(result, 'photo') and result.photo:
+        _logo_file_id = result.photo[-1].file_id
+
+
 _TOPIC_REQUIRED_ERRORS = (
     'topic must be specified',
     'TOPIC_CLOSED',
@@ -110,8 +132,9 @@ async def _answer_with_photo(self: Message, text: str = None, **kwargs):
 
     if LOGO_PATH.exists():
         try:
-            # Отправляем caption как есть; при ошибке парсинга ниже сработает фоллбек
-            return await self.answer_photo(FSInputFile(LOGO_PATH), caption=text, **kwargs)
+            result = await self.answer_photo(get_logo_media(), caption=text, **kwargs)
+            _cache_logo_file_id(result)
+            return result
         except TelegramBadRequest as error:
             if is_topic_required_error(error):
                 # Канал с топиками — просто игнорируем, нельзя ответить без message_thread_id
@@ -163,12 +186,8 @@ async def _edit_with_photo(self: Message, text: str, **kwargs):
                 return await _original_answer(self, text, **kwargs)
         except Exception:
             pass
-        # Всегда используем логотип если включен режим логотипа,
-        # кроме специальных случаев (QR сообщения)
-        if (settings.ENABLE_LOGO_MODE and LOGO_PATH.exists() and not is_qr_message(self)) or (
-            is_qr_message(self) and LOGO_PATH.exists()
-        ):
-            media = FSInputFile(LOGO_PATH)
+        if LOGO_PATH.exists():
+            media = get_logo_media()
         else:
             media = self.photo[-1].file_id
         media_kwargs = {'media': media, 'caption': text}
