@@ -20,6 +20,30 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix='/info', tags=['Cabinet Info'])
 
+_LANGUAGE_META: dict[str, tuple[str, str]] = {
+    'ru': ('Русский', '🇷🇺'),
+    'en': ('English', '🇬🇧'),
+    'ua': ('Українська', '🇺🇦'),
+    'zh': ('中文', '🇨🇳'),
+    'fa': ('فارسی', '🇮🇷'),
+}
+
+
+def _normalize_language_code(value: str | None) -> str:
+    return (value or '').strip().lower().split('-', 1)[0]
+
+
+def _get_available_language_codes() -> list[str]:
+    codes: list[str] = []
+    seen: set[str] = set()
+    for code in settings.get_available_languages():
+        normalized = _normalize_language_code(code)
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        codes.append(normalized)
+    return codes
+
 
 # ============ Schemas ============
 
@@ -212,12 +236,19 @@ async def get_service_info():
 @router.get('/languages')
 async def get_available_languages():
     """Get list of available languages."""
+    codes = _get_available_language_codes()
+    default_language = _normalize_language_code(getattr(settings, 'DEFAULT_LANGUAGE', 'ru') or 'ru')
+
     return {
         'languages': [
-            {'code': 'ru', 'name': 'Русский', 'flag': '🇷🇺'},
-            {'code': 'en', 'name': 'English', 'flag': '🇬🇧'},
+            {
+                'code': code,
+                'name': _LANGUAGE_META.get(code, (code.upper(), '🌐'))[0],
+                'flag': _LANGUAGE_META.get(code, (code.upper(), '🌐'))[1],
+            }
+            for code in codes
         ],
-        'default': getattr(settings, 'DEFAULT_LANGUAGE', 'ru') or 'ru',
+        'default': default_language,
     }
 
 
@@ -236,16 +267,15 @@ async def update_user_language(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Update user's language preference."""
-    language = request.get('language', 'ru')
-
-    valid_languages = ['ru', 'en']
-    if language not in valid_languages:
+    requested_language = _normalize_language_code(request.get('language', 'ru'))
+    available_languages = _get_available_language_codes()
+    if requested_language not in available_languages:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'Invalid language. Supported: {", ".join(valid_languages)}',
+            detail=f'Invalid language. Supported: {", ".join(available_languages)}',
         )
 
-    user.language = language
+    user.language = requested_language
     await db.commit()
     await db.refresh(user)
 

@@ -28,6 +28,13 @@ from app.utils.validators import sanitize_telegram_name
 logger = logging.getLogger(__name__)
 
 
+def _normalize_language_code(language: str | None, fallback: str = 'ru') -> str:
+    normalized = (language or '').strip().lower()
+    if '-' in normalized:
+        normalized = normalized.split('-', 1)[0]
+    return normalized or fallback
+
+
 def _build_spending_stats_select():
     """
     Возвращает базовый SELECT для статистики трат пользователей.
@@ -232,6 +239,7 @@ async def create_user_no_commit(
 
     if not referral_code:
         referral_code = await create_unique_referral_code(db)
+    normalized_language = _normalize_language_code(language)
 
     default_group = await _get_or_create_default_promo_group(db)
     promo_group_id = default_group.id
@@ -243,7 +251,7 @@ async def create_user_no_commit(
         username=username,
         first_name=safe_first,
         last_name=safe_last,
-        language=language,
+        language=normalized_language,
         referred_by_id=referred_by_id,
         referral_code=referral_code,
         balance_kopeks=0,
@@ -277,6 +285,7 @@ async def create_user(
 ) -> User:
     if not referral_code:
         referral_code = await create_unique_referral_code(db)
+    normalized_language = _normalize_language_code(language)
 
     attempts = 3
 
@@ -291,7 +300,7 @@ async def create_user(
             username=username,
             first_name=safe_first,
             last_name=safe_last,
-            language=language,
+            language=normalized_language,
             referred_by_id=referred_by_id,
             referral_code=referral_code,
             balance_kopeks=0,
@@ -360,6 +369,8 @@ async def update_user(db: AsyncSession, user: User, **kwargs) -> User:
     for field, value in kwargs.items():
         if field in ('first_name', 'last_name'):
             value = sanitize_telegram_name(value)
+        if field == 'language':
+            value = _normalize_language_code(value)
         if hasattr(user, field):
             setattr(user, field, value)
 
@@ -1060,6 +1071,7 @@ async def create_user_by_email(
         Created User object
     """
     referral_code = await create_unique_referral_code(db)
+    normalized_language = _normalize_language_code(language)
     default_group = await _get_or_create_default_promo_group(db)
 
     user = User(
@@ -1071,7 +1083,7 @@ async def create_user_by_email(
         username=None,
         first_name=sanitize_telegram_name(first_name) if first_name else None,
         last_name=None,
-        language=language,
+        language=normalized_language,
         referred_by_id=referred_by_id,
         referral_code=referral_code,
         balance_kopeks=0,
@@ -1283,6 +1295,7 @@ async def create_user_by_oauth(
 ) -> User:
     """Create a new user via OAuth provider."""
     referral_code = await create_unique_referral_code(db)
+    normalized_language = _normalize_language_code(language)
     default_group = await _get_or_create_default_promo_group(db)
 
     column_name = _OAUTH_PROVIDER_COLUMNS.get(provider)
@@ -1297,7 +1310,7 @@ async def create_user_by_oauth(
         username=sanitize_telegram_name(username) if username else None,
         first_name=sanitize_telegram_name(first_name) if first_name else None,
         last_name=sanitize_telegram_name(last_name) if last_name else None,
-        language=language,
+        language=normalized_language,
         referral_code=referral_code,
         balance_kopeks=0,
         has_had_paid_subscription=False,

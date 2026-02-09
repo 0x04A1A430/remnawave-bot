@@ -1,7 +1,7 @@
 """
 Email notification templates for different notification types.
 
-Supports multiple languages: ru, en, zh, ua
+Supports multiple languages: ru, en, zh, ua, fa
 """
 
 from typing import Any
@@ -27,7 +27,7 @@ class EmailNotificationTemplates:
 
         Args:
             notification_type: Type of notification
-            language: Language code (ru, en, zh, ua)
+            language: Language code (ru, en, zh, ua, fa)
             context: Context data for template rendering
 
         Returns:
@@ -72,6 +72,7 @@ class EmailNotificationTemplates:
             'en': 'This is an automated message. Please do not reply to this email.',
             'zh': '这是一封自动发送的邮件，请勿回复。',
             'ua': 'Це автоматичне повідомлення. Будь ласка, не відповідайте на цей лист.',
+            'fa': 'این یک پیام خودکار است. لطفاً به این ایمیل پاسخ ندهید.',
         }
         footer_text = footer_texts.get(language, footer_texts['ru'])
 
@@ -182,6 +183,7 @@ class EmailNotificationTemplates:
             'en': 'Open Dashboard',
             'zh': '打开控制面板',
             'ua': 'Відкрити особистий кабінет',
+            'fa': 'باز کردن پنل کاربری',
         }
         text = texts.get(language, texts['en'])
 
