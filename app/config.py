@@ -2449,7 +2449,7 @@ class Settings(BaseSettings):
 
     def get_bot_run_mode(self) -> str:
         mode = (self.BOT_RUN_MODE or 'polling').strip().lower()
-        if mode not in {'polling', 'webhook', 'both'}:
+        if mode not in {'polling', 'webhook'}:
             return 'polling'
         return mode
 
