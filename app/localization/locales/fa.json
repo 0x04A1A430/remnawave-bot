@@ -1436,7 +1436,7 @@
     "SUBSCRIPTION_HAPP_OPEN_TITLE": "🔗 <b>اتصال از طریق Happ</b>",
     "SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT": "📱 دکمه زیر بزنید تا راهنمای تنظیم VPN روی دستگاه را ببینید",
     "SUBSCRIPTION_IMPORT_LINK_SECTION": "🔗 <b>لینک وارد کردن در اپلیکیشن VPN:</b>\n<code>{subscription_url}</code>",
-    "SUBSCRIPTION_INFO": "ℹ️ اطلاعات اشتراک",
+    "SUBSCRIPTION_INFO": "\n📱 <b>اطلاعات اشتراک</b>\n\n📊 <b>وضعیت:</b> {status}\n🎭 <b>نوع:</b> {type}\n📅 <b>اعتبار تا:</b> {end_date}\n⏰ <b>روزهای باقی‌مانده:</b> {days_left}\n\n📈 <b>ترافیک:</b> {traffic_used} / {traffic_limit}\n🌍 <b>سرورها:</b> {countries_count} کشور\n📱 <b>دستگاه‌ها:</b> {devices_used} / {devices_limit}\n\n💳 <b>پرداخت خودکار:</b> {autopay_status}\n",
     "SUBSCRIPTION_LINK_GENERATING_NOTICE": "{purchase_text}\n\nلینک در حال ایجاد است. چند ثانیه بعد به «اشتراک من» بروید.",
     "SUBSCRIPTION_LINK_HIDDEN_NOTICE": "ℹ️ لینک اشتراک از دکمه‌های زیر یا بخش «اشتراک من» در دسترس است.",
     "SUBSCRIPTION_LINK_HINT": "💡 لینک را در اپلیکیشن VPN وارد کنید",
