@@ -298,6 +298,13 @@ class RemnaWaveWebhookService:
             return False
         return bool(re.match(r'^https?://', value))
 
+    @staticmethod
+    def _is_valid_link(value: str) -> bool:
+        """Validate URL or deep link (happ://, vless://, ss://, etc.)."""
+        if not value or len(value) > 4096:
+            return False
+        return bool(re.match(r'^[a-zA-Z][a-zA-Z0-9+\-.]*://', value))
+
     def _get_renew_keyboard(self, user: User) -> InlineKeyboardMarkup:
         texts = get_texts(user.language)
         button_text = texts.get('WEBHOOK_RENEW_BUTTON', 'Renew subscription')
@@ -564,7 +571,7 @@ class RemnaWaveWebhookService:
                 changed = True
             if (
                 new_crypto_link
-                and self._is_valid_url(new_crypto_link)
+                and self._is_valid_link(new_crypto_link)
                 and subscription.subscription_crypto_link != new_crypto_link
             ):
                 subscription.subscription_crypto_link = new_crypto_link
