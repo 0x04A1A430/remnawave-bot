@@ -260,7 +260,10 @@ class HeleketPaymentMixin:
         invoice_message = metadata.get('invoice_message') or {}
         invoice_message_removed = False
 
-        if getattr(self, 'bot', None) and invoice_message:
+        status_normalized = (status or '').lower()
+        is_final = status_normalized in {'paid', 'paid_over', 'cancel', 'fail', 'system_fail', 'refund_paid'}
+
+        if getattr(self, 'bot', None) and invoice_message and is_final:
             chat_id = invoice_message.get('chat_id')
             message_id = invoice_message.get('message_id')
             if chat_id and message_id:
@@ -300,7 +303,6 @@ class HeleketPaymentMixin:
             )
             return updated_payment
 
-        status_normalized = (status or '').lower()
         if status_normalized not in {'paid', 'paid_over'}:
             logger.info('Heleket платеж %s в статусе %s, зачисление не требуется', updated_payment.uuid, status)
             return updated_payment
