@@ -583,23 +583,34 @@ class RemnaWaveWebhookService:
 
     @staticmethod
     def _extract_device_name(data: dict) -> str:
-        """Extract device name from webhook payload, trying multiple field names."""
-        raw = (
-            data.get('deviceName')
-            or data.get('tag')
-            or data.get('hwid')
-            or data.get('device')
-            or data.get('platform')
-            or data.get('name')
-            or ''
-        )
+        """Extract device name from webhook payload.
+
+        RemnaWave sends device info in data['hwidUserDevice'] nested object.
+        Falls back to top-level fields if nested object is absent.
+        """
+        # Primary: nested hwidUserDevice object
+        device_obj = data.get('hwidUserDevice')
+        if isinstance(device_obj, dict):
+            raw = (
+                device_obj.get('tag')
+                or device_obj.get('deviceName')
+                or device_obj.get('platform')
+                or device_obj.get('hwid')
+                or device_obj.get('name')
+                or ''
+            )
+            if raw:
+                return html.escape(str(raw))
+
+        # Fallback: top-level fields
+        raw = data.get('deviceName') or data.get('tag') or data.get('hwid') or ''
         return html.escape(str(raw)) if raw else ''
 
     async def _handle_device_added(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
         device_name = self._extract_device_name(data)
-        logger.info('Webhook: device added for user %s: %s (payload keys: %s)', user.id, device_name, list(data.keys()))
+        logger.info('Webhook: device added for user %s: %s', user.id, device_name or '(empty)')
         await self._notify_user(
             user,
             'WEBHOOK_DEVICE_ADDED',
@@ -611,9 +622,7 @@ class RemnaWaveWebhookService:
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
         device_name = self._extract_device_name(data)
-        logger.info(
-            'Webhook: device deleted for user %s: %s (payload keys: %s)', user.id, device_name, list(data.keys())
-        )
+        logger.info('Webhook: device deleted for user %s: %s', user.id, device_name or '(empty)')
         await self._notify_user(
             user,
             'WEBHOOK_DEVICE_DELETED',
