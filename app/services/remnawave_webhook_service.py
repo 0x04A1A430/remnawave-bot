@@ -586,25 +586,32 @@ class RemnaWaveWebhookService:
         """Extract device name from webhook payload.
 
         RemnaWave sends device info in data['hwidUserDevice'] nested object.
-        Falls back to top-level fields if nested object is absent.
+        Builds a composite name: "tag (platform)" or just "platform" or hwid short.
         """
-        # Primary: nested hwidUserDevice object
         device_obj = data.get('hwidUserDevice')
-        if isinstance(device_obj, dict):
-            raw = (
-                device_obj.get('tag')
-                or device_obj.get('deviceName')
-                or device_obj.get('platform')
-                or device_obj.get('hwid')
-                or device_obj.get('name')
-                or ''
-            )
-            if raw:
-                return html.escape(str(raw))
+        if not isinstance(device_obj, dict):
+            # Fallback: top-level fields
+            raw = data.get('deviceName') or data.get('tag') or data.get('hwid') or ''
+            return html.escape(str(raw)) if raw else ''
 
-        # Fallback: top-level fields
-        raw = data.get('deviceName') or data.get('tag') or data.get('hwid') or ''
-        return html.escape(str(raw)) if raw else ''
+        tag = (device_obj.get('tag') or device_obj.get('deviceName') or device_obj.get('name') or '').strip()
+        platform = (device_obj.get('platform') or '').strip()
+        hwid = (device_obj.get('hwid') or '').strip()
+
+        if tag and platform:
+            return html.escape(f'{tag} ({platform})')
+        if tag:
+            return html.escape(tag)
+        if platform and hwid:
+            # Show platform + short hwid suffix for identification
+            hwid_short = hwid[:8] if len(hwid) > 8 else hwid
+            return html.escape(f'{platform} ({hwid_short})')
+        if platform:
+            return html.escape(platform)
+        if hwid:
+            hwid_short = hwid[:12] if len(hwid) > 12 else hwid
+            return html.escape(hwid_short)
+        return ''
 
     async def _handle_device_added(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
