@@ -111,6 +111,16 @@ def create_unified_app(
     payments_router = payments.create_payment_router(bot, payment_service)
     if payments_router:
         app.include_router(payments_router)
+
+    # Mount RemnaWave incoming webhook router
+    remnawave_webhook_enabled = settings.is_remnawave_webhook_enabled()
+    if remnawave_webhook_enabled:
+        from app.webserver.remnawave_webhook import create_remnawave_webhook_router
+
+        remnawave_router = create_remnawave_webhook_router(bot)
+        app.include_router(remnawave_router)
+        logger.info('RemnaWave webhook router mounted at %s', settings.REMNAWAVE_WEBHOOK_PATH)
+
     payment_providers_state = {
         'tribute': settings.TRIBUTE_ENABLED,
         'mulenpay': settings.is_mulenpay_enabled(),
@@ -181,6 +191,11 @@ def create_unified_app(
             'path': str(miniapp_path),
         }
 
+        remnawave_webhook_state = {
+            'enabled': remnawave_webhook_enabled,
+            'path': settings.REMNAWAVE_WEBHOOK_PATH if remnawave_webhook_enabled else None,
+        }
+
         return JSONResponse(
             {
                 'status': 'ok',
@@ -188,6 +203,7 @@ def create_unified_app(
                 'web_api_enabled': settings.is_web_api_enabled(),
                 'payment_webhooks': payment_state,
                 'telegram_webhook': telegram_state,
+                'remnawave_webhook': remnawave_webhook_state,
                 'miniapp_static': miniapp_state,
             }
         )

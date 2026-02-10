@@ -105,6 +105,11 @@ class Settings(BaseSettings):
     REMNAWAVE_AUTO_SYNC_TIMES: str = '03:00'
     CABINET_REMNA_SUB_CONFIG: str | None = None  # UUID конфига страницы подписки из RemnaWave
 
+    # RemnaWave incoming webhooks (real-time event delivery from backend)
+    REMNAWAVE_WEBHOOK_ENABLED: bool = False
+    REMNAWAVE_WEBHOOK_PATH: str = '/remnawave-webhook'
+    REMNAWAVE_WEBHOOK_SECRET: str | None = None  # HMAC-SHA256 shared secret (min 32 chars)
+
     TRIAL_DURATION_DAYS: int = 3
     TRIAL_TRAFFIC_LIMIT_GB: int = 10
     TRIAL_DEVICE_LIMIT: int = 2
@@ -1088,6 +1093,13 @@ class Settings(BaseSettings):
 
     def get_remnawave_auto_sync_times(self) -> list[time]:
         return self.parse_daily_time_list(self.REMNAWAVE_AUTO_SYNC_TIMES)
+
+    def is_remnawave_webhook_enabled(self) -> bool:
+        return (
+            self.REMNAWAVE_WEBHOOK_ENABLED
+            and bool(self.REMNAWAVE_WEBHOOK_SECRET)
+            and len(self.REMNAWAVE_WEBHOOK_SECRET or '') >= 32
+        )
 
     def get_traffic_monitored_nodes(self) -> list[str]:
         """Возвращает список UUID нод для мониторинга (пусто = все)"""

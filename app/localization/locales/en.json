@@ -1698,5 +1698,20 @@
   "RESUME_DAILY_BUTTON": "▶️ Resume subscription",
   "DAILY_SWITCH_WARNING": "⚠️ <b>Warning!</b> You have {days} days left.\nThey will be lost when switching to daily tariff!",
   "DAILY_SUBSCRIPTION_PAUSED": "⏸️ Subscription paused",
-  "DAILY_SUBSCRIPTION_RESUMED": "▶️ Subscription resumed!"
+  "DAILY_SUBSCRIPTION_RESUMED": "▶️ Subscription resumed!",
+
+  "WEBHOOK_SUB_EXPIRED": "❌ <b>Subscription expired</b>\n\nYour subscription has ended. Renew to restore VPN access.",
+  "WEBHOOK_SUB_DISABLED": "🚫 <b>Subscription disabled</b>\n\nYour subscription has been disabled by the administrator.",
+  "WEBHOOK_SUB_ENABLED": "✅ <b>Subscription activated</b>\n\nYour subscription is active again. Enjoy!",
+  "WEBHOOK_SUB_LIMITED": "⚠️ <b>Traffic limit reached</b>\n\nYou have used all available traffic. Purchase additional traffic or wait for a reset.",
+  "WEBHOOK_SUB_TRAFFIC_RESET": "🔄 <b>Traffic reset</b>\n\nYour traffic has been reset. Full limit is available again.",
+  "WEBHOOK_SUB_DELETED": "🗑️ <b>Subscription deleted</b>\n\nYour subscription was deleted from the panel.",
+  "WEBHOOK_SUB_REVOKED": "🔑 <b>Subscription key updated</b>\n\nYour connection credentials have been updated. Use the new link to connect.",
+  "WEBHOOK_SUB_EXPIRES_72H": "⏳ <b>Subscription expires in 3 days</b>\n\nDon't forget to renew your subscription to keep VPN access.",
+  "WEBHOOK_SUB_EXPIRES_48H": "⏳ <b>Subscription expires in 2 days</b>\n\nRenew your subscription in advance to maintain VPN access.",
+  "WEBHOOK_SUB_EXPIRES_24H": "🔴 <b>Subscription expires tomorrow!</b>\n\nLess than 24 hours left. Renew your subscription now.",
+  "WEBHOOK_SUB_EXPIRED_24H_AGO": "💤 <b>Subscription expired yesterday</b>\n\nYour subscription has ended. Renew now to restore VPN access.",
+  "WEBHOOK_SUB_FIRST_CONNECTED": "🎉 <b>First connection!</b>\n\nYou connected to the VPN for the first time. Welcome!",
+  "WEBHOOK_SUB_BANDWIDTH_THRESHOLD": "📊 <b>{percent}% traffic used</b>\n\nYou have used a significant portion of your traffic. Monitor your usage.",
+  "WEBHOOK_RENEW_BUTTON": "🔄 Renew subscription"
 }
