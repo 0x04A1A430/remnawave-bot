@@ -112,8 +112,10 @@ def create_remnawave_webhook_router(bot: Bot) -> APIRouter:
         if not isinstance(data, dict):
             data = {}
 
-        event_name = f'{scope}.{event}'
-        logger.info('RemnaWave webhook received: %s', event_name)
+        # RemnaWave sends event as full qualified name (e.g. "user.modified"),
+        # so we use event directly instead of concatenating scope + event.
+        event_name = event
+        logger.info('RemnaWave webhook received: scope=%s, event=%s', scope, event_name)
 
         # Process event — return 200 to prevent retries for application-level errors.
         # Only return non-200 for infrastructure failures (DB unavailable).
