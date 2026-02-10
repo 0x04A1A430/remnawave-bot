@@ -2420,26 +2420,31 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
         promo_offer_discount_percent = 0
 
     # Валидация: проверяем что cached_total_price соответствует ожидаемой финальной цене
-    # Допускаем небольшое расхождение из-за округления (до 5%)
-    price_difference = abs(final_price - cached_total_price)
-    max_allowed_difference = max(500, int(final_price * 0.05))  # 5% или минимум 5₽
-
-    if price_difference > max_allowed_difference:
-        # Слишком большое расхождение - блокируем покупку
-        logger.error(
-            f'Критическое расхождение цены для пользователя {db_user.telegram_id}: '
-            f'кэш={cached_total_price / 100}₽, пересчет={final_price / 100}₽, '
-            f'разница={price_difference / 100}₽ (>{max_allowed_difference / 100}₽). '
-            f'Покупка заблокирована.'
-        )
-        await callback.answer('Цена изменилась. Пожалуйста, начните оформление заново.', show_alert=True)
-        return
-    if price_difference > 100:  # допуск 1₽
-        # Небольшое расхождение - логируем предупреждение но продолжаем
-        logger.warning(
-            f'Расхождение цены для пользователя {db_user.telegram_id}: '
+    # Блокируем только если цена ВЫРОСЛА (пользователь переплатит).
+    # Если цена снизилась (промо-скидка активировалась) — разрешаем покупку по новой цене.
+    price_difference = final_price - cached_total_price
+    if price_difference > 0:
+        max_allowed_increase = max(500, int(final_price * 0.05))  # 5% или минимум 5₽
+        if price_difference > max_allowed_increase:
+            logger.error(
+                f'Цена выросла для пользователя {db_user.telegram_id}: '
+                f'кэш={cached_total_price / 100}₽, пересчет={final_price / 100}₽, '
+                f'разница=+{price_difference / 100}₽ (>{max_allowed_increase / 100}₽). '
+                f'Покупка заблокирована.'
+            )
+            await callback.answer('Цена изменилась. Пожалуйста, начните оформление заново.', show_alert=True)
+            return
+        if price_difference > 100:  # допуск 1₽
+            logger.warning(
+                f'Небольшой рост цены для пользователя {db_user.telegram_id}: '
+                f'кэш={cached_total_price / 100}₽, пересчет={final_price / 100}₽. '
+                f'Используем пересчитанную цену.'
+            )
+    elif price_difference < -100:  # цена снизилась более чем на 1₽
+        logger.info(
+            f'Цена снизилась для пользователя {db_user.telegram_id}: '
             f'кэш={cached_total_price / 100}₽, пересчет={final_price / 100}₽. '
-            f'Используем пересчитанную цену.'
+            f'Применяем новую цену.'
         )
 
     # Используем пересчитанную цену
