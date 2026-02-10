@@ -75,7 +75,7 @@ class MulenPayPaymentMixin:
                 uuid=payment_uuid,
                 items=items,
                 language=language or settings.MULENPAY_LANGUAGE,
-                website_url=settings.WEBHOOK_URL,
+                website_url=settings.MULENPAY_WEBSITE_URL or settings.WEBHOOK_URL,
             )
 
             if not response:

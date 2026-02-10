@@ -400,6 +400,7 @@ class Settings(BaseSettings):
     MULENPAY_MIN_AMOUNT_KOPEKS: int = 10000
     MULENPAY_MAX_AMOUNT_KOPEKS: int = 10000000
     MULENPAY_IFRAME_EXPECTED_ORIGIN: str | None = None
+    MULENPAY_WEBSITE_URL: str | None = None
 
     PAL24_ENABLED: bool = False
     PAL24_DISPLAY_NAME: str = 'PAL24'
