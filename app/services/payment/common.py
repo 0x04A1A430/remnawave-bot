@@ -11,12 +11,14 @@ from types import SimpleNamespace
 from typing import Any
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from sqlalchemy import select
 from sqlalchemy.exc import MissingGreenlet
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.crud.user import get_user_by_telegram_id
-from app.database.database import get_db
+from app.database.database import AsyncSessionLocal, get_db
+from app.database.models import Subscription
 from app.localization.texts import get_texts
 from app.services.subscription_checkout_service import (
     has_subscription_checkout_draft,
@@ -37,7 +39,6 @@ class PaymentCommonMixin:
 
         # Определяем статус подписки, чтобы показать подходящую кнопку.
         has_active_subscription = False
-        subscription = None
         if user:
             try:
                 subscription = user.subscription
@@ -46,12 +47,24 @@ class PaymentCommonMixin:
                     and not getattr(subscription, 'is_trial', False)
                     and getattr(subscription, 'is_active', False)
                 )
-            except MissingGreenlet as error:
-                logger.warning(
-                    'Не удалось лениво загрузить подписку пользователя %s при построении клавиатуры после пополнения: %s',
-                    getattr(user, 'id', None),
-                    error,
-                )
+            except MissingGreenlet:
+                # user вне сессии — загружаем подписку отдельным запросом
+                try:
+                    async with AsyncSessionLocal() as session:
+                        result = await session.execute(
+                            select(Subscription.is_active, Subscription.is_trial)
+                            .where(Subscription.user_id == user.id)
+                            .limit(1)
+                        )
+                        row = result.one_or_none()
+                        if row:
+                            has_active_subscription = bool(row.is_active and not row.is_trial)
+                except Exception as db_error:
+                    logger.warning(
+                        'Не удалось загрузить подписку пользователя %s из БД: %s',
+                        getattr(user, 'id', None),
+                        db_error,
+                    )
             except Exception as error:  # pragma: no cover - защитный код
                 logger.error(
                     'Ошибка загрузки подписки пользователя %s при построении клавиатуры после пополнения: %s',
