@@ -30,10 +30,17 @@ async def handle_webhook_notification_close(
 ):
     """Удаляет webhook-уведомление при нажатии кнопки Закрыть."""
     try:
-        await callback.message.delete()
+        await callback.answer()
     except Exception:
         pass
-    await callback.answer()
+    try:
+        await callback.message.delete()
+    except Exception as e:
+        logger.warning('Не удалось удалить webhook-уведомление: %s', e)
+        try:
+            await callback.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            pass
 
 
 async def handle_unknown_callback(callback: types.CallbackQuery, db_user: User):

@@ -109,6 +109,15 @@ class ChannelCheckerMiddleware(BaseMiddleware):
             logger.debug('❌ telegram_id не найден, пропускаем')
             return await handler(event, data)
 
+        # Skip channel check for lightweight UI callbacks (close/delete notifications)
+        if isinstance(event, CallbackQuery) and event.data in (
+            'webhook:close',
+            'ban_notify:delete',
+            'noop',
+            'current_page',
+        ):
+            return await handler(event, data)
+
         # Админам разрешаем пропускать проверку подписки
         if settings.is_admin(telegram_id):
             logger.debug(
