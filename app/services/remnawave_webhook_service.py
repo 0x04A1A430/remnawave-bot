@@ -1,8 +1,9 @@
 """
 Service for processing incoming RemnaWave backend webhooks.
 
-Handles user-scope events: subscription expiration, enable/disable,
-traffic limits, expiration warnings, and more.
+Handles all webhook scopes: user, user_hwid_devices, node, service, crm.
+User events update subscription state and notify the user.
+Admin events (node, service, crm) send alerts to the admin notification chat.
 """
 
 from __future__ import annotations
@@ -26,6 +27,7 @@ from app.database.crud.subscription import (
 from app.database.crud.user import get_user_by_remnawave_uuid, get_user_by_telegram_id
 from app.database.models import Subscription, SubscriptionStatus, User
 from app.localization.texts import get_texts
+from app.services.admin_notification_service import AdminNotificationService
 from app.services.notification_delivery_service import NotificationType, notification_delivery_service
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button
 
@@ -48,6 +50,37 @@ _TEXT_KEY_TO_NOTIFICATION_TYPE: dict[str, NotificationType] = {
     'WEBHOOK_SUB_EXPIRED_24H_AGO': NotificationType.WEBHOOK_SUB_EXPIRED,
     'WEBHOOK_SUB_FIRST_CONNECTED': NotificationType.WEBHOOK_SUB_FIRST_CONNECTED,
     'WEBHOOK_SUB_BANDWIDTH_THRESHOLD': NotificationType.WEBHOOK_SUB_BANDWIDTH_THRESHOLD,
+    'WEBHOOK_USER_NOT_CONNECTED': NotificationType.WEBHOOK_SUB_FIRST_CONNECTED,
+    'WEBHOOK_DEVICE_ADDED': NotificationType.WEBHOOK_SUB_ENABLED,
+    'WEBHOOK_DEVICE_DELETED': NotificationType.WEBHOOK_SUB_DISABLED,
+}
+
+# Admin event display names for notification messages
+_ADMIN_NODE_EVENTS: dict[str, str] = {
+    'node.created': '🟢 Нода создана',
+    'node.modified': '🔧 Нода изменена',
+    'node.disabled': '🔴 Нода отключена',
+    'node.enabled': '🟢 Нода включена',
+    'node.deleted': '🗑️ Нода удалена',
+    'node.connection_lost': '🚨 Потеряно соединение с нодой',
+    'node.connection_restored': '✅ Соединение с нодой восстановлено',
+    'node.traffic_notify': '📊 Уведомление о трафике ноды',
+}
+
+_ADMIN_SERVICE_EVENTS: dict[str, str] = {
+    'service.panel_started': '🚀 Панель RemnaWave запущена',
+    'service.login_attempt_failed': '🔐 Неудачная попытка входа в панель',
+    'service.login_attempt_success': '🔓 Успешный вход в панель',
+}
+
+_ADMIN_CRM_EVENTS: dict[str, str] = {
+    'crm.infra_billing_node_payment_in_7_days': '💳 Оплата ноды через 7 дней',
+    'crm.infra_billing_node_payment_in_48hrs': '💳 Оплата ноды через 48 часов',
+    'crm.infra_billing_node_payment_in_24hrs': '⚠️ Оплата ноды через 24 часа',
+    'crm.infra_billing_node_payment_due_today': '🔴 Оплата ноды сегодня',
+    'crm.infra_billing_node_payment_overdue_24hrs': '❗ Просрочка оплаты ноды: 24 часа',
+    'crm.infra_billing_node_payment_overdue_48hrs': '❗ Просрочка оплаты ноды: 48 часов',
+    'crm.infra_billing_node_payment_overdue_7_days': '🚨 Просрочка оплаты ноды: 7 дней',
 }
 
 
@@ -56,7 +89,10 @@ class RemnaWaveWebhookService:
 
     def __init__(self, bot: Bot) -> None:
         self.bot = bot
-        self._handlers: dict[str, Any] = {
+        self._admin_service = AdminNotificationService(bot)
+
+        # User-scoped handlers: require user resolution
+        self._user_handlers: dict[str, Any] = {
             'user.expired': self._handle_user_expired,
             'user.disabled': self._handle_user_disabled,
             'user.enabled': self._handle_user_enabled,
@@ -72,6 +108,16 @@ class RemnaWaveWebhookService:
             'user.expired_24_hours_ago': self._handle_expired_24h_ago,
             'user.first_connected': self._handle_first_connected,
             'user.bandwidth_usage_threshold_reached': self._handle_bandwidth_threshold,
+            'user.not_connected': self._handle_user_not_connected,
+            'user_hwid_devices.added': self._handle_device_added,
+            'user_hwid_devices.deleted': self._handle_device_deleted,
+        }
+
+        # Admin-scoped handlers: no user resolution, notify admin chat
+        self._admin_handlers: dict[str, str] = {
+            **_ADMIN_NODE_EVENTS,
+            **_ADMIN_SERVICE_EVENTS,
+            **_ADMIN_CRM_EVENTS,
         }
 
     async def process_event(self, db: AsyncSession, event_name: str, data: dict) -> bool:
@@ -79,11 +125,20 @@ class RemnaWaveWebhookService:
 
         Returns True if the event was processed, False if skipped/unknown.
         """
-        handler = self._handlers.get(event_name)
-        if not handler:
-            logger.debug('Unhandled RemnaWave webhook event: %s', event_name)
-            return False
+        # Check user-scoped handlers first
+        user_handler = self._user_handlers.get(event_name)
+        if user_handler:
+            return await self._process_user_event(db, event_name, data, user_handler)
 
+        # Check admin-scoped handlers
+        if event_name in self._admin_handlers:
+            return await self._process_admin_event(event_name, data)
+
+        logger.debug('Unhandled RemnaWave webhook event: %s', event_name)
+        return False
+
+    async def _process_user_event(self, db: AsyncSession, event_name: str, data: dict, handler: Any) -> bool:
+        """Resolve user and execute user-scoped handler."""
         user, subscription = await self._resolve_user_and_subscription(db, data)
         if not user:
             logger.warning(
@@ -103,6 +158,59 @@ class RemnaWaveWebhookService:
                 await db.rollback()
             except Exception:
                 logger.debug('Rollback after webhook handler error also failed')
+            return False
+
+    async def _process_admin_event(self, event_name: str, data: dict) -> bool:
+        """Format and send admin notification for infrastructure events."""
+        if not self._admin_service._is_enabled():
+            logger.debug('Admin notifications disabled, skipping event %s', event_name)
+            return True
+
+        title = self._admin_handlers.get(event_name, event_name)
+
+        # Build message from event data
+        lines = [f'<b>{title}</b>']
+
+        # Extract common fields
+        name = data.get('name') or data.get('nodeName') or data.get('username') or ''
+        if name:
+            lines.append(f'Имя: <code>{name}</code>')
+
+        address = data.get('address') or data.get('ip') or ''
+        if address:
+            lines.append(f'Адрес: <code>{address}</code>')
+
+        port = data.get('port')
+        if port:
+            lines.append(f'Порт: <code>{port}</code>')
+
+        version = data.get('version') or data.get('panelVersion') or ''
+        if version:
+            lines.append(f'Версия: <code>{version}</code>')
+
+        # CRM billing fields
+        amount = data.get('amount') or data.get('price') or ''
+        if amount:
+            lines.append(f'Сумма: <code>{amount}</code>')
+
+        due_date = data.get('dueDate') or data.get('paymentDate') or ''
+        if due_date:
+            lines.append(f'Дата: <code>{due_date}</code>')
+
+        # Login attempt fields
+        ip_addr = data.get('ipAddress') or data.get('ip') or ''
+        if ip_addr and not address:
+            lines.append(f'IP: <code>{ip_addr}</code>')
+
+        message = data.get('message') or ''
+        if message:
+            lines.append(f'Сообщение: {message}')
+
+        try:
+            await self._admin_service._send_message('\n'.join(lines))
+            return True
+        except Exception:
+            logger.exception('Failed to send admin notification for event %s', event_name)
             return False
 
     # ------------------------------------------------------------------
@@ -197,7 +305,7 @@ class RemnaWaveWebhookService:
         )
 
     # ------------------------------------------------------------------
-    # Event handlers
+    # User event handlers
     # ------------------------------------------------------------------
 
     async def _handle_user_expired(
@@ -400,4 +508,36 @@ class RemnaWaveWebhookService:
             user,
             'WEBHOOK_SUB_BANDWIDTH_THRESHOLD',
             format_kwargs={'percent': percent_str},
+        )
+
+    async def _handle_user_not_connected(
+        self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
+    ) -> None:
+        logger.info('Webhook: user %s has not connected to VPN', user.id)
+        await self._notify_user(user, 'WEBHOOK_USER_NOT_CONNECTED')
+
+    # ------------------------------------------------------------------
+    # Device event handlers (user_hwid_devices scope)
+    # ------------------------------------------------------------------
+
+    async def _handle_device_added(
+        self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
+    ) -> None:
+        device_name = data.get('deviceName') or data.get('hwid') or ''
+        logger.info('Webhook: device added for user %s: %s', user.id, device_name)
+        await self._notify_user(
+            user,
+            'WEBHOOK_DEVICE_ADDED',
+            format_kwargs={'device': device_name},
+        )
+
+    async def _handle_device_deleted(
+        self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
+    ) -> None:
+        device_name = data.get('deviceName') or data.get('hwid') or ''
+        logger.info('Webhook: device deleted for user %s: %s', user.id, device_name)
+        await self._notify_user(
+            user,
+            'WEBHOOK_DEVICE_DELETED',
+            format_kwargs={'device': device_name},
         )
