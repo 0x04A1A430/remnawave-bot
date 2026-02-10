@@ -13,7 +13,6 @@ from datetime import UTC, datetime
 from typing import Any
 
 from aiogram import Bot
-from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.types import InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,10 +26,29 @@ from app.database.crud.subscription import (
 from app.database.crud.user import get_user_by_remnawave_uuid, get_user_by_telegram_id
 from app.database.models import Subscription, SubscriptionStatus, User
 from app.localization.texts import get_texts
+from app.services.notification_delivery_service import NotificationType, notification_delivery_service
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button
 
 
 logger = logging.getLogger(__name__)
+
+
+# Mapping from locale text_key to NotificationType for unified delivery
+_TEXT_KEY_TO_NOTIFICATION_TYPE: dict[str, NotificationType] = {
+    'WEBHOOK_SUB_EXPIRED': NotificationType.WEBHOOK_SUB_EXPIRED,
+    'WEBHOOK_SUB_DISABLED': NotificationType.WEBHOOK_SUB_DISABLED,
+    'WEBHOOK_SUB_ENABLED': NotificationType.WEBHOOK_SUB_ENABLED,
+    'WEBHOOK_SUB_LIMITED': NotificationType.WEBHOOK_SUB_LIMITED,
+    'WEBHOOK_SUB_TRAFFIC_RESET': NotificationType.WEBHOOK_SUB_TRAFFIC_RESET,
+    'WEBHOOK_SUB_DELETED': NotificationType.WEBHOOK_SUB_DELETED,
+    'WEBHOOK_SUB_REVOKED': NotificationType.WEBHOOK_SUB_REVOKED,
+    'WEBHOOK_SUB_EXPIRES_72H': NotificationType.WEBHOOK_SUB_EXPIRING,
+    'WEBHOOK_SUB_EXPIRES_48H': NotificationType.WEBHOOK_SUB_EXPIRING,
+    'WEBHOOK_SUB_EXPIRES_24H': NotificationType.WEBHOOK_SUB_EXPIRING,
+    'WEBHOOK_SUB_EXPIRED_24H_AGO': NotificationType.WEBHOOK_SUB_EXPIRED,
+    'WEBHOOK_SUB_FIRST_CONNECTED': NotificationType.WEBHOOK_SUB_FIRST_CONNECTED,
+    'WEBHOOK_SUB_BANDWIDTH_THRESHOLD': NotificationType.WEBHOOK_SUB_BANDWIDTH_THRESHOLD,
+}
 
 
 class RemnaWaveWebhookService:
@@ -143,10 +161,12 @@ class RemnaWaveWebhookService:
         reply_markup: InlineKeyboardMarkup | None = None,
         format_kwargs: dict[str, Any] | None = None,
     ) -> None:
-        """Send a notification to user via Telegram."""
-        if not user.telegram_id:
-            return
+        """Send a notification to user via appropriate channel.
 
+        Telegram users receive a bot message; email-only users receive
+        an email and/or WebSocket notification through the unified
+        notification delivery service.
+        """
         texts = get_texts(user.language)
         message = texts.get(text_key)
         if not message:
@@ -160,17 +180,21 @@ class RemnaWaveWebhookService:
                 logger.warning('Failed to format message %s with kwargs %s', text_key, format_kwargs)
                 return
 
-        try:
-            await self.bot.send_message(
-                chat_id=user.telegram_id,
-                text=message,
-                reply_markup=reply_markup,
-                parse_mode='HTML',
-            )
-        except TelegramForbiddenError:
-            logger.warning('User %s blocked the bot, cannot send webhook notification', user.telegram_id)
-        except TelegramBadRequest as exc:
-            logger.warning('Failed to send webhook notification to %s: %s', user.telegram_id, exc)
+        notification_type = _TEXT_KEY_TO_NOTIFICATION_TYPE.get(text_key)
+        if not notification_type:
+            logger.warning('No NotificationType mapping for text_key %s', text_key)
+            return
+
+        context = {'text_key': text_key, **(format_kwargs or {})}
+
+        await notification_delivery_service.send_notification(
+            user=user,
+            notification_type=notification_type,
+            context=context,
+            bot=self.bot,
+            telegram_message=message,
+            telegram_markup=reply_markup,
+        )
 
     # ------------------------------------------------------------------
     # Event handlers
