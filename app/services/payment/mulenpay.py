@@ -75,7 +75,7 @@ class MulenPayPaymentMixin:
                 uuid=payment_uuid,
                 items=items,
                 language=language or settings.MULENPAY_LANGUAGE,
-                website_url=settings.WEBHOOK_URL,
+                website_url=settings.MULENPAY_WEBSITE_URL or settings.WEBHOOK_URL,
             )
 
             if not response:
@@ -253,6 +253,7 @@ class MulenPayPaymentMixin:
                     payment_method=PaymentMethod.MULENPAY,
                     external_id=payment.uuid,
                     is_completed=True,
+                    created_at=getattr(payment, 'created_at', None),
                 )
 
                 await payment_module.link_mulenpay_payment_to_transaction(

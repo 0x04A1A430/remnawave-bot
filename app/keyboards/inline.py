@@ -47,8 +47,6 @@ async def get_main_menu_keyboard_async(
     Иначе делегирует в синхронную версию.
     """
     if settings.MENU_LAYOUT_ENABLED:
-        from datetime import datetime
-
         from app.services.menu_layout_service import MenuContext, MenuLayoutService
 
         # Получаем данные для плейсхолдеров

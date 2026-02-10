@@ -3613,6 +3613,33 @@ async def add_subscription_crypto_link_column() -> bool:
         return False
 
 
+async def add_subscription_last_webhook_update_column() -> bool:
+    column_exists = await check_column_exists('subscriptions', 'last_webhook_update_at')
+    if column_exists:
+        logger.info('ℹ️ Колонка last_webhook_update_at уже существует')
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'sqlite':
+                await conn.execute(text('ALTER TABLE subscriptions ADD COLUMN last_webhook_update_at DATETIME'))
+            elif db_type == 'postgresql':
+                await conn.execute(text('ALTER TABLE subscriptions ADD COLUMN last_webhook_update_at TIMESTAMP'))
+            elif db_type == 'mysql':
+                await conn.execute(text('ALTER TABLE subscriptions ADD COLUMN last_webhook_update_at DATETIME'))
+            else:
+                logger.error(f'Неподдерживаемый тип БД для добавления last_webhook_update_at: {db_type}')
+                return False
+
+        logger.info('✅ Добавлена колонка last_webhook_update_at в таблицу subscriptions')
+        return True
+    except Exception as e:
+        logger.error(f'Ошибка добавления колонки last_webhook_update_at: {e}')
+        return False
+
+
 async def fix_foreign_keys_for_user_deletion():
     try:
         async with engine.begin() as conn:
@@ -7103,6 +7130,13 @@ async def run_universal_migration():
             logger.info('✅ Колонки OAuth провайдеров (google_id, yandex_id, discord_id, vk_id) готовы')
         else:
             logger.warning('⚠️ Проблемы с колонками OAuth провайдеров')
+
+        logger.info('=== ДОБАВЛЕНИЕ КОЛОНКИ LAST_WEBHOOK_UPDATE_AT ===')
+        webhook_column_ready = await add_subscription_last_webhook_update_column()
+        if webhook_column_ready:
+            logger.info('✅ Колонка last_webhook_update_at готова')
+        else:
+            logger.warning('⚠️ Проблемы с колонкой last_webhook_update_at')
 
         async with engine.begin() as conn:
             total_subs = await conn.execute(text('SELECT COUNT(*) FROM subscriptions'))

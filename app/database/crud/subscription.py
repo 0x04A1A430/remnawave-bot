@@ -1,6 +1,6 @@
 import logging
 from collections.abc import Iterable
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Optional
 
 from sqlalchemy import and_, delete, func, select
@@ -22,6 +22,16 @@ from app.utils.timezone import format_local_datetime
 
 
 logger = logging.getLogger(__name__)
+
+_WEBHOOK_GUARD_SECONDS = 60
+
+
+def is_recently_updated_by_webhook(subscription: Subscription) -> bool:
+    """Return True if subscription was updated by webhook within guard window."""
+    if not subscription.last_webhook_update_at:
+        return False
+    elapsed = (datetime.now(UTC).replace(tzinfo=None) - subscription.last_webhook_update_at).total_seconds()
+    return elapsed < _WEBHOOK_GUARD_SECONDS
 
 
 async def get_subscription_by_user_id(db: AsyncSession, user_id: int) -> Subscription | None:

@@ -272,6 +272,7 @@ class KassaAiPaymentMixin:
             payment_method=PaymentMethod.KASSA_AI,
             external_id=str(intid) if intid else payment.order_id,
             is_completed=True,
+            created_at=getattr(payment, 'created_at', None),
         )
 
         # Связываем платеж с транзакцией

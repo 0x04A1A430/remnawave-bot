@@ -57,6 +57,21 @@ class NotificationType(Enum):
     EMAIL_VERIFICATION = 'email_verification'
     PASSWORD_RESET = 'password_reset'
 
+    # Webhook subscription events
+    WEBHOOK_SUB_EXPIRED = 'webhook_sub_expired'
+    WEBHOOK_SUB_DISABLED = 'webhook_sub_disabled'
+    WEBHOOK_SUB_ENABLED = 'webhook_sub_enabled'
+    WEBHOOK_SUB_LIMITED = 'webhook_sub_limited'
+    WEBHOOK_SUB_TRAFFIC_RESET = 'webhook_sub_traffic_reset'
+    WEBHOOK_SUB_DELETED = 'webhook_sub_deleted'
+    WEBHOOK_SUB_REVOKED = 'webhook_sub_revoked'
+    WEBHOOK_SUB_EXPIRING = 'webhook_sub_expiring'
+    WEBHOOK_SUB_FIRST_CONNECTED = 'webhook_sub_first_connected'
+    WEBHOOK_SUB_BANDWIDTH_THRESHOLD = 'webhook_sub_bandwidth_threshold'
+    WEBHOOK_USER_NOT_CONNECTED = 'webhook_user_not_connected'
+    WEBHOOK_DEVICE_ADDED = 'webhook_device_added'
+    WEBHOOK_DEVICE_DELETED = 'webhook_device_deleted'
+
     # Other
     BROADCAST = 'broadcast'
     PAYMENT_RECEIVED = 'payment_received'

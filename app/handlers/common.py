@@ -25,6 +25,24 @@ async def handle_delete_ban_notification(
         await callback.answer('Не удалось удалить', show_alert=False)
 
 
+async def handle_webhook_notification_close(
+    callback: types.CallbackQuery,
+):
+    """Удаляет webhook-уведомление при нажатии кнопки Закрыть."""
+    try:
+        await callback.answer()
+    except Exception:
+        pass
+    try:
+        await callback.message.delete()
+    except Exception as e:
+        logger.warning('Не удалось удалить webhook-уведомление: %s', e)
+        try:
+            await callback.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+
+
 async def handle_unknown_callback(callback: types.CallbackQuery, db_user: User):
     texts = get_texts(db_user.language if db_user else 'ru')
 
@@ -86,8 +104,9 @@ async def show_rules(callback: types.CallbackQuery, db_user: User, db: AsyncSess
 
 
 def register_handlers(dp: Dispatcher):
-    # Удаление уведомлений о банах
+    # Удаление уведомлений
     dp.callback_query.register(handle_delete_ban_notification, F.data == 'ban_notify:delete')
+    dp.callback_query.register(handle_webhook_notification_close, F.data == 'webhook:close')
 
     dp.callback_query.register(show_rules, F.data == 'menu_rules')
 

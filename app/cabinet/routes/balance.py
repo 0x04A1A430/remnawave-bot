@@ -3,6 +3,7 @@
 import logging
 import math
 import time
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -12,7 +13,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.crud.user import get_user_by_id
 from app.database.models import PaymentMethod, Transaction, User
-from app.external.cryptobot import CryptoBotService
 from app.services.payment_method_config_service import get_enabled_methods_for_user
 from app.services.payment_service import PaymentService
 from app.services.payment_verification_service import (
@@ -23,6 +23,7 @@ from app.services.payment_verification_service import (
     method_display_name,
     run_manual_check,
 )
+from app.utils.currency_converter import currency_converter
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 from ..schemas.balance import (
@@ -381,24 +382,49 @@ async def create_topup(
                 )
 
         elif request.payment_method == 'cryptobot':
-            cryptobot_service = CryptoBotService()
-            # Convert RUB to USDT (approximate)
-            usdt_amount = amount_rubles / 100  # Approximate rate
-            result = await cryptobot_service.create_invoice(
-                amount=usdt_amount,
-                asset='USDT',
-                description=f'Balance top-up {amount_rubles:.2f} RUB',
+            if not settings.is_cryptobot_enabled():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail='CryptoBot payment method is unavailable',
+                )
+
+            try:
+                rate = await currency_converter.get_usd_to_rub_rate()
+            except Exception:
+                rate = 0.0
+            if not rate or rate <= 0:
+                rate = 95.0
+
+            try:
+                amount_usd = float(
+                    (Decimal(request.amount_kopeks) / Decimal(100) / Decimal(str(rate))).quantize(
+                        Decimal('0.01'), rounding=ROUND_HALF_UP
+                    )
+                )
+            except (InvalidOperation, ValueError):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail='Unable to convert amount to USD',
+                )
+
+            payment_service = PaymentService()
+            result = await payment_service.create_cryptobot_payment(
+                db=db,
+                user_id=user.id,
+                amount_usd=amount_usd,
+                asset=settings.CRYPTOBOT_DEFAULT_ASSET,
+                description=settings.get_balance_payment_description(
+                    request.amount_kopeks, telegram_user_id=user.telegram_id
+                ),
                 payload=f'cabinet_topup_{user.id}_{request.amount_kopeks}',
             )
             if result:
-                # Priority: web_app for desktop/browser, mini_app for mobile, bot as fallback
                 payment_url = (
                     result.get('web_app_invoice_url')
                     or result.get('mini_app_invoice_url')
                     or result.get('bot_invoice_url')
-                    or result.get('pay_url')
                 )
-                payment_id = str(result.get('invoice_id'))
+                payment_id = result.get('invoice_id') or str(result.get('local_payment_id', 'pending'))
             else:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

@@ -156,8 +156,10 @@ class CryptoBotPaymentMixin:
             cryptobot_crud = import_module('app.database.crud.cryptobot')
             payment = await cryptobot_crud.get_cryptobot_payment_by_invoice_id(db, invoice_id)
             if not payment:
-                logger.error('CryptoBot платеж не найден в БД: %s', invoice_id)
-                return False
+                logger.warning(
+                    'CryptoBot платеж не найден в БД: %s (возвращаем 200 чтобы остановить ретраи)', invoice_id
+                )
+                return True
 
             if payment.status == 'paid':
                 logger.info('CryptoBot платеж %s уже обработан', invoice_id)
@@ -251,6 +253,7 @@ class CryptoBotPaymentMixin:
                     payment_method=PaymentMethod.CRYPTOBOT,
                     external_id=invoice_id,
                     is_completed=True,
+                    created_at=getattr(updated_payment, 'created_at', None),
                 )
 
                 await cryptobot_crud.link_cryptobot_payment_to_transaction(db, invoice_id, transaction.id)

@@ -1137,6 +1137,8 @@ class Subscription(Base):
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
+    last_webhook_update_at = Column(DateTime, nullable=True)
+
     remnawave_short_uuid = Column(String(255), nullable=True)
 
     # Тариф (для режима продаж "Тарифы")
@@ -2398,7 +2400,7 @@ class ButtonClickLog(Base):
     clicked_at = Column(DateTime, default=func.now(), index=True)
 
     # Дополнительная информация
-    button_type = Column(String(20), nullable=True)  # builtin, callback, url, mini_app
+    button_type = Column(String(20), nullable=True, index=True)  # builtin, callback, url, mini_app
     button_text = Column(String(255), nullable=True)  # Текст кнопки на момент клика
 
     __table_args__ = (

@@ -111,10 +111,19 @@ async def _post_webhook(client: TestClient, payload: dict, **headers: str) -> we
 
 
 def _patch_get_db(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def fake_get_db():
-        yield DummyDB()
+    """Mock AsyncSessionLocal used by the webhook handler."""
+    from unittest.mock import MagicMock
 
-    monkeypatch.setattr('app.external.yookassa_webhook.get_db', fake_get_db)
+    mock_session = AsyncMock()
+    mock_session.commit = AsyncMock()
+    mock_session.rollback = AsyncMock()
+    mock_session.execute = AsyncMock()
+
+    ctx = MagicMock()
+    ctx.__aenter__ = AsyncMock(return_value=mock_session)
+    ctx.__aexit__ = AsyncMock(return_value=False)
+
+    monkeypatch.setattr('app.external.yookassa_webhook.AsyncSessionLocal', lambda: ctx)
 
 
 @pytest.mark.asyncio
