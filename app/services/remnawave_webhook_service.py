@@ -291,6 +291,35 @@ class RemnaWaveWebhookService:
             ]
         )
 
+    def _get_subscription_keyboard(self, user: User) -> InlineKeyboardMarkup:
+        texts = get_texts(user.language)
+        button_text = texts.get('MY_SUBSCRIPTION_BUTTON', 'My subscription')
+        return InlineKeyboardMarkup(
+            inline_keyboard=[
+                [build_miniapp_or_callback_button(text=button_text, callback_data='subscription')],
+            ]
+        )
+
+    def _get_connect_keyboard(self, user: User) -> InlineKeyboardMarkup:
+        texts = get_texts(user.language)
+        button_text = texts.get('CONNECT_BUTTON', 'Connect')
+        return InlineKeyboardMarkup(
+            inline_keyboard=[
+                [build_miniapp_or_callback_button(text=button_text, callback_data='subscription_connect')],
+            ]
+        )
+
+    def _get_traffic_keyboard(self, user: User) -> InlineKeyboardMarkup:
+        texts = get_texts(user.language)
+        buy_text = texts.get('BUY_TRAFFIC_BUTTON', 'Buy traffic')
+        sub_text = texts.get('MY_SUBSCRIPTION_BUTTON', 'My subscription')
+        return InlineKeyboardMarkup(
+            inline_keyboard=[
+                [build_miniapp_or_callback_button(text=buy_text, callback_data='subscription_add_traffic')],
+                [build_miniapp_or_callback_button(text=sub_text, callback_data='subscription')],
+            ]
+        )
+
     async def _notify_user(
         self,
         user: User,
@@ -357,7 +386,7 @@ class RemnaWaveWebhookService:
             await deactivate_subscription(db, subscription)
             logger.info('Webhook: subscription %s disabled for user %s', subscription.id, user.id)
 
-        await self._notify_user(user, 'WEBHOOK_SUB_DISABLED')
+        await self._notify_user(user, 'WEBHOOK_SUB_DISABLED', reply_markup=self._get_subscription_keyboard(user))
 
     async def _handle_user_enabled(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
@@ -366,7 +395,7 @@ class RemnaWaveWebhookService:
             await reactivate_subscription(db, subscription)
             logger.info('Webhook: subscription %s re-enabled for user %s', subscription.id, user.id)
 
-        await self._notify_user(user, 'WEBHOOK_SUB_ENABLED')
+        await self._notify_user(user, 'WEBHOOK_SUB_ENABLED', reply_markup=self._get_connect_keyboard(user))
 
     async def _handle_user_limited(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
@@ -375,7 +404,7 @@ class RemnaWaveWebhookService:
             await deactivate_subscription(db, subscription)
             logger.info('Webhook: subscription %s limited (traffic) for user %s', subscription.id, user.id)
 
-        await self._notify_user(user, 'WEBHOOK_SUB_LIMITED')
+        await self._notify_user(user, 'WEBHOOK_SUB_LIMITED', reply_markup=self._get_traffic_keyboard(user))
 
     async def _handle_user_traffic_reset(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
@@ -387,7 +416,7 @@ class RemnaWaveWebhookService:
                 await reactivate_subscription(db, subscription)
             logger.info('Webhook: traffic reset for subscription %s, user %s', subscription.id, user.id)
 
-        await self._notify_user(user, 'WEBHOOK_SUB_TRAFFIC_RESET')
+        await self._notify_user(user, 'WEBHOOK_SUB_TRAFFIC_RESET', reply_markup=self._get_subscription_keyboard(user))
 
     async def _handle_user_modified(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
@@ -460,7 +489,7 @@ class RemnaWaveWebhookService:
             user.remnawave_uuid = None
             await db.flush()
 
-        await self._notify_user(user, 'WEBHOOK_SUB_DELETED')
+        await self._notify_user(user, 'WEBHOOK_SUB_DELETED', reply_markup=self._get_renew_keyboard(user))
 
     async def _handle_user_revoked(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
@@ -488,7 +517,7 @@ class RemnaWaveWebhookService:
                     'Webhook: subscription %s credentials revoked/updated for user %s', subscription.id, user.id
                 )
 
-        await self._notify_user(user, 'WEBHOOK_SUB_REVOKED')
+        await self._notify_user(user, 'WEBHOOK_SUB_REVOKED', reply_markup=self._get_connect_keyboard(user))
 
     async def _handle_user_created(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
@@ -519,7 +548,7 @@ class RemnaWaveWebhookService:
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
         logger.info('Webhook: user %s first VPN connection', user.id)
-        await self._notify_user(user, 'WEBHOOK_SUB_FIRST_CONNECTED')
+        await self._notify_user(user, 'WEBHOOK_SUB_FIRST_CONNECTED', reply_markup=self._get_subscription_keyboard(user))
 
     async def _handle_bandwidth_threshold(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
@@ -538,6 +567,7 @@ class RemnaWaveWebhookService:
         await self._notify_user(
             user,
             'WEBHOOK_SUB_BANDWIDTH_THRESHOLD',
+            reply_markup=self._get_traffic_keyboard(user),
             format_kwargs={'percent': percent_str},
         )
 
@@ -545,30 +575,48 @@ class RemnaWaveWebhookService:
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
         logger.info('Webhook: user %s has not connected to VPN', user.id)
-        await self._notify_user(user, 'WEBHOOK_USER_NOT_CONNECTED')
+        await self._notify_user(user, 'WEBHOOK_USER_NOT_CONNECTED', reply_markup=self._get_connect_keyboard(user))
 
     # ------------------------------------------------------------------
     # Device event handlers (user_hwid_devices scope)
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _extract_device_name(data: dict) -> str:
+        """Extract device name from webhook payload, trying multiple field names."""
+        raw = (
+            data.get('deviceName')
+            or data.get('tag')
+            or data.get('hwid')
+            or data.get('device')
+            or data.get('platform')
+            or data.get('name')
+            or ''
+        )
+        return html.escape(str(raw)) if raw else ''
+
     async def _handle_device_added(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
-        device_name = html.escape(data.get('deviceName') or data.get('hwid') or '')
-        logger.info('Webhook: device added for user %s: %s', user.id, device_name)
+        device_name = self._extract_device_name(data)
+        logger.info('Webhook: device added for user %s: %s (payload keys: %s)', user.id, device_name, list(data.keys()))
         await self._notify_user(
             user,
             'WEBHOOK_DEVICE_ADDED',
-            format_kwargs={'device': device_name},
+            reply_markup=self._get_subscription_keyboard(user),
+            format_kwargs={'device': device_name or '—'},
         )
 
     async def _handle_device_deleted(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
-        device_name = html.escape(data.get('deviceName') or data.get('hwid') or '')
-        logger.info('Webhook: device deleted for user %s: %s', user.id, device_name)
+        device_name = self._extract_device_name(data)
+        logger.info(
+            'Webhook: device deleted for user %s: %s (payload keys: %s)', user.id, device_name, list(data.keys())
+        )
         await self._notify_user(
             user,
             'WEBHOOK_DEVICE_DELETED',
-            format_kwargs={'device': device_name},
+            reply_markup=self._get_subscription_keyboard(user),
+            format_kwargs={'device': device_name or '—'},
         )
