@@ -68,6 +68,9 @@ class NotificationType(Enum):
     WEBHOOK_SUB_EXPIRING = 'webhook_sub_expiring'
     WEBHOOK_SUB_FIRST_CONNECTED = 'webhook_sub_first_connected'
     WEBHOOK_SUB_BANDWIDTH_THRESHOLD = 'webhook_sub_bandwidth_threshold'
+    WEBHOOK_USER_NOT_CONNECTED = 'webhook_user_not_connected'
+    WEBHOOK_DEVICE_ADDED = 'webhook_device_added'
+    WEBHOOK_DEVICE_DELETED = 'webhook_device_deleted'
 
     # Other
     BROADCAST = 'broadcast'

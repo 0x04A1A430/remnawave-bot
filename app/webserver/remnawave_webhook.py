@@ -17,7 +17,7 @@ from fastapi import APIRouter, Request, status
 from fastapi.responses import JSONResponse
 
 from app.config import settings
-from app.database.database import get_db
+from app.database.database import AsyncSessionLocal
 from app.services.remnawave_webhook_service import RemnaWaveWebhookService
 
 
@@ -119,26 +119,31 @@ def create_remnawave_webhook_router(bot: Bot) -> APIRouter:
 
         # Process event — return 200 to prevent retries for application-level errors.
         # Only return non-200 for infrastructure failures (DB unavailable).
-        db_generator = get_db()
+        # Admin events (node/service/crm) don't need a DB session.
+        if webhook_service.is_admin_event(event_name):
+            try:
+                processed = await webhook_service.process_event(None, event_name, data)
+                return JSONResponse({'status': 'ok', 'processed': processed})
+            except Exception:
+                logger.exception('RemnaWave webhook processing error for event %s', event_name)
+                return JSONResponse({'status': 'ok', 'processed': False})
+
+        # User events require a DB session
         try:
-            db = await db_generator.__anext__()
-        except StopAsyncIteration:
+            async with AsyncSessionLocal() as db:
+                try:
+                    processed = await webhook_service.process_event(db, event_name, data)
+                    await db.commit()
+                    return JSONResponse({'status': 'ok', 'processed': processed})
+                except Exception:
+                    await db.rollback()
+                    logger.exception('RemnaWave webhook processing error for event %s', event_name)
+                    return JSONResponse({'status': 'ok', 'processed': False})
+        except Exception:
             logger.error('RemnaWave webhook: failed to get database session')
             return JSONResponse(
                 {'status': 'error', 'reason': 'database_unavailable'},
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
-
-        try:
-            processed = await webhook_service.process_event(db, event_name, data)
-            return JSONResponse({'status': 'ok', 'processed': processed})
-        except Exception:
-            logger.exception('RemnaWave webhook processing error for event %s', event_name)
-            return JSONResponse({'status': 'ok', 'processed': False})
-        finally:
-            try:
-                await db_generator.__anext__()
-            except StopAsyncIteration:
-                pass
 
     return router
