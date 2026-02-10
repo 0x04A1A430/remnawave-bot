@@ -72,6 +72,7 @@ _ADMIN_SERVICE_EVENTS: dict[str, str] = {
     'service.panel_started': '🚀 Панель RemnaWave запущена',
     'service.login_attempt_failed': '🔐 Неудачная попытка входа в панель',
     'service.login_attempt_success': '🔓 Успешный вход в панель',
+    'service.subpage_config_changed': '📄 Конфиг страницы подписки изменён',
 }
 
 _ADMIN_CRM_EVENTS: dict[str, str] = {
@@ -214,6 +215,16 @@ class RemnaWaveWebhookService:
         message = html.escape(data.get('message') or '')
         if message:
             lines.append(f'Сообщение: {message}')
+
+        # Subpage config fields
+        subpage = data.get('subpageConfig')
+        if isinstance(subpage, dict):
+            action = subpage.get('action', '')
+            action_labels = {'CREATED': 'Создан', 'UPDATED': 'Обновлён', 'DELETED': 'Удалён'}
+            lines.append(f'Действие: {action_labels.get(action, html.escape(str(action)))}')
+            sub_uuid = subpage.get('uuid', '')
+            if sub_uuid:
+                lines.append(f'UUID: <code>{html.escape(str(sub_uuid))}</code>')
 
         try:
             await self._admin_service.send_webhook_notification('\n'.join(lines))
