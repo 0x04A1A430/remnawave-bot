@@ -1335,9 +1335,18 @@ class RemnaWaveService:
                         pending_uuid_mutations.clear()
                     try:
                         await db.rollback()  # Выполняем rollback при ошибке
-                    except:
+                    except Exception:
                         pass
-                    continue
+                    # After rollback all ORM objects in the session are expired.
+                    # Accessing their attributes triggers a lazy load which fails
+                    # in async context (greenlet_spawn error).  Break the loop to
+                    # prevent cascading failures for every remaining user.
+                    logger.warning(
+                        '⚠️ Сессия повреждена после rollback, прерываем обработку (обработано %d/%d пользователей)',
+                        i + 1,
+                        len(unique_panel_users),
+                    )
+                    break
 
                 else:
                     if uuid_mutation and uuid_mutation.has_changes():
