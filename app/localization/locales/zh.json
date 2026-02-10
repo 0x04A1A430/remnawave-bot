@@ -1936,5 +1936,6 @@
 "WEBHOOK_RENEW_BUTTON":"🔄 续订订阅",
 "WEBHOOK_USER_NOT_CONNECTED":"📡 <b>尚未连接</b>\n\n您的订阅已激活，但尚未建立VPN连接。请连接以开始使用服务。",
 "WEBHOOK_DEVICE_ADDED":"📱 <b>新设备</b>\n\n您的订阅已添加新设备：<code>{device}</code>",
-"WEBHOOK_DEVICE_DELETED":"📱 <b>设备已移除</b>\n\n设备已从您的订阅中移除：<code>{device}</code>"
+"WEBHOOK_DEVICE_DELETED":"📱 <b>设备已移除</b>\n\n设备已从您的订阅中移除：<code>{device}</code>",
+"WEBHOOK_CLOSE_BUTTON":"✖️ 关闭"
 }

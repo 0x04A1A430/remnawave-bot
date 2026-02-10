@@ -1716,5 +1716,6 @@
   "WEBHOOK_RENEW_BUTTON": "🔄 Renew subscription",
   "WEBHOOK_USER_NOT_CONNECTED": "📡 <b>Not connected yet</b>\n\nYour subscription is active but no VPN connection has been made. Connect to start using the service.",
   "WEBHOOK_DEVICE_ADDED": "📱 <b>New device</b>\n\nA new device has been added to your subscription: <code>{device}</code>",
-  "WEBHOOK_DEVICE_DELETED": "📱 <b>Device removed</b>\n\nA device has been removed from your subscription: <code>{device}</code>"
+  "WEBHOOK_DEVICE_DELETED": "📱 <b>Device removed</b>\n\nA device has been removed from your subscription: <code>{device}</code>",
+  "WEBHOOK_CLOSE_BUTTON": "✖️ Close"
 }

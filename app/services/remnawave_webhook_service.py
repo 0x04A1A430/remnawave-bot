@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from aiogram import Bot
-from aiogram.types import InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.crud.subscription import (
@@ -346,6 +346,16 @@ class RemnaWaveWebhookService:
             except (KeyError, IndexError):
                 logger.warning('Failed to format message %s with kwargs %s', text_key, format_kwargs)
                 return
+
+        # Append "Close" button to every webhook notification keyboard
+        close_text = texts.get('WEBHOOK_CLOSE_BUTTON', '✖️ Закрыть')
+        close_row = [InlineKeyboardButton(text=close_text, callback_data='webhook:close')]
+        if reply_markup:
+            reply_markup = InlineKeyboardMarkup(
+                inline_keyboard=[*reply_markup.inline_keyboard, close_row],
+            )
+        else:
+            reply_markup = InlineKeyboardMarkup(inline_keyboard=[close_row])
 
         notification_type = _TEXT_KEY_TO_NOTIFICATION_TYPE.get(text_key)
         if not notification_type:
