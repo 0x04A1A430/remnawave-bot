@@ -237,6 +237,7 @@ class CloudPaymentsPaymentMixin:
             payment_method=PaymentMethod.CLOUDPAYMENTS,
             external_id=str(transaction_id_cp) if transaction_id_cp else invoice_id,
             is_completed=True,
+            created_at=getattr(payment, 'created_at', None),
         )
 
         payment.transaction_id = transaction.id

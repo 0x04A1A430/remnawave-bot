@@ -325,6 +325,7 @@ class HeleketPaymentMixin:
             payment_method=PaymentMethod.HELEKET,
             external_id=updated_payment.uuid,
             is_completed=True,
+            created_at=getattr(updated_payment, 'created_at', None),
         )
 
         linked_payment = await heleket_crud.link_heleket_payment_to_transaction(

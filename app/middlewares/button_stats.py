@@ -204,6 +204,6 @@ class ButtonStatsMiddleware(BaseMiddleware):
                         button_text=button_text,
                     )
                 except Exception as e:
-                    logger.debug(f'Ошибка записи клика в БД {button_id}: {e}')
+                    logger.warning(f'Ошибка записи клика в БД {button_id}: {e}')
         except Exception as e:
-            logger.debug(f'Ошибка создания сессии БД для логирования клика: {e}')
+            logger.warning(f'Ошибка создания сессии БД для логирования клика: {e}')

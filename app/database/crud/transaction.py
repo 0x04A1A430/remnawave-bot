@@ -37,6 +37,7 @@ async def create_transaction(
     payment_method: PaymentMethod | None = None,
     external_id: str | None = None,
     is_completed: bool = True,
+    created_at: datetime | None = None,
 ) -> Transaction:
     transaction = Transaction(
         user_id=user_id,
@@ -47,6 +48,7 @@ async def create_transaction(
         external_id=external_id,
         is_completed=is_completed,
         completed_at=datetime.utcnow() if is_completed else None,
+        **({'created_at': created_at} if created_at else {}),
     )
 
     db.add(transaction)

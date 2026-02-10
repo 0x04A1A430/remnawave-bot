@@ -385,6 +385,7 @@ class Pal24PaymentMixin:
             payment_method=PaymentMethod.PAL24,
             external_id=str(payment_id) if payment_id else payment.bill_id,
             is_completed=True,
+            created_at=getattr(payment, 'created_at', None),
         )
 
         await payment_module.link_pal24_payment_to_transaction(db, payment, transaction.id)

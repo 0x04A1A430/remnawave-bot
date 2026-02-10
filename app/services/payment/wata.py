@@ -472,6 +472,7 @@ class WataPaymentMixin:
             payment_method=PaymentMethod.WATA,
             external_id=transaction_external_id or payment.payment_link_id,
             is_completed=True,
+            created_at=getattr(payment, 'created_at', None),
         )
 
         await payment_module.link_wata_payment_to_transaction(db, payment, transaction.id)

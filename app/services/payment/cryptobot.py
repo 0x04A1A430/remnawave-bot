@@ -251,6 +251,7 @@ class CryptoBotPaymentMixin:
                     payment_method=PaymentMethod.CRYPTOBOT,
                     external_id=invoice_id,
                     is_completed=True,
+                    created_at=getattr(updated_payment, 'created_at', None),
                 )
 
                 await cryptobot_crud.link_cryptobot_payment_to_transaction(db, invoice_id, transaction.id)

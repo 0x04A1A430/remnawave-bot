@@ -253,6 +253,7 @@ class MulenPayPaymentMixin:
                     payment_method=PaymentMethod.MULENPAY,
                     external_id=payment.uuid,
                     is_completed=True,
+                    created_at=getattr(payment, 'created_at', None),
                 )
 
                 await payment_module.link_mulenpay_payment_to_transaction(

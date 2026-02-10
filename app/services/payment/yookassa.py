@@ -589,6 +589,7 @@ class YooKassaPaymentMixin:
                     payment_method=PaymentMethod.YOOKASSA,
                     external_id=payment.yookassa_payment_id,
                     is_completed=True,
+                    created_at=getattr(payment, 'created_at', None),
                 )
 
             if not getattr(payment, 'transaction_id', None):

@@ -366,6 +366,7 @@ class PlategaPaymentMixin:
                 payment_method=PaymentMethod.PLATEGA,
                 external_id=transaction_external_id or payment.correlation_id,
                 is_completed=True,
+                created_at=getattr(payment, 'created_at', None),
             )
             created_transaction = True
 
