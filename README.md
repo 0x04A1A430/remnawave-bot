@@ -610,6 +610,16 @@ hooks.domain.com {
         }
     }
 
+    handle /remnawave-webhook {
+        reverse_proxy remnawave_bot:8080 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            transport http {
+                read_buffer 0
+            }
+        }
+    }
+
     # app-config.json с CORS
     handle /app-config.json {
         header Access-Control-Allow-Origin "*"
@@ -807,6 +817,18 @@ http {
         }
 
         location = /cloudpayments-webhook {
+            proxy_pass http://remnawave_bot_unified;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_read_timeout 120s;
+            proxy_send_timeout 120s;
+            proxy_buffering off;
+            proxy_request_buffering off;
+        }
+
+        location = /remnawave-webhook {
             proxy_pass http://remnawave_bot_unified;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
@@ -1054,6 +1076,103 @@ REMNAWAVE_SECRET_KEY=XXXXXXX:DDDDDDDD
 # Или если ключ и значение одинаковые
 REMNAWAVE_SECRET_KEY=secret_key_name
 ```
+
+### 📡 Вебхуки Remnawave (real-time события)
+
+Бот может принимать входящие вебхуки от панели Remnawave для мгновенной реакции на события подписок. Это значительно улучшает скорость обновления данных по сравнению с периодической синхронизацией.
+
+#### Поддерживаемые события
+
+| Событие | Описание |
+|---------|----------|
+| `user.expired` | Подписка истекла |
+| `user.disabled` | Подписка деактивирована |
+| `user.enabled` | Подписка активирована |
+| `user.limited` | Превышен лимит трафика |
+| `user.traffic_reset` | Трафик сброшен |
+| `user.modified` | Данные подписки изменены (трафик, дата, URL) |
+| `user.deleted` | Пользователь удалён |
+| `user.revoked` | Ключи подписки отозваны |
+| `user.created` | Пользователь создан |
+| `user.expires_in_*` | Предупреждения об истечении (72ч, 48ч, 24ч) |
+| `user.first_connected` | Первое подключение |
+| `user.bandwidth_usage_threshold_reached` | Порог трафика достигнут |
+| `user_hwid_devices.*` | Устройство добавлено/удалено |
+| `node.*`, `service.*` | Административные события (ноды, сервис) |
+
+#### Настройка
+
+**1. Переменные окружения в `.env`:**
+
+```env
+REMNAWAVE_WEBHOOK_ENABLED=true
+REMNAWAVE_WEBHOOK_PATH=/remnawave-webhook
+REMNAWAVE_WEBHOOK_SECRET=your_secret_min_32_chars_here
+```
+
+Сгенерируйте секрет:
+
+```bash
+openssl rand -hex 32
+```
+
+**2. Настройка в панели Remnawave:**
+
+В панели Remnawave перейдите в раздел **Настройки > Вебхуки** и создайте новый вебхук:
+
+- **URL**: `https://hooks.domain.com/remnawave-webhook`
+- **Secret**: тот же секрет, что и в `REMNAWAVE_WEBHOOK_SECRET`
+- **Events**: выберите нужные события или все
+
+**3. Настройка прокси:**
+
+Добавьте путь `/remnawave-webhook` в конфигурацию обратного прокси.
+
+**Caddy:**
+
+```caddy
+handle /remnawave-webhook {
+    reverse_proxy remnawave_bot:8080 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        transport http {
+            read_buffer 0
+        }
+    }
+}
+```
+
+**Nginx:**
+
+```nginx
+location = /remnawave-webhook {
+    proxy_pass http://remnawave_bot_unified;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_read_timeout 120s;
+    proxy_send_timeout 120s;
+    proxy_buffering off;
+    proxy_request_buffering off;
+}
+```
+
+**4. Проверка работоспособности:**
+
+```bash
+# Health-check (GET запрос)
+curl -s https://hooks.domain.com/remnawave-webhook | jq
+
+# Ожидаемый ответ:
+# {"status": "ok", "service": "remnawave_webhook", "enabled": true}
+```
+
+**Важно:**
+- Секрет должен быть не менее 32 символов
+- Бот верифицирует подпись `X-Remnawave-Signature` (HMAC-SHA256) для каждого запроса
+- При включённых вебхуках бот автоматически защищает подписки от перезаписи данными из периодической синхронизации в течение 60 секунд после получения события
+- Если бот и панель на одном сервере, URL вебхука может быть `http://remnawave_bot:8080/remnawave-webhook` (внутри Docker-сети)
 
 ### 💳 Freekassa
 

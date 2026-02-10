@@ -393,42 +393,67 @@ class RemnaWaveWebhookService:
             logger.exception('Notification delivery failed for user %s, text_key %s', user.id, text_key)
 
     # ------------------------------------------------------------------
+    # Webhook timestamp helper
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _stamp_webhook_update(subscription: Subscription) -> None:
+        """Mark subscription as recently updated by webhook to prevent sync overwrite."""
+        subscription.last_webhook_update_at = datetime.now(UTC).replace(tzinfo=None)
+
+    # ------------------------------------------------------------------
     # User event handlers
     # ------------------------------------------------------------------
 
     async def _handle_user_expired(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
-        if subscription and subscription.status != SubscriptionStatus.EXPIRED.value:
-            await expire_subscription(db, subscription)
-            logger.info('Webhook: subscription %s expired for user %s', subscription.id, user.id)
+        if subscription:
+            self._stamp_webhook_update(subscription)
+            if subscription.status != SubscriptionStatus.EXPIRED.value:
+                await expire_subscription(db, subscription)
+                logger.info('Webhook: subscription %s expired for user %s', subscription.id, user.id)
+            else:
+                await db.commit()
 
         await self._notify_user(user, 'WEBHOOK_SUB_EXPIRED', reply_markup=self._get_renew_keyboard(user))
 
     async def _handle_user_disabled(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
-        if subscription and subscription.status != SubscriptionStatus.DISABLED.value:
-            await deactivate_subscription(db, subscription)
-            logger.info('Webhook: subscription %s disabled for user %s', subscription.id, user.id)
+        if subscription:
+            self._stamp_webhook_update(subscription)
+            if subscription.status != SubscriptionStatus.DISABLED.value:
+                await deactivate_subscription(db, subscription)
+                logger.info('Webhook: subscription %s disabled for user %s', subscription.id, user.id)
+            else:
+                await db.commit()
 
         await self._notify_user(user, 'WEBHOOK_SUB_DISABLED', reply_markup=self._get_subscription_keyboard(user))
 
     async def _handle_user_enabled(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
-        if subscription and subscription.status == SubscriptionStatus.DISABLED.value:
-            await reactivate_subscription(db, subscription)
-            logger.info('Webhook: subscription %s re-enabled for user %s', subscription.id, user.id)
+        if subscription:
+            self._stamp_webhook_update(subscription)
+            if subscription.status == SubscriptionStatus.DISABLED.value:
+                await reactivate_subscription(db, subscription)
+                logger.info('Webhook: subscription %s re-enabled for user %s', subscription.id, user.id)
+            else:
+                await db.commit()
 
         await self._notify_user(user, 'WEBHOOK_SUB_ENABLED', reply_markup=self._get_connect_keyboard(user))
 
     async def _handle_user_limited(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
-        if subscription and subscription.status == SubscriptionStatus.ACTIVE.value:
-            await deactivate_subscription(db, subscription)
-            logger.info('Webhook: subscription %s limited (traffic) for user %s', subscription.id, user.id)
+        if subscription:
+            self._stamp_webhook_update(subscription)
+            if subscription.status == SubscriptionStatus.ACTIVE.value:
+                await deactivate_subscription(db, subscription)
+                logger.info('Webhook: subscription %s limited (traffic) for user %s', subscription.id, user.id)
+            else:
+                await db.commit()
 
         await self._notify_user(user, 'WEBHOOK_SUB_LIMITED', reply_markup=self._get_traffic_keyboard(user))
 
@@ -436,6 +461,7 @@ class RemnaWaveWebhookService:
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
         if subscription:
+            self._stamp_webhook_update(subscription)
             await update_subscription_usage(db, subscription, 0.0)
             # Re-enable if was disabled due to traffic limit
             if subscription.status == SubscriptionStatus.DISABLED.value:
@@ -496,24 +522,32 @@ class RemnaWaveWebhookService:
             subscription.subscription_url = subscription_url
             changed = True
 
+        # Always stamp to protect from sync overwrite, even if no fields changed
+        self._stamp_webhook_update(subscription)
         if changed:
             subscription.updated_at = datetime.now(UTC).replace(tzinfo=None)
-            await db.flush()
             logger.info('Webhook: subscription %s modified (synced from panel) for user %s', subscription.id, user.id)
+        await db.commit()
 
     async def _handle_user_deleted(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
-        if subscription and subscription.status != SubscriptionStatus.EXPIRED.value:
-            await expire_subscription(db, subscription)
-            logger.info(
-                'Webhook: subscription %s marked expired (user deleted in panel) for user %s', subscription.id, user.id
-            )
+        if subscription:
+            self._stamp_webhook_update(subscription)
+            if subscription.status != SubscriptionStatus.EXPIRED.value:
+                await expire_subscription(db, subscription)
+                logger.info(
+                    'Webhook: subscription %s marked expired (user deleted in panel) for user %s',
+                    subscription.id,
+                    user.id,
+                )
+            else:
+                await db.commit()
 
         # Clear remnawave linkage
         if user.remnawave_uuid:
             user.remnawave_uuid = None
-            await db.flush()
+            await db.commit()
 
         await self._notify_user(user, 'WEBHOOK_SUB_DELETED', reply_markup=self._get_renew_keyboard(user))
 
@@ -536,12 +570,14 @@ class RemnaWaveWebhookService:
                 subscription.subscription_crypto_link = new_crypto_link
                 changed = True
 
+            # Always stamp to protect from sync overwrite
+            self._stamp_webhook_update(subscription)
             if changed:
                 subscription.updated_at = datetime.now(UTC).replace(tzinfo=None)
-                await db.flush()
                 logger.info(
                     'Webhook: subscription %s credentials revoked/updated for user %s', subscription.id, user.id
                 )
+            await db.commit()
 
         await self._notify_user(user, 'WEBHOOK_SUB_REVOKED', reply_markup=self._get_connect_keyboard(user))
 

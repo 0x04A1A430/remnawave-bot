@@ -1137,6 +1137,8 @@ class Subscription(Base):
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
+    last_webhook_update_at = Column(DateTime, nullable=True)
+
     remnawave_short_uuid = Column(String(255), nullable=True)
 
     # Тариф (для режима продаж "Тарифы")

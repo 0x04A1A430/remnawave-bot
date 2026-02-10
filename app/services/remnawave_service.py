@@ -1454,9 +1454,19 @@ class RemnaWaveService:
                     for telegram_id, db_user in users_to_deactivate:
                         cleanup_mutation: _UUIDMapMutation | None = None
                         try:
-                            logger.info(f'🗑️ Деактивация подписки пользователя {telegram_id} (нет в панели)')
-
                             subscription = db_user.subscription
+
+                            # Skip if recently updated by webhook
+                            from app.database.crud.subscription import is_recently_updated_by_webhook
+
+                            if subscription and is_recently_updated_by_webhook(subscription):
+                                logger.debug(
+                                    'Пропуск деактивации подписки %s: обновлена вебхуком недавно',
+                                    subscription.id,
+                                )
+                                continue
+
+                            logger.info(f'🗑️ Деактивация подписки пользователя {telegram_id} (нет в панели)')
 
                             if db_user.remnawave_uuid and hwid_api_client:
                                 try:
@@ -1664,7 +1674,7 @@ class RemnaWaveService:
 
     async def _update_subscription_from_panel_data(self, db: AsyncSession, user, panel_user):
         try:
-            from app.database.crud.subscription import get_subscription_by_user_id
+            from app.database.crud.subscription import get_subscription_by_user_id, is_recently_updated_by_webhook
             from app.database.models import SubscriptionStatus
 
             # Всегда используем async CRUD запрос для получения подписки,
@@ -1673,6 +1683,14 @@ class RemnaWaveService:
 
             if not subscription:
                 await self._create_subscription_from_panel_data(db, user, panel_user)
+                return
+
+            # Skip if recently updated by webhook (prevent stale data overwrite)
+            if is_recently_updated_by_webhook(subscription):
+                logger.debug(
+                    'Пропуск синхронизации подписки %s: обновлена вебхуком недавно',
+                    subscription.id,
+                )
                 return
 
             panel_status = panel_user.get('status', 'ACTIVE')
@@ -2499,12 +2517,20 @@ class RemnaWaveService:
                             await self._update_subscription_from_panel_data(db, user, panel_user)
                             stats['updated'] += 1
                         elif subscription.status != SubscriptionStatus.DISABLED.value:
-                            logger.info(f'🗑️ Деактивируем подписку пользователя {user.telegram_id} (нет в панели)')
+                            from app.database.crud.subscription import (
+                                deactivate_subscription,
+                                is_recently_updated_by_webhook,
+                            )
 
-                            from app.database.crud.subscription import deactivate_subscription
-
-                            await deactivate_subscription(db, subscription)
-                            stats['updated'] += 1
+                            if is_recently_updated_by_webhook(subscription):
+                                logger.debug(
+                                    'Пропуск деактивации подписки %s: обновлена вебхуком недавно',
+                                    subscription.id,
+                                )
+                            else:
+                                logger.info(f'🗑️ Деактивируем подписку пользователя {user.telegram_id} (нет в панели)')
+                                await deactivate_subscription(db, subscription)
+                                stats['updated'] += 1
 
                     except Exception as sub_error:
                         logger.error(f'❌ Ошибка синхронизации подписки {subscription.id}: {sub_error}')
@@ -2547,6 +2573,8 @@ class RemnaWaveService:
                         user = subscription.user
                         issues_fixed = 0
 
+                        from app.database.crud.subscription import is_recently_updated_by_webhook
+
                         current_time = self._now_utc()
                         # Конвертируем end_date в UTC для корректного сравнения
                         end_date_utc = self._local_to_utc(subscription.end_date)
@@ -2555,6 +2583,7 @@ class RemnaWaveService:
                         if (
                             end_date_utc + expiry_buffer <= current_time
                             and subscription.status == SubscriptionStatus.ACTIVE.value
+                            and not is_recently_updated_by_webhook(subscription)
                         ):
                             time_since_expiry = current_time - end_date_utc
                             logger.warning(
