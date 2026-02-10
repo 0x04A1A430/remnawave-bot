@@ -404,15 +404,16 @@ async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSess
             status_text = '⌛ Истекла'
         type_text = 'Платная подписка'
 
-    if subscription.traffic_limit_gb == 0:
+    traffic_limit = subscription.traffic_limit_gb or 0
+    if traffic_limit == 0:
         if settings.is_traffic_fixed():
             traffic_text = '∞ Безлимитный'
         else:
             traffic_text = '∞ Безлимитный'
     elif settings.is_traffic_fixed():
-        traffic_text = f'{subscription.traffic_limit_gb} ГБ'
+        traffic_text = f'{traffic_limit} ГБ'
     else:
-        traffic_text = f'{subscription.traffic_limit_gb} ГБ'
+        traffic_text = f'{traffic_limit} ГБ'
 
     subscription_cost = await get_subscription_cost(subscription, db)
 
@@ -444,7 +445,7 @@ async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSess
         info_text += f'\n💰 <b>Стоимость подписки в месяц:</b> {texts.format_price(subscription_cost)}'
 
     # Отображаем докупленный трафик
-    if subscription.traffic_limit_gb > 0:  # Только для лимитированных тарифов
+    if (subscription.traffic_limit_gb or 0) > 0:  # Только для лимитированных тарифов
         from datetime import datetime
 
         from sqlalchemy import select as sql_select
