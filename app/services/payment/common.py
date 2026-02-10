@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from types import SimpleNamespace
 from typing import Any
 
@@ -39,6 +40,7 @@ class PaymentCommonMixin:
 
         # Определяем статус подписки, чтобы показать подходящую кнопку.
         has_active_subscription = False
+        subscription = None
         if user:
             try:
                 subscription = user.subscription
@@ -52,13 +54,15 @@ class PaymentCommonMixin:
                 try:
                     async with AsyncSessionLocal() as session:
                         result = await session.execute(
-                            select(Subscription.is_active, Subscription.is_trial)
+                            select(Subscription.status, Subscription.is_trial, Subscription.end_date)
                             .where(Subscription.user_id == user.id)
+                            .order_by(Subscription.created_at.desc())
                             .limit(1)
                         )
                         row = result.one_or_none()
                         if row:
-                            has_active_subscription = bool(row.is_active and not row.is_trial)
+                            is_active = row.status == 'active' and row.end_date > datetime.utcnow()
+                            has_active_subscription = bool(is_active and not row.is_trial)
                 except Exception as db_error:
                     logger.warning(
                         'Не удалось загрузить подписку пользователя %s из БД: %s',
