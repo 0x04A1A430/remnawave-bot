@@ -17,6 +17,7 @@ from typing import Any
 from aiogram import Bot
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.exc import StaleDataError
 
 from app.database.crud.subscription import (
     deactivate_subscription,
@@ -164,11 +165,23 @@ class RemnaWaveWebhookService:
             )
             return False
 
+        user_id = user.id
         try:
             await handler(db, user, subscription, data)
             return True
+        except StaleDataError:
+            logger.warning(
+                'RemnaWave webhook %s: entity already deleted for user %s (concurrent deletion)',
+                event_name,
+                user_id,
+            )
+            try:
+                await db.rollback()
+            except Exception:
+                pass
+            return True
         except Exception:
-            logger.exception('Error processing RemnaWave webhook event %s for user %s', event_name, user.id)
+            logger.exception('Error processing RemnaWave webhook event %s for user %s', event_name, user_id)
             try:
                 await db.rollback()
             except Exception:
