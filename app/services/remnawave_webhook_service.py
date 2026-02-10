@@ -85,6 +85,10 @@ _ADMIN_CRM_EVENTS: dict[str, str] = {
     'crm.infra_billing_node_payment_overdue_7_days': '🚨 Просрочка оплаты ноды: 7 дней',
 }
 
+_ADMIN_ERROR_EVENTS: dict[str, str] = {
+    'errors.bandwidth_usage_threshold_reached_max_notifications': '⚠️ Достигнут лимит уведомлений о трафике',
+}
+
 
 class RemnaWaveWebhookService:
     """Processes incoming webhooks from RemnaWave backend."""
@@ -120,6 +124,7 @@ class RemnaWaveWebhookService:
             **_ADMIN_NODE_EVENTS,
             **_ADMIN_SERVICE_EVENTS,
             **_ADMIN_CRM_EVENTS,
+            **_ADMIN_ERROR_EVENTS,
         }
 
     def is_admin_event(self, event_name: str) -> bool:
