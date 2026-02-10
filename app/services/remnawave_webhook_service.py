@@ -519,6 +519,26 @@ class RemnaWaveWebhookService:
             except (ValueError, TypeError):
                 pass
 
+        # Sync status from panel
+        panel_status = data.get('status')
+        if panel_status:
+            now = datetime.now(UTC).replace(tzinfo=None)
+            end_date = subscription.end_date
+            if panel_status == 'ACTIVE' and end_date and end_date > now:
+                if subscription.status != SubscriptionStatus.ACTIVE.value:
+                    subscription.status = SubscriptionStatus.ACTIVE.value
+                    changed = True
+                    logger.info(
+                        'Webhook: subscription %s reactivated (%s → active) for user %s',
+                        subscription.id,
+                        subscription.status,
+                        user.id,
+                    )
+            elif panel_status == 'DISABLED':
+                if subscription.status != SubscriptionStatus.DISABLED.value:
+                    subscription.status = SubscriptionStatus.DISABLED.value
+                    changed = True
+
         # Sync subscription URL (validate to prevent stored XSS)
         subscription_url = data.get('subscriptionUrl')
         if (
