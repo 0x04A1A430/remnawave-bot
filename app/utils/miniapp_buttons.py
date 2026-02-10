@@ -4,32 +4,28 @@ from aiogram.types import InlineKeyboardButton
 from app.config import settings
 
 
-DEFAULT_UNAVAILABLE_CALLBACK = 'menu_profile_unavailable'
-
-
 def build_miniapp_or_callback_button(
     text: str,
     *,
     callback_data: str,
-    unavailable_callback: str = DEFAULT_UNAVAILABLE_CALLBACK,
 ) -> InlineKeyboardButton:
-    """Create a button that opens the miniapp in text menu mode.
+    """Create a button that opens the miniapp or falls back to a callback.
 
-    When the simplified text menu mode is enabled we should avoid exposing
-    deep bot flows and redirect the user to the configured miniapp instead.
-    If the miniapp URL is missing we fall back to a safe callback that shows
-    an alert about the unavailable profile rather than opening disabled
-    sections of the bot.
+    In text menu mode, if ``MINIAPP_CUSTOM_URL`` is configured the button
+    opens the full cabinet miniapp.  Otherwise (or outside text menu mode)
+    the regular ``callback_data`` is used so the user stays in the bot.
+
+    Only ``MINIAPP_CUSTOM_URL`` is considered here — the purchase-only URL
+    (``MINIAPP_PURCHASE_URL``) is intentionally excluded because it cannot
+    display subscription details and would load indefinitely.
     """
 
     if settings.is_text_main_menu_mode():
-        miniapp_url = settings.get_main_menu_miniapp_url()
+        miniapp_url = (settings.MINIAPP_CUSTOM_URL or '').strip()
         if miniapp_url:
             return InlineKeyboardButton(
                 text=text,
                 web_app=types.WebAppInfo(url=miniapp_url),
             )
-        safe_callback = unavailable_callback or DEFAULT_UNAVAILABLE_CALLBACK
-        return InlineKeyboardButton(text=text, callback_data=safe_callback)
 
     return InlineKeyboardButton(text=text, callback_data=callback_data)
