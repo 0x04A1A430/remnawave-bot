@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import re
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -47,6 +49,24 @@ class WataService:
             'Content-Type': 'application/json',
         }
 
+    _MAX_RETRIES = 2
+
+    @staticmethod
+    def _parse_retry_after(response: aiohttp.ClientResponse, response_text: str) -> float:
+        """Extract retry delay from Retry-After header or response body."""
+        retry_after = response.headers.get('Retry-After')
+        if retry_after:
+            try:
+                return float(retry_after)
+            except (ValueError, TypeError):
+                pass
+
+        match = re.search(r'[Rr]etry after (\d+)', response_text)
+        if match:
+            return float(match.group(1))
+
+        return 45.0
+
     async def _request(
         self,
         method: str,
@@ -61,35 +81,57 @@ class WataService:
         url = self._build_url(path)
         timeout = aiohttp.ClientTimeout(total=self.request_timeout)
 
-        try:
-            async with (
-                aiohttp.ClientSession(timeout=timeout) as session,
-                session.request(
-                    method,
-                    url,
-                    json=json,
-                    params=params,
-                    headers=self._build_headers(),
-                ) as response,
-            ):
-                response_text = await response.text()
-                if response.status >= 400:
-                    logger.error('WATA API error %s: %s', response.status, response_text)
-                    raise WataAPIError(f'WATA API returned status {response.status}: {response_text}')
+        last_error: WataAPIError | None = None
+        for attempt in range(1 + self._MAX_RETRIES):
+            try:
+                async with (
+                    aiohttp.ClientSession(timeout=timeout) as session,
+                    session.request(
+                        method,
+                        url,
+                        json=json,
+                        params=params,
+                        headers=self._build_headers(),
+                    ) as response,
+                ):
+                    response_text = await response.text()
 
-                if not response_text:
-                    return {}
+                    if response.status == 429:
+                        retry_delay = self._parse_retry_after(response, response_text)
+                        if attempt < self._MAX_RETRIES:
+                            logger.warning(
+                                'WATA API 429 on %s %s, retry %d/%d after %.0fs',
+                                method,
+                                path,
+                                attempt + 1,
+                                self._MAX_RETRIES,
+                                retry_delay,
+                            )
+                            await asyncio.sleep(retry_delay)
+                            continue
+                        logger.warning('WATA API 429 on %s %s, retries exhausted', method, path)
+                        last_error = WataAPIError(f'WATA API rate limited on {method} {path}')
+                        break
 
-                try:
-                    data = await response.json()
-                except aiohttp.ContentTypeError as error:
-                    logger.error('WATA API returned non-JSON response: %s', error)
-                    raise WataAPIError('WATA API returned invalid JSON') from error
+                    if response.status >= 400:
+                        logger.error('WATA API error %s: %s', response.status, response_text)
+                        raise WataAPIError(f'WATA API returned status {response.status}: {response_text}')
 
-                return data
-        except aiohttp.ClientError as error:
-            logger.error('Error communicating with WATA API: %s', error)
-            raise WataAPIError('Failed to communicate with WATA API') from error
+                    if not response_text:
+                        return {}
+
+                    try:
+                        data = await response.json()
+                    except aiohttp.ContentTypeError as error:
+                        logger.error('WATA API returned non-JSON response: %s', error)
+                        raise WataAPIError('WATA API returned invalid JSON') from error
+
+                    return data
+            except aiohttp.ClientError as error:
+                logger.error('Error communicating with WATA API: %s', error)
+                raise WataAPIError('Failed to communicate with WATA API') from error
+
+        raise last_error or WataAPIError('WATA API request failed')
 
     @staticmethod
     def _amount_from_kopeks(amount_kopeks: int) -> float:
