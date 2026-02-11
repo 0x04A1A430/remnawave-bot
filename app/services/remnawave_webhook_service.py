@@ -581,8 +581,13 @@ class RemnaWaveWebhookService:
                     subscription.id,
                     user.id,
                 )
-            else:
-                await db.commit()
+
+            # Clear subscription data — panel user no longer exists
+            subscription.subscription_url = None
+            subscription.subscription_crypto_link = None
+            subscription.remnawave_short_uuid = None
+            subscription.connected_squads = None
+            await db.commit()
 
         # Clear remnawave linkage
         if user.remnawave_uuid:
