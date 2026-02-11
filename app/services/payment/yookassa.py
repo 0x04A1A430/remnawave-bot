@@ -397,6 +397,21 @@ class YooKassaPaymentMixin:
         try:
             from sqlalchemy import select
 
+            from app.database.models import YooKassaPayment as YKPayment
+
+            # Lock the payment row to prevent concurrent double-processing
+            locked_result = await db.execute(select(YKPayment).where(YKPayment.id == payment.id).with_for_update())
+            payment = locked_result.scalar_one()
+
+            # Fast-path: already processed
+            if getattr(payment, 'transaction_id', None):
+                logger.info(
+                    'Платеж YooKassa %s уже обработан (transaction_id=%s), пропускаем.',
+                    payment.yookassa_payment_id,
+                    payment.transaction_id,
+                )
+                return True
+
             payment_module = import_module('app.services.payment_service')
 
             # Проверяем, не обрабатывается ли уже этот платеж (защита от дублирования)

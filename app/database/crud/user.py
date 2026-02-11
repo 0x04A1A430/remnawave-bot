@@ -503,6 +503,10 @@ async def subtract_user_balance(
     logger.info(f'   💸 Сумма к списанию: {amount_kopeks} копеек')
     logger.info(f'   📝 Описание: {description}')
 
+    # Lock the user row to prevent concurrent balance race conditions
+    locked_result = await db.execute(select(User).where(User.id == user.id).with_for_update())
+    user = locked_result.scalar_one()
+
     log_context: dict[str, object] | None = None
     if consume_promo_offer:
         try:
@@ -554,14 +558,13 @@ async def subtract_user_balance(
 
         user.updated_at = datetime.utcnow()
 
-        await db.commit()
-        await db.refresh(user)
-
         if create_transaction:
             from app.database.crud.transaction import (
                 create_transaction as create_trans,
             )
 
+            # create_trans commits the session, atomically persisting
+            # both the balance change and the transaction record
             await create_trans(
                 db=db,
                 user_id=user.id,
@@ -570,6 +573,10 @@ async def subtract_user_balance(
                 description=description,
                 payment_method=payment_method,
             )
+        else:
+            await db.commit()
+
+        await db.refresh(user)
 
         if consume_promo_offer and log_context:
             try:

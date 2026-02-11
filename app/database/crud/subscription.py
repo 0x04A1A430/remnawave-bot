@@ -666,14 +666,15 @@ async def decrement_subscription_server_counts(
     try:
         from app.database.crud.server_squad import remove_user_from_servers
 
-        await remove_user_from_servers(db, sorted(server_ids))
+        # Use savepoint so StaleDataError rollback doesn't affect the parent transaction
+        async with db.begin_nested():
+            await remove_user_from_servers(db, sorted(server_ids))
     except StaleDataError:
         logger.warning(
             '⚠️ Подписка %s уже удалена (StaleDataError), пропускаем декремент серверов %s',
             sub_id,
             list(server_ids),
         )
-        await db.rollback()
     except Exception as error:
         logger.error(
             '⚠️ Ошибка уменьшения счетчика пользователей серверов %s для подписки %s: %s',

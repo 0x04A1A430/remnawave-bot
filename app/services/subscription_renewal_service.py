@@ -449,7 +449,30 @@ class SubscriptionRenewalService:
         subscription_before = subscription
         old_end_date = subscription_before.end_date
 
-        subscription_after = await extend_subscription(db, subscription_before, period_days)
+        try:
+            subscription_after = await extend_subscription(db, subscription_before, period_days)
+        except Exception:
+            # Compensate: refund the charged balance since extension failed
+            if charge_from_balance > 0:
+                try:
+                    from app.database.crud.user import add_user_balance
+
+                    await add_user_balance(
+                        db,
+                        user,
+                        charge_from_balance,
+                        'Возврат: ошибка продления подписки',
+                        create_transaction=True,
+                        transaction_type=TransactionType.REFUND,
+                    )
+                except Exception as refund_error:
+                    logger.critical(
+                        'CRITICAL: Failed to refund %s kopeks to user %s after extension failure: %s',
+                        charge_from_balance,
+                        user.id,
+                        refund_error,
+                    )
+            raise
 
         server_ids = pricing.server_ids or []
         server_prices_for_period = pricing.details.get('servers_individual_prices', [])
