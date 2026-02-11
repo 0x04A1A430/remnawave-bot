@@ -71,6 +71,7 @@ async def show_updates_menu(callback: types.CallbackQuery, db_user: User, db: As
     except Exception as e:
         if 'message is not modified' in str(e).lower():
             logger.debug('📝 Сообщение не изменено в show_updates_menu')
+            await callback.answer()
             return
         logger.error(f'Ошибка показа меню обновлений: {e}')
         await callback.answer('❌ Ошибка загрузки меню обновлений', show_alert=True)

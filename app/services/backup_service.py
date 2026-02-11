@@ -7,7 +7,7 @@ import shutil
 import tarfile
 import tempfile
 from dataclasses import asdict, dataclass
-from datetime import datetime, time as dt_time, timedelta
+from datetime import date as dt_date, datetime, time as dt_time, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -1164,6 +1164,12 @@ class BackupService:
                 except (ValueError, TypeError) as e:
                     logger.warning(f'Не удалось парсить время {value} для поля {key}: {e}')
                     processed_data[key] = dt_time(hour=12, minute=0)
+            elif column_type_str == 'DATE' and isinstance(value, str):
+                try:
+                    processed_data[key] = dt_date.fromisoformat(value)
+                except (ValueError, TypeError) as e:
+                    logger.warning(f'Не удалось парсить дату {value} для поля {key}: {e}')
+                    processed_data[key] = None
             elif ('BOOLEAN' in column_type_str or 'BOOL' in column_type_str) and isinstance(value, str):
                 processed_data[key] = value.lower() in ('true', '1', 'yes', 'on')
             elif (
@@ -1563,7 +1569,7 @@ class BackupService:
             if not str(backup_path).startswith(str(self.backup_dir.resolve()) + os.sep):
                 return False, '❌ Недопустимое имя файла бекапа'
 
-            if not backup_path.exists():
+            if not backup_path.is_file():
                 return False, f'❌ Файл бекапа не найден: {backup_filename}'
 
             backup_path.unlink()
