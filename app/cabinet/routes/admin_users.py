@@ -27,6 +27,7 @@ from app.database.crud.user import (
 from app.database.models import (
     PromoGroup,
     Subscription,
+    SubscriptionServer,
     SubscriptionStatus,
     TrafficPurchase,
     Transaction,
@@ -1806,6 +1807,8 @@ async def reset_user_trial(
         # Delete subscription from database
         from sqlalchemy import delete
 
+        subscription_id = user.subscription.id
+        await db.execute(delete(SubscriptionServer).where(SubscriptionServer.subscription_id == subscription_id))
         await db.execute(delete(Subscription).where(Subscription.user_id == user_id))
         subscription_deleted = True
 
@@ -1876,6 +1879,8 @@ async def reset_user_subscription(
     # Delete subscription from database
     from sqlalchemy import delete
 
+    subscription_id = user.subscription.id
+    await db.execute(delete(SubscriptionServer).where(SubscriptionServer.subscription_id == subscription_id))
     await db.execute(delete(Subscription).where(Subscription.user_id == user_id))
     subscription_deleted = True
 
