@@ -23,6 +23,7 @@ from app.database.models import (
     Subscription,
     SubscriptionServer,
     SubscriptionStatus,
+    Tariff,
     User,
 )
 
@@ -362,6 +363,25 @@ async def sync_with_remnawave(db: AsyncSession, remnawave_squads: list[dict]) ->
                 subscription.updated_at = datetime.utcnow()
                 cleaned_subscriptions += 1
 
+        # Clean up stale UUIDs from tariff allowed_squads
+        cleaned_tariffs = 0
+        tariffs_result = await db.execute(select(Tariff))
+        for tariff in tariffs_result.scalars().all():
+            current = list(tariff.allowed_squads or [])
+            if not current:
+                continue
+            filtered = [u for u in current if u not in removed_uuids]
+            if len(filtered) != len(current):
+                tariff.allowed_squads = filtered
+                tariff.updated_at = datetime.utcnow()
+                cleaned_tariffs += 1
+                logger.info(
+                    '🧹 Тариф "%s" (ID: %s): удалены несуществующие сквады %s',
+                    tariff.name,
+                    tariff.id,
+                    [u for u in current if u in removed_uuids],
+                )
+
         await db.execute(delete(ServerSquad).where(ServerSquad.id.in_(removed_ids)))
         removed = len(removed_servers)
 
@@ -369,6 +389,12 @@ async def sync_with_remnawave(db: AsyncSession, remnawave_squads: list[dict]) ->
             logger.info(
                 '🧹 Обновлены подписки после удаления серверов: %s',
                 cleaned_subscriptions,
+            )
+
+        if cleaned_tariffs:
+            logger.info(
+                '🧹 Обновлены тарифы после удаления серверов: %s',
+                cleaned_tariffs,
             )
 
     await db.commit()
