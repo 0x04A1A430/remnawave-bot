@@ -2620,10 +2620,6 @@ def get_updated_subscription_settings_keyboard(
             ]
         )
 
-    if settings.is_modem_enabled() and not has_tariff:
-        keyboard.append(
-            [InlineKeyboardButton(text=texts.t('MODEM_BUTTON', '📡 Модем'), callback_data='subscription_modem')]
-        )
 
     keyboard.append(
         [

@@ -1534,7 +1534,6 @@ class AdminNotificationService:
                 'traffic': '📊 ДОКУПКА ТРАФИКА',
                 'devices': '📱 ДОКУПКА УСТРОЙСТВ',
                 'servers': '🌐 СМЕНА СЕРВЕРОВ',
-                'modem': '📡 МОДЕМ',
             }
             title = update_titles.get(update_type, '⚙️ ИЗМЕНЕНИЕ ПОДПИСКИ')
 
@@ -1570,10 +1569,6 @@ class AdminNotificationService:
                 message_lines.append(f'🔄 {old_formatted} → {new_formatted}')
             elif update_type == 'devices':
                 message_lines.append(f'🔄 {old_value} → {new_value} устр.')
-            elif update_type == 'modem':
-                old_state = '✅ Вкл' if old_value else '❌ Выкл'
-                new_state = '✅ Вкл' if new_value else '❌ Выкл'
-                message_lines.append(f'🔄 {old_state} → {new_state}')
             else:
                 message_lines.append(f'🔄 {old_value} → {new_value}')
 
@@ -1638,8 +1633,6 @@ class AdminNotificationService:
             if isinstance(value, list):
                 return f'{len(value)} серверов'
             return str(value)
-        if update_type == 'modem':
-            return '✅ Включён' if value else '❌ Выключен'
         return str(value)
 
     async def send_bulk_ban_notification(
