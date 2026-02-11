@@ -2620,7 +2620,6 @@ def get_updated_subscription_settings_keyboard(
             ]
         )
 
-
     keyboard.append(
         [
             InlineKeyboardButton(

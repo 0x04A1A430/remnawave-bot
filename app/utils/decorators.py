@@ -173,6 +173,3 @@ def rate_limit(rate: float = 1.0, key: str = None):
         return wrapper
 
     return decorator
-
-
-

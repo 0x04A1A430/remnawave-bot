@@ -50,5 +50,3 @@ class SubscriptionDevicesRequest(BaseModel):
 
 class SubscriptionSquadRequest(BaseModel):
     squad_uuid: str
-
-

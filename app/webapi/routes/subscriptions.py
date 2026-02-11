@@ -321,5 +321,3 @@ async def delete_subscription(
 
     subscription = await _get_subscription(db, subscription.id)
     return _serialize_subscription(subscription)
-
-
