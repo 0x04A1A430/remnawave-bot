@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -1010,7 +1011,14 @@ async def request_email_change(
         user.email_verification_token = verification_token
         user.email_verification_expires = verification_expires
 
-        await db.commit()
+        try:
+            await db.commit()
+        except IntegrityError:
+            await db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='This email is already registered',
+            )
 
         if settings.is_cabinet_email_verification_enabled() and email_service.is_configured():
             cabinet_url = settings.CABINET_URL
@@ -1031,16 +1039,19 @@ async def request_email_change(
             )
             custom_subject, custom_body = override if override else (None, None)
 
-            await asyncio.to_thread(
-                email_service.send_verification_email,
-                to_email=request.new_email,
-                verification_token=verification_token,
-                verification_url=verification_url,
-                username=user.first_name,
-                language=lang,
-                custom_subject=custom_subject,
-                custom_body_html=custom_body,
-            )
+            try:
+                await asyncio.to_thread(
+                    email_service.send_verification_email,
+                    to_email=request.new_email,
+                    verification_token=verification_token,
+                    verification_url=verification_url,
+                    username=user.first_name,
+                    language=lang,
+                    custom_subject=custom_subject,
+                    custom_body_html=custom_body,
+                )
+            except Exception as e:
+                logger.error(f'Failed to send verification email to {request.new_email} for user {user.id}: {e}')
 
         logger.info(f'Unverified email replaced for user {user.id}: {old_email} -> {request.new_email}')
 

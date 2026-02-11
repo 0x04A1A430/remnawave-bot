@@ -1225,6 +1225,20 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
             )
             logger.info(f'✅ Приветственное сообщение отправлено пользователю {user.telegram_id}')
             await _send_pinned_message(callback.bot, db, user)
+        except TelegramBadRequest as e:
+            if 'parse entities' in str(e).lower() or "can't parse" in str(e).lower():
+                logger.warning(f'HTML parse error в приветственном сообщении, повтор без parse_mode: {e}')
+                try:
+                    await callback.message.answer(
+                        offer_text,
+                        reply_markup=get_post_registration_keyboard(user.language),
+                        parse_mode=None,
+                    )
+                    await _send_pinned_message(callback.bot, db, user)
+                except Exception as fallback_err:
+                    logger.error(f'Ошибка при повторной отправке приветственного сообщения: {fallback_err}')
+            else:
+                logger.error(f'Ошибка при отправке приветственного сообщения: {e}')
         except Exception as e:
             logger.error(f'Ошибка при отправке приветственного сообщения: {e}')
     else:
@@ -1504,6 +1518,20 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
             )
             logger.info(f'✅ Приветственное сообщение отправлено пользователю {user.telegram_id}')
             await _send_pinned_message(message.bot, db, user)
+        except TelegramBadRequest as e:
+            if 'parse entities' in str(e).lower() or "can't parse" in str(e).lower():
+                logger.warning(f'HTML parse error в приветственном сообщении, повтор без parse_mode: {e}')
+                try:
+                    await message.answer(
+                        offer_text,
+                        reply_markup=keyboard,
+                        parse_mode=None,
+                    )
+                    await _send_pinned_message(message.bot, db, user)
+                except Exception as fallback_err:
+                    logger.error(f'Ошибка при повторной отправке приветственного сообщения: {fallback_err}')
+            else:
+                logger.error(f'Ошибка при отправке приветственного сообщения: {e}')
         except Exception as e:
             logger.error(f'Ошибка при отправке приветственного сообщения: {e}')
     else:

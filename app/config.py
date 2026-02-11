@@ -1057,7 +1057,7 @@ class Settings(BaseSettings):
         if not sanitized_username:
             sanitized_username = f'user_{identifier}'
 
-        return sanitized_username[:64]
+        return sanitized_username[:36]
 
     @staticmethod
     def parse_daily_time_list(raw_value: str | None) -> list[time]:
