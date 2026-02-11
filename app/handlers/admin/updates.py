@@ -69,6 +69,10 @@ async def show_updates_menu(callback: types.CallbackQuery, db_user: User, db: As
         await callback.answer()
 
     except Exception as e:
+        if 'message is not modified' in str(e).lower():
+            logger.debug('📝 Сообщение не изменено в show_updates_menu')
+            await callback.answer()
+            return
         logger.error(f'Ошибка показа меню обновлений: {e}')
         await callback.answer('❌ Ошибка загрузки меню обновлений', show_alert=True)
 
@@ -118,6 +122,9 @@ async def check_updates(callback: types.CallbackQuery, db_user: User, db: AsyncS
         await callback.message.edit_text(message, reply_markup=keyboard, parse_mode='HTML')
 
     except Exception as e:
+        if 'message is not modified' in str(e).lower():
+            logger.debug('📝 Сообщение не изменено в check_updates')
+            return
         logger.error(f'Ошибка проверки обновлений: {e}')
         await callback.message.edit_text(
             f'❌ <b>ОШИБКА ПРОВЕРКИ ОБНОВЛЕНИЙ</b>\n\n'
@@ -142,7 +149,6 @@ async def show_version_info(callback: types.CallbackQuery, db_user: User, db: As
         newer_releases = version_info['newer_releases']
         has_updates = version_info['has_updates']
         last_check = version_info['last_check']
-        version_info['repo_url']
 
         current_info = '📦 <b>ТЕКУЩАЯ ВЕРСИЯ</b>\n\n'
 
@@ -198,6 +204,9 @@ async def show_version_info(callback: types.CallbackQuery, db_user: User, db: As
         )
 
     except Exception as e:
+        if 'message is not modified' in str(e).lower():
+            logger.debug('📝 Сообщение не изменено в show_version_info')
+            return
         logger.error(f'Ошибка получения информации о версиях: {e}')
         await callback.message.edit_text(
             f'❌ <b>ОШИБКА ЗАГРУЗКИ</b>\n\n'

@@ -931,14 +931,11 @@ async def process_privacy_policy_accept(callback: types.CallbackQuery, state: FS
                 await callback.message.edit_text(
                     privacy_policy_required_text, reply_markup=get_privacy_policy_keyboard(language)
                 )
+            except TelegramBadRequest as e:
+                if 'message is not modified' not in str(e):
+                    logger.warning(f'Ошибка при показе сообщения об отклонении политики: {e}')
             except Exception as e:
-                logger.error(f'Ошибка при показе сообщения об отклонении политики конфиденциальности: {e}')
-                try:
-                    await callback.message.edit_text(
-                        privacy_policy_required_text, reply_markup=get_privacy_policy_keyboard(language)
-                    )
-                except:
-                    pass
+                logger.warning(f'Ошибка при показе сообщения об отклонении политики: {e}')
 
         logger.info(f'✅ Политика конфиденциальности обработана для пользователя {callback.from_user.id}')
 

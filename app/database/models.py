@@ -1159,17 +1159,25 @@ class Subscription(Base):
     @property
     def is_active(self) -> bool:
         current_time = datetime.utcnow()
-        return self.status == SubscriptionStatus.ACTIVE.value and self.end_date > current_time
+        return (
+            self.status == SubscriptionStatus.ACTIVE.value
+            and self.end_date is not None
+            and self.end_date > current_time
+        )
 
     @property
     def is_expired(self) -> bool:
         """Проверяет, истёк ли срок подписки"""
-        return self.end_date <= datetime.utcnow()
+        return self.end_date is not None and self.end_date <= datetime.utcnow()
 
     @property
     def should_be_expired(self) -> bool:
         current_time = datetime.utcnow()
-        return self.status == SubscriptionStatus.ACTIVE.value and self.end_date <= current_time
+        return (
+            self.status == SubscriptionStatus.ACTIVE.value
+            and self.end_date is not None
+            and self.end_date <= current_time
+        )
 
     @property
     def actual_status(self) -> str:
@@ -1182,12 +1190,12 @@ class Subscription(Base):
             return 'disabled'
 
         if self.status == SubscriptionStatus.ACTIVE.value:
-            if self.end_date <= current_time:
+            if self.end_date is None or self.end_date <= current_time:
                 return 'expired'
             return 'active'
 
         if self.status == SubscriptionStatus.TRIAL.value:
-            if self.end_date <= current_time:
+            if self.end_date is None or self.end_date <= current_time:
                 return 'expired'
             return 'trial'
 
@@ -1230,6 +1238,8 @@ class Subscription(Base):
 
     @property
     def days_left(self) -> int:
+        if self.end_date is None:
+            return 0
         current_time = datetime.utcnow()
         if self.end_date <= current_time:
             return 0
@@ -1255,11 +1265,10 @@ class Subscription(Base):
 
     @property
     def traffic_used_percent(self) -> float:
-        if self.traffic_limit_gb == 0:
+        if not self.traffic_limit_gb:
             return 0.0
-        if self.traffic_limit_gb > 0:
-            return min((self.traffic_used_gb / self.traffic_limit_gb) * 100, 100.0)
-        return 0.0
+        used = self.traffic_used_gb or 0.0
+        return min((used / self.traffic_limit_gb) * 100, 100.0)
 
     def extend_subscription(self, days: int):
         if self.end_date > datetime.utcnow():

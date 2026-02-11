@@ -16,17 +16,20 @@ from typing import Any
 
 from aiogram import Bot
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.exc import StaleDataError
 
 from app.database.crud.subscription import (
     deactivate_subscription,
+    decrement_subscription_server_counts,
     expire_subscription,
     get_subscription_by_user_id,
     reactivate_subscription,
     update_subscription_usage,
 )
 from app.database.crud.user import get_user_by_remnawave_uuid, get_user_by_telegram_id
-from app.database.models import Subscription, SubscriptionStatus, User
+from app.database.models import Subscription, SubscriptionServer, SubscriptionStatus, User
 from app.localization.texts import get_texts
 from app.services.admin_notification_service import AdminNotificationService
 from app.services.notification_delivery_service import NotificationType, notification_delivery_service
@@ -164,11 +167,23 @@ class RemnaWaveWebhookService:
             )
             return False
 
+        user_id = user.id
         try:
             await handler(db, user, subscription, data)
             return True
+        except StaleDataError:
+            logger.warning(
+                'RemnaWave webhook %s: entity already deleted for user %s (concurrent deletion)',
+                event_name,
+                user_id,
+            )
+            try:
+                await db.rollback()
+            except Exception:
+                pass
+            return True
         except Exception:
-            logger.exception('Error processing RemnaWave webhook event %s for user %s', event_name, user.id)
+            logger.exception('Error processing RemnaWave webhook event %s for user %s', event_name, user_id)
             try:
                 await db.rollback()
             except Exception:
@@ -561,20 +576,33 @@ class RemnaWaveWebhookService:
     ) -> None:
         if subscription:
             self._stamp_webhook_update(subscription)
+
+            # Decrement server counters BEFORE clearing connected_squads
+            await decrement_subscription_server_counts(db, subscription)
+
             if subscription.status != SubscriptionStatus.EXPIRED.value:
-                await expire_subscription(db, subscription)
+                subscription.status = SubscriptionStatus.EXPIRED.value
                 logger.info(
                     'Webhook: subscription %s marked expired (user deleted in panel) for user %s',
                     subscription.id,
                     user.id,
                 )
-            else:
-                await db.commit()
+
+            # Clear subscription data — panel user no longer exists
+            subscription.subscription_url = None
+            subscription.subscription_crypto_link = None
+            subscription.remnawave_short_uuid = None
+            subscription.connected_squads = None
+            subscription.updated_at = datetime.now(UTC).replace(tzinfo=None)
+
+            # Remove SubscriptionServer link rows
+            await db.execute(delete(SubscriptionServer).where(SubscriptionServer.subscription_id == subscription.id))
 
         # Clear remnawave linkage
         if user.remnawave_uuid:
             user.remnawave_uuid = None
-            await db.commit()
+
+        await db.commit()
 
         await self._notify_user(user, 'WEBHOOK_SUB_DELETED', reply_markup=self._get_renew_keyboard(user))
 

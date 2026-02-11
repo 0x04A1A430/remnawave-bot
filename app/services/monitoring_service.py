@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from aiogram.enums import ChatMemberStatus
-from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError, TelegramNetworkError
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -1286,6 +1286,13 @@ class MonitoringService:
                 exc,
             )
             return False
+        except TelegramNetworkError as e:
+            logger.warning(
+                'Таймаут отправки уведомления об истечении подписки пользователю %s: %s',
+                user.telegram_id,
+                e,
+            )
+            return False
         except Exception as e:
             logger.error(
                 'Ошибка отправки уведомления об истечении подписки пользователю %s: %s',
@@ -1333,6 +1340,13 @@ class MonitoringService:
                 'Ошибка Telegram API при отправке уведомления о завершении тестовой подписки пользователю %s: %s',
                 user.telegram_id,
                 exc,
+            )
+            return False
+        except TelegramNetworkError as e:
+            logger.warning(
+                'Таймаут отправки уведомления об окончании тестовой подписки пользователю %s: %s',
+                user.telegram_id,
+                e,
             )
             return False
         except Exception as e:
@@ -1410,6 +1424,13 @@ class MonitoringService:
                 exc,
             )
             return False
+        except TelegramNetworkError as e:
+            logger.warning(
+                'Таймаут отправки уведомления об отсутствии подключения пользователю %s: %s',
+                user.telegram_id,
+                e,
+            )
+            return False
         except Exception as e:
             logger.error(
                 'Ошибка отправки уведомления об отсутствии подключения пользователю %s: %s',
@@ -1471,6 +1492,13 @@ class MonitoringService:
                 'Ошибка Telegram API при отправке уведомления об отписке от канала пользователю %s: %s',
                 user.telegram_id,
                 exc,
+            )
+            return False
+        except TelegramNetworkError as error:
+            logger.warning(
+                'Таймаут отправки уведомления об отписке от канала пользователю %s: %s',
+                user.telegram_id,
+                error,
             )
             return False
         except Exception as error:
@@ -1535,6 +1563,13 @@ class MonitoringService:
                 'Ошибка Telegram API при отправке напоминания об истекшей подписке пользователю %s: %s',
                 user.telegram_id,
                 exc,
+            )
+            return False
+        except TelegramNetworkError as e:
+            logger.warning(
+                'Таймаут отправки напоминания об истекшей подписке пользователю %s: %s',
+                user.telegram_id,
+                e,
             )
             return False
         except Exception as e:
@@ -1629,6 +1664,13 @@ class MonitoringService:
                 exc,
             )
             return False
+        except TelegramNetworkError as e:
+            logger.warning(
+                'Таймаут отправки скидочного уведомления пользователю %s: %s',
+                user.telegram_id,
+                e,
+            )
+            return False
         except Exception as e:
             logger.error(
                 'Ошибка отправки скидочного уведомления пользователю %s: %s',
@@ -1653,6 +1695,12 @@ class MonitoringService:
                     user.telegram_id,
                     exc,
                 )
+        except TelegramNetworkError as e:
+            logger.warning(
+                'Таймаут отправки уведомления об автоплатеже пользователю %s: %s',
+                user.telegram_id,
+                e,
+            )
         except Exception as e:
             logger.error(
                 'Ошибка отправки уведомления об автоплатеже пользователю %s: %s',
@@ -1690,6 +1738,12 @@ class MonitoringService:
                     user.telegram_id,
                     exc,
                 )
+        except TelegramNetworkError as e:
+            logger.warning(
+                'Таймаут отправки уведомления о неудачном автоплатеже пользователю %s: %s',
+                user.telegram_id,
+                e,
+            )
         except Exception as e:
             logger.error(
                 'Ошибка отправки уведомления о неудачном автоплатеже пользователю %s: %s',
