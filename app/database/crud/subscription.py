@@ -357,8 +357,9 @@ async def extend_subscription(
     )
 
     # Определяем, происходит ли СМЕНА тарифа (а не продление того же)
+    # Включает переход из классического режима (tariff_id=None) в тарифный
     is_tariff_change = (
-        tariff_id is not None and subscription.tariff_id is not None and tariff_id != subscription.tariff_id
+        tariff_id is not None and (subscription.tariff_id is None or tariff_id != subscription.tariff_id)
     )
 
     if is_tariff_change:

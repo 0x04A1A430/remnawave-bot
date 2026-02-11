@@ -5926,7 +5926,10 @@ async def update_subscription_servers_endpoint(
 
     if added_server_ids:
         await add_subscription_servers(db, subscription, added_server_ids, added_server_prices)
-        await add_user_to_servers(db, added_server_ids)
+        try:
+            await add_user_to_servers(db, added_server_ids)
+        except Exception as e:
+            logger.error(f'Ошибка обновления счётчика серверов (add): {e}')
 
     removed_server_ids = [
         catalog[uuid].get('server_id') for uuid in removed if catalog[uuid].get('server_id') is not None
@@ -5934,7 +5937,10 @@ async def update_subscription_servers_endpoint(
 
     if removed_server_ids:
         await remove_subscription_servers(db, subscription.id, removed_server_ids)
-        await remove_user_from_servers(db, removed_server_ids)
+        try:
+            await remove_user_from_servers(db, removed_server_ids)
+        except Exception as e:
+            logger.error(f'Ошибка обновления счётчика серверов (remove): {e}')
 
     ordered_selection = []
     seen_selection = set()

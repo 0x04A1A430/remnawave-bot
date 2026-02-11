@@ -3216,7 +3216,10 @@ async def update_countries(
         added_server_ids = await get_server_ids_by_uuids(db, added)
         if added_server_ids:
             await add_subscription_servers(db, user.subscription, added_server_ids, added_server_prices)
-            await add_user_to_servers(db, added_server_ids)
+            try:
+                await add_user_to_servers(db, added_server_ids)
+            except Exception as e:
+                logger.error(f'Ошибка обновления счётчика серверов: {e}')
 
     # Update connected squads
     user.subscription.connected_squads = selected_countries
