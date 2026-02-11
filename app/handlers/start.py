@@ -1760,6 +1760,8 @@ async def get_main_menu_text_simple(user_name, texts, db: AsyncSession):
 async def required_sub_channel_check(
     query: types.CallbackQuery, bot: Bot, state: FSMContext, db: AsyncSession, db_user=None
 ):
+    from app.utils.message_patch import _cache_logo_file_id, get_logo_media
+
     language = DEFAULT_LANGUAGE
     texts = get_texts(language)
 
@@ -1905,8 +1907,6 @@ async def required_sub_channel_check(
 
             menu_text = await get_main_menu_text(user, texts, db)
 
-            from app.utils.message_patch import _cache_logo_file_id, get_logo_media
-
             is_admin = settings.is_admin(user.telegram_id)
             is_moderator = (not is_admin) and SupportSettingsService.is_moderator(user.telegram_id)
 
@@ -1999,8 +1999,6 @@ async def required_sub_channel_check(
 
                     menu_text = await get_main_menu_text(user, texts, db)
 
-                    from app.utils.message_patch import _cache_logo_file_id, get_logo_media
-
                     is_admin = settings.is_admin(user.telegram_id)
                     is_moderator = (not is_admin) and SupportSettingsService.is_moderator(user.telegram_id)
 
@@ -2053,8 +2051,6 @@ async def required_sub_channel_check(
                     )
                     await state.set_state(RegistrationStates.waiting_for_referral_code)
             else:
-                from app.utils.message_patch import _cache_logo_file_id, get_logo_media
-
                 rules_text = await get_rules(language)
 
                 if settings.ENABLE_LOGO_MODE:
