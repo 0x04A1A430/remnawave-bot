@@ -420,9 +420,9 @@ async def create_topup(
             )
             if result:
                 payment_url = (
-                    result.get('web_app_invoice_url')
+                    result.get('bot_invoice_url')
                     or result.get('mini_app_invoice_url')
-                    or result.get('bot_invoice_url')
+                    or result.get('web_app_invoice_url')
                 )
                 payment_id = result.get('invoice_id') or str(result.get('local_payment_id', 'pending'))
             else:
