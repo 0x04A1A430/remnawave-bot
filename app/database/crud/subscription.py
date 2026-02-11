@@ -358,9 +358,7 @@ async def extend_subscription(
 
     # Определяем, происходит ли СМЕНА тарифа (а не продление того же)
     # Включает переход из классического режима (tariff_id=None) в тарифный
-    is_tariff_change = (
-        tariff_id is not None and (subscription.tariff_id is None or tariff_id != subscription.tariff_id)
-    )
+    is_tariff_change = tariff_id is not None and (subscription.tariff_id is None or tariff_id != subscription.tariff_id)
 
     if is_tariff_change:
         logger.info(f'🔄 Обнаружена СМЕНА тарифа: {subscription.tariff_id} → {tariff_id}')
@@ -453,12 +451,16 @@ async def extend_subscription(
             await db.execute(sql_delete(TrafficPurchase).where(TrafficPurchase.subscription_id == subscription.id))
             subscription.purchased_traffic_gb = 0
             subscription.traffic_reset_at = None
-            logger.info(f'📊 Обновлен лимит трафика: {old_traffic} ГБ → {traffic_limit_gb} ГБ (смена тарифа, докупки сброшены)')
+            logger.info(
+                f'📊 Обновлен лимит трафика: {old_traffic} ГБ → {traffic_limit_gb} ГБ (смена тарифа, докупки сброшены)'
+            )
         else:
             # При ПРОДЛЕНИИ того же тарифа — сохраняем докупленный трафик
             purchased = subscription.purchased_traffic_gb or 0
             subscription.traffic_limit_gb = traffic_limit_gb + purchased
-            logger.info(f'📊 Обновлен лимит трафика: {old_traffic} ГБ → {traffic_limit_gb + purchased} ГБ (докупки сохранены: {purchased} ГБ)')
+            logger.info(
+                f'📊 Обновлен лимит трафика: {old_traffic} ГБ → {traffic_limit_gb + purchased} ГБ (докупки сохранены: {purchased} ГБ)'
+            )
     elif settings.RESET_TRAFFIC_ON_PAYMENT:
         subscription.traffic_used_gb = 0.0
         # В режиме тарифов сохраняем докупленный трафик при продлении
