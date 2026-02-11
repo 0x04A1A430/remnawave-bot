@@ -1118,11 +1118,10 @@ openssl rand -hex 32
 
 **2. Настройка в панели Remnawave:**
 
-В панели Remnawave перейдите в раздел **Настройки > Вебхуки** и создайте новый вебхук:
+В env панели Remnawave заполните:
 
 - **URL**: `https://hooks.domain.com/remnawave-webhook`
 - **Secret**: тот же секрет, что и в `REMNAWAVE_WEBHOOK_SECRET`
-- **Events**: выберите нужные события или все
 
 **3. Настройка прокси:**
 
