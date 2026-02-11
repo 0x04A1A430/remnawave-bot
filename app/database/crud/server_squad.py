@@ -740,14 +740,13 @@ async def add_user_to_servers(db: AsyncSession, server_squad_ids: list[int]) -> 
                 .values(current_users=ServerSquad.current_users + 1)
             )
 
-        await db.commit()
+        await db.flush()
         logger.info(f'✅ Увеличен счетчик пользователей для серверов: {server_squad_ids}')
         return True
 
     except Exception as e:
         logger.error(f'Ошибка увеличения счетчика пользователей: {e}')
-        await db.rollback()
-        return False
+        raise
 
 
 async def remove_user_from_servers(db: AsyncSession, server_squad_ids: list[int]) -> bool:
@@ -759,14 +758,13 @@ async def remove_user_from_servers(db: AsyncSession, server_squad_ids: list[int]
                 .values(current_users=func.greatest(ServerSquad.current_users - 1, 0))
             )
 
-        await db.commit()
+        await db.flush()
         logger.info(f'✅ Уменьшен счетчик пользователей для серверов: {server_squad_ids}')
         return True
 
     except Exception as e:
         logger.error(f'Ошибка уменьшения счетчика пользователей: {e}')
-        await db.rollback()
-        return False
+        raise
 
 
 async def get_server_ids_by_uuids(db: AsyncSession, squad_uuids: list[str]) -> list[int]:
