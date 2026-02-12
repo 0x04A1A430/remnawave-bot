@@ -15,6 +15,7 @@ import aiofiles
 import pyzipper
 from aiogram.types import FSInputFile
 from sqlalchemy import inspect, select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -1324,7 +1325,18 @@ class BackupService:
                                 setattr(existing, key, value)
                     else:
                         instance = model(**processed_data)
-                        db.add(instance)
+                        try:
+                            async with db.begin_nested():
+                                db.add(instance)
+                                await db.flush()
+                        except IntegrityError:
+                            # Unique constraint conflict — record exists with different PK
+                            logger.warning(
+                                'Дубликат по уникальному ключу в %s (PK=%s), пропускаем',
+                                table_name,
+                                {col: processed_data.get(col) for col in pk_cols},
+                            )
+                            continue
                 else:
                     instance = model(**processed_data)
                     db.add(instance)
