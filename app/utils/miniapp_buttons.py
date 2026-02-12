@@ -132,7 +132,7 @@ def build_miniapp_or_callback_button(
                 # Resolve style: explicit > global config > per-section default
                 resolved_style = _resolve_style(
                     style
-                    or (settings.CABINET_BUTTON_STYLE or '').strip()
+                    or _resolve_style((settings.CABINET_BUTTON_STYLE or '').strip())
                     or CALLBACK_TO_CABINET_STYLE.get(callback_data)
                 )
                 return InlineKeyboardButton(

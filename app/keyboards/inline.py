@@ -381,7 +381,7 @@ def _build_cabinet_main_menu_keyboard(
         build_cabinet_url,
     )
 
-    global_style = (settings.CABINET_BUTTON_STYLE or '').strip()
+    global_style = _resolve_style((settings.CABINET_BUTTON_STYLE or '').strip())
 
     def _cabinet_button(
         text: str,
