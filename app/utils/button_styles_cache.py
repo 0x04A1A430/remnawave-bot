@@ -54,6 +54,9 @@ BUTTON_STYLES_KEY = 'CABINET_BUTTON_STYLES'
 # Valid Telegram Bot API style values.
 VALID_STYLES = frozenset({'primary', 'success', 'danger'})
 
+# All style values accepted by the admin API ('default' = no color, Telegram default).
+ALLOWED_STYLE_VALUES = VALID_STYLES | {'default'}
+
 # ---- Module-level cache ---------------------------------------------------
 
 _cached_styles: dict[str, dict] | None = None
@@ -90,7 +93,7 @@ async def load_button_styles_cache() -> dict[str, dict]:
                 db_data: dict = json.loads(setting.value)
                 for section, overrides in db_data.items():
                     if section in merged and isinstance(overrides, dict):
-                        if overrides.get('style') in VALID_STYLES:
+                        if overrides.get('style') in ALLOWED_STYLE_VALUES:
                             merged[section]['style'] = overrides['style']
                         if isinstance(overrides.get('icon_custom_emoji_id'), str):
                             merged[section]['icon_custom_emoji_id'] = overrides['icon_custom_emoji_id']

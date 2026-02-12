@@ -398,12 +398,13 @@ def _build_cabinet_main_menu_keyboard(
             section = CALLBACK_TO_SECTION.get(callback_fallback)
             section_cfg = cached_styles.get(section or '', {}) if section else {}
 
-            resolved = _resolve_style(
-                style
-                or _resolve_style(section_cfg.get('style'))
-                or global_style
-                or CALLBACK_TO_CABINET_STYLE.get(callback_fallback)
-            )
+            # 'default' in per-section config means "no color" — do not fall through.
+            if style:
+                resolved = _resolve_style(style)
+            elif section_cfg.get('style'):
+                resolved = _resolve_style(section_cfg['style'])
+            else:
+                resolved = global_style or _resolve_style(CALLBACK_TO_CABINET_STYLE.get(callback_fallback))
             resolved_emoji = icon_custom_emoji_id or section_cfg.get('icon_custom_emoji_id') or None
 
             return InlineKeyboardButton(

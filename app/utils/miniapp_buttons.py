@@ -135,12 +135,15 @@ def build_miniapp_or_callback_button(
                 section_cfg = get_cached_button_styles().get(section or '', {}) if section else {}
 
                 # Style chain: explicit param > per-section DB > global config > hardcoded default
-                resolved_style = _resolve_style(
-                    style
-                    or _resolve_style(section_cfg.get('style'))
-                    or _resolve_style((settings.CABINET_BUTTON_STYLE or '').strip())
-                    or CALLBACK_TO_CABINET_STYLE.get(callback_data)
-                )
+                # 'default' in per-section config means "no color" — do not fall through.
+                if style:
+                    resolved_style = _resolve_style(style)
+                elif section_cfg.get('style'):
+                    resolved_style = _resolve_style(section_cfg['style'])
+                else:
+                    resolved_style = _resolve_style(
+                        (settings.CABINET_BUTTON_STYLE or '').strip()
+                    ) or _resolve_style(CALLBACK_TO_CABINET_STYLE.get(callback_data))
 
                 # Emoji chain: explicit param > per-section DB
                 resolved_emoji = icon_custom_emoji_id or section_cfg.get('icon_custom_emoji_id') or None

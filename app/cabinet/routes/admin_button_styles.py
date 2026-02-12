@@ -9,10 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User
 from app.utils.button_styles_cache import (
+    ALLOWED_STYLE_VALUES,
     BUTTON_STYLES_KEY,
     DEFAULT_BUTTON_STYLES,
     SECTIONS,
-    VALID_STYLES,
     load_button_styles_cache,
 )
 
@@ -116,7 +116,7 @@ async def get_button_styles(
             db_data = json.loads(raw)
             for section, overrides in db_data.items():
                 if section in merged and isinstance(overrides, dict):
-                    if overrides.get('style') in VALID_STYLES:
+                    if overrides.get('style') in ALLOWED_STYLE_VALUES:
                         merged[section]['style'] = overrides['style']
                     if isinstance(overrides.get('icon_custom_emoji_id'), str):
                         merged[section]['icon_custom_emoji_id'] = overrides['icon_custom_emoji_id']
@@ -156,11 +156,11 @@ async def update_button_styles(
 
         if 'style' in updates:
             style_val = updates['style']
-            if style_val not in VALID_STYLES:
+            if style_val not in ALLOWED_STYLE_VALUES:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f'Invalid style "{style_val}" for section "{section}". '
-                    f'Allowed: {", ".join(sorted(VALID_STYLES))}',
+                    f'Allowed: {", ".join(sorted(ALLOWED_STYLE_VALUES))}',
                 )
             current[section]['style'] = style_val
 
