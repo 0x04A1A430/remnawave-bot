@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Any
 
 from aiogram import BaseMiddleware
-from aiogram.exceptions import TelegramForbiddenError
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message, TelegramObject, User as TgUser
 from sqlalchemy.exc import InterfaceError, OperationalError
@@ -224,6 +224,11 @@ class AuthMiddleware(BaseMiddleware):
                 # User blocked the bot — normal, not an error
                 logger.debug('AuthMiddleware: bot blocked by user, skipping')
                 return None
+            except TelegramBadRequest as e:
+                if 'query is too old' in str(e):
+                    logger.debug('AuthMiddleware: callback query expired, skipping')
+                    return None
+                raise
             except Exception as e:
                 logger.error(f'Ошибка в AuthMiddleware: {e}')
                 logger.error(f'Event type: {type(event)}')
