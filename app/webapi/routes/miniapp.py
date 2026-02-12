@@ -29,10 +29,9 @@ from app.database.crud.promo_group import get_auto_assign_promo_groups
 from app.database.crud.promo_offer_template import get_promo_offer_template_by_id
 from app.database.crud.rules import get_rules_by_language
 from app.database.crud.server_squad import (
-    add_user_to_servers,
     get_available_server_squads,
     get_server_squad_by_uuid,
-    remove_user_from_servers,
+    update_server_user_counts,
 )
 from app.database.crud.subscription import (
     add_subscription_servers,
@@ -5926,10 +5925,6 @@ async def update_subscription_servers_endpoint(
 
     if added_server_ids:
         await add_subscription_servers(db, subscription, added_server_ids, added_server_prices)
-        try:
-            await add_user_to_servers(db, added_server_ids)
-        except Exception as e:
-            logger.error(f'Ошибка обновления счётчика серверов (add): {e}')
 
     removed_server_ids = [
         catalog[uuid].get('server_id') for uuid in removed if catalog[uuid].get('server_id') is not None
@@ -5937,10 +5932,16 @@ async def update_subscription_servers_endpoint(
 
     if removed_server_ids:
         await remove_subscription_servers(db, subscription.id, removed_server_ids)
+
+    if added_server_ids or removed_server_ids:
         try:
-            await remove_user_from_servers(db, removed_server_ids)
+            await update_server_user_counts(
+                db,
+                add_ids=added_server_ids or None,
+                remove_ids=removed_server_ids or None,
+            )
         except Exception as e:
-            logger.error(f'Ошибка обновления счётчика серверов (remove): {e}')
+            logger.error('Ошибка обновления счётчика серверов: %s', e)
 
     ordered_selection = []
     seen_selection = set()

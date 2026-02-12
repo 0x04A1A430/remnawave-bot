@@ -110,6 +110,20 @@ class Settings(BaseSettings):
     REMNAWAVE_WEBHOOK_PATH: str = '/remnawave-webhook'
     REMNAWAVE_WEBHOOK_SECRET: str | None = None  # HMAC-SHA256 shared secret (min 32 chars)
 
+    # Webhook user notification toggles (what Telegram messages users receive from webhook events)
+    WEBHOOK_NOTIFY_USER_ENABLED: bool = True
+    WEBHOOK_NOTIFY_SUB_STATUS: bool = True
+    WEBHOOK_NOTIFY_SUB_EXPIRED: bool = True
+    WEBHOOK_NOTIFY_SUB_EXPIRING: bool = True
+    WEBHOOK_NOTIFY_SUB_LIMITED: bool = True
+    WEBHOOK_NOTIFY_TRAFFIC_RESET: bool = True
+    WEBHOOK_NOTIFY_SUB_DELETED: bool = True
+    WEBHOOK_NOTIFY_SUB_REVOKED: bool = True
+    WEBHOOK_NOTIFY_FIRST_CONNECTED: bool = True
+    WEBHOOK_NOTIFY_NOT_CONNECTED: bool = True
+    WEBHOOK_NOTIFY_BANDWIDTH_THRESHOLD: bool = True
+    WEBHOOK_NOTIFY_DEVICES: bool = True
+
     TRIAL_DURATION_DAYS: int = 3
     TRIAL_TRAFFIC_LIMIT_GB: int = 10
     TRIAL_DEVICE_LIMIT: int = 2

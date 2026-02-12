@@ -20,6 +20,7 @@ from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.exc import StaleDataError
 
+from app.config import settings
 from app.database.crud.subscription import (
     deactivate_subscription,
     decrement_subscription_server_counts,
@@ -57,6 +58,26 @@ _TEXT_KEY_TO_NOTIFICATION_TYPE: dict[str, NotificationType] = {
     'WEBHOOK_USER_NOT_CONNECTED': NotificationType.WEBHOOK_USER_NOT_CONNECTED,
     'WEBHOOK_DEVICE_ADDED': NotificationType.WEBHOOK_DEVICE_ADDED,
     'WEBHOOK_DEVICE_DELETED': NotificationType.WEBHOOK_DEVICE_DELETED,
+}
+
+# Mapping from locale text_key to the Settings toggle that controls it
+_TEXT_KEY_TO_SETTING: dict[str, str] = {
+    'WEBHOOK_SUB_EXPIRED': 'WEBHOOK_NOTIFY_SUB_EXPIRED',
+    'WEBHOOK_SUB_DISABLED': 'WEBHOOK_NOTIFY_SUB_STATUS',
+    'WEBHOOK_SUB_ENABLED': 'WEBHOOK_NOTIFY_SUB_STATUS',
+    'WEBHOOK_SUB_LIMITED': 'WEBHOOK_NOTIFY_SUB_LIMITED',
+    'WEBHOOK_SUB_TRAFFIC_RESET': 'WEBHOOK_NOTIFY_TRAFFIC_RESET',
+    'WEBHOOK_SUB_DELETED': 'WEBHOOK_NOTIFY_SUB_DELETED',
+    'WEBHOOK_SUB_REVOKED': 'WEBHOOK_NOTIFY_SUB_REVOKED',
+    'WEBHOOK_SUB_EXPIRES_72H': 'WEBHOOK_NOTIFY_SUB_EXPIRING',
+    'WEBHOOK_SUB_EXPIRES_48H': 'WEBHOOK_NOTIFY_SUB_EXPIRING',
+    'WEBHOOK_SUB_EXPIRES_24H': 'WEBHOOK_NOTIFY_SUB_EXPIRING',
+    'WEBHOOK_SUB_EXPIRED_24H_AGO': 'WEBHOOK_NOTIFY_SUB_EXPIRED',
+    'WEBHOOK_SUB_FIRST_CONNECTED': 'WEBHOOK_NOTIFY_FIRST_CONNECTED',
+    'WEBHOOK_SUB_BANDWIDTH_THRESHOLD': 'WEBHOOK_NOTIFY_BANDWIDTH_THRESHOLD',
+    'WEBHOOK_USER_NOT_CONNECTED': 'WEBHOOK_NOTIFY_NOT_CONNECTED',
+    'WEBHOOK_DEVICE_ADDED': 'WEBHOOK_NOTIFY_DEVICES',
+    'WEBHOOK_DEVICE_DELETED': 'WEBHOOK_NOTIFY_DEVICES',
 }
 
 # Admin event display names for notification messages
@@ -353,7 +374,7 @@ class RemnaWaveWebhookService:
         sub_text = texts.get('MY_SUBSCRIPTION_BUTTON', 'My subscription')
         return InlineKeyboardMarkup(
             inline_keyboard=[
-                [build_miniapp_or_callback_button(text=buy_text, callback_data='subscription_add_traffic')],
+                [build_miniapp_or_callback_button(text=buy_text, callback_data='buy_traffic')],
                 [build_miniapp_or_callback_button(text=sub_text, callback_data='subscription')],
             ]
         )
@@ -371,7 +392,19 @@ class RemnaWaveWebhookService:
         Telegram users receive a bot message; email-only users receive
         an email and/or WebSocket notification through the unified
         notification delivery service.
+
+        Respects WEBHOOK_NOTIFY_USER_ENABLED master toggle and
+        per-event toggles from Settings.
         """
+        if not settings.WEBHOOK_NOTIFY_USER_ENABLED:
+            logger.debug('Webhook user notifications disabled globally, skipping %s', text_key)
+            return
+
+        setting_key = _TEXT_KEY_TO_SETTING.get(text_key)
+        if setting_key and not getattr(settings, setting_key, True):
+            logger.debug('Webhook notification %s disabled via %s', text_key, setting_key)
+            return
+
         texts = get_texts(user.language)
         message = texts.get(text_key)
         if not message:
