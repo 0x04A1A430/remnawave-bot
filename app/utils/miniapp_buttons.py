@@ -2,6 +2,7 @@ from aiogram import types
 from aiogram.types import InlineKeyboardButton
 
 from app.config import settings
+from app.utils.button_styles_cache import CALLBACK_TO_SECTION, get_cached_button_styles
 
 
 # Mapping from callback_data to cabinet frontend paths.
@@ -129,17 +130,26 @@ def build_miniapp_or_callback_button(
         if path:
             url = build_cabinet_url(path)
             if url:
-                # Resolve style: explicit > global config > per-section default
+                # Resolve per-section config from cache
+                section = CALLBACK_TO_SECTION.get(callback_data)
+                section_cfg = get_cached_button_styles().get(section or '', {}) if section else {}
+
+                # Style chain: explicit param > per-section DB > global config > hardcoded default
                 resolved_style = _resolve_style(
                     style
+                    or _resolve_style(section_cfg.get('style'))
                     or _resolve_style((settings.CABINET_BUTTON_STYLE or '').strip())
                     or CALLBACK_TO_CABINET_STYLE.get(callback_data)
                 )
+
+                # Emoji chain: explicit param > per-section DB
+                resolved_emoji = icon_custom_emoji_id or section_cfg.get('icon_custom_emoji_id') or None
+
                 return InlineKeyboardButton(
                     text=text,
                     web_app=types.WebAppInfo(url=url),
                     style=resolved_style,
-                    icon_custom_emoji_id=icon_custom_emoji_id or None,
+                    icon_custom_emoji_id=resolved_emoji or None,
                 )
 
     return InlineKeyboardButton(text=text, callback_data=callback_data)
