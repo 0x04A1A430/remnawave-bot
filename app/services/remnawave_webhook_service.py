@@ -17,6 +17,7 @@ from typing import Any
 from aiogram import Bot
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy import delete
+from sqlalchemy.exc import PendingRollbackError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.exc import StaleDataError
 
@@ -29,7 +30,7 @@ from app.database.crud.subscription import (
     reactivate_subscription,
     update_subscription_usage,
 )
-from app.database.crud.user import get_user_by_remnawave_uuid, get_user_by_telegram_id
+from app.database.crud.user import get_user_by_id, get_user_by_remnawave_uuid, get_user_by_telegram_id
 from app.database.models import Subscription, SubscriptionServer, SubscriptionStatus, User
 from app.localization.texts import get_texts
 from app.services.admin_notification_service import AdminNotificationService
@@ -192,7 +193,7 @@ class RemnaWaveWebhookService:
         try:
             await handler(db, user, subscription, data)
             return True
-        except StaleDataError:
+        except (StaleDataError, PendingRollbackError):
             logger.warning(
                 'RemnaWave webhook %s: entity already deleted for user %s (concurrent deletion)',
                 event_name,
@@ -628,14 +629,18 @@ class RemnaWaveWebhookService:
                 )
                 subscription = None
                 try:
-                    await db.refresh(user)
+                    await db.rollback()
                 except Exception:
-                    from app.database.crud.user import get_user_by_id
+                    pass
 
+                try:
                     user = await get_user_by_id(db, user_id)
-                    if not user:
-                        logger.error('Webhook: user %s not found after rollback', user_id)
-                        return
+                except Exception:
+                    logger.error('Webhook: user %s not found after rollback', user_id)
+                    return
+                if not user:
+                    logger.error('Webhook: user %s not found after rollback', user_id)
+                    return
 
         if subscription:
             if subscription.status != SubscriptionStatus.EXPIRED.value:
