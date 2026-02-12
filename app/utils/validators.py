@@ -1,3 +1,4 @@
+import html as html_module
 import re
 from datetime import datetime
 
@@ -22,6 +23,16 @@ ALLOWED_HTML_TAGS = {
 }
 
 SELF_CLOSING_TAGS = {'br', 'hr', 'img'}
+
+# Разрешённые атрибуты для HTML-тегов
+ALLOWED_TAG_ATTRIBUTES = {
+    'a': {'href'},
+    'tg-emoji': {'emoji-id'},
+    'span': {'class'},
+}
+
+# Разрешённые URI-схемы в href (allowlist вместо blocklist)
+SAFE_URI_SCHEMES = re.compile(r'^(https?://|tg://|mailto:|tel:)', re.IGNORECASE)
 
 
 def validate_email(email: str) -> bool:
@@ -140,25 +151,43 @@ def sanitize_html(text: str) -> str:
     # Обработка всех разрешенных тегов
     for tag in allowed_tags:
         # Паттерн: захватываем &lt;tag&gt;, &lt;/tag&gt;, или &lt;tag атрибуты&gt;
-        # Используем более сложный паттерн, чтобы захватить атрибуты до закрывающего &gt;
-        # (?s) - позволяет . захватывать новую строку
         # [^>]*? - ленивый захват до >
         pattern = rf'(&lt;)(/?{tag}\b)([^>]*?)(&gt;)'
 
-        def replace_tag(match):
-            match.group(1)  # &lt;
+        tag_lower = tag.lower()
+
+        def replace_tag(match, _tag=tag_lower):
             full_tag_content = match.group(2)  # /?tagname
-            attrs_part = match.group(3)  # атрибуты (без >)
-            match.group(4)  # &gt;
+            attrs_part = match.group(3).removeprefix(' ')  # атрибуты (без >)
 
-            # Убираем начальный пробел, если есть
-            attrs_part = attrs_part.removeprefix(' ')
+            if not attrs_part:
+                return f'<{full_tag_content}>'
 
-            # Формируем результат
-            if attrs_part:
-                # Безопасно обрабатываем атрибуты, заменяя только безопасные сущности
-                # Не разворачиваем &lt; и &gt; внутри атрибутов, чтобы избежать XSS
-                processed_attrs = attrs_part.replace('&quot;', '"').replace('&#x27;', "'")
+            # Полное декодирование HTML-сущностей для корректной проверки атрибутов
+            processed_attrs = html_module.unescape(attrs_part)
+
+            # Проверяем whitelist атрибутов для данного тега
+            allowed_attrs = ALLOWED_TAG_ATTRIBUTES.get(_tag)
+            if allowed_attrs is None:
+                # Тег без whitelist — удаляем ВСЕ атрибуты
+                return f'<{full_tag_content}>'
+
+            filtered_parts = []
+            for attr_match in re.finditer(r'([a-zA-Z][\w-]*)\s*=\s*(?:"([^"]*)"|\'([^\']*)\')', processed_attrs):
+                attr_name = attr_match.group(1).lower()
+                attr_value = attr_match.group(2) if attr_match.group(2) is not None else attr_match.group(3)
+                if attr_name not in allowed_attrs:
+                    continue
+                # href: allowlist безопасных URI-схем
+                if attr_name == 'href':
+                    # Нормализуем: убираем control chars и пробелы из начала значения
+                    normalized = re.sub(r'[\x00-\x1f\x7f\s]+', '', attr_value)
+                    if not SAFE_URI_SCHEMES.match(normalized):
+                        continue
+                filtered_parts.append(f'{attr_name}="{attr_value}"')
+            processed_attrs = ' '.join(filtered_parts)
+
+            if processed_attrs:
                 return f'<{full_tag_content} {processed_attrs}>'
             return f'<{full_tag_content}>'
 
