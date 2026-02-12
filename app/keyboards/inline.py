@@ -375,25 +375,44 @@ def _build_cabinet_main_menu_keyboard(
     Each button opens the corresponding section of the cabinet frontend
     via ``MINIAPP_CUSTOM_URL`` + path (e.g. ``/subscription``, ``/balance``).
     """
-    from app.utils.miniapp_buttons import build_cabinet_url
+    from app.utils.miniapp_buttons import (
+        CALLBACK_TO_CABINET_STYLE,
+        _resolve_style,
+        build_cabinet_url,
+    )
 
-    def _cabinet_button(text: str, path: str, callback_fallback: str) -> InlineKeyboardButton:
+    global_style = (settings.CABINET_BUTTON_STYLE or '').strip()
+
+    def _cabinet_button(
+        text: str,
+        path: str,
+        callback_fallback: str,
+        *,
+        style: str | None = None,
+        icon_custom_emoji_id: str | None = None,
+    ) -> InlineKeyboardButton:
         url = build_cabinet_url(path)
         if url:
-            return InlineKeyboardButton(text=text, web_app=types.WebAppInfo(url=url))
+            resolved = _resolve_style(style or global_style or CALLBACK_TO_CABINET_STYLE.get(callback_fallback))
+            return InlineKeyboardButton(
+                text=text,
+                web_app=types.WebAppInfo(url=url),
+                style=resolved,
+                icon_custom_emoji_id=icon_custom_emoji_id or None,
+            )
         return InlineKeyboardButton(text=text, callback_data=callback_fallback)
 
     # -- Primary action row: Cabinet home --
     profile_text = texts.t('MENU_PROFILE', '👤 Личный кабинет')
     keyboard_rows: list[list[InlineKeyboardButton]] = [
-        [_cabinet_button(profile_text, '/', 'menu_profile_unavailable')],
+        [_cabinet_button(profile_text, '/', 'menu_profile_unavailable', style='primary')],
     ]
 
     # -- Section buttons as paired rows --
     paired: list[InlineKeyboardButton] = []
 
-    # Subscription
-    paired.append(_cabinet_button(texts.MENU_SUBSCRIPTION, '/subscription', 'menu_subscription'))
+    # Subscription (green — main action)
+    paired.append(_cabinet_button(texts.MENU_SUBSCRIPTION, '/subscription', 'menu_subscription', style='success'))
 
     # Balance
     safe_balance = balance_kopeks or 0
@@ -403,11 +422,11 @@ def _build_cabinet_main_menu_keyboard(
         balance_text = texts.t('BALANCE_BUTTON_DEFAULT', '💰 Баланс: {balance}').format(
             balance=texts.format_price(safe_balance),
         )
-    paired.append(_cabinet_button(balance_text, '/balance', 'menu_balance'))
+    paired.append(_cabinet_button(balance_text, '/balance', 'menu_balance', style='primary'))
 
     # Referrals (if enabled)
     if settings.is_referral_program_enabled():
-        paired.append(_cabinet_button(texts.MENU_REFERRALS, '/referral', 'menu_referrals'))
+        paired.append(_cabinet_button(texts.MENU_REFERRALS, '/referral', 'menu_referrals', style='success'))
 
     # Support
     support_enabled = False
@@ -430,7 +449,7 @@ def _build_cabinet_main_menu_keyboard(
         )
     )
 
-    # Language selection (stays as callback - not a cabinet section)
+    # Language selection (stays as callback — not a cabinet section)
     if settings.is_language_selection_enabled():
         paired.append(InlineKeyboardButton(text=texts.MENU_LANGUAGE, callback_data='menu_language'))
 
@@ -443,7 +462,7 @@ def _build_cabinet_main_menu_keyboard(
         keyboard_rows.append(
             [
                 InlineKeyboardButton(text=texts.MENU_ADMIN, callback_data='admin_panel'),
-                _cabinet_button('🖥 Веб-Админка', '/admin', 'admin_panel'),
+                _cabinet_button('🖥 Веб-Админка', '/admin', 'admin_panel', style='danger'),
             ]
         )
     elif is_moderator:

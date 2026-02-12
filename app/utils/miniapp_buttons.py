@@ -27,6 +27,28 @@ CALLBACK_TO_CABINET_PATH: dict[str, str] = {
     'back_to_menu': '/',
 }
 
+# Default button styles per callback_data for cabinet mode.
+# Values: 'primary' (blue), 'success' (green), 'danger' (red), None (default).
+CALLBACK_TO_CABINET_STYLE: dict[str, str] = {
+    'menu_balance': 'primary',
+    'balance_topup': 'primary',
+    'menu_subscription': 'success',
+    'subscription': 'success',
+    'subscription_extend': 'success',
+    'subscription_upgrade': 'success',
+    'subscription_connect': 'success',
+    'subscription_resume_checkout': 'success',
+    'return_to_saved_cart': 'success',
+    'menu_buy': 'success',
+    'buy_traffic': 'success',
+    'menu_referrals': 'success',
+    'menu_referral': 'success',
+    'menu_support': 'primary',
+    'menu_info': 'primary',
+    'menu_profile': 'primary',
+    'back_to_menu': 'primary',
+}
+
 # Mapping from broadcast button keys to cabinet paths.
 BUTTON_KEY_TO_CABINET_PATH: dict[str, str] = {
     'balance': '/balance/top-up',
@@ -37,6 +59,16 @@ BUTTON_KEY_TO_CABINET_PATH: dict[str, str] = {
     'support': '/support',
     'home': '/',
 }
+
+# Valid style values accepted by the Telegram Bot API.
+_VALID_STYLES = frozenset({'primary', 'success', 'danger'})
+
+
+def _resolve_style(style: str | None) -> str | None:
+    """Return a validated style or ``None``."""
+    if style and style in _VALID_STYLES:
+        return style
+    return None
 
 
 def build_cabinet_url(path: str = '') -> str:
@@ -66,6 +98,8 @@ def build_miniapp_or_callback_button(
     *,
     callback_data: str,
     cabinet_path: str | None = None,
+    style: str | None = None,
+    icon_custom_emoji_id: str | None = None,
 ) -> InlineKeyboardButton:
     """Create a button that opens the cabinet miniapp or falls back to a callback.
 
@@ -73,6 +107,13 @@ def build_miniapp_or_callback_button(
     opens the relevant section of the cabinet.  The target section is determined
     by ``cabinet_path`` (explicit) or inferred from ``callback_data`` via
     ``CALLBACK_TO_CABINET_PATH``.
+
+    Button styling (Bot API 9.4):
+    - ``style`` overrides the button color: ``'primary'`` (blue),
+      ``'success'`` (green), ``'danger'`` (red).  When omitted the style is
+      resolved from ``CABINET_BUTTON_STYLE`` config or per-section defaults.
+    - ``icon_custom_emoji_id`` shows a custom emoji before the button text
+      (requires bot owner to have Telegram Premium).
 
     When ``callback_data`` is not found in the mapping and no explicit
     ``cabinet_path`` is given, the button falls back to a regular Telegram
@@ -88,9 +129,17 @@ def build_miniapp_or_callback_button(
         if path:
             url = build_cabinet_url(path)
             if url:
+                # Resolve style: explicit > global config > per-section default
+                resolved_style = _resolve_style(
+                    style
+                    or (settings.CABINET_BUTTON_STYLE or '').strip()
+                    or CALLBACK_TO_CABINET_STYLE.get(callback_data)
+                )
                 return InlineKeyboardButton(
                     text=text,
                     web_app=types.WebAppInfo(url=url),
+                    style=resolved_style,
+                    icon_custom_emoji_id=icon_custom_emoji_id or None,
                 )
 
     return InlineKeyboardButton(text=text, callback_data=callback_data)

@@ -517,6 +517,8 @@ class Settings(BaseSettings):
     KASSA_AI_PAYMENT_SYSTEM_ID: int = 44
 
     MAIN_MENU_MODE: str = 'default'  # 'default' | 'cabinet'
+    # Стиль кнопок Cabinet: primary (синий), success (зелёный), danger (красный), '' (по умолчанию для каждой секции)
+    CABINET_BUTTON_STYLE: str = ''
     CONNECT_BUTTON_MODE: str = 'miniapp_subscription'
     MINIAPP_CUSTOM_URL: str = ''
     MINIAPP_STATIC_PATH: str = 'miniapp'

@@ -294,6 +294,7 @@ class BotConfigurationService:
         'LOGO_FILE': 'INTERFACE_BRANDING',
         'HIDE_SUBSCRIPTION_LINK': 'INTERFACE_SUBSCRIPTION',
         'MAIN_MENU_MODE': 'INTERFACE',
+        'CABINET_BUTTON_STYLE': 'INTERFACE',
         'CONNECT_BUTTON_MODE': 'CONNECT_BUTTON',
         'MINIAPP_CUSTOM_URL': 'CONNECT_BUTTON',
         'APP_CONFIG_PATH': 'ADDITIONAL',
@@ -407,6 +408,12 @@ class BotConfigurationService:
         'MAIN_MENU_MODE': [
             ChoiceOption('default', '📋 Полное меню'),
             ChoiceOption('cabinet', '🏠 Cabinet (МиниАпп)'),
+        ],
+        'CABINET_BUTTON_STYLE': [
+            ChoiceOption('', '🎨 По секциям (авто)'),
+            ChoiceOption('primary', '🔵 Синий'),
+            ChoiceOption('success', '🟢 Зелёный'),
+            ChoiceOption('danger', '🔴 Красный'),
         ],
         'SALES_MODE': [
             ChoiceOption('classic', '📋 Классический (периоды из .env)'),
