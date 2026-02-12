@@ -19,7 +19,7 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, backref, mapped_column, relationship
 from sqlalchemy.sql import func
 
 
@@ -1153,8 +1153,12 @@ class Subscription(Base):
     user = relationship('User', back_populates='subscription')
     tariff = relationship('Tariff', back_populates='subscriptions')
     discount_offers = relationship('DiscountOffer', back_populates='subscription')
-    temporary_accesses = relationship('SubscriptionTemporaryAccess', back_populates='subscription')
-    traffic_purchases = relationship('TrafficPurchase', back_populates='subscription', cascade='all, delete-orphan')
+    temporary_accesses = relationship(
+        'SubscriptionTemporaryAccess', back_populates='subscription', passive_deletes=True
+    )
+    traffic_purchases = relationship(
+        'TrafficPurchase', back_populates='subscription', passive_deletes=True, cascade='all, delete-orphan'
+    )
 
     @property
     def is_active(self) -> bool:
@@ -1779,7 +1783,7 @@ class SentNotification(Base):
     created_at = Column(DateTime, default=func.now())
 
     user = relationship('User', backref='sent_notifications')
-    subscription = relationship('Subscription', backref='sent_notifications')
+    subscription = relationship('Subscription', backref=backref('sent_notifications', passive_deletes=True))
 
 
 class SubscriptionEvent(Base):
@@ -2069,7 +2073,7 @@ class SubscriptionServer(Base):
 
     paid_price_kopeks = Column(Integer, default=0)
 
-    subscription = relationship('Subscription', backref='subscription_servers')
+    subscription = relationship('Subscription', backref=backref('subscription_servers', passive_deletes=True))
     server_squad = relationship('ServerSquad', backref='subscription_servers')
 
 

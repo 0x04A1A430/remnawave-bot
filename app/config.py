@@ -195,7 +195,7 @@ class Settings(BaseSettings):
     # Режим продаж подписок:
     # - classic: классический режим (выбор серверов, трафика, устройств, периода отдельно)
     # - tariffs: режим тарифов (готовые пакеты с фиксированными параметрами)
-    SALES_MODE: str = 'classic'
+    SALES_MODE: str = 'tariffs'
 
     # ID тарифа для триала в режиме тарифов (0 = использовать стандартные настройки триала)
     # Если указан ID тарифа, параметры триала берутся из тарифа (traffic_limit_gb, device_limit, allowed_squads)
@@ -517,7 +517,7 @@ class Settings(BaseSettings):
     KASSA_AI_PAYMENT_SYSTEM_ID: int = 44
 
     MAIN_MENU_MODE: str = 'default'
-    CONNECT_BUTTON_MODE: str = 'guide'
+    CONNECT_BUTTON_MODE: str = 'miniapp_subscription'
     MINIAPP_CUSTOM_URL: str = ''
     MINIAPP_STATIC_PATH: str = 'miniapp'
     MINIAPP_PURCHASE_URL: str = ''
@@ -1548,7 +1548,7 @@ class Settings(BaseSettings):
 
     def get_sales_mode(self) -> str:
         """Возвращает текущий режим продаж."""
-        return self.SALES_MODE if self.SALES_MODE in ('classic', 'tariffs') else 'classic'
+        return self.SALES_MODE if self.SALES_MODE in ('classic', 'tariffs') else 'tariffs'
 
     def get_trial_tariff_id(self) -> int:
         """Возвращает ID тарифа для триала (0 = использовать стандартные настройки)."""

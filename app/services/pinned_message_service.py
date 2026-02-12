@@ -189,6 +189,9 @@ async def broadcast_pinned_message(
                     )
                     failed_count += 1
                     break
+            else:
+                # All retry attempts exhausted (TelegramRetryAfter on every attempt)
+                failed_count += 1
 
     for i in range(0, len(recipient_telegram_ids), 30):
         batch = recipient_telegram_ids[i : i + 30]
@@ -251,23 +254,6 @@ async def unpin_active_pinned_message(
                     unpinned_count += 1
                 else:
                     failed_count += 1
-            except TelegramRetryAfter as retry_error:
-                delay = min(retry_error.retry_after + 1, 30)
-                logger.warning(
-                    'RetryAfter while unpinning for user %s, waiting %s seconds',
-                    telegram_id,
-                    delay,
-                )
-                await asyncio.sleep(delay)
-                # Повторная попытка после ожидания
-                try:
-                    success = await _unpin_message_for_user(bot, telegram_id)
-                    if success:
-                        unpinned_count += 1
-                    else:
-                        failed_count += 1
-                except Exception:
-                    failed_count += 1
             except Exception as error:
                 logger.error(
                     'Ошибка открепления сообщения у пользователя %s: %s',
@@ -311,6 +297,12 @@ async def _send_and_pin_message(bot: Bot, chat_id: int, pinned_message: PinnedMe
         pass
     except TelegramForbiddenError:
         return False
+    except TelegramRetryAfter as e:
+        await asyncio.sleep(min(e.retry_after + 1, 30))
+        try:
+            await bot.unpin_all_chat_messages(chat_id=chat_id)
+        except (TelegramBadRequest, TelegramForbiddenError, TelegramRetryAfter):
+            pass
 
     try:
         if pinned_message.media_type == 'photo' and pinned_message.media_file_id:
@@ -345,6 +337,9 @@ async def _send_and_pin_message(bot: Bot, chat_id: int, pinned_message: PinnedMe
         return True
     except TelegramForbiddenError:
         return False
+    except TelegramRetryAfter as e:
+        await asyncio.sleep(min(e.retry_after + 1, 30))
+        raise  # Propagate to caller's retry loop
     except TelegramBadRequest as error:
         logger.warning(
             'Некорректный запрос при отправке закрепленного сообщения в чат %s: %s',
@@ -361,18 +356,38 @@ async def _send_and_pin_message(bot: Bot, chat_id: int, pinned_message: PinnedMe
     return False
 
 
-async def _unpin_message_for_user(bot: Bot, chat_id: int) -> bool:
-    try:
-        await bot.unpin_all_chat_messages(chat_id=chat_id)
-        return True
-    except TelegramForbiddenError:
-        return False
-    except TelegramBadRequest:
-        return False
-    except Exception as error:
-        logger.error(
-            'Не удалось открепить сообщение у пользователя %s: %s',
-            chat_id,
-            error,
-        )
-        return False
+async def _unpin_message_for_user(bot: Bot, chat_id: int, max_retries: int = 3) -> bool:
+    for attempt in range(max_retries):
+        try:
+            await bot.unpin_all_chat_messages(chat_id=chat_id)
+            return True
+        except TelegramRetryAfter as e:
+            if attempt < max_retries - 1:
+                delay = min(e.retry_after + 1, 30)
+                logger.warning(
+                    'RetryAfter при откреплении для %s, ожидание %s сек (попытка %d/%d)',
+                    chat_id,
+                    delay,
+                    attempt + 1,
+                    max_retries,
+                )
+                await asyncio.sleep(delay)
+            else:
+                logger.warning(
+                    'Не удалось открепить сообщение у %s после %d попыток (flood control)',
+                    chat_id,
+                    max_retries,
+                )
+                return False
+        except TelegramForbiddenError:
+            return False
+        except TelegramBadRequest:
+            return False
+        except Exception as error:
+            logger.error(
+                'Не удалось открепить сообщение у пользователя %s: %s',
+                chat_id,
+                error,
+            )
+            return False
+    return False

@@ -210,6 +210,26 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
         logger.info('Мониторинг техработ отключен настройками')
 
     logger.info('🛡️ GlobalErrorMiddleware активирован - бот защищен от устаревших callback queries')
+
+    # Validate CONNECT_BUTTON_MODE dependencies
+    if not settings.get_happ_cryptolink_redirect_template():
+        if settings.CONNECT_BUTTON_MODE == 'happ_cryptolink':
+            logger.warning(
+                '⚠️ CONNECT_BUTTON_MODE=happ_cryptolink, но HAPP_CRYPTOLINK_REDIRECT_TEMPLATE не задан! '
+                'Кнопка "Подключиться" не будет отображаться.'
+            )
+        elif settings.CONNECT_BUTTON_MODE == 'guide':
+            logger.warning(
+                '⚠️ CONNECT_BUTTON_MODE=guide, но HAPP_CRYPTOLINK_REDIRECT_TEMPLATE не задан! '
+                'Кнопка "Подключиться" в гайдах не будет работать — Telegram не поддерживает '
+                'кастомные схемы (happ://, v2ray://) в inline-кнопках без HTTPS-редиректа.'
+            )
+    if settings.CONNECT_BUTTON_MODE == 'miniapp_custom' and not settings.MINIAPP_CUSTOM_URL:
+        logger.warning(
+            '⚠️ CONNECT_BUTTON_MODE=miniapp_custom, но MINIAPP_CUSTOM_URL не задан! '
+            'Кнопка "Подключиться" не будет работать.'
+        )
+
     logger.info('Бот успешно настроен')
 
     return bot, dp
