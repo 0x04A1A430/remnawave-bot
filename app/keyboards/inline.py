@@ -416,30 +416,45 @@ def _build_cabinet_main_menu_keyboard(
         return InlineKeyboardButton(text=text, callback_data=callback_fallback)
 
     # -- Primary action row: Cabinet home --
-    profile_text = texts.t('MENU_PROFILE', '👤 Личный кабинет')
-    keyboard_rows: list[list[InlineKeyboardButton]] = [
-        [_cabinet_button(profile_text, '/', 'menu_profile_unavailable')],
-    ]
+    home_cfg = cached_styles.get('home', {})
+    if home_cfg.get('enabled', True):
+        profile_text = home_cfg.get('labels', {}).get(language, '') or texts.t('MENU_PROFILE', '👤 Личный кабинет')
+        keyboard_rows: list[list[InlineKeyboardButton]] = [
+            [_cabinet_button(profile_text, '/', 'menu_profile_unavailable')],
+        ]
+    else:
+        keyboard_rows: list[list[InlineKeyboardButton]] = []
 
     # -- Section buttons as paired rows --
     paired: list[InlineKeyboardButton] = []
 
     # Subscription (green — main action)
-    paired.append(_cabinet_button(texts.MENU_SUBSCRIPTION, '/subscription', 'menu_subscription'))
+    sub_cfg = cached_styles.get('subscription', {})
+    if sub_cfg.get('enabled', True):
+        sub_text = sub_cfg.get('labels', {}).get(language, '') or texts.MENU_SUBSCRIPTION
+        paired.append(_cabinet_button(sub_text, '/subscription', 'menu_subscription'))
 
     # Balance
-    safe_balance = balance_kopeks or 0
-    if hasattr(texts, 'BALANCE_BUTTON') and safe_balance > 0:
-        balance_text = texts.BALANCE_BUTTON.format(balance=texts.format_price(safe_balance))
-    else:
-        balance_text = texts.t('BALANCE_BUTTON_DEFAULT', '💰 Баланс: {balance}').format(
-            balance=texts.format_price(safe_balance),
-        )
-    paired.append(_cabinet_button(balance_text, '/balance', 'menu_balance'))
+    bal_cfg = cached_styles.get('balance', {})
+    if bal_cfg.get('enabled', True):
+        safe_balance = balance_kopeks or 0
+        # Custom label overrides the whole text including balance amount
+        custom_bal = bal_cfg.get('labels', {}).get(language, '')
+        if custom_bal:
+            balance_text = custom_bal
+        elif hasattr(texts, 'BALANCE_BUTTON') and safe_balance > 0:
+            balance_text = texts.BALANCE_BUTTON.format(balance=texts.format_price(safe_balance))
+        else:
+            balance_text = texts.t('BALANCE_BUTTON_DEFAULT', '💰 Баланс: {balance}').format(
+                balance=texts.format_price(safe_balance),
+            )
+        paired.append(_cabinet_button(balance_text, '/balance', 'menu_balance'))
 
     # Referrals (if enabled)
-    if settings.is_referral_program_enabled():
-        paired.append(_cabinet_button(texts.MENU_REFERRALS, '/referral', 'menu_referrals'))
+    ref_cfg = cached_styles.get('referral', {})
+    if settings.is_referral_program_enabled() and ref_cfg.get('enabled', True):
+        ref_text = ref_cfg.get('labels', {}).get(language, '') or texts.MENU_REFERRALS
+        paired.append(_cabinet_button(ref_text, '/referral', 'menu_referrals'))
 
     # Support
     support_enabled = False
@@ -450,17 +465,16 @@ def _build_cabinet_main_menu_keyboard(
     except Exception:
         support_enabled = settings.SUPPORT_MENU_ENABLED
 
-    if support_enabled:
-        paired.append(_cabinet_button(texts.MENU_SUPPORT, '/support', 'menu_support'))
+    sup_cfg = cached_styles.get('support', {})
+    if support_enabled and sup_cfg.get('enabled', True):
+        sup_text = sup_cfg.get('labels', {}).get(language, '') or texts.MENU_SUPPORT
+        paired.append(_cabinet_button(sup_text, '/support', 'menu_support'))
 
     # Info
-    paired.append(
-        _cabinet_button(
-            texts.t('MENU_INFO', 'ℹ️ Инфо'),
-            '/info',
-            'menu_info',
-        )
-    )
+    info_cfg = cached_styles.get('info', {})
+    if info_cfg.get('enabled', True):
+        info_text = info_cfg.get('labels', {}).get(language, '') or texts.t('MENU_INFO', 'ℹ️ Инфо')
+        paired.append(_cabinet_button(info_text, '/info', 'menu_info'))
 
     # Language selection (stays as callback — not a cabinet section)
     if settings.is_language_selection_enabled():
@@ -471,13 +485,13 @@ def _build_cabinet_main_menu_keyboard(
         keyboard_rows.append(paired[i : i + 2])
 
     # Admin / Moderator
+    admin_cfg = cached_styles.get('admin', {})
     if is_admin:
-        keyboard_rows.append(
-            [
-                InlineKeyboardButton(text=texts.MENU_ADMIN, callback_data='admin_panel'),
-                _cabinet_button('🖥 Веб-Админка', '/admin', 'admin_panel'),
-            ]
-        )
+        admin_buttons = [InlineKeyboardButton(text=texts.MENU_ADMIN, callback_data='admin_panel')]
+        if admin_cfg.get('enabled', True):
+            admin_web_text = admin_cfg.get('labels', {}).get(language, '') or '🖥 Веб-Админка'
+            admin_buttons.append(_cabinet_button(admin_web_text, '/admin', 'admin_panel'))
+        keyboard_rows.append(admin_buttons)
     elif is_moderator:
         keyboard_rows.append([InlineKeyboardButton(text='🧑‍⚖️ Модерация', callback_data='moderator_panel')])
 

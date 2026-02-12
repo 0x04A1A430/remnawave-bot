@@ -141,9 +141,9 @@ def build_miniapp_or_callback_button(
                 elif section_cfg.get('style'):
                     resolved_style = _resolve_style(section_cfg['style'])
                 else:
-                    resolved_style = _resolve_style(
-                        (settings.CABINET_BUTTON_STYLE or '').strip()
-                    ) or _resolve_style(CALLBACK_TO_CABINET_STYLE.get(callback_data))
+                    resolved_style = _resolve_style((settings.CABINET_BUTTON_STYLE or '').strip()) or _resolve_style(
+                        CALLBACK_TO_CABINET_STYLE.get(callback_data)
+                    )
 
                 # Emoji chain: explicit param > per-section DB
                 resolved_emoji = icon_custom_emoji_id or section_cfg.get('icon_custom_emoji_id') or None

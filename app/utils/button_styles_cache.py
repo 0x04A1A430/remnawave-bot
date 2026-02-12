@@ -15,14 +15,16 @@ logger = logging.getLogger(__name__)
 # ---- Defaults per section ------------------------------------------------
 
 DEFAULT_BUTTON_STYLES: dict[str, dict] = {
-    'home': {'style': 'primary', 'icon_custom_emoji_id': ''},
-    'subscription': {'style': 'success', 'icon_custom_emoji_id': ''},
-    'balance': {'style': 'primary', 'icon_custom_emoji_id': ''},
-    'referral': {'style': 'success', 'icon_custom_emoji_id': ''},
-    'support': {'style': 'primary', 'icon_custom_emoji_id': ''},
-    'info': {'style': 'primary', 'icon_custom_emoji_id': ''},
-    'admin': {'style': 'danger', 'icon_custom_emoji_id': ''},
+    'home': {'style': 'primary', 'icon_custom_emoji_id': '', 'enabled': True, 'labels': {}},
+    'subscription': {'style': 'success', 'icon_custom_emoji_id': '', 'enabled': True, 'labels': {}},
+    'balance': {'style': 'primary', 'icon_custom_emoji_id': '', 'enabled': True, 'labels': {}},
+    'referral': {'style': 'success', 'icon_custom_emoji_id': '', 'enabled': True, 'labels': {}},
+    'support': {'style': 'primary', 'icon_custom_emoji_id': '', 'enabled': True, 'labels': {}},
+    'info': {'style': 'primary', 'icon_custom_emoji_id': '', 'enabled': True, 'labels': {}},
+    'admin': {'style': 'danger', 'icon_custom_emoji_id': '', 'enabled': True, 'labels': {}},
 }
+
+BOT_LOCALES = ('ru', 'en', 'ua', 'zh', 'fa')
 
 SECTIONS = list(DEFAULT_BUTTON_STYLES.keys())
 
@@ -62,14 +64,19 @@ ALLOWED_STYLE_VALUES = VALID_STYLES | {'default'}
 _cached_styles: dict[str, dict] | None = None
 
 
+def _deep_copy_styles(source: dict[str, dict]) -> dict[str, dict]:
+    """Return a deep copy of styles dict (copies nested ``labels`` dicts)."""
+    return {section: {**cfg, 'labels': dict(cfg.get('labels', {}))} for section, cfg in source.items()}
+
+
 def get_cached_button_styles() -> dict[str, dict]:
     """Return the current merged config (DB overrides + defaults).
 
     If the cache has not been loaded yet, returns defaults.
     """
     if _cached_styles is not None:
-        return _cached_styles
-    return {section: {**cfg} for section, cfg in DEFAULT_BUTTON_STYLES.items()}
+        return _deep_copy_styles(_cached_styles)
+    return _deep_copy_styles(DEFAULT_BUTTON_STYLES)
 
 
 async def load_button_styles_cache() -> dict[str, dict]:
@@ -79,7 +86,7 @@ async def load_button_styles_cache() -> dict[str, dict]:
     """
     global _cached_styles
 
-    merged = {section: {**cfg} for section, cfg in DEFAULT_BUTTON_STYLES.items()}
+    merged = _deep_copy_styles(DEFAULT_BUTTON_STYLES)
 
     try:
         from sqlalchemy import select
@@ -97,6 +104,13 @@ async def load_button_styles_cache() -> dict[str, dict]:
                             merged[section]['style'] = overrides['style']
                         if isinstance(overrides.get('icon_custom_emoji_id'), str):
                             merged[section]['icon_custom_emoji_id'] = overrides['icon_custom_emoji_id']
+                        if isinstance(overrides.get('enabled'), bool):
+                            merged[section]['enabled'] = overrides['enabled']
+                        if isinstance(overrides.get('labels'), dict):
+                            merged[section]['labels'] = {
+                                k: v for k, v in overrides['labels'].items()
+                                if isinstance(k, str) and isinstance(v, str) and k in BOT_LOCALES
+                            }
     except Exception:
         logger.exception('Failed to load button styles from DB, using defaults')
 

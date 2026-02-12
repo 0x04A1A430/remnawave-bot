@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.models import User
 from app.utils.button_styles_cache import (
     ALLOWED_STYLE_VALUES,
+    BOT_LOCALES,
     BUTTON_STYLES_KEY,
     DEFAULT_BUTTON_STYLES,
     SECTIONS,
@@ -32,6 +33,8 @@ class ButtonSectionConfig(BaseModel):
 
     style: str = 'primary'
     icon_custom_emoji_id: str = ''
+    enabled: bool = True
+    labels: dict[str, str] = {}
 
 
 class ButtonStylesResponse(BaseModel):
@@ -46,11 +49,16 @@ class ButtonStylesResponse(BaseModel):
     admin: ButtonSectionConfig = ButtonSectionConfig()
 
 
+MAX_LABEL_LENGTH = 100
+
+
 class ButtonSectionUpdate(BaseModel):
     """Partial update for a single section (None = keep current)."""
 
     style: str | None = None
     icon_custom_emoji_id: str | None = None
+    enabled: bool | None = None
+    labels: dict[str, str] | None = None
 
 
 class ButtonStylesUpdate(BaseModel):
@@ -109,7 +117,7 @@ async def get_button_styles(
 ):
     """Return current per-section button styles. Admin only."""
     raw = await _get_setting_value(db, BUTTON_STYLES_KEY)
-    merged = {section: {**cfg} for section, cfg in DEFAULT_BUTTON_STYLES.items()}
+    merged = {section: {**cfg, 'labels': dict(cfg.get('labels', {}))} for section, cfg in DEFAULT_BUTTON_STYLES.items()}
 
     if raw:
         try:
@@ -120,6 +128,13 @@ async def get_button_styles(
                         merged[section]['style'] = overrides['style']
                     if isinstance(overrides.get('icon_custom_emoji_id'), str):
                         merged[section]['icon_custom_emoji_id'] = overrides['icon_custom_emoji_id']
+                    if isinstance(overrides.get('enabled'), bool):
+                        merged[section]['enabled'] = overrides['enabled']
+                    if isinstance(overrides.get('labels'), dict):
+                        merged[section]['labels'] = {
+                            k: v for k, v in overrides['labels'].items()
+                            if isinstance(k, str) and isinstance(v, str) and k in BOT_LOCALES
+                        }
         except (json.JSONDecodeError, TypeError):
             pass
 
@@ -135,14 +150,24 @@ async def update_button_styles(
     """Partially update per-section button styles. Admin only."""
     # Load current state
     raw = await _get_setting_value(db, BUTTON_STYLES_KEY)
-    current: dict[str, dict] = {section: {**cfg} for section, cfg in DEFAULT_BUTTON_STYLES.items()}
+    current: dict[str, dict] = {section: {**cfg, 'labels': dict(cfg.get('labels', {}))} for section, cfg in DEFAULT_BUTTON_STYLES.items()}
 
     if raw:
         try:
             db_data = json.loads(raw)
             for section, overrides in db_data.items():
                 if section in current and isinstance(overrides, dict):
-                    current[section].update(overrides)
+                    if overrides.get('style') in ALLOWED_STYLE_VALUES:
+                        current[section]['style'] = overrides['style']
+                    if isinstance(overrides.get('icon_custom_emoji_id'), str):
+                        current[section]['icon_custom_emoji_id'] = overrides['icon_custom_emoji_id']
+                    if isinstance(overrides.get('enabled'), bool):
+                        current[section]['enabled'] = overrides['enabled']
+                    if isinstance(overrides.get('labels'), dict):
+                        current[section]['labels'] = {
+                            k: v for k, v in overrides['labels'].items()
+                            if isinstance(k, str) and isinstance(v, str) and k in BOT_LOCALES
+                        }
         except (json.JSONDecodeError, TypeError):
             pass
 
@@ -167,6 +192,35 @@ async def update_button_styles(
         if 'icon_custom_emoji_id' in updates:
             emoji_val = (updates['icon_custom_emoji_id'] or '').strip()
             current[section]['icon_custom_emoji_id'] = emoji_val
+
+        if 'enabled' in updates:
+            current[section]['enabled'] = updates['enabled']
+
+        if 'labels' in updates:
+            raw_labels = updates['labels'] or {}
+            sanitized: dict[str, str] = {}
+            for locale_key, label_val in raw_labels.items():
+                if locale_key not in BOT_LOCALES:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f'Invalid locale "{locale_key}" for section "{section}". '
+                        f'Allowed: {", ".join(BOT_LOCALES)}',
+                    )
+                if not isinstance(label_val, str):
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f'Label value for locale "{locale_key}" must be a string.',
+                    )
+                stripped = label_val.strip()
+                if len(stripped) > MAX_LABEL_LENGTH:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f'Label for locale "{locale_key}" exceeds {MAX_LABEL_LENGTH} characters.',
+                    )
+                # Empty string = remove custom label (use default)
+                if stripped:
+                    sanitized[locale_key] = stripped
+            current[section]['labels'] = sanitized
 
         changed_sections.append(section)
 
