@@ -30,7 +30,6 @@ from ..schemas.subscriptions import (
     SubscriptionCreateRequest,
     SubscriptionDevicesRequest,
     SubscriptionExtendRequest,
-    SubscriptionModemRequest,
     SubscriptionResponse,
     SubscriptionSquadRequest,
     SubscriptionTrafficRequest,
@@ -54,7 +53,6 @@ def _serialize_subscription(subscription: Subscription) -> SubscriptionResponse:
         traffic_limit_gb=subscription.traffic_limit_gb,
         traffic_used_gb=subscription.traffic_used_gb,
         device_limit=subscription.device_limit,
-        modem_enabled=getattr(subscription, 'modem_enabled', False) or False,
         autopay_enabled=subscription.autopay_enabled,
         autopay_days_before=subscription.autopay_days_before,
         subscription_url=subscription.subscription_url,
@@ -320,44 +318,6 @@ async def delete_subscription(
     if subscription.user and subscription.user.remnawave_uuid:
         subscription_service = SubscriptionService()
         await subscription_service.disable_remnawave_user(subscription.user.remnawave_uuid)
-
-    subscription = await _get_subscription(db, subscription.id)
-    return _serialize_subscription(subscription)
-
-
-@router.post('/{subscription_id}/modem', response_model=SubscriptionResponse)
-async def set_subscription_modem(
-    subscription_id: int,
-    payload: SubscriptionModemRequest,
-    _: Any = Security(require_api_token),
-    db: AsyncSession = Depends(get_db_session),
-) -> SubscriptionResponse:
-    """Включить или выключить модем для подписки."""
-    subscription = await _get_subscription(db, subscription_id)
-
-    if subscription.is_trial:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Modem is not available for trial subscriptions')
-
-    if not settings.is_modem_enabled():
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Modem feature is disabled')
-
-    current_modem = getattr(subscription, 'modem_enabled', False) or False
-
-    if payload.enabled == current_modem:
-        return _serialize_subscription(subscription)
-
-    if payload.enabled:
-        subscription.modem_enabled = True
-        subscription.device_limit = (subscription.device_limit or 1) + 1
-    else:
-        subscription.modem_enabled = False
-        if subscription.device_limit and subscription.device_limit > 1:
-            subscription.device_limit = subscription.device_limit - 1
-
-    await db.commit()
-
-    subscription_service = SubscriptionService()
-    await subscription_service.update_remnawave_user(db, subscription)
 
     subscription = await _get_subscription(db, subscription.id)
     return _serialize_subscription(subscription)

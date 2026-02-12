@@ -426,14 +426,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
             '',
         )
 
-    # Формируем отображение лимита устройств с учётом модема
-    modem_enabled = getattr(subscription, 'modem_enabled', False) or False
-    if modem_enabled and settings.is_modem_enabled():
-        # Показываем лимит без модема + модем
-        visible_device_limit = (subscription.device_limit or 1) - 1
-        device_limit_display = f'{visible_device_limit} + модем'
-    else:
-        device_limit_display = str(subscription.device_limit)
+    device_limit_display = str(subscription.device_limit)
 
     message = message_template.format(
         full_name=db_user.full_name,
@@ -1603,11 +1596,6 @@ async def handle_extend_subscription(callback: types.CallbackQuery, db_user: Use
                     else:
                         device_limit = forced_limit
 
-            # Модем добавляет +1 к device_limit, но оплачивается отдельно,
-            # поэтому не должен учитываться как платное устройство при продлении
-            if getattr(subscription, 'modem_enabled', False):
-                device_limit = max(1, device_limit - 1)
-
             additional_devices = max(0, (device_limit or 0) - settings.DEFAULT_DEVICE_LIMIT)
             devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
             devices_total_base = devices_price_per_month * months_in_period
@@ -1813,11 +1801,6 @@ async def confirm_extend_subscription(callback: types.CallbackQuery, db_user: Us
                     device_limit = settings.DEFAULT_DEVICE_LIMIT
                 else:
                     device_limit = forced_limit
-
-        # Модем добавляет +1 к device_limit, но оплачивается отдельно,
-        # поэтому не должен учитываться как платное устройство при продлении
-        if getattr(subscription, 'modem_enabled', False):
-            device_limit = max(1, device_limit - 1)
 
         additional_devices = max(0, (device_limit or 0) - settings.DEFAULT_DEVICE_LIMIT)
         devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
@@ -3065,13 +3048,7 @@ async def handle_subscription_settings(callback: types.CallbackQuery, db_user: U
             '',
         )
 
-    # Формируем отображение лимита устройств с учётом модема
-    modem_enabled = getattr(subscription, 'modem_enabled', False) or False
-    if modem_enabled and settings.is_modem_enabled():
-        visible_device_limit = (subscription.device_limit or 1) - 1
-        devices_limit_display = f'{visible_device_limit} + модем'
-    else:
-        devices_limit_display = str(subscription.device_limit)
+    devices_limit_display = str(subscription.device_limit)
 
     settings_text = settings_template.format(
         countries_count=len(subscription.connected_squads),
@@ -4118,11 +4095,6 @@ def register_handlers(dp: Dispatcher):
 
     dp.callback_query.register(show_device_connection_help, F.data == 'device_connection_help')
 
-    # Регистрируем обработчики модема
-    from .modem import register_modem_handlers
-
-    register_modem_handlers(dp)
-
     # Регистрируем обработчики покупки по тарифам
     from .tariff_purchase import register_tariff_purchase_handlers
 
@@ -4157,10 +4129,6 @@ async def handle_simple_subscription_purchase(
     if current_subscription and current_subscription.is_active:
         # При продлении используем текущие устройства подписки, а не дефолтные
         extend_device_limit = current_subscription.device_limit or simple_device_limit
-        # Модем добавляет +1 к device_limit, но оплачивается отдельно
-        modem_enabled = getattr(current_subscription, 'modem_enabled', False)
-        if modem_enabled:
-            extend_device_limit = max(1, extend_device_limit - 1)
         # Используем максимум из текущего и дефолтного
         extend_device_limit = max(simple_device_limit, extend_device_limit)
 
@@ -4174,7 +4142,6 @@ async def handle_simple_subscription_purchase(
             device_limit=extend_device_limit,
             traffic_limit_gb=settings.SIMPLE_SUBSCRIPTION_TRAFFIC_GB,
             squad_uuid=settings.SIMPLE_SUBSCRIPTION_SQUAD_UUID,
-            modem_enabled=modem_enabled,
         )
         return
 
@@ -4294,7 +4261,6 @@ async def _extend_existing_subscription(
     device_limit: int,
     traffic_limit_gb: int,
     squad_uuid: str,
-    modem_enabled: bool = False,
 ):
     """Продлевает существующую подписку."""
     from datetime import datetime, timedelta
@@ -4312,7 +4278,6 @@ async def _extend_existing_subscription(
         'device_limit': device_limit,
         'traffic_limit_gb': traffic_limit_gb,
         'squad_uuid': squad_uuid,
-        'modem_enabled': modem_enabled,
     }
     price_kopeks, price_breakdown = await _calculate_simple_subscription_price(
         db,
@@ -4321,17 +4286,15 @@ async def _extend_existing_subscription(
         resolved_squad_uuid=squad_uuid,
     )
     logger.warning(
-        'SIMPLE_SUBSCRIPTION_EXTEND_PRICE | user=%s | total=%s | base=%s | traffic=%s | devices=%s | modem=%s | servers=%s | discount=%s | device_limit=%s | modem_enabled=%s',
+        'SIMPLE_SUBSCRIPTION_EXTEND_PRICE | user=%s | total=%s | base=%s | traffic=%s | devices=%s | servers=%s | discount=%s | device_limit=%s',
         db_user.id,
         price_kopeks,
         price_breakdown.get('base_price', 0),
         price_breakdown.get('traffic_price', 0),
         price_breakdown.get('devices_price', 0),
-        price_breakdown.get('modem_price', 0),
         price_breakdown.get('servers_price', 0),
         price_breakdown.get('total_discount', 0),
         device_limit,
-        modem_enabled,
     )
 
     # Проверяем баланс пользователя

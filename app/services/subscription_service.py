@@ -790,11 +790,6 @@ class SubscriptionService:
                     else:
                         device_limit = forced_limit
 
-            # Модем добавляет +1 к device_limit, но оплачивается отдельно,
-            # поэтому не должен учитываться как платное устройство при продлении
-            if getattr(subscription, 'modem_enabled', False):
-                device_limit = max(1, device_limit - 1)
-
             devices_price = max(0, (device_limit or 0) - settings.DEFAULT_DEVICE_LIMIT) * settings.PRICE_PER_DEVICE
             devices_discount_percent = _resolve_discount_percent(
                 user,

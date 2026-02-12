@@ -1225,6 +1225,20 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
             )
             logger.info(f'✅ Приветственное сообщение отправлено пользователю {user.telegram_id}')
             await _send_pinned_message(callback.bot, db, user)
+        except TelegramBadRequest as e:
+            if 'parse entities' in str(e).lower() or "can't parse" in str(e).lower():
+                logger.warning(f'HTML parse error в приветственном сообщении, повтор без parse_mode: {e}')
+                try:
+                    await callback.message.answer(
+                        offer_text,
+                        reply_markup=get_post_registration_keyboard(user.language),
+                        parse_mode=None,
+                    )
+                    await _send_pinned_message(callback.bot, db, user)
+                except Exception as fallback_err:
+                    logger.error(f'Ошибка при повторной отправке приветственного сообщения: {fallback_err}')
+            else:
+                logger.error(f'Ошибка при отправке приветственного сообщения: {e}')
         except Exception as e:
             logger.error(f'Ошибка при отправке приветственного сообщения: {e}')
     else:
@@ -1504,6 +1518,20 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
             )
             logger.info(f'✅ Приветственное сообщение отправлено пользователю {user.telegram_id}')
             await _send_pinned_message(message.bot, db, user)
+        except TelegramBadRequest as e:
+            if 'parse entities' in str(e).lower() or "can't parse" in str(e).lower():
+                logger.warning(f'HTML parse error в приветственном сообщении, повтор без parse_mode: {e}')
+                try:
+                    await message.answer(
+                        offer_text,
+                        reply_markup=keyboard,
+                        parse_mode=None,
+                    )
+                    await _send_pinned_message(message.bot, db, user)
+                except Exception as fallback_err:
+                    logger.error(f'Ошибка при повторной отправке приветственного сообщения: {fallback_err}')
+            else:
+                logger.error(f'Ошибка при отправке приветственного сообщения: {e}')
         except Exception as e:
             logger.error(f'Ошибка при отправке приветственного сообщения: {e}')
     else:
@@ -1732,6 +1760,8 @@ async def get_main_menu_text_simple(user_name, texts, db: AsyncSession):
 async def required_sub_channel_check(
     query: types.CallbackQuery, bot: Bot, state: FSMContext, db: AsyncSession, db_user=None
 ):
+    from app.utils.message_patch import _cache_logo_file_id, get_logo_media
+
     language = DEFAULT_LANGUAGE
     texts = get_texts(language)
 
@@ -1877,8 +1907,6 @@ async def required_sub_channel_check(
 
             menu_text = await get_main_menu_text(user, texts, db)
 
-            from app.utils.message_patch import _cache_logo_file_id, get_logo_media
-
             is_admin = settings.is_admin(user.telegram_id)
             is_moderator = (not is_admin) and SupportSettingsService.is_moderator(user.telegram_id)
 
@@ -1971,8 +1999,6 @@ async def required_sub_channel_check(
 
                     menu_text = await get_main_menu_text(user, texts, db)
 
-                    from app.utils.message_patch import _cache_logo_file_id, get_logo_media
-
                     is_admin = settings.is_admin(user.telegram_id)
                     is_moderator = (not is_admin) and SupportSettingsService.is_moderator(user.telegram_id)
 
@@ -2025,8 +2051,6 @@ async def required_sub_channel_check(
                     )
                     await state.set_state(RegistrationStates.waiting_for_referral_code)
             else:
-                from app.utils.message_patch import _cache_logo_file_id, get_logo_media
-
                 rules_text = await get_rules(language)
 
                 if settings.ENABLE_LOGO_MODE:

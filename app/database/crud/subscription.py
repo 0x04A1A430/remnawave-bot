@@ -6,6 +6,7 @@ from typing import Optional
 from sqlalchemy import and_, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from sqlalchemy.orm.exc import StaleDataError
 
 from app.config import settings
 from app.database.crud.notification import clear_notifications
@@ -625,6 +626,9 @@ async def decrement_subscription_server_counts(
     if not subscription:
         return
 
+    # Save ID before any DB operations that might invalidate the ORM object
+    sub_id = subscription.id
+
     server_ids: set[int] = set()
 
     if subscription_servers is not None:
@@ -633,12 +637,12 @@ async def decrement_subscription_server_counts(
                 server_ids.add(sub_server.server_squad_id)
     else:
         try:
-            ids_from_links = await get_subscription_server_ids(db, subscription.id)
+            ids_from_links = await get_subscription_server_ids(db, sub_id)
             server_ids.update(ids_from_links)
         except Exception as error:
             logger.error(
                 '⚠️ Не удалось получить серверы подписки %s для уменьшения счетчика: %s',
-                subscription.id,
+                sub_id,
                 error,
             )
 
@@ -652,7 +656,7 @@ async def decrement_subscription_server_counts(
         except Exception as error:
             logger.error(
                 '⚠️ Не удалось сопоставить сквады подписки %s с серверами: %s',
-                subscription.id,
+                sub_id,
                 error,
             )
 
@@ -662,12 +666,20 @@ async def decrement_subscription_server_counts(
     try:
         from app.database.crud.server_squad import remove_user_from_servers
 
-        await remove_user_from_servers(db, sorted(server_ids))
+        # Use savepoint so StaleDataError rollback doesn't affect the parent transaction
+        async with db.begin_nested():
+            await remove_user_from_servers(db, sorted(server_ids))
+    except StaleDataError:
+        logger.warning(
+            '⚠️ Подписка %s уже удалена (StaleDataError), пропускаем декремент серверов %s',
+            sub_id,
+            list(server_ids),
+        )
     except Exception as error:
         logger.error(
             '⚠️ Ошибка уменьшения счетчика пользователей серверов %s для подписки %s: %s',
             list(server_ids),
-            subscription.id,
+            sub_id,
             error,
         )
 

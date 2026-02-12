@@ -574,18 +574,43 @@ class RemnaWaveWebhookService:
     async def _handle_user_deleted(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
+        user_id = user.id
+        sub_id = subscription.id if subscription else None
+
         if subscription:
             self._stamp_webhook_update(subscription)
 
             # Decrement server counters BEFORE clearing connected_squads
             await decrement_subscription_server_counts(db, subscription)
 
+            # Re-fetch after potential rollback inside decrement_subscription_server_counts
+            try:
+                await db.refresh(subscription)
+            except Exception:
+                # Subscription was cascade-deleted, re-fetch user and skip subscription updates
+                logger.warning(
+                    'Webhook: subscription %s already deleted for user %s, skipping subscription cleanup',
+                    sub_id,
+                    user_id,
+                )
+                subscription = None
+                try:
+                    await db.refresh(user)
+                except Exception:
+                    from app.database.crud.user import get_user_by_id
+
+                    user = await get_user_by_id(db, user_id)
+                    if not user:
+                        logger.error('Webhook: user %s not found after rollback', user_id)
+                        return
+
+        if subscription:
             if subscription.status != SubscriptionStatus.EXPIRED.value:
                 subscription.status = SubscriptionStatus.EXPIRED.value
                 logger.info(
                     'Webhook: subscription %s marked expired (user deleted in panel) for user %s',
-                    subscription.id,
-                    user.id,
+                    sub_id,
+                    user_id,
                 )
 
             # Clear subscription data — panel user no longer exists
@@ -596,7 +621,7 @@ class RemnaWaveWebhookService:
             subscription.updated_at = datetime.now(UTC).replace(tzinfo=None)
 
             # Remove SubscriptionServer link rows
-            await db.execute(delete(SubscriptionServer).where(SubscriptionServer.subscription_id == subscription.id))
+            await db.execute(delete(SubscriptionServer).where(SubscriptionServer.subscription_id == sub_id))
 
         # Clear remnawave linkage
         if user.remnawave_uuid:

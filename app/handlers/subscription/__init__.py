@@ -64,13 +64,6 @@ from .links import (
     handle_connect_subscription,
     handle_open_subscription_link,
 )
-from .modem import (
-    handle_modem_confirm,
-    handle_modem_disable,
-    handle_modem_enable,
-    handle_modem_menu,
-    register_modem_handlers,
-)
 from .notifications import (
     send_extension_notification,
     send_purchase_notification,
@@ -172,10 +165,6 @@ __all__ = [
     'handle_happ_download_platform_choice',
     'handle_happ_download_request',
     'handle_manage_country',
-    'handle_modem_confirm',
-    'handle_modem_disable',
-    'handle_modem_enable',
-    'handle_modem_menu',
     'handle_no_traffic_packages',
     'handle_open_subscription_link',
     'handle_promo_offer_close',
@@ -190,7 +179,6 @@ __all__ = [
     'load_app_config',
     'refresh_traffic_config',
     'register_handlers',
-    'register_modem_handlers',
     'resume_subscription_checkout',
     'return_to_saved_cart',
     'save_cart_and_redirect_to_topup',

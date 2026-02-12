@@ -1105,6 +1105,9 @@ class UserService:
             try:
                 if user.subscription:
                     logger.info(f'🔄 Удаляем подписку {user.subscription.id}')
+                    await db.execute(
+                        delete(SubscriptionServer).where(SubscriptionServer.subscription_id == user.subscription.id)
+                    )
                     await db.execute(delete(Subscription).where(Subscription.user_id == user_id))
                     await db.flush()
             except Exception as e:

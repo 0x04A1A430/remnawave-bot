@@ -129,14 +129,6 @@ async def compute_simple_subscription_price(
     additional_devices = max(0, device_limit - settings.DEFAULT_DEVICE_LIMIT)
     devices_price_original = additional_devices * settings.PRICE_PER_DEVICE
 
-    # Расчёт цены модема (если включён)
-    modem_enabled = params.get('modem_enabled', False)
-    modem_price_original = 0
-    if modem_enabled and settings.is_modem_enabled():
-        modem_price_per_month = settings.get_modem_price_per_month()
-        months = calculate_months_from_days(period_days)
-        modem_price_original = modem_price_per_month * months
-
     promo_group: PromoGroup | None = params.get('promo_group')
 
     if promo_group is None:
@@ -256,11 +248,7 @@ async def compute_simple_subscription_price(
         )
 
     total_before_discount = (
-        base_price_original
-        + traffic_price_original
-        + devices_price_original
-        + servers_price_original
-        + modem_price_original
+        base_price_original + traffic_price_original + devices_price_original + servers_price_original
     )
 
     total_discount = base_discount + traffic_discount + devices_discount + servers_discount_total
@@ -274,8 +262,6 @@ async def compute_simple_subscription_price(
         'traffic_discount': traffic_discount,
         'devices_price': devices_price_original,
         'devices_discount': devices_discount,
-        'modem_price': modem_price_original,
-        'modem_enabled': modem_enabled,
         'servers_price': servers_price_original,
         'servers_discount': servers_discount_total,
         'servers_final': sum(item['final_price'] for item in server_breakdown),

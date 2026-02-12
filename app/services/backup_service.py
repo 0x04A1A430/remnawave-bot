@@ -599,7 +599,7 @@ class BackupService:
 
                             if value is None:
                                 record_dict[column.name] = None
-                            elif isinstance(value, datetime):
+                            elif isinstance(value, (datetime, dt_date, dt_time)):
                                 record_dict[column.name] = value.isoformat()
                             elif isinstance(value, (list, dict)):
                                 record_dict[column.name] = json_lib.dumps(value) if value else None

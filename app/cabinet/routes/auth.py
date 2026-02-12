@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -969,14 +970,13 @@ async def request_email_change(
     """
     Request email change.
 
-    Sends a 6-digit verification code to the new email address.
-    User must have a verified email to change it.
+    For verified emails: sends a 6-digit verification code to the new email.
+    For unverified emails: replaces the email directly and sends verification to the new address.
     """
-    # Check if user has a verified email
-    if not user.email or not user.email_verified:
+    if not user.email:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='You must have a verified email to change it',
+            detail='No email address to change',
         )
 
     # Check if new email is the same as current
@@ -1000,6 +1000,68 @@ async def request_email_change(
             detail='This email is already registered',
         )
 
+    # Unverified email: replace directly and send verification to new address
+    if not user.email_verified:
+        old_email = user.email
+        user.email = request.new_email.lower()
+        user.email_verified = False
+
+        verification_token = generate_verification_token()
+        verification_expires = get_verification_expires_at()
+        user.email_verification_token = verification_token
+        user.email_verification_expires = verification_expires
+
+        try:
+            await db.commit()
+        except IntegrityError:
+            await db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='This email is already registered',
+            )
+
+        if settings.is_cabinet_email_verification_enabled() and email_service.is_configured():
+            cabinet_url = settings.CABINET_URL
+            verification_url = f'{cabinet_url}/verify-email'
+            lang = user.language or 'ru'
+            full_url = f'{verification_url}?token={verification_token}'
+            expire_hours = settings.get_cabinet_email_verification_expire_hours()
+
+            override = await get_rendered_override(
+                'email_verification',
+                lang,
+                context={
+                    'username': user.first_name or '',
+                    'verification_url': full_url,
+                    'expire_hours': str(expire_hours),
+                },
+                db=db,
+            )
+            custom_subject, custom_body = override if override else (None, None)
+
+            try:
+                await asyncio.to_thread(
+                    email_service.send_verification_email,
+                    to_email=request.new_email,
+                    verification_token=verification_token,
+                    verification_url=verification_url,
+                    username=user.first_name,
+                    language=lang,
+                    custom_subject=custom_subject,
+                    custom_body_html=custom_body,
+                )
+            except Exception as e:
+                logger.error(f'Failed to send verification email to {request.new_email} for user {user.id}: {e}')
+
+        logger.info(f'Unverified email replaced for user {user.id}: {old_email} -> {request.new_email}')
+
+        return EmailChangeResponse(
+            message='Email replaced, verification sent to new address',
+            new_email=request.new_email,
+            expires_in_minutes=0,
+        )
+
+    # Verified email: send code to new address for confirmation
     # Generate verification code
     code = generate_email_change_code()
     expires_at = get_email_change_expires_at()

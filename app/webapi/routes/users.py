@@ -70,7 +70,6 @@ def _serialize_subscription(subscription: Subscription | None) -> SubscriptionSu
         traffic_limit_gb=subscription.traffic_limit_gb,
         traffic_used_gb=subscription.traffic_used_gb,
         device_limit=subscription.device_limit,
-        modem_enabled=getattr(subscription, 'modem_enabled', False) or False,
         autopay_enabled=subscription.autopay_enabled,
         autopay_days_before=subscription.autopay_days_before,
         subscription_url=subscription.subscription_url,
