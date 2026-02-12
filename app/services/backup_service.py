@@ -2,12 +2,14 @@ import asyncio
 import gzip
 import json as json_lib
 import logging
+import math
 import os
 import shutil
 import tarfile
 import tempfile
 from dataclasses import asdict, dataclass
 from datetime import date as dt_date, datetime, time as dt_time, timedelta
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +17,7 @@ import aiofiles
 import pyzipper
 from aiogram.types import FSInputFile
 from sqlalchemy import inspect, select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -601,8 +604,15 @@ class BackupService:
                                 record_dict[column.name] = None
                             elif isinstance(value, (datetime, dt_date, dt_time)):
                                 record_dict[column.name] = value.isoformat()
+                            elif isinstance(value, Decimal):
+                                record_dict[column.name] = float(value)
+                            elif isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
+                                record_dict[column.name] = 0.0
                             elif isinstance(value, (list, dict)):
-                                record_dict[column.name] = json_lib.dumps(value) if value else None
+                                try:
+                                    record_dict[column.name] = json_lib.dumps(value) if value else None
+                                except TypeError:
+                                    record_dict[column.name] = str(value)
                             elif hasattr(value, '__dict__'):
                                 record_dict[column.name] = str(value)
                             else:
@@ -1088,16 +1098,39 @@ class BackupService:
                                 setattr(existing, key, value)
                     else:
                         instance = User(**processed_data)
-                        db.add(instance)
+                        try:
+                            async with db.begin_nested():
+                                db.add(instance)
+                                await db.flush()
+                        except IntegrityError:
+                            logger.warning(
+                                'Дубликат пользователя (id=%s, telegram_id=%s), пропускаем',
+                                processed_data.get('id'),
+                                processed_data.get('telegram_id'),
+                            )
+                            continue
                 else:
                     instance = User(**processed_data)
-                    db.add(instance)
+                    try:
+                        async with db.begin_nested():
+                            db.add(instance)
+                            await db.flush()
+                    except IntegrityError:
+                        logger.warning(
+                            'Дубликат пользователя (telegram_id=%s), пропускаем',
+                            processed_data.get('telegram_id'),
+                        )
+                        continue
 
             except Exception as e:
                 logger.error(f'Ошибка при восстановлении пользователя: {e}')
                 raise
 
-        await db.flush()
+        try:
+            await db.flush()
+        except IntegrityError as e:
+            logger.warning('IntegrityError при flush пользователей, откатываем: %s', e)
+            await db.rollback()
         logger.info('✅ Пользователи без реферальных связей восстановлены')
 
     async def _update_user_referrals(self, db: AsyncSession, backup_data: dict):
@@ -1277,8 +1310,13 @@ class BackupService:
                     logger.debug('Запись %s %s уже существует', table_name, values)
                     continue
 
-                await db.execute(table_obj.insert().values(**values))
-                restored += 1
+                try:
+                    async with db.begin_nested():
+                        await db.execute(table_obj.insert().values(**values))
+                    restored += 1
+                except IntegrityError:
+                    logger.warning('Пропускаем связь %s %s (FK или дубликат)', table_name, values)
+                    continue
             except Exception as e:
                 logger.error('Ошибка при восстановлении связи %s %s: %s', table_name, values, e)
                 raise
@@ -1324,7 +1362,18 @@ class BackupService:
                                 setattr(existing, key, value)
                     else:
                         instance = model(**processed_data)
-                        db.add(instance)
+                        try:
+                            async with db.begin_nested():
+                                db.add(instance)
+                                await db.flush()
+                        except IntegrityError:
+                            # Unique constraint conflict — record exists with different PK
+                            logger.warning(
+                                'Дубликат по уникальному ключу в %s (PK=%s), пропускаем',
+                                table_name,
+                                {col: processed_data.get(col) for col in pk_cols},
+                            )
+                            continue
                 else:
                     instance = model(**processed_data)
                     db.add(instance)

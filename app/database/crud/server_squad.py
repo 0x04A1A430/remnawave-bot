@@ -759,7 +759,7 @@ async def count_active_users_for_squad(db: AsyncSession, squad_uuid: str) -> int
 
 async def add_user_to_servers(db: AsyncSession, server_squad_ids: list[int]) -> bool:
     try:
-        for server_id in server_squad_ids:
+        for server_id in sorted(server_squad_ids):
             await db.execute(
                 update(ServerSquad)
                 .where(ServerSquad.id == server_id)
@@ -777,7 +777,7 @@ async def add_user_to_servers(db: AsyncSession, server_squad_ids: list[int]) -> 
 
 async def remove_user_from_servers(db: AsyncSession, server_squad_ids: list[int]) -> bool:
     try:
-        for server_id in server_squad_ids:
+        for server_id in sorted(server_squad_ids):
             await db.execute(
                 update(ServerSquad)
                 .where(ServerSquad.id == server_id)
@@ -790,6 +790,58 @@ async def remove_user_from_servers(db: AsyncSession, server_squad_ids: list[int]
 
     except Exception as e:
         logger.error(f'Ошибка уменьшения счетчика пользователей: {e}')
+        raise
+
+
+async def update_server_user_counts(
+    db: AsyncSession,
+    add_ids: list[int] | None = None,
+    remove_ids: list[int] | None = None,
+) -> None:
+    """Increment and decrement server user counters in a single sorted pass.
+
+    Prevents deadlocks by acquiring row locks in consistent ID order
+    across both add and remove operations within one transaction.
+    """
+    try:
+        add_set = set(add_ids) if add_ids else set()
+        remove_set = set(remove_ids) if remove_ids else set()
+
+        if not add_set and not remove_set:
+            return
+
+        # IDs in both sets cancel out — skip them
+        overlap = add_set & remove_set
+        if overlap:
+            add_set -= overlap
+            remove_set -= overlap
+
+        all_ids = sorted(add_set | remove_set)
+        if not all_ids:
+            return
+
+        for server_id in all_ids:
+            if server_id in add_set:
+                await db.execute(
+                    update(ServerSquad)
+                    .where(ServerSquad.id == server_id)
+                    .values(current_users=ServerSquad.current_users + 1)
+                )
+            if server_id in remove_set:
+                await db.execute(
+                    update(ServerSquad)
+                    .where(ServerSquad.id == server_id)
+                    .values(current_users=func.greatest(ServerSquad.current_users - 1, 0))
+                )
+
+        await db.flush()
+        if add_set:
+            logger.info('✅ Увеличен счетчик пользователей для серверов: %s', sorted(add_set))
+        if remove_set:
+            logger.info('✅ Уменьшен счетчик пользователей для серверов: %s', sorted(remove_set))
+
+    except Exception as e:
+        logger.error('Ошибка обновления счетчиков серверов: %s', e)
         raise
 
 

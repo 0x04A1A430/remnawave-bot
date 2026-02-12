@@ -1070,22 +1070,15 @@ class RemnaWaveService:
                     )
 
             if updated_subscriptions:
+                # Update in consistent ID order to prevent deadlocks
+                counter_updates = {}
                 if source_decrement:
-                    await db.execute(
-                        update(ServerSquad)
-                        .where(ServerSquad.id == source_server.id)
-                        .values(
-                            current_users=func.greatest(
-                                ServerSquad.current_users - source_decrement,
-                                0,
-                            )
-                        )
-                    )
+                    counter_updates[source_server.id] = func.greatest(ServerSquad.current_users - source_decrement, 0)
                 if target_increment:
+                    counter_updates[target_server.id] = ServerSquad.current_users + target_increment
+                for sid in sorted(counter_updates):
                     await db.execute(
-                        update(ServerSquad)
-                        .where(ServerSquad.id == target_server.id)
-                        .values(current_users=ServerSquad.current_users + target_increment)
+                        update(ServerSquad).where(ServerSquad.id == sid).values(current_users=counter_updates[sid])
                     )
 
                 await db.commit()
