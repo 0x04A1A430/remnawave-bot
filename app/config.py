@@ -516,7 +516,7 @@ class Settings(BaseSettings):
     # Способ оплаты: 44 = СБП (QR код), 36 = Карты РФ, 43 = SberPay
     KASSA_AI_PAYMENT_SYSTEM_ID: int = 44
 
-    MAIN_MENU_MODE: str = 'default'
+    MAIN_MENU_MODE: str = 'default'  # 'default' | 'cabinet'
     CONNECT_BUTTON_MODE: str = 'miniapp_subscription'
     MINIAPP_CUSTOM_URL: str = ''
     MINIAPP_STATIC_PATH: str = 'miniapp'
@@ -750,15 +750,16 @@ class Settings(BaseSettings):
             'default': 'default',
             'full': 'default',
             'standard': 'default',
-            'text': 'text',
-            'text_only': 'text',
-            'textual': 'text',
-            'minimal': 'text',
+            'cabinet': 'cabinet',
+            'text': 'cabinet',
+            'text_only': 'cabinet',
+            'textual': 'cabinet',
+            'minimal': 'cabinet',
         }
 
         mode = aliases.get(normalized, normalized)
-        if mode not in {'default', 'text'}:
-            raise ValueError('MAIN_MENU_MODE must be one of: default, text')
+        if mode not in {'default', 'cabinet'}:
+            raise ValueError('MAIN_MENU_MODE must be one of: default, cabinet')
         return mode
 
     @field_validator('SERVER_STATUS_MODE', mode='before')
@@ -1365,8 +1366,12 @@ class Settings(BaseSettings):
     def get_main_menu_mode(self) -> str:
         return getattr(self, 'MAIN_MENU_MODE', 'default')
 
+    def is_cabinet_mode(self) -> bool:
+        return self.get_main_menu_mode() == 'cabinet'
+
     def is_text_main_menu_mode(self) -> bool:
-        return self.get_main_menu_mode() == 'text'
+        """Backward-compatible alias for :meth:`is_cabinet_mode`."""
+        return self.is_cabinet_mode()
 
     def get_main_menu_miniapp_url(self) -> str | None:
         for candidate in [self.MINIAPP_CUSTOM_URL, self.MINIAPP_PURCHASE_URL]:

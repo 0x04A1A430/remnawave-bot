@@ -406,7 +406,7 @@ class BotConfigurationService:
         ],
         'MAIN_MENU_MODE': [
             ChoiceOption('default', '📋 Полное меню'),
-            ChoiceOption('text', '📝 Текстовое меню'),
+            ChoiceOption('cabinet', '🏠 Cabinet (МиниАпп)'),
         ],
         'SALES_MODE': [
             ChoiceOption('classic', '📋 Классический (периоды из .env)'),

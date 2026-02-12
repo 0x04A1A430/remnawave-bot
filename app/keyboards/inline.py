@@ -362,32 +362,54 @@ def get_language_selection_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-def _build_text_main_menu_keyboard(
+def _build_cabinet_main_menu_keyboard(
     language: str,
     texts,
     *,
     is_admin: bool,
     is_moderator: bool,
+    balance_kopeks: int = 0,
 ) -> InlineKeyboardMarkup:
+    """Build the main-menu keyboard for Cabinet mode.
+
+    Each button opens the corresponding section of the cabinet frontend
+    via ``MINIAPP_CUSTOM_URL`` + path (e.g. ``/subscription``, ``/balance``).
+    """
+    from app.utils.miniapp_buttons import build_cabinet_url
+
+    def _cabinet_button(text: str, path: str, callback_fallback: str) -> InlineKeyboardButton:
+        url = build_cabinet_url(path)
+        if url:
+            return InlineKeyboardButton(text=text, web_app=types.WebAppInfo(url=url))
+        return InlineKeyboardButton(text=text, callback_data=callback_fallback)
+
+    # -- Primary action row: Cabinet home --
     profile_text = texts.t('MENU_PROFILE', '👤 Личный кабинет')
-    miniapp_url = settings.get_main_menu_miniapp_url()
+    keyboard_rows: list[list[InlineKeyboardButton]] = [
+        [_cabinet_button(profile_text, '/', 'menu_profile_unavailable')],
+    ]
 
-    if miniapp_url:
-        profile_button = InlineKeyboardButton(
-            text=profile_text,
-            web_app=types.WebAppInfo(url=miniapp_url),
-        )
+    # -- Section buttons as paired rows --
+    paired: list[InlineKeyboardButton] = []
+
+    # Subscription
+    paired.append(_cabinet_button(texts.MENU_SUBSCRIPTION, '/subscription', 'menu_subscription'))
+
+    # Balance
+    safe_balance = balance_kopeks or 0
+    if hasattr(texts, 'BALANCE_BUTTON') and safe_balance > 0:
+        balance_text = texts.BALANCE_BUTTON.format(balance=texts.format_price(safe_balance))
     else:
-        profile_button = InlineKeyboardButton(
-            text=profile_text,
-            callback_data='menu_profile_unavailable',
+        balance_text = texts.t('BALANCE_BUTTON_DEFAULT', '💰 Баланс: {balance}').format(
+            balance=texts.format_price(safe_balance),
         )
+    paired.append(_cabinet_button(balance_text, '/balance', 'menu_balance'))
 
-    keyboard_rows: list[list[InlineKeyboardButton]] = [[profile_button]]
+    # Referrals (if enabled)
+    if settings.is_referral_program_enabled():
+        paired.append(_cabinet_button(texts.MENU_REFERRALS, '/referral', 'menu_referrals'))
 
-    if settings.is_language_selection_enabled():
-        keyboard_rows.append([InlineKeyboardButton(text=texts.MENU_LANGUAGE, callback_data='menu_language')])
-
+    # Support
     support_enabled = False
     try:
         from app.services.support_settings_service import SupportSettingsService
@@ -397,8 +419,26 @@ def _build_text_main_menu_keyboard(
         support_enabled = settings.SUPPORT_MENU_ENABLED
 
     if support_enabled:
-        keyboard_rows.append([InlineKeyboardButton(text=texts.MENU_SUPPORT, callback_data='menu_support')])
+        paired.append(_cabinet_button(texts.MENU_SUPPORT, '/support', 'menu_support'))
 
+    # Info
+    paired.append(
+        _cabinet_button(
+            texts.t('MENU_INFO', 'ℹ️ Инфо'),
+            '/info',
+            'menu_info',
+        )
+    )
+
+    # Language selection (stays as callback - not a cabinet section)
+    if settings.is_language_selection_enabled():
+        paired.append(InlineKeyboardButton(text=texts.MENU_LANGUAGE, callback_data='menu_language'))
+
+    # Lay out in pairs
+    for i in range(0, len(paired), 2):
+        keyboard_rows.append(paired[i : i + 2])
+
+    # Admin / Moderator
     if is_admin:
         keyboard_rows.append([InlineKeyboardButton(text=texts.MENU_ADMIN, callback_data='admin_panel')])
     elif is_moderator:
@@ -423,12 +463,13 @@ def get_main_menu_keyboard(
 ) -> InlineKeyboardMarkup:
     texts = get_texts(language)
 
-    if settings.is_text_main_menu_mode():
-        return _build_text_main_menu_keyboard(
+    if settings.is_cabinet_mode():
+        return _build_cabinet_main_menu_keyboard(
             language,
             texts,
             is_admin=is_admin,
             is_moderator=is_moderator,
+            balance_kopeks=balance_kopeks,
         )
 
     if settings.DEBUG:

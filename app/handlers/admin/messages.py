@@ -45,7 +45,7 @@ from app.services.pinned_message_service import (
 )
 from app.states import AdminStates
 from app.utils.decorators import admin_required, error_handler
-from app.utils.miniapp_buttons import build_miniapp_or_callback_button
+from app.utils.miniapp_buttons import BUTTON_KEY_TO_CABINET_PATH, build_miniapp_or_callback_button
 
 
 logger = logging.getLogger(__name__)
@@ -76,12 +76,14 @@ async def safe_edit_or_send_text(callback: types.CallbackQuery, text: str, reply
 BUTTON_ROWS = BROADCAST_BUTTON_ROWS
 DEFAULT_SELECTED_BUTTONS = DEFAULT_BROADCAST_BUTTONS
 
-TEXT_MENU_MINIAPP_BUTTON_KEYS = {
+CABINET_MINIAPP_BUTTON_KEYS = {
     'balance',
     'referrals',
     'promocode',
     'connect',
     'subscription',
+    'support',
+    'home',
 }
 
 
@@ -106,11 +108,12 @@ def create_broadcast_keyboard(selected_buttons: list, language: str = 'ru') -> t
             if button_key not in selected_buttons:
                 continue
             button_config = button_config_map[button_key]
-            if settings.is_text_main_menu_mode() and button_key in TEXT_MENU_MINIAPP_BUTTON_KEYS:
+            if settings.is_cabinet_mode() and button_key in CABINET_MINIAPP_BUTTON_KEYS:
                 row_buttons.append(
                     build_miniapp_or_callback_button(
                         text=button_config['text'],
                         callback_data=button_config['callback'],
+                        cabinet_path=BUTTON_KEY_TO_CABINET_PATH.get(button_key, ''),
                     )
                 )
             else:

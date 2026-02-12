@@ -229,6 +229,14 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
             '⚠️ CONNECT_BUTTON_MODE=miniapp_custom, но MINIAPP_CUSTOM_URL не задан! '
             'Кнопка "Подключиться" не будет работать.'
         )
+    if settings.is_cabinet_mode() and not settings.MINIAPP_CUSTOM_URL:
+        logger.warning(
+            '⚠️ MAIN_MENU_MODE=cabinet, но MINIAPP_CUSTOM_URL не задан! '
+            'Кнопки кабинета не смогут открывать разделы MiniApp. '
+            'Установите MINIAPP_CUSTOM_URL.'
+        )
+    elif settings.is_cabinet_mode():
+        logger.info(f'🏠 Режим Cabinet активен, базовый URL: {settings.MINIAPP_CUSTOM_URL}')
 
     logger.info('Бот успешно настроен')
 
