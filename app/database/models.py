@@ -1153,8 +1153,12 @@ class Subscription(Base):
     user = relationship('User', back_populates='subscription')
     tariff = relationship('Tariff', back_populates='subscriptions')
     discount_offers = relationship('DiscountOffer', back_populates='subscription')
-    temporary_accesses = relationship('SubscriptionTemporaryAccess', back_populates='subscription', passive_deletes=True)
-    traffic_purchases = relationship('TrafficPurchase', back_populates='subscription', passive_deletes=True, cascade='all, delete-orphan')
+    temporary_accesses = relationship(
+        'SubscriptionTemporaryAccess', back_populates='subscription', passive_deletes=True
+    )
+    traffic_purchases = relationship(
+        'TrafficPurchase', back_populates='subscription', passive_deletes=True, cascade='all, delete-orphan'
+    )
 
     @property
     def is_active(self) -> bool:
