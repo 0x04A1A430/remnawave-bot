@@ -440,7 +440,12 @@ def _build_cabinet_main_menu_keyboard(
 
     # Admin / Moderator
     if is_admin:
-        keyboard_rows.append([InlineKeyboardButton(text=texts.MENU_ADMIN, callback_data='admin_panel')])
+        keyboard_rows.append(
+            [
+                InlineKeyboardButton(text=texts.MENU_ADMIN, callback_data='admin_panel'),
+                _cabinet_button('🖥 Веб-Админка', '/admin', 'admin_panel'),
+            ]
+        )
     elif is_moderator:
         keyboard_rows.append([InlineKeyboardButton(text='🧑‍⚖️ Модерация', callback_data='moderator_panel')])
 
