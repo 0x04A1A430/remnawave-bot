@@ -221,7 +221,6 @@ class MonitoringService:
                 await self._check_expired_subscriptions(db)
                 await self._check_expiring_subscriptions(db)
                 await self._check_trial_expiring_soon(db)
-                await self._check_trial_inactivity_notifications(db)
                 await self._check_trial_channel_subscriptions(db)
                 await self._check_expired_subscription_followups(db)
                 if settings.ENABLE_AUTOPAY:
@@ -503,77 +502,6 @@ class MonitoringService:
 
         except Exception as e:
             logger.error(f'Ошибка проверки истекающих тестовых подписок: {e}')
-
-    async def _check_trial_inactivity_notifications(self, db: AsyncSession):
-        if not NotificationSettingsService.are_notifications_globally_enabled():
-            return
-        if not self.bot:
-            return
-
-        try:
-            now = datetime.utcnow()
-            one_hour_ago = now - timedelta(hours=1)
-
-            result = await db.execute(
-                select(Subscription)
-                .options(selectinload(Subscription.user))
-                .where(
-                    and_(
-                        Subscription.status == SubscriptionStatus.ACTIVE.value,
-                        Subscription.is_trial == True,
-                        Subscription.start_date.isnot(None),
-                        Subscription.start_date <= one_hour_ago,
-                        Subscription.end_date > now,
-                    )
-                )
-            )
-
-            subscriptions = result.scalars().all()
-            sent_1h = 0
-            sent_24h = 0
-
-            for subscription in subscriptions:
-                user = subscription.user
-                if not user:
-                    continue
-
-                if (subscription.traffic_used_gb or 0) > 0:
-                    continue
-
-                start_date = subscription.start_date
-                if not start_date:
-                    continue
-
-                time_since_start = now - start_date
-
-                if NotificationSettingsService.is_trial_inactive_1h_enabled() and timedelta(
-                    hours=1
-                ) <= time_since_start < timedelta(hours=24):
-                    if not await notification_sent(db, user.id, subscription.id, 'trial_inactive_1h'):
-                        success = await self._send_trial_inactive_notification(user, subscription, 1)
-                        if success:
-                            await record_notification(db, user.id, subscription.id, 'trial_inactive_1h')
-                            sent_1h += 1
-
-                if NotificationSettingsService.is_trial_inactive_24h_enabled() and time_since_start >= timedelta(
-                    hours=24
-                ):
-                    if not await notification_sent(db, user.id, subscription.id, 'trial_inactive_24h'):
-                        success = await self._send_trial_inactive_notification(user, subscription, 24)
-                        if success:
-                            await record_notification(db, user.id, subscription.id, 'trial_inactive_24h')
-                            sent_24h += 1
-
-            if sent_1h or sent_24h:
-                await self._log_monitoring_event(
-                    db,
-                    'trial_inactivity_notifications',
-                    f'Отправлено {sent_1h} уведомлений спустя 1 час и {sent_24h} спустя 24 часа',
-                    {'sent_1h': sent_1h, 'sent_24h': sent_24h},
-                )
-
-        except Exception as e:
-            logger.error(f'Ошибка проверки неактивных тестовых подписок: {e}')
 
     async def _check_trial_channel_subscriptions(self, db: AsyncSession):
         from app.database.crud.subscription import is_recently_updated_by_webhook
@@ -1352,88 +1280,6 @@ class MonitoringService:
         except Exception as e:
             logger.error(
                 'Ошибка отправки уведомления об окончании тестовой подписки пользователю %s: %s',
-                user.telegram_id,
-                e,
-            )
-            return False
-
-    async def _send_trial_inactive_notification(self, user: User, subscription: Subscription, hours: int) -> bool:
-        try:
-            texts = get_texts(user.language)
-            if hours >= 24:
-                template = texts.get(
-                    'TRIAL_INACTIVE_24H',
-                    (
-                        '⏳ <b>Вы ещё не подключились к VPN</b>\n\n'
-                        'Прошли сутки с активации тестового периода, но трафик не зафиксирован.'
-                        '\n\nНажмите кнопку ниже, чтобы подключиться.'
-                    ),
-                )
-            else:
-                template = texts.get(
-                    'TRIAL_INACTIVE_1H',
-                    (
-                        '⏳ <b>Прошёл час, а подключения нет</b>\n\n'
-                        'Если возникли сложности с запуском — воспользуйтесь инструкциями.'
-                    ),
-                )
-
-            message = template.format(
-                price=settings.format_price(settings.PRICE_30_DAYS),
-                end_date=format_local_datetime(subscription.end_date, '%d.%m.%Y %H:%M'),
-            )
-
-            from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-
-            keyboard = InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        build_miniapp_or_callback_button(
-                            text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
-                            callback_data='subscription_connect',
-                        )
-                    ],
-                    [
-                        build_miniapp_or_callback_button(
-                            text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
-                            callback_data='menu_subscription',
-                        )
-                    ],
-                    [
-                        InlineKeyboardButton(
-                            text=texts.t('SUPPORT_BUTTON', '🆘 Поддержка'), callback_data='menu_support'
-                        )
-                    ],
-                ]
-            )
-
-            await self._send_message_with_logo(
-                chat_id=user.telegram_id,
-                text=message,
-                parse_mode='HTML',
-                reply_markup=keyboard,
-            )
-            return True
-
-        except (TelegramForbiddenError, TelegramBadRequest) as exc:
-            if self._handle_unreachable_user(user, exc, 'уведомление о бездействии на тесте'):
-                return True
-            logger.error(
-                'Ошибка Telegram API при отправке уведомления об отсутствии подключения пользователю %s: %s',
-                user.telegram_id,
-                exc,
-            )
-            return False
-        except TelegramNetworkError as e:
-            logger.warning(
-                'Таймаут отправки уведомления об отсутствии подключения пользователю %s: %s',
-                user.telegram_id,
-                e,
-            )
-            return False
-        except Exception as e:
-            logger.error(
-                'Ошибка отправки уведомления об отсутствии подключения пользователю %s: %s',
                 user.telegram_id,
                 e,
             )
