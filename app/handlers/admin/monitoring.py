@@ -41,17 +41,13 @@ def _build_notification_settings_view(language: str):
     third_hours = NotificationSettingsService.get_third_wave_valid_hours()
     third_days = NotificationSettingsService.get_third_wave_trigger_days()
 
-    trial_1h_status = _format_toggle(config['trial_inactive_1h'].get('enabled', True))
-    trial_24h_status = _format_toggle(config['trial_inactive_24h'].get('enabled', True))
-    trial_channel_status = _format_toggle(config['trial_channel_unsubscribed'].get('enabled', True))
+    trial_channel_status = _format_toggle(config.get('trial_channel_unsubscribed', {}).get('enabled', True))
     expired_1d_status = _format_toggle(config['expired_1d'].get('enabled', True))
     second_wave_status = _format_toggle(config['expired_second_wave'].get('enabled', True))
     third_wave_status = _format_toggle(config['expired_third_wave'].get('enabled', True))
 
     summary_text = (
         '🔔 <b>Уведомления пользователям</b>\n\n'
-        f'• 1 час после триала: {trial_1h_status}\n'
-        f'• 24 часа после триала: {trial_24h_status}\n'
         f'• Отписка от канала: {trial_channel_status}\n'
         f'• 1 день после истечения: {expired_1d_status}\n'
         f'• 2-3 дня (скидка {second_percent}% / {second_hours} ч): {second_wave_status}\n'
@@ -62,26 +58,6 @@ def _build_notification_settings_view(language: str):
 
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text=f'{trial_1h_status} • 1 час после триала', callback_data='admin_mon_notify_toggle_trial_1h'
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text='🧪 Тест: 1 час после триала', callback_data='admin_mon_notify_preview_trial_1h'
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text=f'{trial_24h_status} • 24 часа после триала', callback_data='admin_mon_notify_toggle_trial_24h'
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text='🧪 Тест: 24 часа после триала', callback_data='admin_mon_notify_preview_trial_24h'
-                )
-            ],
             [
                 InlineKeyboardButton(
                     text=f'{trial_channel_status} • Отписка от канала',
@@ -170,76 +146,7 @@ def _build_notification_preview_message(language: str, notification_type: str):
 
     header = '🧪 <b>Тестовое уведомление мониторинга</b>\n\n'
 
-    if notification_type == 'trial_inactive_1h':
-        template = texts.get(
-            'TRIAL_INACTIVE_1H',
-            (
-                '⏳ <b>Прошёл час, а подключения нет</b>\n\n'
-                'Если возникли сложности с запуском — воспользуйтесь инструкциями.'
-            ),
-        )
-        message = template.format(
-            price=price_30_days,
-            end_date=(now + timedelta(days=settings.TRIAL_DURATION_DAYS)).strftime('%d.%m.%Y %H:%M'),
-        )
-        keyboard = InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    InlineKeyboardButton(
-                        text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
-                        callback_data='subscription_connect',
-                    )
-                ],
-                [
-                    InlineKeyboardButton(
-                        text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
-                        callback_data='menu_subscription',
-                    )
-                ],
-                [
-                    InlineKeyboardButton(
-                        text=texts.t('SUPPORT_BUTTON', '🆘 Поддержка'),
-                        callback_data='menu_support',
-                    )
-                ],
-            ]
-        )
-    elif notification_type == 'trial_inactive_24h':
-        template = texts.get(
-            'TRIAL_INACTIVE_24H',
-            (
-                '⏳ <b>Вы ещё не подключились к VPN</b>\n\n'
-                'Прошли сутки с активации тестового периода, но трафик не зафиксирован.'
-                '\n\nНажмите кнопку ниже, чтобы подключиться.'
-            ),
-        )
-        message = template.format(
-            price=price_30_days,
-            end_date=(now + timedelta(days=1)).strftime('%d.%m.%Y %H:%M'),
-        )
-        keyboard = InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    InlineKeyboardButton(
-                        text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
-                        callback_data='subscription_connect',
-                    )
-                ],
-                [
-                    InlineKeyboardButton(
-                        text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
-                        callback_data='menu_subscription',
-                    )
-                ],
-                [
-                    InlineKeyboardButton(
-                        text=texts.t('SUPPORT_BUTTON', '🆘 Поддержка'),
-                        callback_data='menu_support',
-                    )
-                ],
-            ]
-        )
-    elif notification_type == 'trial_channel_unsubscribed':
+    if notification_type == 'trial_channel_unsubscribed':
         template = texts.get(
             'TRIAL_CHANNEL_UNSUBSCRIBED',
             (
@@ -535,48 +442,6 @@ async def admin_notify_settings(callback: CallbackQuery):
         await callback.answer('❌ Не удалось загрузить настройки', show_alert=True)
 
 
-@router.callback_query(F.data == 'admin_mon_notify_toggle_trial_1h')
-@admin_required
-async def toggle_trial_1h_notification(callback: CallbackQuery):
-    enabled = NotificationSettingsService.is_trial_inactive_1h_enabled()
-    NotificationSettingsService.set_trial_inactive_1h_enabled(not enabled)
-    await callback.answer('✅ Включено' if not enabled else '⏸️ Отключено')
-    await _render_notification_settings(callback)
-
-
-@router.callback_query(F.data == 'admin_mon_notify_preview_trial_1h')
-@admin_required
-async def preview_trial_1h_notification(callback: CallbackQuery):
-    try:
-        language = callback.from_user.language_code or settings.DEFAULT_LANGUAGE
-        await _send_notification_preview(callback.bot, callback.from_user.id, language, 'trial_inactive_1h')
-        await callback.answer('✅ Пример отправлен')
-    except Exception as exc:
-        logger.error('Failed to send trial 1h preview: %s', exc)
-        await callback.answer('❌ Не удалось отправить тест', show_alert=True)
-
-
-@router.callback_query(F.data == 'admin_mon_notify_toggle_trial_24h')
-@admin_required
-async def toggle_trial_24h_notification(callback: CallbackQuery):
-    enabled = NotificationSettingsService.is_trial_inactive_24h_enabled()
-    NotificationSettingsService.set_trial_inactive_24h_enabled(not enabled)
-    await callback.answer('✅ Включено' if not enabled else '⏸️ Отключено')
-    await _render_notification_settings(callback)
-
-
-@router.callback_query(F.data == 'admin_mon_notify_preview_trial_24h')
-@admin_required
-async def preview_trial_24h_notification(callback: CallbackQuery):
-    try:
-        language = callback.from_user.language_code or settings.DEFAULT_LANGUAGE
-        await _send_notification_preview(callback.bot, callback.from_user.id, language, 'trial_inactive_24h')
-        await callback.answer('✅ Пример отправлен')
-    except Exception as exc:
-        logger.error('Failed to send trial 24h preview: %s', exc)
-        await callback.answer('❌ Не удалось отправить тест', show_alert=True)
-
-
 @router.callback_query(F.data == 'admin_mon_notify_toggle_trial_channel')
 @admin_required
 async def toggle_trial_channel_notification(callback: CallbackQuery):
@@ -668,8 +533,6 @@ async def preview_all_notifications(callback: CallbackQuery):
         language = callback.from_user.language_code or settings.DEFAULT_LANGUAGE
         chat_id = callback.from_user.id
         for notification_type in [
-            'trial_inactive_1h',
-            'trial_inactive_24h',
             'trial_channel_unsubscribed',
             'expired_1d',
             'expired_2d',

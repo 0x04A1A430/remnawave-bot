@@ -18,8 +18,6 @@ class NotificationSettingsService:
     _loaded: bool = False
 
     _DEFAULTS: dict[str, dict[str, Any]] = {
-        'trial_inactive_1h': {'enabled': True},
-        'trial_inactive_24h': {'enabled': True},
         'trial_channel_unsubscribed': {'enabled': True},
         'expired_1d': {'enabled': True},
         'expired_second_wave': {
@@ -121,23 +119,6 @@ class NotificationSettingsService:
     @classmethod
     def is_enabled(cls, key: str) -> bool:
         return bool(cls._get(key).get('enabled', True))
-
-    # Trial inactivity helpers
-    @classmethod
-    def is_trial_inactive_1h_enabled(cls) -> bool:
-        return cls.is_enabled('trial_inactive_1h')
-
-    @classmethod
-    def set_trial_inactive_1h_enabled(cls, enabled: bool) -> bool:
-        return cls.set_enabled('trial_inactive_1h', enabled)
-
-    @classmethod
-    def is_trial_inactive_24h_enabled(cls) -> bool:
-        return cls.is_enabled('trial_inactive_24h')
-
-    @classmethod
-    def set_trial_inactive_24h_enabled(cls, enabled: bool) -> bool:
-        return cls.set_enabled('trial_inactive_24h', enabled)
 
     @classmethod
     def is_trial_channel_unsubscribed_enabled(cls) -> bool:
