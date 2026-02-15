@@ -1537,6 +1537,15 @@ async def handle_extend_subscription(callback: types.CallbackQuery, db_user: Use
     # В режиме тарифов проверяем наличие tariff_id
     if settings.is_tariffs_mode():
         if subscription.tariff_id:
+            # Проверяем, суточный ли тариф — у суточных нет period_prices, продление через resume
+            from app.database.crud.tariff import get_tariff_by_id
+
+            tariff = getattr(subscription, 'tariff', None) or await get_tariff_by_id(db, subscription.tariff_id)
+            if tariff and getattr(tariff, 'is_daily', False):
+                # Суточный тариф: перенаправляем на страницу подписки (там кнопка «Возобновить»)
+                await show_subscription_info(callback, db_user, db)
+                return
+
             # У подписки есть тариф - перенаправляем на продление по тарифу
             from .tariff_purchase import show_tariff_extend
 
@@ -3111,11 +3120,15 @@ async def handle_toggle_daily_subscription_pause(callback: types.CallbackQuery, 
     # Прикрепляем тариф к подписке для CRUD функций
     subscription.tariff = tariff
 
-    # Переключаем статус паузы
+    # Определяем, нужно ли возобновление: пауза пользователя ИЛИ остановка системой (disabled/expired)
+    from app.database.models import SubscriptionStatus
+
     was_paused = getattr(subscription, 'is_daily_paused', False)
+    is_inactive = subscription.status in (SubscriptionStatus.DISABLED.value, SubscriptionStatus.EXPIRED.value)
+    needs_resume = was_paused or is_inactive
 
     # При возобновлении проверяем баланс
-    if was_paused:
+    if needs_resume:
         daily_price = getattr(tariff, 'daily_price_kopeks', 0)
         if daily_price > 0 and db_user.balance_kopeks < daily_price:
             await callback.answer(
@@ -3127,10 +3140,11 @@ async def handle_toggle_daily_subscription_pause(callback: types.CallbackQuery, 
             )
             return
 
-    subscription = await toggle_daily_subscription_pause(db, subscription)
+    if needs_resume:
+        # Принудительный resume: снимаем паузу + восстанавливаем статус ACTIVE
+        from app.database.crud.subscription import resume_daily_subscription
 
-    if was_paused:
-        # Была пауза, теперь возобновили
+        subscription = await resume_daily_subscription(db, subscription)
         message = texts.t('DAILY_SUBSCRIPTION_RESUMED', '▶️ Подписка возобновлена!')
         # Синхронизируем с Remnawave - активируем пользователя
         try:
@@ -3147,10 +3161,9 @@ async def handle_toggle_daily_subscription_pause(callback: types.CallbackQuery, 
         except Exception as e:
             logger.error(f'Ошибка синхронизации с Remnawave при возобновлении: {e}')
     else:
-        # Была активна, теперь на паузе
+        # Подписка активна, ставим на паузу
+        subscription = await toggle_daily_subscription_pause(db, subscription)
         message = texts.t('DAILY_SUBSCRIPTION_PAUSED', '⏸️ Подписка приостановлена!')
-        # При паузе можно отключить пользователя в Remnawave (опционально)
-        # Пока оставляем активным, т.к. пауза - это только остановка списания
 
     await callback.answer(message, show_alert=True)
 

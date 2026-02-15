@@ -1092,9 +1092,15 @@ def get_subscription_keyboard(
             is_daily_tariff = tariff and getattr(tariff, 'is_daily', False)
 
             if is_daily_tariff:
-                # Для суточного тарифа показываем кнопку паузы/возобновления
+                # Для суточного тарифа: проверяем статус подписки
+                from app.database.models import SubscriptionStatus
+
+                sub_status = getattr(subscription, 'status', None)
                 is_paused = getattr(subscription, 'is_daily_paused', False)
-                if is_paused:
+                is_inactive = sub_status in (SubscriptionStatus.DISABLED.value, SubscriptionStatus.EXPIRED.value)
+
+                if is_inactive or is_paused:
+                    # Подписка остановлена (системой или пользователем) — показываем «Возобновить»
                     pause_text = texts.t('RESUME_DAILY_BUTTON', '▶️ Возобновить подписку')
                 else:
                     pause_text = texts.t('PAUSE_DAILY_BUTTON', '⏸️ Приостановить подписку')

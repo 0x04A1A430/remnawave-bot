@@ -1982,13 +1982,14 @@ async def resume_daily_subscription(
 
     subscription.is_daily_paused = False
 
-    # Восстанавливаем статус ACTIVE если подписка была DISABLED (недостаток средств)
-    if subscription.status == SubscriptionStatus.DISABLED.value:
+    # Восстанавливаем статус ACTIVE если подписка была DISABLED/EXPIRED
+    if subscription.status in (SubscriptionStatus.DISABLED.value, SubscriptionStatus.EXPIRED.value):
+        previous_status = subscription.status
         subscription.status = SubscriptionStatus.ACTIVE.value
         # Обновляем время последнего списания для корректного расчёта следующего
         subscription.last_daily_charge_at = datetime.utcnow()
         subscription.end_date = datetime.utcnow() + timedelta(days=1)
-        logger.info(f'✅ Суточная подписка {subscription.id} восстановлена из DISABLED в ACTIVE')
+        logger.info(f'✅ Суточная подписка {subscription.id} восстановлена из {previous_status} в ACTIVE')
 
     await db.commit()
     await db.refresh(subscription)
