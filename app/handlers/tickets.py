@@ -3,6 +3,7 @@ import logging
 import time
 
 from aiogram import Bot, Dispatcher, F, types
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import InaccessibleMessage
@@ -62,12 +63,20 @@ async def show_ticket_priority_selection(
         )
         return
 
-    await callback.message.edit_text(
-        texts.t('TICKET_TITLE_INPUT', 'Введите заголовок тикета:'),
-        reply_markup=get_ticket_cancel_keyboard(db_user.language),
-    )
+    prompt_text = texts.t('TICKET_TITLE_INPUT', 'Введите заголовок тикета:')
+    cancel_kb = get_ticket_cancel_keyboard(db_user.language)
+    prompt_msg = callback.message
+    try:
+        await callback.message.edit_text(prompt_text, reply_markup=cancel_kb)
+    except TelegramBadRequest:
+        # Предыдущее сообщение — фото (нет текста для edit_text), удаляем и шлём новое
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
+        prompt_msg = await callback.message.answer(prompt_text, reply_markup=cancel_kb)
     # Запоминаем исходное сообщение бота, чтобы далее редактировать его, а не слать новые
-    await state.update_data(prompt_chat_id=callback.message.chat.id, prompt_message_id=callback.message.message_id)
+    await state.update_data(prompt_chat_id=prompt_msg.chat.id, prompt_message_id=prompt_msg.message_id)
     await state.set_state(TicketStates.waiting_for_title)
     await callback.answer()
 
