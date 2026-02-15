@@ -1552,6 +1552,12 @@ async def select_tariff_extend_period(
     texts = get_texts(db_user.language)
     parts = callback.data.split(':')
     tariff_id = int(parts[1])
+
+    # Кнопка «Назад» шлёт tariff_extend:{id} без периода — показываем экран выбора периода
+    if len(parts) < 3:
+        await show_tariff_extend(callback, db_user, db)
+        return
+
     period = int(parts[2])
 
     tariff = await get_tariff_by_id(db, tariff_id)
