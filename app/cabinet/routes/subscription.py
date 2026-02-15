@@ -598,6 +598,8 @@ async def get_traffic_packages(
         result = []
 
         for gb, price in packages.items():
+            if price <= 0:
+                continue
             result.append(
                 TrafficPackageResponse(
                     gb=gb,
@@ -624,6 +626,8 @@ async def get_traffic_packages(
 
     for pkg in packages:
         if not pkg.get('enabled', True):
+            continue
+        if pkg['price'] <= 0:
             continue
 
         result.append(
@@ -705,6 +709,11 @@ async def purchase_traffic(
                 detail=f'Traffic package {request.gb}GB is not available',
             )
         base_price_kopeks = packages[request.gb]
+        if base_price_kopeks <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f'Traffic package {request.gb}GB has no price configured',
+            )
 
     else:
         # Classic режим
@@ -732,6 +741,11 @@ async def purchase_traffic(
                 detail='Invalid traffic package',
             )
         base_price_kopeks = matching_pkg['price']
+        if base_price_kopeks <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='Traffic package has no price configured',
+            )
 
     # На тарифах пакеты трафика покупаются на 1 месяц (30 дней),
     # цена в тарифе уже месячная — не умножаем на оставшиеся месяцы подписки.

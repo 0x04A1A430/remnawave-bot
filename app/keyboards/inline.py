@@ -1898,7 +1898,7 @@ def get_add_traffic_keyboard(
             period_text = f' (за {months_multiplier} мес)'
 
     packages = settings.get_traffic_topup_packages()
-    enabled_packages = [pkg for pkg in packages if pkg['enabled']]
+    enabled_packages = [pkg for pkg in packages if pkg['enabled'] and pkg['price'] > 0]
 
     if not enabled_packages:
         return InlineKeyboardMarkup(
@@ -1982,8 +1982,8 @@ def get_add_traffic_keyboard_from_tariff(
 
     buttons = []
 
-    # Сортируем пакеты по размеру
-    sorted_packages = sorted(packages.items(), key=lambda x: x[0])
+    # Сортируем пакеты по размеру, исключаем пакеты с нулевой ценой
+    sorted_packages = sorted(((gb, p) for gb, p in packages.items() if p > 0), key=lambda x: x[0])
 
     # Пакеты трафика на тарифах покупаются на 1 месяц (30 дней),
     # цена в тарифе уже месячная — не умножаем на оставшиеся месяцы подписки
