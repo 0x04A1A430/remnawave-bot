@@ -50,6 +50,7 @@ services:
     env_file:
       - .env
     environment:
+      FORCE_COLOR: '1'
       DOCKER_ENV: 'true'
       DATABASE_MODE: 'auto'
       POSTGRES_HOST: 'postgres'

@@ -15,7 +15,6 @@ Usage::
 from __future__ import annotations
 
 import logging
-import sys
 from typing import Any
 
 import structlog
@@ -67,10 +66,11 @@ def setup_logging() -> tuple[logging.Formatter, logging.Formatter, Any]:
         structlog.stdlib.PositionalArgumentsFormatter(),
         timestamper,
         structlog.processors.StackInfoRenderer(),
-        # TelegramNotifierProcessor MUST be before format_exc_info so it can
-        # access exc_info as a raw tuple for traceback extraction.
+        # TelegramNotifierProcessor MUST run while exc_info is still a raw
+        # tuple so it can extract the traceback for Telegram notifications.
+        # ConsoleRenderer handles exc_info formatting downstream (with Rich
+        # tracebacks on console, plain text in files).
         telegram_notifier,
-        structlog.processors.format_exc_info,
     ]
 
     # Configure structlog for structlog-originated logs.
@@ -90,21 +90,25 @@ def setup_logging() -> tuple[logging.Formatter, logging.Formatter, Any]:
         cache_logger_on_first_use=True,
     )
 
-    # File formatter: no ANSI colors (safe for log files)
+    # File formatter: no ANSI colors, plain tracebacks (safe for log files)
     file_formatter = structlog.stdlib.ProcessorFormatter(
         foreign_pre_chain=shared_processors,
         processors=[
             structlog.stdlib.ProcessorFormatter.remove_processors_meta,
-            structlog.dev.ConsoleRenderer(colors=False),
+            structlog.dev.ConsoleRenderer(
+                colors=False,
+                exception_formatter=structlog.dev.plain_traceback,
+            ),
         ],
     )
 
-    # Console formatter: auto-detect terminal colors
+    # Console formatter: colors auto-detected via FORCE_COLOR env var / TTY.
+    # Rich tracebacks are used automatically when the `rich` package is installed.
     console_formatter = structlog.stdlib.ProcessorFormatter(
         foreign_pre_chain=shared_processors,
         processors=[
             structlog.stdlib.ProcessorFormatter.remove_processors_meta,
-            structlog.dev.ConsoleRenderer(colors=sys.stdout.isatty()),
+            structlog.dev.ConsoleRenderer(),
         ],
     )
 
