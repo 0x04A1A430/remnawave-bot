@@ -48,6 +48,14 @@ def _clean_logger_name(logger: Any, method_name: str, event_dict: dict[str, Any]
     return event_dict
 
 
+def _prefix_logger_name(logger: Any, method_name: str, event_dict: dict[str, Any]) -> dict[str, Any]:
+    """Move logger name before event text: [module.name] event text."""
+    logger_name = event_dict.pop('logger', None)
+    if logger_name:
+        event_dict['event'] = f'[{logger_name}] {event_dict.get("event", "")}'
+    return event_dict
+
+
 def setup_logging() -> tuple[logging.Formatter, logging.Formatter, Any]:
     """Configure structlog and return formatters + notifier.
 
@@ -103,6 +111,7 @@ def setup_logging() -> tuple[logging.Formatter, logging.Formatter, Any]:
         foreign_pre_chain=shared_processors,
         processors=[
             structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+            _prefix_logger_name,
             structlog.dev.ConsoleRenderer(
                 colors=False,
                 pad_event_to=0,
@@ -118,6 +127,7 @@ def setup_logging() -> tuple[logging.Formatter, logging.Formatter, Any]:
         foreign_pre_chain=shared_processors,
         processors=[
             structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+            _prefix_logger_name,
             structlog.dev.ConsoleRenderer(
                 pad_event_to=0,
                 pad_level=False,
