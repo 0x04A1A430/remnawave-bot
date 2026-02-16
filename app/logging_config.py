@@ -103,12 +103,21 @@ def setup_logging() -> tuple[logging.Formatter, logging.Formatter, Any]:
     )
 
     # Console formatter: colors enabled by default on non-Windows.
-    # Rich tracebacks are used automatically when the `rich` package is installed.
+    # Rich tracebacks with conservative limits to avoid 5000-line dumps.
     console_formatter = structlog.stdlib.ProcessorFormatter(
         foreign_pre_chain=shared_processors,
         processors=[
             structlog.stdlib.ProcessorFormatter.remove_processors_meta,
-            structlog.dev.ConsoleRenderer(pad_event_to=0),
+            structlog.dev.ConsoleRenderer(
+                pad_event_to=0,
+                exception_formatter=structlog.dev.RichTracebackFormatter(
+                    show_locals=False,
+                    max_frames=20,
+                    extra_lines=1,
+                    width=120,
+                    suppress=['aiogram', 'aiohttp'],
+                ),
+            ),
         ],
     )
 
