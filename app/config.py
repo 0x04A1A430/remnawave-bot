@@ -2141,13 +2141,8 @@ class Settings(BaseSettings):
             packages = []
             config_str = self.TRAFFIC_PACKAGES_CONFIG.strip()
 
-            logger.debug('CONFIG STRING', config_str=config_str)
-
             if not config_str:
-                logger.debug('CONFIG EMPTY, USING FALLBACK')
                 return self._get_fallback_traffic_packages()
-
-            logger.debug('PARSING CONFIG...')
 
             for package_config in config_str.split(','):
                 package_config = package_config.strip()
@@ -2167,11 +2162,10 @@ class Settings(BaseSettings):
                 except ValueError:
                     continue
 
-            logger.debug('PARSED packages from config', packages_count=len(packages))
             return packages if packages else self._get_fallback_traffic_packages()
 
         except Exception as e:
-            logger.info('ERROR PARSING CONFIG', error=e)
+            logger.warning('ERROR PARSING CONFIG', error=e)
             return self._get_fallback_traffic_packages()
 
     def is_version_check_enabled(self) -> bool:

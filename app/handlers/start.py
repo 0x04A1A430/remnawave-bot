@@ -2150,47 +2150,47 @@ async def required_sub_channel_check(
 
 
 def register_handlers(dp: Dispatcher):
-    logger.info('🔧 === НАЧАЛО регистрации обработчиков start.py ===')
+    logger.debug('=== НАЧАЛО регистрации обработчиков start.py ===')
 
     dp.message.register(cmd_start, Command('start'))
-    logger.info('✅ Зарегистрирован cmd_start')
+    logger.debug('Зарегистрирован cmd_start')
 
     dp.callback_query.register(
         process_rules_accept,
         F.data.in_(['rules_accept', 'rules_decline']),
         StateFilter(RegistrationStates.waiting_for_rules_accept),
     )
-    logger.info('✅ Зарегистрирован process_rules_accept')
+    logger.debug('Зарегистрирован process_rules_accept')
 
     dp.callback_query.register(
         process_privacy_policy_accept,
         F.data.in_(['privacy_policy_accept', 'privacy_policy_decline']),
         StateFilter(RegistrationStates.waiting_for_privacy_policy_accept),
     )
-    logger.info('✅ Зарегистрирован process_privacy_policy_accept')
+    logger.debug('Зарегистрирован process_privacy_policy_accept')
 
     dp.callback_query.register(
         process_language_selection,
         F.data.startswith('language_select:'),
         StateFilter(RegistrationStates.waiting_for_language),
     )
-    logger.info('✅ Зарегистрирован process_language_selection')
+    logger.debug('Зарегистрирован process_language_selection')
 
     dp.callback_query.register(
         process_referral_code_skip, F.data == 'referral_skip', StateFilter(RegistrationStates.waiting_for_referral_code)
     )
-    logger.info('✅ Зарегистрирован process_referral_code_skip')
+    logger.debug('Зарегистрирован process_referral_code_skip')
 
     dp.message.register(process_referral_code_input, StateFilter(RegistrationStates.waiting_for_referral_code))
-    logger.info('✅ Зарегистрирован process_referral_code_input')
+    logger.debug('Зарегистрирован process_referral_code_input')
 
     dp.message.register(
         handle_potential_referral_code,
         StateFilter(RegistrationStates.waiting_for_rules_accept, RegistrationStates.waiting_for_referral_code),
     )
-    logger.info('✅ Зарегистрирован handle_potential_referral_code')
+    logger.debug('Зарегистрирован handle_potential_referral_code')
 
     dp.callback_query.register(required_sub_channel_check, F.data.in_(['sub_channel_check']))
-    logger.info('✅ Зарегистрирован required_sub_channel_check')
+    logger.debug('Зарегистрирован required_sub_channel_check')
 
-    logger.info('🔧 === КОНЕЦ регистрации обработчиков start.py ===')
+    logger.debug('=== КОНЕЦ регистрации обработчиков start.py ===')

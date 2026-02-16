@@ -189,7 +189,13 @@ async def main():
                 success_message='Миграция завершена успешно',
             ) as stage:
                 try:
-                    migration_success = await run_universal_migration()
+                    migration_log = logging.getLogger('app.database.universal_migration')
+                    original_level = migration_log.level
+                    migration_log.setLevel(logging.WARNING)
+                    try:
+                        migration_success = await run_universal_migration()
+                    finally:
+                        migration_log.setLevel(original_level)
                     if migration_success:
                         stage.success('Миграция завершена успешно')
                     else:

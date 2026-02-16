@@ -6816,14 +6816,12 @@ async def run_universal_migration():
         else:
             logger.warning('⚠️ Не удалось обновить колонку last_pinned_message_id')
 
-        logger.info('=== ДОБАВЛЕНИЕ МЕДИА ПОЛЕЙ В BROADCAST_HISTORY ===')
         media_fields_added = await add_media_fields_to_broadcast_history()
         if media_fields_added:
             logger.info('✅ Медиа поля в broadcast_history готовы')
         else:
             logger.warning('⚠️ Проблемы с добавлением медиа полей')
 
-        logger.info('=== ДОБАВЛЕНИЕ EMAIL ПОЛЕЙ В BROADCAST_HISTORY ===')
         email_fields_added = await add_email_fields_to_broadcast_history()
         if email_fields_added:
             logger.info('✅ Email поля в broadcast_history готовы')
@@ -6945,7 +6943,6 @@ async def run_universal_migration():
         except Exception as e:
             logger.warning('⚠️ Проблемы с созданием таблицы support_audit_logs', error=e)
 
-        logger.info('=== НАСТРОЙКА ПРОМО ГРУПП ===')
         promo_groups_ready = await ensure_promo_groups_setup()
         if promo_groups_ready:
             logger.info('✅ Промо группы готовы')
