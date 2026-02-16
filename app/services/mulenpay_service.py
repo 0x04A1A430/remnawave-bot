@@ -1,15 +1,15 @@
 import asyncio
 import hashlib
 import json
-import logging
 from typing import Any
 
 import aiohttp
+import structlog
 
 from app.config import settings
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class MulenPayService:
@@ -65,10 +65,7 @@ class MulenPayService:
 
                     if response.status >= 400:
                         logger.error(
-                            'MulenPay API error %s %s: %s',
-                            response.status,
-                            endpoint,
-                            raw_text,
+                            'MulenPay API error', response_status=response.status, endpoint=endpoint, raw_text=raw_text
                         )
                         if response.status in self._retryable_statuses and attempt < self._max_retries:
                             await self._sleep_with_backoff(attempt)
@@ -78,37 +75,35 @@ class MulenPayService:
                     if data is None:
                         if raw_text:
                             logger.warning(
-                                'MulenPay returned unexpected payload for %s: %s',
-                                endpoint,
-                                raw_text,
+                                'MulenPay returned unexpected payload for', endpoint=endpoint, raw_text=raw_text
                             )
                         return None
 
                     return data
             except asyncio.CancelledError:
-                logger.debug('MulenPay request cancelled: %s %s', method, endpoint)
+                logger.debug('MulenPay request cancelled', method=method, endpoint=endpoint)
                 raise
             except TimeoutError as error:
                 last_error = error
                 logger.warning(
-                    'MulenPay request timeout (%s %s) attempt %s/%s',
-                    method,
-                    endpoint,
-                    attempt,
-                    self._max_retries,
+                    'MulenPay request timeout attempt /',
+                    method=method,
+                    endpoint=endpoint,
+                    attempt=attempt,
+                    max_retries=self._max_retries,
                 )
             except aiohttp.ClientError as error:
                 last_error = error
                 logger.warning(
-                    'MulenPay client error (%s %s) attempt %s/%s: %s',
-                    method,
-                    endpoint,
-                    attempt,
-                    self._max_retries,
-                    error,
+                    'MulenPay client error attempt /',
+                    method=method,
+                    endpoint=endpoint,
+                    attempt=attempt,
+                    max_retries=self._max_retries,
+                    error=error,
                 )
             except Exception as error:  # pragma: no cover - safety
-                logger.error('Unexpected MulenPay error: %s', error, exc_info=True)
+                logger.error('Unexpected MulenPay error', error=error, exc_info=True)
                 return None
 
             if attempt < self._max_retries:
@@ -116,18 +111,18 @@ class MulenPayService:
 
         if isinstance(last_error, asyncio.TimeoutError):
             logger.error(
-                'MulenPay request timed out after %s attempts: %s %s',
-                self._max_retries,
-                method,
-                endpoint,
+                'MulenPay request timed out after attempts',
+                max_retries=self._max_retries,
+                method=method,
+                endpoint=endpoint,
             )
         elif last_error is not None:
             logger.error(
-                'MulenPay request failed after %s attempts (%s %s): %s',
-                self._max_retries,
-                method,
-                endpoint,
-                last_error,
+                'MulenPay request failed after attempts',
+                max_retries=self._max_retries,
+                method=method,
+                endpoint=endpoint,
+                last_error=last_error,
             )
 
         return None
@@ -145,11 +140,7 @@ class MulenPayService:
             try:
                 return json.loads(raw_text), raw_text
             except json.JSONDecodeError as error:
-                logger.error(
-                    'Failed to decode MulenPay JSON response %s: %s',
-                    response.url,
-                    error,
-                )
+                logger.error('Failed to decode MulenPay JSON response', url=response.url, error=error)
                 return None, raw_text
 
         return None, raw_text
@@ -200,7 +191,7 @@ class MulenPayService:
 
         response = await self._request('POST', '/v2/payments', json_data=payload)
         if not response or not response.get('success'):
-            logger.error('Failed to create MulenPay payment: %s', response)
+            logger.error('Failed to create MulenPay payment', response=response)
             return None
 
         return response

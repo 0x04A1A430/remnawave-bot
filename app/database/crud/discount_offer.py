@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import logging
 from datetime import datetime, timedelta
 
+import structlog
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -11,7 +11,7 @@ from app.database.crud.promo_offer_log import log_promo_offer_action
 from app.database.models import DiscountOffer
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def upsert_discount_offer(
@@ -178,17 +178,12 @@ async def mark_offer_claimed(
             details=details,
         )
     except Exception as exc:  # pragma: no cover - defensive logging
-        logger.warning(
-            'Failed to record promo offer claim log for offer %s: %s',
-            offer.id,
-            exc,
-        )
+        logger.warning('Failed to record promo offer claim log for offer', offer_id=offer.id, exc=exc)
         try:
             await db.rollback()
         except Exception as rollback_error:  # pragma: no cover - defensive logging
             logger.warning(
-                'Failed to rollback session after promo offer claim log failure: %s',
-                rollback_error,
+                'Failed to rollback session after promo offer claim log failure', rollback_error=rollback_error
             )
 
     return offer
@@ -239,16 +234,13 @@ async def deactivate_expired_offers(db: AsyncSession) -> int:
             )
         except Exception as exc:  # pragma: no cover - defensive logging
             logger.warning(
-                'Failed to record promo offer disable log for offer %s: %s',
-                payload.get('offer_id'),
-                exc,
+                'Failed to record promo offer disable log for offer', payload=payload.get('offer_id'), exc=exc
             )
             try:
                 await db.rollback()
             except Exception as rollback_error:  # pragma: no cover - defensive logging
                 logger.warning(
-                    'Failed to rollback session after promo offer disable log failure: %s',
-                    rollback_error,
+                    'Failed to rollback session after promo offer disable log failure', rollback_error=rollback_error
                 )
 
     return count

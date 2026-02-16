@@ -1,6 +1,6 @@
-import logging
 from collections.abc import Iterable, Sequence
 
+import structlog
 from sqlalchemy import and_, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -14,7 +14,7 @@ from app.database.models import (
 )
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def create_poll(
@@ -97,7 +97,7 @@ async def delete_poll(db: AsyncSession, poll_id: int) -> bool:
 
     await db.delete(poll)
     await db.commit()
-    logger.info('🗑️ Удалён опрос %s', poll_id)
+    logger.info('🗑️ Удалён опрос', poll_id=poll_id)
     return True
 
 

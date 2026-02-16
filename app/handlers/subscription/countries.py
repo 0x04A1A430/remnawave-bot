@@ -146,13 +146,13 @@ async def get_countries_price_by_uuids_fallback(
         return total_price, prices_list
 
     except Exception as e:
-        logger.error(f'Ошибка fallback функции: {e}')
+        logger.error('Ошибка fallback функции', error=e)
         default_prices = [0] * len(country_uuids)
         return sum(default_prices), default_prices
 
 
 async def handle_manage_country(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
-    logger.info(f'🔍 Управление страной: {callback.data}')
+    logger.info('🔍 Управление страной', callback_data=callback.data)
 
     country_uuid = callback.data.split('_')[2]
 
@@ -189,7 +189,7 @@ async def handle_manage_country(callback: types.CallbackQuery, db_user: User, db
         current_selected.append(country_uuid)
         action = 'added'
 
-    logger.info(f'🔍 Страна {country_uuid} {action}')
+    logger.info('🔍 Страна', country_uuid=country_uuid, action=action)
 
     await state.update_data(countries=current_selected)
 
@@ -214,7 +214,7 @@ async def handle_manage_country(callback: types.CallbackQuery, db_user: User, db
         logger.info('✅ Клавиатура обновлена')
 
     except Exception as e:
-        logger.error(f'⚠ Ошибка обновления клавиатуры: {e}')
+        logger.error('⚠ Ошибка обновления клавиатуры', error=e)
 
     await callback.answer()
 
@@ -251,7 +251,7 @@ async def apply_countries_changes(callback: types.CallbackQuery, db_user: User, 
         )
         return
 
-    logger.info(f'🔧 Добавлено: {added}, Удалено: {removed}')
+    logger.info('🔧 Добавлено: Удалено', added=added, removed=removed)
 
     months_to_pay = get_remaining_months(subscription.end_date)
 
@@ -298,11 +298,11 @@ async def apply_countries_changes(callback: types.CallbackQuery, db_user: User, 
 
     if added_names:
         logger.info(
-            'Стоимость новых серверов: %.2f₽/мес × %s мес = %.2f₽ (скидка %.2f₽)',
-            cost_per_month / 100,
-            charged_months,
-            total_cost / 100,
-            total_discount / 100,
+            'Стоимость новых серверов: ₽/мес × мес = ₽ (скидка ₽)',
+            cost_per_month=cost_per_month / 100,
+            charged_months=charged_months,
+            total_cost=total_cost / 100,
+            total_discount=total_discount / 100,
         )
 
     if total_cost > 0 and db_user.balance_kopeks < total_cost:
@@ -377,7 +377,9 @@ async def apply_countries_changes(callback: types.CallbackQuery, db_user: User, 
                 await add_user_to_servers(db, added_server_ids)
 
                 logger.info(
-                    f'📊 Добавлены серверы с ценами за {charged_months} мес: {list(zip(added_server_ids, added_server_prices, strict=False))}'
+                    '📊 Добавлены серверы с ценами за мес',
+                    charged_months=charged_months,
+                    value=list(zip(added_server_ids, added_server_prices, strict=False)),
                 )
 
         subscription.connected_squads = selected_countries
@@ -397,7 +399,7 @@ async def apply_countries_changes(callback: types.CallbackQuery, db_user: User, 
                 db, db_user, subscription, 'servers', current_countries, selected_countries, total_cost
             )
         except Exception as e:
-            logger.error(f'Ошибка отправки уведомления об изменении серверов: {e}')
+            logger.error('Ошибка отправки уведомления об изменении серверов', error=e)
 
         success_text = texts.t(
             'COUNTRY_CHANGES_SUCCESS_HEADER',
@@ -454,11 +456,15 @@ async def apply_countries_changes(callback: types.CallbackQuery, db_user: User, 
 
         await state.clear()
         logger.info(
-            f'✅ Пользователь {db_user.telegram_id} обновил страны. Добавлено: {len(added)}, удалено: {len(removed)}, заплатил: {total_cost / 100}₽'
+            '✅ Пользователь обновил страны. Добавлено: удалено: заплатил: ₽',
+            telegram_id=db_user.telegram_id,
+            added_count=len(added),
+            removed_count=len(removed),
+            total_cost=total_cost / 100,
         )
 
     except Exception as e:
-        logger.error(f'⚠️ Ошибка применения изменений: {e}')
+        logger.error('⚠️ Ошибка применения изменений', error=e)
         await callback.message.edit_text(texts.ERROR, reply_markup=get_back_keyboard(db_user.language))
 
     await callback.answer()
@@ -557,8 +563,7 @@ async def _get_available_countries(promo_group_id: int | None = None):
 
         if promo_group_id is not None and not available_servers:
             logger.info(
-                'Промогруппа %s не имеет доступных серверов, возврат пустого списка',
-                promo_group_id,
+                'Промогруппа не имеет доступных серверов, возврат пустого списка', promo_group_id=promo_group_id
             )
             await cache.set(cache_key_value, [], 60)
             return []
@@ -613,7 +618,7 @@ async def _get_available_countries(promo_group_id: int | None = None):
         return countries
 
     except Exception as e:
-        logger.error(f'Ошибка получения списка стран: {e}')
+        logger.error('Ошибка получения списка стран', error=e)
         fallback_countries = [
             {
                 'uuid': 'default-free',
@@ -662,15 +667,15 @@ def _build_countries_selection_text(countries: list[dict], base_text: str) -> st
 async def handle_add_country_to_subscription(
     callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext
 ):
-    logger.info(f'🔍 handle_add_country_to_subscription вызван для {db_user.telegram_id}')
-    logger.info(f'🔍 Callback data: {callback.data}')
+    logger.info('🔍 handle_add_country_to_subscription вызван для', telegram_id=db_user.telegram_id)
+    logger.info('🔍 Callback data', callback_data=callback.data)
 
     current_state = await state.get_state()
-    logger.info(f'🔍 Текущее состояние: {current_state}')
+    logger.info('🔍 Текущее состояние', current_state=current_state)
 
     country_uuid = callback.data.split('_')[1]
     data = await state.get_data()
-    logger.info(f'🔍 Данные состояния: {data}')
+    logger.info('🔍 Данные состояния', data=data)
 
     selected_countries = data.get('countries', [])
     countries = await _get_available_countries(db_user.promo_group_id)
@@ -682,10 +687,10 @@ async def handle_add_country_to_subscription(
 
     if country_uuid in selected_countries:
         selected_countries.remove(country_uuid)
-        logger.info(f'🔍 Удалена страна: {country_uuid}')
+        logger.info('🔍 Удалена страна', country_uuid=country_uuid)
     else:
         selected_countries.append(country_uuid)
-        logger.info(f'🔍 Добавлена страна: {country_uuid}')
+        logger.info('🔍 Добавлена страна', country_uuid=country_uuid)
 
     total_price = 0
     subscription = db_user.subscription
@@ -715,8 +720,8 @@ async def handle_add_country_to_subscription(
     data['total_price'] = total_price
     await state.set_data(data)
 
-    logger.info(f'🔍 Новые выбранные страны: {selected_countries}')
-    logger.info(f'🔍 Общая стоимость: {total_price}')
+    logger.info('🔍 Новые выбранные страны', selected_countries=selected_countries)
+    logger.info('🔍 Общая стоимость', total_price=total_price)
 
     try:
         from app.keyboards.inline import get_manage_countries_keyboard
@@ -733,7 +738,7 @@ async def handle_add_country_to_subscription(
         )
         logger.info('✅ Клавиатура обновлена')
     except Exception as e:
-        logger.error(f'❌ Ошибка обновления клавиатуры: {e}')
+        logger.error('❌ Ошибка обновления клавиатуры', error=e)
 
     await callback.answer()
 
@@ -751,16 +756,16 @@ async def _should_show_countries_management(user: User | None = None) -> bool:
             if allowed_servers:
                 if len(allowed_servers) > 1:
                     logger.debug(
-                        'Промогруппа %s имеет %s доступных серверов, показываем управление странами',
-                        promo_group.id,
-                        len(allowed_servers),
+                        'Промогруппа имеет доступных серверов, показываем управление странами',
+                        promo_group_id=promo_group.id,
+                        allowed_servers_count=len(allowed_servers),
                     )
                     return True
 
                 logger.debug(
-                    'Промогруппа %s имеет всего %s доступный сервер, пропускаем шаг выбора стран',
-                    promo_group.id,
-                    len(allowed_servers),
+                    'Промогруппа имеет всего доступный сервер, пропускаем шаг выбора стран',
+                    promo_group_id=promo_group.id,
+                    allowed_servers_count=len(allowed_servers),
                 )
                 return False
 
@@ -768,7 +773,7 @@ async def _should_show_countries_management(user: User | None = None) -> bool:
         available_countries = [c for c in countries if c.get('is_available', True)]
         return len(available_countries) > 1
     except Exception as e:
-        logger.error(f'Ошибка проверки доступных серверов: {e}')
+        logger.error('Ошибка проверки доступных серверов', error=e)
         return True
 
 
@@ -925,11 +930,14 @@ async def confirm_add_countries_to_subscription(
         await callback.message.edit_text(success_text, reply_markup=get_back_keyboard(db_user.language))
 
         logger.info(
-            f'✅ Пользователь {db_user.telegram_id} обновил страны подписки. Добавлено: {len(new_countries)}, убрано: {len(removed_countries)}'
+            '✅ Пользователь обновил страны подписки. Добавлено: убрано',
+            telegram_id=db_user.telegram_id,
+            new_countries_count=len(new_countries),
+            removed_countries_count=len(removed_countries),
         )
 
     except Exception as e:
-        logger.error(f'Ошибка обновления стран подписки: {e}')
+        logger.error('Ошибка обновления стран подписки', error=e)
         await callback.message.edit_text(texts.ERROR, reply_markup=get_back_keyboard(db_user.language))
 
     await state.clear()

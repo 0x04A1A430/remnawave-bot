@@ -1,7 +1,7 @@
 import html
-import logging
 from datetime import datetime
 
+import structlog
 from aiogram import Dispatcher, F, types
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,7 +14,7 @@ from app.utils.decorators import admin_required, error_handler
 from app.utils.validators import get_html_help_text, validate_html_tags
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 def _format_timestamp(value: datetime | None) -> str:
@@ -389,11 +389,7 @@ async def process_new_faq_content(
         content=content,
     )
 
-    logger.info(
-        'Админ %s создал страницу FAQ (%d символов)',
-        db_user.telegram_id,
-        len(content),
-    )
+    logger.info('Админ создал страницу FAQ (символов)', telegram_id=db_user.telegram_id, content_count=len(content))
 
     await state.clear()
 

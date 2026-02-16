@@ -1,9 +1,9 @@
 """Admin routes for payment verification in cabinet."""
 
-import logging
 import math
 from datetime import datetime
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,7 +22,7 @@ from app.services.payment_verification_service import (
 from ..dependencies import get_cabinet_db, get_current_admin_user
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/admin/payments', tags=['Cabinet Admin Payments'])
 
@@ -406,7 +406,14 @@ async def check_payment_status(
     if status_changed:
         _, new_status_text = _get_status_info(updated)
         message = f'Статус обновлён: {new_status_text}'
-        logger.info(f'Admin {admin.id} checked payment {method}/{payment_id}: {old_status} -> {updated.status}')
+        logger.info(
+            'Admin checked payment /',
+            admin_id=admin.id,
+            method=method,
+            payment_id=payment_id,
+            old_status=old_status,
+            status=updated.status,
+        )
     else:
         message = 'Статус не изменился'
 

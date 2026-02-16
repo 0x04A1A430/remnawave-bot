@@ -1,13 +1,14 @@
 import json
-import logging
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
+import structlog
+
 from app.config import settings
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class NotificationSettingsService:
@@ -38,7 +39,7 @@ class NotificationSettingsService:
         try:
             cls._storage_path.parent.mkdir(parents=True, exist_ok=True)
         except Exception as exc:  # pragma: no cover - filesystem guard
-            logger.error('Failed to create notification settings dir: %s', exc)
+            logger.error('Failed to create notification settings dir', exc=exc)
 
     @classmethod
     def _load(cls) -> None:
@@ -53,7 +54,7 @@ class NotificationSettingsService:
             else:
                 cls._data = {}
         except Exception as exc:
-            logger.error('Failed to load notification settings: %s', exc)
+            logger.error('Failed to load notification settings', exc=exc)
             cls._data = {}
 
         changed = cls._apply_defaults()
@@ -87,7 +88,7 @@ class NotificationSettingsService:
             )
             return True
         except Exception as exc:
-            logger.error('Failed to save notification settings: %s', exc)
+            logger.error('Failed to save notification settings', exc=exc)
             return False
 
     @classmethod

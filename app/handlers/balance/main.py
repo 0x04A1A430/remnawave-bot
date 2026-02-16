@@ -1,5 +1,4 @@
-import logging
-
+import structlog
 from aiogram import Dispatcher, F, types
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
@@ -21,7 +20,7 @@ from app.utils.decorators import error_handler
 from app.utils.price_display import calculate_user_price
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 TRANSACTIONS_PER_PAGE = 10
 
@@ -230,10 +229,7 @@ async def show_balance_menu(callback: types.CallbackQuery, db_user: User, db: As
         else:
             await callback.message.answer(balance_text, reply_markup=reply_markup)
     except TelegramBadRequest as error:
-        logger.warning(
-            'Failed to edit balance message, sending a new one instead: %s',
-            error,
-        )
+        logger.warning('Failed to edit balance message, sending a new one instead', error=error)
         await callback.message.answer(balance_text, reply_markup=reply_markup)
     await callback.answer()
 
@@ -435,7 +431,9 @@ async def show_payment_methods(callback: types.CallbackQuery, db_user: User, db:
 
             tariff_info = f'\n\n📋 <b>Ваш текущий тариф:</b>\n{current_tariff_desc}\n{estimated_price_info}'
         except Exception as e:
-            logger.warning(f'Не удалось рассчитать стоимость текущей подписки для пользователя {db_user.id}: {e}')
+            logger.warning(
+                'Не удалось рассчитать стоимость текущей подписки для пользователя', db_user_id=db_user.id, error=e
+            )
             tariff_info = ''
 
     full_text = payment_text + tariff_info
@@ -489,7 +487,7 @@ async def handle_successful_topup_with_cart(user_id: int, amount_kopeks: int, bo
 
     # Email-only users don't have telegram_id - skip Telegram notification
     if not user.telegram_id:
-        logger.info(f'Skipping cart notification for email-only user {user_id}')
+        logger.info('Skipping cart notification for email-only user', user_id=user_id)
         return
 
     storage = dp.storage
@@ -532,7 +530,7 @@ async def handle_successful_topup_with_cart(user_id: int, amount_kopeks: int, bo
             )
 
     except Exception as e:
-        logger.error(f'Ошибка обработки успешного пополнения с корзиной: {e}')
+        logger.error('Ошибка обработки успешного пополнения с корзиной', error=e)
 
 
 @error_handler
@@ -674,7 +672,7 @@ async def handle_sbp_payment(callback: types.CallbackQuery, db: AsyncSession):
         await callback.answer('Информация об оплате отправлена', show_alert=True)
 
     except Exception as e:
-        logger.error(f'Ошибка обработки embedded платежа СБП: {e}')
+        logger.error('Ошибка обработки embedded платежа СБП', error=e)
         await callback.answer('❌ Ошибка обработки платежа', show_alert=True)
 
 
@@ -705,7 +703,7 @@ async def handle_quick_amount_selection(callback: types.CallbackQuery, db_user: 
     except ValueError:
         await callback.answer('❌ Ошибка обработки суммы', show_alert=True)
     except Exception as e:
-        logger.error(f'Ошибка обработки быстрого выбора суммы: {e}')
+        logger.error('Ошибка обработки быстрого выбора суммы', error=e)
         await callback.answer('❌ Ошибка обработки запроса', show_alert=True)
 
 
@@ -755,7 +753,7 @@ async def handle_topup_amount_callback(
         await callback.answer()
 
     except Exception as error:
-        logger.error(f'Ошибка быстрого пополнения: {error}')
+        logger.error('Ошибка быстрого пополнения', error=error)
         await callback.answer('❌ Ошибка обработки запроса', show_alert=True)
 
 

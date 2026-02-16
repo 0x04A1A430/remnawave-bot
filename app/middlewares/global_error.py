@@ -1,9 +1,9 @@
-import logging
 import traceback
 from collections.abc import Awaitable, Callable
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any, Final
 
+import structlog
 from aiogram import BaseMiddleware, Bot
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest
@@ -15,7 +15,7 @@ from app.services.startup_notification_service import _get_error_recommendations
 from app.utils.timezone import format_local_datetime
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Константы
 ERROR_NOTIFICATION_COOLDOWN_MINUTES: Final[int] = 5
@@ -69,11 +69,11 @@ class GlobalErrorMiddleware(BaseMiddleware):
             return await self._handle_telegram_error(event, e, data)
         except (InterfaceError, OperationalError) as e:
             # Ошибки соединения с БД (таймаут после долгих операций) - логируем, но не спамим админам
-            logger.warning('⚠️ Ошибка соединения с БД в GlobalErrorMiddleware: %s', e)
+            logger.warning('⚠️ Ошибка соединения с БД в GlobalErrorMiddleware', e=e)
             raise
         except Exception as e:
             user_info = self._get_user_info(event)
-            logger.error('Неожиданная ошибка в GlobalErrorMiddleware (user=%s): %s', user_info, e, exc_info=True)
+            logger.error('Неожиданная ошибка в GlobalErrorMiddleware (user=)', user_info=user_info, e=e, exc_info=True)
             raise
 
     async def _handle_telegram_error(self, event: TelegramObject, error: TelegramBadRequest, data: dict[str, Any]):
@@ -85,14 +85,14 @@ class GlobalErrorMiddleware(BaseMiddleware):
             return await self._handle_message_not_modified(event, error, data)
         if self._is_topic_required_error(error_message):
             # Канал с топиками — просто игнорируем
-            logger.debug('[GlobalErrorMiddleware] Игнорируем ошибку топика: %s', error)
+            logger.debug('[GlobalErrorMiddleware] Игнорируем ошибку топика', error=error)
             return None
         if self._is_bad_request_error(error_message):
             return await self._handle_bad_request(event, error, data)
 
         # Неизвестная ошибка — логируем
         user_info = self._get_user_info(event)
-        logger.error('Неизвестная Telegram API ошибка (user=%s): %s', user_info, error)
+        logger.error('Неизвестная Telegram API ошибка (user=)', user_info=user_info, error=error)
         raise error
 
     def _is_old_query_error(self, error_message: str) -> bool:
@@ -110,14 +110,18 @@ class GlobalErrorMiddleware(BaseMiddleware):
     async def _handle_old_query(self, event: TelegramObject, error: TelegramBadRequest):
         if isinstance(event, CallbackQuery):
             user_info = self._get_user_info(event)
-            logger.warning("[GlobalErrorMiddleware] Игнорируем устаревший callback '%s' от %s", event.data, user_info)
+            logger.warning(
+                "[GlobalErrorMiddleware] Игнорируем устаревший callback '' от",
+                event_data=event.data,
+                user_info=user_info,
+            )
         else:
-            logger.warning('[GlobalErrorMiddleware] Игнорируем устаревший запрос: %s', error)
+            logger.warning('[GlobalErrorMiddleware] Игнорируем устаревший запрос', error=error)
 
     async def _handle_message_not_modified(
         self, event: TelegramObject, error: TelegramBadRequest, data: dict[str, Any]
     ):
-        logger.debug('[GlobalErrorMiddleware] Сообщение не было изменено: %s', error)
+        logger.debug('[GlobalErrorMiddleware] Сообщение не было изменено', error=error)
 
         if isinstance(event, CallbackQuery):
             try:
@@ -125,24 +129,24 @@ class GlobalErrorMiddleware(BaseMiddleware):
                 logger.debug("Успешно ответили на callback после 'message not modified'")
             except TelegramBadRequest as answer_error:
                 if not self._is_old_query_error(str(answer_error).lower()):
-                    logger.warning('Ошибка при ответе на callback: %s', answer_error)
+                    logger.warning('Ошибка при ответе на callback', answer_error=answer_error)
 
     async def _handle_bad_request(self, event: TelegramObject, error: TelegramBadRequest, data: dict[str, Any]):
         error_message = str(error).lower()
 
         if BOT_BLOCKED_PHRASE in error_message:
             user_info = self._get_user_info(event) if hasattr(event, 'from_user') else 'Unknown'
-            logger.info('[GlobalErrorMiddleware] Бот заблокирован пользователем %s', user_info)
+            logger.info('[GlobalErrorMiddleware] Бот заблокирован пользователем', user_info=user_info)
             return
         if USER_DEACTIVATED_PHRASE in error_message:
             user_info = self._get_user_info(event) if hasattr(event, 'from_user') else 'Unknown'
-            logger.info('[GlobalErrorMiddleware] Пользователь деактивирован %s', user_info)
+            logger.info('[GlobalErrorMiddleware] Пользователь деактивирован', user_info=user_info)
             return
         if CHAT_NOT_FOUND_PHRASE in error_message or MESSAGE_NOT_FOUND_PHRASE in error_message:
-            logger.warning('[GlobalErrorMiddleware] Чат или сообщение не найдено: %s', error)
+            logger.warning('[GlobalErrorMiddleware] Чат или сообщение не найдено', error=error)
             return
         user_info = self._get_user_info(event)
-        logger.error('[GlobalErrorMiddleware] Неизвестная bad request ошибка (user=%s): %s', user_info, error)
+        logger.error('[GlobalErrorMiddleware] Неизвестная bad request ошибка (user=)', user_info=user_info, error=error)
         raise error
 
     def _get_user_info(self, event: TelegramObject) -> str:
@@ -233,9 +237,9 @@ async def send_error_to_admin_chat(
         _error_buffer.pop(0)
 
     # Проверяем троттлинг
-    now = datetime.utcnow()
+    now = datetime.now(tz=UTC)
     if _last_error_notification and (now - _last_error_notification) < _error_notification_cooldown:
-        logger.debug('Ошибка добавлена в буфер, троттлинг активен: %s', error_type)
+        logger.debug('Ошибка добавлена в буфер, троттлинг активен', error_type=error_type)
         return False
 
     _last_error_notification = now
@@ -269,9 +273,7 @@ async def send_error_to_admin_chat(
 
         log_content = '\n'.join(log_lines)
 
-        # Очищаем буфер после отправки
         errors_count = len(_error_buffer)
-        _error_buffer.clear()
 
         file_name = f'error_report_{now.strftime(DATETIME_FORMAT_FILENAME)}.txt'
         file = BufferedInputFile(
@@ -318,9 +320,10 @@ async def send_error_to_admin_chat(
             message_kwargs['message_thread_id'] = topic_id
 
         await bot.send_document(**message_kwargs)
-        logger.info('Уведомление об ошибке отправлено в чат %s', chat_id)
+        _error_buffer.clear()  # Clear only after successful send
+        logger.info('Уведомление об ошибке отправлено в чат', chat_id=chat_id)
         return True
 
     except Exception as e:
-        logger.error('Ошибка отправки уведомления об ошибке: %s', e, extra={'_admin_notified': True})
+        logger.error('Ошибка отправки уведомления об ошибке', e=e, _admin_notified=True)
         return False

@@ -1,5 +1,4 @@
-import logging
-
+import structlog
 from aiogram import Dispatcher, F, types
 
 from app.database.models import User
@@ -9,7 +8,7 @@ from app.services.support_settings_service import SupportSettingsService
 from app.utils.photo_message import edit_or_answer_photo
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def show_support_info(callback: types.CallbackQuery, db_user: User):

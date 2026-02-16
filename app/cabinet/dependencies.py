@@ -1,8 +1,8 @@
 """FastAPI dependencies for cabinet module."""
 
 import asyncio
-import logging
 
+import structlog
 from aiogram import Bot
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -18,7 +18,7 @@ from app.services.maintenance_service import maintenance_service
 from .auth.jwt_handler import get_token_payload
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 security = HTTPBearer(auto_error=False)
 
@@ -161,10 +161,12 @@ async def get_current_cabinet_user(
                 except HTTPException:
                     raise
                 except TimeoutError:
-                    logger.warning(f'Timeout checking channel subscription for user {user.telegram_id}')
+                    logger.warning('Timeout checking channel subscription for user', telegram_id=user.telegram_id)
                     # Don't block user if check times out
                 except Exception as e:
-                    logger.warning(f'Failed to check channel subscription for user {user.telegram_id}: {e}')
+                    logger.warning(
+                        'Failed to check channel subscription for user', telegram_id=user.telegram_id, error=e
+                    )
                     # Don't block user if check fails
 
     return user

@@ -1,5 +1,4 @@
-import logging
-
+import structlog
 from aiogram import Dispatcher, F, types
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -12,7 +11,7 @@ from app.services.maintenance_service import maintenance_service
 from app.utils.decorators import admin_required, error_handler
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class MaintenanceStates(StatesGroup):
@@ -33,7 +32,7 @@ async def show_maintenance_panel(callback: types.CallbackQuery, db_user: User, d
         rw_service = RemnaWaveService()
         panel_status = await rw_service.get_panel_status_summary()
     except Exception as e:
-        logger.error(f'Ошибка получения статуса панели: {e}')
+        logger.error('Ошибка получения статуса панели', error=e)
         panel_status = {'description': '❓ Не удалось проверить', 'has_issues': True}
 
     status_emoji = '🔧' if status_info['is_active'] else '✅'
@@ -316,7 +315,7 @@ async def process_notification_message(message: types.Message, db_user: User, db
             await message.answer('❌ Ошибка отправки уведомления')
 
     except Exception as e:
-        logger.error(f'Ошибка отправки ручного уведомления: {e}')
+        logger.error('Ошибка отправки ручного уведомления', error=e)
         await message.answer(f'❌ Ошибка: {e!s}')
 
     await state.clear()

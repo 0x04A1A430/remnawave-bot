@@ -1,5 +1,4 @@
-import logging
-
+import structlog
 from aiogram import Bot, types
 from aiohttp import web
 
@@ -11,7 +10,7 @@ from app.database.models import PaymentMethod, TransactionType
 from app.external.tribute import TributeService
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Глобальная ссылка на бота для отправки уведомлений
 _bot_instance: Bot | None = None
@@ -48,7 +47,7 @@ async def tribute_webhook(request):
                 )
 
                 if existing_transaction:
-                    logger.info(f'Платеж {processed_data["payment_id"]} уже обработан')
+                    logger.info('Платеж уже обработан', processed_data=processed_data['payment_id'])
                     return web.Response(status=200, text='Already processed')
 
                 if processed_data['status'] == 'completed':
@@ -72,18 +71,18 @@ async def tribute_webhook(request):
                             external_id=processed_data['payment_id'],
                         )
 
-                        logger.info(f'✅ Обработан Tribute платеж: {processed_data["payment_id"]}')
+                        logger.info('✅ Обработан Tribute платеж', processed_data=processed_data['payment_id'])
 
                 await db.commit()
                 return web.Response(status=200, text='OK')
 
             except Exception as e:
-                logger.error(f'Ошибка обработки Tribute webhook: {e}')
+                logger.error('Ошибка обработки Tribute webhook', error=e)
                 await db.rollback()
                 return web.Response(status=500, text='Internal error')
 
     except Exception as e:
-        logger.error(f'Ошибка в Tribute webhook: {e}')
+        logger.error('Ошибка в Tribute webhook', error=e)
         return web.Response(status=500, text='Internal error')
 
 
@@ -103,7 +102,9 @@ async def handle_successful_payment(message: types.Message):
                     )
 
                     if existing_transaction:
-                        logger.info(f'Stars платеж {payment.telegram_payment_charge_id} уже обработан')
+                        logger.info(
+                            'Stars платеж уже обработан', telegram_payment_charge_id=payment.telegram_payment_charge_id
+                        )
                         return
 
                     user = await get_user_by_id(db, user_id)
@@ -129,23 +130,25 @@ async def handle_successful_payment(message: types.Message):
                             f'подписка будет приобретена автоматически после пополнения баланса.'
                         )
 
-                        logger.info(f'✅ Обработан Stars платеж: {payment.telegram_payment_charge_id}')
+                        logger.info(
+                            '✅ Обработан Stars платеж', telegram_payment_charge_id=payment.telegram_payment_charge_id
+                        )
 
                     await db.commit()
 
                 except Exception as e:
-                    logger.error(f'Ошибка обработки Stars платежа: {e}')
+                    logger.error('Ошибка обработки Stars платежа', error=e)
                     await db.rollback()
 
     except Exception as e:
-        logger.error(f'Ошибка в обработчике Stars платежа: {e}')
+        logger.error('Ошибка в обработчике Stars платежа', error=e)
 
 
 async def handle_pre_checkout_query(pre_checkout_query: types.PreCheckoutQuery):
     try:
         await pre_checkout_query.answer(ok=True)
-        logger.info(f'Pre-checkout query принят: {pre_checkout_query.id}')
+        logger.info('Pre-checkout query принят', pre_checkout_query_id=pre_checkout_query.id)
 
     except Exception as e:
-        logger.error(f'Ошибка в pre-checkout query: {e}')
+        logger.error('Ошибка в pre-checkout query', error=e)
         await pre_checkout_query.answer(ok=False, error_message='Ошибка обработки платежа')

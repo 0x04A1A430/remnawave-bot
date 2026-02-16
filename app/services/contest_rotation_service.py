@@ -1,8 +1,8 @@
 import asyncio
-import logging
 from datetime import UTC, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
+import structlog
 from aiogram import Bot
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,7 +20,7 @@ from app.services.contests.enums import GameType, PrizeType
 from app.services.contests.games import get_game_strategy
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Legacy aliases for backward compatibility
 GAME_QUEST = GameType.QUEST_BUTTONS.value
@@ -166,7 +166,7 @@ class ContestRotationService:
                 try:
                     await upsert_template(db, **tpl)
                 except Exception as exc:
-                    logger.error('Не удалось создать шаблон %s: %s', tpl['slug'], exc)
+                    logger.error('Не удалось создать шаблон', tpl=tpl['slug'], exc=exc)
 
     async def _loop(self) -> None:
         try:
@@ -176,7 +176,7 @@ class ContestRotationService:
                 except asyncio.CancelledError:
                     raise
                 except Exception as exc:
-                    logger.error('Ошибка в ротации конкурсов: %s', exc)
+                    logger.error('Ошибка в ротации конкурсов', exc=exc)
                 await asyncio.sleep(self._interval_seconds)
         except asyncio.CancelledError:
             logger.info('Сервис ротации конкурсов остановлен')
@@ -234,14 +234,14 @@ class ContestRotationService:
                         ends_at=ends_at_utc,
                         payload=payload,
                     )
-                    logger.info('Создан раунд %s для шаблона %s', round_obj.id, tpl.slug)
+                    logger.info('Создан раунд для шаблона', round_obj_id=round_obj.id, slug=tpl.slug)
 
     def _get_timezone(self) -> ZoneInfo:
         tz_name = settings.TIMEZONE or 'UTC'
         try:
             return ZoneInfo(tz_name)
         except Exception:
-            logger.warning('Не удалось загрузить TZ %s, используем UTC', tz_name)
+            logger.warning('Не удалось загрузить TZ , используем UTC', tz_name=tz_name)
             return ZoneInfo('UTC')
 
     def _build_payload_for_template(self, tpl: ContestTemplate) -> dict:
@@ -315,7 +315,7 @@ class ContestRotationService:
                 reply_markup=keyboard,
             )
         except Exception as exc:
-            logger.error('Не удалось отправить анонс в канал %s: %s', channel_id_raw, exc)
+            logger.error('Не удалось отправить анонс в канал', channel_id_raw=channel_id_raw, exc=exc)
 
     async def _broadcast_to_users(self, text: str) -> None:
         """Отправляет анонс всем пользователям с активной/триальной подпиской."""
@@ -364,9 +364,9 @@ class ContestRotationService:
 
                 await asyncio.gather(*tasks, return_exceptions=True)
 
-            logger.info('Анонс игр: отправлено=%s, ошибок=%s', sent, failed)
+            logger.info('Анонс игр: отправлено ошибок', sent=sent, failed=failed)
         except Exception as exc:
-            logger.error('Ошибка рассылки анонса игр пользователям: %s', exc)
+            logger.error('Ошибка рассылки анонса игр пользователям', exc=exc)
 
     async def _load_users_batch(self, db: AsyncSession, offset: int, limit: int) -> list[User]:
         from app.database.crud.user import get_users_list

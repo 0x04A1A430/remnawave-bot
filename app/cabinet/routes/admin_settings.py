@@ -1,8 +1,8 @@
 """Admin settings routes for cabinet - system configuration management."""
 
-import logging
 from typing import Any
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,7 +16,7 @@ from app.services.system_settings_service import (
 from ..dependencies import get_cabinet_db, get_current_admin_user
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/admin/settings', tags=['Admin Settings'])
 
@@ -248,7 +248,7 @@ async def update_setting(
         raise HTTPException(status.HTTP_403_FORBIDDEN, str(error)) from error
     await db.commit()
 
-    logger.info(f'Admin {admin.telegram_id} updated setting {key} to {value}')
+    logger.info('Admin updated setting to', telegram_id=admin.telegram_id, key=key, value=value)
     return _serialize_definition(definition)
 
 
@@ -270,5 +270,5 @@ async def reset_setting(
         raise HTTPException(status.HTTP_403_FORBIDDEN, str(error)) from error
     await db.commit()
 
-    logger.info(f'Admin {admin.telegram_id} reset setting {key}')
+    logger.info('Admin reset setting', telegram_id=admin.telegram_id, key=key)
     return _serialize_definition(definition)

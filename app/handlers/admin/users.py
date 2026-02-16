@@ -1,10 +1,10 @@
-import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any
 
+import structlog
 from aiogram import Dispatcher, F, types
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.fsm.context import FSMContext
@@ -53,7 +53,7 @@ from app.utils.subscription_utils import (
 from app.utils.user_utils import get_effective_referral_commission_percent
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 # =============================================================================
@@ -645,7 +645,7 @@ async def handle_users_list_pagination_fixed(
         page = int(callback_parts[-1])
         await show_users_list(callback, db_user, db, state, page)
     except (ValueError, IndexError) as e:
-        logger.error(f'Ошибка парсинга номера страницы: {e}')
+        logger.error('Ошибка парсинга номера страницы', error=e)
         await show_users_list(callback, db_user, db, state, 1)
 
 
@@ -659,7 +659,7 @@ async def handle_users_balance_list_pagination(
         page = int(callback_parts[-1])
         await show_users_list_by_balance(callback, db_user, db, state, page)
     except (ValueError, IndexError) as e:
-        logger.error(f'Ошибка парсинга номера страницы: {e}')
+        logger.error('Ошибка парсинга номера страницы', error=e)
         await show_users_list_by_balance(callback, db_user, db, state, 1)
 
 
@@ -672,7 +672,7 @@ async def handle_users_ready_to_renew_pagination(
         page = int(callback.data.split('_')[-1])
         await show_users_ready_to_renew(callback, db_user, db, state, page)
     except (ValueError, IndexError) as e:
-        logger.error(f'Ошибка парсинга номера страницы: {e}')
+        logger.error('Ошибка парсинга номера страницы', error=e)
         await show_users_ready_to_renew(callback, db_user, db, state, 1)
 
 
@@ -685,7 +685,7 @@ async def handle_potential_customers_pagination(
         page = int(callback.data.split('_')[-1])
         await show_potential_customers(callback, db_user, db, state, page)
     except (ValueError, IndexError) as e:
-        logger.error(f'Ошибка парсинга номера страницы: {e}')
+        logger.error('Ошибка парсинга номера страницы', error=e)
         await show_potential_customers(callback, db_user, db, state, 1)
 
 
@@ -699,7 +699,7 @@ async def handle_users_campaign_list_pagination(
         page = int(callback_parts[-1])
         await show_users_list_by_campaign(callback, db_user, db, state, page)
     except (ValueError, IndexError) as e:
-        logger.error(f'Ошибка парсинга номера страницы: {e}')
+        logger.error('Ошибка парсинга номера страницы', error=e)
         await show_users_list_by_campaign(callback, db_user, db, state, 1)
 
 
@@ -873,7 +873,7 @@ async def _render_user_subscription_overview(callback: types.CallbackQuery, db: 
                     else:
                         text += f'• {squad_uuid[:8]}... (неизвестный)\n'
                 except Exception as e:
-                    logger.error(f'Ошибка получения сервера {squad_uuid}: {e}')
+                    logger.error('Ошибка получения сервера', squad_uuid=squad_uuid, error=e)
                     text += f'• {squad_uuid[:8]}... (ошибка загрузки)\n'
         else:
             text += '\n<b>Подключенные серверы:</b> отсутствуют\n'
@@ -1565,23 +1565,16 @@ async def _update_referral_commission_percent(
         effective = get_effective_referral_commission_percent(user)
 
         logger.info(
-            'Админ %s обновил реферальный процент пользователя %s: %s',
-            admin_id,
-            user_id,
-            percent,
+            'Админ обновил реферальный процент пользователя', admin_id=admin_id, user_id=user_id, percent=percent
         )
 
         return True, effective
     except Exception as e:
-        logger.error(
-            'Ошибка обновления реферального процента пользователя %s: %s',
-            user_id,
-            e,
-        )
+        logger.error('Ошибка обновления реферального процента пользователя', user_id=user_id, e=e)
         try:
             await db.rollback()
         except Exception as rollback_error:
-            logger.error('Ошибка отката транзакции: %s', rollback_error)
+            logger.error('Ошибка отката транзакции', rollback_error=rollback_error)
         return False, None
 
 
@@ -2249,7 +2242,7 @@ async def process_send_user_message(
             reply_markup=confirmation_keyboard,
         )
     except TelegramBadRequest as err:
-        logger.error('Ошибка отправки сообщения пользователю %s: %s', target_user.telegram_id, err)
+        logger.error('Ошибка отправки сообщения пользователю', telegram_id=target_user.telegram_id, err=err)
         await message.answer(
             texts.t(
                 'ADMIN_USER_SEND_MESSAGE_BAD_REQUEST',
@@ -2260,7 +2253,7 @@ async def process_send_user_message(
         await state.clear()
         return
     except Exception as err:
-        logger.error('Неожиданная ошибка отправки сообщения пользователю %s: %s', target_user.telegram_id, err)
+        logger.error('Неожиданная ошибка отправки сообщения пользователю', telegram_id=target_user.telegram_id, err=err)
         await message.answer(
             texts.t('ADMIN_USER_SEND_MESSAGE_ERROR', '❌ Не удалось отправить сообщение. Попробуйте позже.'),
             reply_markup=confirmation_keyboard,
@@ -3444,7 +3437,7 @@ async def _show_servers_for_user(callback: types.CallbackQuery, user_id: int, db
         await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
 
     except Exception as e:
-        logger.error(f'Ошибка показа серверов: {e}')
+        logger.error('Ошибка показа серверов', error=e)
 
 
 @admin_required
@@ -3491,16 +3484,22 @@ async def toggle_user_server(callback: types.CallbackQuery, db_user: User, db: A
                             full_name=user.full_name, username=user.username, telegram_id=user.telegram_id
                         ),
                     )
-                logger.info(f'✅ Обновлены серверы в RemnaWave для пользователя {user.telegram_id}')
+                logger.info('✅ Обновлены серверы в RemnaWave для пользователя', telegram_id=user.telegram_id)
             except Exception as rw_error:
-                logger.error(f'❌ Ошибка обновления RemnaWave: {rw_error}')
+                logger.error('❌ Ошибка обновления RemnaWave', rw_error=rw_error)
 
-        logger.info(f'Админ {db_user.id}: сервер {server.display_name} {action_text} для пользователя {user_id}')
+        logger.info(
+            'Админ сервер для пользователя',
+            db_user_id=db_user.id,
+            display_name=server.display_name,
+            action_text=action_text,
+            user_id=user_id,
+        )
 
         await refresh_server_selection_screen(callback, user_id, db_user, db)
 
     except Exception as e:
-        logger.error(f'Ошибка переключения сервера: {e}')
+        logger.error('Ошибка переключения сервера', error=e)
         await callback.answer('❌ Ошибка изменения сервера', show_alert=True)
 
 
@@ -3554,7 +3553,7 @@ async def refresh_server_selection_screen(callback: types.CallbackQuery, user_id
         await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
 
     except Exception as e:
-        logger.error(f'Ошибка обновления экрана серверов: {e}')
+        logger.error('Ошибка обновления экрана серверов', error=e)
 
 
 @admin_required
@@ -3628,7 +3627,9 @@ async def set_user_devices_button(callback: types.CallbackQuery, db_user: User, 
 
     await callback.answer()
 
-    logger.info(f'Админ {db_user.telegram_id} {action_text} модем для пользователя {user_id}')
+    logger.info(
+        'Админ модем для пользователя', telegram_id=db_user.telegram_id, action_text=action_text, user_id=user_id
+    )
     await callback.answer()
 
 
@@ -3842,7 +3843,7 @@ async def reset_user_devices(callback: types.CallbackQuery, db_user: User, db: A
                     ]
                 ),
             )
-            logger.info(f'Админ {db_user.id} сбросил устройства пользователя {user_id}')
+            logger.info('Админ сбросил устройства пользователя', db_user_id=db_user.id, user_id=user_id)
         else:
             await callback.message.edit_text(
                 '❌ Ошибка сброса устройств',
@@ -3858,7 +3859,7 @@ async def reset_user_devices(callback: types.CallbackQuery, db_user: User, db: A
             )
 
     except Exception as e:
-        logger.error(f'Ошибка сброса устройств: {e}')
+        logger.error('Ошибка сброса устройств', error=e)
         await callback.answer('❌ Ошибка сброса устройств', show_alert=True)
 
 
@@ -3866,7 +3867,7 @@ async def _update_user_devices(db: AsyncSession, user_id: int, devices: int, adm
     try:
         user = await get_user_by_id(db, user_id)
         if not user or not user.subscription:
-            logger.error(f'Пользователь {user_id} или подписка не найдены')
+            logger.error('Пользователь или подписка не найдены', user_id=user_id)
             return False
 
         subscription = user.subscription
@@ -3887,15 +3888,21 @@ async def _update_user_devices(db: AsyncSession, user_id: int, devices: int, adm
                             full_name=user.full_name, username=user.username, telegram_id=user.telegram_id
                         ),
                     )
-                logger.info(f'✅ Обновлен лимит устройств в RemnaWave для пользователя {user.telegram_id}')
+                logger.info('✅ Обновлен лимит устройств в RemnaWave для пользователя', telegram_id=user.telegram_id)
             except Exception as rw_error:
-                logger.error(f'❌ Ошибка обновления лимита устройств в RemnaWave: {rw_error}')
+                logger.error('❌ Ошибка обновления лимита устройств в RemnaWave', rw_error=rw_error)
 
-        logger.info(f'Админ {admin_id} изменил лимит устройств пользователя {user_id}: {old_devices} -> {devices}')
+        logger.info(
+            'Админ изменил лимит устройств пользователя',
+            admin_id=admin_id,
+            user_id=user_id,
+            old_devices=old_devices,
+            devices=devices,
+        )
         return True
 
     except Exception as e:
-        logger.error(f'Ошибка обновления лимита устройств: {e}')
+        logger.error('Ошибка обновления лимита устройств', error=e)
         await db.rollback()
         return False
 
@@ -3904,7 +3911,7 @@ async def _update_user_traffic(db: AsyncSession, user_id: int, traffic_gb: int, 
     try:
         user = await get_user_by_id(db, user_id)
         if not user or not user.subscription:
-            logger.error(f'Пользователь {user_id} или подписка не найдены')
+            logger.error('Пользователь или подписка не найдены', user_id=user_id)
             return False
 
         subscription = user.subscription
@@ -3928,19 +3935,23 @@ async def _update_user_traffic(db: AsyncSession, user_id: int, traffic_gb: int, 
                             full_name=user.full_name, username=user.username, telegram_id=user.telegram_id
                         ),
                     )
-                logger.info(f'✅ Обновлен лимит трафика в RemnaWave для пользователя {user.telegram_id}')
+                logger.info('✅ Обновлен лимит трафика в RemnaWave для пользователя', telegram_id=user.telegram_id)
             except Exception as rw_error:
-                logger.error(f'❌ Ошибка обновления лимита трафика в RemnaWave: {rw_error}')
+                logger.error('❌ Ошибка обновления лимита трафика в RemnaWave', rw_error=rw_error)
 
         traffic_text_old = 'безлимитный' if old_traffic == 0 else f'{old_traffic} ГБ'
         traffic_text_new = 'безлимитный' if traffic_gb == 0 else f'{traffic_gb} ГБ'
         logger.info(
-            f'Админ {admin_id} изменил лимит трафика пользователя {user_id}: {traffic_text_old} -> {traffic_text_new}'
+            'Админ изменил лимит трафика пользователя',
+            admin_id=admin_id,
+            user_id=user_id,
+            traffic_text_old=traffic_text_old,
+            traffic_text_new=traffic_text_new,
         )
         return True
 
     except Exception as e:
-        logger.error(f'Ошибка обновления лимита трафика: {e}')
+        logger.error('Ошибка обновления лимита трафика', error=e)
         await db.rollback()
         return False
 
@@ -3952,7 +3963,7 @@ async def _extend_subscription_by_days(db: AsyncSession, user_id: int, days: int
 
         subscription = await get_subscription_by_user_id(db, user_id)
         if not subscription:
-            logger.error(f'Подписка не найдена для пользователя {user_id}')
+            logger.error('Подписка не найдена для пользователя', user_id=user_id)
             return False
 
         await extend_subscription(db, subscription, days)
@@ -3961,13 +3972,15 @@ async def _extend_subscription_by_days(db: AsyncSession, user_id: int, days: int
         await subscription_service.update_remnawave_user(db, subscription)
 
         if days > 0:
-            logger.info(f'Админ {admin_id} продлил подписку пользователя {user_id} на {days} дней')
+            logger.info('Админ продлил подписку пользователя на дней', admin_id=admin_id, user_id=user_id, days=days)
         else:
-            logger.info(f'Админ {admin_id} сократил подписку пользователя {user_id} на {abs(days)} дней')
+            logger.info(
+                'Админ сократил подписку пользователя на дней', admin_id=admin_id, user_id=user_id, value=abs(days)
+            )
         return True
 
     except Exception as e:
-        logger.error(f'Ошибка продления подписки: {e}')
+        logger.error('Ошибка продления подписки', error=e)
         return False
 
 
@@ -3978,7 +3991,7 @@ async def _add_subscription_traffic(db: AsyncSession, user_id: int, gb: int, adm
 
         subscription = await get_subscription_by_user_id(db, user_id)
         if not subscription:
-            logger.error(f'Подписка не найдена для пользователя {user_id}')
+            logger.error('Подписка не найдена для пользователя', user_id=user_id)
             return False
 
         if gb == 0:
@@ -3991,11 +4004,11 @@ async def _add_subscription_traffic(db: AsyncSession, user_id: int, gb: int, adm
         await subscription_service.update_remnawave_user(db, subscription)
 
         traffic_text = 'безлимитный' if gb == 0 else f'{gb} ГБ'
-        logger.info(f'Админ {admin_id} добавил трафик {traffic_text} пользователю {user_id}')
+        logger.info('Админ добавил трафик пользователю', admin_id=admin_id, traffic_text=traffic_text, user_id=user_id)
         return True
 
     except Exception as e:
-        logger.error(f'Ошибка добавления трафика: {e}')
+        logger.error('Ошибка добавления трафика', error=e)
         return False
 
 
@@ -4006,7 +4019,7 @@ async def _deactivate_user_subscription(db: AsyncSession, user_id: int, admin_id
 
         subscription = await get_subscription_by_user_id(db, user_id)
         if not subscription:
-            logger.error(f'Подписка не найдена для пользователя {user_id}')
+            logger.error('Подписка не найдена для пользователя', user_id=user_id)
             return False
 
         await deactivate_subscription(db, subscription)
@@ -4016,11 +4029,11 @@ async def _deactivate_user_subscription(db: AsyncSession, user_id: int, admin_id
             subscription_service = SubscriptionService()
             await subscription_service.disable_remnawave_user(user.remnawave_uuid)
 
-        logger.info(f'Админ {admin_id} деактивировал подписку пользователя {user_id}')
+        logger.info('Админ деактивировал подписку пользователя', admin_id=admin_id, user_id=user_id)
         return True
 
     except Exception as e:
-        logger.error(f'Ошибка деактивации подписки: {e}')
+        logger.error('Ошибка деактивации подписки', error=e)
         return False
 
 
@@ -4034,7 +4047,7 @@ async def _activate_user_subscription(db: AsyncSession, user_id: int, admin_id: 
 
         subscription = await get_subscription_by_user_id(db, user_id)
         if not subscription:
-            logger.error(f'Подписка не найдена для пользователя {user_id}')
+            logger.error('Подписка не найдена для пользователя', user_id=user_id)
             return False
 
         subscription.status = SubscriptionStatus.ACTIVE.value
@@ -4047,11 +4060,11 @@ async def _activate_user_subscription(db: AsyncSession, user_id: int, admin_id: 
         subscription_service = SubscriptionService()
         await subscription_service.update_remnawave_user(db, subscription)
 
-        logger.info(f'Админ {admin_id} активировал подписку пользователя {user_id}')
+        logger.info('Админ активировал подписку пользователя', admin_id=admin_id, user_id=user_id)
         return True
 
     except Exception as e:
-        logger.error(f'Ошибка активации подписки: {e}')
+        logger.error('Ошибка активации подписки', error=e)
         return False
 
 
@@ -4062,7 +4075,7 @@ async def _grant_trial_subscription(db: AsyncSession, user_id: int, admin_id: in
 
         existing_subscription = await get_subscription_by_user_id(db, user_id)
         if existing_subscription:
-            logger.error(f'У пользователя {user_id} уже есть подписка')
+            logger.error('У пользователя уже есть подписка', user_id=user_id)
             return False
 
         forced_devices = None
@@ -4078,11 +4091,11 @@ async def _grant_trial_subscription(db: AsyncSession, user_id: int, admin_id: in
         subscription_service = SubscriptionService()
         await subscription_service.create_remnawave_user(db, subscription)
 
-        logger.info(f'Админ {admin_id} выдал триальную подписку пользователю {user_id}')
+        logger.info('Админ выдал триальную подписку пользователю', admin_id=admin_id, user_id=user_id)
         return True
 
     except Exception as e:
-        logger.error(f'Ошибка выдачи триальной подписки: {e}')
+        logger.error('Ошибка выдачи триальной подписки', error=e)
         return False
 
 
@@ -4094,7 +4107,7 @@ async def _grant_paid_subscription(db: AsyncSession, user_id: int, days: int, ad
 
         existing_subscription = await get_subscription_by_user_id(db, user_id)
         if existing_subscription:
-            logger.error(f'У пользователя {user_id} уже есть подписка')
+            logger.error('У пользователя уже есть подписка', user_id=user_id)
             return False
 
         trial_squads: list[str] = []
@@ -4106,11 +4119,7 @@ async def _grant_paid_subscription(db: AsyncSession, user_id: int, days: int, ad
             if trial_uuid:
                 trial_squads = [trial_uuid]
         except Exception as error:
-            logger.error(
-                'Не удалось подобрать сквад при выдаче подписки админом %s: %s',
-                admin_id,
-                error,
-            )
+            logger.error('Не удалось подобрать сквад при выдаче подписки админом', admin_id=admin_id, error=error)
 
         forced_devices = None
         if not settings.is_devices_selection_enabled():
@@ -4133,11 +4142,11 @@ async def _grant_paid_subscription(db: AsyncSession, user_id: int, days: int, ad
         subscription_service = SubscriptionService()
         await subscription_service.create_remnawave_user(db, subscription)
 
-        logger.info(f'Админ {admin_id} выдал платную подписку на {days} дней пользователю {user_id}')
+        logger.info('Админ выдал платную подписку на дней пользователю', admin_id=admin_id, days=days, user_id=user_id)
         return True
 
     except Exception as e:
-        logger.error(f'Ошибка выдачи платной подписки: {e}')
+        logger.error('Ошибка выдачи платной подписки', error=e)
         return False
 
 
@@ -4160,14 +4169,14 @@ async def _calculate_subscription_period_price(
             server_ids = await get_server_ids_by_uuids(db, connected_squads)
             if len(server_ids) != len(connected_squads):
                 logger.warning(
-                    'Не удалось сопоставить все сервера подписки пользователя %s для расчёта цены',
-                    target_user.telegram_id,
+                    'Не удалось сопоставить все сервера подписки пользователя для расчёта цены',
+                    telegram_id=target_user.telegram_id,
                 )
         except Exception as e:
             logger.error(
-                'Не удалось получить идентификаторы серверов для расчёта цены подписки пользователя %s: %s',
-                target_user.telegram_id,
-                e,
+                'Не удалось получить идентификаторы серверов для расчёта цены подписки пользователя',
+                telegram_id=target_user.telegram_id,
+                e=e,
             )
             server_ids = []
     traffic_limit_gb = subscription.traffic_limit_gb
@@ -4282,10 +4291,10 @@ async def admin_buy_subscription(callback: types.CallbackQuery, db_user: User, d
             )
         except Exception as e:
             logger.error(
-                'Ошибка расчёта стоимости подписки для пользователя %s и периода %s дней: %s',
-                target_user.telegram_id,
-                period,
-                e,
+                'Ошибка расчёта стоимости подписки для пользователя и периода дней',
+                telegram_id=target_user.telegram_id,
+                period=period,
+                e=e,
             )
             continue
 
@@ -4363,19 +4372,19 @@ async def admin_buy_subscription_confirm(callback: types.CallbackQuery, db_user:
         )
     except Exception as e:
         logger.error(
-            'Ошибка расчёта стоимости подписки при подтверждении админом для пользователя %s: %s',
-            target_user.telegram_id,
-            e,
+            'Ошибка расчёта стоимости подписки при подтверждении админом для пользователя',
+            telegram_id=target_user.telegram_id,
+            e=e,
         )
         await callback.answer('❌ Не удалось рассчитать стоимость подписки', show_alert=True)
         return
 
     if price_kopeks_from_callback is not None and price_kopeks_from_callback != price_kopeks:
         logger.info(
-            'Стоимость подписки для пользователя %s изменилась с %s до %s при подтверждении',
-            target_user.telegram_id,
-            price_kopeks_from_callback,
-            price_kopeks,
+            'Стоимость подписки для пользователя изменилась с до при подтверждении',
+            telegram_id=target_user.telegram_id,
+            price_kopeks_from_callback=price_kopeks_from_callback,
+            price_kopeks=price_kopeks,
         )
 
     if target_user.balance_kopeks < price_kopeks:
@@ -4467,19 +4476,19 @@ async def admin_buy_subscription_execute(callback: types.CallbackQuery, db_user:
         )
     except Exception as e:
         logger.error(
-            'Ошибка расчёта стоимости подписки при списании средств админом для пользователя %s: %s',
-            target_user.telegram_id,
-            e,
+            'Ошибка расчёта стоимости подписки при списании средств админом для пользователя',
+            telegram_id=target_user.telegram_id,
+            e=e,
         )
         await callback.answer('❌ Не удалось рассчитать стоимость подписки', show_alert=True)
         return
 
     if price_kopeks_from_callback is not None and price_kopeks_from_callback != price_kopeks:
         logger.info(
-            'Стоимость подписки для пользователя %s изменилась с %s до %s перед списанием',
-            target_user.telegram_id,
-            price_kopeks_from_callback,
-            price_kopeks,
+            'Стоимость подписки для пользователя изменилась с до перед списанием',
+            telegram_id=target_user.telegram_id,
+            price_kopeks_from_callback=price_kopeks_from_callback,
+            price_kopeks=price_kopeks,
         )
 
     if target_user.balance_kopeks < price_kopeks:
@@ -4506,9 +4515,9 @@ async def admin_buy_subscription_execute(callback: types.CallbackQuery, db_user:
                 if remaining_trial_delta.total_seconds() > 0:
                     bonus_period = remaining_trial_delta
                     logger.info(
-                        'Админ продлевает подписку: добавляем оставшееся время триала (%s) пользователю %s',
-                        bonus_period,
-                        target_user.telegram_id,
+                        'Админ продлевает подписку: добавляем оставшееся время триала пользователю',
+                        bonus_period=bonus_period,
+                        telegram_id=target_user.telegram_id,
                     )
 
             extension_base_date = current_time
@@ -4613,11 +4622,11 @@ async def admin_buy_subscription_execute(callback: types.CallbackQuery, db_user:
                         await db.commit()
 
                 if remnawave_user:
-                    logger.info(f'Пользователь {target_user.telegram_id} успешно обновлен в RemnaWave')
+                    logger.info('Пользователь успешно обновлен в RemnaWave', telegram_id=target_user.telegram_id)
                 else:
-                    logger.error(f'Ошибка обновления пользователя {target_user.telegram_id} в RemnaWave')
+                    logger.error('Ошибка обновления пользователя в RemnaWave', telegram_id=target_user.telegram_id)
             except Exception as e:
-                logger.error(f'Ошибка работы с RemnaWave для пользователя {target_user.telegram_id}: {e}')
+                logger.error('Ошибка работы с RemnaWave для пользователя', telegram_id=target_user.telegram_id, error=e)
 
             message = f'✅ Подписка пользователя продлена на {period_days} дней'
         else:
@@ -4658,12 +4667,12 @@ async def admin_buy_subscription_execute(callback: types.CallbackQuery, db_user:
                 )
         except Exception as e:
             user_id_display = target_user.telegram_id or target_user.email or f'#{target_user.id}'
-            logger.error(f'Ошибка отправки уведомления пользователю {user_id_display}: {e}')
+            logger.error('Ошибка отправки уведомления пользователю', user_id_display=user_id_display, error=e)
 
         await callback.answer()
 
     except Exception as e:
-        logger.error(f'Ошибка покупки подписки администратором: {e}')
+        logger.error('Ошибка покупки подписки администратором', error=e)
         await callback.answer('❌ Ошибка при покупке подписки', show_alert=True)
 
         await db.rollback()
@@ -4977,7 +4986,7 @@ async def admin_buy_tariff_execute(callback: types.CallbackQuery, db_user: User,
                 reset_reason='покупка тарифа (администратор)',
             )
         except Exception as e:
-            logger.error(f'Ошибка обновления Remnawave: {e}')
+            logger.error('Ошибка обновления Remnawave', error=e)
 
         # Создаем транзакцию
         await create_transaction(
@@ -5032,12 +5041,12 @@ async def admin_buy_tariff_execute(callback: types.CallbackQuery, db_user: User,
                     parse_mode='HTML',
                 )
         except Exception as e:
-            logger.error(f'Ошибка отправки уведомления пользователю: {e}')
+            logger.error('Ошибка отправки уведомления пользователю', error=e)
 
         await callback.answer('✅ Тариф куплен!', show_alert=True)
 
     except Exception as e:
-        logger.error(f'Ошибка покупки тарифа администратором: {e}', exc_info=True)
+        logger.error('Ошибка покупки тарифа администратором', error=e, exc_info=True)
         await callback.answer('❌ Ошибка при покупке тарифа', show_alert=True)
         await db.rollback()
 
@@ -5081,13 +5090,13 @@ async def _change_subscription_type(db: AsyncSession, user_id: int, new_type: st
 
         subscription = await get_subscription_by_user_id(db, user_id)
         if not subscription:
-            logger.error(f'Подписка не найдена для пользователя {user_id}')
+            logger.error('Подписка не найдена для пользователя', user_id=user_id)
             return False
 
         new_is_trial = new_type == 'trial'
 
         if subscription.is_trial == new_is_trial:
-            logger.info(f'Тип подписки уже установлен корректно для пользователя {user_id}')
+            logger.info('Тип подписки уже установлен корректно для пользователя', user_id=user_id)
             return True
 
         old_type = 'триальной' if subscription.is_trial else 'платной'
@@ -5106,11 +5115,17 @@ async def _change_subscription_type(db: AsyncSession, user_id: int, new_type: st
         subscription_service = SubscriptionService()
         await subscription_service.update_remnawave_user(db, subscription)
 
-        logger.info(f'Админ {admin_id} изменил тип подписки пользователя {user_id}: {old_type} -> {new_type_text}')
+        logger.info(
+            'Админ изменил тип подписки пользователя',
+            admin_id=admin_id,
+            user_id=user_id,
+            old_type=old_type,
+            new_type_text=new_type_text,
+        )
         return True
 
     except Exception as e:
-        logger.error(f'Ошибка изменения типа подписки: {e}')
+        logger.error('Ошибка изменения типа подписки', error=e)
         await db.rollback()
         return False
 
@@ -5310,7 +5325,12 @@ async def confirm_admin_tariff_change(callback: types.CallbackQuery, db_user: Us
         await subscription_service.update_remnawave_user(db, subscription)
 
         logger.info(
-            f'Админ {db_user.id} изменил тариф пользователя {user_id}: {old_tariff_id} -> {tariff_id} ({tariff.name})'
+            'Админ изменил тариф пользователя',
+            db_user_id=db_user.id,
+            user_id=user_id,
+            old_tariff_id=old_tariff_id,
+            tariff_id=tariff_id,
+            tariff_name=tariff.name,
         )
 
         await callback.message.edit_text(
@@ -5331,7 +5351,7 @@ async def confirm_admin_tariff_change(callback: types.CallbackQuery, db_user: Us
         )
 
     except Exception as e:
-        logger.error(f'Ошибка смены тарифа: {e}')
+        logger.error('Ошибка смены тарифа', error=e)
         await db.rollback()
 
         await callback.message.edit_text(

@@ -1,7 +1,7 @@
 import html
-import logging
 from datetime import datetime
 
+import structlog
 from aiogram import Dispatcher, F, types
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,7 +14,7 @@ from app.utils.decorators import admin_required, error_handler
 from app.utils.validators import get_html_help_text, validate_html_tags
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 def _format_timestamp(value: datetime | None) -> str:
@@ -349,9 +349,7 @@ async def process_public_offer_edit(
 
     await PublicOfferService.save_offer(db, db_user.language, new_text)
     logger.info(
-        'Админ %s обновил текст публичной оферты (%d символов)',
-        db_user.telegram_id,
-        len(new_text),
+        'Админ обновил текст публичной оферты (символов)', telegram_id=db_user.telegram_id, new_text_count=len(new_text)
     )
     await state.clear()
 

@@ -1,8 +1,8 @@
 import functools
-import logging
 from collections.abc import Callable
 from typing import Any
 
+import structlog
 from aiogram import types
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
@@ -11,7 +11,7 @@ from app.config import settings
 from app.localization.texts import get_texts
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 def admin_required(func: Callable) -> Callable:
@@ -31,11 +31,13 @@ def admin_required(func: Callable) -> Callable:
                     await event.answer(texts.ACCESS_DENIED, show_alert=True)
             except TelegramBadRequest as e:
                 if 'query is too old' in str(e).lower():
-                    logger.warning(f'Попытка ответить на устаревший callback query от {user.id if user else "Unknown"}')
+                    logger.warning(
+                        'Попытка ответить на устаревший callback query от', user_id=user.id if user else 'Unknown'
+                    )
                 else:
                     raise
 
-            logger.warning(f'Попытка доступа к админской функции от {user.id if user else "Unknown"}')
+            logger.warning('Попытка доступа к админской функции от', user_id=user.id if user else 'Unknown')
             return None
 
         return await func(event, *args, **kwargs)
@@ -76,28 +78,35 @@ def error_handler(func: Callable) -> Callable:
                     user_info = (
                         f'@{event.from_user.username}' if event.from_user.username else f'ID:{event.from_user.id}'
                     )
-                    logger.warning(f"🕐 Игнорируем устаревший callback '{event.data}' от {user_info} в {func.__name__}")
+                    logger.warning(
+                        '🕐 Игнорируем устаревший callback от в',
+                        event_data=event.data,
+                        user_info=user_info,
+                        __name__=func.__name__,
+                    )
                 else:
-                    logger.warning(f'🕐 Игнорируем устаревший запрос в {func.__name__}: {e}')
+                    logger.warning('🕐 Игнорируем устаревший запрос в', __name__=func.__name__, error=e)
                 return None
 
             if 'message is not modified' in error_message:
-                logger.debug(f'📝 Сообщение не изменено в {func.__name__}')
+                logger.debug('📝 Сообщение не изменено в', __name__=func.__name__)
                 event = _extract_event(args)
                 if event and isinstance(event, types.CallbackQuery):
                     try:
                         await event.answer()
                     except TelegramBadRequest as answer_error:
                         if 'query is too old' not in str(answer_error).lower():
-                            logger.error(f'Ошибка при ответе на callback в {func.__name__}: {answer_error}')
+                            logger.error(
+                                'Ошибка при ответе на callback в', __name__=func.__name__, answer_error=answer_error
+                            )
                 return None
 
-            logger.error(f'Telegram API error в {func.__name__}: {e}')
+            logger.error('Telegram API error в', __name__=func.__name__, error=e)
             # Уведомление отправляется в _send_error_message
             await _send_error_message(args, kwargs, e, func.__name__)
 
         except Exception as e:
-            logger.error(f'Ошибка в {func.__name__}: {e}', exc_info=True)
+            logger.error('Ошибка в', __name__=func.__name__, error=e, exc_info=True)
             await _send_error_message(args, kwargs, e, func.__name__)
 
     return wrapper
@@ -130,9 +139,9 @@ async def _send_error_message(args, kwargs, original_error, func_name: str = 'un
         if 'query is too old' in str(e).lower():
             logger.warning('Не удалось отправить сообщение об ошибке - callback query устарел')
         else:
-            logger.warning(f'Ошибка при отправке сообщения об ошибке: {e}')
+            logger.warning('Ошибка при отправке сообщения об ошибке', error=e)
     except Exception as e:
-        logger.warning(f'Критическая ошибка при отправке сообщения об ошибке: {e}')
+        logger.warning('Критическая ошибка при отправке сообщения об ошибке', error=e)
 
 
 def state_cleanup(func: Callable) -> Callable:
@@ -157,7 +166,7 @@ def typing_action(func: Callable) -> Callable:
             try:
                 await event.bot.send_chat_action(chat_id=event.chat.id, action='typing')
             except Exception as e:
-                logger.warning(f'Не удалось отправить typing action: {e}')
+                logger.warning('Не удалось отправить typing action', error=e)
 
         return await func(event, *args, **kwargs)
 

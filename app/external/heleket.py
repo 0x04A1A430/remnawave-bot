@@ -6,15 +6,15 @@ import base64
 import hashlib
 import hmac
 import json
-import logging
 from typing import Any
 
 import aiohttp
+import structlog
 
 from app.config import settings
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class HeleketService:
@@ -93,26 +93,28 @@ class HeleketService:
             ):
                 text = await response.text()
                 if response.content_type != 'application/json':
-                    logger.error('Ответ Heleket не JSON (%s): %s', response.content_type, text)
+                    logger.error('Ответ Heleket не JSON', content_type=response.content_type, text=text)
                     return None
 
                 try:
                     data = json.loads(text)
                 except json.JSONDecodeError:
-                    logger.error('Ошибка парсинга Heleket JSON: %s', text)
+                    logger.error('Ошибка парсинга Heleket JSON', text=text)
                     return None
 
                 if response.status >= 400:
-                    logger.error('Heleket API %s вернул статус %s: %s', endpoint, response.status, data)
+                    logger.error(
+                        'Heleket API вернул статус', endpoint=endpoint, response_status=response.status, data=data
+                    )
                     return None
 
                 if isinstance(data, dict) and data.get('state') == 0:
                     return data
 
-                logger.error('Heleket API вернул ошибку: %s', data)
+                logger.error('Heleket API вернул ошибку', data=data)
                 return None
         except Exception as error:  # pragma: no cover - defensive
-            logger.error('Ошибка запроса к Heleket API: %s', error)
+            logger.error('Ошибка запроса к Heleket API', error=error)
             return None
 
     async def create_payment(self, payload: dict[str, Any]) -> dict[str, Any] | None:
@@ -157,7 +159,7 @@ class HeleketService:
             return True
 
         if not isinstance(payload, dict):
-            logger.error('Heleket webhook payload не dict: %s', payload)
+            logger.error('Heleket webhook payload не dict', payload=payload)
             return False
 
         signature = payload.get('sign')
@@ -173,5 +175,7 @@ class HeleketService:
         is_valid = hmac.compare_digest(expected, str(signature))
 
         if not is_valid:
-            logger.error('Неверная подпись Heleket webhook: ожидается %s, получено %s', expected, signature)
+            logger.error(
+                'Неверная подпись Heleket webhook: ожидается , получено', expected=expected, signature=signature
+            )
         return is_valid

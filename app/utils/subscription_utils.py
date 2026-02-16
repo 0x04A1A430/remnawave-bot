@@ -1,7 +1,7 @@
-import logging
 from datetime import datetime
 from urllib.parse import quote, urlparse, urlunparse
 
+import structlog
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,7 +9,7 @@ from app.config import settings
 from app.database.models import Subscription
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def ensure_single_subscription(db: AsyncSession, user_id: int) -> Subscription | None:
@@ -25,17 +25,24 @@ async def ensure_single_subscription(db: AsyncSession, user_id: int) -> Subscrip
     old_subscriptions = subscriptions[1:]
 
     logger.warning(
-        f'🚨 Обнаружено {len(subscriptions)} подписок у пользователя {user_id}. Удаляем {len(old_subscriptions)} старых.'
+        '🚨 Обнаружено подписок у пользователя . Удаляем старых.',
+        subscriptions_count=len(subscriptions),
+        user_id=user_id,
+        old_subscriptions_count=len(old_subscriptions),
     )
 
     for old_sub in old_subscriptions:
         await db.delete(old_sub)
-        logger.info(f'🗑️ Удалена подписка ID {old_sub.id} от {old_sub.created_at}')
+        logger.info('🗑️ Удалена подписка ID от', old_sub_id=old_sub.id, created_at=old_sub.created_at)
 
     await db.commit()
     await db.refresh(latest_subscription)
 
-    logger.info(f'✅ Оставлена подписка ID {latest_subscription.id} от {latest_subscription.created_at}')
+    logger.info(
+        '✅ Оставлена подписка ID от',
+        latest_subscription_id=latest_subscription.id,
+        created_at=latest_subscription.created_at,
+    )
     return latest_subscription
 
 
@@ -51,7 +58,7 @@ async def update_or_create_subscription(db: AsyncSession, user_id: int, **subscr
         await db.commit()
         await db.refresh(existing_subscription)
 
-        logger.info(f'🔄 Обновлена существующая подписка ID {existing_subscription.id}')
+        logger.info('🔄 Обновлена существующая подписка ID', existing_subscription_id=existing_subscription.id)
         return existing_subscription
 
     subscription_defaults = dict(subscription_data)
@@ -71,7 +78,7 @@ async def update_or_create_subscription(db: AsyncSession, user_id: int, **subscr
     await db.commit()
     await db.refresh(new_subscription)
 
-    logger.info(f'🆕 Создана новая подписка ID {new_subscription.id}')
+    logger.info('🆕 Создана новая подписка ID', new_subscription_id=new_subscription.id)
     return new_subscription
 
 
@@ -92,10 +99,14 @@ async def cleanup_duplicate_subscriptions(db: AsyncSession) -> int:
         for old_subscription in subscriptions[1:]:
             await db.delete(old_subscription)
             total_deleted += 1
-            logger.info(f'🗑️ Удалена дублирующаяся подписка ID {old_subscription.id} пользователя {user_id}')
+            logger.info(
+                '🗑️ Удалена дублирующаяся подписка ID пользователя',
+                old_subscription_id=old_subscription.id,
+                user_id=user_id,
+            )
 
     await db.commit()
-    logger.info(f'🧹 Очищено {total_deleted} дублирующихся подписок')
+    logger.info('🧹 Очищено дублирующихся подписок', total_deleted=total_deleted)
 
     return total_deleted
 

@@ -1,5 +1,4 @@
-import logging
-
+import structlog
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.fsm.context import FSMContext
 from aiogram.types import InaccessibleMessage
@@ -14,7 +13,7 @@ from app.states import PromoCodeStates
 from app.utils.decorators import error_handler
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @error_handler
@@ -40,7 +39,7 @@ async def activate_promocode_for_registration(db: AsyncSession, user_id: int, co
     result = await promocode_service.activate_promocode(db, user_id, code)
 
     if result['success']:
-        logger.info(f'✅ Пользователь {user_id} активировал промокод {code} при регистрации')
+        logger.info('✅ Пользователь активировал промокод при регистрации', user_id=user_id, code=code)
 
         # Отправляем уведомление админу, если бот доступен
         if bot:
@@ -60,9 +59,7 @@ async def activate_promocode_for_registration(db: AsyncSession, user_id: int, co
                     )
             except Exception as notify_error:
                 logger.error(
-                    'Ошибка отправки админ уведомления об активации промокода %s: %s',
-                    code,
-                    notify_error,
+                    'Ошибка отправки админ уведомления об активации промокода', code=code, notify_error=notify_error
                 )
 
     return result

@@ -1,8 +1,8 @@
-import logging
 import math
 from datetime import UTC, datetime, time
 from zoneinfo import ZoneInfo
 
+import structlog
 from aiogram import Dispatcher, F, types
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,7 +35,7 @@ from app.states import AdminStates
 from app.utils.decorators import admin_required, error_handler
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 PAGE_SIZE = 5
 
@@ -44,7 +44,7 @@ def _ensure_timezone(tz_name: str) -> ZoneInfo:
     try:
         return ZoneInfo(tz_name)
     except Exception:
-        logger.warning('Не удалось загрузить TZ %s, используем UTC', tz_name)
+        logger.warning('Не удалось загрузить TZ , используем UTC', tz_name=tz_name)
         return ZoneInfo('UTC')
 
 

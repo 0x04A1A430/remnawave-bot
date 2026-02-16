@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import json
-import logging
 
+import structlog
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from fastapi.security import APIKeyHeader
 
@@ -11,7 +11,7 @@ from app.services.event_emitter import event_emitter
 from app.services.web_api_token_service import web_api_token_service
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter()
 
@@ -43,7 +43,7 @@ async def verify_websocket_token(
                 logger.warning('WebSocket token authentication failed: token not found or invalid')
             return webhook_token is not None
         except Exception as error:
-            logger.warning('WebSocket authentication error: %s', error, exc_info=True)
+            logger.warning('WebSocket authentication error', error=error, exc_info=True)
             return False
 
 
@@ -51,20 +51,20 @@ async def verify_websocket_token(
 async def websocket_endpoint(websocket: WebSocket):
     """WebSocket endpoint для real-time обновлений."""
     client_host = websocket.client.host if websocket.client else 'unknown'
-    logger.debug('WebSocket connection attempt from %s', client_host)
+    logger.debug('WebSocket connection attempt from', client_host=client_host)
 
     # Сначала проверяем авторизацию ДО принятия соединения
     token = websocket.query_params.get('token') or websocket.query_params.get('api_key')
 
     if not token:
-        logger.debug('WebSocket: No token provided from %s', client_host)
+        logger.debug('WebSocket: No token provided from', client_host=client_host)
         # Принимаем и сразу закрываем с кодом ошибки
         await websocket.accept()
         await websocket.close(code=1008, reason='Unauthorized: No token provided')
         return
 
     if not await verify_websocket_token(websocket, token):
-        logger.debug('WebSocket: Invalid token from %s', client_host)
+        logger.debug('WebSocket: Invalid token from', client_host=client_host)
         # Принимаем и сразу закрываем с кодом ошибки
         await websocket.accept()
         await websocket.close(code=1008, reason='Unauthorized: Invalid token')
@@ -73,9 +73,9 @@ async def websocket_endpoint(websocket: WebSocket):
     # Только после успешной проверки принимаем соединение
     try:
         await websocket.accept()
-        logger.debug('WebSocket connection accepted from %s', client_host)
+        logger.debug('WebSocket connection accepted from', client_host=client_host)
     except Exception as e:
-        logger.error('WebSocket: Failed to accept connection from %s: %s', client_host, e)
+        logger.error('WebSocket: Failed to accept connection from', client_host=client_host, e=e)
         return
 
     # Регистрируем подключение
@@ -107,12 +107,12 @@ async def websocket_endpoint(websocket: WebSocket):
             except WebSocketDisconnect:
                 break
             except Exception as error:
-                logger.exception('Error processing WebSocket message: %s', error)
+                logger.exception('Error processing WebSocket message', error=error)
 
     except WebSocketDisconnect:
         logger.debug('WebSocket client disconnected')
     except Exception as error:
-        logger.exception('WebSocket error: %s', error)
+        logger.exception('WebSocket error', error=error)
     finally:
         # Отменяем регистрацию при отключении
         event_emitter.unregister_websocket(websocket)

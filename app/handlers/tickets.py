@@ -1,7 +1,7 @@
 import asyncio
-import logging
 import time
 
+import structlog
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
@@ -25,7 +25,7 @@ from app.utils.photo_message import edit_or_answer_photo
 from app.utils.timezone import format_local_datetime
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class TicketStates(StatesGroup):
@@ -303,7 +303,7 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
         await notify_admins_about_new_ticket(ticket, db)
 
     except Exception as e:
-        logger.error(f'Error creating ticket: {e}')
+        logger.error('Error creating ticket', error=e)
         texts = get_texts(db_user.language)
         await message.answer(
             texts.t('TICKET_CREATE_ERROR', '❌ Произошла ошибка при создании тикета. Попробуйте позже.')
@@ -889,11 +889,11 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
         await state.clear()
 
         # Уведомить админов об ответе пользователя
-        logger.info(f'Attempting to notify admins about ticket reply #{ticket_id}')
+        logger.info('Attempting to notify admins about ticket reply #', ticket_id=ticket_id)
         await notify_admins_about_ticket_reply(ticket, reply_text, db)
 
     except Exception as e:
-        logger.error(f'Error adding ticket reply: {e}')
+        logger.error('Error adding ticket reply', error=e)
         texts = get_texts(db_user.language)
         await message.answer(
             texts.t('TICKET_REPLY_ERROR', '❌ Произошла ошибка при отправке ответа. Попробуйте позже.')
@@ -928,7 +928,7 @@ async def close_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSe
             await callback.answer(texts.t('TICKET_CLOSE_ERROR', '❌ Ошибка при закрытии тикета.'), show_alert=True)
 
     except Exception as e:
-        logger.error(f'Error closing ticket: {e}')
+        logger.error('Error closing ticket', error=e)
         texts = get_texts(db_user.language)
         await callback.answer(texts.t('TICKET_CLOSE_ERROR', '❌ Ошибка при закрытии тикета.'), show_alert=True)
 
@@ -990,7 +990,9 @@ async def notify_admins_about_new_ticket(ticket: Ticket, db: AsyncSession):
         from app.config import settings
 
         if not settings.is_admin_notifications_enabled():
-            logger.info(f'Admin notifications disabled. Ticket #{ticket.id} created by user {ticket.user_id}')
+            logger.info(
+                'Admin notifications disabled. Ticket # created by user', ticket_id=ticket.id, user_id=ticket.user_id
+            )
             return
 
         # Получаем язык пользователя для локализации заголовков в уведомлении
@@ -1033,17 +1035,17 @@ async def notify_admins_about_new_ticket(ticket: Ticket, db: AsyncSession):
         service = AdminNotificationService(bot)
         await service.send_ticket_event_notification(notification_text, None)
     except Exception as e:
-        logger.error(f'Error notifying admins about new ticket: {e}')
+        logger.error('Error notifying admins about new ticket', error=e)
 
 
 async def notify_admins_about_ticket_reply(ticket: Ticket, reply_text: str, db: AsyncSession):
     """Уведомить админов об ответе пользователя на тикет"""
-    logger.info(f'notify_admins_about_ticket_reply called for ticket #{ticket.id}')
+    logger.info('notify_admins_about_ticket_reply called for ticket #', ticket_id=ticket.id)
     try:
         from app.config import settings
 
         if not settings.is_admin_notifications_enabled():
-            logger.info(f'Admin notifications disabled. Reply to ticket #{ticket.id}')
+            logger.info('Admin notifications disabled. Reply to ticket #', ticket_id=ticket.id)
             return
 
         title = (ticket.title or '').strip()
@@ -1081,9 +1083,9 @@ async def notify_admins_about_ticket_reply(ticket: Ticket, reply_text: str, db: 
 
         service = AdminNotificationService(bot)
         result = await service.send_ticket_event_notification(notification_text, None)
-        logger.info(f'Ticket #{ticket.id} reply notification sent: {result}')
+        logger.info('Ticket # reply notification sent', ticket_id=ticket.id, result=result)
     except Exception as e:
-        logger.error(f'Error notifying admins about ticket reply: {e}')
+        logger.error('Error notifying admins about ticket reply', error=e)
 
 
 def register_handlers(dp: Dispatcher):

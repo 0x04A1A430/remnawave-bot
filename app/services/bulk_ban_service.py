@@ -2,8 +2,7 @@
 Модуль для массовой блокировки пользователей по списку Telegram ID
 """
 
-import logging
-
+import structlog
 from aiogram import Bot
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,7 +12,7 @@ from app.services.admin_notification_service import AdminNotificationService
 from app.services.user_service import UserService
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class BulkBanService:
@@ -59,13 +58,13 @@ class BulkBanService:
                 user = await get_user_by_telegram_id(db, telegram_id)
 
                 if not user:
-                    logger.warning(f'Пользователь с Telegram ID {telegram_id} не найден')
+                    logger.warning('Пользователь с Telegram ID не найден', telegram_id=telegram_id)
                     not_found_users.append(telegram_id)
                     continue
 
                 # Проверяем, что пользователь не заблокирован уже
                 if user.status == UserStatus.BLOCKED.value:
-                    logger.info(f'Пользователь {telegram_id} уже заблокирован')
+                    logger.info('Пользователь уже заблокирован', telegram_id=telegram_id)
                     continue
 
                 # Блокируем пользователя
@@ -73,7 +72,7 @@ class BulkBanService:
 
                 if ban_success:
                     successfully_banned += 1
-                    logger.info(f'Пользователь {telegram_id} успешно заблокирован')
+                    logger.info('Пользователь успешно заблокирован', telegram_id=telegram_id)
 
                     # Отправляем уведомление пользователю, если возможно
                     if bot:
@@ -89,13 +88,15 @@ class BulkBanService:
                                 parse_mode='HTML',
                             )
                         except Exception as e:
-                            logger.warning(f'Не удалось отправить уведомление пользователю {telegram_id}: {e}')
+                            logger.warning(
+                                'Не удалось отправить уведомление пользователю', telegram_id=telegram_id, error=e
+                            )
                 else:
-                    logger.error(f'Не удалось заблокировать пользователя {telegram_id}')
+                    logger.error('Не удалось заблокировать пользователя', telegram_id=telegram_id)
                     error_ids.append(telegram_id)
 
             except Exception as e:
-                logger.error(f'Ошибка при блокировке пользователя {telegram_id}: {e}')
+                logger.error('Ошибка при блокировке пользователя', telegram_id=telegram_id, error=e)
                 error_ids.append(telegram_id)
 
         # Отправляем уведомление администратору
@@ -106,11 +107,13 @@ class BulkBanService:
                     admin_user_id, successfully_banned, len(not_found_users), len(error_ids), admin_name
                 )
             except Exception as e:
-                logger.error(f'Ошибка при отправке уведомления администратору: {e}')
+                logger.error('Ошибка при отправке уведомления администратору', error=e)
 
         logger.info(
-            f'Массовая блокировка завершена: успешно={successfully_banned}, '
-            f'не найдено={len(not_found_users)}, ошибки={len(error_ids)}'
+            'Массовая блокировка завершена: успешно=, не найдено=, ошибки',
+            successfully_banned=successfully_banned,
+            not_found_users_count=len(not_found_users),
+            error_ids_count=len(error_ids),
         )
 
         return successfully_banned, len(not_found_users), error_ids

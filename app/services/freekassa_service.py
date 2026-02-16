@@ -4,17 +4,17 @@ import asyncio
 import hashlib
 import hmac
 import json
-import logging
 import time
 import urllib.request
 from typing import Any
 
 import aiohttp
+import structlog
 
 from app.config import settings
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Кэш для публичного IP
 _cached_public_ip: str | None = None
@@ -71,15 +71,15 @@ async def get_public_ip() -> str:
                             # Простая валидация IPv4
                             if ip and len(ip.split('.')) == 4:
                                 _cached_public_ip = ip
-                                logger.info(f'Определён публичный IP сервера: {ip}')
+                                logger.info('Определён публичный IP сервера', ip=ip)
                                 return ip
                 except Exception as e:
-                    logger.debug(f'Не удалось получить IP от {service_url}: {e}')
+                    logger.debug('Не удалось получить IP от', service_url=service_url, error=e)
                     continue
 
         # Fallback на известный рабочий IP если ничего не получилось
         fallback_ip = '185.92.183.173'
-        logger.warning(f'Не удалось определить публичный IP, используем fallback: {fallback_ip}')
+        logger.warning('Не удалось определить публичный IP, используем fallback', fallback_ip=fallback_ip)
         _cached_public_ip = fallback_ip
         return fallback_ip
 
@@ -206,7 +206,7 @@ class FreekassaService:
                 # Генерация подписи
                 params['signature'] = self._generate_api_signature(params)
 
-                logger.info(f'Freekassa synchronous build_payment_url for 44: {params}')
+                logger.info('Freekassa synchronous build_payment_url for 44', params=params)
 
                 data_json = json.dumps(params).encode('utf-8')
                 req = urllib.request.Request(
@@ -218,7 +218,7 @@ class FreekassaService:
                     data = json.loads(resp_body)
 
                     if data.get('type') == 'error':
-                        logger.error(f'Freekassa build_payment_url error: {data}')
+                        logger.error('Freekassa build_payment_url error', data=data)
                         # Fallback to standard flow if error? Or raise?
                         # User wants it to work. Raise to see error is safer.
                         # raise Exception(f"Freekassa API Error: {data.get('message')}")
@@ -228,7 +228,7 @@ class FreekassaService:
                     if data.get('location'):
                         return data.get('location')
             except Exception as e:
-                logger.error(f'Failed to create order 44 via sync API: {e}')
+                logger.error('Failed to create order 44 via sync API', error=e)
                 # Если не получилось, попробуем сгенерировать обычную ссылку как fallback
 
         signature = self.generate_form_signature(final_amount, currency, order_id)
@@ -297,7 +297,7 @@ class FreekassaService:
         # Генерируем подпись HMAC-SHA256
         params['signature'] = self._generate_api_signature(params)
 
-        logger.info(f'Freekassa API create_order params: {params}')
+        logger.info('Freekassa API create_order params', params=params)
 
         try:
             async with (
@@ -310,19 +310,19 @@ class FreekassaService:
                 ) as response,
             ):
                 text = await response.text()
-                logger.info(f'Freekassa API response: {text}')
+                logger.info('Freekassa API response', text=text)
 
                 data = await response.json()
 
                 # Проверяем на ошибку - API может вернуть error или type=error
                 error_msg = data.get('error') or data.get('message')
                 if response.status != 200 or data.get('type') == 'error' or error_msg:
-                    logger.error(f'Freekassa create_order error: {data}')
+                    logger.error('Freekassa create_order error', data=data)
                     raise Exception(f'Freekassa API error: {error_msg or "Unknown error"}')
 
                 return data
         except aiohttp.ClientError as e:
-            logger.exception(f'Freekassa API connection error: {e}')
+            logger.exception('Freekassa API connection error', error=e)
             raise
 
     async def create_order_and_get_url(
@@ -363,7 +363,7 @@ class FreekassaService:
         }
         params['signature'] = self._generate_api_signature(params)
 
-        logger.debug(f'Freekassa get_order_status params: {params}')
+        logger.debug('Freekassa get_order_status params', params=params)
 
         try:
             async with (
@@ -376,10 +376,10 @@ class FreekassaService:
                 ) as response,
             ):
                 text = await response.text()
-                logger.debug(f'Freekassa get_order_status response: {text}')
+                logger.debug('Freekassa get_order_status response', text=text)
                 return await response.json()
         except aiohttp.ClientError as e:
-            logger.exception(f'Freekassa API connection error: {e}')
+            logger.exception('Freekassa API connection error', error=e)
             raise
 
     async def get_balance(self) -> dict[str, Any]:
@@ -402,7 +402,7 @@ class FreekassaService:
             ):
                 return await response.json()
         except aiohttp.ClientError as e:
-            logger.exception(f'Freekassa API connection error: {e}')
+            logger.exception('Freekassa API connection error', error=e)
             raise
 
     async def get_payment_systems(self) -> dict[str, Any]:
@@ -425,7 +425,7 @@ class FreekassaService:
             ):
                 return await response.json()
         except aiohttp.ClientError as e:
-            logger.exception(f'Freekassa API connection error: {e}')
+            logger.exception('Freekassa API connection error', error=e)
             raise
 
 

@@ -1,7 +1,6 @@
 """Info pages routes for cabinet - FAQ, rules, privacy policy, etc."""
 
-import logging
-
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,7 +15,7 @@ from app.services.public_offer_service import PublicOfferService
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/info', tags=['Cabinet Info'])
 

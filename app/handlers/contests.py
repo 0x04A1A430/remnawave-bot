@@ -1,8 +1,8 @@
 """Contest handlers for daily games."""
 
-import logging
 from datetime import datetime
 
+import structlog
 from aiogram import Dispatcher, F, types
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
@@ -22,7 +22,7 @@ from app.states import ContestStates
 from app.utils.decorators import auth_required, error_handler
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Rate limiting storage
 _rate_limits: dict = {}

@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import logging
-
+import structlog
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -16,7 +15,7 @@ from app.services.system_settings_service import (
 )
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def ensure_external_admin_token(
@@ -42,7 +41,7 @@ async def ensure_external_admin_token(
     try:
         token = settings.build_external_admin_token(normalized_username)
     except Exception as error:  # pragma: no cover - защитный блок
-        logger.error('❌ Ошибка генерации токена внешней админки: %s', error)
+        logger.error('❌ Ошибка генерации токена внешней админки', error=error)
         return None
 
     try:
@@ -62,8 +61,8 @@ async def ensure_external_admin_token(
                     existing_bot_id = int(existing_bot_id_raw)
                 except (TypeError, ValueError):  # pragma: no cover - защита от мусорных значений
                     logger.warning(
-                        '⚠️ Не удалось разобрать сохраненный идентификатор бота внешней админки: %s',
-                        existing_bot_id_raw,
+                        '⚠️ Не удалось разобрать сохраненный идентификатор бота внешней админки',
+                        existing_bot_id_raw=existing_bot_id_raw,
                     )
 
             if existing_token == token and existing_bot_id == bot_id:
@@ -75,9 +74,9 @@ async def ensure_external_admin_token(
 
             if existing_bot_id is not None and bot_id is not None and existing_bot_id != bot_id:
                 logger.error(
-                    '❌ Обнаружено несовпадение ID бота для токена внешней админки: сохранен %s, текущий %s',
-                    existing_bot_id,
-                    bot_id,
+                    '❌ Обнаружено несовпадение ID бота для токена внешней админки: сохранен , текущий',
+                    existing_bot_id=existing_bot_id,
+                    bot_id=bot_id,
                 )
 
                 try:
@@ -98,8 +97,8 @@ async def ensure_external_admin_token(
                 except Exception as cleanup_error:  # pragma: no cover - защитный блок
                     await session.rollback()
                     logger.error(
-                        '❌ Не удалось очистить токен внешней админки после обнаружения подмены: %s',
-                        cleanup_error,
+                        '❌ Не удалось очистить токен внешней админки после обнаружения подмены',
+                        cleanup_error=cleanup_error,
                     )
                 finally:
                     settings.EXTERNAL_ADMIN_TOKEN = None
@@ -133,10 +132,7 @@ async def ensure_external_admin_token(
                         force=True,
                     )
                 await session.commit()
-                logger.info(
-                    '✅ Токен внешней админки синхронизирован для @%s',
-                    normalized_username,
-                )
+                logger.info('✅ Токен внешней админки синхронизирован для @', normalized_username=normalized_username)
             except ReadOnlySettingError:  # pragma: no cover - force=True предотвращает исключение
                 await session.rollback()
                 logger.warning(
@@ -146,5 +142,5 @@ async def ensure_external_admin_token(
 
             return token
     except SQLAlchemyError as error:
-        logger.error('❌ Ошибка сохранения токена внешней админки: %s', error)
+        logger.error('❌ Ошибка сохранения токена внешней админки', error=error)
         return None

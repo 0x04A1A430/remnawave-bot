@@ -5,9 +5,9 @@
 """
 
 import asyncio
-import logging
 from datetime import datetime
 
+import structlog
 from aiogram import Bot
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,7 +29,7 @@ from app.services.notification_delivery_service import (
 )
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class DailySubscriptionService:
@@ -84,15 +84,20 @@ class DailySubscriptionService:
                             elif result == 'error':
                                 stats['errors'] += 1
                         except Exception as e:
-                            logger.error(f'Ошибка обработки суточной подписки {subscription.id}: {e}', exc_info=True)
+                            logger.error(
+                                'Ошибка обработки суточной подписки',
+                                subscription_id=subscription.id,
+                                error=e,
+                                exc_info=True,
+                            )
                             stats['errors'] += 1
                     await db.commit()
                 except Exception as e:
-                    logger.error(f'Ошибка при обработке подписок: {e}', exc_info=True)
+                    logger.error('Ошибка при обработке подписок', error=e, exc_info=True)
                     await db.rollback()
 
         except Exception as e:
-            logger.error(f'Ошибка при получении подписок для списания: {e}', exc_info=True)
+            logger.error('Ошибка при получении подписок для списания', error=e, exc_info=True)
 
         return stats
 
@@ -108,17 +113,17 @@ class DailySubscriptionService:
             user = await get_user_by_id(db, subscription.user_id)
 
         if not user:
-            logger.warning(f'Пользователь не найден для подписки {subscription.id}')
+            logger.warning('Пользователь не найден для подписки', subscription_id=subscription.id)
             return 'error'
 
         tariff = subscription.tariff
         if not tariff:
-            logger.warning(f'Тариф не найден для подписки {subscription.id}')
+            logger.warning('Тариф не найден для подписки', subscription_id=subscription.id)
             return 'error'
 
         daily_price = tariff.daily_price_kopeks
         if daily_price <= 0:
-            logger.warning(f'Некорректная суточная цена для тарифа {tariff.id}')
+            logger.warning('Некорректная суточная цена для тарифа', tariff_id=tariff.id)
             return 'error'
 
         # Проверяем баланс
@@ -131,8 +136,10 @@ class DailySubscriptionService:
                 await self._notify_insufficient_balance(user, subscription, daily_price)
 
             logger.info(
-                f'Подписка {subscription.id} приостановлена: недостаточно средств '
-                f'(баланс: {user.balance_kopeks}, требуется: {daily_price})'
+                'Подписка приостановлена: недостаточно средств (баланс: требуется: )',
+                subscription_id=subscription.id,
+                balance_kopeks=user.balance_kopeks,
+                daily_price=daily_price,
             )
             return 'suspended'
 
@@ -148,7 +155,7 @@ class DailySubscriptionService:
             )
 
             if not deducted:
-                logger.warning(f'Не удалось списать средства для подписки {subscription.id}')
+                logger.warning('Не удалось списать средства для подписки', subscription_id=subscription.id)
                 return 'error'
 
             # Создаём транзакцию
@@ -166,8 +173,10 @@ class DailySubscriptionService:
 
             user_id_display = user.telegram_id or user.email or f'#{user.id}'
             logger.info(
-                f'✅ Суточное списание: подписка {subscription.id}, '
-                f'сумма {daily_price} коп., пользователь {user_id_display}'
+                '✅ Суточное списание: подписка сумма коп., пользователь',
+                subscription_id=subscription.id,
+                daily_price=daily_price,
+                user_id_display=user_id_display,
             )
 
             # Синхронизируем с Remnawave (обновляем срок подписки)
@@ -182,7 +191,7 @@ class DailySubscriptionService:
                     reset_reason=None,
                 )
             except Exception as e:
-                logger.warning(f'Не удалось обновить Remnawave: {e}')
+                logger.warning('Не удалось обновить Remnawave', error=e)
 
             # Уведомляем пользователя
             if self._bot:
@@ -191,7 +200,9 @@ class DailySubscriptionService:
             return 'charged'
 
         except Exception as e:
-            logger.error(f'Ошибка при списании средств для подписки {subscription.id}: {e}', exc_info=True)
+            logger.error(
+                'Ошибка при списании средств для подписки', subscription_id=subscription.id, error=e, exc_info=True
+            )
             return 'error'
 
     async def _notify_daily_charge(self, user, subscription, amount_kopeks: int):
@@ -217,7 +228,7 @@ class DailySubscriptionService:
                 telegram_message=message,
             )
         except Exception as e:
-            logger.warning(f'Не удалось отправить уведомление о списании: {e}')
+            logger.warning('Не удалось отправить уведомление о списании', error=e)
 
     async def _notify_insufficient_balance(self, user, subscription, required_amount: int):
         """Уведомляет пользователя о недостатке средств."""
@@ -258,7 +269,7 @@ class DailySubscriptionService:
                 telegram_markup=keyboard,
             )
         except Exception as e:
-            logger.warning(f'Не удалось отправить уведомление о недостатке средств: {e}')
+            logger.warning('Не удалось отправить уведомление о недостатке средств', error=e)
 
     async def process_traffic_resets(self) -> dict:
         """
@@ -298,15 +309,20 @@ class DailySubscriptionService:
                             await self._reset_subscription_traffic(db, subscription_id, purchases)
                             stats['reset'] += len(purchases)
                         except Exception as e:
-                            logger.error(f'Ошибка сброса трафика подписки {subscription_id}: {e}', exc_info=True)
+                            logger.error(
+                                'Ошибка сброса трафика подписки',
+                                subscription_id=subscription_id,
+                                error=e,
+                                exc_info=True,
+                            )
                             stats['errors'] += 1
                     await db.commit()
                 except Exception as e:
-                    logger.error(f'Ошибка при обработке сброса трафика: {e}', exc_info=True)
+                    logger.error('Ошибка при обработке сброса трафика', error=e, exc_info=True)
                     await db.rollback()
 
         except Exception as e:
-            logger.error(f'Ошибка при получении подписок для сброса трафика: {e}', exc_info=True)
+            logger.error('Ошибка при получении подписок для сброса трафика', error=e, exc_info=True)
 
         return stats
 
@@ -330,9 +346,11 @@ class DailySubscriptionService:
         # КРИТИЧЕСКАЯ ПРОВЕРКА: защита от некорректных данных
         if total_expired_gb > old_purchased:
             logger.error(
-                f'⚠️ ОШИБКА ДАННЫХ: подписка {subscription.id}, '
-                f'истекает {total_expired_gb} ГБ, но purchased_traffic_gb = {old_purchased} ГБ. '
-                f'Сбрасываем только {old_purchased} ГБ.'
+                '⚠️ ОШИБКА ДАННЫХ: подписка истекает ГБ, но purchased_traffic_gb ГБ. Сбрасываем только ГБ.',
+                subscription_id=subscription.id,
+                total_expired_gb=total_expired_gb,
+                old_purchased=old_purchased,
+                old_purchased_2=old_purchased,
             )
             total_expired_gb = old_purchased
 
@@ -349,8 +367,10 @@ class DailySubscriptionService:
                 # Проверяем, что базовый лимит не отрицательный
                 if base_limit < 0:
                     logger.warning(
-                        f'⚠️ Базовый лимит отрицательный для подписки {subscription.id}: {base_limit} ГБ. '
-                        f'Используем лимит из тарифа: {tariff_base_limit} ГБ'
+                        '⚠️ Базовый лимит отрицательный для подписки ГБ. Используем лимит из тарифа: ГБ',
+                        subscription_id=subscription.id,
+                        base_limit=base_limit,
+                        tariff_base_limit=tariff_base_limit,
                     )
                     base_limit = tariff_base_limit
 
@@ -368,8 +388,9 @@ class DailySubscriptionService:
         # Двойная защита: новый лимит не может быть меньше базового
         if new_limit < base_limit:
             logger.error(
-                f'⚠️ КРИТИЧЕСКАЯ ОШИБКА: новый лимит ({new_limit} ГБ) меньше базового ({base_limit} ГБ). '
-                f'Устанавливаем базовый лимит.'
+                '⚠️ КРИТИЧЕСКАЯ ОШИБКА: новый лимит ( ГБ) меньше базового ( ГБ). Устанавливаем базовый лимит.',
+                new_limit=new_limit,
+                base_limit=base_limit,
             )
             new_limit = base_limit
             new_purchased = 0
@@ -401,10 +422,16 @@ class DailySubscriptionService:
         await db.commit()
 
         logger.info(
-            f'🔄 Сброс истекших докупок: подписка {subscription.id}, '
-            f'было {old_limit} ГБ (базовый: {base_limit} ГБ, докуплено: {old_purchased} ГБ), '
-            f'стало {subscription.traffic_limit_gb} ГБ (базовый: {base_limit} ГБ, докуплено: {new_purchased} ГБ), '
-            f'убрано {total_expired_gb} ГБ из {len(expired_purchases)} покупок'
+            '🔄 Сброс истекших докупок: подписка было ГБ (базовый: ГБ, докуплено: ГБ), стало ГБ (базовый: ГБ, докуплено: ГБ), убрано ГБ из покупок',
+            subscription_id=subscription.id,
+            old_limit=old_limit,
+            base_limit=base_limit,
+            old_purchased=old_purchased,
+            traffic_limit_gb=subscription.traffic_limit_gb,
+            base_limit_2=base_limit,
+            new_purchased=new_purchased,
+            total_expired_gb=total_expired_gb,
+            expired_purchases_count=len(expired_purchases),
         )
 
         # Синхронизируем с RemnaWave
@@ -414,7 +441,7 @@ class DailySubscriptionService:
             subscription_service = SubscriptionService()
             await subscription_service.update_remnawave_user(db, subscription)
         except Exception as e:
-            logger.warning(f'Не удалось синхронизировать с RemnaWave после сброса трафика: {e}')
+            logger.warning('Не удалось синхронизировать с RemnaWave после сброса трафика', error=e)
 
         # Уведомляем пользователя
         if self._bot and subscription.user_id:
@@ -447,14 +474,14 @@ class DailySubscriptionService:
                 telegram_message=message,
             )
         except Exception as e:
-            logger.warning(f'Не удалось отправить уведомление о сбросе трафика: {e}')
+            logger.warning('Не удалось отправить уведомление о сбросе трафика', error=e)
 
     async def start_monitoring(self):
         """Запускает периодическую проверку суточных подписок и сброса трафика."""
         self._running = True
         interval_minutes = self.get_check_interval_minutes()
 
-        logger.info(f'🔄 Запуск сервиса суточных подписок (интервал: {interval_minutes} мин)')
+        logger.info('🔄 Запуск сервиса суточных подписок (интервал: мин)', interval_minutes=interval_minutes)
 
         while self._running:
             try:
@@ -463,20 +490,24 @@ class DailySubscriptionService:
 
                 if stats['charged'] > 0 or stats['suspended'] > 0:
                     logger.info(
-                        f'📊 Суточные списания: проверено={stats["checked"]}, '
-                        f'списано={stats["charged"]}, приостановлено={stats["suspended"]}, '
-                        f'ошибок={stats["errors"]}'
+                        '📊 Суточные списания: проверено=, списано=, приостановлено=, ошибок',
+                        stats=stats['checked'],
+                        stats_2=stats['charged'],
+                        stats_3=stats['suspended'],
+                        stats_4=stats['errors'],
                     )
 
                 # Обработка сброса докупленного трафика
                 traffic_stats = await self.process_traffic_resets()
                 if traffic_stats['reset'] > 0:
                     logger.info(
-                        f'📊 Сброс трафика: проверено={traffic_stats["checked"]}, '
-                        f'сброшено={traffic_stats["reset"]}, ошибок={traffic_stats["errors"]}'
+                        '📊 Сброс трафика: проверено=, сброшено=, ошибок',
+                        traffic_stats=traffic_stats['checked'],
+                        traffic_stats_2=traffic_stats['reset'],
+                        traffic_stats_3=traffic_stats['errors'],
                     )
             except Exception as e:
-                logger.error(f'Ошибка в цикле проверки суточных подписок: {e}', exc_info=True)
+                logger.error('Ошибка в цикле проверки суточных подписок', error=e, exc_info=True)
 
             await asyncio.sleep(interval_minutes * 60)
 

@@ -1,6 +1,6 @@
 import asyncio
-import logging
 
+import structlog
 from aiogram import types
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError, TelegramNetworkError
 from aiogram.types import InaccessibleMessage, InputMediaPhoto
@@ -18,7 +18,7 @@ from .message_patch import (
 )
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 MAX_RETRIES = 3
 RETRY_DELAY = 0.5
@@ -103,7 +103,7 @@ async def edit_or_answer_photo(
                     parse_mode=resolved_parse_mode,
                 )
         except Exception as e:
-            logger.warning('Не удалось отправить новое сообщение для InaccessibleMessage: %s', e)
+            logger.warning('Не удалось отправить новое сообщение для InaccessibleMessage', e=e)
             try:
                 await callback.message.answer(
                     caption,
@@ -160,10 +160,15 @@ async def edit_or_answer_photo(
             return  # Успешно — выходим
         except TelegramNetworkError as net_error:
             if attempt < MAX_RETRIES - 1:
-                logger.warning('Сетевая ошибка edit_media (попытка %d/%d): %s', attempt + 1, MAX_RETRIES, net_error)
+                logger.warning(
+                    'Сетевая ошибка edit_media (попытка /)',
+                    attempt=attempt + 1,
+                    MAX_RETRIES=MAX_RETRIES,
+                    net_error=net_error,
+                )
                 await asyncio.sleep(RETRY_DELAY * (attempt + 1))
                 continue
-            logger.error('Сетевая ошибка edit_media после %d попыток: %s', MAX_RETRIES, net_error)
+            logger.error('Сетевая ошибка edit_media после попыток', MAX_RETRIES=MAX_RETRIES, net_error=net_error)
             # После всех попыток — фоллбек на текст
             try:
                 await callback.message.delete()

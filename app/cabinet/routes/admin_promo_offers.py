@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from datetime import datetime
 from typing import Any
 
+import structlog
 from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
@@ -37,7 +37,7 @@ from app.utils.miniapp_buttons import build_miniapp_or_callback_button
 from ..dependencies import get_cabinet_db, get_current_admin_user
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/admin/promo-offers', tags=['Admin Promo Offers'])
 
@@ -430,7 +430,7 @@ async def _send_promo_notifications(
     async def send_single(user: User, offer: DiscountOffer) -> bool:
         # Skip email-only users (no telegram_id)
         if not user.telegram_id:
-            logger.debug(f'Skipping promo notification for email-only user {user.id}')
+            logger.debug('Skipping promo notification for email-only user', user_id=user.id)
             return False
 
         async with semaphore:
@@ -459,18 +459,10 @@ async def _send_promo_notifications(
                 )
                 return True
             except (TelegramForbiddenError, TelegramBadRequest) as exc:
-                logger.warning(
-                    'Failed to send promo notification to user %s: %s',
-                    user.telegram_id,
-                    exc,
-                )
+                logger.warning('Failed to send promo notification to user', telegram_id=user.telegram_id, exc=exc)
                 return False
             except Exception as exc:
-                logger.error(
-                    'Error sending promo notification to user %s: %s',
-                    user.telegram_id,
-                    exc,
-                )
+                logger.error('Error sending promo notification to user', telegram_id=user.telegram_id, exc=exc)
                 return False
 
     # Send in batches

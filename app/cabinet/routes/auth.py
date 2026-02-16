@@ -2,9 +2,9 @@
 
 import asyncio
 import hashlib
-import logging
 from datetime import UTC, datetime
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -69,7 +69,7 @@ from ..services.email_service import email_service
 from ..services.email_template_overrides import get_rendered_override
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/auth', tags=['Cabinet Auth'])
 
@@ -158,12 +158,12 @@ async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -
             panel_users = await api.get_user_by_email(user.email)
 
             if not panel_users:
-                logger.debug(f'No subscription found in panel for email: {user.email}')
+                logger.debug('No subscription found in panel for email', email=user.email)
                 return
 
             # Take first user if multiple found
             panel_user = panel_users[0]
-            logger.info(f'Found subscription in panel for email {user.email}: {panel_user.uuid}')
+            logger.info('Found subscription in panel for email', email=user.email, uuid=panel_user.uuid)
 
             # Link user to panel
             user.remnawave_uuid = panel_user.uuid
@@ -208,7 +208,10 @@ async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -
                 existing_sub.device_limit = device_limit
                 existing_sub.is_trial = False  # Panel subscription is not trial
                 logger.info(
-                    f'Updated subscription for email user {user.email}, squads: {connected_squads}, devices: {device_limit}'
+                    'Updated subscription for email user squads: devices',
+                    email=user.email,
+                    connected_squads=connected_squads,
+                    device_limit=device_limit,
                 )
             else:
                 # Create new subscription (expire_at and current_time already naive UTC)
@@ -228,13 +231,16 @@ async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -
                 )
                 db.add(new_sub)
                 logger.info(
-                    f'Created subscription for email user {user.email}, squads: {connected_squads}, devices: {device_limit}'
+                    'Created subscription for email user squads: devices',
+                    email=user.email,
+                    connected_squads=connected_squads,
+                    device_limit=device_limit,
                 )
 
             await db.commit()
 
     except Exception as e:
-        logger.warning(f'Failed to sync subscription from panel for {user.email}: {e}')
+        logger.warning('Failed to sync subscription from panel for', email=user.email, error=e)
         # Don't rollback - it detaches user object and breaks subsequent operations
         # The sync is non-critical, main verification already succeeded
 
@@ -275,7 +281,7 @@ async def auth_telegram(
 
     if not user:
         # Create new user from Telegram initData
-        logger.info(f'Creating new user from cabinet (initData): telegram_id={telegram_id}')
+        logger.info('Creating new user from cabinet (initData): telegram_id', telegram_id=telegram_id)
         user = await create_user(
             db=db,
             telegram_id=telegram_id,
@@ -284,7 +290,7 @@ async def auth_telegram(
             last_name=tg_last_name,
             language=tg_language,
         )
-        logger.info(f'User created successfully: id={user.id}, telegram_id={user.telegram_id}')
+        logger.info('User created successfully: id=, telegram_id', user_id=user.id, telegram_id=user.telegram_id)
     else:
         # Update user info from initData (like bot middleware does)
         updated = False
@@ -298,7 +304,7 @@ async def auth_telegram(
             user.last_name = tg_last_name
             updated = True
         if updated:
-            logger.info(f'User {user.id} profile updated from initData')
+            logger.info('User profile updated from initData', user_id=user.id)
 
     if user.status != 'active':
         raise HTTPException(
@@ -341,7 +347,9 @@ async def auth_telegram_widget(
 
     if not user:
         # Create new user from Telegram data
-        logger.info(f'Creating new user from cabinet: telegram_id={request.id}, username={request.username}')
+        logger.info(
+            'Creating new user from cabinet: telegram_id=, username', request_id=request.id, username=request.username
+        )
         user = await create_user(
             db=db,
             telegram_id=request.id,
@@ -350,7 +358,7 @@ async def auth_telegram_widget(
             last_name=request.last_name,
             language='ru',
         )
-        logger.info(f'User created successfully: id={user.id}, telegram_id={user.telegram_id}')
+        logger.info('User created successfully: id=, telegram_id', user_id=user.id, telegram_id=user.telegram_id)
 
     if user.status != 'active':
         raise HTTPException(
@@ -485,7 +493,7 @@ async def register_email_standalone(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail='Invalid test email password',
             )
-        logger.info(f'Test email registration: {request.email}')
+        logger.info('Test email registration', email=request.email)
 
     # Check for disposable email
     if disposable_email_service.is_disposable(request.email):
@@ -512,11 +520,17 @@ async def register_email_standalone(
         if referrer:
             # Защита от самореферала - нельзя регистрироваться по своему же коду
             if referrer.email and referrer.email.lower() == request.email.lower():
-                logger.warning(f'Self-referral attempt blocked: email={request.email}, code={request.referral_code}')
+                logger.warning(
+                    'Self-referral attempt blocked: email=, code',
+                    email=request.email,
+                    referral_code=request.referral_code,
+                )
                 referrer = None
             else:
                 logger.info(
-                    f'Found referrer for email registration: referrer_id={referrer.id}, code={request.referral_code}'
+                    'Found referrer for email registration: referrer_id=, code',
+                    referrer_id=referrer.id,
+                    referral_code=request.referral_code,
                 )
 
     # Создать пользователя
@@ -534,7 +548,7 @@ async def register_email_standalone(
         user.email_verified = True
         user.email_verified_at = datetime.utcnow()
         await db.commit()
-        logger.info(f'Test email auto-verified: {request.email}, user_id={user.id}')
+        logger.info('Test email auto-verified: user_id', email=request.email, user_id=user.id)
     else:
         # Сгенерировать токен верификации
         verification_token = generate_verification_token()
@@ -579,9 +593,11 @@ async def register_email_standalone(
     if referrer:
         try:
             await process_referral_registration(db, user.id, referrer.id, bot=None)
-            logger.info(f'Processed referral registration: user_id={user.id}, referrer_id={referrer.id}')
+            logger.info(
+                'Processed referral registration: user_id=, referrer_id', user_id=user.id, referrer_id=referrer.id
+            )
         except Exception as e:
-            logger.error(f'Failed to process referral registration: {e}')
+            logger.error('Failed to process referral registration', error=e)
             # Не прерываем регистрацию из-за ошибки реферальной системы
 
     # Для тестового email - сразу можно логиниться (уже verified)
@@ -724,7 +740,7 @@ async def login_email(
     if not user:
         # For test email - auto-create user if not exists
         if is_test_email and settings.validate_test_email_password(request.email, request.password):
-            logger.info(f'Test email login - creating new user: {request.email}')
+            logger.info('Test email login creating new user', email=request.email)
             password_hash = hash_password(request.password)
             user = await create_user_by_email(
                 db=db,
@@ -1051,9 +1067,16 @@ async def request_email_change(
                     custom_body_html=custom_body,
                 )
             except Exception as e:
-                logger.error(f'Failed to send verification email to {request.new_email} for user {user.id}: {e}')
+                logger.error(
+                    'Failed to send verification email to for user',
+                    new_email=request.new_email,
+                    user_id=user.id,
+                    error=e,
+                )
 
-        logger.info(f'Unverified email replaced for user {user.id}: {old_email} -> {request.new_email}')
+        logger.info(
+            'Unverified email replaced for user', user_id=user.id, old_email=old_email, new_email=request.new_email
+        )
 
         return EmailChangeResponse(
             message='Email replaced, verification sent to new address',
@@ -1104,7 +1127,7 @@ async def request_email_change(
             detail='Email service is not configured',
         )
 
-    logger.info(f'Email change requested for user {user.id}: {user.email} -> {request.new_email}')
+    logger.info('Email change requested for user', user_id=user.id, email=user.email, new_email=request.new_email)
 
     return EmailChangeResponse(
         message='Verification code sent to new email',

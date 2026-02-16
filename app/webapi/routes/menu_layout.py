@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Response, Security, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,7 +15,7 @@ from app.services.menu_layout_service import (
 )
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 from ..dependencies import get_db_session, require_api_token
 from ..schemas.menu_layout import (
@@ -828,7 +828,7 @@ async def get_stats_by_button_type(
             total_clicks=total_clicks,
         )
     except Exception as e:
-        logger.error(f'Error getting stats by type: {e}', exc_info=True)
+        logger.error('Error getting stats by type', error=e, exc_info=True)
         raise HTTPException(status_code=500, detail=f'Internal server error: {e!s}')
 
 
@@ -889,7 +889,7 @@ async def get_top_users(
             limit=limit,
         )
     except Exception as e:
-        logger.error(f'Error getting top users: {e}', exc_info=True)
+        logger.error('Error getting top users', error=e, exc_info=True)
         raise HTTPException(status_code=500, detail=f'Internal server error: {e!s}')
 
 
@@ -906,7 +906,11 @@ async def get_period_comparison(
         comparison = await MenuLayoutService.get_period_comparison(db, button_id, current_days, previous_days)
 
         logger.debug(
-            f'Period comparison: button_id={button_id}, current_days={current_days}, previous_days={previous_days}, trend={comparison.get("change", {}).get("trend")}'
+            'Period comparison: button_id=, current_days=, previous_days=, trend',
+            button_id=button_id,
+            current_days=current_days,
+            previous_days=previous_days,
+            get=comparison.get('change', {}).get('trend'),
         )
 
         return PeriodComparisonResponse(
@@ -916,7 +920,7 @@ async def get_period_comparison(
             button_id=button_id,
         )
     except Exception as e:
-        logger.error(f'Error getting period comparison: {e}', exc_info=True)
+        logger.error('Error getting period comparison', error=e, exc_info=True)
         raise HTTPException(status_code=500, detail=f'Internal server error: {e!s}')
 
 
@@ -931,7 +935,12 @@ async def get_user_click_sequences(
     try:
         sequences = await MenuLayoutService.get_user_click_sequences(db, user_id, limit)
 
-        logger.debug(f'User sequences: user_id={user_id}, limit={limit}, found={len(sequences)} sequences')
+        logger.debug(
+            'User sequences: user_id=, limit=, found= sequences',
+            user_id=user_id,
+            limit=limit,
+            sequences_count=len(sequences),
+        )
 
         return UserClickSequencesResponse(
             user_id=user_id,
@@ -946,5 +955,5 @@ async def get_user_click_sequences(
             total=len(sequences),
         )
     except Exception as e:
-        logger.error(f'Error getting user sequences: user_id={user_id}, error={e}', exc_info=True)
+        logger.error('Error getting user sequences: user_id=, error', user_id=user_id, error=e, exc_info=True)
         raise HTTPException(status_code=500, detail=f'Internal server error: {e!s}')

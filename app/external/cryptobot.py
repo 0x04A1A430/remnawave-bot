@@ -1,14 +1,14 @@
 import hashlib
 import hmac
-import logging
 from typing import Any
 
 import aiohttp
+import structlog
 
 from app.config import settings
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class CryptoBotService:
@@ -49,11 +49,11 @@ class CryptoBotService:
 
                     if response.status == 200 and response_data.get('ok'):
                         return response_data.get('result')
-                    logger.error(f'CryptoBot API ошибка: {response_data}')
+                    logger.error('CryptoBot API ошибка', response_data=response_data)
                     return None
 
         except Exception as e:
-            logger.error(f'Ошибка запроса к CryptoBot API: {e}')
+            logger.error('Ошибка запроса к CryptoBot API', error=e)
             return None
 
     async def get_me(self) -> dict[str, Any] | None:
@@ -81,7 +81,7 @@ class CryptoBotService:
         result = await self._make_request('POST', 'createInvoice', data)
 
         if result:
-            logger.info(f'Создан CryptoBot invoice {result.get("invoice_id")} на {amount} {asset}')
+            logger.info('Создан CryptoBot invoice на', get=result.get('invoice_id'), amount=amount, asset=asset)
 
         return result
 
@@ -140,7 +140,7 @@ class CryptoBotService:
             return is_valid
 
         except Exception as e:
-            logger.error(f'Ошибка проверки подписи CryptoBot webhook: {e}')
+            logger.error('Ошибка проверки подписи CryptoBot webhook', error=e)
             return False
 
     async def process_webhook(self, webhook_data: dict[str, Any]) -> dict[str, Any] | None:
@@ -161,9 +161,9 @@ class CryptoBotService:
                     'payment_system': 'cryptobot',
                 }
 
-            logger.warning(f'Неизвестный тип CryptoBot webhook: {update_type}')
+            logger.warning('Неизвестный тип CryptoBot webhook', update_type=update_type)
             return None
 
         except Exception as e:
-            logger.error(f'Ошибка обработки CryptoBot webhook: {e}')
+            logger.error('Ошибка обработки CryptoBot webhook', error=e)
             return None

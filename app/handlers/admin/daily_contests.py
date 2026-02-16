@@ -1,7 +1,7 @@
 import json
-import logging
 from datetime import datetime, timedelta
 
+import structlog
 from aiogram import Dispatcher, F, types
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,7 +23,7 @@ from app.states import AdminStates
 from app.utils.decorators import admin_required, error_handler
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 EDITABLE_FIELDS: dict[str, dict] = {
     'prize_type': {'type': str, 'label': 'тип приза (days/balance/custom)'},

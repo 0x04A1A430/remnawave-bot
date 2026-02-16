@@ -1,5 +1,4 @@
-import logging
-
+import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -11,7 +10,7 @@ from app.database.crud.privacy_policy import (
 from app.database.models import PrivacyPolicy
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class PrivacyPolicyService:
@@ -88,7 +87,7 @@ class PrivacyPolicyService:
             content,
             enable_if_new=enable_if_new,
         )
-        logger.info('✅ Политика конфиденциальности обновлена для языка %s', lang)
+        logger.info('✅ Политика конфиденциальности обновлена для языка', lang=lang)
         return policy
 
     @classmethod

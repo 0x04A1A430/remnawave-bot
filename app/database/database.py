@@ -1,11 +1,11 @@
 import asyncio
-import logging
 import time
 from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
 from functools import wraps
 from typing import TypeVar
 
+import structlog
 from sqlalchemy import bindparam, event, inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import InterfaceError, OperationalError, ProgrammingError
@@ -16,7 +16,7 @@ from app.config import settings
 from app.database.models import Base
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 T = TypeVar('T')
 
@@ -126,16 +126,16 @@ def with_db_retry(
                     last_exception = e
                     if attempt < attempts:
                         logger.warning(
-                            'Ошибка БД (попытка %d/%d): %s. Повтор через %.1f сек...',
-                            attempt,
-                            attempts,
-                            str(e)[:100],
-                            current_delay,
+                            'Ошибка БД (попытка /): . Повтор через сек...',
+                            attempt=attempt,
+                            attempts=attempts,
+                            e=str(e)[:100],
+                            current_delay=current_delay,
                         )
                         await asyncio.sleep(current_delay)
                         current_delay *= backoff
                     else:
-                        logger.error('Ошибка БД: все %d попыток исчерпаны. Последняя ошибка: %s', attempts, str(e))
+                        logger.error('Ошибка БД: все попыток исчерпаны. Последняя ошибка', attempts=attempts, e=str(e))
 
             raise last_exception
 
@@ -159,7 +159,7 @@ async def execute_with_retry(
         except RETRYABLE_EXCEPTIONS as e:
             last_exception = e
             if attempt < attempts:
-                logger.warning('SQL retry (попытка %d/%d): %s', attempt, attempts, str(e)[:100])
+                logger.warning('SQL retry (попытка /)', attempt=attempt, attempts=attempts, e=str(e)[:100])
                 await asyncio.sleep(delay)
                 delay *= 2
 
@@ -175,15 +175,15 @@ if settings.DEBUG:
     @event.listens_for(Engine, 'before_cursor_execute')
     def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
         conn.info.setdefault('query_start_time', []).append(time.time())
-        logger.debug(f'🔍 Executing query: {statement[:100]}...')
+        logger.debug('🔍 Executing query: ...', statement=statement[:100])
 
     @event.listens_for(Engine, 'after_cursor_execute')
     def after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
         total = time.time() - conn.info['query_start_time'].pop(-1)
         if total > 0.1:  # Логируем медленные запросы > 100ms
-            logger.warning(f'🐌 Slow query ({total:.3f}s): {statement[:100]}...')
+            logger.warning('🐌 Slow query (s): ...', total=round(total, 3), statement=statement[:100])
         else:
-            logger.debug(f'⚡ Query executed in {total:.3f}s')
+            logger.debug('⚡ Query executed in', total=round(total, 3))
 
 # ============================================================================
 # ADVANCED SESSION MANAGER WITH READ REPLICAS
@@ -201,7 +201,7 @@ def _validate_database_url(url: str | None) -> str | None:
         return None
     # Простая проверка на валидный формат
     if not ('://' in url or url.startswith('sqlite')):
-        logger.warning('Невалидный DATABASE_URL: %s', url[:20])
+        logger.warning('Невалидный DATABASE_URL', url=url[:20])
         return None
     return url
 
@@ -234,9 +234,9 @@ class DatabaseManager:
                     expire_on_commit=False,
                     autoflush=False,
                 )
-                logger.info('Read replica настроена: %s', replica_url[:30] + '...')
+                logger.info('Read replica настроена', replica_url=replica_url[:30] + '...')
             except Exception as e:
-                logger.error('Не удалось настроить read replica: %s', e)
+                logger.error('Не удалось настроить read replica', e=e)
                 self.read_replica_engine = None
 
     @asynccontextmanager
@@ -276,10 +276,10 @@ class DatabaseManager:
                     latency = (time.time() - start) * 1000
             status = 'healthy'
         except TimeoutError:
-            logger.error('Health check таймаут (%s сек)', timeout)
+            logger.error('Health check таймаут (сек)', timeout=timeout)
             status = 'timeout'
         except Exception as e:
-            logger.error('Database health check failed: %s', e)
+            logger.error('Database health check failed', e=e)
             status = 'unhealthy'
 
         return {
@@ -307,7 +307,7 @@ class DatabaseManager:
         except TimeoutError:
             status = 'timeout'
         except Exception as e:
-            logger.error('Read replica health check failed: %s', e)
+            logger.error('Read replica health check failed', e=e)
 
         return {
             'status': status,
@@ -440,7 +440,7 @@ async def init_db():
             # Продолжаем выполнение, так как основные таблицы могут быть созданы
         else:
             # Для других ошибок пробрасываем исключение
-            logger.error(f'❌ Ошибка при создании таблиц: {e}')
+            logger.error('❌ Ошибка при создании таблиц', error=e)
             raise
 
     if not IS_SQLITE:
@@ -468,21 +468,19 @@ async def init_db():
 
                 if not table_exists:
                     logger.debug(
-                        'Пропускаем создание индекса %s: таблица %s отсутствует',
-                        index_sql,
-                        table_name,
+                        'Пропускаем создание индекса : таблица отсутствует', index_sql=index_sql, table_name=table_name
                     )
                     continue
 
                 try:
                     await conn.execute(text(index_sql))
                 except Exception as e:
-                    logger.debug('Index creation skipped for %s: %s', table_name, e)
+                    logger.debug('Index creation skipped for', table_name=table_name, e=e)
 
     logger.info('База данных успешно инициализирована')
 
     health = await db_manager.health_check()
-    logger.info('Database health: %s', health)
+    logger.info('Database health', health=health)
 
 
 async def close_db():

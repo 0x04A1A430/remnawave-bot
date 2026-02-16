@@ -1,9 +1,9 @@
-import logging
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
 
+import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -35,7 +35,7 @@ from app.utils.promo_offer import get_user_active_promo_discount_percent
 from app.utils.user_utils import mark_user_as_had_paid_subscription
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @dataclass
@@ -349,7 +349,7 @@ class MiniAppSubscriptionPurchaseService:
                 try:
                     existing = await get_server_squad_by_uuid(db, uuid)
                 except Exception as error:  # pragma: no cover - defensive logging
-                    logger.warning('Failed to load server squad %s: %s', uuid, error)
+                    logger.warning('Failed to load server squad', uuid=uuid, error=error)
                     existing = None
                 if existing:
                     server_catalog[uuid] = existing
@@ -1053,9 +1053,9 @@ class MiniAppSubscriptionPurchaseService:
                 await db.refresh(subscription)
             except Exception as refresh_error:  # pragma: no cover - defensive logging
                 logger.warning(
-                    'Failed to refresh existing subscription %s: %s',
-                    getattr(subscription, 'id', None),
-                    refresh_error,
+                    'Failed to refresh existing subscription',
+                    getattr=getattr(subscription, 'id', None),
+                    refresh_error=refresh_error,
                 )
         else:
             result = await db.execute(select(Subscription).where(Subscription.user_id == user.id))
@@ -1085,7 +1085,7 @@ class MiniAppSubscriptionPurchaseService:
                         first_paid_period_days=pricing.selection.period.days,
                     )
                 except Exception as conversion_error:  # pragma: no cover - defensive logging
-                    logger.error('Failed to create subscription conversion record: %s', conversion_error)
+                    logger.error('Failed to create subscription conversion record', conversion_error=conversion_error)
 
             subscription.is_trial = False
             subscription.status = SubscriptionStatus.ACTIVE.value
@@ -1128,7 +1128,7 @@ class MiniAppSubscriptionPurchaseService:
                 )
                 await add_user_to_servers(db, pricing.server_ids)
             except Exception as error:  # pragma: no cover - defensive logging
-                logger.error('Failed to register subscription servers: %s', error)
+                logger.error('Failed to register subscription servers', error=error)
 
         subscription_service = SubscriptionService()
         # При покупке подписки ВСЕГДА сбрасываем трафик в панели
@@ -1148,7 +1148,7 @@ class MiniAppSubscriptionPurchaseService:
                     reset_reason='miniapp purchase',
                 )
         except Exception as remnawave_error:  # pragma: no cover - defensive logging
-            logger.error('Failed to sync subscription with RemnaWave: %s', remnawave_error)
+            logger.error('Failed to sync subscription with RemnaWave', remnawave_error=remnawave_error)
 
         transaction = await create_transaction(
             db=db,

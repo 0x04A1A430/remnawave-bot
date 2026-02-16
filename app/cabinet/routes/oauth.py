@@ -1,8 +1,8 @@
 """OAuth 2.0 authentication routes for cabinet."""
 
-import logging
 from datetime import UTC, datetime
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,7 +27,7 @@ from ..schemas.auth import AuthResponse
 from .auth import _create_auth_response, _store_refresh_token
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/auth/oauth', tags=['Cabinet OAuth'])
 
@@ -120,7 +120,7 @@ async def oauth_callback(
     try:
         token_data = await oauth_provider.exchange_code(request.code)
     except Exception as exc:
-        logger.error('OAuth code exchange failed for %s: %s', provider, exc)
+        logger.error('OAuth code exchange failed for', provider=provider, exc=exc)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Failed to exchange authorization code',
@@ -130,7 +130,7 @@ async def oauth_callback(
     try:
         user_info: OAuthUserInfo = await oauth_provider.get_user_info(token_data)
     except Exception as exc:
-        logger.error('OAuth user info fetch failed for %s: %s', provider, exc)
+        logger.error('OAuth user info fetch failed for', provider=provider, exc=exc)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Failed to fetch user information from provider',
@@ -139,7 +139,7 @@ async def oauth_callback(
     # 5. Find user by provider ID
     user = await get_user_by_oauth_provider(db, provider, user_info.provider_id)
     if user:
-        logger.info('OAuth login via %s for existing user %s', provider, user.id)
+        logger.info('OAuth login via for existing user', provider=provider, user_id=user.id)
         return await _finalize_oauth_login(db, user, provider)
 
     # 6. Find user by email (if verified) and link provider
@@ -147,7 +147,7 @@ async def oauth_callback(
         user = await get_user_by_email(db, user_info.email)
         if user:
             await set_user_oauth_provider_id(db, user, provider, user_info.provider_id)
-            logger.info('OAuth login via %s linked to existing email user %s', provider, user.id)
+            logger.info('OAuth login via linked to existing email user', provider=provider, user_id=user.id)
             return await _finalize_oauth_login(db, user, provider)
 
     # 7. Create new user
@@ -161,5 +161,5 @@ async def oauth_callback(
         last_name=user_info.last_name,
         username=user_info.username,
     )
-    logger.info('OAuth new user created via %s with id=%s', provider, user.id)
+    logger.info('OAuth new user created via with id', provider=provider, user_id=user.id)
     return await _finalize_oauth_login(db, user, provider)

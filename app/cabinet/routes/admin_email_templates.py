@@ -1,9 +1,9 @@
 """Admin routes for managing email notification templates."""
 
 import asyncio
-import logging
 from typing import Any
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,7 +20,7 @@ from ..services.email_template_overrides import (
 from ..services.email_templates import EmailNotificationTemplates
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/admin/email-templates', tags=['Admin Email Templates'])
 
@@ -505,10 +505,7 @@ async def update_template(
     )
 
     logger.info(
-        'Админ %s обновил email шаблон %s/%s',
-        admin.id,
-        notification_type,
-        language,
+        'Админ обновил email шаблон /', admin_id=admin.id, notification_type=notification_type, language=language
     )
 
     return {'status': 'ok', 'template': result}
@@ -533,10 +530,10 @@ async def reset_template(
 
     if deleted:
         logger.info(
-            'Админ %s сбросил email шаблон %s/%s к дефолту',
-            admin.id,
-            notification_type,
-            language,
+            'Админ сбросил email шаблон / к дефолту',
+            admin_id=admin.id,
+            notification_type=notification_type,
+            language=language,
         )
 
     return {'status': 'ok', 'was_custom': deleted}
@@ -657,7 +654,7 @@ async def send_test_email(
             body_html=body_html,
         )
     except Exception as e:
-        logger.error('Ошибка отправки тестового email: %s', e)
+        logger.error('Ошибка отправки тестового email', e=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f'Failed to send test email: {e!s}',
@@ -670,11 +667,11 @@ async def send_test_email(
         )
 
     logger.info(
-        'Админ %s отправил тестовый email %s/%s на %s',
-        admin.id,
-        notification_type,
-        language,
-        to_email,
+        'Админ отправил тестовый email / на',
+        admin_id=admin.id,
+        notification_type=notification_type,
+        language=language,
+        to_email=to_email,
     )
 
     return {'status': 'ok', 'sent_to': to_email}

@@ -1,8 +1,8 @@
 """Referral program routes for cabinet."""
 
-import logging
 import math
 
+import structlog
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,7 +22,7 @@ from ..schemas.referral import (
 )
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/referral', tags=['Cabinet Referral'])
 

@@ -1,14 +1,14 @@
 import json
-import logging
 from datetime import timedelta
 from typing import Any
 
 import redis.asyncio as redis
+import structlog
 
 from app.config import settings
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class CacheService:
@@ -23,7 +23,7 @@ class CacheService:
             self._connected = True
             logger.info('✅ Подключение к Redis кешу установлено')
         except Exception as e:
-            logger.warning(f'⚠️ Не удалось подключиться к Redis: {e}')
+            logger.warning('⚠️ Не удалось подключиться к Redis', error=e)
             self._connected = False
 
     async def disconnect(self):
@@ -41,7 +41,7 @@ class CacheService:
                 return json.loads(value)
             return None
         except Exception as e:
-            logger.error(f'Ошибка получения из кеша {key}: {e}')
+            logger.error('Ошибка получения из кеша', key=key, error=e)
             return None
 
     async def set(self, key: str, value: Any, expire: int | timedelta = None) -> bool:
@@ -57,7 +57,7 @@ class CacheService:
             await self.redis_client.set(key, serialized_value, ex=expire)
             return True
         except Exception as e:
-            logger.error(f'Ошибка записи в кеш {key}: {e}')
+            logger.error('Ошибка записи в кеш', key=key, error=e)
             return False
 
     async def setnx(self, key: str, value: Any, expire: int | timedelta = None) -> bool:
@@ -79,7 +79,7 @@ class CacheService:
             result = await self.redis_client.set(key, serialized_value, ex=expire, nx=True)
             return result is True
         except Exception as e:
-            logger.error(f'Ошибка setnx в кеш {key}: {e}')
+            logger.error('Ошибка setnx в кеш', key=key, error=e)
             return False
 
     async def delete(self, key: str) -> bool:
@@ -90,7 +90,7 @@ class CacheService:
             deleted = await self.redis_client.delete(key)
             return deleted > 0
         except Exception as e:
-            logger.error(f'Ошибка удаления из кеша {key}: {e}')
+            logger.error('Ошибка удаления из кеша', key=key, error=e)
             return False
 
     async def delete_pattern(self, pattern: str) -> int:
@@ -105,7 +105,7 @@ class CacheService:
             deleted = await self.redis_client.delete(*keys)
             return int(deleted)
         except Exception as e:
-            logger.error(f'Ошибка удаления ключей по шаблону {pattern}: {e}')
+            logger.error('Ошибка удаления ключей по шаблону', pattern=pattern, error=e)
             return 0
 
     async def exists(self, key: str) -> bool:
@@ -115,7 +115,7 @@ class CacheService:
         try:
             return await self.redis_client.exists(key)
         except Exception as e:
-            logger.error(f'Ошибка проверки существования в кеше {key}: {e}')
+            logger.error('Ошибка проверки существования в кеше', key=key, error=e)
             return False
 
     async def expire(self, key: str, seconds: int) -> bool:
@@ -125,7 +125,7 @@ class CacheService:
         try:
             return await self.redis_client.expire(key, seconds)
         except Exception as e:
-            logger.error(f'Ошибка установки TTL для {key}: {e}')
+            logger.error('Ошибка установки TTL для', key=key, error=e)
             return False
 
     async def get_keys(self, pattern: str = '*') -> list:
@@ -136,7 +136,7 @@ class CacheService:
             keys = await self.redis_client.keys(pattern)
             return [key.decode() if isinstance(key, bytes) else key for key in keys]
         except Exception as e:
-            logger.error(f'Ошибка получения ключей по паттерну {pattern}: {e}')
+            logger.error('Ошибка получения ключей по паттерну', pattern=pattern, error=e)
             return []
 
     async def flush_all(self) -> bool:
@@ -148,7 +148,7 @@ class CacheService:
             logger.info('🗑️ Кеш полностью очищен')
             return True
         except Exception as e:
-            logger.error(f'Ошибка очистки кеша: {e}')
+            logger.error('Ошибка очистки кеша', error=e)
             return False
 
     async def increment(self, key: str, amount: int = 1) -> int | None:
@@ -158,7 +158,7 @@ class CacheService:
         try:
             return await self.redis_client.incrby(key, amount)
         except Exception as e:
-            logger.error(f'Ошибка инкремента {key}: {e}')
+            logger.error('Ошибка инкремента', key=key, error=e)
             return None
 
     async def set_hash(self, name: str, mapping: dict, expire: int = None) -> bool:
@@ -171,7 +171,7 @@ class CacheService:
                 await self.redis_client.expire(name, expire)
             return True
         except Exception as e:
-            logger.error(f'Ошибка записи хеша {name}: {e}')
+            logger.error('Ошибка записи хеша', name=name, error=e)
             return False
 
     async def get_hash(self, name: str, key: str = None) -> dict | str | None:
@@ -185,7 +185,7 @@ class CacheService:
             hash_data = await self.redis_client.hgetall(name)
             return {k.decode(): v.decode() for k, v in hash_data.items()}
         except Exception as e:
-            logger.error(f'Ошибка получения хеша {name}: {e}')
+            logger.error('Ошибка получения хеша', name=name, error=e)
             return None
 
     async def lpush(self, key: str, value: Any) -> bool:
@@ -198,7 +198,7 @@ class CacheService:
             await self.redis_client.lpush(key, serialized)
             return True
         except Exception as e:
-            logger.error(f'Ошибка добавления в очередь {key}: {e}')
+            logger.error('Ошибка добавления в очередь', key=key, error=e)
             return False
 
     async def rpop(self, key: str) -> Any | None:
@@ -212,7 +212,7 @@ class CacheService:
                 return json.loads(value)
             return None
         except Exception as e:
-            logger.error(f'Ошибка извлечения из очереди {key}: {e}')
+            logger.error('Ошибка извлечения из очереди', key=key, error=e)
             return None
 
     async def llen(self, key: str) -> int:
@@ -223,7 +223,7 @@ class CacheService:
         try:
             return await self.redis_client.llen(key)
         except Exception as e:
-            logger.error(f'Ошибка получения длины очереди {key}: {e}')
+            logger.error('Ошибка получения длины очереди', key=key, error=e)
             return 0
 
     async def lrange(self, key: str, start: int = 0, end: int = -1) -> list:
@@ -235,7 +235,7 @@ class CacheService:
             items = await self.redis_client.lrange(key, start, end)
             return [json.loads(item) for item in items]
         except Exception as e:
-            logger.error(f'Ошибка чтения очереди {key}: {e}')
+            logger.error('Ошибка чтения очереди', key=key, error=e)
             return []
 
 

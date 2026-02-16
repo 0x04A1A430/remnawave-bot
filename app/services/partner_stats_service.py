@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import logging
 from datetime import datetime, timedelta
 from typing import Any
 
+import structlog
 from sqlalchemy import and_, case, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,7 +17,7 @@ from app.database.models import (
 )
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class PartnerStatsService:

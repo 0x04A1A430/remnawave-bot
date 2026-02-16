@@ -1,16 +1,16 @@
 """CRUD helpers for WATA payment records."""
 
-import logging
 from datetime import datetime
 from typing import Any
 
+import structlog
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import WataPayment
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def create_wata_payment(
@@ -53,11 +53,11 @@ async def create_wata_payment(
     await db.refresh(payment)
 
     logger.info(
-        'Создан Wata платеж #%s для пользователя %s: %s копеек (статус %s)',
-        payment.id,
-        user_id,
-        amount_kopeks,
-        status,
+        'Создан Wata платеж # для пользователя : копеек (статус)',
+        payment_id=payment.id,
+        user_id=user_id,
+        amount_kopeks=amount_kopeks,
+        status=status,
     )
 
     return payment
@@ -128,10 +128,10 @@ async def update_wata_payment_status(
     await db.refresh(payment)
 
     logger.info(
-        'Обновлен Wata платеж %s: статус=%s, is_paid=%s',
-        payment.payment_link_id,
-        payment.status,
-        payment.is_paid,
+        'Обновлен Wata платеж : статус is_paid',
+        payment_link_id=payment.payment_link_id,
+        payment_status=payment.status,
+        is_paid=payment.is_paid,
     )
 
     return payment
@@ -147,9 +147,7 @@ async def link_wata_payment_to_transaction(
     await db.refresh(payment)
 
     logger.info(
-        'Wata платеж %s привязан к транзакции %s',
-        payment.payment_link_id,
-        transaction_id,
+        'Wata платеж привязан к транзакции', payment_link_id=payment.payment_link_id, transaction_id=transaction_id
     )
 
     return payment

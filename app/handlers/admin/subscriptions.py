@@ -1,5 +1,4 @@
-import logging
-
+import structlog
 from aiogram import Dispatcher, F, types
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -58,11 +57,11 @@ async def get_users_by_countries(db: AsyncSession) -> dict:
 
         return stats
     except Exception as e:
-        logger.error(f'Ошибка получения статистики по странам: {e}')
+        logger.error('Ошибка получения статистики по странам', error=e)
         return {}
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @admin_required
@@ -319,7 +318,7 @@ async def show_countries_management(callback: types.CallbackQuery, db_user: User
                 text += f'{country_flag} {country}: {count} пользователей\n'
 
     except Exception as e:
-        logger.error(f'Ошибка получения данных о странах: {e}')
+        logger.error('Ошибка получения данных о странах', error=e)
         text = f"""
 🌍 <b>Управление странами</b>
 
@@ -360,7 +359,7 @@ async def send_expiry_reminders(callback: types.CallbackQuery, db_user: User, db
                 user = subscription.user
                 # Skip email-only users (no telegram_id)
                 if not user.telegram_id:
-                    logger.debug(f'Пропуск email-пользователя {user.id} при отправке напоминания')
+                    logger.debug('Пропуск email-пользователя при отправке напоминания', user_id=user.id)
                     continue
 
                 days_left = max(1, subscription.days_left)
@@ -379,7 +378,7 @@ async def send_expiry_reminders(callback: types.CallbackQuery, db_user: User, db
                 sent_count += 1
 
             except Exception as e:
-                logger.error(f'Ошибка отправки напоминания пользователю {subscription.user_id}: {e}')
+                logger.error('Ошибка отправки напоминания пользователю', user_id=subscription.user_id, error=e)
 
     await callback.message.edit_text(
         f'✅ Напоминания отправлены: {sent_count} из {len(expiring_subs)}',

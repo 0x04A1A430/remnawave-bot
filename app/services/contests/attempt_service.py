@@ -1,8 +1,8 @@
 """Service for atomic contest attempt operations."""
 
-import logging
 from dataclasses import dataclass
 
+import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,7 +15,7 @@ from app.services.contests.enums import PrizeType
 from app.services.contests.games import get_game_strategy
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @dataclass
@@ -95,7 +95,13 @@ class ContestAttemptService:
             is_winner=is_winner,
         )
 
-        logger.info("Contest attempt: user %s, round %s, pick '%s', winner %s", user_id, round_obj.id, pick, is_winner)
+        logger.info(
+            "Contest attempt: user , round , pick '', winner",
+            user_id=user_id,
+            round_obj_id=round_obj.id,
+            pick=pick,
+            is_winner=is_winner,
+        )
 
         if is_winner:
             prize_msg = await self._award_prize(db, user_id, tpl, language)
@@ -177,11 +183,11 @@ class ContestAttemptService:
         await update_attempt(db, attempt, answer=text_answer.strip().upper(), is_winner=is_winner)
 
         logger.info(
-            "Contest text attempt: user %s, round %s, answer '%s', winner %s",
-            user_id,
-            round_obj.id,
-            text_answer,
-            is_winner,
+            "Contest text attempt: user , round , answer '', winner",
+            user_id=user_id,
+            round_obj_id=round_obj.id,
+            text_answer=text_answer,
+            is_winner=is_winner,
         )
 
         if is_winner:

@@ -1,7 +1,6 @@
 """Admin routes for managing advertising campaigns in cabinet."""
 
-import logging
-
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -45,7 +44,7 @@ from ..schemas.campaigns import (
 from ..schemas.tariffs import TariffListItem
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/admin/campaigns', tags=['Cabinet Admin Campaigns'])
 
@@ -378,7 +377,7 @@ async def create_new_campaign(
     # Reload to get tariff relationship
     campaign = await get_campaign_by_id(db, campaign.id)
 
-    logger.info(f'Admin {admin.id} created campaign {campaign.id}: {campaign.name}')
+    logger.info('Admin created campaign', admin_id=admin.id, campaign_id=campaign.id, campaign_name=campaign.name)
 
     return await get_campaign(campaign.id, admin, db)
 
@@ -447,7 +446,7 @@ async def update_existing_campaign(
     if updates:
         await update_campaign(db, campaign, **updates)
 
-    logger.info(f'Admin {admin.id} updated campaign {campaign_id}')
+    logger.info('Admin updated campaign', admin_id=admin.id, campaign_id=campaign_id)
 
     return await get_campaign(campaign_id, admin, db)
 
@@ -475,7 +474,7 @@ async def delete_existing_campaign(
         )
 
     await delete_campaign(db, campaign)
-    logger.info(f'Admin {admin.id} deleted campaign {campaign_id}: {campaign.name}')
+    logger.info('Admin deleted campaign', admin_id=admin.id, campaign_id=campaign_id, campaign_name=campaign.name)
 
     return {'message': 'Campaign deleted successfully'}
 
@@ -498,7 +497,7 @@ async def toggle_campaign(
     await update_campaign(db, campaign, is_active=new_status)
 
     status_text = 'activated' if new_status else 'deactivated'
-    logger.info(f'Admin {admin.id} {status_text} campaign {campaign_id}')
+    logger.info('Admin campaign', admin_id=admin.id, status_text=status_text, campaign_id=campaign_id)
 
     return CampaignToggleResponse(
         id=campaign_id,

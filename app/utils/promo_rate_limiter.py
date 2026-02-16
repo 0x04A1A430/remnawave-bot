@@ -1,9 +1,10 @@
-import logging
 import re
 import time
 
+import structlog
 
-logger = logging.getLogger(__name__)
+
+logger = structlog.get_logger(__name__)
 
 # Только буквы, цифры, дефис, подчёркивание
 PROMO_CODE_PATTERN = re.compile(r'^[A-Za-z0-9_-]+$')
@@ -37,10 +38,10 @@ class PromoRateLimiter:
 
         if len(attempts) >= MAX_FAILED_ATTEMPTS:
             logger.warning(
-                'Promo brute-force: user %s — %d failed attempts in %ds',
-                user_id,
-                len(attempts),
-                FAILED_WINDOW_SECONDS,
+                'Promo brute-force: user — failed attempts in s',
+                user_id=user_id,
+                attempts_count=len(attempts),
+                FAILED_WINDOW_SECONDS=FAILED_WINDOW_SECONDS,
             )
 
     def is_blocked(self, user_id: int) -> bool:

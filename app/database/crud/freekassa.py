@@ -1,16 +1,16 @@
 """CRUD операции для платежей Freekassa."""
 
 import json
-import logging
 from datetime import datetime
 
+import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import FreekassaPayment
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def create_freekassa_payment(
@@ -41,7 +41,7 @@ async def create_freekassa_payment(
     db.add(payment)
     await db.commit()
     await db.refresh(payment)
-    logger.info(f'Создан платеж Freekassa: order_id={order_id}, user_id={user_id}')
+    logger.info('Создан платеж Freekassa: order_id=, user_id', order_id=order_id, user_id=user_id)
     return payment
 
 
@@ -92,7 +92,12 @@ async def update_freekassa_payment_status(
 
     await db.commit()
     await db.refresh(payment)
-    logger.info(f'Обновлен статус платежа Freekassa: order_id={payment.order_id}, status={status}, is_paid={is_paid}')
+    logger.info(
+        'Обновлен статус платежа Freekassa: order_id=, status=, is_paid',
+        order_id=payment.order_id,
+        status=status,
+        is_paid=is_paid,
+    )
     return payment
 
 

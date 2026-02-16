@@ -4,8 +4,7 @@ API эндпоинты для приема уведомлений от ban си�
 
 from __future__ import annotations
 
-import logging
-
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,7 +16,7 @@ from app.webapi.schemas.ban_notifications import (
 )
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter()
 
@@ -46,9 +45,11 @@ async def send_ban_notification(
     Требует API ключ в заголовке X-API-Key или Authorization: Bearer <token>
     """
     logger.info(
-        f"Получен запрос на отправку уведомления типа '{request.notification_type}' "
-        f'для пользователя {request.username} ({request.user_identifier}), '
-        f'node_name={request.node_name!r}'
+        'Получен запрос на отправку уведомления типа для пользователя node_name',
+        notification_type=request.notification_type,
+        username=request.username,
+        user_identifier=request.user_identifier,
+        node_name=repr(request.node_name),
     )
 
     try:
@@ -132,7 +133,6 @@ async def send_ban_notification(
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception(f'Ошибка при отправке уведомления: {e}')
-        raise HTTPException(
+        logger.exception('Ошибка при отправке уведомления', error=e)(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'Внутренняя ошибка сервера: {e!s}'
         )

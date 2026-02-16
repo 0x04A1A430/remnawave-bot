@@ -1,10 +1,10 @@
 """Обработчики для простой покупки подписки."""
 
 import html
-import logging
 from datetime import datetime
 from typing import Any
 
+import structlog
 from aiogram import F, types
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
@@ -25,7 +25,7 @@ from app.utils.subscription_utils import (
 )
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @error_handler
@@ -120,11 +120,11 @@ async def start_simple_subscription_purchase(
 
     can_pay_from_balance = user_balance_kopeks >= price_kopeks
     logger.warning(
-        'SIMPLE_SUBSCRIPTION_DEBUG_START_BALANCE | user=%s | balance=%s | min_required=%s | can_pay=%s',
-        db_user.id,
-        user_balance_kopeks,
-        price_kopeks,
-        can_pay_from_balance,
+        'SIMPLE_SUBSCRIPTION_DEBUG_START_BALANCE | user= | balance= | min_required= | can_pay',
+        db_user_id=db_user.id,
+        user_balance_kopeks=user_balance_kopeks,
+        price_kopeks=price_kopeks,
+        can_pay_from_balance=can_pay_from_balance,
     )
 
     # Проверяем, является ли у пользователя текущая подписка активной платной подпиской
@@ -352,19 +352,13 @@ async def _ensure_simple_subscription_squad_uuid(
 
         resolved_uuid = await get_random_active_squad_uuid(db)
     except Exception as error:  # pragma: no cover - defensive logging
-        logger.error(
-            'SIMPLE_SUBSCRIPTION_RANDOM_SQUAD_ERROR | user=%s | error=%s',
-            user_id,
-            error,
-        )
+        logger.error('SIMPLE_SUBSCRIPTION_RANDOM_SQUAD_ERROR | user= | error', user_id=user_id, error=error)
         return None
 
     if resolved_uuid:
         await state.update_data(resolved_squad_uuid=resolved_uuid)
         logger.info(
-            'SIMPLE_SUBSCRIPTION_RANDOM_SQUAD_ASSIGNED | user=%s | squad=%s',
-            user_id,
-            resolved_uuid,
+            'SIMPLE_SUBSCRIPTION_RANDOM_SQUAD_ASSIGNED | user= | squad', user_id=user_id, resolved_uuid=resolved_uuid
         )
 
     return resolved_uuid
@@ -416,16 +410,16 @@ async def handle_simple_subscription_pay_with_balance(
     )
     total_required = price_kopeks
     logger.warning(
-        'SIMPLE_SUBSCRIPTION_DEBUG_PAY_BALANCE | user=%s | period=%s | base=%s | traffic=%s | devices=%s | servers=%s | discount=%s | total_required=%s | balance=%s',
-        db_user.id,
-        subscription_params['period_days'],
-        price_breakdown.get('base_price', 0),
-        price_breakdown.get('traffic_price', 0),
-        price_breakdown.get('devices_price', 0),
-        price_breakdown.get('servers_price', 0),
-        price_breakdown.get('total_discount', 0),
-        total_required,
-        getattr(db_user, 'balance_kopeks', 0),
+        'SIMPLE_SUBSCRIPTION_DEBUG_PAY_BALANCE | user= | period= | base= | traffic= | devices= | servers= | discount= | total_required= | balance',
+        db_user_id=db_user.id,
+        subscription_params=subscription_params['period_days'],
+        price_breakdown=price_breakdown.get('base_price', 0),
+        price_breakdown_2=price_breakdown.get('traffic_price', 0),
+        price_breakdown_3=price_breakdown.get('devices_price', 0),
+        price_breakdown_4=price_breakdown.get('servers_price', 0),
+        price_breakdown_5=price_breakdown.get('total_discount', 0),
+        total_required=total_required,
+        getattr=getattr(db_user, 'balance_kopeks', 0),
     )
 
     # Проверяем баланс пользователя
@@ -523,7 +517,10 @@ async def handle_simple_subscription_pay_with_balance(
                 await db.refresh(subscription)
         except Exception as sync_error:
             logger.error(
-                f'Ошибка синхронизации подписки с RemnaWave для пользователя {db_user.id}: {sync_error}', exc_info=True
+                'Ошибка синхронизации подписки с RemnaWave для пользователя',
+                db_user_id=db_user.id,
+                sync_error=sync_error,
+                exc_info=True,
             )
 
         # Отправляем уведомление об успешной покупке
@@ -641,18 +638,22 @@ async def handle_simple_subscription_pay_with_balance(
                 amount_kopeks=price_kopeks,
             )
         except Exception as e:
-            logger.error(f'Ошибка отправки уведомления админам о покупке: {e}')
+            logger.error('Ошибка отправки уведомления админам о покупке', error=e)
 
         await state.clear()
         await callback.answer()
 
-        logger.info(f'Пользователь {db_user.telegram_id} успешно купил подписку с баланса на {price_kopeks / 100}₽')
+        logger.info(
+            'Пользователь успешно купил подписку с баланса на ₽',
+            telegram_id=db_user.telegram_id,
+            price_kopeks=price_kopeks / 100,
+        )
 
     except Exception as error:
         logger.error(
-            'Ошибка оплаты простой подписки с баланса для пользователя %s: %s',
-            db_user.id,
-            error,
+            'Ошибка оплаты простой подписки с баланса для пользователя',
+            db_user_id=db_user.id,
+            error=error,
             exc_info=True,
         )
         await callback.answer(
@@ -712,16 +713,16 @@ async def handle_simple_subscription_other_payment_methods(
     user_balance_kopeks = getattr(db_user, 'balance_kopeks', 0)
     can_pay_from_balance = user_balance_kopeks >= price_kopeks
     logger.warning(
-        'SIMPLE_SUBSCRIPTION_DEBUG_METHODS | user=%s | balance=%s | base=%s | traffic=%s | devices=%s | servers=%s | discount=%s | total_required=%s | can_pay=%s',
-        db_user.id,
-        user_balance_kopeks,
-        price_breakdown.get('base_price', 0),
-        price_breakdown.get('traffic_price', 0),
-        price_breakdown.get('devices_price', 0),
-        price_breakdown.get('servers_price', 0),
-        price_breakdown.get('total_discount', 0),
-        price_kopeks,
-        can_pay_from_balance,
+        'SIMPLE_SUBSCRIPTION_DEBUG_METHODS | user= | balance= | base= | traffic= | devices= | servers= | discount= | total_required= | can_pay',
+        db_user_id=db_user.id,
+        user_balance_kopeks=user_balance_kopeks,
+        price_breakdown=price_breakdown.get('base_price', 0),
+        price_breakdown_2=price_breakdown.get('traffic_price', 0),
+        price_breakdown_3=price_breakdown.get('devices_price', 0),
+        price_breakdown_4=price_breakdown.get('servers_price', 0),
+        price_breakdown_5=price_breakdown.get('total_discount', 0),
+        price_kopeks=price_kopeks,
+        can_pay_from_balance=can_pay_from_balance,
     )
 
     # Отображаем доступные методы оплаты
@@ -974,7 +975,7 @@ async def handle_simple_subscription_payment_method(
                 except ImportError:
                     logger.warning('qrcode библиотека не установлена, QR-код не будет сгенерирован')
                 except Exception as e:
-                    logger.error(f'Ошибка генерации QR-кода: {e}')
+                    logger.error('Ошибка генерации QR-кода', error=e)
 
             # Создаем клавиатуру с кнопками для оплаты по ссылке и проверки статуса
             keyboard_buttons = []
@@ -1079,7 +1080,7 @@ async def handle_simple_subscription_payment_method(
 
                 usd_rate = await currency_converter.get_usd_to_rub_rate()
             except Exception as rate_error:
-                logger.warning('Не удалось получить курс USD: %s', rate_error)
+                logger.warning('Не удалось получить курс USD', rate_error=rate_error)
                 usd_rate = 95.0
 
             amount_usd = round(amount_rubles / usd_rate, 2)
@@ -1576,7 +1577,7 @@ async def handle_simple_subscription_payment_method(
                     language=db_user.language,
                 )
             except Exception as error:
-                logger.error('Ошибка создания WATA платежа: %s', error)
+                logger.error('Ошибка создания WATA платежа', error=error)
                 wata_result = None
 
             if not wata_result or not wata_result.get('payment_url'):
@@ -1644,7 +1645,7 @@ async def handle_simple_subscription_payment_method(
             await callback.answer('❌ Неизвестный способ оплаты', show_alert=True)
 
     except Exception as e:
-        logger.error(f'Ошибка обработки метода оплаты простой подписки: {e}')
+        logger.error('Ошибка обработки метода оплаты простой подписки', error=e)
         await callback.answer(
             '❌ Ошибка обработки запроса. Попробуйте позже или обратитесь в поддержку.', show_alert=True
         )
@@ -1781,7 +1782,7 @@ async def check_simple_pal24_payment_status(
                 raise
 
     except Exception as error:
-        logger.error(f'Ошибка проверки статуса PayPalych для простой подписки: {error}')
+        logger.error('Ошибка проверки статуса PayPalych для простой подписки', error=error)
         await callback.answer('❌ Ошибка проверки статуса', show_alert=True)
 
 
@@ -1813,7 +1814,7 @@ async def check_simple_mulenpay_payment_status(
         if user and getattr(user, 'language', None):
             user_language = user.language
     except Exception as error:
-        logger.debug('Не удалось получить пользователя для MulenPay статуса: %s', error)
+        logger.debug('Не удалось получить пользователя для MulenPay статуса', error=error)
 
     texts = get_texts(user_language)
     status_labels = {
@@ -1895,7 +1896,7 @@ async def check_simple_cryptobot_payment_status(
         if user and getattr(user, 'language', None):
             language = user.language
     except Exception as error:
-        logger.debug('Не удалось получить пользователя для CryptoBot статуса: %s', error)
+        logger.debug('Не удалось получить пользователя для CryptoBot статуса', error=error)
 
     texts = get_texts(language)
     message_lines = [
@@ -1971,7 +1972,7 @@ async def check_simple_heleket_payment_status(
         if user and getattr(user, 'language', None):
             language = user.language
     except Exception as error:
-        logger.debug('Не удалось получить пользователя для Heleket статуса: %s', error)
+        logger.debug('Не удалось получить пользователя для Heleket статуса', error=error)
 
     texts = get_texts(language)
 
@@ -2115,16 +2116,16 @@ async def confirm_simple_subscription_purchase(
     )
     total_required = price_kopeks
     logger.warning(
-        'SIMPLE_SUBSCRIPTION_DEBUG_CONFIRM | user=%s | period=%s | base=%s | traffic=%s | devices=%s | servers=%s | discount=%s | total_required=%s | balance=%s',
-        db_user.id,
-        subscription_params['period_days'],
-        price_breakdown.get('base_price', 0),
-        price_breakdown.get('traffic_price', 0),
-        price_breakdown.get('devices_price', 0),
-        price_breakdown.get('servers_price', 0),
-        price_breakdown.get('total_discount', 0),
-        total_required,
-        getattr(db_user, 'balance_kopeks', 0),
+        'SIMPLE_SUBSCRIPTION_DEBUG_CONFIRM | user= | period= | base= | traffic= | devices= | servers= | discount= | total_required= | balance',
+        db_user_id=db_user.id,
+        subscription_params=subscription_params['period_days'],
+        price_breakdown=price_breakdown.get('base_price', 0),
+        price_breakdown_2=price_breakdown.get('traffic_price', 0),
+        price_breakdown_3=price_breakdown.get('devices_price', 0),
+        price_breakdown_4=price_breakdown.get('servers_price', 0),
+        price_breakdown_5=price_breakdown.get('total_discount', 0),
+        total_required=total_required,
+        getattr=getattr(db_user, 'balance_kopeks', 0),
     )
 
     # Проверяем баланс пользователя
@@ -2222,7 +2223,10 @@ async def confirm_simple_subscription_purchase(
                 await db.refresh(subscription)
         except Exception as sync_error:
             logger.error(
-                f'Ошибка синхронизации подписки с RemnaWave для пользователя {db_user.id}: {sync_error}', exc_info=True
+                'Ошибка синхронизации подписки с RemnaWave для пользователя',
+                db_user_id=db_user.id,
+                sync_error=sync_error,
+                exc_info=True,
             )
 
         # Отправляем уведомление об успешной покупке
@@ -2340,18 +2344,22 @@ async def confirm_simple_subscription_purchase(
                 amount_kopeks=price_kopeks,
             )
         except Exception as e:
-            logger.error(f'Ошибка отправки уведомления админам о покупке: {e}')
+            logger.error('Ошибка отправки уведомления админам о покупке', error=e)
 
         await state.clear()
         await callback.answer()
 
-        logger.info(f'Пользователь {db_user.telegram_id} успешно купил подписку с баланса на {price_kopeks / 100}₽')
+        logger.info(
+            'Пользователь успешно купил подписку с баланса на ₽',
+            telegram_id=db_user.telegram_id,
+            price_kopeks=price_kopeks / 100,
+        )
 
     except Exception as error:
         logger.error(
-            'Ошибка подтверждения простой подписки с баланса для пользователя %s: %s',
-            db_user.id,
-            error,
+            'Ошибка подтверждения простой подписки с баланса для пользователя',
+            db_user_id=db_user.id,
+            error=error,
             exc_info=True,
         )
         await callback.answer(

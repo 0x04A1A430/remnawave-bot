@@ -1,10 +1,10 @@
 """Middleware для автоматического логирования кликов по кнопкам."""
 
 import asyncio
-import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+import structlog
 from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery, TelegramObject
 
@@ -12,7 +12,7 @@ from app.config import settings
 from app.database.database import AsyncSessionLocal
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Известные builtin callback_data из меню
 BUILTIN_CALLBACKS: set[str] = {
@@ -134,7 +134,7 @@ class ButtonStatsMiddleware(BaseMiddleware):
             )
         except Exception as e:
             # Не прерываем обработку при ошибке логирования
-            logger.error(f'Ошибка логирования клика по кнопке: {e}', exc_info=True)
+            logger.error('Ошибка логирования клика по кнопке', error=e, exc_info=True)
 
         # Продолжаем обработку
         return await handler(event, data)
@@ -204,6 +204,6 @@ class ButtonStatsMiddleware(BaseMiddleware):
                         button_text=button_text,
                     )
                 except Exception as e:
-                    logger.warning(f'Ошибка записи клика в БД {button_id}: {e}')
+                    logger.warning('Ошибка записи клика в БД', button_id=button_id, error=e)
         except Exception as e:
-            logger.warning(f'Ошибка создания сессии БД для логирования клика: {e}')
+            logger.warning('Ошибка создания сессии БД для логирования клика', error=e)

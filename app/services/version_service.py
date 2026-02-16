@@ -1,15 +1,15 @@
 import asyncio
-import logging
 import re
 from datetime import datetime, timedelta
 
 import aiohttp
+import structlog
 from packaging import version
 
 from app.config import settings
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class VersionInfo:
@@ -127,7 +127,7 @@ class VersionService:
             return has_updates, newer_releases
 
         except Exception as e:
-            logger.error(f'Ошибка проверки обновлений: {e}')
+            logger.error('Ошибка проверки обновлений', error=e)
             return False, []
 
     async def _fetch_releases(self, force: bool = False) -> list[VersionInfo]:
@@ -157,16 +157,16 @@ class VersionService:
                     self._cache['releases'] = releases
                     self._last_check = datetime.now()
 
-                    logger.info(f'Получено {len(releases)} релизов из GitHub')
+                    logger.info('Получено релизов из GitHub', releases_count=len(releases))
                     return releases
-                logger.warning(f'GitHub API вернул статус {response.status}')
+                logger.warning('GitHub API вернул статус', status=response.status)
                 return []
 
         except TimeoutError:
             logger.warning('Таймаут при запросе к GitHub API')
             return []
         except Exception as e:
-            logger.error(f'Ошибка запроса к GitHub API: {e}')
+            logger.error('Ошибка запроса к GitHub API', error=e)
             return []
 
     def _parse_version(self, version_str: str):
@@ -199,7 +199,7 @@ class VersionService:
             self._cache[cache_key] = True
 
         except Exception as e:
-            logger.error(f'Ошибка отправки уведомления об обновлении: {e}')
+            logger.error('Ошибка отправки уведомления об обновлении', error=e)
 
     async def get_version_info(self) -> dict:
         try:
@@ -225,7 +225,7 @@ class VersionService:
             }
 
         except Exception as e:
-            logger.error(f'Ошибка получения информации о версиях: {e}')
+            logger.error('Ошибка получения информации о версиях', error=e)
             return {
                 'current_version': self.current_version,
                 'current_release': None,
@@ -242,8 +242,8 @@ class VersionService:
             logger.info('Проверка версий отключена')
             return
 
-        logger.info(f'Запуск периодической проверки обновлений для {self.repo}')
-        logger.info(f'Текущая версия: {self.current_version}')
+        logger.info('Запуск периодической проверки обновлений для', repo=self.repo)
+        logger.info('Текущая версия', current_version=self.current_version)
 
         while True:
             try:
@@ -254,7 +254,7 @@ class VersionService:
                 logger.info('Остановка проверки обновлений')
                 break
             except Exception as e:
-                logger.error(f'Ошибка в периодической проверке обновлений: {e}')
+                logger.error('Ошибка в периодической проверке обновлений', error=e)
                 await asyncio.sleep(300)
 
     def format_version_display(self, version_info: VersionInfo) -> str:

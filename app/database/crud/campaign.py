@@ -1,6 +1,6 @@
-import logging
 from datetime import datetime
 
+import structlog
 from sqlalchemy import and_, delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -17,7 +17,7 @@ from app.database.models import (
 )
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def create_campaign(
@@ -57,10 +57,10 @@ async def create_campaign(
     await db.refresh(campaign)
 
     logger.info(
-        '📣 Создана рекламная кампания %s (start=%s, bonus=%s)',
-        campaign.name,
-        campaign.start_parameter,
-        campaign.bonus_type,
+        '📣 Создана рекламная кампания (start bonus=)',
+        campaign_name=campaign.name,
+        start_parameter=campaign.start_parameter,
+        bonus_type=campaign.bonus_type,
     )
     return campaign
 
@@ -157,14 +157,14 @@ async def update_campaign(
     await db.commit()
     await db.refresh(campaign)
 
-    logger.info('✏️ Обновлена рекламная кампания %s (%s)', campaign.name, update_data)
+    logger.info('✏️ Обновлена рекламная кампания', campaign_name=campaign.name, update_data=update_data)
     return campaign
 
 
 async def delete_campaign(db: AsyncSession, campaign: AdvertisingCampaign) -> bool:
     await db.execute(delete(AdvertisingCampaign).where(AdvertisingCampaign.id == campaign.id))
     await db.commit()
-    logger.info('🗑️ Удалена рекламная кампания %s', campaign.name)
+    logger.info('🗑️ Удалена рекламная кампания', campaign_name=campaign.name)
     return True
 
 
@@ -217,7 +217,7 @@ async def record_campaign_registration(
     await db.commit()
     await db.refresh(registration)
 
-    logger.info('📈 Регистрируем пользователя %s в кампании %s', user_id, campaign_id)
+    logger.info('📈 Регистрируем пользователя в кампании', user_id=user_id, campaign_id=campaign_id)
     return registration
 
 

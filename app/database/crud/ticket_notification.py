@@ -1,8 +1,8 @@
 """CRUD operations for TicketNotification."""
 
-import logging
 from datetime import datetime
 
+import structlog
 from sqlalchemy import desc, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -10,7 +10,7 @@ from sqlalchemy.orm import selectinload
 from app.database.models import Ticket, TicketNotification
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class TicketNotificationCRUD:

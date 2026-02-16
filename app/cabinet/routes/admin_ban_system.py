@@ -1,8 +1,8 @@
 """Admin routes for Ban System monitoring in cabinet."""
 
-import logging
 from typing import Any
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.config import settings
@@ -45,7 +45,7 @@ from ..schemas.ban_system import (
 )
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/admin/ban-system', tags=['Cabinet Admin Ban System'])
 
@@ -53,9 +53,11 @@ router = APIRouter(prefix='/admin/ban-system', tags=['Cabinet Admin Ban System']
 def _get_ban_api() -> BanSystemAPI:
     """Get Ban System API instance."""
     logger.debug(
-        f'Ban System check - enabled: {settings.is_ban_system_enabled()}, configured: {settings.is_ban_system_configured()}'
+        'Ban System check enabled: configured',
+        is_ban_system_enabled=settings.is_ban_system_enabled(),
+        is_ban_system_configured=settings.is_ban_system_configured(),
     )
-    logger.debug(f'Ban System URL: {settings.get_ban_system_api_url()}')
+    logger.debug('Ban System URL', get_ban_system_api_url=settings.get_ban_system_api_url())
 
     if not settings.is_ban_system_enabled():
         raise HTTPException(
@@ -83,13 +85,13 @@ async def _api_request(api: BanSystemAPI, method: str, *args, **kwargs) -> Any:
             func = getattr(api, method)
             return await func(*args, **kwargs)
     except BanSystemAPIError as e:
-        logger.error(f'Ban System API error: {e}')
+        logger.error('Ban System API error', error=e)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f'Ban System API error: {e.message}',
         )
     except Exception as e:
-        logger.error(f'Ban System unexpected error: {e}')
+        logger.error('Ban System unexpected error', error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f'Internal error: {e!s}',
@@ -133,7 +135,7 @@ async def get_stats(
     api = _get_ban_api()
     data = await _api_request(api, 'get_stats')
 
-    logger.debug(f'Ban System raw stats: {data}')
+    logger.debug('Ban System raw stats', data=data)
 
     # Extract punishment stats
     punishment_stats = data.get('punishment_stats') or {}
@@ -364,7 +366,7 @@ async def unban_user(
     api = _get_ban_api()
     try:
         await _api_request(api, 'enable_user', user_id=user_id)
-        logger.info(f'Admin {admin.id} unbanned user {user_id} in Ban System')
+        logger.info('Admin unbanned user in Ban System', admin_id=admin.id, user_id=user_id)
         return UnbanResponse(success=True, message='User unbanned successfully')
     except HTTPException:
         raise
@@ -387,7 +389,7 @@ async def ban_user(
             minutes=request.minutes,
             reason=request.reason,
         )
-        logger.info(f'Admin {admin.id} banned user {request.username}: {request.reason}')
+        logger.info('Admin banned user', admin_id=admin.id, username=request.username, reason=request.reason)
         return UnbanResponse(success=True, message='User banned successfully')
     except HTTPException:
         raise
@@ -819,7 +821,7 @@ async def set_setting(
     api = _get_ban_api()
     data = await _api_request(api, 'set_setting', key=key, value=value)
 
-    logger.info(f'Admin {admin.id} changed Ban System setting {key} to {value}')
+    logger.info('Admin changed Ban System setting to', admin_id=admin.id, key=key, value=value)
 
     return _parse_setting_response(key, data)
 
@@ -833,7 +835,7 @@ async def toggle_setting(
     api = _get_ban_api()
     data = await _api_request(api, 'toggle_setting', key=key)
 
-    logger.info(f'Admin {admin.id} toggled Ban System setting {key}')
+    logger.info('Admin toggled Ban System setting', admin_id=admin.id, key=key)
 
     return _parse_setting_response(key, data, default_type='bool')
 
@@ -850,7 +852,7 @@ async def whitelist_add(
     api = _get_ban_api()
     try:
         await _api_request(api, 'whitelist_add', username=request.username)
-        logger.info(f'Admin {admin.id} added {request.username} to Ban System whitelist')
+        logger.info('Admin added to Ban System whitelist', admin_id=admin.id, username=request.username)
         return UnbanResponse(success=True, message=f'User {request.username} added to whitelist')
     except HTTPException:
         raise
@@ -867,7 +869,7 @@ async def whitelist_remove(
     api = _get_ban_api()
     try:
         await _api_request(api, 'whitelist_remove', username=request.username)
-        logger.info(f'Admin {admin.id} removed {request.username} from Ban System whitelist')
+        logger.info('Admin removed from Ban System whitelist', admin_id=admin.id, username=request.username)
         return UnbanResponse(success=True, message=f'User {request.username} removed from whitelist')
     except HTTPException:
         raise

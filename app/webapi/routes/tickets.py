@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import logging
 from datetime import datetime
 from typing import Any
 
+import structlog
 from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
@@ -28,7 +28,7 @@ from ..schemas.tickets import (
 
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 def _serialize_message(message: TicketMessage) -> TicketMessageResponse:
@@ -255,7 +255,7 @@ async def reply_to_ticket(
             db=db,
         )
     except Exception as error:
-        logger.warning('Failed to emit ticket.message_added event: %s', error)
+        logger.warning('Failed to emit ticket.message_added event', error=error)
 
     return TicketReplyResponse(
         ticket=_serialize_ticket(ticket_with_messages, include_messages=True),
@@ -295,7 +295,9 @@ async def get_ticket_message_media(
         if file.file_path:
             media_url = str(request.url_for('download_media', file_id=message.media_file_id))
     except Exception as error:
-        logger.warning('Failed to resolve media URL for ticket %s message %s: %s', ticket_id, message_id, error)
+        logger.warning(
+            'Failed to resolve media URL for ticket message', ticket_id=ticket_id, message_id=message_id, error=error
+        )
     finally:
         await bot.session.close()
 

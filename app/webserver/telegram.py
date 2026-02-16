@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import Any
 
+import structlog
 from aiogram import Bot, Dispatcher
 from aiogram.types import Update
 from fastapi import APIRouter, HTTPException, Request, status
@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse
 from app.config import settings
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class TelegramWebhookProcessorError(RuntimeError):
@@ -74,9 +74,9 @@ class TelegramWebhookProcessor:
 
             if self._worker_count:
                 logger.info(
-                    '🚀 Telegram webhook processor запущен: %s воркеров, очередь %s',
-                    self._worker_count,
-                    self._queue_maxsize,
+                    '🚀 Telegram webhook processor запущен: воркеров, очередь',
+                    worker_count=self._worker_count,
+                    queue_maxsize=self._queue_maxsize,
                 )
             else:
                 logger.warning('Telegram webhook processor запущен без воркеров — обновления не будут обрабатываться')
@@ -93,8 +93,8 @@ class TelegramWebhookProcessor:
                     await asyncio.wait_for(self._queue.join(), timeout=self._shutdown_timeout)
                 except TimeoutError:
                     logger.warning(
-                        '⏱️ Не удалось дождаться завершения очереди Telegram webhook за %s секунд',
-                        self._shutdown_timeout,
+                        '⏱️ Не удалось дождаться завершения очереди Telegram webhook за секунд',
+                        shutdown_timeout=self._shutdown_timeout,
                     )
             else:
                 drained = 0
@@ -108,8 +108,7 @@ class TelegramWebhookProcessor:
                         self._queue.task_done()
                 if drained:
                     logger.warning(
-                        'Очередь Telegram webhook остановлена без воркеров, потеряно %s обновлений',
-                        drained,
+                        'Очередь Telegram webhook остановлена без воркеров, потеряно обновлений', drained=drained
                     )
 
             for _ in range(len(self._workers)):
@@ -152,7 +151,7 @@ class TelegramWebhookProcessor:
                 try:
                     item = await self._queue.get()
                 except asyncio.CancelledError:  # pragma: no cover - остановка приложения
-                    logger.debug('Worker %s cancelled', worker_id)
+                    logger.debug('Worker cancelled', worker_id=worker_id)
                     raise
 
                 if item is self._stop_sentinel:
@@ -163,14 +162,14 @@ class TelegramWebhookProcessor:
                 try:
                     await self._dispatcher.feed_update(self._bot, update)  # type: ignore[arg-type]
                 except asyncio.CancelledError:  # pragma: no cover - остановка приложения
-                    logger.debug('Worker %s cancelled during processing', worker_id)
+                    logger.debug('Worker cancelled during processing', worker_id=worker_id)
                     raise
                 except Exception as error:  # pragma: no cover - логируем сбой обработчика
-                    logger.exception('Ошибка обработки Telegram update в worker %s: %s', worker_id, error)
+                    logger.exception('Ошибка обработки Telegram update в worker', worker_id=worker_id, error=error)
                 finally:
                     self._queue.task_done()
         finally:
-            logger.debug('Worker %s завершён', worker_id)
+            logger.debug('Worker завершён', worker_id=worker_id)
 
 
 async def _dispatch_update(
@@ -184,10 +183,10 @@ async def _dispatch_update(
         try:
             await processor.enqueue(update)
         except TelegramWebhookOverloadedError as error:
-            logger.warning('Очередь Telegram webhook переполнена: %s', error)
+            logger.warning('Очередь Telegram webhook переполнена', error=error)
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail='webhook_queue_full') from error
         except TelegramWebhookProcessorNotRunningError as error:
-            logger.error('Telegram webhook processor неактивен: %s', error)
+            logger.error('Telegram webhook processor неактивен', error=error)
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail='webhook_processor_unavailable'
             ) from error
@@ -221,13 +220,13 @@ def create_telegram_router(
         try:
             payload: Any = await request.json()
         except Exception as error:  # pragma: no cover - defensive logging
-            logger.error('Ошибка чтения Telegram webhook: %s', error)
+            logger.error('Ошибка чтения Telegram webhook', error=error)
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='invalid_payload') from error
 
         try:
             update = Update.model_validate(payload)
         except Exception as error:  # pragma: no cover - defensive logging
-            logger.error('Ошибка валидации Telegram update: %s', error)
+            logger.error('Ошибка валидации Telegram update', error=error)
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='invalid_update') from error
 
         await _dispatch_update(update, dispatcher=dispatcher, bot=bot, processor=processor)

@@ -1,10 +1,10 @@
 """Contests routes for cabinet - user participation in games/contests."""
 
-import logging
 import random
 from datetime import datetime, timedelta
 from typing import Any
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,7 +30,7 @@ from app.services.contest_rotation_service import (
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/contests', tags=['Cabinet Contests'])
 
@@ -106,7 +106,7 @@ async def _award_prize(db: AsyncSession, user_id: int, prize_type: str, prize_va
         await db.commit()
         await db.refresh(subscription)
 
-        logger.info(f'🎁 Extended subscription for user {user_id} by {days} days (contest prize)')
+        logger.info('🎁 Extended subscription for user by days (contest prize)', user_id=user_id, days=days)
         return f'Subscription extended by {days} days'
 
     if prize_type == 'balance':
@@ -125,10 +125,10 @@ async def _award_prize(db: AsyncSession, user_id: int, prize_type: str, prize_va
         await db.commit()
         await db.refresh(user)
 
-        logger.info(f'🎁 Added {amount} to balance for user {user_id} (contest prize)')
+        logger.info('🎁 Added to balance for user (contest prize)', amount=amount, user_id=user_id)
         return f'Balance increased by {amount}'
 
-    logger.warning(f'Unknown prize type: {prize_type}')
+    logger.warning('Unknown prize type', prize_type=prize_type)
     return f"Prize type '{prize_type}' not supported"
 
 

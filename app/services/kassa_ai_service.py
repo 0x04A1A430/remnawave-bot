@@ -3,16 +3,16 @@
 import asyncio
 import hashlib
 import hmac
-import logging
 import time
 from typing import Any
 
 import aiohttp
+import structlog
 
 from app.config import settings
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Кэш для публичного IP
 _cached_public_ip: str | None = None
@@ -56,14 +56,14 @@ async def get_public_ip() -> str:
                             ip = (await response.text()).strip()
                             if ip and len(ip.split('.')) == 4:
                                 _cached_public_ip = ip
-                                logger.info(f'KassaAI: определён публичный IP сервера: {ip}')
+                                logger.info('KassaAI: определён публичный IP сервера', ip=ip)
                                 return ip
                 except Exception as e:
-                    logger.debug(f'KassaAI: не удалось получить IP от {service_url}: {e}')
+                    logger.debug('KassaAI: не удалось получить IP от', service_url=service_url, error=e)
                     continue
 
         fallback_ip = '127.0.0.1'
-        logger.warning(f'KassaAI: не удалось определить публичный IP, используем fallback: {fallback_ip}')
+        logger.warning('KassaAI: не удалось определить публичный IP, используем fallback', fallback_ip=fallback_ip)
         _cached_public_ip = fallback_ip
         return fallback_ip
 
@@ -122,7 +122,7 @@ class KassaAiService:
 
             return expected_sign.lower() == sign.lower()
         except Exception as e:
-            logger.error(f'KassaAI webhook verify error: {e}')
+            logger.error('KassaAI webhook verify error', error=e)
             return False
 
     async def create_order(
@@ -170,7 +170,11 @@ class KassaAiService:
         params['signature'] = self._generate_hmac_signature(params)
 
         logger.info(
-            f'KassaAI API create_order: shop_id={self.shop_id}, order_id={order_id}, amount={final_amount}, ps_id={ps_id}'
+            'KassaAI API create_order: shop_id=, order_id=, amount=, ps_id',
+            shop_id=self.shop_id,
+            order_id=order_id,
+            final_amount=final_amount,
+            ps_id=ps_id,
         )
 
         try:
@@ -184,14 +188,14 @@ class KassaAiService:
                 ) as response,
             ):
                 text = await response.text()
-                logger.info(f'KassaAI API response: {text}')
+                logger.info('KassaAI API response', text=text)
 
                 data = await response.json()
 
                 # Проверяем на ошибку
                 if data.get('type') == 'error':
                     error_msg = data.get('error') or data.get('message') or 'Unknown error'
-                    logger.error(f'KassaAI create_order error: {error_msg}')
+                    logger.error('KassaAI create_order error', error_msg=error_msg)
                     raise Exception(f'KassaAI API error: {error_msg}')
 
                 if data.get('type') == 'success':
@@ -202,11 +206,11 @@ class KassaAiService:
                     }
 
                 # Неизвестный формат ответа
-                logger.error(f'KassaAI unexpected response: {data}')
+                logger.error('KassaAI unexpected response', data=data)
                 raise Exception('KassaAI unexpected response format')
 
         except aiohttp.ClientError as e:
-            logger.exception(f'KassaAI API connection error: {e}')
+            logger.exception('KassaAI API connection error', error=e)
             raise
 
     async def create_order_and_get_url(
@@ -246,7 +250,7 @@ class KassaAiService:
         }
         params['signature'] = self._generate_hmac_signature(params)
 
-        logger.info(f'KassaAI get_order_status: order_id={order_id}')
+        logger.info('KassaAI get_order_status: order_id', order_id=order_id)
 
         try:
             async with (
@@ -259,10 +263,10 @@ class KassaAiService:
                 ) as response,
             ):
                 text = await response.text()
-                logger.info(f'KassaAI get_order_status response: {text}')
+                logger.info('KassaAI get_order_status response', text=text)
                 return await response.json()
         except aiohttp.ClientError as e:
-            logger.exception(f'KassaAI API connection error: {e}')
+            logger.exception('KassaAI API connection error', error=e)
             raise
 
     async def get_balance(self) -> dict[str, Any]:
@@ -285,7 +289,7 @@ class KassaAiService:
             ):
                 return await response.json()
         except aiohttp.ClientError as e:
-            logger.exception(f'KassaAI API connection error: {e}')
+            logger.exception('KassaAI API connection error', error=e)
             raise
 
 

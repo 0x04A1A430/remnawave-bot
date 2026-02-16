@@ -1,8 +1,8 @@
 """Admin routes for per-section cabinet button style configuration."""
 
 import json
-import logging
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,7 +20,7 @@ from app.utils.button_styles_cache import (
 from ..dependencies import get_cabinet_db, get_current_admin_user
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/admin/button-styles', tags=['Admin Button Styles'])
 
@@ -234,7 +234,9 @@ async def update_button_styles(
     # Refresh in-process cache
     await load_button_styles_cache()
 
-    logger.info('Admin %s updated button styles for sections: %s', admin.telegram_id, changed_sections)
+    logger.info(
+        'Admin updated button styles for sections', telegram_id=admin.telegram_id, changed_sections=changed_sections
+    )
 
     return _build_response(current)
 
@@ -248,6 +250,6 @@ async def reset_button_styles(
     await _set_setting_value(db, BUTTON_STYLES_KEY, json.dumps(DEFAULT_BUTTON_STYLES))
     await load_button_styles_cache()
 
-    logger.info('Admin %s reset button styles to defaults', admin.telegram_id)
+    logger.info('Admin reset button styles to defaults', telegram_id=admin.telegram_id)
 
     return _build_response(DEFAULT_BUTTON_STYLES)

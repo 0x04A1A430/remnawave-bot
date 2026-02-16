@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import structlog
 from aiogram import Bot
 from aiogram.types import FSInputFile
 
@@ -25,7 +26,7 @@ from app.config import settings
 from app.utils.timezone import get_local_timezone
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @dataclass
@@ -113,9 +114,9 @@ class LogRotationService:
 
             if wait_seconds > 0:
                 logger.info(
-                    'Следующая ротация логов: %s (через %.1f часов)',
-                    next_rotation.strftime('%Y-%m-%d %H:%M'),
-                    wait_seconds / 3600,
+                    'Следующая ротация логов: (через часов)',
+                    next_rotation=next_rotation.strftime('%Y-%m-%d %H:%M'),
+                    wait_seconds=wait_seconds / 3600,
                 )
                 try:
                     await asyncio.sleep(wait_seconds)
@@ -135,7 +136,7 @@ class LogRotationService:
             hours, minutes = map(int, time_str.split(':'))
         except ValueError:
             hours, minutes = 0, 0
-            logger.warning("Некорректное LOG_ROTATION_TIME='%s', используем 00:00", time_str)
+            logger.warning("Некорректное LOG_ROTATION_TIME='', используем 00:00", time_str=time_str)
 
         next_rotation = now.replace(hour=hours, minute=minutes, second=0, microsecond=0)
 
@@ -234,11 +235,11 @@ class LogRotationService:
                         tar.add(file_path, arcname=arcname)
 
             await asyncio.to_thread(_create_tar)
-            logger.debug('Создан архив: %s', archive_path)
+            logger.debug('Создан архив', archive_path=archive_path)
             return archive_path
 
         except Exception as error:
-            logger.error('Ошибка создания архива: %s', error)
+            logger.error('Ошибка создания архива', error=error)
             return None
 
     async def _cleanup_old_archives(self) -> None:
@@ -267,7 +268,7 @@ class LogRotationService:
 
                 if file_date < cutoff_date:
                     archive_file.unlink()
-                    logger.info('Удален старый архив логов: %s', archive_file.name)
+                    logger.info('Удален старый архив логов', archive_file_name=archive_file.name)
             except ValueError:
                 # Пропускаем файлы с некорректным форматом имени
                 pass
@@ -305,10 +306,10 @@ class LogRotationService:
                 send_kwargs['message_thread_id'] = topic_id
 
             await self.bot.send_document(**send_kwargs)
-            logger.info('Архив логов отправлен: %s', archive_path.name)
+            logger.info('Архив логов отправлен', archive_path_name=archive_path.name)
 
         except Exception as error:
-            logger.error('Ошибка отправки архива %s: %s', archive_path.name, error)
+            logger.error('Ошибка отправки архива', archive_path_name=archive_path.name, error=error)
 
     # === Ручные операции ===
 

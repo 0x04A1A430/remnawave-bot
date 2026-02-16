@@ -1,5 +1,4 @@
-import logging
-
+import structlog
 from aiogram import Dispatcher, F, types
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
@@ -25,7 +24,7 @@ from app.utils.validators import (
 )
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class UserMessageStates(StatesGroup):
@@ -140,7 +139,7 @@ async def process_new_message_text(message: types.Message, state: FSMContext, db
         )
 
     except Exception as e:
-        logger.error(f'Ошибка создания сообщения: {e}')
+        logger.error('Ошибка создания сообщения', error=e)
         await state.clear()
         await message.answer(
             '❌ Произошла ошибка при создании сообщения. Попробуйте еще раз.',
@@ -405,7 +404,7 @@ async def process_edit_message_text(message: types.Message, state: FSMContext, d
             )
 
     except Exception as e:
-        logger.error(f'Ошибка обновления сообщения: {e}')
+        logger.error('Ошибка обновления сообщения', error=e)
         await state.clear()
         await message.answer(
             '❌ Произошла ошибка при обновлении сообщения.', reply_markup=get_user_messages_keyboard(db_user.language)

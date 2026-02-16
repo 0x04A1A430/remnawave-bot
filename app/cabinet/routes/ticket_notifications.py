@@ -1,8 +1,8 @@
 """Ticket notifications routes for cabinet."""
 
-import logging
 from datetime import datetime
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,7 +13,7 @@ from app.database.models import User
 from ..dependencies import get_cabinet_db, get_current_admin_user, get_current_cabinet_user
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/tickets/notifications', tags=['Cabinet Ticket Notifications'])
 admin_router = APIRouter(prefix='/admin/tickets/notifications', tags=['Cabinet Admin Ticket Notifications'])

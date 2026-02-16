@@ -1,15 +1,15 @@
 """Service for blocking disposable/temporary email domains."""
 
 import asyncio
-import logging
 from datetime import UTC, datetime
 
 import aiohttp
+import structlog
 
 from app.config import settings
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class DisposableEmailService:
@@ -34,7 +34,7 @@ class DisposableEmailService:
         """Load domains and start periodic refresh task."""
         await self._update_domains()
         self._task = asyncio.create_task(self._periodic_loop())
-        logger.info('DisposableEmailService started (%d domains loaded)', self._domain_count)
+        logger.info('DisposableEmailService started (domains loaded)', domain_count=self._domain_count)
 
     async def stop(self) -> None:
         """Cancel periodic refresh task."""
@@ -52,10 +52,7 @@ class DisposableEmailService:
         try:
             async with aiohttp.ClientSession() as session, session.get(self.DOMAINS_URL) as resp:
                 if resp.status != 200:
-                    logger.error(
-                        'Failed to fetch disposable domains: HTTP %d',
-                        resp.status,
-                    )
+                    logger.error('Failed to fetch disposable domains: HTTP', resp_status=resp.status)
                     return
 
                 text = await resp.text()
@@ -67,7 +64,7 @@ class DisposableEmailService:
             self._domains = domains
             self._domain_count = len(domains)
             self._last_updated = datetime.now(UTC)
-            logger.info('Disposable email domains updated: %d domains', self._domain_count)
+            logger.info('Disposable email domains updated: domains', domain_count=self._domain_count)
 
         except Exception:
             logger.exception('Error updating disposable email domains')

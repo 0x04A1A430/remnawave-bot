@@ -1,6 +1,6 @@
-import logging
 from datetime import datetime
 
+import structlog
 from aiogram import types
 from aiogram.fsm.context import FSMContext
 from sqlalchemy import update
@@ -15,7 +15,7 @@ from app.states import BalanceStates
 from app.utils.decorators import error_handler
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @error_handler
@@ -233,16 +233,13 @@ async def process_yookassa_payment_amount(
         try:
             await message.delete()
         except Exception as delete_error:  # pragma: no cover - зависит от прав бота
-            logger.warning('Не удалось удалить сообщение с суммой YooKassa: %s', delete_error)
+            logger.warning('Не удалось удалить сообщение с суммой YooKassa', delete_error=delete_error)
 
         if prompt_message_id:
             try:
                 await message.bot.delete_message(prompt_chat_id, prompt_message_id)
             except Exception as delete_error:  # pragma: no cover - диагностический лог
-                logger.warning(
-                    'Не удалось удалить сообщение с запросом суммы YooKassa: %s',
-                    delete_error,
-                )
+                logger.warning('Не удалось удалить сообщение с запросом суммы YooKassa', delete_error=delete_error)
 
         invoice_message = await message.answer(
             f'💳 <b>Оплата банковской картой</b>\n\n'
@@ -277,7 +274,7 @@ async def process_yookassa_payment_amount(
                 )
                 await db.commit()
         except Exception as error:  # pragma: no cover - диагностический лог
-            logger.warning('Не удалось сохранить сообщение YooKassa: %s', error)
+            logger.warning('Не удалось сохранить сообщение YooKassa', error=error)
 
         await state.update_data(
             yookassa_invoice_message_id=invoice_message.message_id,
@@ -286,12 +283,14 @@ async def process_yookassa_payment_amount(
 
         await state.clear()
         logger.info(
-            f'Создан платеж YooKassa для пользователя {db_user.telegram_id}: '
-            f'{amount_kopeks // 100}₽, ID: {payment_result["yookassa_payment_id"]}'
+            'Создан платеж YooKassa для пользователя ₽, ID',
+            telegram_id=db_user.telegram_id,
+            value=amount_kopeks // 100,
+            payment_result=payment_result['yookassa_payment_id'],
         )
 
     except Exception as e:
-        logger.error(f'Ошибка создания YooKassa платежа: {e}')
+        logger.error('Ошибка создания YooKassa платежа', error=e)
         await message.answer('❌ Ошибка создания платежа. Попробуйте позже или обратитесь в поддержку.')
         await state.clear()
 
@@ -392,7 +391,7 @@ async def process_yookassa_sbp_payment_amount(
             except ImportError:
                 logger.warning('qrcode библиотека не установлена, QR-код не будет сгенерирован')
             except Exception as e:
-                logger.error(f'Ошибка генерации QR-кода: {e}')
+                logger.error('Ошибка генерации QR-кода', error=e)
 
         # Если нет QR-данных из YooKassa, но есть URL, генерируем QR-код из URL
         if not qr_photo and confirmation_url:
@@ -419,7 +418,7 @@ async def process_yookassa_sbp_payment_amount(
             except ImportError:
                 logger.warning('qrcode библиотека не установлена, QR-код не будет сгенерирован')
             except Exception as e:
-                logger.error(f'Ошибка генерации QR-кода из URL: {e}')
+                logger.error('Ошибка генерации QR-кода из URL', error=e)
 
         # Создаем клавиатуру с кнопками для оплаты по ссылке и проверки статуса
         keyboard_buttons = []
@@ -452,15 +451,14 @@ async def process_yookassa_sbp_payment_amount(
         try:
             await message.delete()
         except Exception as delete_error:  # pragma: no cover - зависит от прав бота
-            logger.warning('Не удалось удалить сообщение с суммой YooKassa (СБП): %s', delete_error)
+            logger.warning('Не удалось удалить сообщение с суммой YooKassa (СБП)', delete_error=delete_error)
 
         if prompt_message_id:
             try:
                 await message.bot.delete_message(prompt_chat_id, prompt_message_id)
             except Exception as delete_error:  # pragma: no cover - диагностический лог
                 logger.warning(
-                    'Не удалось удалить сообщение с запросом суммы YooKassa (СБП): %s',
-                    delete_error,
+                    'Не удалось удалить сообщение с запросом суммы YooKassa (СБП)', delete_error=delete_error
                 )
 
         # Подготавливаем текст сообщения
@@ -515,7 +513,7 @@ async def process_yookassa_sbp_payment_amount(
                 )
                 await db.commit()
         except Exception as error:  # pragma: no cover - диагностический лог
-            logger.warning('Не удалось сохранить сообщение YooKassa (СБП): %s', error)
+            logger.warning('Не удалось сохранить сообщение YooKassa (СБП)', error=error)
 
         await state.update_data(
             yookassa_invoice_message_id=invoice_message.message_id,
@@ -524,12 +522,14 @@ async def process_yookassa_sbp_payment_amount(
 
         await state.clear()
         logger.info(
-            f'Создан платеж YooKassa СБП для пользователя {db_user.telegram_id}: '
-            f'{amount_kopeks // 100}₽, ID: {payment_result["yookassa_payment_id"]}'
+            'Создан платеж YooKassa СБП для пользователя ₽, ID',
+            telegram_id=db_user.telegram_id,
+            value=amount_kopeks // 100,
+            payment_result=payment_result['yookassa_payment_id'],
         )
 
     except Exception as e:
-        logger.error(f'Ошибка создания YooKassa СБП платежа: {e}')
+        logger.error('Ошибка создания YooKassa СБП платежа', error=e)
         await message.answer('❌ Ошибка создания платежа через СБП. Попробуйте позже или обратитесь в поддержку.')
         await state.clear()
 
@@ -584,5 +584,5 @@ async def check_yookassa_payment_status(callback: types.CallbackQuery, db: Async
         await callback.answer(message_text, show_alert=True)
 
     except Exception as e:
-        logger.error(f'Ошибка проверки статуса платежа: {e}')
+        logger.error('Ошибка проверки статуса платежа', error=e)
         await callback.answer('❌ Ошибка проверки статуса', show_alert=True)

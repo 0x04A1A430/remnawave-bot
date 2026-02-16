@@ -1,7 +1,7 @@
 import asyncio
-import logging
 from datetime import datetime, timedelta
 
+import structlog
 from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
@@ -23,7 +23,7 @@ from app.utils.decorators import admin_required
 from app.utils.pagination import paginate_list
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 router = Router()
 
 
@@ -393,7 +393,7 @@ async def admin_monitoring_menu(callback: CallbackQuery):
             await callback.message.edit_text(text, parse_mode='HTML', reply_markup=keyboard)
 
     except Exception as e:
-        logger.error(f'Ошибка в админ меню мониторинга: {e}')
+        logger.error('Ошибка в админ меню мониторинга', error=e)
         await callback.answer('❌ Ошибка получения данных', show_alert=True)
 
 
@@ -428,7 +428,7 @@ async def admin_monitoring_settings(callback: CallbackQuery):
         await callback.message.edit_text(text, parse_mode='HTML', reply_markup=keyboard)
 
     except Exception as e:
-        logger.error(f'Ошибка отображения настроек мониторинга: {e}')
+        logger.error('Ошибка отображения настроек мониторинга', error=e)
         await callback.answer('❌ Не удалось открыть настройки', show_alert=True)
 
 
@@ -438,7 +438,7 @@ async def admin_notify_settings(callback: CallbackQuery):
     try:
         await _render_notification_settings(callback)
     except Exception as e:
-        logger.error(f'Ошибка отображения настроек уведомлений: {e}')
+        logger.error('Ошибка отображения настроек уведомлений', error=e)
         await callback.answer('❌ Не удалось загрузить настройки', show_alert=True)
 
 
@@ -459,7 +459,7 @@ async def preview_trial_channel_notification(callback: CallbackQuery):
         await _send_notification_preview(callback.bot, callback.from_user.id, language, 'trial_channel_unsubscribed')
         await callback.answer('✅ Пример отправлен')
     except Exception as exc:
-        logger.error('Failed to send trial channel preview: %s', exc)
+        logger.error('Failed to send trial channel preview', exc=exc)
         await callback.answer('❌ Не удалось отправить тест', show_alert=True)
 
 
@@ -480,7 +480,7 @@ async def preview_expired_1d_notification(callback: CallbackQuery):
         await _send_notification_preview(callback.bot, callback.from_user.id, language, 'expired_1d')
         await callback.answer('✅ Пример отправлен')
     except Exception as exc:
-        logger.error('Failed to send expired 1d preview: %s', exc)
+        logger.error('Failed to send expired 1d preview', exc=exc)
         await callback.answer('❌ Не удалось отправить тест', show_alert=True)
 
 
@@ -501,7 +501,7 @@ async def preview_second_wave_notification(callback: CallbackQuery):
         await _send_notification_preview(callback.bot, callback.from_user.id, language, 'expired_2d')
         await callback.answer('✅ Пример отправлен')
     except Exception as exc:
-        logger.error('Failed to send second wave preview: %s', exc)
+        logger.error('Failed to send second wave preview', exc=exc)
         await callback.answer('❌ Не удалось отправить тест', show_alert=True)
 
 
@@ -522,7 +522,7 @@ async def preview_third_wave_notification(callback: CallbackQuery):
         await _send_notification_preview(callback.bot, callback.from_user.id, language, 'expired_nd')
         await callback.answer('✅ Пример отправлен')
     except Exception as exc:
-        logger.error('Failed to send third wave preview: %s', exc)
+        logger.error('Failed to send third wave preview', exc=exc)
         await callback.answer('❌ Не удалось отправить тест', show_alert=True)
 
 
@@ -541,7 +541,7 @@ async def preview_all_notifications(callback: CallbackQuery):
             await _send_notification_preview(callback.bot, chat_id, language, notification_type)
         await callback.answer('✅ Все тестовые уведомления отправлены')
     except Exception as exc:
-        logger.error('Failed to send all notification previews: %s', exc)
+        logger.error('Failed to send all notification previews', exc=exc)
         await callback.answer('❌ Не удалось отправить тесты', show_alert=True)
 
 
@@ -655,7 +655,7 @@ async def start_monitoring_callback(callback: CallbackQuery):
         await admin_monitoring_menu(callback)
 
     except Exception as e:
-        logger.error(f'Ошибка запуска мониторинга: {e}')
+        logger.error('Ошибка запуска мониторинга', error=e)
         await callback.answer(f'❌ Ошибка запуска: {e!s}', show_alert=True)
 
 
@@ -673,7 +673,7 @@ async def stop_monitoring_callback(callback: CallbackQuery):
         await admin_monitoring_menu(callback)
 
     except Exception as e:
-        logger.error(f'Ошибка остановки мониторинга: {e}')
+        logger.error('Ошибка остановки мониторинга', error=e)
         await callback.answer(f'❌ Ошибка остановки: {e!s}', show_alert=True)
 
 
@@ -708,7 +708,7 @@ async def force_check_callback(callback: CallbackQuery):
             await callback.message.edit_text(text, parse_mode='HTML', reply_markup=keyboard)
 
     except Exception as e:
-        logger.error(f'Ошибка принудительной проверки: {e}')
+        logger.error('Ошибка принудительной проверки', error=e)
         await callback.answer(f'❌ Ошибка проверки: {e!s}', show_alert=True)
 
 
@@ -774,7 +774,7 @@ async def traffic_check_callback(callback: CallbackQuery):
         await callback.message.edit_text(text, parse_mode='HTML', reply_markup=keyboard)
 
     except Exception as e:
-        logger.error(f'Ошибка проверки трафика: {e}')
+        logger.error('Ошибка проверки трафика', error=e)
         await callback.answer(f'❌ Ошибка: {e!s}', show_alert=True)
 
 
@@ -826,7 +826,7 @@ async def monitoring_logs_callback(callback: CallbackQuery):
             await callback.message.edit_text(text, parse_mode='HTML', reply_markup=keyboard)
 
     except Exception as e:
-        logger.error(f'Ошибка получения логов: {e}')
+        logger.error('Ошибка получения логов', error=e)
         await callback.answer('❌ Ошибка получения логов', show_alert=True)
 
 
@@ -846,7 +846,7 @@ async def clear_logs_callback(callback: CallbackQuery):
             await monitoring_logs_callback(callback)
 
     except Exception as e:
-        logger.error(f'Ошибка очистки логов: {e}')
+        logger.error('Ошибка очистки логов', error=e)
         await callback.answer(f'❌ Ошибка очистки: {e!s}', show_alert=True)
 
 
@@ -872,7 +872,7 @@ async def test_notifications_callback(callback: CallbackQuery):
         await callback.answer('✅ Тестовое уведомление отправлено!')
 
     except Exception as e:
-        logger.error(f'Ошибка отправки тестового уведомления: {e}')
+        logger.error('Ошибка отправки тестового уведомления', error=e)
         await callback.answer(f'❌ Ошибка отправки: {e!s}', show_alert=True)
 
 
@@ -971,7 +971,7 @@ async def monitoring_statistics_callback(callback: CallbackQuery):
             await callback.message.edit_text(text, parse_mode='HTML', reply_markup=keyboard)
 
     except Exception as e:
-        logger.error(f'Ошибка получения статистики: {e}')
+        logger.error('Ошибка получения статистики', error=e)
         await callback.answer(f'❌ Ошибка получения статистики: {e!s}', show_alert=True)
 
 
@@ -1082,7 +1082,7 @@ async def nalogo_force_process_callback(callback: CallbackQuery):
             await callback.message.edit_text(stats_text, parse_mode='HTML', reply_markup=keyboard)
 
     except Exception as e:
-        logger.error(f'Ошибка принудительной обработки чеков: {e}')
+        logger.error('Ошибка принудительной обработки чеков', error=e)
         await callback.answer(f'❌ Ошибка: {e!s}', show_alert=True)
 
 
@@ -1143,7 +1143,7 @@ async def nalogo_pending_callback(callback: CallbackQuery):
         await callback.message.edit_text(text, parse_mode='HTML', reply_markup=keyboard)
 
     except Exception as e:
-        logger.error(f'Ошибка просмотра очереди проверки: {e}')
+        logger.error('Ошибка просмотра очереди проверки', error=e)
         await callback.answer(f'❌ Ошибка: {e!s}', show_alert=True)
 
 
@@ -1168,7 +1168,7 @@ async def nalogo_mark_verified_callback(callback: CallbackQuery):
             await callback.answer('❌ Чек не найден', show_alert=True)
 
     except Exception as e:
-        logger.error(f'Ошибка пометки чека: {e}')
+        logger.error('Ошибка пометки чека', error=e)
         await callback.answer(f'❌ Ошибка: {e!s}', show_alert=True)
 
 
@@ -1194,7 +1194,7 @@ async def nalogo_retry_callback(callback: CallbackQuery):
             await callback.answer('❌ Не удалось создать чек', show_alert=True)
 
     except Exception as e:
-        logger.error(f'Ошибка повторной отправки чека: {e}')
+        logger.error('Ошибка повторной отправки чека', error=e)
         await callback.answer(f'❌ Ошибка: {e!s}', show_alert=True)
 
 
@@ -1218,7 +1218,7 @@ async def nalogo_clear_pending_callback(callback: CallbackQuery):
         )
 
     except Exception as e:
-        logger.error(f'Ошибка очистки очереди: {e}')
+        logger.error('Ошибка очистки очереди', error=e)
         await callback.answer(f'❌ Ошибка: {e!s}', show_alert=True)
 
 
@@ -1334,7 +1334,7 @@ async def receipts_link_old_callback(callback: CallbackQuery):
             await callback.message.edit_text(text, parse_mode='HTML', reply_markup=keyboard)
 
     except Exception as e:
-        logger.error(f'Ошибка привязки старых чеков: {e}', exc_info=True)
+        logger.error('Ошибка привязки старых чеков', error=e, exc_info=True)
         await callback.answer(f'❌ Ошибка: {e!s}', show_alert=True)
 
 
@@ -1415,7 +1415,7 @@ async def _do_reconcile_logs(callback: CallbackQuery):
                         date_str, payment_id, receipt_uuid = match.groups()
                         receipts[payment_id] = {'date': date_str, 'receipt_uuid': receipt_uuid}
         except Exception as e:
-            logger.error(f'Ошибка чтения логов: {e}')
+            logger.error('Ошибка чтения логов', error=e)
             await callback.message.edit_text(
                 f'❌ <b>Ошибка чтения логов</b>\n\n{e!s}',
                 parse_mode='HTML',
@@ -1479,7 +1479,7 @@ async def _do_reconcile_logs(callback: CallbackQuery):
     except TelegramBadRequest:
         pass  # Игнорируем если сообщение не изменилось
     except Exception as e:
-        logger.error(f'Ошибка сверки по логам: {e}', exc_info=True)
+        logger.error('Ошибка сверки по логам', error=e, exc_info=True)
         await callback.answer(f'❌ Ошибка: {e!s}', show_alert=True)
 
 
@@ -1575,7 +1575,7 @@ async def receipts_reconcile_logs_details_callback(callback: CallbackQuery):
     except TelegramBadRequest:
         pass
     except Exception as e:
-        logger.error(f'Ошибка детализации: {e}', exc_info=True)
+        logger.error('Ошибка детализации', error=e, exc_info=True)
         await callback.answer(f'❌ Ошибка: {e!s}', show_alert=True)
 
 
@@ -1647,7 +1647,7 @@ async def monitoring_command(message: Message):
             await message.answer(text, parse_mode='HTML')
 
     except Exception as e:
-        logger.error(f'Ошибка команды /monitoring: {e}')
+        logger.error('Ошибка команды /monitoring', error=e)
         await message.answer(f'❌ Ошибка: {e!s}')
 
 
@@ -1836,7 +1836,7 @@ async def admin_traffic_settings(callback: CallbackQuery):
         keyboard = _build_traffic_settings_keyboard()
         await callback.message.edit_text(text, parse_mode='HTML', reply_markup=keyboard)
     except Exception as e:
-        logger.error(f'Ошибка отображения настроек трафика: {e}')
+        logger.error('Ошибка отображения настроек трафика', error=e)
         await callback.answer('❌ Ошибка загрузки настроек', show_alert=True)
 
 
@@ -1862,7 +1862,7 @@ async def toggle_fast_check(callback: CallbackQuery):
         await callback.message.edit_text(text, parse_mode='HTML', reply_markup=keyboard)
 
     except Exception as e:
-        logger.error(f'Ошибка переключения быстрой проверки: {e}')
+        logger.error('Ошибка переключения быстрой проверки', error=e)
         await callback.answer('❌ Ошибка', show_alert=True)
 
 
@@ -1887,7 +1887,7 @@ async def toggle_daily_check(callback: CallbackQuery):
         await callback.message.edit_text(text, parse_mode='HTML', reply_markup=keyboard)
 
     except Exception as e:
-        logger.error(f'Ошибка переключения суточной проверки: {e}')
+        logger.error('Ошибка переключения суточной проверки', error=e)
         await callback.answer('❌ Ошибка', show_alert=True)
 
 
@@ -2037,7 +2037,7 @@ async def process_traffic_setting_input(message: Message, state: FSMContext):
                 pass  # Игнорируем если сообщение уже удалено
 
     except Exception as e:
-        logger.error(f'Ошибка сохранения настройки трафика: {e}')
+        logger.error('Ошибка сохранения настройки трафика', error=e)
         await message.answer(f'❌ Ошибка сохранения: {e!s}')
 
     await state.clear()

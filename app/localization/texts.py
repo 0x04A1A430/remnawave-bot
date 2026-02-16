@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import Any
+
+import structlog
 
 from app.config import settings
 from app.localization.loader import (
@@ -12,7 +13,7 @@ from app.localization.loader import (
 )
 
 
-_logger = logging.getLogger(__name__)
+_logger = structlog.get_logger(__name__)
 
 _cached_rules: dict[str, str] = {}
 
@@ -190,11 +191,7 @@ class Texts:
         if item in self._fallback_values:
             return self._fallback_values[item]
 
-        _logger.warning(
-            "Missing localization key '%s' for language '%s'",
-            item,
-            self.language,
-        )
+        _logger.warning("Missing localization key '' for language ''", item=item, language=self.language)
         raise KeyError(item)
 
     @staticmethod
@@ -232,7 +229,7 @@ async def get_rules_from_db(language: str = DEFAULT_LANGUAGE) -> str:
                 return rules
 
     except Exception as error:  # pragma: no cover - defensive logging
-        _logger.warning('Failed to load rules from DB for %s: %s', language, error)
+        _logger.warning('Failed to load rules from DB for', language=language, error=error)
 
     default = _get_default_rules(language)
     _cached_rules[language] = default

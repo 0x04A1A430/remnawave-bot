@@ -332,10 +332,10 @@ async def confirm_reset_traffic(callback: types.CallbackQuery, db_user: User, db
             reply_markup=get_back_keyboard(db_user.language),
         )
 
-        logger.info(f'✅ Пользователь {db_user.telegram_id} сбросил трафик')
+        logger.info('✅ Пользователь сбросил трафик', telegram_id=db_user.telegram_id)
 
     except Exception as e:
-        logger.error(f'Ошибка сброса трафика: {e}')
+        logger.error('Ошибка сброса трафика', error=e)
         await callback.message.edit_text(texts.ERROR, reply_markup=get_back_keyboard(db_user.language))
 
     await callback.answer()
@@ -350,16 +350,16 @@ async def refresh_traffic_config():
         packages = settings.get_traffic_packages()
         enabled_count = sum(1 for pkg in packages if pkg['enabled'])
 
-        logger.info(f'🔄 Конфигурация трафика обновлена: {enabled_count} активных пакетов')
+        logger.info('🔄 Конфигурация трафика обновлена: активных пакетов', enabled_count=enabled_count)
         for pkg in packages:
             if pkg['enabled']:
                 gb_text = '♾️ Безлимит' if pkg['gb'] == 0 else f'{pkg["gb"]} ГБ'
-                logger.info(f'   📦 {gb_text}: {pkg["price"] / 100}₽')
+                logger.info('📦 ₽', gb_text=gb_text, pkg=pkg['price'] / 100)
 
         return True
 
     except Exception as e:
-        logger.error(f'⚠️ Ошибка обновления конфигурации трафика: {e}')
+        logger.error('⚠️ Ошибка обновления конфигурации трафика', error=e)
         return False
 
 
@@ -517,9 +517,11 @@ async def add_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSes
         }
         try:
             await user_cart_service.save_user_cart(db_user.id, cart_data)
-            logger.info(f'Cart saved for traffic purchase (bot) user {db_user.telegram_id}: +{traffic_gb} GB')
+            logger.info(
+                'Cart saved for traffic purchase (bot) user +', telegram_id=db_user.telegram_id, traffic_gb=traffic_gb
+            )
         except Exception as e:
-            logger.error(f'Error saving cart for traffic purchase (bot): {e}')
+            logger.error('Error saving cart for traffic purchase (bot)', error=e)
 
         message_text = texts.t(
             'ADDON_INSUFFICIENT_FUNDS_MESSAGE',
@@ -599,7 +601,7 @@ async def add_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSes
                 db, db_user, subscription, 'traffic', old_traffic_limit, subscription.traffic_limit_gb, price
             )
         except Exception as e:
-            logger.error(f'Ошибка отправки уведомления о докупке трафика: {e}')
+            logger.error('Ошибка отправки уведомления о докупке трафика', error=e)
 
         success_text = '✅ Трафик успешно добавлен!\n\n'
         if traffic_gb == 0:
@@ -615,10 +617,10 @@ async def add_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSes
 
         await callback.message.edit_text(success_text, reply_markup=get_back_keyboard(db_user.language))
 
-        logger.info(f'✅ Пользователь {db_user.telegram_id} добавил {traffic_gb} ГБ трафика')
+        logger.info('✅ Пользователь добавил ГБ трафика', telegram_id=db_user.telegram_id, traffic_gb=traffic_gb)
 
     except Exception as e:
-        logger.error(f'Ошибка добавления трафика: {e}')
+        logger.error('Ошибка добавления трафика', error=e)
         await callback.message.edit_text(texts.ERROR, reply_markup=get_back_keyboard(db_user.language))
 
     await callback.answer()
@@ -842,7 +844,7 @@ async def execute_switch_traffic(callback: types.CallbackQuery, db_user: User, d
                 db, db_user, subscription, 'traffic', current_traffic, new_traffic_gb, price_difference
             )
         except Exception as e:
-            logger.error(f'Ошибка отправки уведомления об изменении трафика: {e}')
+            logger.error('Ошибка отправки уведомления об изменении трафика', error=e)
 
         if new_traffic_gb > current_traffic:
             success_text = '✅ Лимит трафика увеличен!\n\n'
@@ -859,11 +861,15 @@ async def execute_switch_traffic(callback: types.CallbackQuery, db_user: User, d
         await callback.message.edit_text(success_text, reply_markup=get_back_keyboard(db_user.language))
 
         logger.info(
-            f'✅ Пользователь {db_user.telegram_id} переключил трафик с {current_traffic}GB на {new_traffic_gb}GB, доплата: {price_difference / 100}₽'
+            '✅ Пользователь переключил трафик с на доплата: ₽',
+            telegram_id=db_user.telegram_id,
+            current_traffic=current_traffic,
+            new_traffic_gb=new_traffic_gb,
+            price_difference=price_difference / 100,
         )
 
     except Exception as e:
-        logger.error(f'Ошибка переключения трафика: {e}')
+        logger.error('Ошибка переключения трафика', error=e)
         await callback.message.edit_text(texts.ERROR, reply_markup=get_back_keyboard(db_user.language))
 
     await callback.answer()

@@ -2,10 +2,10 @@
 API роуты колеса удачи для администраторов.
 """
 
-import logging
 import math
 from datetime import datetime
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -35,7 +35,7 @@ from app.database.models import User
 from app.services.wheel_service import wheel_service
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/admin/wheel', tags=['Admin Fortune Wheel'])
 
@@ -107,7 +107,7 @@ async def update_admin_wheel_config(
 
     config = await update_wheel_config(db, **update_data)
 
-    logger.info(f'🎡 Admin {admin.telegram_id} updated wheel config: {update_data}')
+    logger.info('🎡 Admin updated wheel config', telegram_id=admin.telegram_id, update_data=update_data)
 
     # Возвращаем полную конфигурацию
     prizes = await get_wheel_prizes(db, config.id, active_only=False)
@@ -211,7 +211,7 @@ async def create_prize(
         promo_traffic_gb=request.promo_traffic_gb,
     )
 
-    logger.info(f'🎁 Admin {admin.telegram_id} created prize: {prize.display_name}')
+    logger.info('🎁 Admin created prize', telegram_id=admin.telegram_id, display_name=prize.display_name)
 
     return WheelPrizeAdminResponse(
         id=prize.id,
@@ -261,7 +261,7 @@ async def update_prize(
             detail='Prize not found',
         )
 
-    logger.info(f'🎁 Admin {admin.telegram_id} updated prize {prize_id}: {update_data}')
+    logger.info('🎁 Admin updated prize', telegram_id=admin.telegram_id, prize_id=prize_id, update_data=update_data)
 
     return WheelPrizeAdminResponse(
         id=prize.id,
@@ -298,7 +298,7 @@ async def delete_prize_endpoint(
             detail='Prize not found',
         )
 
-    logger.info(f'🗑️ Admin {admin.telegram_id} deleted prize {prize_id}')
+    logger.info('🗑️ Admin deleted prize', telegram_id=admin.telegram_id, prize_id=prize_id)
 
 
 @router.post('/prizes/reorder', status_code=status.HTTP_200_OK)
@@ -309,7 +309,7 @@ async def reorder_prizes(
 ):
     """Переупорядочить призы."""
     await reorder_wheel_prizes(db, request.prize_ids)
-    logger.info(f'🔄 Admin {admin.telegram_id} reordered prizes: {request.prize_ids}')
+    logger.info('🔄 Admin reordered prizes', telegram_id=admin.telegram_id, prize_ids=request.prize_ids)
     return {'success': True}
 
 

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import logging
-
+import structlog
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -9,7 +8,7 @@ from sqlalchemy.orm import selectinload
 from app.database.models import PromoOfferLog
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def log_promo_offer_action(

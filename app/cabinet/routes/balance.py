@@ -1,11 +1,11 @@
 """Balance and payment routes for cabinet."""
 
-import logging
 import math
 import time
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 import httpx
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -41,7 +41,7 @@ from ..schemas.balance import (
 )
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/balance', tags=['Cabinet Balance'])
 
@@ -249,7 +249,7 @@ async def create_stars_invoice(
         if stars_amount <= 0:
             stars_amount = 1
     except Exception as e:
-        logger.error(f'Error calculating Stars amount: {e}')
+        logger.error('Error calculating Stars amount', error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Failed to calculate Stars amount',
@@ -279,7 +279,7 @@ async def create_stars_invoice(
             result = response.json()
 
             if not result.get('ok'):
-                logger.error(f'Telegram API error: {result}')
+                logger.error('Telegram API error', result=result)
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail='Failed to create Stars invoice',
@@ -287,8 +287,10 @@ async def create_stars_invoice(
 
             invoice_url = result['result']
             logger.info(
-                f'Created Stars invoice for balance top-up: user={user.id}, '
-                f'amount={request.amount_kopeks} kopeks, stars={stars_amount}'
+                'Created Stars invoice for balance top-up: user=, amount= kopeks, stars',
+                user_id=user.id,
+                amount_kopeks=request.amount_kopeks,
+                stars_amount=stars_amount,
             )
 
             return StarsInvoiceResponse(
@@ -298,7 +300,7 @@ async def create_stars_invoice(
             )
 
     except httpx.HTTPError as e:
-        logger.error(f'HTTP error creating Stars invoice: {e}')
+        logger.error('HTTP error creating Stars invoice', error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Failed to connect to Telegram API',
@@ -710,7 +712,7 @@ async def create_topup(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f'Payment creation error: {e}')
+        logger.error('Payment creation error', error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Failed to create payment. Please try again later.',

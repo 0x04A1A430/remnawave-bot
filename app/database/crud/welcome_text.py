@@ -1,13 +1,13 @@
-import logging
 from datetime import datetime
 
+import structlog
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User, WelcomeText
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 WELCOME_TEXT_KEY = 'welcome_text'
 
@@ -83,7 +83,7 @@ async def toggle_welcome_text_status(db: AsyncSession, admin_id: int) -> bool:
             await db.refresh(welcome_text)
 
             status = 'включен' if welcome_text.is_enabled else 'отключен'
-            logger.info(f'Приветственный текст {status} администратором {admin_id}')
+            logger.info('Приветственный текст администратором', status=status, admin_id=admin_id)
             return welcome_text.is_enabled
         default_text = await get_current_welcome_text_or_default()
         new_welcome_text = WelcomeText(text_content=default_text, is_active=True, is_enabled=True, created_by=admin_id)
@@ -92,11 +92,11 @@ async def toggle_welcome_text_status(db: AsyncSession, admin_id: int) -> bool:
         await db.commit()
         await db.refresh(new_welcome_text)
 
-        logger.info(f'Создан и включен дефолтный приветственный текст администратором {admin_id}')
+        logger.info('Создан и включен дефолтный приветственный текст администратором', admin_id=admin_id)
         return True
 
     except Exception as e:
-        logger.error(f'Ошибка при переключении статуса приветственного текста: {e}')
+        logger.error('Ошибка при переключении статуса приветственного текста', error=e)
         await db.rollback()
         return False
 
@@ -116,11 +116,11 @@ async def set_welcome_text(db: AsyncSession, text_content: str, admin_id: int) -
         await db.commit()
         await db.refresh(new_welcome_text)
 
-        logger.info(f'Установлен новый приветственный текст администратором {admin_id}')
+        logger.info('Установлен новый приветственный текст администратором', admin_id=admin_id)
         return True
 
     except Exception as e:
-        logger.error(f'Ошибка при установке приветственного текста: {e}')
+        logger.error('Ошибка при установке приветственного текста', error=e)
         await db.rollback()
         return False
 
@@ -154,10 +154,10 @@ async def create_welcome_text(
     await db.refresh(welcome_text)
 
     logger.info(
-        '✅ Создан приветственный текст ID %s (активный=%s, включен=%s)',
-        welcome_text.id,
-        welcome_text.is_active,
-        welcome_text.is_enabled,
+        '✅ Создан приветственный текст ID (активный включен=)',
+        welcome_text_id=welcome_text.id,
+        is_active=welcome_text.is_active,
+        is_enabled=welcome_text.is_enabled,
     )
     return welcome_text
 
@@ -188,10 +188,10 @@ async def update_welcome_text(
     await db.refresh(welcome_text)
 
     logger.info(
-        '📝 Обновлен приветственный текст ID %s (активный=%s, включен=%s)',
-        welcome_text.id,
-        welcome_text.is_active,
-        welcome_text.is_enabled,
+        '📝 Обновлен приветственный текст ID (активный включен=)',
+        welcome_text_id=welcome_text.id,
+        is_active=welcome_text.is_active,
+        is_enabled=welcome_text.is_enabled,
     )
     return welcome_text
 
@@ -199,7 +199,7 @@ async def update_welcome_text(
 async def delete_welcome_text(db: AsyncSession, welcome_text: WelcomeText) -> None:
     await db.delete(welcome_text)
     await db.commit()
-    logger.info('🗑️ Удален приветственный текст ID %s', welcome_text.id)
+    logger.info('🗑️ Удален приветственный текст ID', welcome_text_id=welcome_text.id)
 
 
 async def get_current_welcome_text_or_default() -> str:

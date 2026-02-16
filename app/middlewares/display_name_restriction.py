@@ -1,8 +1,8 @@
-import logging
 import re
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+import structlog
 from aiogram import BaseMiddleware
 from aiogram.types import (
     CallbackQuery,
@@ -16,7 +16,7 @@ from app.config import settings
 from app.localization.texts import get_texts
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 ZERO_WIDTH_PATTERN = re.compile(r'[\u200B-\u200D\uFEFF]')
@@ -101,9 +101,9 @@ class DisplayNameRestrictionMiddleware(BaseMiddleware):
             )
 
             logger.warning(
-                "🚫 DisplayNameRestriction: user %s blocked due to suspicious name '%s'",
-                user.id,
-                suspicious_value,
+                "🚫 DisplayNameRestriction: user blocked due to suspicious name ''",
+                user_id=user.id,
+                suspicious_value=suspicious_value,
             )
 
             if isinstance(event, Message):

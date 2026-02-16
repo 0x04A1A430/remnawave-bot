@@ -1,6 +1,6 @@
-import logging
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
+import structlog
 from aiogram import Dispatcher, F, types
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
@@ -27,7 +27,7 @@ from app.utils.decorators import admin_required, error_handler
 from app.utils.pricing_utils import format_period_description
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 def _format_discount_lines(texts, group) -> list[str]:
@@ -806,7 +806,7 @@ async def process_create_group_auto_assign(
             auto_assign_total_spent_kopeks=auto_assign_kopeks,
         )
     except Exception as e:
-        logger.error(f'Не удалось создать промогруппу: {e}')
+        logger.error('Не удалось создать промогруппу', error=e)
         await message.answer(texts.ERROR)
         await state.clear()
         return

@@ -1,7 +1,6 @@
 """Handler for KassaAI balance top-up."""
 
-import logging
-
+import structlog
 from aiogram import types
 from aiogram.fsm.context import FSMContext
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -16,7 +15,7 @@ from app.states import BalanceStates
 from app.utils.decorators import error_handler
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def _create_kassa_ai_payment_and_respond(
@@ -119,11 +118,7 @@ async def _create_kassa_ai_payment_and_respond(
             parse_mode='HTML',
         )
 
-    logger.info(
-        'KassaAI payment created: user=%s, amount=%s₽',
-        db_user.telegram_id,
-        amount_rub,
-    )
+    logger.info('KassaAI payment created: user amount=₽', telegram_id=db_user.telegram_id, amount_rub=amount_rub)
 
 
 @error_handler

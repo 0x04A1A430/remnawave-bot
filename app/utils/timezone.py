@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-import logging
 from datetime import UTC, datetime
 from functools import lru_cache
 from zoneinfo import ZoneInfo
 
+import structlog
+
 from app.config import settings
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @lru_cache(maxsize=1)
@@ -26,11 +27,7 @@ def get_local_timezone() -> ZoneInfo:
     try:
         return ZoneInfo(tz_name)
     except Exception as exc:  # pragma: no cover - defensive branch
-        logger.warning(
-            "⚠️ Не удалось загрузить временную зону '%s': %s. Используем UTC.",
-            tz_name,
-            exc,
-        )
+        logger.warning("⚠️ Не удалось загрузить временную зону '': . Используем UTC.", tz_name=tz_name, exc=exc)
         return ZoneInfo('UTC')
 
 
@@ -67,28 +64,3 @@ def format_local_datetime(
     if localized is None:
         return na_placeholder
     return localized.strftime(fmt)
-
-
-class TimezoneAwareFormatter(logging.Formatter):
-    """Logging formatter that renders timestamps in the configured timezone."""
-
-    def __init__(self, *args, timezone_name: str | None = None, **kwargs):
-        super().__init__(*args, **kwargs)
-        if timezone_name:
-            try:
-                self._timezone = ZoneInfo(timezone_name)
-            except Exception as exc:  # pragma: no cover - defensive branch
-                logger.warning(
-                    "⚠️ Не удалось загрузить временную зону '%s': %s. Используем UTC.",
-                    timezone_name,
-                    exc,
-                )
-                self._timezone = ZoneInfo('UTC')
-        else:
-            self._timezone = get_local_timezone()
-
-    def formatTime(self, record, datefmt=None):
-        dt = datetime.fromtimestamp(record.created, tz=self._timezone)
-        if datefmt:
-            return dt.strftime(datefmt)
-        return dt.strftime('%Y-%m-%d %H:%M:%S,%f')[:-3]

@@ -1,6 +1,6 @@
-import logging
 from typing import Any
 
+import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.crud.promo_group import get_promo_group_by_id
@@ -18,7 +18,7 @@ from app.services.remnawave_service import RemnaWaveService
 from app.services.subscription_service import SubscriptionService
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class PromoCodeService:
@@ -60,9 +60,9 @@ class PromoCodeService:
             recent_count = await count_user_recent_activations(db, user_id, hours=24)
             if recent_count >= 5:
                 logger.warning(
-                    'Promo stacking limit: user %s has %d activations in 24h',
-                    self._format_user_log(user),
-                    recent_count,
+                    'Promo stacking limit: user has activations in 24h',
+                    format_user_log=self._format_user_log(user),
+                    recent_count=recent_count,
                 )
                 return {'success': False, 'error': 'daily_limit'}
 
@@ -87,7 +87,9 @@ class PromoCodeService:
                 await mark_user_as_had_paid_subscription(db, user)
 
                 logger.info(
-                    f'🎯 Пользователь {self._format_user_log(user)} получил платную подписку через промокод {code}'
+                    '🎯 Пользователь получил платную подписку через промокод',
+                    _format_user_log=self._format_user_log(user),
+                    code=code,
                 )
 
             # Assign promo group if promocode has one
@@ -107,24 +109,33 @@ class PromoCodeService:
                             )
 
                             logger.info(
-                                f"🎯 Пользователю {self._format_user_log(user)} назначена промогруппа '{promo_group.name}' "
-                                f'(приоритет: {promo_group.priority}) через промокод {code}'
+                                '🎯 Пользователю назначена промогруппа (приоритет: ) через промокод',
+                                _format_user_log=self._format_user_log(user),
+                                promo_group_name=promo_group.name,
+                                priority=promo_group.priority,
+                                code=code,
                             )
 
                             # Add to result description
                             result_description += f'\n🎁 Назначена промогруппа: {promo_group.name}'
                         else:
                             logger.warning(
-                                f'⚠️ Промогруппа ID {promocode.promo_group_id} не найдена для промокода {code}'
+                                '⚠️ Промогруппа ID не найдена для промокода',
+                                promo_group_id=promocode.promo_group_id,
+                                code=code,
                             )
                     else:
                         logger.info(
-                            f'ℹ️ Пользователь {self._format_user_log(user)} уже имеет промогруппу ID {promocode.promo_group_id}'
+                            'ℹ️ Пользователь уже имеет промогруппу ID',
+                            _format_user_log=self._format_user_log(user),
+                            promo_group_id=promocode.promo_group_id,
                         )
                 except Exception as pg_error:
                     logger.error(
-                        f'❌ Ошибка назначения промогруппы для пользователя {self._format_user_log(user)} '
-                        f'при активации промокода {code}: {pg_error}'
+                        '❌ Ошибка назначения промогруппы для пользователя при активации промокода',
+                        _format_user_log=self._format_user_log(user),
+                        code=code,
+                        pg_error=pg_error,
                     )
                     # Don't fail the whole promocode activation if promo group assignment fails
 
@@ -133,7 +144,7 @@ class PromoCodeService:
             promocode.current_uses += 1
             await db.commit()
 
-            logger.info(f'✅ Пользователь {self._format_user_log(user)} активировал промокод {code}')
+            logger.info('✅ Пользователь активировал промокод', _format_user_log=self._format_user_log(user), code=code)
 
             promocode_data = {
                 'code': promocode.code,
@@ -155,7 +166,7 @@ class PromoCodeService:
             }
 
         except Exception as e:
-            logger.error(f'Ошибка активации промокода {code} для пользователя {user_id}: {e}')
+            logger.error('Ошибка активации промокода для пользователя', code=code, user_id=user_id, error=e)
             await db.rollback()
             return {'success': False, 'error': 'server_error'}
 
@@ -188,8 +199,11 @@ class PromoCodeService:
             if current_discount > 0:
                 if expires_at is None or expires_at > datetime.utcnow():
                     logger.warning(
-                        f'⚠️ Пользователь {self._format_user_log(user)} попытался активировать промокод {promocode.code}, '
-                        f'но у него уже есть активная скидка {current_discount}% до {expires_at}'
+                        '⚠️ Пользователь попытался активировать промокод но у него уже есть активная скидка до',
+                        _format_user_log=self._format_user_log(user),
+                        code=promocode.code,
+                        current_discount=current_discount,
+                        expires_at=expires_at,
                     )
                     raise ValueError('active_discount_exists')
 
@@ -214,8 +228,11 @@ class PromoCodeService:
             await db.flush()
 
             logger.info(
-                f'✅ Пользователю {self._format_user_log(user)} назначена скидка {discount_percent}% '
-                f'(срок: {discount_hours} ч.) по промокоду {promocode.code}'
+                '✅ Пользователю назначена скидка (срок: ч.) по промокоду',
+                _format_user_log=self._format_user_log(user),
+                discount_percent=discount_percent,
+                discount_hours=discount_hours,
+                code=promocode.code,
             )
 
         if promocode.type == PromoCodeType.BALANCE.value and promocode.balance_bonus_kopeks > 0:
@@ -236,7 +253,9 @@ class PromoCodeService:
 
                 effects.append(f'⏰ Подписка продлена на {promocode.subscription_days} дней')
                 logger.info(
-                    f'✅ Подписка пользователя {self._format_user_log(user)} продлена на {promocode.subscription_days} дней в RemnaWave с текущими сквадами'
+                    '✅ Подписка пользователя продлена на дней в RemnaWave с текущими сквадами',
+                    _format_user_log=self._format_user_log(user),
+                    subscription_days=promocode.subscription_days,
                 )
 
             else:
@@ -251,9 +270,9 @@ class PromoCodeService:
                         trial_squads = [trial_uuid]
                 except Exception as error:
                     logger.error(
-                        'Не удалось подобрать сквад для подписки по промокоду %s: %s',
-                        promocode.code,
-                        error,
+                        'Не удалось подобрать сквад для подписки по промокоду',
+                        promocode_code=promocode.code,
+                        error=error,
                     )
 
                 forced_devices = None
@@ -278,7 +297,10 @@ class PromoCodeService:
 
                 effects.append(f'🎉 Получена подписка на {promocode.subscription_days} дней')
                 logger.info(
-                    f'✅ Создана новая подписка для пользователя {self._format_user_log(user)} на {promocode.subscription_days} дней с триал сквадом {trial_squads}'
+                    '✅ Создана новая подписка для пользователя на дней с триал сквадом',
+                    _format_user_log=self._format_user_log(user),
+                    subscription_days=promocode.subscription_days,
+                    trial_squads=trial_squads,
                 )
 
         if promocode.type == PromoCodeType.TRIAL_SUBSCRIPTION.value:
@@ -307,7 +329,9 @@ class PromoCodeService:
 
                 effects.append(f'🎁 Активирована тестовая подписка на {trial_days} дней')
                 logger.info(
-                    f'✅ Создана триал подписка для пользователя {self._format_user_log(user)} на {trial_days} дней'
+                    '✅ Создана триал подписка для пользователя на дней',
+                    _format_user_log=self._format_user_log(user),
+                    trial_days=trial_days,
                 )
             else:
                 effects.append('ℹ️ У вас уже есть активная подписка')
@@ -390,16 +414,21 @@ class PromoCodeService:
                     if has_group:
                         await remove_user_from_promo_group(db, user_id, promocode.promo_group_id)
                         logger.info(
-                            f'Снята промогруппа ID {promocode.promo_group_id} у пользователя '
-                            f'{self._format_user_log(user)} при деактивации промокода {deactivated_code}'
+                            'Снята промогруппа ID у пользователя при деактивации промокода',
+                            promo_group_id=promocode.promo_group_id,
+                            _format_user_log=self._format_user_log(user),
+                            deactivated_code=deactivated_code,
                         )
 
             await db.commit()
 
             initiator = 'администратором' if admin_initiated else 'пользователем'
             logger.info(
-                f'Промокод {deactivated_code} (скидка {current_discount}%) деактивирован '
-                f'{initiator} для пользователя {self._format_user_log(user)}'
+                'Промокод (скидка %) деактивирован для пользователя',
+                deactivated_code=deactivated_code,
+                current_discount=current_discount,
+                initiator=initiator,
+                _format_user_log=self._format_user_log(user),
             )
 
             return {
@@ -409,6 +438,6 @@ class PromoCodeService:
             }
 
         except Exception as e:
-            logger.error(f'Ошибка деактивации промокода для пользователя {user_id}: {e}')
+            logger.error('Ошибка деактивации промокода для пользователя', user_id=user_id, error=e)
             await db.rollback()
             return {'success': False, 'error': 'server_error'}

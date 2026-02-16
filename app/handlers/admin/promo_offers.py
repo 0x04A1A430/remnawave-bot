@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import html
-import logging
 import re
 from collections.abc import Sequence
 from datetime import datetime
 
+import structlog
 from aiogram import Dispatcher, F, types
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.fsm.context import FSMContext
@@ -48,7 +48,7 @@ from app.utils.miniapp_buttons import build_miniapp_or_callback_button
 from app.utils.subscription_utils import get_display_subscription_link
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 SQUADS_PAGE_LIMIT = 10
@@ -61,7 +61,7 @@ async def _safe_delete_message(message: Message) -> None:
         await message.delete()
     except TelegramBadRequest as exc:
         if 'message to delete not found' not in str(exc).lower():
-            logger.debug('Не удалось удалить сообщение администратора: %s', exc)
+            logger.debug('Не удалось удалить сообщение администратора', exc=exc)
     except TelegramForbiddenError:
         logger.debug('Недостаточно прав для удаления сообщения администратора')
 
@@ -72,16 +72,11 @@ async def _safe_delete_message_by_id(bot, chat_id: int, message_id: int) -> None
     except TelegramBadRequest as exc:
         if 'message to delete not found' not in str(exc).lower():
             logger.debug(
-                'Не удалось удалить сообщение администратора (%s, %s): %s',
-                chat_id,
-                message_id,
-                exc,
+                'Не удалось удалить сообщение администратора (,)', chat_id=chat_id, message_id=message_id, exc=exc
             )
     except TelegramForbiddenError:
         logger.debug(
-            'Недостаточно прав для удаления сообщения администратора (%s, %s)',
-            chat_id,
-            message_id,
+            'Недостаточно прав для удаления сообщения администратора (,)', chat_id=chat_id, message_id=message_id
         )
 
 
@@ -168,7 +163,7 @@ def _render_template_text(
     try:
         return template.message_text.format(**replacements)
     except Exception:  # pragma: no cover - fallback for invalid placeholders
-        logger.warning('Не удалось форматировать текст промо-предложения %s', template.id)
+        logger.warning('Не удалось форматировать текст промо-предложения', template_id=template.id)
         return template.message_text
 
 
@@ -1181,7 +1176,7 @@ async def _handle_edit_field(
                 except TelegramBadRequest:
                     logger.debug('Не удалось удалить сообщение промо без текста')
             else:
-                logger.warning('Не удалось обновить сообщение редактирования промо: %s', exc)
+                logger.warning('Не удалось обновить сообщение редактирования промо', exc=exc)
             await message.answer(description, reply_markup=reply_markup, parse_mode='HTML')
     else:
         await message.answer(description, reply_markup=reply_markup, parse_mode='HTML')
@@ -1928,7 +1923,7 @@ async def _send_offer_to_users(
         """Отправляет одно предложение с семафором ограничения"""
         # Skip email-only users (no telegram_id)
         if not user.telegram_id:
-            logger.debug('Пропуск email-пользователя %s при рассылке промо', user.id)
+            logger.debug('Пропуск email-пользователя при рассылке промо', user_id=user.id)
             return False
 
         async with semaphore:
@@ -1989,10 +1984,14 @@ async def _send_offer_to_users(
                     )
                     return True
             except (TelegramForbiddenError, TelegramBadRequest) as exc:
-                logger.warning('Не удалось отправить предложение пользователю %s: %s', user.telegram_id or user.id, exc)
+                logger.warning(
+                    'Не удалось отправить предложение пользователю', telegram_id=user.telegram_id or user.id, exc=exc
+                )
                 return False
             except Exception as exc:  # pragma: no cover - defensive logging
-                logger.error('Ошибка рассылки промо предложения пользователю %s: %s', user.telegram_id or user.id, exc)
+                logger.error(
+                    'Ошибка рассылки промо предложения пользователю', telegram_id=user.telegram_id or user.id, exc=exc
+                )
                 return False
 
     # Отправляем предложения пакетами для эффективности

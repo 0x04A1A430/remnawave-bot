@@ -3,17 +3,17 @@
 from __future__ import annotations
 
 import hashlib
-import logging
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
 import aiohttp
+import structlog
 
 from app.config import settings
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class Pal24APIError(Exception):
@@ -96,30 +96,21 @@ class Pal24Client:
                     payload = await response.json(content_type=None)
                 except aiohttp.ContentTypeError:
                     text_body = await response.text()
-                    logger.error(
-                        'Pal24 API returned non-JSON response for %s: %s',
-                        endpoint,
-                        text_body,
-                    )
+                    logger.error('Pal24 API returned non-JSON response for', endpoint=endpoint, text_body=text_body)
                     raise Pal24APIError(f'Pal24 API returned non-JSON response: {text_body}') from None
 
                 result = Pal24Response.from_payload(payload, status)
                 if status >= 400 or not result.success:
-                    logger.error(
-                        'Pal24 API error %s %s: %s',
-                        status,
-                        endpoint,
-                        payload,
-                    )
+                    logger.error('Pal24 API error', status=status, endpoint=endpoint, payload=payload)
                     result.raise_for_status(endpoint)
 
                 return result
 
         except TimeoutError as error:
-            logger.error('Pal24 API request timeout for %s: %s', endpoint, error)
+            logger.error('Pal24 API request timeout for', endpoint=endpoint, error=error)
             raise Pal24APIError(f'Pal24 API request timeout for {endpoint}') from error
         except aiohttp.ClientError as error:
-            logger.error('Pal24 API client error for %s: %s', endpoint, error)
+            logger.error('Pal24 API client error for', endpoint=endpoint, error=error)
             raise Pal24APIError(str(error)) from error
 
     # API methods -----------------------------------------------------------------

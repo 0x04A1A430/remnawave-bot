@@ -1,9 +1,9 @@
 """Admin routes for pinned messages in cabinet."""
 
-import logging
 import time
 from datetime import datetime
 
+import structlog
 from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
@@ -34,7 +34,7 @@ from ..schemas.pinned_messages import (
 )
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/admin/pinned-messages', tags=['Cabinet Admin Pinned Messages'])
 
@@ -186,7 +186,9 @@ async def create_pinned_message(
     if payload.broadcast:
         sent_count, failed_count = await broadcast_pinned_message(_get_bot(), db, msg)
 
-    logger.info(f'Admin {admin.id} created pinned message #{msg.id} (broadcast={payload.broadcast})')
+    logger.info(
+        'Admin created pinned message # (broadcast=)', admin_id=admin.id, message_id=msg.id, broadcast=payload.broadcast
+    )
 
     return PinnedMessageBroadcastResponse(
         message=_serialize_pinned_message(msg),
@@ -229,7 +231,7 @@ async def update_pinned_message(
     await db.commit()
     await db.refresh(msg)
 
-    logger.info(f'Admin {admin.id} updated pinned message #{message_id}')
+    logger.info('Admin updated pinned message #', admin_id=admin.id, message_id=message_id)
 
     return _serialize_pinned_message(msg)
 
@@ -273,7 +275,7 @@ async def deactivate_active_message(
     if not msg:
         return None
 
-    logger.info(f'Admin {admin.id} deactivated pinned message #{msg.id}')
+    logger.info('Admin deactivated pinned message #', admin_id=admin.id, message_id=msg.id)
 
     return _serialize_pinned_message(msg)
 
@@ -288,7 +290,12 @@ async def unpin_active_message(
     unpinned_count, failed_count, was_active = await unpin_active_pinned_message(_get_bot(), db)
 
     if was_active:
-        logger.info(f'Admin {admin.id} unpinned active message: unpinned={unpinned_count}, failed={failed_count}')
+        logger.info(
+            'Admin unpinned active message: unpinned=, failed',
+            admin_id=admin.id,
+            unpinned_count=unpinned_count,
+            failed_count=failed_count,
+        )
 
     return PinnedMessageUnpinResponse(
         unpinned_count=unpinned_count,
@@ -339,7 +346,9 @@ async def activate_pinned_message(
     if broadcast:
         sent_count, failed_count = await broadcast_pinned_message(_get_bot(), db, msg)
 
-    logger.info(f'Admin {admin.id} activated pinned message #{message_id} (broadcast={broadcast})')
+    logger.info(
+        'Admin activated pinned message # (broadcast=)', admin_id=admin.id, message_id=message_id, broadcast=broadcast
+    )
 
     return PinnedMessageBroadcastResponse(
         message=_serialize_pinned_message(msg),
@@ -364,7 +373,13 @@ async def broadcast_message(
 
     sent_count, failed_count = await broadcast_pinned_message(_get_bot(), db, msg)
 
-    logger.info(f'Admin {admin.id} broadcast pinned message #{message_id}: sent={sent_count}, failed={failed_count}')
+    logger.info(
+        'Admin broadcast pinned message #: sent=, failed',
+        admin_id=admin.id,
+        message_id=message_id,
+        sent_count=sent_count,
+        failed_count=failed_count,
+    )
 
     return PinnedMessageBroadcastResponse(
         message=_serialize_pinned_message(msg),
@@ -394,4 +409,4 @@ async def delete_pinned_message(
     await db.delete(msg)
     await db.commit()
 
-    logger.info(f'Admin {admin.id} deleted pinned message #{message_id}')
+    logger.info('Admin deleted pinned message #', admin_id=admin.id, message_id=message_id)

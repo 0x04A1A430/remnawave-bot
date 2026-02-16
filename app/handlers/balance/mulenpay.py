@@ -1,5 +1,4 @@
-import logging
-
+import structlog
 from aiogram import types
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,7 +12,7 @@ from app.states import BalanceStates
 from app.utils.decorators import error_handler
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @error_handler
@@ -144,16 +143,13 @@ async def process_mulenpay_payment_amount(
     try:
         await message.delete()
     except Exception as delete_error:  # pragma: no cover - depends on bot permissions
-        logger.warning('Не удалось удалить сообщение с суммой MulenPay: %s', delete_error)
+        logger.warning('Не удалось удалить сообщение с суммой MulenPay', delete_error=delete_error)
 
     if prompt_message_id:
         try:
             await message.bot.delete_message(prompt_chat_id, prompt_message_id)
         except Exception as delete_error:  # pragma: no cover - diagnostic
-            logger.warning(
-                'Не удалось удалить сообщение с запросом суммы MulenPay: %s',
-                delete_error,
-            )
+            logger.warning('Не удалось удалить сообщение с запросом суммы MulenPay', delete_error=delete_error)
 
     try:
         payment_service = PaymentService(message.bot)
@@ -247,7 +243,7 @@ async def process_mulenpay_payment_amount(
                     metadata=payment_metadata,
                 )
         except Exception as error:  # pragma: no cover - diagnostic logging only
-            logger.warning('Не удалось сохранить данные сообщения MulenPay: %s', error)
+            logger.warning('Не удалось сохранить данные сообщения MulenPay', error=error)
 
         await state.update_data(
             mulenpay_invoice_message_id=invoice_message.message_id,
@@ -257,15 +253,15 @@ async def process_mulenpay_payment_amount(
         await state.clear()
 
         logger.info(
-            'Создан %s платеж для пользователя %s: %s₽, ID: %s',
-            mulenpay_name,
-            db_user.telegram_id,
-            amount_rubles,
-            payment_id_display,
+            'Создан платеж для пользователя : ₽, ID',
+            mulenpay_name=mulenpay_name,
+            telegram_id=db_user.telegram_id,
+            amount_rubles=amount_rubles,
+            payment_id_display=payment_id_display,
         )
 
     except Exception as e:
-        logger.error(f'Ошибка создания {mulenpay_name} платежа: {e}')
+        logger.error('Ошибка создания платежа', mulenpay_name=mulenpay_name, error=e)
         await message.answer(
             texts.t(
                 'MULENPAY_PAYMENT_ERROR',
@@ -329,5 +325,5 @@ async def check_mulenpay_payment_status(callback: types.CallbackQuery, db: Async
             await callback.answer(message_text, show_alert=True)
 
     except Exception as e:
-        logger.error(f'Ошибка проверки статуса {settings.get_mulenpay_display_name()}: {e}')
+        logger.error('Ошибка проверки статуса', get_mulenpay_display_name=settings.get_mulenpay_display_name(), error=e)
         await callback.answer('❌ Ошибка проверки статуса', show_alert=True)

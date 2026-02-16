@@ -1,5 +1,4 @@
-import logging
-
+import structlog
 from aiogram import types
 from aiogram.fsm.context import FSMContext
 
@@ -13,7 +12,7 @@ from app.states import BalanceStates
 from app.utils.decorators import error_handler
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @error_handler
@@ -126,16 +125,13 @@ async def process_stars_payment_amount(message: types.Message, db_user: User, am
         try:
             await message.delete()
         except Exception as delete_error:  # pragma: no cover - зависит от прав бота
-            logger.warning('Не удалось удалить сообщение с суммой Stars: %s', delete_error)
+            logger.warning('Не удалось удалить сообщение с суммой Stars', delete_error=delete_error)
 
         if prompt_message_id:
             try:
                 await message.bot.delete_message(prompt_chat_id, prompt_message_id)
             except Exception as delete_error:  # pragma: no cover - диагностический лог
-                logger.warning(
-                    'Не удалось удалить сообщение с запросом суммы Stars: %s',
-                    delete_error,
-                )
+                logger.warning('Не удалось удалить сообщение с запросом суммы Stars', delete_error=delete_error)
 
         invoice_message = await message.answer(
             f'⭐ <b>Оплата через Telegram Stars</b>\n\n'
@@ -155,5 +151,5 @@ async def process_stars_payment_amount(message: types.Message, db_user: User, am
         await state.set_state(None)
 
     except Exception as e:
-        logger.error(f'Ошибка создания Stars invoice: {e}')
+        logger.error('Ошибка создания Stars invoice', error=e)
         await message.answer('⚠️ Ошибка создания платежа')

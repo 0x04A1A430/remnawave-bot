@@ -1,8 +1,8 @@
-import logging
 from collections.abc import Sequence
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Optional
 
+import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -11,7 +11,7 @@ from app.config import settings
 if TYPE_CHECKING:  # pragma: no cover
     from app.database.models import PromoGroup, User
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 def calculate_months_from_days(days: int) -> int:
@@ -31,7 +31,12 @@ def calculate_period_multiplier(period_days: int) -> tuple[int, float]:
     exact_months = period_days / 30
     months_count = max(1, round(exact_months))
 
-    logger.debug(f'Период {period_days} дней = {exact_months:.2f} точных месяцев ≈ {months_count} месяцев для расчета')
+    logger.debug(
+        'Период дней точных месяцев ≈ месяцев для расчета',
+        period_days=period_days,
+        exact_months=round(exact_months, 2),
+        months_count=months_count,
+    )
 
     return months_count, exact_months
 
@@ -43,7 +48,10 @@ def calculate_prorated_price(monthly_price: int, end_date: datetime, min_charge_
     total_price = monthly_price * months_to_charge
 
     logger.debug(
-        f'Расчет пропорциональной цены: {monthly_price / 100}₽/мес × {months_to_charge} мес = {total_price / 100}₽'
+        'Расчет пропорциональной цены: ₽/мес × мес ₽',
+        monthly_price=monthly_price / 100,
+        months_to_charge=months_to_charge,
+        total_price=total_price / 100,
     )
 
     return total_price, months_to_charge
@@ -65,11 +73,11 @@ def apply_percentage_discount(amount: int, percent: int) -> tuple[int, int]:
         discount_value = amount - discounted_amount
 
     logger.debug(
-        'Применена скидка %s%%: %s → %s (скидка %s)',
-        clamped_percent,
-        amount,
-        discounted_amount,
-        discount_value,
+        'Применена скидка %: → (скидка)',
+        clamped_percent=clamped_percent,
+        amount=amount,
+        discounted_amount=discounted_amount,
+        discount_value=discount_value,
     )
 
     return discounted_amount, discount_value
@@ -194,10 +202,7 @@ async def compute_simple_subscription_price(
     for squad_uuid in resolved_uuids:
         server = await get_server_squad_by_uuid(db, squad_uuid)
         if not server:
-            logger.warning(
-                'SIMPLE_SUBSCRIPTION_PRICE_SERVER_NOT_FOUND | squad=%s',
-                squad_uuid,
-            )
+            logger.warning('SIMPLE_SUBSCRIPTION_PRICE_SERVER_NOT_FOUND | squad', squad_uuid=squad_uuid)
             server_breakdown.append(
                 {
                     'uuid': squad_uuid,
@@ -212,10 +217,10 @@ async def compute_simple_subscription_price(
 
         if not server.is_available or server.is_full:
             logger.warning(
-                'SIMPLE_SUBSCRIPTION_PRICE_SERVER_UNAVAILABLE | squad=%s | available=%s | full=%s',
-                squad_uuid,
-                server.is_available,
-                server.is_full,
+                'SIMPLE_SUBSCRIPTION_PRICE_SERVER_UNAVAILABLE | squad= | available= | full',
+                squad_uuid=squad_uuid,
+                is_available=server.is_available,
+                is_full=server.is_full,
             )
             server_breakdown.append(
                 {
@@ -327,10 +332,15 @@ def validate_pricing_calculation(base_price: int, monthly_additions: int, months
 
     if not is_valid:
         logger.warning(
-            f'Несоответствие в расчете цены: ожидалось {expected_total / 100}₽, получено {total_calculated / 100}₽'
+            'Несоответствие в расчете цены: ожидалось ₽, получено ₽',
+            expected_total=expected_total / 100,
+            total_calculated=total_calculated / 100,
         )
         logger.warning(
-            f'Детали: базовая цена {base_price / 100}₽ + месячные дополнения {monthly_additions / 100}₽ × {months} мес'
+            'Детали: базовая цена ₽ + месячные дополнения ₽ × мес',
+            base_price=base_price / 100,
+            monthly_additions=monthly_additions / 100,
+            months=months,
         )
 
     return is_valid

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 
+import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -11,7 +11,7 @@ from app.database.crud.user import add_user_balance, subtract_user_balance
 from app.database.models import Subscription, TransactionType, User
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class TrialPaymentError(Exception):
@@ -121,9 +121,9 @@ async def refund_trial_activation_charge(
 
     if not success:
         logger.error(
-            'Failed to refund %s kopeks for user %s during trial activation rollback',
-            amount_kopeks,
-            getattr(user, 'id', '<unknown>'),
+            'Failed to refund kopeks for user during trial activation rollback',
+            amount_kopeks=amount_kopeks,
+            getattr=getattr(user, 'id', '<unknown>'),
         )
 
     return success
@@ -147,9 +147,7 @@ async def rollback_trial_subscription_activation(
         await decrement_subscription_server_counts(db, subscription)
     except Exception as error:  # pragma: no cover - defensive logging
         logger.error(
-            'Failed to decrement server counters during trial rollback for %s: %s',
-            subscription.user_id,
-            error,
+            'Failed to decrement server counters during trial rollback for', user_id=subscription.user_id, error=error
         )
 
     try:
@@ -157,9 +155,9 @@ async def rollback_trial_subscription_activation(
         await db.commit()
     except Exception as error:  # pragma: no cover - defensive logging
         logger.error(
-            'Failed to remove trial subscription %s after charge failure: %s',
-            getattr(subscription, 'id', '<unknown>'),
-            error,
+            'Failed to remove trial subscription after charge failure',
+            getattr=getattr(subscription, 'id', '<unknown>'),
+            error=error,
         )
         await db.rollback()
         return False
@@ -189,9 +187,9 @@ async def revert_trial_activation(
         await db.refresh(user)
     except Exception as error:  # pragma: no cover - defensive logging
         logger.warning(
-            'Failed to refresh user %s after reverting trial activation: %s',
-            getattr(user, 'id', '<unknown>'),
-            error,
+            'Failed to refresh user after reverting trial activation',
+            getattr=getattr(user, 'id', '<unknown>'),
+            error=error,
         )
 
     return TrialActivationReversionResult(

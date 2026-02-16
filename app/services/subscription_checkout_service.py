@@ -1,12 +1,11 @@
-import logging
-
+import structlog
 from sqlalchemy.exc import MissingGreenlet
 
 from app.database.models import Subscription, User
 from app.utils.cache import UserCache
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 _CHECKOUT_SESSION_KEY = 'subscription_checkout'
@@ -57,9 +56,9 @@ def should_offer_checkout_resume(
             subscription = getattr(user, 'subscription', None)
         except MissingGreenlet as error:
             logger.warning(
-                'Не удалось лениво загрузить подписку пользователя %s при проверке возврата к checkout: %s',
-                getattr(user, 'id', None),
-                error,
+                'Не удалось лениво загрузить подписку пользователя при проверке возврата к checkout',
+                getattr=getattr(user, 'id', None),
+                error=error,
             )
             subscription = None
 

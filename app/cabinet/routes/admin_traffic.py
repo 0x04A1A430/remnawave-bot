@@ -3,10 +3,10 @@
 import asyncio
 import csv
 import io
-import logging
 import time
 from datetime import UTC, datetime, timedelta
 
+import structlog
 from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
@@ -32,7 +32,7 @@ from ..schemas.traffic import (
 )
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/admin/traffic', tags=['Admin Traffic'])
 
@@ -110,7 +110,7 @@ async def _aggregate_traffic(
                         stats = await api.get_bandwidth_stats_node_users_legacy(node.uuid, start_str, end_str)
                         return node.uuid, stats
                     except Exception:
-                        logger.warning('Failed to get traffic for node %s', node.name, exc_info=True)
+                        logger.warning('Failed to get traffic for node', node_name=node.name, exc_info=True)
                         return node.uuid, None
 
             results = await asyncio.gather(*(fetch_node_users(n) for n in nodes))
@@ -685,7 +685,7 @@ async def export_traffic_csv(
                 caption=f'Traffic usage report ({period_label})\nUsers: {len(rows)}',
             )
     except Exception:
-        logger.error('Failed to send CSV to admin %s', admin.telegram_id, exc_info=True)
+        logger.error('Failed to send CSV to admin', telegram_id=admin.telegram_id, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Failed to send CSV report. Please try again later.',

@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-import logging
 from datetime import datetime
 from typing import Any
 
+import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import CloudPaymentsPayment
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def create_cloudpayments_payment(
@@ -65,10 +65,10 @@ async def create_cloudpayments_payment(
     await db.refresh(payment)
 
     logger.debug(
-        'Created CloudPayments payment: id=%s, invoice=%s, amount=%s',
-        payment.id,
-        invoice_id,
-        amount_kopeks,
+        'Created CloudPayments payment: id invoice amount',
+        payment_id=payment.id,
+        invoice_id=invoice_id,
+        amount_kopeks=amount_kopeks,
     )
 
     return payment
@@ -195,9 +195,7 @@ async def mark_cloudpayments_payment_as_paid(
     await db.refresh(payment)
 
     logger.info(
-        'Marked CloudPayments payment as paid: id=%s, invoice=%s',
-        payment.id,
-        payment.invoice_id,
+        'Marked CloudPayments payment as paid: id invoice', payment_id=payment.id, invoice_id=payment.invoice_id
     )
 
     return payment

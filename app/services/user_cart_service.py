@@ -1,13 +1,13 @@
 import json
-import logging
 from typing import Any
 
 import redis.asyncio as redis
+import structlog
 
 from app.config import settings
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class UserCartService:
@@ -32,7 +32,7 @@ class UserCartService:
             self._initialized = True
             logger.debug('Redis клиент для корзины инициализирован')
         except Exception as e:
-            logger.warning(f'Не удалось подключиться к Redis для корзины: {e}')
+            logger.warning('Не удалось подключиться к Redis для корзины', error=e)
             self._redis_client = None
             self._initialized = True
 
@@ -52,7 +52,7 @@ class UserCartService:
         """
         client = self._get_redis_client()
         if client is None:
-            logger.warning(f'🛒 Redis недоступен, корзина пользователя {user_id} НЕ сохранена')
+            logger.warning('🛒 Redis недоступен, корзина пользователя НЕ сохранена', user_id=user_id)
             return False
 
         try:
@@ -61,10 +61,15 @@ class UserCartService:
             effective_ttl = ttl if ttl is not None else settings.CART_TTL_SECONDS
             await client.setex(key, effective_ttl, json_data)
             cart_mode = cart_data.get('cart_mode', 'unknown')
-            logger.info(f'🛒 Корзина пользователя {user_id} сохранена в Redis (mode={cart_mode}, ttl={effective_ttl}s)')
+            logger.info(
+                '🛒 Корзина пользователя сохранена в Redis (mode=, ttl=s)',
+                user_id=user_id,
+                cart_mode=cart_mode,
+                effective_ttl=effective_ttl,
+            )
             return True
         except Exception as e:
-            logger.error(f'🛒 Ошибка сохранения корзины пользователя {user_id}: {e}')
+            logger.error('🛒 Ошибка сохранения корзины пользователя', user_id=user_id, error=e)
             return False
 
     async def get_user_cart(self, user_id: int) -> dict[str, Any] | None:
@@ -86,11 +91,11 @@ class UserCartService:
             json_data = await client.get(key)
             if json_data:
                 cart_data = json.loads(json_data)
-                logger.debug(f'Корзина пользователя {user_id} загружена из Redis')
+                logger.debug('Корзина пользователя загружена из Redis', user_id=user_id)
                 return cart_data
             return None
         except Exception as e:
-            logger.error(f'Ошибка получения корзины пользователя {user_id}: {e}')
+            logger.error('Ошибка получения корзины пользователя', user_id=user_id, error=e)
             return None
 
     async def delete_user_cart(self, user_id: int) -> bool:
@@ -111,10 +116,10 @@ class UserCartService:
             key = f'user_cart:{user_id}'
             result = await client.delete(key)
             if result:
-                logger.debug(f'Корзина пользователя {user_id} удалена из Redis')
+                logger.debug('Корзина пользователя удалена из Redis', user_id=user_id)
             return bool(result)
         except Exception as e:
-            logger.error(f'Ошибка удаления корзины пользователя {user_id}: {e}')
+            logger.error('Ошибка удаления корзины пользователя', user_id=user_id, error=e)
             return False
 
     async def has_user_cart(self, user_id: int) -> bool:
@@ -129,17 +134,19 @@ class UserCartService:
         """
         client = self._get_redis_client()
         if client is None:
-            logger.warning(f'🛒 Redis недоступен, проверка корзины пользователя {user_id} невозможна')
+            logger.warning('🛒 Redis недоступен, проверка корзины пользователя невозможна', user_id=user_id)
             return False
 
         try:
             key = f'user_cart:{user_id}'
             exists = await client.exists(key)
             result = bool(exists)
-            logger.info(f'🛒 Проверка корзины пользователя {user_id}: {"найдена" if result else "не найдена"}')
+            logger.info(
+                '🛒 Проверка корзины пользователя', user_id=user_id, value='найдена' if result else 'не найдена'
+            )
             return result
         except Exception as e:
-            logger.error(f'🛒 Ошибка проверки наличия корзины пользователя {user_id}: {e}')
+            logger.error('🛒 Ошибка проверки наличия корзины пользователя', user_id=user_id, error=e)
             return False
 
 

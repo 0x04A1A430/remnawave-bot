@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import logging
 from typing import Any
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, Security, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -36,7 +36,7 @@ from ..schemas.subscriptions import (
 )
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter()
 
@@ -75,13 +75,13 @@ async def _choose_trial_squads(
     try:
         squad_uuid = await get_random_trial_squad_uuid(db)
     except Exception as error:
-        logger.error('Failed to select trial squad: %s', error)
+        logger.error('Failed to select trial squad', error=error)
         squad_uuid = None
 
     if not squad_uuid:
         return []
 
-    logger.debug('Selected trial squad %s for subscription replacement', squad_uuid)
+    logger.debug('Selected trial squad for subscription replacement', squad_uuid=squad_uuid)
     return [squad_uuid]
 
 
@@ -222,7 +222,7 @@ async def create_subscription(
         try:
             await db.rollback()
         except Exception:
-            logger.exception('Rollback failed after error: %s', e)
+            logger.exception('Rollback failed after error', e=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'Failed to sync with Remnawave: {e!s}'
         )

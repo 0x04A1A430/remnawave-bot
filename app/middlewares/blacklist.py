@@ -1,14 +1,14 @@
-import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+import structlog
 from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery, Message, PreCheckoutQuery, TelegramObject, User as TgUser
 
 from app.services.blacklist_service import blacklist_service
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class BlacklistMiddleware(BaseMiddleware):
@@ -30,7 +30,7 @@ class BlacklistMiddleware(BaseMiddleware):
         if not is_blacklisted:
             return await handler(event, data)
 
-        logger.warning(f'🚫 Пользователь {user.id} (@{user.username}) из черного списка: {reason}')
+        logger.warning('🚫 Пользователь (@) из черного списка', user_id=user.id, username=user.username, reason=reason)
 
         block_text = (
             f'🚫 Доступ запрещен\n\nПричина: {reason}\n\nЕсли вы считаете, что это ошибка, обратитесь в поддержку.'
@@ -44,6 +44,6 @@ class BlacklistMiddleware(BaseMiddleware):
             elif isinstance(event, PreCheckoutQuery):
                 await event.answer(ok=False, error_message='Доступ запрещен')
         except Exception as e:
-            logger.error(f'Ошибка отправки сообщения о блокировке пользователю {user.id}: {e}')
+            logger.error('Ошибка отправки сообщения о блокировке пользователю', user_id=user.id, error=e)
 
         return None

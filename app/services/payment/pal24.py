@@ -42,17 +42,17 @@ class Pal24PaymentMixin:
 
         if amount_kopeks < settings.PAL24_MIN_AMOUNT_KOPEKS:
             logger.warning(
-                'Сумма Pal24 меньше минимальной: %s < %s',
-                amount_kopeks,
-                settings.PAL24_MIN_AMOUNT_KOPEKS,
+                'Сумма Pal24 меньше минимальной: <',
+                amount_kopeks=amount_kopeks,
+                PAL24_MIN_AMOUNT_KOPEKS=settings.PAL24_MIN_AMOUNT_KOPEKS,
             )
             return None
 
         if amount_kopeks > settings.PAL24_MAX_AMOUNT_KOPEKS:
             logger.warning(
-                'Сумма Pal24 больше максимальной: %s > %s',
-                amount_kopeks,
-                settings.PAL24_MAX_AMOUNT_KOPEKS,
+                'Сумма Pal24 больше максимальной: >',
+                amount_kopeks=amount_kopeks,
+                PAL24_MAX_AMOUNT_KOPEKS=settings.PAL24_MAX_AMOUNT_KOPEKS,
             )
             return None
 
@@ -81,16 +81,16 @@ class Pal24PaymentMixin:
                 payment_method=api_payment_method,
             )
         except Pal24APIError as error:
-            logger.error('Ошибка Pal24 API при создании счета: %s', error)
+            logger.error('Ошибка Pal24 API при создании счета', error=error)
             return None
 
         if not response.get('success', True):
-            logger.error('Pal24 вернул ошибку при создании счета: %s', response)
+            logger.error('Pal24 вернул ошибку при создании счета', response=response)
             return None
 
         bill_id = response.get('bill_id')
         if not bill_id:
-            logger.error('Pal24 не вернул bill_id: %s', response)
+            logger.error('Pal24 не вернул bill_id', response=response)
             return None
 
         def _pick_url(*keys: str) -> str | None:
@@ -169,10 +169,10 @@ class Pal24PaymentMixin:
         )
 
         logger.info(
-            'Создан Pal24 счет %s для пользователя %s (%s₽)',
-            bill_id,
-            user_id,
-            amount_kopeks / 100,
+            'Создан Pal24 счет для пользователя (₽)',
+            bill_id=bill_id,
+            user_id=user_id,
+            amount_kopeks=amount_kopeks / 100,
         )
 
         payment_status = getattr(payment, 'status', response.get('status', 'NEW'))
@@ -230,7 +230,7 @@ class Pal24PaymentMixin:
             status = (callback.get('status') or callback.get('Status') or '').upper()
 
             if not bill_id and not order_id:
-                logger.error('Pal24 callback без идентификаторов: %s', callback)
+                logger.error('Pal24 callback без идентификаторов', callback=callback)
                 return False
 
             payment = None
@@ -240,11 +240,11 @@ class Pal24PaymentMixin:
                 payment = await payment_module.get_pal24_payment_by_order_id(db, order_id)
 
             if not payment:
-                logger.error('Pal24 платеж не найден: %s / %s', bill_id, order_id)
+                logger.error('Pal24 платеж не найден: /', bill_id=bill_id, order_id=order_id)
                 return False
 
             if payment.is_paid:
-                logger.info('Pal24 платеж %s уже обработан', payment.bill_id)
+                logger.info('Pal24 платеж уже обработан', bill_id=payment.bill_id)
                 return True
 
             if status in {'PAID', 'SUCCESS', 'OVERPAID'}:
@@ -300,15 +300,11 @@ class Pal24PaymentMixin:
                 balance_currency=callback.get('BalanceCurrency') or callback.get('balance_currency'),
                 payer_account=callback.get('AccountNumber') or callback.get('account') or callback.get('Account'),
             )
-            logger.info(
-                'Обновили Pal24 платеж %s до статуса %s',
-                payment.bill_id,
-                status,
-            )
+            logger.info('Обновили Pal24 платеж до статуса', bill_id=payment.bill_id, status=status)
             return True
 
         except Exception as error:
-            logger.error('Ошибка обработки Pal24 callback: %s', error, exc_info=True)
+            logger.error('Ошибка обработки Pal24 callback', error=error, exc_info=True)
             return False
 
     async def _finalize_pal24_payment(
@@ -335,9 +331,7 @@ class Pal24PaymentMixin:
                     await self.bot.delete_message(chat_id, message_id)
                 except Exception as delete_error:  # pragma: no cover - depends on rights
                     logger.warning(
-                        'Не удалось удалить счёт PayPalych %s: %s',
-                        message_id,
-                        delete_error,
+                        'Не удалось удалить счёт PayPalych', message_id=message_id, delete_error=delete_error
                     )
                 else:
                     metadata.pop('invoice_message', None)
@@ -353,26 +347,19 @@ class Pal24PaymentMixin:
                 )
                 payment.metadata_json = metadata
             except Exception as error:  # pragma: no cover - diagnostics
-                logger.warning(
-                    'Не удалось обновить метаданные PayPalych после удаления счёта: %s',
-                    error,
-                )
+                logger.warning('Не удалось обновить метаданные PayPalych после удаления счёта', error=error)
 
         if payment.transaction_id:
-            logger.info(
-                'Pal24 платеж %s уже привязан к транзакции (trigger=%s)',
-                payment.bill_id,
-                trigger,
-            )
+            logger.info('Pal24 платеж уже привязан к транзакции (trigger=)', bill_id=payment.bill_id, trigger=trigger)
             return True
 
         user = await payment_module.get_user_by_id(db, payment.user_id)
         if not user:
             logger.error(
-                'Пользователь %s не найден для Pal24 платежа %s (trigger=%s)',
-                payment.user_id,
-                payment.bill_id,
-                trigger,
+                'Пользователь не найден для Pal24 платежа (trigger=)',
+                user_id=payment.user_id,
+                bill_id=payment.bill_id,
+                trigger=trigger,
             )
             return False
 
@@ -408,10 +395,7 @@ class Pal24PaymentMixin:
 
             await process_referral_topup(db, user.id, payment.amount_kopeks, getattr(self, 'bot', None))
         except Exception as error:
-            logger.error(
-                'Ошибка обработки реферального пополнения Pal24: %s',
-                error,
-            )
+            logger.error('Ошибка обработки реферального пополнения Pal24', error=error)
 
         if was_first_topup and not user.has_made_first_topup:
             user.has_made_first_topup = True
@@ -438,10 +422,7 @@ class Pal24PaymentMixin:
                     db=db,
                 )
             except Exception as error:
-                logger.error(
-                    'Ошибка отправки админ уведомления Pal24: %s',
-                    error,
-                )
+                logger.error('Ошибка отправки админ уведомления Pal24', error=error)
 
         if getattr(self, 'bot', None) and user.telegram_id:
             try:
@@ -459,10 +440,7 @@ class Pal24PaymentMixin:
                     reply_markup=keyboard,
                 )
             except Exception as error:
-                logger.error(
-                    'Ошибка отправки уведомления пользователю Pal24: %s',
-                    error,
-                )
+                logger.error('Ошибка отправки уведомления пользователю Pal24', error=error)
 
         try:
             from aiogram import types
@@ -480,9 +458,9 @@ class Pal24PaymentMixin:
                     )
                 except Exception as auto_error:
                     logger.error(
-                        'Ошибка автоматической покупки подписки для пользователя %s: %s',
-                        user.id,
-                        auto_error,
+                        'Ошибка автоматической покупки подписки для пользователя',
+                        user_id=user.id,
+                        auto_error=auto_error,
                         exc_info=True,
                     )
 
@@ -531,27 +509,20 @@ class Pal24PaymentMixin:
                     reply_markup=keyboard,
                 )
                 logger.info(
-                    'Отправлено уведомление с кнопкой возврата к оформлению подписки пользователю %s',
-                    user.id,
+                    'Отправлено уведомление с кнопкой возврата к оформлению подписки пользователю', user_id=user.id
                 )
             else:
-                logger.info(
-                    'У пользователя %s нет сохраненной корзины или автопокупка выполнена',
-                    user.id,
-                )
+                logger.info('У пользователя нет сохраненной корзины или автопокупка выполнена', user_id=user.id)
         except Exception as error:
             logger.error(
-                'Ошибка при работе с сохраненной корзиной для пользователя %s: %s',
-                user.id,
-                error,
-                exc_info=True,
+                'Ошибка при работе с сохраненной корзиной для пользователя', user_id=user.id, error=error, exc_info=True
             )
 
         logger.info(
-            '✅ Обработан Pal24 платеж %s для пользователя %s (trigger=%s)',
-            payment.bill_id,
-            payment.user_id,
-            trigger,
+            '✅ Обработан Pal24 платеж для пользователя (trigger=)',
+            bill_id=payment.bill_id,
+            user_id=payment.user_id,
+            trigger=trigger,
         )
 
         return True
@@ -579,7 +550,7 @@ class Pal24PaymentMixin:
                 try:
                     response = await service.get_bill_status(bill_id_str)
                 except Pal24APIError as error:
-                    logger.error('Ошибка Pal24 API при получении статуса счёта: %s', error)
+                    logger.error('Ошибка Pal24 API при получении статуса счёта', error=error)
                 else:
                     if response:
                         remote_payloads['bill_status'] = response
@@ -595,7 +566,7 @@ class Pal24PaymentMixin:
                     try:
                         payment_response = await service.get_payment_status(payment_id_str)
                     except Pal24APIError as error:
-                        logger.error('Ошибка Pal24 API при получении статуса платежа: %s', error)
+                        logger.error('Ошибка Pal24 API при получении статуса платежа', error=error)
                     else:
                         if payment_response:
                             remote_payloads['payment_status'] = payment_response
@@ -606,7 +577,7 @@ class Pal24PaymentMixin:
                 try:
                     payments_response = await service.get_bill_payments(bill_id_str)
                 except Pal24APIError as error:
-                    logger.error('Ошибка Pal24 API при получении списка платежей: %s', error)
+                    logger.error('Ошибка Pal24 API при получении списка платежей', error=error)
                 else:
                     if payments_response:
                         remote_payloads['bill_payments'] = payments_response
@@ -711,11 +682,7 @@ class Pal24PaymentMixin:
                     if finalized:
                         payment = await payment_module.get_pal24_payment_by_id(db, local_payment_id)
                 except Exception as error:
-                    logger.error(
-                        'Ошибка автоматического начисления по Pal24 статусу: %s',
-                        error,
-                        exc_info=True,
-                    )
+                    logger.error('Ошибка автоматического начисления по Pal24 статусу', error=error, exc_info=True)
 
             links_map, selected_method = self._build_links_map(payment, remote_payloads)
             primary_url = (
@@ -740,7 +707,7 @@ class Pal24PaymentMixin:
             }
 
         except Exception as error:
-            logger.error('Ошибка получения статуса Pal24: %s', error, exc_info=True)
+            logger.error('Ошибка получения статуса Pal24', error=error, exc_info=True)
             return None
 
     @staticmethod

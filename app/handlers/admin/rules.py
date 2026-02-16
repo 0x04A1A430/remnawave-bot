@@ -1,6 +1,6 @@
-import logging
 import re
 
+import structlog
 from aiogram import Dispatcher, F, types
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,7 +20,7 @@ def _safe_preview(html_text: str, limit: int = 500) -> str:
     return plain[:limit] + '...'
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @admin_required
@@ -69,7 +69,7 @@ async def view_current_rules(callback: types.CallbackQuery, db_user: User, db: A
         )
         await callback.answer()
     except Exception as e:
-        logger.error(f'Ошибка при показе правил: {e}')
+        logger.error('Ошибка при показе правил', error=e)
         await callback.message.edit_text(
             '❌ Ошибка при загрузке правил. Возможно, в тексте есть некорректные HTML теги.',
             reply_markup=types.InlineKeyboardMarkup(
@@ -112,7 +112,7 @@ async def start_edit_rules(callback: types.CallbackQuery, db_user: User, state: 
         await callback.answer()
 
     except Exception as e:
-        logger.error(f'Ошибка при начале редактирования правил: {e}')
+        logger.error('Ошибка при начале редактирования правил', error=e)
         await callback.answer('❌ Ошибка при загрузке правил для редактирования', show_alert=True)
 
 
@@ -169,7 +169,7 @@ async def process_rules_edit(message: types.Message, db_user: User, state: FSMCo
         await state.update_data(new_rules=new_rules)
 
     except Exception as e:
-        logger.error(f'Ошибка при показе превью правил: {e}')
+        logger.error('Ошибка при показе превью правил', error=e)
         await message.answer(
             '⚠️ <b>Подтверждение сохранения правил</b>\n\n'
             f'Новые правила готовы к сохранению ({len(new_rules)} символов).\n'
@@ -240,11 +240,11 @@ async def save_rules(callback: types.CallbackQuery, db_user: User, state: FSMCon
         )
 
         await state.clear()
-        logger.info(f'Правила сервиса обновлены администратором {db_user.telegram_id}')
+        logger.info('Правила сервиса обновлены администратором', telegram_id=db_user.telegram_id)
         await callback.answer()
 
     except Exception as e:
-        logger.error(f'Ошибка сохранения правил: {e}')
+        logger.error('Ошибка сохранения правил', error=e)
         await callback.message.edit_text(
             '❌ <b>Ошибка при сохранении правил</b>\n\nПроизошла ошибка при записи в базу данных. Попробуйте еще раз.',
             reply_markup=types.InlineKeyboardMarkup(
@@ -302,11 +302,11 @@ async def confirm_clear_rules(callback: types.CallbackQuery, db_user: User, db: 
             ),
         )
 
-        logger.info(f'Правила очищены администратором {db_user.telegram_id}')
+        logger.info('Правила очищены администратором', telegram_id=db_user.telegram_id)
         await callback.answer()
 
     except Exception as e:
-        logger.error(f'Ошибка при очистке правил: {e}')
+        logger.error('Ошибка при очистке правил', error=e)
         await callback.answer('❌ Ошибка при очистке правил', show_alert=True)
 
 

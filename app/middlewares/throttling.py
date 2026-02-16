@@ -1,14 +1,14 @@
-import logging
 import time
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+import structlog
 from aiogram import BaseMiddleware
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message, TelegramObject
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class ThrottlingMiddleware(BaseMiddleware):
@@ -56,11 +56,11 @@ class ThrottlingMiddleware(BaseMiddleware):
             if len(timestamps) >= self.start_max_calls:
                 cooldown = int(self.start_window - (now - timestamps[0])) + 1
                 logger.warning(
-                    'Rate-limit /start для %s: %d вызовов за %ds (лимит %d)',
-                    user_id,
-                    len(timestamps),
-                    int(self.start_window),
-                    self.start_max_calls,
+                    'Rate-limit /start для : вызовов за s (лимит)',
+                    user_id=user_id,
+                    timestamps_count=len(timestamps),
+                    start_window=int(self.start_window),
+                    start_max_calls=self.start_max_calls,
                 )
                 try:
                     await event.answer(f'⏳ Слишком много запросов. Попробуйте через {cooldown} сек.')
@@ -76,7 +76,7 @@ class ThrottlingMiddleware(BaseMiddleware):
         last_call = self.user_buckets.get(user_id, 0)
 
         if now - last_call < self.rate_limit:
-            logger.warning(f'Throttling для пользователя {user_id}')
+            logger.warning('Throttling для пользователя', user_id=user_id)
 
             # Для сообщений: молчим только если это состояние работы с тикетами; иначе показываем блок
             if isinstance(event, Message):

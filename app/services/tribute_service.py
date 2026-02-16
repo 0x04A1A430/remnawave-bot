@@ -1,8 +1,8 @@
 import json
-import logging
 from datetime import datetime
 from typing import Any
 
+import structlog
 from aiogram import Bot
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
@@ -19,7 +19,7 @@ from app.services.subscription_auto_purchase_service import (
 from app.utils.user_utils import format_referrer_info
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class TributeService:
@@ -46,7 +46,7 @@ class TributeService:
         try:
             await self.bot.delete_message(chat_id, message_id)
         except Exception as error:  # pragma: no cover - depends on bot rights
-            logger.warning('Не удалось удалить Tribute счёт %s: %s', message_id, error)
+            logger.warning('Не удалось удалить Tribute счёт', message_id=message_id, error=error)
 
     async def create_payment_link(
         self, user_id: int, amount_kopeks: int, description: str = 'Пополнение баланса'
@@ -66,7 +66,7 @@ class TributeService:
             return payment_url
 
         except Exception as e:
-            logger.error(f'Ошибка создания Tribute платежа: {e}')
+            logger.error('Ошибка создания Tribute платежа', error=e)
             return None
 
     async def process_webhook(self, payload: str) -> dict[str, Any]:
@@ -76,7 +76,7 @@ class TributeService:
             logger.error('Некорректный JSON в Tribute webhook')
             return {'status': 'error', 'reason': 'invalid_json'}
 
-        logger.info(f'Получен Tribute webhook: {json.dumps(webhook_data, ensure_ascii=False)}')
+        logger.info('Получен Tribute webhook', dumps=json.dumps(webhook_data, ensure_ascii=False))
 
         processed_data = await self.tribute_api.process_webhook(webhook_data)
         if not processed_data:
@@ -101,16 +101,23 @@ class TributeService:
             payment_id = payment_data['payment_id']
 
             logger.info(
-                f'Обрабатываем успешный Tribute платеж: user_telegram_id={user_telegram_id}, amount={amount_kopeks}, payment_id={payment_id}'
+                'Обрабатываем успешный Tribute платеж: user_telegram_id=, amount=, payment_id',
+                user_telegram_id=user_telegram_id,
+                amount_kopeks=amount_kopeks,
+                payment_id=payment_id,
             )
 
             async for session in get_db():
                 user = await get_user_by_telegram_id(session, user_telegram_id)
                 if not user:
-                    logger.error(f'Пользователь {user_telegram_id} не найден')
+                    logger.error('Пользователь не найден', user_telegram_id=user_telegram_id)
                     return
 
-                logger.info(f'Найден пользователь {user.telegram_id}, текущий баланс: {user.balance_kopeks} коп')
+                logger.info(
+                    'Найден пользователь текущий баланс: коп',
+                    telegram_id=user.telegram_id,
+                    balance_kopeks=user.balance_kopeks,
+                )
 
                 from app.database.crud.transaction import check_tribute_payment_duplicate
 
@@ -120,10 +127,10 @@ class TributeService:
 
                 if duplicate_transaction:
                     logger.warning('Найден дубликат платежа в течение 24ч:')
-                    logger.warning(f'   Transaction ID: {duplicate_transaction.id}')
-                    logger.warning(f'   Amount: {duplicate_transaction.amount_kopeks} коп')
-                    logger.warning(f'   Created: {duplicate_transaction.created_at}')
-                    logger.warning(f'   External ID: {duplicate_transaction.external_id}')
+                    logger.warning('Transaction ID', duplicate_transaction_id=duplicate_transaction.id)
+                    logger.warning('Amount: коп', amount_kopeks=duplicate_transaction.amount_kopeks)
+                    logger.warning('Created', created_at=duplicate_transaction.created_at)
+                    logger.warning('External ID', external_id=duplicate_transaction.external_id)
                     logger.warning('Платеж игнорирован - это дубликат свежего платежа')
                     return
 
@@ -155,7 +162,7 @@ class TributeService:
 
                     await process_referral_topup(session, user.id, amount_kopeks, self.bot)
                 except Exception as e:
-                    logger.error(f'Ошибка обработки реферального пополнения Tribute: {e}')
+                    logger.error('Ошибка обработки реферального пополнения Tribute', error=e)
 
                 if was_first_topup and not user.has_made_first_topup:
                     user.has_made_first_topup = True
@@ -164,12 +171,16 @@ class TributeService:
                 await session.refresh(user)
 
                 logger.info(
-                    f'✅ Баланс пользователя {user_telegram_id} обновлен: {old_balance} -> {user.balance_kopeks} коп (+{amount_kopeks})'
+                    '✅ Баланс пользователя обновлен: коп (+)',
+                    user_telegram_id=user_telegram_id,
+                    old_balance=old_balance,
+                    balance_kopeks=user.balance_kopeks,
+                    amount_kopeks=amount_kopeks,
                 )
-                logger.info(f'✅ Создана транзакция ID: {transaction.id}')
+                logger.info('✅ Создана транзакция ID', transaction_id=transaction.id)
 
                 if was_first_topup:
-                    logger.info(f'Отмечен первый топап для пользователя {user_telegram_id}')
+                    logger.info('Отмечен первый топап для пользователя', user_telegram_id=user_telegram_id)
 
                 try:
                     from app.services.admin_notification_service import AdminNotificationService
@@ -186,18 +197,20 @@ class TributeService:
                         db=session,
                     )
                 except Exception as e:
-                    logger.error(f'Ошибка отправки уведомления о Tribute пополнении: {e}')
+                    logger.error('Ошибка отправки уведомления о Tribute пополнении', error=e)
 
                 await self._cleanup_invoice_message(user_telegram_id)
                 await self._send_success_notification(user_telegram_id, amount_kopeks)
 
                 logger.info(
-                    f'🎉 Успешно обработан Tribute платеж: {amount_kopeks / 100}₽ для пользователя {user_telegram_id}'
+                    '🎉 Успешно обработан Tribute платеж: ₽ для пользователя',
+                    amount_kopeks=amount_kopeks / 100,
+                    user_telegram_id=user_telegram_id,
                 )
                 break
 
         except Exception as e:
-            logger.error(f'Ошибка обработки успешного Tribute платежа: {e}', exc_info=True)
+            logger.error('Ошибка обработки успешного Tribute платежа', error=e, exc_info=True)
 
     async def _handle_failed_payment(self, payment_data: dict[str, Any]):
         try:
@@ -215,11 +228,11 @@ class TributeService:
 
                 await self._send_failure_notification(user_id)
 
-                logger.info(f'Обработан неудачный Tribute платеж для пользователя {user_id}')
+                logger.info('Обработан неудачный Tribute платеж для пользователя', user_id=user_id)
                 break
 
         except Exception as e:
-            logger.error(f'Ошибка обработки неудачного Tribute платежа: {e}')
+            logger.error('Ошибка обработки неудачного Tribute платежа', error=e)
 
     async def _handle_refund(self, refund_data: dict[str, Any]):
         try:
@@ -246,11 +259,13 @@ class TributeService:
 
                 await self._send_refund_notification(user_id, amount_kopeks)
 
-                logger.info(f'Обработан возврат Tribute: {amount_kopeks / 100}₽ для пользователя {user_id}')
+                logger.info(
+                    'Обработан возврат Tribute: ₽ для пользователя', amount_kopeks=amount_kopeks / 100, user_id=user_id
+                )
                 break
 
         except Exception as e:
-            logger.error(f'Ошибка обработки возврата Tribute: {e}')
+            logger.error('Ошибка обработки возврата Tribute', error=e)
 
     async def _send_success_notification(self, user_id: int, amount_kopeks: int):
         # Skip if no telegram_id (email-only user)
@@ -297,9 +312,9 @@ class TributeService:
                     )
                 except Exception as auto_error:
                     logger.error(
-                        'Ошибка автоматической покупки подписки для пользователя %s: %s',
-                        user.id,
-                        auto_error,
+                        'Ошибка автоматической покупки подписки для пользователя',
+                        user_id=user.id,
+                        auto_error=auto_error,
                         exc_info=True,
                     )
 
@@ -340,12 +355,11 @@ class TributeService:
                     reply_markup=keyboard,
                 )
                 logger.info(
-                    'Отправлено уведомление с кнопкой возврата к оформлению подписки пользователю %s',
-                    user_id,
+                    'Отправлено уведомление с кнопкой возврата к оформлению подписки пользователю', user_id=user_id
                 )
 
         except Exception as e:
-            logger.error(f'Ошибка отправки уведомления об успешном платеже: {e}')
+            logger.error('Ошибка отправки уведомления об успешном платеже', error=e)
 
     async def _send_failure_notification(self, user_id: int):
         # Skip if no telegram_id (email-only user)
@@ -374,7 +388,7 @@ class TributeService:
             await self.bot.send_message(user_id, text, reply_markup=keyboard, parse_mode='Markdown')
 
         except Exception as e:
-            logger.error(f'Ошибка отправки уведомления о неудачном платеже: {e}')
+            logger.error('Ошибка отправки уведомления о неудачном платеже', error=e)
 
     async def _send_refund_notification(self, user_id: int, amount_kopeks: int):
         # Skip if no telegram_id (email-only user)
@@ -403,7 +417,7 @@ class TributeService:
             await self.bot.send_message(user_id, text, reply_markup=keyboard, parse_mode='Markdown')
 
         except Exception as e:
-            logger.error(f'Ошибка отправки уведомления о возврате: {e}')
+            logger.error('Ошибка отправки уведомления о возврате', error=e)
 
     async def force_process_payment(
         self,
@@ -414,13 +428,16 @@ class TributeService:
     ) -> bool:
         try:
             logger.info(
-                f'🔧 ПРИНУДИТЕЛЬНАЯ ОБРАБОТКА: payment_id={payment_id}, user_id={user_id}, amount={amount_kopeks}'
+                '🔧 ПРИНУДИТЕЛЬНАЯ ОБРАБОТКА: payment_id=, user_id=, amount',
+                payment_id=payment_id,
+                user_id=user_id,
+                amount_kopeks=amount_kopeks,
             )
 
             async for session in get_db():
                 user = await get_user_by_telegram_id(session, user_id)
                 if not user:
-                    logger.error(f'⌘ Пользователь {user_id} не найден')
+                    logger.error('⌘ Пользователь не найден', user_id=user_id)
                     return False
 
                 external_id = f'force_donation_{payment_id}_{int(datetime.utcnow().timestamp())}'
@@ -442,15 +459,17 @@ class TributeService:
 
                 await session.commit()
 
-                logger.info(f'💰 ПРИНУДИТЕЛЬНО обновлен баланс: {old_balance} -> {user.balance_kopeks} коп')
+                logger.info(
+                    '💰 ПРИНУДИТЕЛЬНО обновлен баланс: коп', old_balance=old_balance, balance_kopeks=user.balance_kopeks
+                )
 
                 await self._send_success_notification(user_id, amount_kopeks)
 
-                logger.info(f'✅ Принудительно обработан платеж {payment_id}')
+                logger.info('✅ Принудительно обработан платеж', payment_id=payment_id)
                 return True
 
         except Exception as e:
-            logger.error(f'Ошибка принудительной обработки: {e}', exc_info=True)
+            logger.error('Ошибка принудительной обработки', error=e, exc_info=True)
             return False
 
     async def get_payment_status(self, payment_id: str) -> dict[str, Any] | None:

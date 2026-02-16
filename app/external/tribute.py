@@ -1,13 +1,14 @@
 import hashlib
 import hmac
 import json
-import logging
 from typing import Any
+
+import structlog
 
 from app.config import settings
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class TributeService:
@@ -25,11 +26,11 @@ class TributeService:
         try:
             payment_url = f'{self.donate_link}&user_id={user_id}'
 
-            logger.info(f'Создана ссылка Tribute для пользователя {user_id}')
+            logger.info('Создана ссылка Tribute для пользователя', user_id=user_id)
             return payment_url
 
         except Exception as e:
-            logger.error(f'Ошибка создания Tribute ссылки: {e}')
+            logger.error('Ошибка создания Tribute ссылки', error=e)
             return None
 
     def verify_webhook_signature(self, payload: str, signature: str) -> bool:
@@ -50,7 +51,7 @@ class TributeService:
             return is_valid
 
         except Exception as e:
-            logger.error(f'Ошибка проверки подписи webhook: {e}')
+            logger.error('Ошибка проверки подписи webhook', error=e)
             return False
 
     async def process_webhook(self, payload_or_data) -> dict[str, Any] | None:
@@ -60,9 +61,9 @@ class TributeService:
             if isinstance(payload_or_data, str):
                 try:
                     webhook_data = json.loads(payload_or_data)
-                    logger.info(f'📊 Распарсенные данные: {webhook_data}')
+                    logger.info('📊 Распарсенные данные', webhook_data=webhook_data)
                 except json.JSONDecodeError as e:
-                    logger.error(f'❌ Ошибка парсинга JSON: {e}')
+                    logger.error('❌ Ошибка парсинга JSON', error=e)
                     return None
             else:
                 webhook_data = payload_or_data
@@ -99,18 +100,24 @@ class TributeService:
                     status = 'unknown'
 
             logger.info(
-                f'📝 Извлеченные данные: payment_id={payment_id}, status={status}, amount_kopeks={amount_kopeks}, user_id={telegram_user_id}'
+                '📝 Извлеченные данные: payment_id=, status=, amount_kopeks=, user_id',
+                payment_id=payment_id,
+                status=status,
+                amount_kopeks=amount_kopeks,
+                telegram_user_id=telegram_user_id,
             )
 
             if not telegram_user_id:
                 logger.error('❌ Не найден telegram_user_id в webhook данных')
-                logger.error(f'🔍 Полные данные для отладки: {json.dumps(webhook_data, ensure_ascii=False, indent=2)}')
+                logger.error(
+                    '🔍 Полные данные для отладки', dumps=json.dumps(webhook_data, ensure_ascii=False, indent=2)
+                )
                 return None
 
             try:
                 telegram_user_id = int(telegram_user_id)
             except (ValueError, TypeError):
-                logger.error(f'❌ Некорректный telegram_user_id: {telegram_user_id}')
+                logger.error('❌ Некорректный telegram_user_id', telegram_user_id=telegram_user_id)
                 return None
 
             result = {
@@ -123,28 +130,28 @@ class TributeService:
                 'payment_system': 'tribute',
             }
 
-            logger.info(f'✅ Tribute webhook обработан успешно: {result}')
+            logger.info('✅ Tribute webhook обработан успешно', result=result)
             return result
 
         except Exception as e:
-            logger.error(f'❌ Ошибка обработки Tribute webhook: {e}', exc_info=True)
-            logger.error(f'🔍 Webhook data для отладки: {json.dumps(webhook_data, ensure_ascii=False, indent=2)}')
+            logger.error('❌ Ошибка обработки Tribute webhook', error=e, exc_info=True)
+            logger.error('🔍 Webhook data для отладки', dumps=json.dumps(webhook_data, ensure_ascii=False, indent=2))
             return None
 
     async def get_payment_status(self, payment_id: str) -> dict[str, Any] | None:
         try:
-            logger.info(f'Запрос статуса платежа {payment_id}')
+            logger.info('Запрос статуса платежа', payment_id=payment_id)
             return {'status': 'unknown', 'payment_id': payment_id}
         except Exception as e:
-            logger.error(f'Ошибка получения статуса платежа: {e}')
+            logger.error('Ошибка получения статуса платежа', error=e)
             return None
 
     async def refund_payment(
         self, payment_id: str, amount_kopeks: int | None = None, reason: str = 'Возврат по запросу'
     ) -> dict[str, Any] | None:
         try:
-            logger.info(f'Создание возврата для платежа {payment_id}')
+            logger.info('Создание возврата для платежа', payment_id=payment_id)
             return {'refund_id': f'refund_{payment_id}', 'status': 'pending'}
         except Exception as e:
-            logger.error(f'Ошибка создания возврата: {e}')
+            logger.error('Ошибка создания возврата', error=e)
             return None

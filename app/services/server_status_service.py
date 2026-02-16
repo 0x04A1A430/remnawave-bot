@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-import logging
 import re
 from dataclasses import dataclass
 
 import aiohttp
+import structlog
 
 from app.config import settings
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @dataclass
@@ -35,7 +35,7 @@ class ServerStatusService:
     _FLAG_PATTERN = re.compile(r'^([\U0001F1E6-\U0001F1FF]{2})\s*(.*)$')
 
     def __init__(self) -> None:
-        self._logger = logging.getLogger(self.__class__.__name__)
+        pass
 
     async def get_servers(self) -> list[ServerStatusEntry]:
         mode = settings.get_server_status_mode()

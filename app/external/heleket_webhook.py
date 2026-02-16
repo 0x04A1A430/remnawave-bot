@@ -1,8 +1,8 @@
 import asyncio
 import json
-import logging
 from typing import Any
 
+import structlog
 from aiohttp import web
 
 from app.config import settings
@@ -11,7 +11,7 @@ from app.external.heleket import HeleketService
 from app.services.payment_service import PaymentService
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class HeleketWebhookHandler:
@@ -39,7 +39,7 @@ class HeleketWebhookHandler:
                 processed = await self.payment_service.process_heleket_webhook(db, payload)
                 await db.commit()
             except Exception as e:
-                logger.error(f'Ошибка обработки Heleket webhook: {e}')
+                logger.error('Ошибка обработки Heleket webhook', error=e)
                 await db.rollback()
                 return web.json_response({'status': 'error', 'reason': 'internal_error'}, status=500)
 
@@ -97,15 +97,15 @@ async def start_heleket_webhook_server(payment_service: PaymentService) -> None:
     try:
         await site.start()
         logger.info(
-            'Heleket webhook сервер запущен на %s:%s',
-            settings.HELEKET_WEBHOOK_HOST,
-            settings.HELEKET_WEBHOOK_PORT,
+            'Heleket webhook сервер запущен на',
+            HELEKET_WEBHOOK_HOST=settings.HELEKET_WEBHOOK_HOST,
+            HELEKET_WEBHOOK_PORT=settings.HELEKET_WEBHOOK_PORT,
         )
         logger.info(
-            'Heleket webhook URL: http://%s:%s%s',
-            settings.HELEKET_WEBHOOK_HOST,
-            settings.HELEKET_WEBHOOK_PORT,
-            settings.HELEKET_WEBHOOK_PATH,
+            'Heleket webhook URL: http://',
+            HELEKET_WEBHOOK_HOST=settings.HELEKET_WEBHOOK_HOST,
+            HELEKET_WEBHOOK_PORT=settings.HELEKET_WEBHOOK_PORT,
+            HELEKET_WEBHOOK_PATH=settings.HELEKET_WEBHOOK_PATH,
         )
 
         while True:

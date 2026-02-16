@@ -1,6 +1,6 @@
-import logging
 from dataclasses import dataclass
 
+import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -15,7 +15,7 @@ from app.database.models import AdvertisingCampaign, User
 from app.services.subscription_service import SubscriptionService
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 def _format_user_log(user: User) -> str:
@@ -53,7 +53,7 @@ class AdvertisingCampaignService:
         campaign: AdvertisingCampaign,
     ) -> CampaignBonusResult:
         if not campaign.is_active:
-            logger.warning('⚠️ Попытка выдать бонус по неактивной кампании %s', campaign.id)
+            logger.warning('⚠️ Попытка выдать бонус по неактивной кампании', campaign_id=campaign.id)
             return CampaignBonusResult(success=False)
 
         if campaign.is_balance_bonus:
@@ -68,7 +68,7 @@ class AdvertisingCampaignService:
         if campaign.is_tariff_bonus:
             return await self._apply_tariff_bonus(db, user, campaign)
 
-        logger.error('❌ Неизвестный тип бонуса кампании: %s', campaign.bonus_type)
+        logger.error('❌ Неизвестный тип бонуса кампании', bonus_type=campaign.bonus_type)
         return CampaignBonusResult(success=False)
 
     async def _apply_balance_bonus(
@@ -79,7 +79,7 @@ class AdvertisingCampaignService:
     ) -> CampaignBonusResult:
         amount = campaign.balance_bonus_kopeks or 0
         if amount <= 0:
-            logger.info('ℹ️ Кампания %s не имеет бонуса на баланс', campaign.id)
+            logger.info('ℹ️ Кампания не имеет бонуса на баланс', campaign_id=campaign.id)
             return CampaignBonusResult(success=False)
 
         description = f"Бонус за регистрацию по кампании '{campaign.name}'"
@@ -102,10 +102,10 @@ class AdvertisingCampaignService:
         )
 
         logger.info(
-            '💰 Пользователю %s начислен бонус %s₽ по кампании %s',
-            _format_user_log(user),
-            amount / 100,
-            campaign.id,
+            '💰 Пользователю начислен бонус ₽ по кампании',
+            format_user_log=_format_user_log(user),
+            amount=amount / 100,
+            campaign_id=campaign.id,
         )
 
         return CampaignBonusResult(
@@ -123,18 +123,15 @@ class AdvertisingCampaignService:
         existing_subscription = await get_subscription_by_user_id(db, user.id)
         if existing_subscription:
             logger.warning(
-                '⚠️ У пользователя %s уже есть подписка, бонус кампании %s пропущен',
-                _format_user_log(user),
-                campaign.id,
+                '⚠️ У пользователя уже есть подписка, бонус кампании пропущен',
+                format_user_log=_format_user_log(user),
+                campaign_id=campaign.id,
             )
             return CampaignBonusResult(success=False)
 
         duration_days = campaign.subscription_duration_days or 0
         if duration_days <= 0:
-            logger.info(
-                'ℹ️ Кампания %s не содержит корректной длительности подписки',
-                campaign.id,
-            )
+            logger.info('ℹ️ Кампания не содержит корректной длительности подписки', campaign_id=campaign.id)
             return CampaignBonusResult(success=False)
 
         traffic_limit = campaign.subscription_traffic_gb
@@ -151,11 +148,7 @@ class AdvertisingCampaignService:
                 if trial_uuid:
                     squads = [trial_uuid]
             except Exception as error:
-                logger.error(
-                    'Не удалось подобрать сквад для кампании %s: %s',
-                    campaign.id,
-                    error,
-                )
+                logger.error('Не удалось подобрать сквад для кампании', campaign_id=campaign.id, error=error)
 
         squads[0] if squads else None
 
@@ -173,11 +166,7 @@ class AdvertisingCampaignService:
         try:
             await self.subscription_service.create_remnawave_user(db, new_subscription)
         except Exception as error:
-            logger.error(
-                '❌ Ошибка синхронизации RemnaWave для кампании %s: %s',
-                campaign.id,
-                error,
-            )
+            logger.error('❌ Ошибка синхронизации RemnaWave для кампании', campaign_id=campaign.id, error=error)
 
         await record_campaign_registration(
             db,
@@ -188,10 +177,10 @@ class AdvertisingCampaignService:
         )
 
         logger.info(
-            '🎁 Пользователю %s выдана подписка по кампании %s на %s дней',
-            _format_user_log(user),
-            campaign.id,
-            duration_days,
+            '🎁 Пользователю выдана подписка по кампании на дней',
+            format_user_log=_format_user_log(user),
+            campaign_id=campaign.id,
+            duration_days=duration_days,
         )
 
         return CampaignBonusResult(
@@ -218,9 +207,9 @@ class AdvertisingCampaignService:
         )
 
         logger.info(
-            '📊 Пользователь %s зарегистрирован по ссылке кампании %s (без награды)',
-            _format_user_log(user),
-            campaign.id,
+            '📊 Пользователь зарегистрирован по ссылке кампании (без награды)',
+            format_user_log=_format_user_log(user),
+            campaign_id=campaign.id,
         )
 
         return CampaignBonusResult(
@@ -238,43 +227,29 @@ class AdvertisingCampaignService:
         existing_subscription = await get_subscription_by_user_id(db, user.id)
         if existing_subscription:
             logger.warning(
-                '⚠️ У пользователя %s уже есть подписка, бонус тарифа кампании %s пропущен',
-                _format_user_log(user),
-                campaign.id,
+                '⚠️ У пользователя уже есть подписка, бонус тарифа кампании пропущен',
+                format_user_log=_format_user_log(user),
+                campaign_id=campaign.id,
             )
             return CampaignBonusResult(success=False)
 
         if not campaign.tariff_id:
-            logger.error(
-                '❌ Кампания %s не имеет указанного тарифа для выдачи',
-                campaign.id,
-            )
+            logger.error('❌ Кампания не имеет указанного тарифа для выдачи', campaign_id=campaign.id)
             return CampaignBonusResult(success=False)
 
         duration_days = campaign.tariff_duration_days or 0
         if duration_days <= 0:
-            logger.error(
-                '❌ Кампания %s не имеет указанной длительности тарифа',
-                campaign.id,
-            )
+            logger.error('❌ Кампания не имеет указанной длительности тарифа', campaign_id=campaign.id)
             return CampaignBonusResult(success=False)
 
         # Получаем тариф для извлечения параметров
         tariff = await get_tariff_by_id(db, campaign.tariff_id)
         if not tariff:
-            logger.error(
-                '❌ Тариф %s не найден для кампании %s',
-                campaign.tariff_id,
-                campaign.id,
-            )
+            logger.error('❌ Тариф не найден для кампании', tariff_id=campaign.tariff_id, campaign_id=campaign.id)
             return CampaignBonusResult(success=False)
 
         if not tariff.is_active:
-            logger.warning(
-                '⚠️ Тариф %s неактивен, бонус кампании %s пропущен',
-                tariff.id,
-                campaign.id,
-            )
+            logger.warning('⚠️ Тариф неактивен, бонус кампании пропущен', tariff_id=tariff.id, campaign_id=campaign.id)
             return CampaignBonusResult(success=False)
 
         traffic_limit = tariff.traffic_limit_gb
@@ -289,11 +264,7 @@ class AdvertisingCampaignService:
                 if trial_uuid:
                     squads = [trial_uuid]
             except Exception as error:
-                logger.error(
-                    'Не удалось подобрать сквад для тарифа кампании %s: %s',
-                    campaign.id,
-                    error,
-                )
+                logger.error('Не удалось подобрать сквад для тарифа кампании', campaign_id=campaign.id, error=error)
 
         # Создаём подписку как платную (не trial) с привязкой к тарифу
         new_subscription = await create_paid_subscription(
@@ -311,11 +282,7 @@ class AdvertisingCampaignService:
         try:
             await self.subscription_service.create_remnawave_user(db, new_subscription)
         except Exception as error:
-            logger.error(
-                '❌ Ошибка синхронизации RemnaWave для тарифа кампании %s: %s',
-                campaign.id,
-                error,
-            )
+            logger.error('❌ Ошибка синхронизации RemnaWave для тарифа кампании', campaign_id=campaign.id, error=error)
 
         await record_campaign_registration(
             db,
@@ -327,11 +294,11 @@ class AdvertisingCampaignService:
         )
 
         logger.info(
-            "🎁 Пользователю %s выдан тариф '%s' по кампании %s на %s дней",
-            _format_user_log(user),
-            tariff.name,
-            campaign.id,
-            duration_days,
+            "🎁 Пользователю выдан тариф '' по кампании на дней",
+            format_user_log=_format_user_log(user),
+            tariff_name=tariff.name,
+            campaign_id=campaign.id,
+            duration_days=duration_days,
         )
 
         return CampaignBonusResult(

@@ -1,8 +1,8 @@
 import json
-import logging
 from pathlib import Path
 
 import qrcode
+import structlog
 from aiogram import Dispatcher, F, types
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
@@ -25,7 +25,7 @@ from app.utils.user_utils import (
 )
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
@@ -795,7 +795,7 @@ async def confirm_withdrawal_request(callback: types.CallbackQuery, db_user: Use
         notification_service = AdminNotificationService(callback.bot)
         await notification_service.send_to_admins(admin_text, keyboard=admin_keyboard)
     except Exception as e:
-        logger.error(f'Ошибка отправки уведомления админам о заявке на вывод: {e}')
+        logger.error('Ошибка отправки уведомления админам о заявке на вывод', error=e)
 
     # Уведомление в топик, если настроено
     topic_id = settings.REFERRAL_WITHDRAWAL_NOTIFICATIONS_TOPIC_ID
@@ -809,7 +809,7 @@ async def confirm_withdrawal_request(callback: types.CallbackQuery, db_user: Use
                 parse_mode='HTML',
             )
         except Exception as e:
-            logger.error(f'Ошибка отправки уведомления в топик о заявке на вывод: {e}')
+            logger.error('Ошибка отправки уведомления в топик о заявке на вывод', error=e)
 
     # Отвечаем пользователю
     text = texts.t(

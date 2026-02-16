@@ -57,7 +57,7 @@ class StageHandle:
         self._explicit_status = True
 
     def log(self, message: str, icon: str = '•') -> None:
-        self.timeline.logger.info(f'┃ {icon} {message}')
+        self.timeline.logger.info('┃', icon=icon, message=message)
 
 
 class StartupTimeline:
@@ -113,8 +113,8 @@ class StartupTimeline:
         status_label: str,
         message: str,
     ) -> None:
-        self.logger.info(f'┏ {icon} {title}')
-        self.logger.info(f'┗ {icon} {title} — {status_label}: {message}')
+        self.logger.info('┏', icon=icon, title=title)
+        self.logger.info('┗ —', icon=icon, title=title, status_label=status_label, message=message)
         self._record_step(title, icon, status_label, message, 0.0)
 
     @asynccontextmanager
@@ -126,9 +126,9 @@ class StartupTimeline:
         success_message: str | None = 'Готово',
     ):
         if description:
-            self.logger.info(f'┏ {icon} {title} — {description}')
+            self.logger.info('┏ —', icon=icon, title=title, description=description)
         else:
-            self.logger.info(f'┏ {icon} {title}')
+            self.logger.info('┏', icon=icon, title=title)
 
         handle = StageHandle(self, title, icon, success_message)
         start_time = time.perf_counter()
@@ -137,13 +137,19 @@ class StartupTimeline:
         except Exception as exc:
             message = str(exc)
             handle.failure(message)
-            self.logger.exception(f'┣ ❌ {title} — ошибка: {message}')
+            self.logger.exception('┣ ❌ — ошибка', title=title, message=message)
             raise
         finally:
             duration = time.perf_counter() - start_time
             if not handle._explicit_status:
                 handle.success(handle.message or 'Готово')
-            self.logger.info(f'┗ {handle.status_icon} {title} — {handle.message} [{duration:.2f}s]')
+            self.logger.info(
+                '┗ — [s]',
+                status_icon=handle.status_icon,
+                title=title,
+                message=handle.message,
+                duration=round(duration, 2),
+            )
             self._record_step(
                 title=title,
                 icon=handle.status_icon,

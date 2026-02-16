@@ -2,8 +2,7 @@
 Сервис для отправки уведомлений от ban системы пользователям
 """
 
-import logging
-
+import structlog
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -19,7 +18,7 @@ from app.services.notification_delivery_service import (
 from app.services.remnawave_service import remnawave_service
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 def get_delete_keyboard() -> InlineKeyboardMarkup:
@@ -60,7 +59,7 @@ class BanNotificationService:
                 if user:
                     return user
         except Exception as e:
-            logger.warning(f'Не удалось получить telegram_id через remnawave: {e}')
+            logger.warning('Не удалось получить telegram_id через remnawave', error=e)
 
         # Если не нашли через remnawave, пытаемся искать по email в подписках
         # (это может быть полезно если у пользователя есть подписка с таким email)
@@ -75,7 +74,7 @@ class BanNotificationService:
             if user:
                 return user
         except Exception as e:
-            logger.warning(f'Ошибка поиска пользователя по email в подписках: {e}')
+            logger.warning('Ошибка поиска пользователя по email в подписках', error=e)
 
         return None
 
@@ -101,7 +100,7 @@ class BanNotificationService:
         # Находим пользователя
         user = await self._find_user_by_identifier(db, user_identifier)
         if not user:
-            logger.warning(f'Пользователь {user_identifier} не найден в базе данных')
+            logger.warning('Пользователь не найден в базе данных', user_identifier=user_identifier)
             return False, f'Пользователь не найден: {user_identifier}', None
 
         # Формируем информацию о ноде (заметно выделяем)
@@ -129,7 +128,7 @@ class BanNotificationService:
                 reason=reason,
             )
             if success:
-                logger.info(f'Email уведомление о бане отправлено пользователю {user.id}')
+                logger.info('Email уведомление о бане отправлено пользователю', user_id=user.id)
                 return True, 'Email уведомление отправлено', None
             return False, 'Не удалось отправить email уведомление', None
 
@@ -138,11 +137,20 @@ class BanNotificationService:
             await self._bot.send_message(
                 chat_id=user.telegram_id, text=message_text, parse_mode='HTML', reply_markup=get_delete_keyboard()
             )
-            logger.info(f'Уведомление о бане отправлено пользователю {username} (telegram_id: {user.telegram_id})')
+            logger.info(
+                'Уведомление о бане отправлено пользователю (telegram_id: )',
+                username=username,
+                telegram_id=user.telegram_id,
+            )
             return True, 'Уведомление отправлено', user.telegram_id
 
         except TelegramAPIError as e:
-            logger.error(f'Ошибка отправки уведомления пользователю {username} (telegram_id: {user.telegram_id}): {e}')
+            logger.error(
+                'Ошибка отправки уведомления пользователю (telegram_id: )',
+                username=username,
+                telegram_id=user.telegram_id,
+                error=e,
+            )
             return False, f'Ошибка Telegram API: {e!s}', user.telegram_id
 
     async def send_enabled_notification(
@@ -160,7 +168,7 @@ class BanNotificationService:
         # Находим пользователя
         user = await self._find_user_by_identifier(db, user_identifier)
         if not user:
-            logger.warning(f'Пользователь {user_identifier} не найден в базе данных')
+            logger.warning('Пользователь не найден в базе данных', user_identifier=user_identifier)
             return False, f'Пользователь не найден: {user_identifier}', None
 
         # Формируем сообщение из настроек
@@ -170,7 +178,7 @@ class BanNotificationService:
         if not user.telegram_id:
             success = await notification_delivery_service.notify_unban(user=user)
             if success:
-                logger.info(f'Email уведомление о разбане отправлено пользователю {user.id}')
+                logger.info('Email уведомление о разбане отправлено пользователю', user_id=user.id)
                 return True, 'Email уведомление отправлено', None
             return False, 'Не удалось отправить email уведомление', None
 
@@ -179,11 +187,20 @@ class BanNotificationService:
             await self._bot.send_message(
                 chat_id=user.telegram_id, text=message_text, parse_mode='HTML', reply_markup=get_delete_keyboard()
             )
-            logger.info(f'Уведомление о разбане отправлено пользователю {username} (telegram_id: {user.telegram_id})')
+            logger.info(
+                'Уведомление о разбане отправлено пользователю (telegram_id: )',
+                username=username,
+                telegram_id=user.telegram_id,
+            )
             return True, 'Уведомление отправлено', user.telegram_id
 
         except TelegramAPIError as e:
-            logger.error(f'Ошибка отправки уведомления пользователю {username} (telegram_id: {user.telegram_id}): {e}')
+            logger.error(
+                'Ошибка отправки уведомления пользователю (telegram_id: )',
+                username=username,
+                telegram_id=user.telegram_id,
+                error=e,
+            )
             return False, f'Ошибка Telegram API: {e!s}', user.telegram_id
 
     async def send_warning_notification(
@@ -201,7 +218,7 @@ class BanNotificationService:
         # Находим пользователя
         user = await self._find_user_by_identifier(db, user_identifier)
         if not user:
-            logger.warning(f'Пользователь {user_identifier} не найден в базе данных')
+            logger.warning('Пользователь не найден в базе данных', user_identifier=user_identifier)
             return False, f'Пользователь не найден: {user_identifier}', None
 
         # Формируем сообщение из настроек
@@ -216,7 +233,7 @@ class BanNotificationService:
                 context=context,
             )
             if success:
-                logger.info(f'Email предупреждение отправлено пользователю {user.id}')
+                logger.info('Email предупреждение отправлено пользователю', user_id=user.id)
                 return True, 'Email предупреждение отправлено', None
             return False, 'Не удалось отправить email предупреждение', None
 
@@ -225,12 +242,19 @@ class BanNotificationService:
             await self._bot.send_message(
                 chat_id=user.telegram_id, text=message_text, parse_mode='HTML', reply_markup=get_delete_keyboard()
             )
-            logger.info(f'Предупреждение отправлено пользователю {username} (telegram_id: {user.telegram_id})')
+            logger.info(
+                'Предупреждение отправлено пользователю (telegram_id: )',
+                username=username,
+                telegram_id=user.telegram_id,
+            )
             return True, 'Предупреждение отправлено', user.telegram_id
 
         except TelegramAPIError as e:
             logger.error(
-                f'Ошибка отправки предупреждения пользователю {username} (telegram_id: {user.telegram_id}): {e}'
+                'Ошибка отправки предупреждения пользователю (telegram_id: )',
+                username=username,
+                telegram_id=user.telegram_id,
+                error=e,
             )
             return False, f'Ошибка Telegram API: {e!s}', user.telegram_id
 
@@ -255,14 +279,14 @@ class BanNotificationService:
         # Находим пользователя
         user = await self._find_user_by_identifier(db, user_identifier)
         if not user:
-            logger.warning(f'Пользователь {user_identifier} не найден в базе данных')
+            logger.warning('Пользователь не найден в базе данных', user_identifier=user_identifier)
             return False, f'Пользователь не найден: {user_identifier}', None
 
         # Формируем сообщение из настроек (заметно выделяем)
         network_info = f'├ 🌐 Сеть: <b>{network_type}</b>\n' if network_type else ''
         node_info = f'🖥 <b>Нода:</b> <code>{node_name}</code>' if node_name else ''
 
-        logger.info(f'WiFi notification: node_name={node_name!r}, node_info={node_info!r}')
+        logger.info('WiFi notification: node_name=, node_info', node_name=repr(node_name), node_info=repr(node_info))
 
         # Безопасное форматирование
         format_vars = {'ban_minutes': ban_minutes, 'network_info': network_info, 'node_info': node_info}
@@ -287,7 +311,7 @@ class BanNotificationService:
                 reason=reason,
             )
             if success:
-                logger.info(f'Email WiFi уведомление отправлено пользователю {user.id}')
+                logger.info('Email WiFi уведомление отправлено пользователю', user_id=user.id)
                 return True, 'Email уведомление отправлено', None
             return False, 'Не удалось отправить email уведомление', None
 
@@ -296,12 +320,19 @@ class BanNotificationService:
             await self._bot.send_message(
                 chat_id=user.telegram_id, text=message_text, parse_mode='HTML', reply_markup=get_delete_keyboard()
             )
-            logger.info(f'Уведомление о WiFi бане отправлено пользователю {username} (telegram_id: {user.telegram_id})')
+            logger.info(
+                'Уведомление о WiFi бане отправлено пользователю (telegram_id: )',
+                username=username,
+                telegram_id=user.telegram_id,
+            )
             return True, 'Уведомление отправлено', user.telegram_id
 
         except TelegramAPIError as e:
             logger.error(
-                f'Ошибка отправки WiFi уведомления пользователю {username} (telegram_id: {user.telegram_id}): {e}'
+                'Ошибка отправки WiFi уведомления пользователю (telegram_id: )',
+                username=username,
+                telegram_id=user.telegram_id,
+                error=e,
             )
             return False, f'Ошибка Telegram API: {e!s}', user.telegram_id
 
@@ -326,7 +357,7 @@ class BanNotificationService:
         # Находим пользователя
         user = await self._find_user_by_identifier(db, user_identifier)
         if not user:
-            logger.warning(f'Пользователь {user_identifier} не найден в базе данных')
+            logger.warning('Пользователь не найден в базе данных', user_identifier=user_identifier)
             return False, f'Пользователь не найден: {user_identifier}', None
 
         # Формируем сообщение из настроек (заметно выделяем)
@@ -355,7 +386,7 @@ class BanNotificationService:
                 reason=reason,
             )
             if success:
-                logger.info(f'Email Mobile уведомление отправлено пользователю {user.id}')
+                logger.info('Email Mobile уведомление отправлено пользователю', user_id=user.id)
                 return True, 'Email уведомление отправлено', None
             return False, 'Не удалось отправить email уведомление', None
 
@@ -365,13 +396,18 @@ class BanNotificationService:
                 chat_id=user.telegram_id, text=message_text, parse_mode='HTML', reply_markup=get_delete_keyboard()
             )
             logger.info(
-                f'Уведомление о Mobile бане отправлено пользователю {username} (telegram_id: {user.telegram_id})'
+                'Уведомление о Mobile бане отправлено пользователю (telegram_id: )',
+                username=username,
+                telegram_id=user.telegram_id,
             )
             return True, 'Уведомление отправлено', user.telegram_id
 
         except TelegramAPIError as e:
             logger.error(
-                f'Ошибка отправки Mobile уведомления пользователю {username} (telegram_id: {user.telegram_id}): {e}'
+                'Ошибка отправки Mobile уведомления пользователю (telegram_id: )',
+                username=username,
+                telegram_id=user.telegram_id,
+                error=e,
             )
             return False, f'Ошибка Telegram API: {e!s}', user.telegram_id
 

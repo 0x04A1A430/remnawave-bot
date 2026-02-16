@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-import logging
 from datetime import datetime
 from typing import Any
 
+import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import PlategaPayment
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def create_platega_payment(
@@ -55,11 +55,11 @@ async def create_platega_payment(
     await db.refresh(payment)
 
     logger.info(
-        'Создан Platega платеж #%s (tx=%s) на сумму %s копеек для пользователя %s',
-        payment.id,
-        platega_transaction_id,
-        amount_kopeks,
-        user_id,
+        'Создан Platega платеж # (tx=) на сумму копеек для пользователя',
+        payment_id=payment.id,
+        platega_transaction_id=platega_transaction_id,
+        amount_kopeks=amount_kopeks,
+        user_id=user_id,
     )
 
     return payment

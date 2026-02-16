@@ -7,14 +7,15 @@ This module provides a centralized way to:
 - Ensure uniform discount display throughout the application
 """
 
-import logging
 from dataclasses import dataclass
+
+import structlog
 
 from app.config import settings
 from app.database.models import User
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @dataclass
@@ -71,9 +72,12 @@ def calculate_user_price(user: User | None, base_price: int, period_days: int, c
         discount_percent = settings.get_base_promo_group_period_discount(period_days)
 
     logger.debug(
-        f'calculate_user_price: user={user.telegram_id if user else "None"}, '
-        f'base_price={base_price}, period_days={period_days}, category={category}, '
-        f'discount_percent={discount_percent}'
+        'calculate_user_price: user=, base_price=, period_days=, category=, discount_percent',
+        telegram_id=user.telegram_id if user else 'None',
+        base_price=base_price,
+        period_days=period_days,
+        category=category,
+        discount_percent=discount_percent,
     )
 
     if discount_percent <= 0:
@@ -84,9 +88,13 @@ def calculate_user_price(user: User | None, base_price: int, period_days: int, c
     final_price = base_price - discount_value
 
     logger.debug(
-        f'Calculated price for user {user.telegram_id if user else "None"}: '
-        f'{base_price} -> {final_price} (-{discount_percent}%) '
-        f'[category={category}, period={period_days}]'
+        'Calculated price for user -> (-%) [category=, period=]',
+        telegram_id=user.telegram_id if user else 'None',
+        base_price=base_price,
+        final_price=final_price,
+        discount_percent=discount_percent,
+        category=category,
+        period_days=period_days,
     )
 
     return PriceInfo(base_price=base_price, final_price=final_price, discount_percent=discount_percent)
@@ -139,7 +147,7 @@ def format_price_button(
     if emphasize:
         button_text = f'🔥 {button_text} 🔥'
 
-    logger.debug(f'Formatted button: {button_text}')
+    logger.debug('Formatted button', button_text=button_text)
     return button_text
 
 

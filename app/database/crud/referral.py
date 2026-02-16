@@ -1,6 +1,6 @@
-import logging
 from datetime import datetime, timedelta
 
+import structlog
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -8,7 +8,7 @@ from sqlalchemy.orm import selectinload
 from app.database.models import ReferralEarning, User
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def create_referral_earning(
@@ -31,7 +31,9 @@ async def create_referral_earning(
     await db.commit()
     await db.refresh(earning)
 
-    logger.info(f'💰 Создан реферальный заработок: {amount_kopeks / 100}₽ для пользователя {user_id}')
+    logger.info(
+        '💰 Создан реферальный заработок: ₽ для пользователя', amount_kopeks=amount_kopeks / 100, user_id=user_id
+    )
     return earning
 
 
@@ -211,7 +213,10 @@ async def get_referral_statistics(db: AsyncSession) -> dict:
     month_earnings = month_referral_earnings_result.scalar() + month_transaction_earnings_result.scalar()
 
     logger.info(
-        f'Реферальная статистика: {users_with_referrals} рефералов, {active_referrers} рефереров, выплачено {total_paid} копеек'
+        'Реферальная статистика: рефералов, рефереров, выплачено копеек',
+        users_with_referrals=users_with_referrals,
+        active_referrers=active_referrers,
+        total_paid=total_paid,
     )
 
     return {
