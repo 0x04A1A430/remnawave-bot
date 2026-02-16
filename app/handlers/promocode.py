@@ -84,14 +84,52 @@ async def process_promocode(message: types.Message, db_user: User, state: FSMCon
         )
         return
 
+    from app.utils.promo_rate_limiter import promo_limiter, validate_promo_format
+
+    # Валидация формата
+    if not validate_promo_format(code):
+        await message.answer(texts.PROMOCODE_INVALID, reply_markup=get_back_keyboard(db_user.language))
+        return
+
+    # Rate-limit на перебор
+    if promo_limiter.is_blocked(message.from_user.id):
+        cooldown = promo_limiter.get_block_cooldown(message.from_user.id)
+        await message.answer(
+            texts.t(
+                'PROMO_RATE_LIMITED',
+                '⏳ Слишком много попыток. Попробуйте через {cooldown} сек.',
+            ).format(cooldown=cooldown),
+            reply_markup=get_back_keyboard(db_user.language),
+        )
+        await state.clear()
+        return
+
+    # Лимит на стакинг (макс активаций в день)
+    if not promo_limiter.can_activate(message.from_user.id):
+        await message.answer(
+            texts.t(
+                'PROMO_DAILY_LIMIT',
+                '❌ Достигнут лимит активаций промокодов на сегодня. Попробуйте завтра.',
+            ),
+            reply_markup=get_back_keyboard(db_user.language),
+        )
+        await state.clear()
+        return
+
     result = await activate_promocode_for_registration(db, db_user.id, code, message.bot)
 
     if result['success']:
+        promo_limiter.record_activation(message.from_user.id)
         await message.answer(
             texts.PROMOCODE_SUCCESS.format(description=result['description']),
             reply_markup=get_back_keyboard(db_user.language),
         )
     else:
+        # Записываем неудачную попытку только для not_found (перебор)
+        if result['error'] == 'not_found':
+            promo_limiter.record_failed_attempt(message.from_user.id)
+            promo_limiter.cleanup()
+
         error_messages = {
             'not_found': texts.PROMOCODE_INVALID,
             'expired': texts.PROMOCODE_EXPIRED,
@@ -103,6 +141,10 @@ async def process_promocode(message: types.Message, db_user: User, state: FSMCon
             'active_discount_exists': texts.t(
                 'PROMOCODE_ACTIVE_DISCOUNT_EXISTS',
                 '❌ У вас уже есть активная скидка. Используйте её перед активацией новой.',
+            ),
+            'daily_limit': texts.t(
+                'PROMO_DAILY_LIMIT',
+                '❌ Достигнут лимит активаций промокодов на сегодня. Попробуйте завтра.',
             ),
             'server_error': texts.ERROR,
         }

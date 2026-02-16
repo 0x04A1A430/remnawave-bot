@@ -131,6 +131,17 @@ async def get_promocode_use_by_user_and_code(db: AsyncSession, user_id: int, pro
     return result.scalar_one_or_none()
 
 
+async def count_user_recent_activations(db: AsyncSession, user_id: int, hours: int = 24) -> int:
+    """Подсчитывает количество активаций промокодов пользователем за последние N часов."""
+    from datetime import timedelta
+
+    cutoff = datetime.utcnow() - timedelta(hours=hours)
+    result = await db.execute(
+        select(func.count(PromoCodeUse.id)).where(and_(PromoCodeUse.user_id == user_id, PromoCodeUse.used_at >= cutoff))
+    )
+    return result.scalar() or 0
+
+
 async def get_user_promocodes(db: AsyncSession, user_id: int) -> list[PromoCodeUse]:
     result = await db.execute(
         select(PromoCodeUse).where(PromoCodeUse.user_id == user_id).order_by(PromoCodeUse.used_at.desc())

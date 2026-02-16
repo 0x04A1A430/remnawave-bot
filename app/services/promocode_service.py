@@ -54,6 +54,18 @@ class PromoCodeService:
             if existing_use:
                 return {'success': False, 'error': 'already_used_by_user'}
 
+            # Лимит на количество активаций за день (анти-стакинг)
+            from app.database.crud.promocode import count_user_recent_activations
+
+            recent_count = await count_user_recent_activations(db, user_id, hours=24)
+            if recent_count >= 5:
+                logger.warning(
+                    'Promo stacking limit: user %s has %d activations in 24h',
+                    self._format_user_log(user),
+                    recent_count,
+                )
+                return {'success': False, 'error': 'daily_limit'}
+
             # Проверка "только для первой покупки"
             if getattr(promocode, 'first_purchase_only', False):
                 if getattr(user, 'has_had_paid_subscription', False):

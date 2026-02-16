@@ -159,9 +159,26 @@ async def handle_potential_referral_code(message: types.Message, state: FSMConte
     language = data.get('language') or (getattr(user, 'language', None) if user else None) or DEFAULT_LANGUAGE
     texts = get_texts(language)
 
+    from app.utils.promo_rate_limiter import promo_limiter, validate_promo_format
+
     potential_code = message.text.strip()
-    if len(potential_code) < 4 or len(potential_code) > 20:
+    if len(potential_code) < 3 or len(potential_code) > 50:
         return False
+
+    # Валидация формата (только буквы, цифры, дефис, подчёркивание)
+    if not validate_promo_format(potential_code):
+        return False
+
+    # Rate-limit на перебор промокодов
+    if promo_limiter.is_blocked(message.from_user.id):
+        cooldown = promo_limiter.get_block_cooldown(message.from_user.id)
+        await message.answer(
+            texts.t(
+                'PROMO_RATE_LIMITED',
+                '⏳ Слишком много попыток. Попробуйте через {cooldown} сек.',
+            ).format(cooldown=cooldown)
+        )
+        return True
 
     # Сначала проверяем реферальный код
     referrer = await get_user_by_referral_code(db, potential_code)
@@ -217,7 +234,10 @@ async def handle_potential_referral_code(message: types.Message, state: FSMConte
 
         return True
 
-    # Ни реферальный код, ни промокод не найдены
+    # Ни реферальный код, ни промокод не найдены — записываем неудачную попытку
+    promo_limiter.record_failed_attempt(message.from_user.id)
+    promo_limiter.cleanup()
+
     await message.answer(
         texts.t(
             'REFERRAL_OR_PROMO_CODE_INVALID_HELP',
@@ -969,7 +989,25 @@ async def process_referral_code_input(message: types.Message, state: FSMContext,
     language = data.get('language', DEFAULT_LANGUAGE)
     texts = get_texts(language)
 
+    from app.utils.promo_rate_limiter import promo_limiter, validate_promo_format
+
     code = message.text.strip()
+
+    # Валидация формата
+    if not validate_promo_format(code):
+        await message.answer(texts.t('REFERRAL_OR_PROMO_CODE_INVALID', '❌ Неверный реферальный код или промокод'))
+        return
+
+    # Rate-limit на перебор
+    if promo_limiter.is_blocked(message.from_user.id):
+        cooldown = promo_limiter.get_block_cooldown(message.from_user.id)
+        await message.answer(
+            texts.t(
+                'PROMO_RATE_LIMITED',
+                '⏳ Слишком много попыток. Попробуйте через {cooldown} сек.',
+            ).format(cooldown=cooldown)
+        )
+        return
 
     # Сначала проверяем, является ли это реферальным кодом
     referrer = await get_user_by_referral_code(db, code)
@@ -1000,7 +1038,10 @@ async def process_referral_code_input(message: types.Message, state: FSMContext,
         await complete_registration(message, state, db)
         return
 
-    # Ни реферальный код, ни промокод не найдены
+    # Ни реферальный код, ни промокод не найдены — записываем неудачу
+    promo_limiter.record_failed_attempt(message.from_user.id)
+    promo_limiter.cleanup()
+
     await message.answer(texts.t('REFERRAL_OR_PROMO_CODE_INVALID', '❌ Неверный реферальный код или промокод'))
     logger.info(f'❌ Неверный код (ни реферальный, ни промокод): {code}')
     return
