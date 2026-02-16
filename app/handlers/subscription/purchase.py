@@ -1547,7 +1547,7 @@ async def handle_extend_subscription(callback: types.CallbackQuery, db_user: Use
             # Проверяем, суточный ли тариф — у суточных нет period_prices, продление через resume
             from app.database.crud.tariff import get_tariff_by_id
 
-            tariff = getattr(subscription, 'tariff', None) or await get_tariff_by_id(db, subscription.tariff_id)
+            tariff = await get_tariff_by_id(db, subscription.tariff_id)
             if tariff and getattr(tariff, 'is_daily', False):
                 # Суточный тариф: перенаправляем на страницу подписки (там кнопка «Возобновить»)
                 await show_subscription_info(callback, db_user, db)
