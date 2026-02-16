@@ -41,6 +41,13 @@ def _create_timezone_timestamper() -> structlog.types.Processor:
     return timestamper
 
 
+def _clean_logger_name(logger: Any, method_name: str, event_dict: dict[str, Any]) -> dict[str, Any]:
+    """Strip __main__ logger name — it's redundant noise in startup logs."""
+    if event_dict.get('logger') == '__main__':
+        del event_dict['logger']
+    return event_dict
+
+
 def setup_logging() -> tuple[logging.Formatter, logging.Formatter, Any]:
     """Configure structlog and return formatters + notifier.
 
@@ -62,6 +69,7 @@ def setup_logging() -> tuple[logging.Formatter, logging.Formatter, Any]:
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_log_level,
         structlog.stdlib.add_logger_name,
+        _clean_logger_name,
         structlog.stdlib.ExtraAdder(),
         structlog.stdlib.PositionalArgumentsFormatter(),
         timestamper,
@@ -97,6 +105,8 @@ def setup_logging() -> tuple[logging.Formatter, logging.Formatter, Any]:
             structlog.stdlib.ProcessorFormatter.remove_processors_meta,
             structlog.dev.ConsoleRenderer(
                 colors=False,
+                pad_event_to=0,
+                pad_level=False,
                 exception_formatter=structlog.dev.plain_traceback,
             ),
         ],
@@ -110,6 +120,7 @@ def setup_logging() -> tuple[logging.Formatter, logging.Formatter, Any]:
             structlog.stdlib.ProcessorFormatter.remove_processors_meta,
             structlog.dev.ConsoleRenderer(
                 pad_event_to=0,
+                pad_level=False,
                 exception_formatter=structlog.dev.RichTracebackFormatter(
                     show_locals=False,
                     max_frames=20,

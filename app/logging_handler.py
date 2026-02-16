@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import sys
 import threading
 import time
 import traceback
@@ -128,12 +129,20 @@ class TelegramNotifierProcessor:
         if any(logger_name.startswith(prefix) for prefix in IGNORED_LOGGER_PREFIXES):
             return event_dict
 
-        # 4. Bot not initialized yet — skip
+        # 4. Resolve exc_info=True to actual tuple while still in except block.
+        # logger.exception() sets exc_info=True (bool); we need the tuple for
+        # traceback extraction. sys.exc_info() works because the processor runs
+        # synchronously inside the except clause.
+        exc_info = event_dict.get('exc_info')
+        if exc_info is True:
+            event_dict['exc_info'] = sys.exc_info()
+
+        # 5. Bot not initialized yet — skip
         bot = self._bot
         if bot is None:
             return event_dict
 
-        # 5. Deduplication via hash
+        # 6. Deduplication via hash
         msg_hash = self._compute_hash(event_dict)
         now = time.monotonic()
 
@@ -143,7 +152,7 @@ class TelegramNotifierProcessor:
                 return event_dict
             self._recent_hashes[msg_hash] = now
 
-        # 6. Schedule async send
+        # 7. Schedule async send
         self._schedule_send(bot, event_dict)
 
         return event_dict
@@ -220,10 +229,18 @@ class TelegramNotifierProcessor:
             # Build a pseudo-Exception from the event_dict
             error = _make_event_dict_error(event_dict)
 
+            # Build rich context from event_dict
             context_parts: list[str] = []
             logger_name = event_dict.get('logger', '')
             if logger_name:
                 context_parts.append(f'Logger: {logger_name}')
+            user_id = event_dict.get('user_id')
+            username = event_dict.get('username')
+            if user_id:
+                user_str = f'User: {user_id}'
+                if username:
+                    user_str += f' (@{username})'
+                context_parts.append(user_str)
 
             context = '\n'.join(context_parts)
 
@@ -245,10 +262,22 @@ def _make_event_dict_error(event_dict: dict[str, Any]) -> Exception:
     """Create an Exception wrapper for a structlog event_dict.
 
     ``send_error_to_admin_chat`` uses ``type(error).__name__`` as error_type.
-    We dynamically create a class with a descriptive name.
+    If exc_info contains a real exception, use its type name.
+    Otherwise, create a descriptive class from the log level.
     """
-    level = event_dict.get('level', 'error')
-    class_name = f'Log{level.capitalize()}'
+    # Prefer the real exception type from exc_info or error kwarg
+    exc_info = event_dict.get('exc_info')
+    if exc_info and isinstance(exc_info, tuple) and exc_info[1] is not None:
+        real_exc = exc_info[1]
+        class_name = type(real_exc).__name__
+    else:
+        error_kwarg = event_dict.get('error')
+        if error_kwarg and isinstance(error_kwarg, BaseException):
+            class_name = type(error_kwarg).__name__
+        else:
+            level = event_dict.get('level', 'error')
+            class_name = f'Log{level.capitalize()}'
+
     error_cls = type(
         class_name,
         (Exception,),
