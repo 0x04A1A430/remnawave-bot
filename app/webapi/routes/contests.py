@@ -335,7 +335,7 @@ async def start_round_now(
     tags=['contests'],
 )
 async def list_rounds(
-    status_filter: str = Query('active', regex='^(active|finished|any)$'),
+    status_filter: str = Query('active', pattern='^(active|finished|any)$'),
     template_id: int | None = Query(None),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
