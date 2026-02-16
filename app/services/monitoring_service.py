@@ -57,7 +57,6 @@ from app.services.notification_delivery_service import (
     notification_delivery_service,
 )
 from app.services.notification_settings_service import NotificationSettingsService
-from app.services.payment_service import PaymentService
 from app.services.promo_offer_service import promo_offer_service
 from app.services.subscription_service import SubscriptionService
 from app.utils.cache import cache
@@ -83,7 +82,6 @@ class MonitoringService:
     def __init__(self, bot=None):
         self.is_running = False
         self.subscription_service = SubscriptionService()
-        self.payment_service = PaymentService()
         self.bot = bot
         self._notified_users: set[str] = set()
         self._last_cleanup = datetime.utcnow()
