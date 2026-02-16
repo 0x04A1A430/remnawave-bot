@@ -86,7 +86,7 @@ async def get_user_by_id(db: AsyncSession, user_id: int) -> User | None:
     result = await db.execute(
         select(User)
         .options(
-            selectinload(User.subscription),
+            selectinload(User.subscription).selectinload(Subscription.tariff),
             selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
             selectinload(User.referrer),
             selectinload(User.promo_group),
@@ -106,7 +106,7 @@ async def get_user_by_telegram_id(db: AsyncSession, telegram_id: int) -> User | 
     result = await db.execute(
         select(User)
         .options(
-            selectinload(User.subscription),
+            selectinload(User.subscription).selectinload(Subscription.tariff),
             selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
             selectinload(User.referrer),
             selectinload(User.promo_group),
@@ -131,7 +131,7 @@ async def get_user_by_username(db: AsyncSession, username: str) -> User | None:
     result = await db.execute(
         select(User)
         .options(
-            selectinload(User.subscription),
+            selectinload(User.subscription).selectinload(Subscription.tariff),
             selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
             selectinload(User.referrer),
             selectinload(User.promo_group),
@@ -152,7 +152,7 @@ async def get_user_by_referral_code(db: AsyncSession, referral_code: str) -> Use
     result = await db.execute(
         select(User)
         .options(
-            selectinload(User.subscription),
+            selectinload(User.subscription).selectinload(Subscription.tariff),
             selectinload(User.promo_group),
             selectinload(User.referrer),
         )
@@ -171,7 +171,7 @@ async def get_user_by_remnawave_uuid(db: AsyncSession, remnawave_uuid: str) -> U
     result = await db.execute(
         select(User)
         .options(
-            selectinload(User.subscription),
+            selectinload(User.subscription).selectinload(Subscription.tariff),
             selectinload(User.promo_group),
             selectinload(User.referrer),
         )
@@ -719,7 +719,7 @@ async def get_users_list(
     order_by_purchase_count: bool = False,
 ) -> list[User]:
     query = select(User).options(
-        selectinload(User.subscription),
+        selectinload(User.subscription).selectinload(Subscription.tariff),
         selectinload(User.promo_group),
         selectinload(User.referrer),
     )
@@ -879,7 +879,7 @@ async def get_referrals(db: AsyncSession, user_id: int) -> list[User]:
     result = await db.execute(
         select(User)
         .options(
-            selectinload(User.subscription),
+            selectinload(User.subscription).selectinload(Subscription.tariff),
             selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
             selectinload(User.referrer),
             selectinload(User.promo_group),
@@ -904,7 +904,7 @@ async def get_users_for_promo_segment(db: AsyncSession, segment: str) -> list[Us
     base_query = (
         select(User)
         .options(
-            selectinload(User.subscription),
+            selectinload(User.subscription).selectinload(Subscription.tariff),
             selectinload(User.promo_group),
             selectinload(User.referrer),
         )
@@ -966,7 +966,7 @@ async def get_inactive_users(db: AsyncSession, months: int = 3) -> list[User]:
     result = await db.execute(
         select(User)
         .options(
-            selectinload(User.subscription),
+            selectinload(User.subscription).selectinload(Subscription.tariff),
             selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
             selectinload(User.referrer),
             selectinload(User.promo_group),
@@ -1050,7 +1050,7 @@ async def get_users_with_active_subscriptions(db: AsyncSession) -> list[User]:
                 Subscription.end_date > current_time,
             )
         )
-        .options(selectinload(User.subscription))
+        .options(selectinload(User.subscription).selectinload(Subscription.tariff))
     )
 
     return result.scalars().unique().all()

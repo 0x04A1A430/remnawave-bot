@@ -3628,9 +3628,8 @@ async def set_user_devices_button(callback: types.CallbackQuery, db_user: User, 
     await callback.answer()
 
     logger.info(
-        'Админ модем для пользователя', telegram_id=db_user.telegram_id, action_text=action_text, user_id=user_id
+        'Админ изменил устройства для пользователя', telegram_id=db_user.telegram_id, devices=devices, user_id=user_id
     )
-    await callback.answer()
 
 
 @admin_required

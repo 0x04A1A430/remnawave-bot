@@ -1603,6 +1603,13 @@ class BotConfigurationService:
                     )
                 except Exception as error:
                     logger.error('Не удалось обновить сервис автосинхронизации RemnaWave', error=error)
+            elif key == 'SUPPORT_SYSTEM_MODE':
+                try:
+                    from app.services.support_settings_service import SupportSettingsService
+
+                    SupportSettingsService.set_system_mode(str(value))
+                except Exception as error:
+                    logger.error('Не удалось синхронизировать SupportSettingsService', error=error)
             elif key in {
                 'REMNAWAVE_API_URL',
                 'REMNAWAVE_API_KEY',

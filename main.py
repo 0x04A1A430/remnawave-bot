@@ -119,6 +119,7 @@ async def main():
         logging.basicConfig(
             level=getattr(logging, settings.LOG_LEVEL),
             handlers=log_handlers,
+            force=True,
         )
 
         # Регистрируем хэндлеры для управления при ротации
@@ -137,6 +138,7 @@ async def main():
         logging.basicConfig(
             level=getattr(logging, settings.LOG_LEVEL),
             handlers=log_handlers,
+            force=True,
         )
 
     # NOTE: TelegramNotifierProcessor and noisy logger suppression are
@@ -684,8 +686,16 @@ async def main():
             webhook_lines.append(f'WATA: {_fmt(settings.WATA_WEBHOOK_PATH)}')
         if settings.is_heleket_enabled():
             webhook_lines.append(f'Heleket: {_fmt(settings.HELEKET_WEBHOOK_PATH)}')
+        if settings.is_platega_enabled():
+            webhook_lines.append(f'Platega: {_fmt(settings.PLATEGA_WEBHOOK_PATH)}')
+        if settings.is_cloudpayments_enabled():
+            webhook_lines.append(f'CloudPayments: {_fmt(settings.CLOUDPAYMENTS_WEBHOOK_PATH)}')
         if settings.is_freekassa_enabled():
             webhook_lines.append(f'Freekassa: {_fmt(settings.FREEKASSA_WEBHOOK_PATH)}')
+        if settings.is_kassa_ai_enabled():
+            webhook_lines.append(f'Kassa.ai: {_fmt(settings.KASSA_AI_WEBHOOK_PATH)}')
+        if settings.is_remnawave_webhook_enabled():
+            webhook_lines.append(f'RemnaWave: {_fmt(settings.REMNAWAVE_WEBHOOK_PATH)}')
 
         timeline.log_section(
             'Активные webhook endpoints',
