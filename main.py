@@ -119,6 +119,7 @@ async def main():
         logging.basicConfig(
             level=getattr(logging, settings.LOG_LEVEL),
             handlers=log_handlers,
+            force=True,
         )
 
         # Регистрируем хэндлеры для управления при ротации
@@ -137,6 +138,7 @@ async def main():
         logging.basicConfig(
             level=getattr(logging, settings.LOG_LEVEL),
             handlers=log_handlers,
+            force=True,
         )
 
     # NOTE: TelegramNotifierProcessor and noisy logger suppression are
