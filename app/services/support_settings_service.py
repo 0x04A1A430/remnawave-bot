@@ -62,6 +62,7 @@ class SupportSettingsService:
             return False
         cls._load()
         cls._data['system_mode'] = mode_clean
+        settings.SUPPORT_SYSTEM_MODE = mode_clean
         return cls._save()
 
     # Main menu visibility
