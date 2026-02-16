@@ -53,17 +53,17 @@ class CloudPaymentsPaymentMixin:
 
         if amount_kopeks < settings.CLOUDPAYMENTS_MIN_AMOUNT_KOPEKS:
             logger.warning(
-                'Сумма CloudPayments меньше минимальной: %s < %s',
-                amount_kopeks,
-                settings.CLOUDPAYMENTS_MIN_AMOUNT_KOPEKS,
+                'Сумма CloudPayments меньше минимальной: <',
+                amount_kopeks=amount_kopeks,
+                CLOUDPAYMENTS_MIN_AMOUNT_KOPEKS=settings.CLOUDPAYMENTS_MIN_AMOUNT_KOPEKS,
             )
             return None
 
         if amount_kopeks > settings.CLOUDPAYMENTS_MAX_AMOUNT_KOPEKS:
             logger.warning(
-                'Сумма CloudPayments больше максимальной: %s > %s',
-                amount_kopeks,
-                settings.CLOUDPAYMENTS_MAX_AMOUNT_KOPEKS,
+                'Сумма CloudPayments больше максимальной: >',
+                amount_kopeks=amount_kopeks,
+                CLOUDPAYMENTS_MAX_AMOUNT_KOPEKS=settings.CLOUDPAYMENTS_MAX_AMOUNT_KOPEKS,
             )
             return None
 
@@ -83,10 +83,10 @@ class CloudPaymentsPaymentMixin:
                 email=email,
             )
         except CloudPaymentsAPIError as error:
-            logger.error('Ошибка создания CloudPayments платежа: %s', error)
+            logger.error('Ошибка создания CloudPayments платежа', error=error)
             return None
         except Exception as error:
-            logger.exception('Непредвиденная ошибка при создании CloudPayments платежа: %s', error)
+            logger.exception('Непредвиденная ошибка при создании CloudPayments платежа', error=error)
             return None
 
         metadata = {
@@ -111,10 +111,10 @@ class CloudPaymentsPaymentMixin:
             return None
 
         logger.info(
-            'Создан CloudPayments платёж: invoice=%s, amount=%s₽, user=%s',
-            invoice_id,
-            amount_kopeks / 100,
-            user_id,
+            'Создан CloudPayments платёж: invoice amount=₽, user',
+            invoice_id=invoice_id,
+            amount_kopeks=amount_kopeks / 100,
+            user_id=user_id,
         )
 
         return {
@@ -156,10 +156,7 @@ class CloudPaymentsPaymentMixin:
         payment = await payment_module.get_cloudpayments_payment_by_invoice_id(db, invoice_id)
 
         if not payment:
-            logger.warning(
-                'CloudPayments платёж не найден: invoice=%s, создаём новый',
-                invoice_id,
-            )
+            logger.warning('CloudPayments платёж не найден: invoice создаём новый', invoice_id=invoice_id)
             # Try to extract user_id from account_id (we now use user_id as AccountId)
             try:
                 user_id = int(account_id) if account_id else None
@@ -167,7 +164,7 @@ class CloudPaymentsPaymentMixin:
                 user_id = None
 
             if not user_id:
-                logger.error('Не удалось определить user_id из account_id: %s', account_id)
+                logger.error('Не удалось определить user_id из account_id', account_id=account_id)
                 return False
 
             # Get user by ID
@@ -175,7 +172,7 @@ class CloudPaymentsPaymentMixin:
 
             user = await get_user_by_id(db, user_id)
             if not user:
-                logger.error('Пользователь не найден: id=%s', user_id)
+                logger.error('Пользователь не найден: id', user_id=user_id)
                 return False
 
             # Create payment record
@@ -194,7 +191,7 @@ class CloudPaymentsPaymentMixin:
 
         # Check if already processed
         if payment.is_paid:
-            logger.info('CloudPayments платёж уже обработан: invoice=%s', invoice_id)
+            logger.info('CloudPayments платёж уже обработан: invoice', invoice_id=invoice_id)
             return True
 
         # Update payment record
@@ -219,7 +216,7 @@ class CloudPaymentsPaymentMixin:
         user = await get_user_by_id(db, payment.user_id)
 
         if not user:
-            logger.error('Пользователь не найден: id=%s', payment.user_id)
+            logger.error('Пользователь не найден: id', user_id=payment.user_id)
             return False
 
         # Add balance (без автоматической транзакции - создадим ниже с external_id)
@@ -245,10 +242,10 @@ class CloudPaymentsPaymentMixin:
 
         user_id_display = user.telegram_id or user.email or f'#{user.id}'
         logger.info(
-            'CloudPayments платёж успешно обработан: invoice=%s, amount=%s₽, user=%s',
-            invoice_id,
-            amount_kopeks / 100,
-            user_id_display,
+            'CloudPayments платёж успешно обработан: invoice amount=₽, user',
+            invoice_id=invoice_id,
+            amount_kopeks=amount_kopeks / 100,
+            user_id_display=user_id_display,
         )
 
         # Send notification to user
@@ -259,13 +256,13 @@ class CloudPaymentsPaymentMixin:
                 transaction=transaction,
             )
         except Exception as error:
-            logger.exception('Ошибка отправки уведомления CloudPayments: %s', error)
+            logger.exception('Ошибка отправки уведомления CloudPayments', error=error)
 
         # Auto-purchase if enabled
         try:
             await auto_purchase_saved_cart_after_topup(db, user, bot=getattr(self, 'bot', None))
         except Exception as error:
-            logger.exception('Ошибка автопокупки после CloudPayments: %s', error)
+            logger.exception('Ошибка автопокупки после CloudPayments', error=error)
 
         return True
 
@@ -305,10 +302,10 @@ class CloudPaymentsPaymentMixin:
             await db.commit()
 
         logger.info(
-            'CloudPayments платёж неуспешен: invoice=%s, reason=%s (code=%s)',
-            invoice_id,
-            reason,
-            reason_code,
+            'CloudPayments платёж неуспешен: invoice reason= (code=)',
+            invoice_id=invoice_id,
+            reason=reason,
+            reason_code=reason_code,
         )
 
         # Notify user about failed payment (account_id now contains user_id, not telegram_id)
@@ -328,7 +325,7 @@ class CloudPaymentsPaymentMixin:
                             message=card_holder_message,
                         )
         except Exception as error:
-            logger.exception('Ошибка отправки уведомления о неуспешном платеже: %s', error)
+            logger.exception('Ошибка отправки уведомления о неуспешном платеже', error=error)
 
         return True
 
@@ -353,7 +350,7 @@ class CloudPaymentsPaymentMixin:
 
         # Skip email-only users (no telegram_id)
         if not user.telegram_id:
-            logger.debug('Skipping CloudPayments notification for email-only user %s', user.id)
+            logger.debug('Skipping CloudPayments notification for email-only user', user_id=user.id)
             return
 
         texts = get_texts(user.language)
@@ -387,7 +384,7 @@ class CloudPaymentsPaymentMixin:
                 reply_markup=keyboard,
             )
         except Exception as error:
-            logger.warning('Не удалось отправить уведомление пользователю %s: %s', user.telegram_id, error)
+            logger.warning('Не удалось отправить уведомление пользователю', telegram_id=user.telegram_id, error=error)
 
     async def _send_cloudpayments_fail_notification(
         self,
@@ -415,7 +412,7 @@ class CloudPaymentsPaymentMixin:
                 parse_mode='HTML',
             )
         except Exception as error:
-            logger.warning('Не удалось отправить уведомление пользователю %s: %s', telegram_id, error)
+            logger.warning('Не удалось отправить уведомление пользователю', telegram_id=telegram_id, error=error)
 
     async def get_cloudpayments_payment_status(
         self,
@@ -437,7 +434,7 @@ class CloudPaymentsPaymentMixin:
         # Get local payment record
         payment = await payment_module.get_cloudpayments_payment_by_id(db, local_payment_id)
         if not payment:
-            logger.warning('CloudPayments payment not found: id=%s', local_payment_id)
+            logger.warning('CloudPayments payment not found: id', local_payment_id=local_payment_id)
             return None
 
         # If already paid, return current state
@@ -454,10 +451,7 @@ class CloudPaymentsPaymentMixin:
             api_response = await self.cloudpayments_service.find_payment(payment.invoice_id)
 
             if not api_response.get('Success'):
-                logger.debug(
-                    'CloudPayments API: payment not found or error for invoice=%s',
-                    payment.invoice_id,
-                )
+                logger.debug('CloudPayments API: payment not found or error for invoice', invoice_id=payment.invoice_id)
                 return {'payment': payment, 'status': payment.status}
 
             model = api_response.get('Model', {})
@@ -493,8 +487,6 @@ class CloudPaymentsPaymentMixin:
 
         except Exception as error:
             logger.error(
-                'Error checking CloudPayments payment status: id=%s, error=%s',
-                local_payment_id,
-                error,
+                'Error checking CloudPayments payment status: id error', local_payment_id=local_payment_id, error=error
             )
             return {'payment': payment, 'status': payment.status}

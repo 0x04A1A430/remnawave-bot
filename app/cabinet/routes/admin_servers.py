@@ -1,7 +1,6 @@
 """Admin routes for managing servers in cabinet."""
 
-import logging
-
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import String, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,7 +30,7 @@ from ..schemas.servers import (
 )
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/admin/servers', tags=['Cabinet Admin Servers'])
 
@@ -184,7 +183,7 @@ async def update_existing_server(
     if request.promo_group_ids is not None:
         await update_server_squad_promo_groups(db, server_id, request.promo_group_ids)
 
-    logger.info(f'Admin {admin.id} updated server {server_id}')
+    logger.info('Admin updated server', admin_id=admin.id, server_id=server_id)
 
     return await get_server(server_id, admin, db)
 
@@ -207,7 +206,7 @@ async def toggle_server(
     await update_server_squad(db, server_id, is_available=new_status)
 
     status_text = 'enabled' if new_status else 'disabled'
-    logger.info(f'Admin {admin.id} {status_text} server {server_id}')
+    logger.info('Admin server', admin_id=admin.id, status_text=status_text, server_id=server_id)
 
     return ServerToggleResponse(
         id=server_id,
@@ -234,7 +233,7 @@ async def toggle_server_trial(
     await update_server_squad(db, server_id, is_trial_eligible=new_status)
 
     status_text = 'enabled for trial' if new_status else 'disabled for trial'
-    logger.info(f'Admin {admin.id} {status_text} server {server_id}')
+    logger.info('Admin server', admin_id=admin.id, status_text=status_text, server_id=server_id)
 
     return ServerTrialToggleResponse(
         id=server_id,
@@ -311,7 +310,7 @@ async def sync_servers(
         # Sync with database
         created, updated, removed = await sync_with_remnawave(db, squads)
 
-        logger.info(f'Admin {admin.id} synced servers: +{created} ~{updated} -{removed}')
+        logger.info('Admin synced servers: + ~', admin_id=admin.id, created=created, updated=updated, removed=removed)
 
         return ServerSyncResponse(
             created=created,
@@ -323,7 +322,7 @@ async def sync_servers(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f'Failed to sync servers: {e}')
+        logger.error('Failed to sync servers', error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f'Sync failed: {e!s}',

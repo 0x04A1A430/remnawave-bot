@@ -1,7 +1,7 @@
 import html
-import logging
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
+import structlog
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
@@ -31,14 +31,14 @@ from app.utils.decorators import admin_required, error_handler
 from app.utils.validators import get_html_help_text, validate_html_tags
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 def _safe_format_price(amount_kopeks: int) -> str:
     try:
         return settings.format_price(amount_kopeks)
     except Exception as error:  # pragma: no cover - defensive logging
-        logger.error('Не удалось отформатировать сумму %s: %s', amount_kopeks, error)
+        logger.error('Не удалось отформатировать сумму', amount_kopeks=amount_kopeks, error=error)
         return f'{amount_kopeks / 100:.2f} ₽'
 
 
@@ -47,9 +47,9 @@ async def _safe_delete_message(message: types.Message) -> None:
         await message.delete()
     except TelegramBadRequest as error:
         if 'message to delete not found' in str(error).lower():
-            logger.debug('Сообщение уже удалено: %s', error)
+            logger.debug('Сообщение уже удалено', error=error)
         else:
-            logger.warning('Не удалось удалить сообщение %s: %s', message.message_id, error)
+            logger.warning('Не удалось удалить сообщение', message_id=message.message_id, error=error)
 
 
 async def _edit_creation_message(
@@ -87,9 +87,7 @@ async def _edit_creation_message(
         )
     except Exception as error:  # pragma: no cover - defensive logging
         logger.error(
-            'Непредвиденная ошибка при обновлении сообщения создания опроса %s: %s',
-            message_id,
-            error,
+            'Непредвиденная ошибка при обновлении сообщения создания опроса', message_id=message_id, error=error
         )
     return False
 
@@ -112,18 +110,12 @@ async def _send_creation_message(
         except TelegramBadRequest as error:
             error_text = str(error).lower()
             if 'message to delete not found' in error_text:
-                logger.debug('Сообщение уже удалено: %s', error)
+                logger.debug('Сообщение уже удалено', error=error)
             else:
-                logger.warning(
-                    'Не удалось удалить сообщение создания опроса %s: %s',
-                    message_id,
-                    error,
-                )
+                logger.warning('Не удалось удалить сообщение создания опроса', message_id=message_id, error=error)
         except Exception as error:  # pragma: no cover - defensive logging
             logger.error(
-                'Непредвиденная ошибка при удалении сообщения создания опроса %s: %s',
-                message_id,
-                error,
+                'Непредвиденная ошибка при удалении сообщения создания опроса', message_id=message_id, error=error
             )
 
     sent_message = await message.bot.send_message(

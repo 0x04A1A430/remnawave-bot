@@ -4,16 +4,16 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 from datetime import datetime, timedelta
 from typing import Any
 
 import aiohttp
+import structlog
 
 from app.config import settings
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class PlategaService:
@@ -105,10 +105,7 @@ class PlategaService:
 
                     if response.status >= 400:
                         logger.error(
-                            'Platega API error %s %s: %s',
-                            response.status,
-                            endpoint,
-                            raw_text,
+                            'Platega API error', response_status=response.status, endpoint=endpoint, raw_text=raw_text
                         )
                         if response.status in self._retryable_statuses and attempt < self._max_retries:
                             await asyncio.sleep(self._retry_delay * attempt)
@@ -117,29 +114,29 @@ class PlategaService:
 
                     return data
             except asyncio.CancelledError:
-                logger.debug('Platega request cancelled: %s %s', method, endpoint)
+                logger.debug('Platega request cancelled', method=method, endpoint=endpoint)
                 raise
             except TimeoutError as error:
                 last_error = error
                 logger.warning(
-                    'Platega request timeout (%s %s) attempt %s/%s',
-                    method,
-                    endpoint,
-                    attempt,
-                    self._max_retries,
+                    'Platega request timeout attempt /',
+                    method=method,
+                    endpoint=endpoint,
+                    attempt=attempt,
+                    max_retries=self._max_retries,
                 )
             except aiohttp.ClientError as error:
                 last_error = error
                 logger.warning(
-                    'Platega client error (%s %s) attempt %s/%s: %s',
-                    method,
-                    endpoint,
-                    attempt,
-                    self._max_retries,
-                    error,
+                    'Platega client error attempt /',
+                    method=method,
+                    endpoint=endpoint,
+                    attempt=attempt,
+                    max_retries=self._max_retries,
+                    error=error,
                 )
             except Exception as error:  # pragma: no cover - safety
-                logger.exception('Unexpected Platega error: %s', error)
+                logger.exception('Unexpected Platega error', error=error)
                 return None
 
             if attempt < self._max_retries:
@@ -147,11 +144,11 @@ class PlategaService:
 
         if last_error is not None:
             logger.error(
-                'Platega request failed after %s attempts (%s %s): %s',
-                self._max_retries,
-                method,
-                endpoint,
-                last_error,
+                'Platega request failed after attempts',
+                max_retries=self._max_retries,
+                method=method,
+                endpoint=endpoint,
+                last_error=last_error,
             )
 
         return None
@@ -169,11 +166,7 @@ class PlategaService:
             try:
                 return json.loads(raw_text), raw_text
             except json.JSONDecodeError as error:
-                logger.error(
-                    'Failed to decode Platega JSON response %s: %s',
-                    response.url,
-                    error,
-                )
+                logger.error('Failed to decode Platega JSON response', url=response.url, error=error)
                 return None, raw_text
 
         return None, raw_text
@@ -190,11 +183,7 @@ class PlategaService:
         if len(encoded) <= max_bytes:
             return cleaned
 
-        logger.debug(
-            'Platega description trimmed from %s to %s bytes',
-            len(encoded),
-            max_bytes,
-        )
+        logger.debug('Platega description trimmed from to bytes', encoded_count=len(encoded), max_bytes=max_bytes)
 
         trimmed_bytes = encoded[:max_bytes]
         while True:
@@ -213,5 +202,5 @@ class PlategaService:
             delta = timedelta(hours=hours, minutes=minutes, seconds=seconds)
             return datetime.utcnow() + delta
         except Exception:
-            logger.warning('Failed to parse Platega expiresIn value: %s', expires_in)
+            logger.warning('Failed to parse Platega expiresIn value', expires_in=expires_in)
             return None

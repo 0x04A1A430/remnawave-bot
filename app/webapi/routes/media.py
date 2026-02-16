@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import logging
 import mimetypes
 from typing import Any
 
+import structlog
 from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
@@ -27,7 +27,7 @@ from ..schemas.media import MediaUploadResponse
 
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 ALLOWED_MEDIA_TYPES = {'photo', 'video', 'document'}
 
@@ -110,7 +110,7 @@ async def upload_media(
     except HTTPException:
         raise
     except Exception as error:
-        logger.error('Failed to upload media: %s', error)
+        logger.error('Failed to upload media', error=error)
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, 'Failed to upload media') from error
     finally:
         await bot.session.close()
@@ -151,7 +151,7 @@ async def download_media(
     except HTTPException:
         raise
     except Exception as error:  # pragma: no cover - неожиданные ошибки загрузки файла
-        logger.error('Failed to download media %s: %s', file_id, error)
+        logger.error('Failed to download media', file_id=file_id, error=error)
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, 'Failed to download media') from error
     finally:
         await bot.session.close()

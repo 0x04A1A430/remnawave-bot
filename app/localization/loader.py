@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import logging
 import os
 import shutil
 import tempfile
@@ -9,10 +8,12 @@ from functools import cache
 from pathlib import Path
 from typing import Any
 
+import structlog
+
 from app.config import settings
 
 
-_logger = logging.getLogger(__name__)
+_logger = structlog.get_logger(__name__)
 
 _FALLBACK_LANGUAGE = 'ru'
 
@@ -84,7 +85,7 @@ def _determine_default_language() -> str:
     try:
         available_languages = settings.get_available_languages()
     except Exception as error:  # pragma: no cover - defensive logging
-        _logger.warning('Failed to load available languages from settings: %s', error)
+        _logger.warning('Failed to load available languages from settings', error=error)
         available_languages = []
 
     available_map = {
@@ -104,26 +105,26 @@ def _determine_default_language() -> str:
 
         if _locale_file_exists(normalized_configured):
             _logger.warning(
-                "Configured default language '%s' is not listed in AVAILABLE_LANGUAGES. Falling back to '%s'.",
-                configured,
-                _FALLBACK_LANGUAGE,
+                "Configured default language '' is not listed in AVAILABLE_LANGUAGES. Falling back to ''.",
+                configured=configured,
+                FALLBACK_LANGUAGE=_FALLBACK_LANGUAGE,
             )
         else:
             _logger.warning(
-                "Configured default language '%s' is not available. Falling back to '%s'.",
-                configured,
-                _FALLBACK_LANGUAGE,
+                "Configured default language '' is not available. Falling back to ''.",
+                configured=configured,
+                FALLBACK_LANGUAGE=_FALLBACK_LANGUAGE,
             )
     else:
-        _logger.debug("DEFAULT_LANGUAGE is not set. Falling back to '%s'.", _FALLBACK_LANGUAGE)
+        _logger.debug("DEFAULT_LANGUAGE is not set. Falling back to ''.", FALLBACK_LANGUAGE=_FALLBACK_LANGUAGE)
 
     fallback_language = _select_fallback_language(available_map)
 
     if _normalize_language_code(fallback_language) != _normalize_language_code(_FALLBACK_LANGUAGE):
         _logger.warning(
-            "Fallback language '%s' is not available. Using '%s' instead.",
-            _FALLBACK_LANGUAGE,
-            fallback_language,
+            "Fallback language '' is not available. Using '' instead.",
+            FALLBACK_LANGUAGE=_FALLBACK_LANGUAGE,
+            fallback_language=fallback_language,
         )
 
     return fallback_language or _FALLBACK_LANGUAGE
@@ -174,24 +175,21 @@ def _directory_is_writable(directory: Path) -> bool:
         return True
     except PermissionError as error:
         _logger.warning(
-            'Locale directory %s is not writable%s. Ensure the mounted directory allows writes for the container user or configure LOCALES_PATH to a writable path. (%s)',
-            directory,
-            user_hint,
-            error,
+            'Locale directory is not writable. Ensure the mounted directory allows writes for the container user or configure LOCALES_PATH to a writable path.',
+            directory=directory,
+            user_hint=user_hint,
+            error=error,
         )
     except OSError as error:
         _logger.warning(
-            'Unable to prepare locale directory %s for writing%s: %s. Configure LOCALES_PATH to a writable path.',
-            directory,
-            user_hint,
-            error,
+            'Unable to prepare locale directory for writing: . Configure LOCALES_PATH to a writable path.',
+            directory=directory,
+            user_hint=user_hint,
+            error=error,
         )
     except Exception as error:  # pragma: no cover - defensive logging
         _logger.warning(
-            'Unexpected error while checking locale directory %s%s: %s',
-            directory,
-            user_hint,
-            error,
+            'Unexpected error while checking locale directory', directory=directory, user_hint=user_hint, error=error
         )
     return False
 
@@ -201,11 +199,11 @@ def ensure_locale_templates() -> None:
     try:
         destination.mkdir(parents=True, exist_ok=True)
     except Exception as error:
-        _logger.warning('Unable to create locales directory %s: %s', destination, error)
+        _logger.warning('Unable to create locales directory', destination=destination, error=error)
         return
 
     if not _DEFAULT_LOCALES_DIR.exists():
-        _logger.debug('Default locales directory %s is missing', _DEFAULT_LOCALES_DIR)
+        _logger.debug('Default locales directory is missing', DEFAULT_LOCALES_DIR=_DEFAULT_LOCALES_DIR)
         return
 
     if not _directory_is_writable(destination):
@@ -217,12 +215,7 @@ def ensure_locale_templates() -> None:
         try:
             shutil.copyfile(source, target)
         except Exception as error:
-            _logger.warning(
-                'Failed to copy default locale %s to %s: %s',
-                source,
-                target,
-                error,
-            )
+            _logger.warning('Failed to copy default locale to', source=source, target=target, error=error)
 
     if not destination_has_files:
         for template in _DEFAULT_LOCALES_DIR.iterdir():
@@ -239,7 +232,7 @@ def ensure_locale_templates() -> None:
             continue
 
         if not source_path.exists():
-            _logger.debug('Default locale template %s is missing at %s', locale_code, source_path)
+            _logger.debug('Default locale template is missing at', locale_code=locale_code, source_path=source_path)
             continue
 
         _copy_locale(source_path, target_path)
@@ -275,10 +268,10 @@ def _load_locale_file(path: Path) -> dict[str, Any]:
                 ) from import_error
             return yaml.safe_load(path.read_text(encoding='utf-8')) or {}
     except Exception as error:
-        _logger.warning('Failed to parse locale file %s: %s', path, error)
+        _logger.warning('Failed to parse locale file', path=path, error=error)
         return {}
 
-    _logger.warning('Unsupported locale format for %s', path)
+    _logger.warning('Unsupported locale format for', path=path)
     return {}
 
 
@@ -301,9 +294,7 @@ def load_locale(language: str) -> dict[str, Any]:
 
     if not merged and language != DEFAULT_LANGUAGE:
         _logger.warning(
-            'Locale %s not found. Falling back to default language %s.',
-            language,
-            DEFAULT_LANGUAGE,
+            'Locale not found. Falling back to default language .', language=language, DEFAULT_LANGUAGE=DEFAULT_LANGUAGE
         )
         return load_locale(DEFAULT_LANGUAGE)
     return merged

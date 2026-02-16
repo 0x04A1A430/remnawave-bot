@@ -1,6 +1,5 @@
 import html
 import io
-import logging
 import math
 import time
 from collections.abc import Iterable
@@ -693,17 +692,12 @@ async def apply_preset(
             await bot_configuration_service.set_value(db, setting_key, value)
             applied.append(setting_key)
         except ReadOnlySettingError:
-            logging.getLogger(__name__).info(
-                'Пропускаем настройку %s из пресета %s: только для чтения',
-                setting_key,
-                preset_key,
+            logger.info(
+                'Пропускаем настройку из пресета : только для чтения', setting_key=setting_key, preset_key=preset_key
             )
         except Exception as error:
-            logging.getLogger(__name__).warning(
-                'Не удалось применить пресет %s для %s: %s',
-                preset_key,
-                setting_key,
-                error,
+            logger.warning(
+                'Не удалось применить пресет для', preset_key=preset_key, setting_key=setting_key, error=error
             )
     await db.commit()
 

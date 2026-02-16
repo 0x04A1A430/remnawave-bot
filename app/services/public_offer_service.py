@@ -1,6 +1,6 @@
-import logging
 from html.parser import HTMLParser
 
+import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -12,7 +12,7 @@ from app.database.crud.public_offer import (
 from app.database.models import PublicOffer
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class PublicOfferService:
@@ -93,7 +93,7 @@ class PublicOfferService:
             content,
             enable_if_new=enable_if_new,
         )
-        logger.info('✅ Публичная оферта обновлена для языка %s', lang)
+        logger.info('✅ Публичная оферта обновлена для языка', lang=lang)
         return offer
 
     @classmethod

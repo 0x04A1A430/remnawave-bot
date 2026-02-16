@@ -1,7 +1,6 @@
 """Handler for CloudPayments balance top-up."""
 
-import logging
-
+import structlog
 from aiogram import types
 from aiogram.fsm.context import FSMContext
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -16,7 +15,7 @@ from app.states import BalanceStates
 from app.utils.decorators import error_handler
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def _create_cloudpayments_payment_and_respond(
@@ -118,11 +117,7 @@ async def _create_cloudpayments_payment_and_respond(
             parse_mode='HTML',
         )
 
-    logger.info(
-        'CloudPayments payment created: user=%s, amount=%s₽',
-        db_user.telegram_id,
-        amount_rub,
-    )
+    logger.info('CloudPayments payment created: user amount=₽', telegram_id=db_user.telegram_id, amount_rub=amount_rub)
 
 
 @error_handler
@@ -375,11 +370,7 @@ async def process_cloudpayments_amount(
         parse_mode='HTML',
     )
 
-    logger.info(
-        'CloudPayments payment created: user=%s, amount=%s₽',
-        db_user.telegram_id,
-        amount_rub,
-    )
+    logger.info('CloudPayments payment created: user amount=₽', telegram_id=db_user.telegram_id, amount_rub=amount_rub)
 
 
 @error_handler
@@ -498,7 +489,5 @@ async def handle_cloudpayments_quick_amount(
     )
 
     logger.info(
-        'CloudPayments payment created (quick): user=%s, amount=%s₽',
-        db_user.telegram_id,
-        amount_rub,
+        'CloudPayments payment created (quick): user amount=₽', telegram_id=db_user.telegram_id, amount_rub=amount_rub
     )

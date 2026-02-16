@@ -1,6 +1,6 @@
-import logging
 from decimal import ROUND_HALF_UP, Decimal
 
+import structlog
 from aiogram import Dispatcher, F, types
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,7 +13,7 @@ from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def _handle_wheel_spin_payment(
@@ -70,8 +70,10 @@ async def _handle_wheel_spin_payment(
                 promocode_id = row[0]
 
         logger.info(
-            f'🎰 Creating wheel spin: user.id={user.id}, user.telegram_id={user.telegram_id}, '
-            f'prize={selected_prize.display_name}'
+            '🎰 Creating wheel spin: user.id=, user.telegram_id=, prize',
+            user_id=user.id,
+            telegram_id=user.telegram_id,
+            display_name=selected_prize.display_name,
         )
 
         spin = await create_wheel_spin(
@@ -89,7 +91,7 @@ async def _handle_wheel_spin_payment(
             is_applied=True,
         )
 
-        logger.info(f'🎰 Wheel spin created: spin.id={spin.id}, spin.user_id={spin.user_id}')
+        logger.info('🎰 Wheel spin created: spin.id=, spin.user_id', spin_id=spin.id, user_id=spin.user_id)
 
         # Ensure all changes are committed (subscription days, traffic GB, etc.)
         await db.commit()
@@ -107,12 +109,15 @@ async def _handle_wheel_spin_payment(
         )
 
         logger.info(
-            f'🎰 Wheel spin via Stars: user={user.id}, prize={selected_prize.display_name}, stars={stars_amount}'
+            '🎰 Wheel spin via Stars: user=, prize=, stars',
+            user_id=user.id,
+            display_name=selected_prize.display_name,
+            stars_amount=stars_amount,
         )
         return True
 
     except Exception as e:
-        logger.error(f'Ошибка обработки wheel spin payment: {e}', exc_info=True)
+        logger.error('Ошибка обработки wheel spin payment', error=e, exc_info=True)
         await message.answer(
             '❌ Произошла ошибка при обработке спина. Обратитесь в поддержку.',
         )
@@ -138,7 +143,7 @@ async def _handle_trial_payment(
         # Парсим payload: trial_{subscription_id}
         parts = payload.split('_')
         if len(parts) < 2:
-            logger.error(f'Невалидный trial payload: {payload}')
+            logger.error('Невалидный trial payload', payload=payload)
             await message.answer(
                 '❌ Ошибка: неверный формат платежа. Обратитесь в поддержку.',
             )
@@ -147,7 +152,7 @@ async def _handle_trial_payment(
         try:
             subscription_id = int(parts[1])
         except ValueError:
-            logger.error(f'Невалидный subscription_id в trial payload: {payload}')
+            logger.error('Невалидный subscription_id в trial payload', payload=payload)
             await message.answer(
                 '❌ Ошибка: неверный ID подписки. Обратитесь в поддержку.',
             )
@@ -177,7 +182,11 @@ async def _handle_trial_payment(
         )
 
         if not subscription:
-            logger.error(f'Не удалось активировать триальную подписку {subscription_id} для пользователя {user.id}')
+            logger.error(
+                'Не удалось активировать триальную подписку для пользователя',
+                subscription_id=subscription_id,
+                user_id=user.id,
+            )
             # Возвращаем деньги на баланс
             from app.database.crud.user import add_user_balance
 
@@ -198,7 +207,7 @@ async def _handle_trial_payment(
         try:
             await subscription_service.create_remnawave_user(db, subscription)
         except Exception as rw_error:
-            logger.error(f'Ошибка создания пользователя RemnaWave для триала: {rw_error}')
+            logger.error('Ошибка создания пользователя RemnaWave для триала', rw_error=rw_error)
             # Не откатываем подписку, просто логируем - RemnaWave может быть временно недоступен
 
         await db.commit()
@@ -214,7 +223,7 @@ async def _handle_trial_payment(
                 payment_method='Telegram Stars',
             )
         except Exception as admin_error:
-            logger.warning(f'Ошибка отправки уведомления админам о триале: {admin_error}')
+            logger.warning('Ошибка отправки уведомления админам о триале', admin_error=admin_error)
 
         # Отправляем сообщение пользователю
         await message.answer(
@@ -227,13 +236,15 @@ async def _handle_trial_payment(
         )
 
         logger.info(
-            f'✅ Платный триал активирован через Stars: user={user.id}, '
-            f'subscription={subscription.id}, stars={stars_amount}'
+            '✅ Платный триал активирован через Stars: user=, subscription=, stars',
+            user_id=user.id,
+            subscription_id=subscription.id,
+            stars_amount=stars_amount,
         )
         return True
 
     except Exception as e:
-        logger.error(f'Ошибка обработки trial payment: {e}', exc_info=True)
+        logger.error('Ошибка обработки trial payment', error=e, exc_info=True)
         await message.answer(
             '❌ Произошла ошибка при активации пробной подписки. Обратитесь в поддержку.',
         )
@@ -245,13 +256,16 @@ async def handle_pre_checkout_query(query: types.PreCheckoutQuery):
 
     try:
         logger.info(
-            f'📋 Pre-checkout query от {query.from_user.id}: {query.total_amount} XTR, payload: {query.invoice_payload}'
+            '📋 Pre-checkout query от XTR, payload',
+            from_user_id=query.from_user.id,
+            total_amount=query.total_amount,
+            invoice_payload=query.invoice_payload,
         )
 
         allowed_prefixes = ('balance_', 'admin_stars_test_', 'simple_sub_', 'wheel_spin_', 'trial_')
 
         if not query.invoice_payload or not query.invoice_payload.startswith(allowed_prefixes):
-            logger.warning(f'Невалидный payload: {query.invoice_payload}')
+            logger.warning('Невалидный payload', invoice_payload=query.invoice_payload)
             await query.answer(
                 ok=False,
                 error_message=texts.t(
@@ -267,7 +281,7 @@ async def handle_pre_checkout_query(query: types.PreCheckoutQuery):
             async with AsyncSessionLocal() as db:
                 user = await get_user_by_telegram_id(db, query.from_user.id)
                 if not user:
-                    logger.warning(f'Пользователь {query.from_user.id} не найден в БД')
+                    logger.warning('Пользователь не найден в БД', from_user_id=query.from_user.id)
                     await query.answer(
                         ok=False,
                         error_message=texts.t(
@@ -278,7 +292,7 @@ async def handle_pre_checkout_query(query: types.PreCheckoutQuery):
                     return
                 texts = get_texts(user.language or DEFAULT_LANGUAGE)
         except Exception as db_error:
-            logger.error(f'Ошибка подключения к БД в pre_checkout_query: {db_error}')
+            logger.error('Ошибка подключения к БД в pre_checkout_query', db_error=db_error)
             await query.answer(
                 ok=False,
                 error_message=texts.t(
@@ -289,10 +303,10 @@ async def handle_pre_checkout_query(query: types.PreCheckoutQuery):
             return
 
         await query.answer(ok=True)
-        logger.info(f'✅ Pre-checkout одобрен для пользователя {query.from_user.id}')
+        logger.info('✅ Pre-checkout одобрен для пользователя', from_user_id=query.from_user.id)
 
     except Exception as e:
-        logger.error(f'Ошибка в pre_checkout_query: {e}', exc_info=True)
+        logger.error('Ошибка в pre_checkout_query', error=e, exc_info=True)
         await query.answer(
             ok=False,
             error_message=texts.t(
@@ -310,17 +324,18 @@ async def handle_successful_payment(message: types.Message, db: AsyncSession, st
         user_id = message.from_user.id
 
         logger.info(
-            f'💳 Успешный Stars платеж от {user_id}: '
-            f'{payment.total_amount} XTR, '
-            f'payload: {payment.invoice_payload}, '
-            f'charge_id: {payment.telegram_payment_charge_id}'
+            '💳 Успешный Stars платеж от XTR, payload: charge_id',
+            user_id=user_id,
+            total_amount=payment.total_amount,
+            invoice_payload=payment.invoice_payload,
+            telegram_payment_charge_id=payment.telegram_payment_charge_id,
         )
 
         user = await get_user_by_telegram_id(db, user_id)
         texts = get_texts(user.language if user and user.language else DEFAULT_LANGUAGE)
 
         if not user:
-            logger.error(f'Пользователь {user_id} не найден при обработке Stars платежа')
+            logger.error('Пользователь не найден при обработке Stars платежа', user_id=user_id)
             await message.answer(
                 texts.t(
                     'STARS_PAYMENT_USER_NOT_FOUND',
@@ -370,9 +385,7 @@ async def handle_successful_payment(message: types.Message, db: AsyncSession, st
                     await message.bot.delete_message(chat_id, message_id)
                 except Exception as delete_error:  # pragma: no cover - зависит от прав бота
                     logger.warning(
-                        'Не удалось удалить сообщение %s после оплаты Stars: %s',
-                        label,
-                        delete_error,
+                        'Не удалось удалить сообщение после оплаты Stars', label=label, delete_error=delete_error
                     )
 
         success = await payment_service.process_stars_payment(
@@ -421,13 +434,13 @@ async def handle_successful_payment(message: types.Message, db: AsyncSession, st
             )
 
             logger.info(
-                '✅ Stars платеж успешно обработан: пользователь %s, %s звезд → %s',
-                user.id,
-                payment.total_amount,
-                settings.format_price(amount_kopeks),
+                '✅ Stars платеж успешно обработан: пользователь , звезд →',
+                user_id=user.id,
+                total_amount=payment.total_amount,
+                format_price=settings.format_price(amount_kopeks),
             )
         else:
-            logger.error(f'Ошибка обработки Stars платежа для пользователя {user.id}')
+            logger.error('Ошибка обработки Stars платежа для пользователя', user_id=user.id)
             await message.answer(
                 texts.t(
                     'STARS_PAYMENT_ENROLLMENT_ERROR',
@@ -437,7 +450,7 @@ async def handle_successful_payment(message: types.Message, db: AsyncSession, st
             )
 
     except Exception as e:
-        logger.error(f'Ошибка в successful_payment: {e}', exc_info=True)
+        logger.error('Ошибка в successful_payment', error=e, exc_info=True)
         await message.answer(
             texts.t(
                 'STARS_PAYMENT_PROCESSING_ERROR',

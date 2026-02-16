@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import logging
 from typing import Any
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, Security, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -50,7 +50,7 @@ from ..schemas.partners import (
 )
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter()
 

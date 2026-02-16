@@ -7,17 +7,17 @@ This service handles notification delivery through appropriate channels:
 """
 
 import asyncio
-import logging
 from enum import Enum
 from typing import Any
 
+import structlog
 from aiogram import Bot
 
 from app.config import settings
 from app.database.models import User
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class NotificationType(Enum):
@@ -163,23 +163,20 @@ class NotificationDeliveryService:
 
             if email_sent or ws_sent:
                 logger.info(
-                    'Уведомление %s отправлено email-пользователю %s (email=%s, ws=%s)',
-                    notification_type.value,
-                    user.id,
-                    email_sent,
-                    ws_sent,
+                    'Уведомление отправлено email-пользователю (email ws=)',
+                    notification_type_value=notification_type.value,
+                    user_id=user.id,
+                    email_sent=email_sent,
+                    ws_sent=ws_sent,
                 )
                 return True
             logger.warning(
-                'Не удалось отправить уведомление %s email-пользователю %s',
-                notification_type.value,
-                user.id,
+                'Не удалось отправить уведомление email-пользователю',
+                notification_type_value=notification_type.value,
+                user_id=user.id,
             )
             return False
-        logger.debug(
-            'Пользователь %s не имеет telegram_id или verified email, пропускаем уведомление',
-            user.id,
-        )
+        logger.debug('Пользователь не имеет telegram_id или verified email, пропускаем уведомление', user_id=user.id)
         return False
 
     async def _send_telegram_notification(
@@ -193,17 +190,14 @@ class NotificationDeliveryService:
     ) -> bool:
         """Send notification via Telegram bot."""
         if not bot:
-            logger.warning(
-                'Bot instance not provided for Telegram notification to user %s',
-                user.telegram_id,
-            )
+            logger.warning('Bot instance not provided for Telegram notification to user', telegram_id=user.telegram_id)
             return False
 
         if not message:
             logger.warning(
-                'No Telegram message provided for notification %s to user %s',
-                notification_type.value,
-                user.telegram_id,
+                'No Telegram message provided for notification to user',
+                notification_type_value=notification_type.value,
+                telegram_id=user.telegram_id,
             )
             return False
 
@@ -222,32 +216,19 @@ class NotificationDeliveryService:
             return True
 
         except TimeoutError:
-            logger.warning(
-                'Timeout при отправке Telegram уведомления пользователю %s',
-                user.telegram_id,
-            )
+            logger.warning('Timeout при отправке Telegram уведомления пользователю', telegram_id=user.telegram_id)
             return False
 
         except TelegramForbiddenError:
-            logger.warning(
-                'Telegram user %s заблокировал бота',
-                user.telegram_id,
-            )
+            logger.warning('Telegram user заблокировал бота', telegram_id=user.telegram_id)
             return False
 
         except TelegramBadRequest as e:
-            logger.warning(
-                'Ошибка отправки Telegram уведомления пользователю %s: %s',
-                user.telegram_id,
-                e,
-            )
+            logger.warning('Ошибка отправки Telegram уведомления пользователю', telegram_id=user.telegram_id, e=e)
             return False
 
         except Exception as e:
-            logger.error(
-                'Неожиданная ошибка при отправке Telegram уведомления: %s',
-                e,
-            )
+            logger.error('Неожиданная ошибка при отправке Telegram уведомления', e=e)
             return False
 
     async def _send_email_notification(
@@ -262,7 +243,7 @@ class NotificationDeliveryService:
             return False
 
         if not user.email or not user.email_verified:
-            logger.debug('У пользователя %s нет подтверждённого email', user.id)
+            logger.debug('У пользователя нет подтверждённого email', user_id=user.id)
             return False
 
         try:
@@ -283,16 +264,13 @@ class NotificationDeliveryService:
                         'body_html': full_html,
                     }
             except Exception as e:
-                logger.debug('Не удалось проверить override шаблона: %s', e)
+                logger.debug('Не удалось проверить override шаблона', e=e)
 
             if not template:
                 template = self.email_templates.get_template(notification_type, language, context)
 
             if not template:
-                logger.warning(
-                    'Не найден email шаблон для %s',
-                    notification_type.value,
-                )
+                logger.warning('Не найден email шаблон для', notification_type_value=notification_type.value)
                 return False
 
             # Send email
@@ -305,20 +283,16 @@ class NotificationDeliveryService:
 
             if success:
                 logger.info(
-                    'Email уведомление %s отправлено пользователю %s (%s)',
-                    notification_type.value,
-                    user.id,
-                    user.email,
+                    'Email уведомление отправлено пользователю',
+                    notification_type_value=notification_type.value,
+                    user_id=user.id,
+                    email=user.email,
                 )
 
             return success
 
         except Exception as e:
-            logger.error(
-                'Ошибка отправки email уведомления пользователю %s: %s',
-                user.id,
-                e,
-            )
+            logger.error('Ошибка отправки email уведомления пользователю', user_id=user.id, e=e)
             return False
 
     async def _send_websocket_notification(
@@ -338,11 +312,7 @@ class NotificationDeliveryService:
             return True
 
         except Exception as e:
-            logger.debug(
-                'WebSocket уведомление не отправлено пользователю %s: %s',
-                user.id,
-                e,
-            )
+            logger.debug('WebSocket уведомление не отправлено пользователю', user_id=user.id, e=e)
             return False
 
     # ============================================================================

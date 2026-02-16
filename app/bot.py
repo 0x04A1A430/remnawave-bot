@@ -1,6 +1,5 @@
-import logging
-
 import redis.asyncio as redis
+import structlog
 from aiogram import Bot, Dispatcher, types
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.storage.redis import RedisStorage
@@ -63,6 +62,7 @@ from app.handlers.stars_payments import register_stars_handlers
 from app.middlewares.auth import AuthMiddleware
 from app.middlewares.blacklist import BlacklistMiddleware
 from app.middlewares.button_stats import ButtonStatsMiddleware
+from app.middlewares.context_binding import ContextVarsMiddleware
 from app.middlewares.global_error import GlobalErrorMiddleware
 from app.middlewares.logging import LoggingMiddleware
 from app.middlewares.maintenance import MaintenanceMiddleware
@@ -75,14 +75,14 @@ from app.utils.message_patch import patch_message_methods
 
 patch_message_methods()
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def debug_callback_handler(callback: types.CallbackQuery):
     logger.info('🔍 DEBUG CALLBACK:')
-    logger.info(f'  - Data: {callback.data}')
-    logger.info(f'  - User: {callback.from_user.id}')
-    logger.info(f'  - Username: {callback.from_user.username}')
+    logger.info('Data', callback_data=callback.data)
+    logger.info('User', from_user_id=callback.from_user.id)
+    logger.info('Username', username=callback.from_user.username)
 
 
 async def setup_bot() -> tuple[Bot, Dispatcher]:
@@ -90,7 +90,7 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
         await cache.connect()
         logger.info('Кеш инициализирован')
     except Exception as e:
-        logger.warning(f'Кеш не инициализирован: {e}')
+        logger.warning('Кеш не инициализирован', error=e)
 
     from aiogram.client.default import DefaultBotProperties
     from aiogram.enums import ParseMode
@@ -106,12 +106,15 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
         storage = RedisStorage(redis_client)
         logger.info('Подключено к Redis для FSM storage')
     except Exception as e:
-        logger.warning(f'Не удалось подключиться к Redis: {e}')
+        logger.warning('Не удалось подключиться к Redis', error=e)
         logger.info('Используется MemoryStorage для FSM')
         storage = MemoryStorage()
 
     dp = Dispatcher(storage=storage)
 
+    dp.message.middleware(ContextVarsMiddleware())
+    dp.callback_query.middleware(ContextVarsMiddleware())
+    dp.pre_checkout_query.middleware(ContextVarsMiddleware())
     dp.message.middleware(GlobalErrorMiddleware())
     dp.callback_query.middleware(GlobalErrorMiddleware())
     dp.pre_checkout_query.middleware(GlobalErrorMiddleware())
@@ -205,7 +208,7 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
             await maintenance_service.start_monitoring()
             logger.info('Мониторинг техработ запущен')
         except Exception as e:
-            logger.error(f'Ошибка запуска мониторинга техработ: {e}')
+            logger.error('Ошибка запуска мониторинга техработ', error=e)
     else:
         logger.info('Мониторинг техработ отключен настройками')
 
@@ -236,7 +239,7 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
             'Установите MINIAPP_CUSTOM_URL.'
         )
     elif settings.is_cabinet_mode():
-        logger.info(f'🏠 Режим Cabinet активен, базовый URL: {settings.MINIAPP_CUSTOM_URL}')
+        logger.info('🏠 Режим Cabinet активен, базовый URL', MINIAPP_CUSTOM_URL=settings.MINIAPP_CUSTOM_URL)
 
     # Load per-section button styles cache
     if settings.is_cabinet_mode():
@@ -245,7 +248,7 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
 
             await load_button_styles_cache()
         except Exception as e:
-            logger.warning(f'Failed to load button styles cache: {e}')
+            logger.warning('Failed to load button styles cache', error=e)
 
     logger.info('Бот успешно настроен')
 
@@ -257,10 +260,10 @@ async def shutdown_bot():
         await maintenance_service.stop_monitoring()
         logger.info('Мониторинг техработ остановлен')
     except Exception as e:
-        logger.error(f'Ошибка остановки мониторинга: {e}')
+        logger.error('Ошибка остановки мониторинга', error=e)
 
     try:
         await cache.close()
         logger.info('Соединения с кешем закрыты')
     except Exception as e:
-        logger.error(f'Ошибка закрытия кеша: {e}')
+        logger.error('Ошибка закрытия кеша', error=e)

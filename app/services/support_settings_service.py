@@ -1,11 +1,12 @@
 import json
-import logging
 from pathlib import Path
+
+import structlog
 
 from app.config import settings
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class SupportSettingsService:
@@ -20,7 +21,7 @@ class SupportSettingsService:
         try:
             cls._storage_path.parent.mkdir(parents=True, exist_ok=True)
         except Exception as e:
-            logger.error(f'Failed to ensure settings dir: {e}')
+            logger.error('Failed to ensure settings dir', error=e)
 
     @classmethod
     def _load(cls) -> None:
@@ -33,7 +34,7 @@ class SupportSettingsService:
             else:
                 cls._data = {}
         except Exception as e:
-            logger.error(f'Failed to load support settings: {e}')
+            logger.error('Failed to load support settings', error=e)
             cls._data = {}
         cls._loaded = True
 
@@ -44,7 +45,7 @@ class SupportSettingsService:
             cls._storage_path.write_text(json.dumps(cls._data, ensure_ascii=False, indent=2), encoding='utf-8')
             return True
         except Exception as e:
-            logger.error(f'Failed to save support settings: {e}')
+            logger.error('Failed to save support settings', error=e)
             return False
 
     # Mode

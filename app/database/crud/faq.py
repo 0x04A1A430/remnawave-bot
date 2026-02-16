@@ -1,14 +1,14 @@
-import logging
 from collections.abc import Iterable
 from datetime import datetime
 
+import structlog
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import FaqPage, FaqSetting
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def get_faq_setting(db: AsyncSession, language: str) -> FaqSetting | None:
@@ -94,7 +94,7 @@ async def create_faq_page(
     await db.commit()
     await db.refresh(page)
 
-    logger.info('✅ Создана страница FAQ %s для языка %s', page.id, language)
+    logger.info('✅ Создана страница FAQ для языка', page_id=page.id, language=language)
 
     return page
 
@@ -122,7 +122,7 @@ async def update_faq_page(
     await db.commit()
     await db.refresh(page)
 
-    logger.info('✅ Страница FAQ %s обновлена', page.id)
+    logger.info('✅ Страница FAQ обновлена', page_id=page.id)
 
     return page
 
@@ -130,7 +130,7 @@ async def update_faq_page(
 async def delete_faq_page(db: AsyncSession, page_id: int) -> None:
     await db.execute(delete(FaqPage).where(FaqPage.id == page_id))
     await db.commit()
-    logger.info('🗑️ Страница FAQ %s удалена', page_id)
+    logger.info('🗑️ Страница FAQ удалена', page_id=page_id)
 
 
 async def bulk_update_order(

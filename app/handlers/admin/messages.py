@@ -1,8 +1,8 @@
 import asyncio
 import html
-import logging
 from datetime import datetime, timedelta
 
+import structlog
 from aiogram import Dispatcher, F, types
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError, TelegramRetryAfter
 from aiogram.fsm.context import FSMContext
@@ -48,7 +48,7 @@ from app.utils.decorators import admin_required, error_handler
 from app.utils.miniapp_buttons import BUTTON_KEY_TO_CABINET_PATH, build_miniapp_or_callback_button
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def safe_edit_or_send_text(callback: types.CallbackQuery, text: str, reply_markup=None, parse_mode: str = 'HTML'):
@@ -158,8 +158,7 @@ async def _persist_broadcast_result(
                 broadcast_history = await session.get(BroadcastHistory, broadcast_id)
                 if not broadcast_history:
                     logger.critical(
-                        'Не удалось найти запись BroadcastHistory #%s для записи результатов',
-                        broadcast_id,
+                        'Не удалось найти запись BroadcastHistory # для записи результатов', broadcast_id=broadcast_id
                     )
                     return
 
@@ -170,35 +169,35 @@ async def _persist_broadcast_result(
                 await session.commit()
 
                 logger.info(
-                    'Результаты рассылки сохранены (id=%s, sent=%d, failed=%d, status=%s)',
-                    broadcast_id,
-                    sent_count,
-                    failed_count,
-                    status,
+                    'Результаты рассылки сохранены (id sent failed status=)',
+                    broadcast_id=broadcast_id,
+                    sent_count=sent_count,
+                    failed_count=failed_count,
+                    status=status,
                 )
                 return
 
         except InterfaceError as error:
             logger.warning(
-                'Ошибка соединения при сохранении результатов рассылки (попытка %d/%d): %s',
-                attempt,
-                max_retries,
-                error,
+                'Ошибка соединения при сохранении результатов рассылки (попытка /)',
+                attempt=attempt,
+                max_retries=max_retries,
+                error=error,
             )
             if attempt < max_retries:
                 await asyncio.sleep(retry_delay)
                 retry_delay *= 2
             else:
                 logger.critical(
-                    'Не удалось сохранить результаты рассылки после %d попыток (id=%s)',
-                    max_retries,
-                    broadcast_id,
+                    'Не удалось сохранить результаты рассылки после попыток (id=)',
+                    max_retries=max_retries,
+                    broadcast_id=broadcast_id,
                 )
 
         except Exception as error:
             logger.critical(
-                'Неожиданная ошибка при сохранении результатов рассылки (id=%s)',
-                broadcast_id,
+                'Неожиданная ошибка при сохранении результатов рассылки (id=)',
+                broadcast_id=broadcast_id,
                 exc_info=error,
             )
             return
@@ -1268,11 +1267,11 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
                 wait_seconds = e.retry_after + 1
                 flood_wait_until = asyncio.get_event_loop().time() + wait_seconds
                 logger.warning(
-                    'FloodWait: Telegram просит подождать %d сек (пользователь %d, попытка %d/%d)',
-                    e.retry_after,
-                    telegram_id,
-                    attempt + 1,
-                    _MAX_SEND_RETRIES,
+                    'FloodWait: Telegram просит подождать сек (пользователь , попытка /)',
+                    retry_after=e.retry_after,
+                    telegram_id=telegram_id,
+                    attempt=attempt + 1,
+                    MAX_SEND_RETRIES=_MAX_SEND_RETRIES,
                 )
                 await asyncio.sleep(wait_seconds)
 
@@ -1280,16 +1279,16 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
                 return False
 
             except TelegramBadRequest as e:
-                logger.debug('BadRequest при рассылке пользователю %d: %s', telegram_id, e)
+                logger.debug('BadRequest при рассылке пользователю', telegram_id=telegram_id, e=e)
                 return False
 
             except Exception as e:
                 logger.error(
-                    'Ошибка отправки пользователю %d (попытка %d/%d): %s',
-                    telegram_id,
-                    attempt + 1,
-                    _MAX_SEND_RETRIES,
-                    e,
+                    'Ошибка отправки пользователю (попытка /)',
+                    telegram_id=telegram_id,
+                    attempt=attempt + 1,
+                    MAX_SEND_RETRIES=_MAX_SEND_RETRIES,
+                    e=e,
                 )
                 if attempt < _MAX_SEND_RETRIES - 1:
                     await asyncio.sleep(0.5 * (attempt + 1))
@@ -1341,7 +1340,7 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
             await progress_message.edit_text(text, parse_mode='HTML')
         except TelegramRetryAfter as e:
             # Не паникуем — пропускаем обновление прогресса
-            logger.debug('FloodWait при обновлении прогресса, пропускаем: %d сек', e.retry_after)
+            logger.debug('FloodWait при обновлении прогресса, пропускаем: сек', retry_after=e.retry_after)
         except TelegramBadRequest:
             # Сообщение удалено или контент не изменился — отправляем новое
             try:
@@ -1378,7 +1377,7 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
                     failed_count += 1
             elif isinstance(result, Exception):
                 failed_count += 1
-                logger.error('Необработанное исключение в рассылке: %s', result)
+                logger.error('Необработанное исключение в рассылке', result=result)
 
         # Обновляем прогресс каждые _PROGRESS_UPDATE_INTERVAL батчей
         if batch_idx % _PROGRESS_UPDATE_INTERVAL == 0:
@@ -1390,7 +1389,7 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
     # Учитываем пропущенных email-only пользователей
     skipped_email_users = total_users_count - total_recipients
     if skipped_email_users > 0:
-        logger.info('Пропущено %d email-only пользователей при рассылке', skipped_email_users)
+        logger.info('Пропущено email-only пользователей при рассылке', skipped_email_users=skipped_email_users)
 
     status = 'completed' if failed_count == 0 else 'partial'
 
@@ -1439,12 +1438,12 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
 
     await state.clear()
     logger.info(
-        'Рассылка завершена админом %s: sent=%d, failed=%d, total=%d (медиа: %s)',
-        admin_telegram_id,
-        sent_count,
-        failed_count,
-        total_users_count,
-        has_media,
+        'Рассылка завершена админом : sent failed total= (медиа:)',
+        admin_telegram_id=admin_telegram_id,
+        sent_count=sent_count,
+        failed_count=failed_count,
+        total_users_count=total_users_count,
+        has_media=has_media,
     )
 
 

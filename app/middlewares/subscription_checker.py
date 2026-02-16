@@ -1,15 +1,15 @@
-import logging
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta
 from typing import Any
 
+import structlog
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject
 
 from app.database.models import SubscriptionStatus
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Буфер времени перед деактивацией (защита от race condition при продлении)
 EXPIRATION_BUFFER_MINUTES = 5
@@ -55,18 +55,22 @@ class SubscriptionStatusMiddleware(BaseMiddleware):
                         await db.commit()
 
                         logger.warning(
-                            f'⏰ Middleware DEACTIVATION: подписка {subscription.id} '
-                            f'(user_id={user.id}) деактивирована. '
-                            f'end_date={subscription.end_date}, просрочена на {time_since_expiry}'
+                            '⏰ Middleware DEACTIVATION: подписка (user_id=) деактивирована. end_date=, просрочена на',
+                            subscription_id=subscription.id,
+                            user_id=user.id,
+                            end_date=subscription.end_date,
+                            time_since_expiry=time_since_expiry,
                         )
                     else:
                         # Подписка только что истекла - не деактивируем сразу (может быть продление)
                         logger.debug(
-                            f'⏰ Middleware: подписка пользователя {user.id} истекла недавно '
-                            f'({time_since_expiry}), ждём буфер {EXPIRATION_BUFFER_MINUTES} мин'
+                            '⏰ Middleware: подписка пользователя истекла недавно ждём буфер мин',
+                            user_id=user.id,
+                            time_since_expiry=time_since_expiry,
+                            EXPIRATION_BUFFER_MINUTES=EXPIRATION_BUFFER_MINUTES,
                         )
 
             except Exception as e:
-                logger.error(f'Ошибка проверки статуса подписки: {e}')
+                logger.error('Ошибка проверки статуса подписки', error=e)
 
         return await handler(event, data)

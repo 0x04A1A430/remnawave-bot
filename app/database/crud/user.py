@@ -1,8 +1,8 @@
-import logging
 import secrets
 import string
 from datetime import UTC, datetime, timedelta
 
+import structlog
 from sqlalchemy import and_, case, func, nullslast, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,7 +25,7 @@ from app.database.models import (
 from app.utils.validators import sanitize_telegram_name
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 def _normalize_language_code(language: str | None, fallback: str = 'ru') -> str:
@@ -269,7 +269,11 @@ async def create_user_no_commit(
     user.promo_group = default_group
 
     # Не коммитим сразу, оставляем для пакетной обработки
-    logger.info(f'✅ Подготовлен пользователь {telegram_id} с реферальным кодом {referral_code} (ожидает коммита)')
+    logger.info(
+        '✅ Подготовлен пользователь с реферальным кодом (ожидает коммита)',
+        telegram_id=telegram_id,
+        referral_code=referral_code,
+    )
     return user
 
 
@@ -316,7 +320,9 @@ async def create_user(
             await db.refresh(user)
 
             user.promo_group = default_group
-            logger.info(f'✅ Создан пользователь {telegram_id} с реферальным кодом {referral_code}')
+            logger.info(
+                '✅ Создан пользователь с реферальным кодом', telegram_id=telegram_id, referral_code=referral_code
+            )
 
             # Отправляем событие о создании пользователя
             try:
@@ -336,7 +342,7 @@ async def create_user(
                     db=db,
                 )
             except Exception as error:
-                logger.warning('Failed to emit user.created event: %s', error)
+                logger.warning('Failed to emit user.created event', error=error)
 
             return user
 
@@ -349,11 +355,10 @@ async def create_user(
                 and attempt < attempts
             ):
                 logger.warning(
-                    '⚠️ Обнаружено несоответствие последовательности users_id_seq при создании пользователя %s. '
-                    'Выполняем повторную синхронизацию (попытка %s/%s)',
-                    telegram_id,
-                    attempt,
-                    attempts,
+                    '⚠️ Обнаружено несоответствие последовательности users_id_seq при создании пользователя . Выполняем повторную синхронизацию (попытка /)',
+                    telegram_id=telegram_id,
+                    attempt=attempt,
+                    attempts=attempts,
                 )
                 await _sync_users_sequence(db)
                 continue
@@ -413,7 +418,11 @@ async def add_user_balance(
 
         user_id_display = user.telegram_id or user.email or f'#{user.id}'
         logger.info(
-            f'💰 Баланс пользователя {user_id_display} изменен: {old_balance} → {user.balance_kopeks} (изменение: +{amount_kopeks})'
+            '💰 Баланс пользователя изменен: → (изменение: +)',
+            user_id_display=user_id_display,
+            old_balance=old_balance,
+            balance_kopeks=user.balance_kopeks,
+            amount_kopeks=amount_kopeks,
         )
 
         # Автоматическое возобновление приостановленной суточной подписки
@@ -436,8 +445,9 @@ async def add_user_balance(
                         if daily_price > 0 and user.balance_kopeks >= daily_price:
                             await resume_daily_subscription(db, subscription)
                             logger.info(
-                                f'✅ Автоматически возобновлена суточная подписка {subscription.id} '
-                                f'после пополнения баланса (user_id={user.id})'
+                                '✅ Автоматически возобновлена суточная подписка после пополнения баланса (user_id=)',
+                                subscription_id=subscription.id,
+                                user_id=user.id,
                             )
                             # Синхронизируем с RemnaWave
                             try:
@@ -446,14 +456,14 @@ async def add_user_balance(
                                 subscription_service = SubscriptionService()
                                 await subscription_service.update_remnawave_user(db, subscription)
                             except Exception as sync_err:
-                                logger.warning(f'Не удалось синхронизировать с RemnaWave: {sync_err}')
+                                logger.warning('Не удалось синхронизировать с RemnaWave', sync_err=sync_err)
         except Exception as resume_err:
-            logger.warning(f'Ошибка при попытке возобновить суточную подписку: {resume_err}')
+            logger.warning('Ошибка при попытке возобновить суточную подписку', resume_err=resume_err)
 
         return True
 
     except Exception as e:
-        logger.error(f'Ошибка изменения баланса пользователя {user.id}: {e}')
+        logger.error('Ошибка изменения баланса пользователя', user_id=user.id, error=e)
         await db.rollback()
         return False
 
@@ -469,7 +479,7 @@ async def add_user_balance_by_id(
     try:
         user = await get_user_by_telegram_id(db, telegram_id)
         if not user:
-            logger.error(f'Пользователь с telegram_id {telegram_id} не найден')
+            logger.error('Пользователь с telegram_id не найден', telegram_id=telegram_id)
             return False
 
         return await add_user_balance(
@@ -482,7 +492,7 @@ async def add_user_balance_by_id(
         )
 
     except Exception as e:
-        logger.error(f'Ошибка пополнения баланса пользователя {telegram_id}: {e}')
+        logger.error('Ошибка пополнения баланса пользователя', telegram_id=telegram_id, error=e)
         return False
 
 
@@ -498,10 +508,10 @@ async def subtract_user_balance(
 ) -> bool:
     user_id_display = user.telegram_id or user.email or f'#{user.id}'
     logger.info('💸 ОТЛАДКА subtract_user_balance:')
-    logger.info(f'   👤 User ID: {user.id} (ID: {user_id_display})')
-    logger.info(f'   💰 Баланс до списания: {user.balance_kopeks} копеек')
-    logger.info(f'   💸 Сумма к списанию: {amount_kopeks} копеек')
-    logger.info(f'   📝 Описание: {description}')
+    logger.info('👤 User ID: (ID: )', user_id=user.id, user_id_display=user_id_display)
+    logger.info('💰 Баланс до списания: копеек', balance_kopeks=user.balance_kopeks)
+    logger.info('💸 Сумма к списанию: копеек', amount_kopeks=amount_kopeks)
+    logger.info('📝 Описание', description=description)
 
     # Lock the user row to prevent concurrent balance race conditions
     locked_result = await db.execute(select(User).where(User.id == user.id).with_for_update())
@@ -531,9 +541,7 @@ async def subtract_user_balance(
                 offer = await get_latest_claimed_offer_for_user(db, user.id, source)
             except Exception as lookup_error:  # pragma: no cover - defensive logging
                 logger.warning(
-                    'Failed to fetch latest claimed promo offer for user %s: %s',
-                    user.id,
-                    lookup_error,
+                    'Failed to fetch latest claimed promo offer for user', user_id=user.id, lookup_error=lookup_error
                 )
                 offer = None
 
@@ -592,23 +600,21 @@ async def subtract_user_balance(
                 )
             except Exception as log_error:  # pragma: no cover - defensive logging
                 logger.warning(
-                    'Failed to record promo offer consumption log for user %s: %s',
-                    user.id,
-                    log_error,
+                    'Failed to record promo offer consumption log for user', user_id=user.id, log_error=log_error
                 )
                 try:
                     await db.rollback()
                 except Exception as rollback_error:  # pragma: no cover - defensive logging
                     logger.warning(
-                        'Failed to rollback session after promo offer consumption log failure: %s',
-                        rollback_error,
+                        'Failed to rollback session after promo offer consumption log failure',
+                        rollback_error=rollback_error,
                     )
 
-        logger.info(f'   ✅ Средства списаны: {old_balance} → {user.balance_kopeks}')
+        logger.info('✅ Средства списаны: →', old_balance=old_balance, balance_kopeks=user.balance_kopeks)
         return True
 
     except Exception as e:
-        logger.error(f'   ❌ ОШИБКА СПИСАНИЯ: {e}')
+        logger.error('❌ ОШИБКА СПИСАНИЯ', error=e)
         await db.rollback()
         return False
 
@@ -643,9 +649,9 @@ async def cleanup_expired_promo_offer_discounts(db: AsyncSession) -> int:
                 offer = await get_latest_claimed_offer_for_user(db, user.id, source)
             except Exception as lookup_error:  # pragma: no cover - defensive logging
                 logger.warning(
-                    'Failed to fetch latest claimed promo offer for user %s during expiration cleanup: %s',
-                    user.id,
-                    lookup_error,
+                    'Failed to fetch latest claimed promo offer for user during expiration cleanup',
+                    user_id=user.id,
+                    lookup_error=lookup_error,
                 )
                 offer = None
 
@@ -688,17 +694,12 @@ async def cleanup_expired_promo_offer_discounts(db: AsyncSession) -> int:
                 details={'reason': 'offer_expired'},
             )
         except Exception as log_error:  # pragma: no cover - defensive logging
-            logger.warning(
-                'Failed to log promo offer expiration for user %s: %s',
-                user_id,
-                log_error,
-            )
+            logger.warning('Failed to log promo offer expiration for user', user_id=user_id, log_error=log_error)
             try:
                 await db.rollback()
             except Exception as rollback_error:  # pragma: no cover - defensive logging
                 logger.warning(
-                    'Failed to rollback session after promo offer expiration log failure: %s',
-                    rollback_error,
+                    'Failed to rollback session after promo offer expiration log failure', rollback_error=rollback_error
                 )
 
     return len(users)
@@ -944,7 +945,7 @@ async def get_users_for_promo_segment(db: AsyncSession, segment: str) -> list[Us
                 ),
             )
         else:
-            logger.warning('Неизвестный сегмент для промо: %s', segment)
+            logger.warning('Неизвестный сегмент для промо', segment=segment)
             return []
 
     result = await db.execute(query.order_by(User.id))
@@ -989,7 +990,7 @@ async def delete_user(db: AsyncSession, user: User) -> bool:
 
     await db.commit()
     user_id_display = user.telegram_id or user.email or f'#{user.id}'
-    logger.info(f'🗑️ Пользователь {user_id_display} помечен как удаленный')
+    logger.info('🗑️ Пользователь помечен как удаленный', user_id_display=user_id_display)
     return True
 
 
@@ -1104,7 +1105,7 @@ async def create_user_by_email(
     await db.refresh(user)
 
     user.promo_group = default_group
-    logger.info(f'✅ Создан email-пользователь {email} с id={user.id}')
+    logger.info('✅ Создан email-пользователь с id', email=email, user_id=user.id)
 
     # Emit event
     try:
@@ -1123,7 +1124,7 @@ async def create_user_by_email(
             db=db,
         )
     except Exception as error:
-        logger.warning('Failed to emit user.created event: %s', error)
+        logger.warning('Failed to emit user.created event', error=error)
 
     return user
 
@@ -1181,7 +1182,7 @@ async def set_email_change_pending(
     await db.commit()
     await db.refresh(user)
 
-    logger.info(f'Email change pending for user {user.id}: {user.email} -> {new_email}')
+    logger.info('Email change pending for user', user_id=user.id, email=user.email, new_email=new_email)
     return user
 
 
@@ -1235,7 +1236,7 @@ async def verify_and_apply_email_change(db: AsyncSession, user: User, code: str)
     await db.commit()
     await db.refresh(user)
 
-    logger.info(f'Email changed for user {user.id}: {old_email} -> {new_email}')
+    logger.info('Email changed for user', user_id=user.id, old_email=old_email, new_email=new_email)
     return True, 'Email changed successfully'
 
 
@@ -1253,7 +1254,7 @@ async def clear_email_change_pending(db: AsyncSession, user: User) -> None:
     user.updated_at = datetime.utcnow()
 
     await db.commit()
-    logger.info(f'Email change cancelled for user {user.id}')
+    logger.info('Email change cancelled for user', user_id=user.id)
 
 
 # --- OAuth provider functions ---
@@ -1286,7 +1287,7 @@ async def set_user_oauth_provider_id(db: AsyncSession, user: User, provider: str
     value: str | int = int(provider_id) if provider == 'vk' else provider_id
     setattr(user, column_name, value)
     user.updated_at = datetime.now(UTC).replace(tzinfo=None)
-    logger.info(f'Linked {provider} (id={provider_id}) to user {user.id}')
+    logger.info('Linked (id=) to user', provider=provider, provider_id=provider_id, user_id=user.id)
 
 
 async def create_user_by_oauth(
@@ -1332,7 +1333,9 @@ async def create_user_by_oauth(
     await db.refresh(user)
 
     user.promo_group = default_group
-    logger.info(f'Created OAuth user via {provider} (provider_id={provider_id}) with id={user.id}')
+    logger.info(
+        'Created OAuth user via (provider_id=) with id', provider=provider, provider_id=provider_id, user_id=user.id
+    )
 
     try:
         from app.services.event_emitter import event_emitter
@@ -1349,6 +1352,6 @@ async def create_user_by_oauth(
             db=db,
         )
     except Exception as error:
-        logger.warning('Failed to emit user.created event: %s', error)
+        logger.warning('Failed to emit user.created event', error=error)
 
     return user

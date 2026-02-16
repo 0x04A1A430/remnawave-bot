@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 
+import structlog
 import uvicorn
 
 from app.config import settings
@@ -10,7 +10,7 @@ from app.config import settings
 from .app import create_web_api_app
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class WebAPIServer:
@@ -76,13 +76,11 @@ class WebAPIServer:
             try:
                 await self._server.serve()
             except Exception as error:  # pragma: no cover - логируем ошибки сервера
-                logger.exception('❌ Ошибка работы веб-API: %s', error)
+                logger.exception('❌ Ошибка работы веб-API', error=error)
                 raise
 
         logger.info(
-            '🌐 Запуск административного API на %s:%s',
-            settings.WEB_API_HOST,
-            settings.WEB_API_PORT,
+            '🌐 Запуск административного API на', WEB_API_HOST=settings.WEB_API_HOST, WEB_API_PORT=settings.WEB_API_PORT
         )
         self._task = asyncio.create_task(_serve(), name='web-api-server')
 

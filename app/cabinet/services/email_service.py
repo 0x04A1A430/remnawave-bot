@@ -1,14 +1,15 @@
 """Email service for sending verification and password reset emails."""
 
-import logging
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
+import structlog
+
 from app.config import settings
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class EmailService:
@@ -41,7 +42,7 @@ class EmailService:
             if smtp.has_extn('auth'):
                 smtp.login(self.user, self.password)
             else:
-                logger.debug(f'SMTP server {self.host} does not support AUTH, skipping authentication')
+                logger.debug('SMTP server does not support AUTH, skipping authentication', host=self.host)
 
         return smtp
 
@@ -94,11 +95,11 @@ class EmailService:
             with self._get_smtp_connection() as smtp:
                 smtp.sendmail(self.from_email, to_email, msg.as_string())
 
-            logger.info(f'Email sent successfully to {to_email}')
+            logger.info('Email sent successfully to', to_email=to_email)
             return True
 
         except Exception as e:
-            logger.error(f'Failed to send email to {to_email}: {e}')
+            logger.error('Failed to send email to', to_email=to_email, error=e)
             return False
 
     def send_verification_email(

@@ -1,5 +1,4 @@
-import logging
-
+import structlog
 from aiogram import Dispatcher, F, types
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,7 +17,7 @@ from app.services.reporting_service import (
 from app.utils.decorators import admin_required, error_handler
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @admin_required
@@ -74,11 +73,11 @@ async def _send_report(
     try:
         report_text = await reporting_service.send_report(period, send_to_topic=True)
     except ReportingServiceError as exc:
-        logger.warning('Не удалось отправить отчет: %s', exc)
+        logger.warning('Не удалось отправить отчет', exc=exc)
         await callback.answer(str(exc), show_alert=True)
         return
     except Exception as exc:
-        logger.error('Непредвиденная ошибка при отправке отчета: %s', exc)
+        logger.error('Непредвиденная ошибка при отправке отчета', exc=exc)
         await callback.answer('Не удалось отправить отчет. Попробуйте позже.', show_alert=True)
         return
 
@@ -101,7 +100,7 @@ async def close_report_message(
     try:
         await callback.message.delete()
     except (TelegramBadRequest, TelegramForbiddenError) as exc:
-        logger.warning('Не удалось закрыть сообщение отчета: %s', exc)
+        logger.warning('Не удалось закрыть сообщение отчета', exc=exc)
         await callback.answer(texts.t('REPORT_CLOSE_ERROR', 'Не удалось закрыть отчет.'), show_alert=True)
         return
 

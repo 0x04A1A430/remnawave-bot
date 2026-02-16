@@ -1,7 +1,6 @@
 """Admin routes for managing tariffs in cabinet."""
 
-import logging
-
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -38,7 +37,7 @@ from ..schemas.tariffs import (
 )
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/admin/tariffs', tags=['Cabinet Admin Tariffs'])
 
@@ -169,7 +168,7 @@ async def update_tariff_order(
     await reorder_tariffs(db, request.tariff_ids)
     await db.commit()
 
-    logger.info(f'Admin {admin.id} updated tariff order: {request.tariff_ids}')
+    logger.info('Admin updated tariff order', admin_id=admin.id, tariff_ids=request.tariff_ids)
 
     return {'message': 'Tariff order updated successfully'}
 
@@ -295,7 +294,7 @@ async def create_new_tariff(
         traffic_reset_mode=request.traffic_reset_mode,
     )
 
-    logger.info(f'Admin {admin.id} created tariff {tariff.id}: {tariff.name}')
+    logger.info('Admin created tariff', admin_id=admin.id, tariff_id=tariff.id, tariff_name=tariff.name)
 
     # Перезагружаем периоды из БД для синхронизации с ботом
     await load_period_prices_from_db(db)
@@ -390,7 +389,7 @@ async def update_existing_tariff(
     if request.promo_group_ids is not None:
         await set_tariff_promo_groups(db, tariff, request.promo_group_ids)
 
-    logger.info(f'Admin {admin.id} updated tariff {tariff_id}')
+    logger.info('Admin updated tariff', admin_id=admin.id, tariff_id=tariff_id)
 
     # Перезагружаем периоды из БД для синхронизации с ботом
     await load_period_prices_from_db(db)
@@ -414,7 +413,13 @@ async def delete_existing_tariff(
 
     subs_count = await get_tariff_subscriptions_count(db, tariff_id)
     await delete_tariff(db, tariff)
-    logger.info(f'Admin {admin.id} deleted tariff {tariff_id}: {tariff.name} (affected subscriptions: {subs_count})')
+    logger.info(
+        'Admin deleted tariff (affected subscriptions: )',
+        admin_id=admin.id,
+        tariff_id=tariff_id,
+        tariff_name=tariff.name,
+        subs_count=subs_count,
+    )
 
     # Перезагружаем периоды из БД для синхронизации с ботом
     await load_period_prices_from_db(db)
@@ -440,7 +445,7 @@ async def toggle_tariff(
     await update_tariff(db, tariff, is_active=new_status)
 
     status_text = 'activated' if new_status else 'deactivated'
-    logger.info(f'Admin {admin.id} {status_text} tariff {tariff_id}')
+    logger.info('Admin tariff', admin_id=admin.id, status_text=status_text, tariff_id=tariff_id)
 
     # Перезагружаем периоды из БД для синхронизации с ботом
     await load_period_prices_from_db(db)
@@ -483,7 +488,7 @@ async def toggle_trial_tariff(
     await update_tariff(db, tariff, is_trial_available=new_status)
 
     status_text = 'set as trial' if new_status else 'removed from trial'
-    logger.info(f'Admin {admin.id} {status_text} tariff {tariff_id}')
+    logger.info('Admin tariff', admin_id=admin.id, status_text=status_text, tariff_id=tariff_id)
 
     return TariffTrialResponse(
         id=tariff_id,

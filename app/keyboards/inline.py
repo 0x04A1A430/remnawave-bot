@@ -1,6 +1,6 @@
-import logging
 from datetime import UTC, datetime
 
+import structlog
 from aiogram import types
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,7 +21,7 @@ from app.utils.subscription_utils import (
 )
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def get_main_menu_keyboard_async(
@@ -110,7 +110,7 @@ async def get_main_menu_keyboard_async(
                     referral_count = referral_data.get('invited_count', 0)
                     referral_earnings_kopeks = referral_data.get('total_earned_kopeks', 0)
         except Exception as e:
-            logger.error(f'Error getting referral data: {e}')
+            logger.error('Error getting referral data', error=e)
 
         context = MenuContext(
             language=language,
@@ -524,8 +524,14 @@ def get_main_menu_keyboard(
         )
 
     if settings.DEBUG:
-        print(
-            f'DEBUG KEYBOARD: language={language}, is_admin={is_admin}, has_had_paid={has_had_paid_subscription}, has_active={has_active_subscription}, sub_active={subscription_is_active}, balance={balance_kopeks}'
+        logger.debug(
+            'DEBUG KEYBOARD',
+            language=language,
+            is_admin=is_admin,
+            has_had_paid=has_had_paid_subscription,
+            has_active=has_active_subscription,
+            sub_active=subscription_is_active,
+            balance=balance_kopeks,
         )
 
     safe_balance = balance_kopeks or 0
@@ -704,14 +710,14 @@ def get_main_menu_keyboard(
         keyboard.append(row)
 
     if settings.DEBUG:
-        print(f'DEBUG KEYBOARD: is_admin={is_admin}, добавляем админ кнопку: {is_admin}')
+        logger.debug('DEBUG KEYBOARD: админ кнопка', is_admin=is_admin)
 
     if is_admin:
         if settings.DEBUG:
-            print('DEBUG KEYBOARD: Админ кнопка ДОБАВЛЕНА!')
+            logger.debug('DEBUG KEYBOARD: Админ кнопка ДОБАВЛЕНА')
         keyboard.append([InlineKeyboardButton(text=texts.MENU_ADMIN, callback_data='admin_panel')])
     elif settings.DEBUG:
-        print('DEBUG KEYBOARD: Админ кнопка НЕ добавлена')
+        logger.debug('DEBUG KEYBOARD: Админ кнопка НЕ добавлена')
     # Moderator access (limited support panel)
     if (not is_admin) and is_moderator:
         keyboard.append([InlineKeyboardButton(text='🧑‍⚖️ Модерация', callback_data='moderator_panel')])
@@ -1286,28 +1292,24 @@ def get_subscription_period_keyboard(
 
 
 def get_traffic_packages_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
-    import logging
-
-    logger = logging.getLogger(__name__)
-
     from app.config import settings
 
     if settings.is_traffic_topup_blocked():
         return get_back_keyboard(language)
 
-    logger.info(f"🔍 RAW CONFIG: '{settings.TRAFFIC_PACKAGES_CONFIG}'")
+    logger.info('🔍 RAW CONFIG', TRAFFIC_PACKAGES_CONFIG=settings.TRAFFIC_PACKAGES_CONFIG)
 
     all_packages = settings.get_traffic_packages()
-    logger.info(f'🔍 ALL PACKAGES: {all_packages}')
+    logger.info('🔍 ALL PACKAGES', all_packages=all_packages)
 
     enabled_packages = [pkg for pkg in all_packages if pkg['enabled']]
     disabled_packages = [pkg for pkg in all_packages if not pkg['enabled']]
 
-    logger.info(f'🔍 ENABLED: {len(enabled_packages)} packages')
-    logger.info(f'🔍 DISABLED: {len(disabled_packages)} packages')
+    logger.info('🔍 ENABLED: packages', enabled_packages_count=len(enabled_packages))
+    logger.info('🔍 DISABLED: packages', disabled_packages_count=len(disabled_packages))
 
     for pkg in disabled_packages:
-        logger.info(f'🔍 DISABLED PACKAGE: {pkg["gb"]}GB = {pkg["price"]} kopeks, enabled={pkg["enabled"]}')
+        logger.info('🔍 DISABLED PACKAGE: kopeks, enabled', pkg=pkg['gb'], pkg_2=pkg['price'], pkg_3=pkg['enabled'])
 
     texts = get_texts(language)
     keyboard = []
@@ -2203,7 +2205,9 @@ def get_manage_countries_keyboard(
     if subscription_end_date:
         months_multiplier = get_remaining_months(subscription_end_date)
         logger.info(
-            f'🔍 Расчет для управления странами: осталось {months_multiplier} месяцев до {subscription_end_date}'
+            '🔍 Расчет для управления странами: осталось месяцев до',
+            months_multiplier=months_multiplier,
+            subscription_end_date=subscription_end_date,
         )
 
     buttons = []
@@ -2238,12 +2242,12 @@ def get_manage_countries_keyboard(
             if months_multiplier > 1:
                 price_text = f' ({discounted_per_month // 100}₽/мес × {months_multiplier} = {total_price // 100}₽)'
                 logger.info(
-                    '🔍 Сервер %s: %.2f₽/мес × %s мес = %.2f₽ (скидка %.2f₽)',
-                    name,
-                    discounted_per_month / 100,
-                    months_multiplier,
-                    total_price / 100,
-                    (discount_per_month * months_multiplier) / 100,
+                    '🔍 Сервер : ₽/мес × мес = ₽ (скидка ₽)',
+                    name=name,
+                    discounted_per_month=discounted_per_month / 100,
+                    months_multiplier=months_multiplier,
+                    total_price=total_price / 100,
+                    discount_per_month=(discount_per_month * months_multiplier) / 100,
                 )
             else:
                 price_text = f' ({total_price // 100}₽)'
@@ -2257,7 +2261,7 @@ def get_manage_countries_keyboard(
 
     if total_cost > 0:
         apply_text = f'✅ Применить изменения ({total_cost // 100} ₽)'
-        logger.info(f'🔍 Общая стоимость новых серверов: {total_cost / 100}₽')
+        logger.info('🔍 Общая стоимость новых серверов: ₽', total_cost=total_cost / 100)
     else:
         apply_text = '✅ Применить изменения'
 

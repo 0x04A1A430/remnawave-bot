@@ -1,9 +1,9 @@
 """Admin routes for managing VPN applications in app-config.json."""
 
 import json
-import logging
 from pathlib import Path
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,7 +16,7 @@ from app.services.system_settings_service import bot_configuration_service
 from ..dependencies import get_cabinet_db, get_current_admin_user
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/admin/apps', tags=['Cabinet Admin Apps'])
 
@@ -231,7 +231,7 @@ async def create_app(
     config['platforms'] = platforms
 
     _save_config(config)
-    logger.info(f"Admin {admin.id} created app '{request.app.id}' for platform '{platform}'")
+    logger.info('Admin created app for platform', admin_id=admin.id, app_id=request.app.id, platform=platform)
 
     return request.app
 
@@ -274,7 +274,7 @@ async def update_app(
     config['platforms'] = platforms
 
     _save_config(config)
-    logger.info(f"Admin {admin.id} updated app '{app_id}' in platform '{platform}'")
+    logger.info('Admin updated app in platform', admin_id=admin.id, app_id=app_id, platform=platform)
 
     return request.app
 
@@ -310,7 +310,7 @@ async def delete_app(
     config['platforms'] = platforms
 
     _save_config(config)
-    logger.info(f"Admin {admin.id} deleted app '{app_id}' from platform '{platform}'")
+    logger.info('Admin deleted app from platform', admin_id=admin.id, app_id=app_id, platform=platform)
 
     return {'status': 'deleted', 'app_id': app_id}
 
@@ -355,7 +355,7 @@ async def reorder_apps(
     config['platforms'] = platforms
 
     _save_config(config)
-    logger.info(f"Admin {admin.id} reordered apps in platform '{platform}'")
+    logger.info('Admin reordered apps in platform', admin_id=admin.id, platform=platform)
 
     return {'status': 'reordered', 'order': request.app_ids}
 
@@ -374,7 +374,7 @@ async def update_branding(
     config['config']['branding'] = request.branding.model_dump()
 
     _save_config(config)
-    logger.info(f'Admin {admin.id} updated branding')
+    logger.info('Admin updated branding', admin_id=admin.id)
 
     return request.branding
 
@@ -434,7 +434,14 @@ async def copy_app_to_platform(
     config['platforms'] = platforms
 
     _save_config(config)
-    logger.info(f"Admin {admin.id} copied app '{app_id}' from '{platform}' to '{target_platform}' as '{new_id}'")
+    logger.info(
+        'Admin copied app from to as',
+        admin_id=admin.id,
+        app_id=app_id,
+        platform=platform,
+        target_platform=target_platform,
+        new_id=new_id,
+    )
 
     return {'status': 'copied', 'new_id': new_id, 'target_platform': target_platform}
 
@@ -498,9 +505,9 @@ async def set_remnawave_config_uuid(
     try:
         await bot_configuration_service.set_value(db, 'CABINET_REMNA_SUB_CONFIG', uuid_value)
         await db.commit()
-        logger.info(f"Admin {admin.id} updated CABINET_REMNA_SUB_CONFIG to '{uuid_value}'")
+        logger.info('Admin updated CABINET_REMNA_SUB_CONFIG to', admin_id=admin.id, uuid_value=uuid_value)
     except Exception as e:
-        logger.error(f'Error saving RemnaWave config UUID: {e}')
+        logger.error('Error saving RemnaWave config UUID', error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Failed to save configuration',
@@ -547,7 +554,7 @@ async def get_remnawave_subscription_config(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f'Error fetching RemnaWave config: {e}')
+        logger.error('Error fetching RemnaWave config', error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f'Failed to fetch config from RemnaWave: {e!s}',
@@ -572,7 +579,7 @@ async def list_remnawave_subscription_configs(
                 for c in configs
             ]
     except Exception as e:
-        logger.error(f'Error listing RemnaWave configs: {e}')
+        logger.error('Error listing RemnaWave configs', error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f'Failed to fetch configs from RemnaWave: {e!s}',

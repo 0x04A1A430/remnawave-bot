@@ -1,5 +1,4 @@
-import logging
-
+import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -16,7 +15,7 @@ from app.database.crud.faq import (
 from app.database.models import FaqPage, FaqSetting
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class FaqService:

@@ -1,11 +1,11 @@
 import asyncio
-import logging
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time as datetime_time, timedelta
 from enum import Enum
 from html import escape
 from zoneinfo import ZoneInfo
 
+import structlog
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from sqlalchemy import cast, func, not_, or_, select
@@ -28,7 +28,7 @@ from app.database.models import (
 )
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class ReportingServiceError(RuntimeError):
@@ -84,10 +84,7 @@ class ReportingService:
             return
 
         self._task = asyncio.create_task(self._auto_daily_loop(send_time))
-        logger.info(
-            '📊 Сервис отчетов запущен: ежедневная отправка в %s по МСК',
-            send_time.strftime('%H:%M'),
-        )
+        logger.info('📊 Сервис отчетов запущен: ежедневная отправка в по МСК', send_time=send_time.strftime('%H:%M'))
 
     async def stop(self) -> None:
         if self._task and not self._task.done():
@@ -129,14 +126,11 @@ class ReportingService:
                         report_date=report_date,
                         send_to_topic=True,
                     )
-                    logger.info(
-                        '📊 Автоматический отчет за %s отправлен',
-                        report_date.strftime('%d.%m.%Y'),
-                    )
+                    logger.info('📊 Автоматический отчет за отправлен', report_date=report_date.strftime('%d.%m.%Y'))
                 except asyncio.CancelledError:
                     raise
                 except Exception as exc:
-                    logger.error('Ошибка автоматической отправки отчета: %s', exc)
+                    logger.error('Ошибка автоматической отправки отчета', exc=exc)
 
                 next_run_utc, report_date = self._calculate_next_run(send_time)
 
@@ -144,7 +138,7 @@ class ReportingService:
             logger.info('Сервис отчетов остановлен')
             raise
         except Exception as exc:
-            logger.error('Критическая ошибка в сервисе отчетов: %s', exc)
+            logger.error('Критическая ошибка в сервисе отчетов', exc=exc)
 
     def _calculate_next_run(
         self,
@@ -177,7 +171,7 @@ class ReportingService:
                 parse_mode='HTML',
             )
         except (TelegramBadRequest, TelegramForbiddenError) as exc:
-            logger.error('Не удалось отправить отчет: %s', exc)
+            logger.error('Не удалось отправить отчет', exc=exc)
             raise ReportingServiceError('Не удалось отправить отчет в чат') from exc
 
     # ---------- referral helpers ----------

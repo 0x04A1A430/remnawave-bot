@@ -1,10 +1,7 @@
-import logging
 from datetime import datetime, timedelta
-
-
-logger = logging.getLogger(__name__)
 from typing import Any
 
+import structlog
 from aiogram import Dispatcher, F, types
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
@@ -58,7 +55,7 @@ from app.services.user_cart_service import user_cart_service
 from app.utils.decorators import error_handler
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 def _serialize_markup(markup: InlineKeyboardMarkup | None) -> Any | None:
@@ -202,7 +199,9 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
     # Проверяем и синхронизируем подписку с RemnaWave если необходимо
     sync_success, sync_error = await subscription_service.ensure_subscription_synced(db, subscription)
     if not sync_success:
-        logger.warning(f'Не удалось синхронизировать подписку {subscription.id} с RemnaWave: {sync_error}')
+        logger.warning(
+            'Не удалось синхронизировать подписку с RemnaWave', subscription_id=subscription.id, sync_error=sync_error
+        )
 
     await db.refresh(subscription)
     await db.refresh(db_user)
@@ -294,12 +293,18 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
                         devices_count = devices_info.get('total', 0)
                         devices_list = devices_info.get('devices', [])
                         devices_used_str = str(devices_count)
-                        logger.info(f'Найдено {devices_count} устройств для пользователя {db_user.telegram_id}')
+                        logger.info(
+                            'Найдено устройств для пользователя',
+                            devices_count=devices_count,
+                            telegram_id=db_user.telegram_id,
+                        )
                     else:
-                        logger.warning(f'Не удалось получить информацию об устройствах для {db_user.telegram_id}')
+                        logger.warning(
+                            'Не удалось получить информацию об устройствах для', telegram_id=db_user.telegram_id
+                        )
 
         except Exception as e:
-            logger.error(f'Ошибка получения устройств для отображения: {e}')
+            logger.error('Ошибка получения устройств для отображения', error=e)
             devices_used = await get_current_devices_count(db_user)
             devices_used_str = str(devices_used)
 
@@ -385,7 +390,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
                 tariff_info_block = '\n<blockquote expandable>' + '\n'.join(tariff_info_lines) + '</blockquote>'
 
         except Exception as e:
-            logger.warning(f'Ошибка получения тарифа: {e}', exc_info=True)
+            logger.warning('Ошибка получения тарифа', error=e, exc_info=True)
 
     # Определяем, суточный ли тариф для выбора шаблона
     is_daily_tariff = tariff and getattr(tariff, 'is_daily', False)
@@ -604,9 +609,9 @@ async def show_trial_offer(callback: types.CallbackQuery, db_user: User, db: Asy
                 tariff_trial_days = getattr(trial_tariff, 'trial_duration_days', None)
                 if tariff_trial_days:
                     trial_days = tariff_trial_days
-                logger.info(f'Показываем триал с тарифом {trial_tariff.name}')
+                logger.info('Показываем триал с тарифом', trial_tariff_name=trial_tariff.name)
         except Exception as e:
-            logger.error(f'Ошибка получения триального тарифа: {e}')
+            logger.error('Ошибка получения триального тарифа', error=e)
 
     try:
         from app.database.crud.server_squad import get_trial_eligible_server_squads
@@ -638,7 +643,7 @@ async def show_trial_offer(callback: types.CallbackQuery, db_user: User, db: Asy
                 logger.warning('Не настроены сквады для выдачи триалов')
 
     except Exception as e:
-        logger.error(f'Ошибка получения триального сервера: {e}')
+        logger.error('Ошибка получения триального сервера', error=e)
 
     if not settings.is_devices_selection_enabled():
         forced_limit = settings.get_disabled_mode_device_limit()
@@ -859,9 +864,13 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                     tariff_trial_days = getattr(trial_tariff, 'trial_duration_days', None)
                     if tariff_trial_days:
                         trial_duration = tariff_trial_days
-                    logger.info(f'Используем триальный тариф {trial_tariff.name} (ID: {trial_tariff.id})')
+                    logger.info(
+                        'Используем триальный тариф (ID: )',
+                        trial_tariff_name=trial_tariff.name,
+                        trial_tariff_id=trial_tariff.id,
+                    )
             except Exception as e:
-                logger.error(f'Ошибка получения триального тарифа: {e}')
+                logger.error('Ошибка получения триального тарифа', error=e)
 
         subscription = await create_trial_subscription(
             db,
@@ -895,9 +904,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                 return
 
             logger.error(
-                'Insufficient funds detected after trial creation for user %s: %s',
-                db_user.id,
-                error,
+                'Insufficient funds detected after trial creation for user', db_user_id=db_user.id, error=error
             )
             required_label = settings.format_price(error.required_amount)
             balance_label = settings.format_price(error.balance_amount)
@@ -951,7 +958,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                 subscription,
             )
         except RemnaWaveConfigurationError as error:
-            logger.error('RemnaWave update skipped due to configuration error: %s', error)
+            logger.error('RemnaWave update skipped due to configuration error', error=error)
             revert_result = await revert_trial_activation(
                 db,
                 db_user,
@@ -983,9 +990,9 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
             return
         except Exception as error:
             logger.error(
-                'Failed to create RemnaWave user for trial subscription %s: %s',
-                getattr(subscription, 'id', '<unknown>'),
-                error,
+                'Failed to create RemnaWave user for trial subscription',
+                getattr=getattr(subscription, 'id', '<unknown>'),
+                error=error,
             )
             revert_result = await revert_trial_activation(
                 db,
@@ -1028,7 +1035,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                 charged_amount_kopeks=charged_amount,
             )
         except Exception as e:
-            logger.error(f'Ошибка отправки уведомления о триале: {e}')
+            logger.error('Ошибка отправки уведомления о триале', error=e)
 
         subscription_link = get_display_subscription_link(subscription)
         hide_subscription_link = settings.should_hide_subscription_link()
@@ -1200,10 +1207,10 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                 reply_markup=get_back_keyboard(db_user.language),
             )
 
-        logger.info(f'✅ Активирована тестовая подписка для пользователя {db_user.telegram_id}')
+        logger.info('✅ Активирована тестовая подписка для пользователя', telegram_id=db_user.telegram_id)
 
     except Exception as e:
-        logger.error(f'Ошибка активации триала: {e}')
+        logger.error('Ошибка активации триала', error=e)
         failure_text = texts.ERROR
 
         if subscription and remnawave_user is None:
@@ -1411,9 +1418,9 @@ async def return_to_saved_cart(callback: types.CallbackQuery, state: FSMContext,
             )
         except ValueError as recalculation_error:
             logger.error(
-                'Не удалось пересчитать сохраненную корзину пользователя %s: %s',
-                db_user.telegram_id,
-                recalculation_error,
+                'Не удалось пересчитать сохраненную корзину пользователя',
+                telegram_id=db_user.telegram_id,
+                recalculation_error=recalculation_error,
             )
             forced_limit = settings.get_disabled_mode_device_limit()
             if forced_limit is None:
@@ -1646,7 +1653,7 @@ async def handle_extend_subscription(callback: types.CallbackQuery, db_user: Use
             }
 
         except Exception as e:
-            logger.error(f'Ошибка расчета цены для периода {days}: {e}')
+            logger.error('Ошибка расчета цены для периода', days=days, error=e)
             continue
 
     if not renewal_prices:
@@ -1847,11 +1854,16 @@ async def confirm_extend_subscription(callback: types.CallbackQuery, db_user: Us
         is_valid = validate_pricing_calculation(base_price, monthly_additions, months_in_period, original_price)
 
         if not is_valid:
-            logger.error(f'Ошибка в расчете цены продления для пользователя {db_user.telegram_id}')
+            logger.error('Ошибка в расчете цены продления для пользователя', telegram_id=db_user.telegram_id)
             await callback.answer('Ошибка расчета цены. Обратитесь в поддержку.', show_alert=True)
             return
 
-        logger.info(f'💰 Расчет продления подписки {subscription.id} на {days} дней ({months_in_period} мес):')
+        logger.info(
+            '💰 Расчет продления подписки на дней ( мес)',
+            subscription_id=subscription.id,
+            days=days,
+            months_in_period=months_in_period,
+        )
         base_log = f'   📅 Период {days} дней: {base_price_original / 100}₽'
         if base_discount_total > 0:
             base_log += f' → {base_price / 100}₽ (скидка {period_discount_percent}%: -{base_discount_total / 100}₽)'
@@ -1888,14 +1900,14 @@ async def confirm_extend_subscription(callback: types.CallbackQuery, db_user: Us
             )
         if promo_component['discount'] > 0:
             logger.info(
-                '   🎯 Промо-предложение: -%s₽ (%s%%)',
-                promo_component['discount'] / 100,
-                promo_component['percent'],
+                '🎯 Промо-предложение: -₽ (%)',
+                promo_component=promo_component['discount'] / 100,
+                promo_component_2=promo_component['percent'],
             )
-        logger.info(f'   💎 ИТОГО: {price / 100}₽')
+        logger.info('💎 ИТОГО: ₽', price=price / 100)
 
     except Exception as e:
-        logger.error(f'⚠ ОШИБКА РАСЧЕТА ЦЕНЫ: {e}')
+        logger.error('⚠ ОШИБКА РАСЧЕТА ЦЕНЫ', error=e)
         await callback.answer('⚠ Ошибка расчета стоимости', show_alert=True)
         return
 
@@ -1980,7 +1992,11 @@ async def confirm_extend_subscription(callback: types.CallbackQuery, db_user: Us
                 subscription.traffic_limit_gb = fixed_limit
                 subscription.purchased_traffic_gb = 0
                 subscription.traffic_reset_at = None  # Сбрасываем дату сброса трафика
-                logger.info(f'🔄 Сброс трафика при продлении: {old_traffic_limit} ГБ → {fixed_limit} ГБ')
+                logger.info(
+                    '🔄 Сброс трафика при продлении: ГБ → ГБ',
+                    old_traffic_limit=old_traffic_limit,
+                    fixed_limit=fixed_limit,
+                )
 
         await db.commit()
         await db.refresh(subscription)
@@ -2022,7 +2038,7 @@ async def confirm_extend_subscription(callback: types.CallbackQuery, db_user: Us
             else:
                 logger.error('⚠ ОШИБКА ОБНОВЛЕНИЯ REMNAWAVE')
         except Exception as e:
-            logger.error(f'⚠ ИСКЛЮЧЕНИЕ ПРИ ОБНОВЛЕНИИ REMNAWAVE: {e}')
+            logger.error('⚠ ИСКЛЮЧЕНИЕ ПРИ ОБНОВЛЕНИИ REMNAWAVE', error=e)
 
         transaction = await create_transaction(
             db=db,
@@ -2045,7 +2061,7 @@ async def confirm_extend_subscription(callback: types.CallbackQuery, db_user: Us
                 balance_after=refreshed_balance,
             )
         except Exception as e:
-            logger.error(f'Ошибка отправки уведомления о продлении: {e}')
+            logger.error('Ошибка отправки уведомления о продлении', error=e)
 
         success_message = (
             '✅ Подписка успешно продлена!\n\n'
@@ -2067,13 +2083,18 @@ async def confirm_extend_subscription(callback: types.CallbackQuery, db_user: Us
 
         await callback.message.edit_text(success_message, reply_markup=get_back_keyboard(db_user.language))
 
-        logger.info(f'✅ Пользователь {db_user.telegram_id} продлил подписку на {days} дней за {price / 100}₽')
+        logger.info(
+            '✅ Пользователь продлил подписку на дней за ₽',
+            telegram_id=db_user.telegram_id,
+            days=days,
+            price=price / 100,
+        )
 
     except Exception as e:
-        logger.error(f'⚠ КРИТИЧЕСКАЯ ОШИБКА ПРОДЛЕНИЯ: {e}')
+        logger.error('⚠ КРИТИЧЕСКАЯ ОШИБКА ПРОДЛЕНИЯ', error=e)
         import traceback
 
-        logger.error(f'TRACEBACK: {traceback.format_exc()}')
+        logger.error('TRACEBACK', format_exc=traceback.format_exc())
 
         await callback.message.edit_text(
             '⚠ Произошла ошибка при продлении подписки. Обратитесь в поддержку.',
@@ -2419,30 +2440,34 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
         max_allowed_increase = max(500, int(final_price * 0.05))  # 5% или минимум 5₽
         if price_difference > max_allowed_increase:
             logger.error(
-                f'Цена выросла для пользователя {db_user.telegram_id}: '
-                f'кэш={cached_total_price / 100}₽, пересчет={final_price / 100}₽, '
-                f'разница=+{price_difference / 100}₽ (>{max_allowed_increase / 100}₽). '
-                f'Покупка заблокирована.'
+                'Цена выросла для пользователя кэш=₽, пересчет=₽, разница=+₽ (>₽). Покупка заблокирована.',
+                telegram_id=db_user.telegram_id,
+                cached_total_price=cached_total_price / 100,
+                final_price=final_price / 100,
+                price_difference=price_difference / 100,
+                max_allowed_increase=max_allowed_increase / 100,
             )
             await callback.answer('Цена изменилась. Пожалуйста, начните оформление заново.', show_alert=True)
             return
         if price_difference > 100:  # допуск 1₽
             logger.warning(
-                f'Небольшой рост цены для пользователя {db_user.telegram_id}: '
-                f'кэш={cached_total_price / 100}₽, пересчет={final_price / 100}₽. '
-                f'Используем пересчитанную цену.'
+                'Небольшой рост цены для пользователя кэш=₽, пересчет=₽. Используем пересчитанную цену.',
+                telegram_id=db_user.telegram_id,
+                cached_total_price=cached_total_price / 100,
+                final_price=final_price / 100,
             )
     elif price_difference < -100:  # цена снизилась более чем на 1₽
         logger.info(
-            f'Цена снизилась для пользователя {db_user.telegram_id}: '
-            f'кэш={cached_total_price / 100}₽, пересчет={final_price / 100}₽. '
-            f'Применяем новую цену.'
+            'Цена снизилась для пользователя кэш=₽, пересчет=₽. Применяем новую цену.',
+            telegram_id=db_user.telegram_id,
+            cached_total_price=cached_total_price / 100,
+            final_price=final_price / 100,
         )
 
     # Используем пересчитанную цену
     validation_total_price = calculated_total_before_promo
 
-    logger.info(f'Расчет покупки подписки на {data["period_days"]} дней ({months_in_period} мес):')
+    logger.info('Расчет покупки подписки на дней ( мес)', data=data['period_days'], months_in_period=months_in_period)
     base_log = f'   Период: {base_price_original / 100}₽'
     if base_discount_total and base_discount_total > 0:
         base_log += f' → {base_price / 100}₽ (скидка {base_discount_percent}%: -{base_discount_total / 100}₽)'
@@ -2468,11 +2493,11 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
         logger.info(message)
     if promo_offer_discount_value > 0:
         logger.info(
-            '   🎯 Промо-предложение: -%s₽ (%s%%)',
-            promo_offer_discount_value / 100,
-            promo_offer_discount_percent,
+            '🎯 Промо-предложение: -₽ (%)',
+            promo_offer_discount_value=promo_offer_discount_value / 100,
+            promo_offer_discount_percent=promo_offer_discount_percent,
         )
-    logger.info(f'   ИТОГО: {final_price / 100}₽')
+    logger.info('ИТОГО: ₽', final_price=final_price / 100)
 
     if db_user.balance_kopeks < final_price:
         missing_kopeks = final_price - db_user.balance_kopeks
@@ -2567,12 +2592,12 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
         current_time = datetime.utcnow()
 
         if existing_subscription:
-            logger.info(f'Обновляем существующую подписку пользователя {db_user.telegram_id}')
+            logger.info('Обновляем существующую подписку пользователя', telegram_id=db_user.telegram_id)
 
             bonus_period = timedelta()
 
             if existing_subscription.is_trial:
-                logger.info(f'Конверсия из триала в платную для пользователя {db_user.telegram_id}')
+                logger.info('Конверсия из триала в платную для пользователя', telegram_id=db_user.telegram_id)
                 was_trial_conversion = True
 
                 trial_duration = (current_time - existing_subscription.start_date).days
@@ -2582,9 +2607,9 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                     if remaining_trial_delta.total_seconds() > 0:
                         bonus_period = remaining_trial_delta
                         logger.info(
-                            'Добавляем оставшееся время триала (%s) к новой подписке пользователя %s',
-                            bonus_period,
-                            db_user.telegram_id,
+                            'Добавляем оставшееся время триала к новой подписке пользователя',
+                            bonus_period=bonus_period,
+                            telegram_id=db_user.telegram_id,
                         )
 
                 try:
@@ -2599,10 +2624,13 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                         first_paid_period_days=period_days,
                     )
                     logger.info(
-                        f'Записана конверсия: {trial_duration} дн. триал → {period_days} дн. платная за {final_price / 100}₽'
+                        'Записана конверсия: дн. триал → дн. платная за ₽',
+                        trial_duration=trial_duration,
+                        period_days=period_days,
+                        final_price=final_price / 100,
                     )
                 except Exception as conversion_error:
-                    logger.error(f'Ошибка записи конверсии: {conversion_error}')
+                    logger.error('Ошибка записи конверсии', conversion_error=conversion_error)
 
             existing_subscription.is_trial = False
             existing_subscription.status = SubscriptionStatus.ACTIVE.value
@@ -2650,7 +2678,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
             subscription = existing_subscription
 
         else:
-            logger.info(f'Создаем новую подписку для пользователя {db_user.telegram_id}')
+            logger.info('Создаем новую подписку для пользователя', telegram_id=db_user.telegram_id)
             default_device_limit = getattr(settings, 'DEFAULT_DEVICE_LIMIT', 1)
             resolved_device_limit = selected_devices
 
@@ -2704,7 +2732,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
             await add_subscription_servers(db, subscription, server_ids, server_prices)
             await add_user_to_servers(db, server_ids)
 
-            logger.info(f'Сохранены цены серверов за весь период: {server_prices}')
+            logger.info('Сохранены цены серверов за весь период', server_prices=server_prices)
 
         await db.refresh(db_user)
 
@@ -2726,7 +2754,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
             )
 
         if not remnawave_user:
-            logger.error(f'Не удалось создать/обновить RemnaWave пользователя для {db_user.telegram_id}')
+            logger.error('Не удалось создать/обновить RemnaWave пользователя для', telegram_id=db_user.telegram_id)
             remnawave_user = await subscription_service.create_remnawave_user(
                 db,
                 subscription,
@@ -2748,7 +2776,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                 db, db_user, subscription, transaction, period_days, was_trial_conversion
             )
         except Exception as e:
-            logger.error(f'Ошибка отправки уведомления о покупке: {e}')
+            logger.error('Ошибка отправки уведомления о покупке', error=e)
 
         await db.refresh(db_user)
         await db.refresh(subscription)
@@ -2921,11 +2949,14 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
 
         purchase_completed = True
         logger.info(
-            f'Пользователь {db_user.telegram_id} купил подписку на {data["period_days"]} дней за {final_price / 100}₽'
+            'Пользователь купил подписку на дней за ₽',
+            telegram_id=db_user.telegram_id,
+            data=data['period_days'],
+            final_price=final_price / 100,
         )
 
     except Exception as e:
-        logger.error(f'Ошибка покупки подписки: {e}')
+        logger.error('Ошибка покупки подписки', error=e)
         await callback.message.edit_text(texts.ERROR, reply_markup=get_back_keyboard(db_user.language))
 
     if purchase_completed:
@@ -2951,7 +2982,9 @@ async def resume_subscription_checkout(
     try:
         summary_text, prepared_data = await _prepare_subscription_summary(db_user, draft, texts)
     except ValueError as exc:
-        logger.error(f'Ошибка восстановления заказа подписки для пользователя {db_user.telegram_id}: {exc}')
+        logger.error(
+            'Ошибка восстановления заказа подписки для пользователя', telegram_id=db_user.telegram_id, error=exc
+        )
         await clear_subscription_checkout_draft(db_user.id)
         await callback.answer(texts.NO_SAVED_SUBSCRIPTION_ORDER, show_alert=True)
         return
@@ -3001,7 +3034,11 @@ async def create_paid_subscription_with_traffic_mode(
 
     subscription = await create_paid_subscription(**create_kwargs)
 
-    logger.info(f'📋 Создана подписка с трафиком: {traffic_limit_gb} ГБ (режим: {settings.TRAFFIC_SELECTION_MODE})')
+    logger.info(
+        '📋 Создана подписка с трафиком: ГБ (режим: )',
+        traffic_limit_gb=traffic_limit_gb,
+        TRAFFIC_SELECTION_MODE=settings.TRAFFIC_SELECTION_MODE,
+    )
 
     return subscription
 
@@ -3157,9 +3194,11 @@ async def handle_toggle_daily_subscription_pause(callback: types.CallbackQuery, 
                 reset_traffic=False,
                 reset_reason=None,
             )
-            logger.info(f'✅ Синхронизировано с Remnawave после возобновления суточной подписки {subscription.id}')
+            logger.info(
+                '✅ Синхронизировано с Remnawave после возобновления суточной подписки', subscription_id=subscription.id
+            )
         except Exception as e:
-            logger.error(f'Ошибка синхронизации с Remnawave при возобновлении: {e}')
+            logger.error('Ошибка синхронизации с Remnawave при возобновлении', error=e)
     else:
         # Подписка активна, ставим на паузу
         subscription = await toggle_daily_subscription_pause(db, subscription)
@@ -3249,7 +3288,7 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
                 subscription,
             )
         except RemnaWaveConfigurationError as error:
-            logger.error('RemnaWave update skipped due to configuration error: %s', error)
+            logger.error('RemnaWave update skipped due to configuration error', error=error)
             # Откатываем подписку и возвращаем деньги
             await rollback_trial_subscription_activation(db, subscription)
             from app.database.crud.user import add_user_balance
@@ -3274,9 +3313,9 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
             return
         except Exception as error:
             logger.error(
-                'Failed to create RemnaWave user for trial subscription %s: %s',
-                getattr(subscription, 'id', '<unknown>'),
-                error,
+                'Failed to create RemnaWave user for trial subscription',
+                getattr=getattr(subscription, 'id', '<unknown>'),
+                error=error,
             )
             # Откатываем подписку и возвращаем деньги
             await rollback_trial_subscription_activation(db, subscription)
@@ -3311,7 +3350,7 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
                 charged_amount_kopeks=trial_price_kopeks,
             )
         except Exception as e:
-            logger.error(f'Ошибка отправки уведомления о триале: {e}')
+            logger.error('Ошибка отправки уведомления о триале', error=e)
 
         # Показываем успешное сообщение с ссылкой
         subscription_link = get_display_subscription_link(subscription)
@@ -3385,9 +3424,7 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
 
     except Exception as error:
         logger.error(
-            'Unexpected error during paid trial activation for user %s: %s',
-            user_id_snapshot,
-            error,
+            'Unexpected error during paid trial activation for user', user_id_snapshot=user_id_snapshot, error=error
         )
         # Откатываем сессию чтобы очистить PendingRollbackError
         try:
@@ -3409,9 +3446,7 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
             await db.refresh(db_user)
         except Exception as refund_error:
             logger.error(
-                'Failed to refund trial payment for user %s: %s',
-                user_id_snapshot,
-                refund_error,
+                'Failed to refund trial payment for user', user_id_snapshot=user_id_snapshot, refund_error=refund_error
             )
 
         await callback.message.edit_text(
@@ -3694,7 +3729,7 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
             try:
                 usd_rate = await currency_converter.get_usd_to_rub_rate()
             except Exception as rate_error:
-                logger.warning('Не удалось получить курс USD: %s', rate_error)
+                logger.warning('Не удалось получить курс USD', rate_error=rate_error)
                 usd_rate = 95.0
 
             amount_rubles = trial_price_kopeks / 100
@@ -3953,7 +3988,7 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
         await callback.answer()
 
     except Exception as error:
-        logger.error(f'Error processing trial payment method {payment_method}: {error}')
+        logger.error('Error processing trial payment method', payment_method=payment_method, error=error)
         await callback.answer('❌ Произошла ошибка при создании платежа. Попробуйте позже.', show_alert=True)
 
 
@@ -4179,14 +4214,14 @@ async def handle_simple_subscription_purchase(
         resolved_squad_uuid=subscription_params.get('squad_uuid'),
     )
     logger.debug(
-        'SIMPLE_SUBSCRIPTION_PURCHASE_PRICE | user=%s | total=%s | base=%s | traffic=%s | devices=%s | servers=%s | discount=%s',
-        db_user.id,
-        price_kopeks,
-        price_breakdown.get('base_price', 0),
-        price_breakdown.get('traffic_price', 0),
-        price_breakdown.get('devices_price', 0),
-        price_breakdown.get('servers_price', 0),
-        price_breakdown.get('total_discount', 0),
+        'SIMPLE_SUBSCRIPTION_PURCHASE_PRICE | user= | total= | base= | traffic= | devices= | servers= | discount',
+        db_user_id=db_user.id,
+        price_kopeks=price_kopeks,
+        price_breakdown=price_breakdown.get('base_price', 0),
+        price_breakdown_2=price_breakdown.get('traffic_price', 0),
+        price_breakdown_3=price_breakdown.get('devices_price', 0),
+        price_breakdown_4=price_breakdown.get('servers_price', 0),
+        price_breakdown_5=price_breakdown.get('total_discount', 0),
     )
     traffic_text = (
         'Безлимит' if subscription_params['traffic_limit_gb'] == 0 else f'{subscription_params["traffic_limit_gb"]} ГБ'
@@ -4299,15 +4334,15 @@ async def _extend_existing_subscription(
         resolved_squad_uuid=squad_uuid,
     )
     logger.warning(
-        'SIMPLE_SUBSCRIPTION_EXTEND_PRICE | user=%s | total=%s | base=%s | traffic=%s | devices=%s | servers=%s | discount=%s | device_limit=%s',
-        db_user.id,
-        price_kopeks,
-        price_breakdown.get('base_price', 0),
-        price_breakdown.get('traffic_price', 0),
-        price_breakdown.get('devices_price', 0),
-        price_breakdown.get('servers_price', 0),
-        price_breakdown.get('total_discount', 0),
-        device_limit,
+        'SIMPLE_SUBSCRIPTION_EXTEND_PRICE | user= | total= | base= | traffic= | devices= | servers= | discount= | device_limit',
+        db_user_id=db_user.id,
+        price_kopeks=price_kopeks,
+        price_breakdown=price_breakdown.get('base_price', 0),
+        price_breakdown_2=price_breakdown.get('traffic_price', 0),
+        price_breakdown_3=price_breakdown.get('devices_price', 0),
+        price_breakdown_4=price_breakdown.get('servers_price', 0),
+        price_breakdown_5=price_breakdown.get('total_discount', 0),
+        device_limit=device_limit,
     )
 
     # Проверяем баланс пользователя
@@ -4429,7 +4464,7 @@ async def _extend_existing_subscription(
         else:
             logger.error('⚠ ОШИБКА ОБНОВЛЕНИЯ REMNAWAVE')
     except Exception as e:
-        logger.error(f'⚠ ИСКЛЮЧЕНИЕ ПРИ ОБНОВЛЕНИИ REMNAWAVE: {e}')
+        logger.error('⚠ ИСКЛЮЧЕНИЕ ПРИ ОБНОВЛЕНИИ REMNAWAVE', error=e)
 
     # Создаём транзакцию
     transaction = await create_transaction(
@@ -4454,7 +4489,7 @@ async def _extend_existing_subscription(
             balance_after=db_user.balance_kopeks,
         )
     except Exception as e:
-        logger.error(f'Ошибка отправки уведомления о продлении: {e}')
+        logger.error('Ошибка отправки уведомления о продлении', error=e)
 
     # Отправляем сообщение пользователю
     success_message = (
@@ -4471,6 +4506,9 @@ async def _extend_existing_subscription(
     await callback.message.edit_text(success_message, reply_markup=get_back_keyboard(db_user.language))
 
     logger.info(
-        f'✅ Пользователь {db_user.telegram_id} продлил подписку на {period_days} дней за {price_kopeks / 100}₽'
+        '✅ Пользователь продлил подписку на дней за ₽',
+        telegram_id=db_user.telegram_id,
+        period_days=period_days,
+        price_kopeks=price_kopeks / 100,
     )
     await callback.answer()

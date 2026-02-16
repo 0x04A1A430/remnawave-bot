@@ -1,10 +1,10 @@
 import base64
 import json
-import logging
 from datetime import datetime
 from typing import Any
 from urllib.parse import quote
 
+import structlog
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.config import get_traffic_prices, settings
@@ -19,7 +19,7 @@ from app.utils.promo_offer import (
 )
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 TRAFFIC_PRICES = get_traffic_prices()
 
@@ -39,7 +39,7 @@ def _format_text_with_placeholders(template: str, values: dict[str, Any]) -> str
     try:
         return template.format_map(safe_values)
     except Exception:  # pragma: no cover - defensive logging
-        logger.warning("Failed to format template '%s' with values %s", template, values)
+        logger.warning("Failed to format template '' with values", template=template, values=values)
         return template
 
 
@@ -164,7 +164,7 @@ def load_app_config() -> dict[str, Any]:
                 return data
             logger.error('Некорректный формат app-config.json: ожидается объект')
     except Exception as e:
-        logger.error(f'Ошибка загрузки конфига приложений: {e}')
+        logger.error('Ошибка загрузки конфига приложений', error=e)
 
     return {}
 
@@ -317,9 +317,7 @@ def create_deep_link(app: dict[str, Any], subscription_url: str) -> str | None:
             payload = base64.b64encode(subscription_url.encode('utf-8')).decode('utf-8')
         except Exception as exc:
             logger.warning(
-                'Не удалось закодировать ссылку подписки в base64 для приложения %s: %s',
-                app.get('id'),
-                exc,
+                'Не удалось закодировать ссылку подписки в base64 для приложения', app=app.get('id'), exc=exc
             )
             payload = subscription_url
 

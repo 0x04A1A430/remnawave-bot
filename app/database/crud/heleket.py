@@ -1,7 +1,7 @@
-import logging
 from datetime import datetime
 from typing import Any
 
+import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -9,7 +9,7 @@ from sqlalchemy.orm import selectinload
 from app.database.models import HeleketPayment
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def create_heleket_payment(
@@ -50,12 +50,12 @@ async def create_heleket_payment(
     await db.refresh(payment)
 
     logger.info(
-        'Создан Heleket платеж: uuid=%s order_id=%s amount=%s %s для пользователя %s',
-        uuid,
-        order_id,
-        amount,
-        currency,
-        user_id,
+        'Создан Heleket платеж: uuid= order_id= amount= для пользователя',
+        uuid=uuid,
+        order_id=order_id,
+        amount=amount,
+        currency=currency,
+        user_id=user_id,
     )
 
     return payment
@@ -107,7 +107,7 @@ async def update_heleket_payment(
     payment = await get_heleket_payment_by_uuid(db, uuid)
 
     if not payment:
-        logger.error('Heleket платеж с uuid=%s не найден', uuid)
+        logger.error('Heleket платеж с uuid= не найден', uuid=uuid)
         return None
 
     if status is not None:
@@ -135,11 +135,11 @@ async def update_heleket_payment(
     await db.refresh(payment)
 
     logger.info(
-        'Обновлен Heleket платеж %s: статус=%s payer_amount=%s %s',
-        uuid,
-        payment.status,
-        payment.payer_amount,
-        payment.payer_currency,
+        'Обновлен Heleket платеж : статус= payer_amount',
+        uuid=uuid,
+        payment_status=payment.status,
+        payer_amount=payment.payer_amount,
+        payer_currency=payment.payer_currency,
     )
 
     return payment
@@ -153,7 +153,7 @@ async def link_heleket_payment_to_transaction(
     payment = await get_heleket_payment_by_uuid(db, uuid)
 
     if not payment:
-        logger.error('Не найден Heleket платеж для связи с транзакцией: %s', uuid)
+        logger.error('Не найден Heleket платеж для связи с транзакцией', uuid=uuid)
         return None
 
     payment.transaction_id = transaction_id
@@ -162,10 +162,6 @@ async def link_heleket_payment_to_transaction(
     await db.commit()
     await db.refresh(payment)
 
-    logger.info(
-        'Heleket платеж %s связан с транзакцией %s',
-        uuid,
-        transaction_id,
-    )
+    logger.info('Heleket платеж связан с транзакцией', uuid=uuid, transaction_id=transaction_id)
 
     return payment

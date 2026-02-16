@@ -1,5 +1,4 @@
-import logging
-
+import structlog
 from aiogram import Dispatcher, F, types
 from aiogram.filters import Command
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -24,7 +23,7 @@ from app.services.support_settings_service import SupportSettingsService
 from app.utils.decorators import admin_required, error_handler
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @admin_required
@@ -52,7 +51,7 @@ async def show_admin_panel(callback: types.CallbackQuery, db_user: User, db: Asy
             ),
         )
     except Exception as e:
-        logger.error(f'Не удалось получить статистику Remnawave для админ-панели: {e}')
+        logger.error('Не удалось получить статистику Remnawave для админ-панели', error=e)
 
     await callback.message.edit_text(admin_text, reply_markup=get_admin_main_keyboard(db_user.language))
     await callback.answer()
@@ -288,12 +287,14 @@ async def clear_rules_command(message: types.Message, db_user: User, db: AsyncSe
                 f'Теперь используются стандартные правила по умолчанию.'
             )
 
-            logger.info(f'Правила очищены командой администратором {db_user.telegram_id} ({db_user.full_name})')
+            logger.info(
+                'Правила очищены командой администратором', telegram_id=db_user.telegram_id, full_name=db_user.full_name
+            )
         else:
             await message.reply('⚠️ <b>Нет правил для очистки</b>\n\nАктивные правила не найдены.')
 
     except Exception as e:
-        logger.error(f'Ошибка при очистке правил командой: {e}')
+        logger.error('Ошибка при очистке правил командой', error=e)
         await message.reply(
             '❌ <b>Ошибка при очистке правил</b>\n\n'
             f'Произошла ошибка: {e!s}\n'
@@ -330,7 +331,7 @@ async def rules_stats_command(message: types.Message, db_user: User, db: AsyncSe
         await message.reply(text)
 
     except Exception as e:
-        logger.error(f'Ошибка при получении статистики правил: {e}')
+        logger.error('Ошибка при получении статистики правил', error=e)
         await message.reply(f'❌ <b>Ошибка получения статистики</b>\n\nПроизошла ошибка: {e!s}')
 
 

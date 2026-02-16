@@ -1,5 +1,4 @@
-import logging
-
+import structlog
 from aiogram import Bot
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,7 +13,7 @@ from app.services.notification_delivery_service import (
 from app.utils.user_utils import get_effective_referral_commission_percent
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def send_referral_notification(
@@ -46,18 +45,18 @@ async def send_referral_notification(
                 telegram_message=message,
             )
             if success:
-                logger.info(f'✅ Email уведомление о реферале отправлено пользователю {user.id}')
+                logger.info('✅ Email уведомление о реферале отправлено пользователю', user_id=user.id)
             else:
-                logger.warning(f'⚠️ Не удалось отправить email уведомление пользователю {user.id}')
+                logger.warning('⚠️ Не удалось отправить email уведомление пользователю', user_id=user.id)
         else:
             logger.debug('Пропуск уведомления: пользователь без telegram_id и без User object')
         return
 
     try:
         await bot.send_message(telegram_id, message, parse_mode='HTML')
-        logger.info(f'✅ Уведомление отправлено пользователю {telegram_id}')
+        logger.info('✅ Уведомление отправлено пользователю', telegram_id=telegram_id)
     except Exception as e:
-        logger.error(f'❌ Ошибка отправки уведомления пользователю {telegram_id}: {e}')
+        logger.error('❌ Ошибка отправки уведомления пользователю', telegram_id=telegram_id, error=e)
 
 
 async def process_referral_registration(db: AsyncSession, new_user_id: int, referrer_id: int, bot: Bot = None):
@@ -66,11 +65,13 @@ async def process_referral_registration(db: AsyncSession, new_user_id: int, refe
         referrer = await get_user_by_id(db, referrer_id)
 
         if not new_user or not referrer:
-            logger.error(f'Пользователи не найдены: new_user_id={new_user_id}, referrer_id={referrer_id}')
+            logger.error(
+                'Пользователи не найдены: new_user_id=, referrer_id', new_user_id=new_user_id, referrer_id=referrer_id
+            )
             return False
 
         if new_user.referred_by_id != referrer_id:
-            logger.error(f'Пользователь {new_user_id} не привязан к рефереру {referrer_id}')
+            logger.error('Пользователь не привязан к рефереру', new_user_id=new_user_id, referrer_id=referrer_id)
             return False
 
         await create_referral_earning(
@@ -82,7 +83,7 @@ async def process_referral_registration(db: AsyncSession, new_user_id: int, refe
 
             await referral_contest_service.on_referral_registration(db, new_user_id)
         except Exception as exc:
-            logger.debug('Не удалось записать конкурсную регистрацию: %s', exc)
+            logger.debug('Не удалось записать конкурсную регистрацию', exc=exc)
 
         if bot:
             commission_percent = get_effective_referral_commission_percent(referrer)
@@ -108,12 +109,14 @@ async def process_referral_registration(db: AsyncSession, new_user_id: int, refe
             )
 
         logger.info(
-            f'✅ Зарегистрирован реферал {new_user_id} для {referrer_id}. Бонусы будут выданы после пополнения.'
+            '✅ Зарегистрирован реферал для . Бонусы будут выданы после пополнения.',
+            new_user_id=new_user_id,
+            referrer_id=referrer_id,
         )
         return True
 
     except Exception as e:
-        logger.error(f'Ошибка обработки реферальной регистрации: {e}')
+        logger.error('Ошибка обработки реферальной регистрации', error=e)
         return False
 
 
@@ -121,12 +124,12 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
     try:
         user = await get_user_by_id(db, user_id)
         if not user or not user.referred_by_id:
-            logger.info(f'Пользователь {user_id} не является рефералом')
+            logger.info('Пользователь не является рефералом', user_id=user_id)
             return True
 
         referrer = await get_user_by_id(db, user.referred_by_id)
         if not referrer:
-            logger.error(f'Реферер {user.referred_by_id} не найден')
+            logger.error('Реферер не найден', referred_by_id=user.referred_by_id)
             return False
 
         commission_percent = get_effective_referral_commission_percent(referrer)
@@ -138,9 +141,9 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
         if not user.has_made_first_topup:
             if not qualifies_for_first_bonus:
                 logger.info(
-                    'Пополнение %s на %s₽ меньше минимума для первого бонуса, но комиссия будет начислена',
-                    user_id,
-                    topup_amount_kopeks / 100,
+                    'Пополнение на ₽ меньше минимума для первого бонуса, но комиссия будет начислена',
+                    user_id=user_id,
+                    topup_amount_kopeks=topup_amount_kopeks / 100,
                 )
 
                 if commission_amount > 0:
@@ -161,9 +164,9 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
                     )
 
                     logger.info(
-                        '💰 Комиссия с пополнения: %s получил %s₽ (до первого бонуса)',
-                        referrer.telegram_id,
-                        commission_amount / 100,
+                        '💰 Комиссия с пополнения: получил ₽ (до первого бонуса)',
+                        telegram_id=referrer.telegram_id,
+                        commission_amount=commission_amount / 100,
                     )
 
                     if bot:
@@ -198,9 +201,9 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
                     )
                 )
                 await db.commit()
-                logger.info(f"🗑️ Удалена запись 'ожидание пополнения' для реферала {user.id}")
+                logger.info("🗑️ Удалена запись 'ожидание пополнения' для реферала", user_id=user.id)
             except Exception as e:
-                logger.error(f'Ошибка удаления записи ожидания: {e}')
+                logger.error('Ошибка удаления записи ожидания', error=e)
 
             if settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS > 0:
                 await add_user_balance(
@@ -210,7 +213,11 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
                     'Бонус за первое пополнение по реферальной программе',
                     bot=bot,
                 )
-                logger.info(f'💰 Реферал {user.id} получил бонус {settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS / 100}₽')
+                logger.info(
+                    '💰 Реферал получил бонус ₽',
+                    user_id=user.id,
+                    REFERRAL_FIRST_TOPUP_BONUS_KOPEKS=settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS / 100,
+                )
 
                 if bot:
                     bonus_notification = (
@@ -243,7 +250,7 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
                     reason='referral_first_topup',
                 )
                 referrer_id = referrer.telegram_id or referrer.email or f'user#{referrer.id}'
-                logger.info(f'💰 Реферер {referrer_id} получил бонус {inviter_bonus / 100}₽')
+                logger.info('💰 Реферер получил бонус ₽', referrer_id=referrer_id, inviter_bonus=inviter_bonus / 100)
 
                 if bot:
                     inviter_bonus_notification = (
@@ -279,7 +286,11 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
             )
 
             referrer_id = referrer.telegram_id or referrer.email or f'user#{referrer.id}'
-            logger.info(f'💰 Комиссия с пополнения: {referrer_id} получил {commission_amount / 100}₽')
+            logger.info(
+                '💰 Комиссия с пополнения: получил ₽',
+                referrer_id=referrer_id,
+                commission_amount=commission_amount / 100,
+            )
 
             if bot:
                 commission_notification = (
@@ -302,7 +313,7 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
         return True
 
     except Exception as e:
-        logger.error(f'Ошибка обработки пополнения реферала: {e}')
+        logger.error('Ошибка обработки пополнения реферала', error=e)
         return False
 
 
@@ -316,7 +327,7 @@ async def process_referral_purchase(
 
         referrer = await get_user_by_id(db, user.referred_by_id)
         if not referrer:
-            logger.error(f'Реферер {user.referred_by_id} не найден')
+            logger.error('Реферер не найден', referred_by_id=user.referred_by_id)
             return False
 
         commission_percent = get_effective_referral_commission_percent(referrer)
@@ -338,7 +349,9 @@ async def process_referral_purchase(
             )
 
             referrer_id = referrer.telegram_id or referrer.email or f'user#{referrer.id}'
-            logger.info(f'💰 Комиссия с покупки: {referrer_id} получил {commission_amount / 100}₽')
+            logger.info(
+                '💰 Комиссия с покупки: получил ₽', referrer_id=referrer_id, commission_amount=commission_amount / 100
+            )
 
             if bot:
                 purchase_commission_notification = (
@@ -361,13 +374,13 @@ async def process_referral_purchase(
         if not user.has_had_paid_subscription:
             user.has_had_paid_subscription = True
             await db.commit()
-            logger.info(f'✅ Пользователь {user_id} отмечен как имевший платную подписку')
+            logger.info('✅ Пользователь отмечен как имевший платную подписку', user_id=user_id)
 
         return True
 
     except Exception as e:
-        logger.error(f'Ошибка обработки покупки реферала: {e}')
+        logger.error('Ошибка обработки покупки реферала', error=e)
         import traceback
 
-        logger.error(f'Полный traceback: {traceback.format_exc()}')
+        logger.error('Полный traceback', format_exc=traceback.format_exc())
         return False

@@ -1,8 +1,8 @@
 import html
-import logging
 import time
 from datetime import datetime, timedelta
 
+import structlog
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
@@ -22,7 +22,7 @@ from app.states import AdminTicketStates
 from app.utils.cache import RateLimitCache
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Максимальная длина сообщения Telegram (с запасом)
 MAX_MESSAGE_LEN = 3500
@@ -506,7 +506,7 @@ async def handle_admin_ticket_reply(message: types.Message, state: FSMContext, d
         # Админ-уведомления о ответе в тикет отключены по требованию
 
     except Exception as e:
-        logger.error(f'Error adding admin ticket reply: {e}')
+        logger.error('Error adding admin ticket reply', error=e)
         texts = get_texts(db_user.language)
         await message.answer(
             texts.t('TICKET_REPLY_ERROR', '❌ Произошла ошибка при отправке ответа. Попробуйте позже.')
@@ -533,7 +533,7 @@ async def mark_ticket_as_answered(callback: types.CallbackQuery, db_user: User, 
             await callback.answer(texts.t('TICKET_UPDATE_ERROR', '❌ Ошибка при обновлении тикета.'), show_alert=True)
 
     except Exception as e:
-        logger.error(f'Error marking ticket as answered: {e}')
+        logger.error('Error marking ticket as answered', error=e)
         texts = get_texts(db_user.language)
         await callback.answer(texts.t('TICKET_UPDATE_ERROR', '❌ Ошибка при обновлении тикета.'), show_alert=True)
 
@@ -550,7 +550,7 @@ async def close_all_open_admin_tickets(callback: types.CallbackQuery, db_user: U
     try:
         closed_ticket_ids = await TicketCRUD.close_all_open_tickets(db)
     except Exception as error:
-        logger.error('Error closing all open tickets: %s', error)
+        logger.error('Error closing all open tickets', error=error)
         await callback.answer(texts.t('TICKET_UPDATE_ERROR', '❌ Ошибка при обновлении тикета.'), show_alert=True)
         return
 
@@ -580,7 +580,7 @@ async def close_all_open_admin_tickets(callback: types.CallbackQuery, db_user: U
             },
         )
     except Exception as audit_error:
-        logger.warning('Failed to add support audit for bulk close: %s', audit_error)
+        logger.warning('Failed to add support audit for bulk close', audit_error=audit_error)
 
     # Обновляем список тикетов
     await show_admin_tickets(callback, db_user, db)
@@ -668,7 +668,7 @@ async def close_admin_ticket(callback: types.CallbackQuery, db_user: User, db: A
             await callback.answer(texts.t('TICKET_CLOSE_ERROR', '❌ Ошибка при закрытии тикета.'), show_alert=True)
 
     except Exception as e:
-        logger.error(f'Error closing admin ticket: {e}')
+        logger.error('Error closing admin ticket', error=e)
         texts = get_texts(db_user.language)
         await callback.answer(texts.t('TICKET_CLOSE_ERROR', '❌ Ошибка при закрытии тикета.'), show_alert=True)
 
@@ -911,7 +911,7 @@ async def handle_admin_block_duration_input(message: types.Message, state: FSMCo
         finally:
             await state.clear()
     except Exception as e:
-        logger.error(f'Error setting block duration: {e}')
+        logger.error('Error setting block duration', error=e)
         texts = get_texts(db_user.language)
         await message.answer(texts.t('TICKET_REPLY_ERROR', '❌ Произошла ошибка. Попробуйте позже.'))
 
@@ -1041,15 +1041,15 @@ async def notify_user_about_ticket_reply(bot: Bot, ticket: Ticket, reply_text: s
 
         user = getattr(ticket_with_user, 'user', None)
         if not user:
-            logger.error(f'User not found for ticket #{ticket.id}')
+            logger.error('User not found for ticket #', ticket_id=ticket.id)
             return
 
         if not getattr(user, 'telegram_id', None):
             logger.warning(
-                'Cannot notify ticket #%s user without telegram_id (username=%s, auth_type=%s)',
-                ticket.id,
-                getattr(user, 'username', None),
-                getattr(user, 'auth_type', None),
+                'Cannot notify ticket # user without telegram_id (username auth_type=)',
+                ticket_id=ticket.id,
+                getattr=getattr(user, 'username', None),
+                getattr_2=getattr(user, 'auth_type', None),
             )
             return
 
@@ -1096,13 +1096,13 @@ async def notify_user_about_ticket_reply(bot: Bot, ticket: Ticket, reply_text: s
                 return
             except TelegramBadRequest as photo_error:
                 logger.error(
-                    'Не удалось отправить фото-уведомление пользователю %s для тикета %s: %s',
-                    chat_id,
-                    ticket.id,
-                    photo_error,
+                    'Не удалось отправить фото-уведомление пользователю для тикета',
+                    chat_id=chat_id,
+                    ticket_id=ticket.id,
+                    photo_error=photo_error,
                 )
             except Exception as e:
-                logger.error(f'Не удалось отправить фото-уведомление: {e}')
+                logger.error('Не удалось отправить фото-уведомление', error=e)
         # Фоллбек: текстовое уведомление
         await bot.send_message(
             chat_id=chat_id,
@@ -1110,10 +1110,10 @@ async def notify_user_about_ticket_reply(bot: Bot, ticket: Ticket, reply_text: s
             reply_markup=keyboard,
         )
 
-        logger.info(f'Ticket #{ticket.id} reply notification sent to user {chat_id}')
+        logger.info('Ticket # reply notification sent to user', ticket_id=ticket.id, chat_id=chat_id)
 
     except Exception as e:
-        logger.error(f'Error notifying user about ticket reply: {e}')
+        logger.error('Error notifying user about ticket reply', error=e)
 
 
 def register_handlers(dp: Dispatcher):

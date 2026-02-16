@@ -1,8 +1,8 @@
 import asyncio
-import logging
 import uuid
 from typing import Any
 
+import structlog
 from yookassa import Configuration, Payment as YooKassaPayment
 from yookassa.domain.common.confirmation_type import ConfirmationType
 from yookassa.domain.request.payment_request_builder import PaymentRequestBuilder
@@ -10,7 +10,7 @@ from yookassa.domain.request.payment_request_builder import PaymentRequestBuilde
 from app.config import settings
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class YooKassaService:
@@ -35,34 +35,27 @@ class YooKassaService:
             try:
                 Configuration.configure(shop_id, secret_key)
                 self.configured = True
-                logger.info(f'YooKassa SDK сконфигурирован для shop_id: {shop_id[:5]}...')
+                logger.info('YooKassa SDK сконфигурирован для shop_id: ...', shop_id=shop_id[:5])
             except Exception as error:
-                logger.error(
-                    'Ошибка конфигурации YooKassa SDK: %s',
-                    error,
-                    exc_info=True,
-                )
+                logger.error('Ошибка конфигурации YooKassa SDK', error=error, exc_info=True)
                 self.configured = False
 
         if not self.configured:
             self.return_url = 'https://t.me/'
-            logger.warning(
-                'YooKassa не активна, используем заглушку return_url: %s',
-                self.return_url,
-            )
+            logger.warning('YooKassa не активна, используем заглушку return_url', return_url=self.return_url)
         elif configured_return_url:
             self.return_url = configured_return_url
         elif bot_username_for_default_return:
             self.return_url = f'https://t.me/{bot_username_for_default_return}'
-            logger.info(f'YOOKASSA_RETURN_URL не установлен, используем бота: {self.return_url}')
+            logger.info('YOOKASSA_RETURN_URL не установлен, используем бота', return_url=self.return_url)
         else:
             self.return_url = 'https://t.me/'
             logger.warning(
-                f'КРИТИЧНО: YOOKASSA_RETURN_URL не установлен И username бота не предоставлен. '
-                f'Используем заглушку: {self.return_url}. Платежи могут работать некорректно.'
+                'КРИТИЧНО: YOOKASSA_RETURN_URL не установлен И username бота не предоставлен. Используем заглушку: . Платежи могут работать некорректно.',
+                return_url=self.return_url,
             )
 
-        logger.info(f'YooKassa Service return_url: {self.return_url}')
+        logger.info('YooKassa Service return_url', return_url=self.return_url)
 
     async def create_payment(
         self,
@@ -122,8 +115,12 @@ class YooKassaService:
             payment_request = builder.build()
 
             logger.info(
-                f'Создание платежа YooKassa (Idempotence-Key: {idempotence_key}). '
-                f'Сумма: {amount} {currency}. Метаданные: {metadata}. Чек: {receipt_data_dict}'
+                'Создание платежа YooKassa (Idempotence-Key: ). Сумма: . Метаданные: . Чек',
+                idempotence_key=idempotence_key,
+                amount=amount,
+                currency=currency,
+                metadata=metadata,
+                receipt_data_dict=receipt_data_dict,
             )
 
             loop = asyncio.get_running_loop()
@@ -132,7 +129,10 @@ class YooKassaService:
             )
 
             logger.info(
-                f'Ответ YooKassa Payment.create: ID={response.id}, Status={response.status}, Paid={response.paid}'
+                'Ответ YooKassa Payment.create: ID=, Status=, Paid',
+                response_id=response.id,
+                status=response.status,
+                paid=response.paid,
             )
 
             return {
@@ -152,7 +152,7 @@ class YooKassaService:
                 'test_mode': response.test if hasattr(response, 'test') else None,
             }
         except Exception as e:
-            logger.error(f'Ошибка создания платежа YooKassa: {e}', exc_info=True)
+            logger.error('Ошибка создания платежа YooKassa', error=e, exc_info=True)
             return None
 
     async def create_sbp_payment(
@@ -222,8 +222,12 @@ class YooKassaService:
             payment_request = builder.build()
 
             logger.info(
-                f"Создание платежа YooKassa СБП с подтверждением 'qr' (Idempotence-Key: {idempotence_key}). "
-                f'Сумма: {amount} {currency}. Метаданные: {metadata}. Чек: {receipt_data_dict}'
+                "Создание платежа YooKassa СБП с подтверждением 'qr' (Idempotence-Key: ). Сумма: . Метаданные: . Чек",
+                idempotence_key=idempotence_key,
+                amount=amount,
+                currency=currency,
+                metadata=metadata,
+                receipt_data_dict=receipt_data_dict,
             )
 
             loop = asyncio.get_running_loop()
@@ -232,7 +236,10 @@ class YooKassaService:
             )
 
             logger.info(
-                f'Ответ YooKassa Payment.create (СБП, qr): ID={response.id}, Status={response.status}, Paid={response.paid}'
+                'Ответ YooKassa Payment.create (СБП, qr): ID=, Status=, Paid',
+                response_id=response.id,
+                status=response.status,
+                paid=response.paid,
             )
 
             # Возвращаем данные платежа с QR-подтверждением
@@ -259,7 +266,7 @@ class YooKassaService:
                 'test_mode': response.test if hasattr(response, 'test') else None,
             }
         except Exception as e:
-            logger.error(f'Ошибка создания платежа YooKassa СБП: {e}', exc_info=True)
+            logger.error('Ошибка создания платежа YooKassa СБП', error=e, exc_info=True)
             return None
 
     async def _create_sbp_payment_with_confirmation_type(
@@ -310,8 +317,13 @@ class YooKassaService:
             payment_request = builder.build()
 
             logger.info(
-                f"Создание платежа YooKassa СБП с подтверждением '{confirmation_type}' (Idempotence-Key: {idempotence_key}). "
-                f'Сумма: {amount} {currency}. Метаданные: {metadata}. Чек: {receipt_data_dict}'
+                'Создание платежа YooKassa СБП с подтверждением (Idempotence-Key: ). Сумма: . Метаданные: . Чек',
+                confirmation_type=confirmation_type,
+                idempotence_key=idempotence_key,
+                amount=amount,
+                currency=currency,
+                metadata=metadata,
+                receipt_data_dict=receipt_data_dict,
             )
 
             loop = asyncio.get_running_loop()
@@ -320,7 +332,11 @@ class YooKassaService:
             )
 
             logger.info(
-                f'Ответ YooKassa Payment.create (СБП, {confirmation_type}): ID={response.id}, Status={response.status}, Paid={response.paid}'
+                'Ответ YooKassa Payment.create (СБП, ): ID=, Status=, Paid',
+                confirmation_type=confirmation_type,
+                response_id=response.id,
+                status=response.status,
+                paid=response.paid,
             )
 
             result = {
@@ -349,7 +365,10 @@ class YooKassaService:
             return result
         except Exception as e:
             logger.error(
-                f"Ошибка создания платежа YooKassa СБП с подтверждением '{confirmation_type}': {e}", exc_info=True
+                'Ошибка создания платежа YooKassa СБП с подтверждением',
+                confirmation_type=confirmation_type,
+                error=e,
+                exc_info=True,
             )
             return None
 
@@ -359,15 +378,17 @@ class YooKassaService:
             return None
 
         try:
-            logger.info(f'Получение информации о платеже YooKassa ID: {payment_id_in_yookassa}')
+            logger.info('Получение информации о платеже YooKassa ID', payment_id_in_yookassa=payment_id_in_yookassa)
 
             loop = asyncio.get_running_loop()
             payment_info_yk = await loop.run_in_executor(None, lambda: YooKassaPayment.find_one(payment_id_in_yookassa))
 
             if payment_info_yk:
                 logger.info(
-                    f'Информация о платеже YooKassa {payment_id_in_yookassa}: '
-                    f'Status={payment_info_yk.status}, Paid={payment_info_yk.paid}'
+                    'Информация о платеже YooKassa Status=, Paid',
+                    payment_id_in_yookassa=payment_id_in_yookassa,
+                    status=payment_info_yk.status,
+                    paid=payment_info_yk.paid,
                 )
                 return {
                     'id': payment_info_yk.id,
@@ -389,8 +410,13 @@ class YooKassaService:
                     else None,
                     'test_mode': payment_info_yk.test if hasattr(payment_info_yk, 'test') else None,
                 }
-            logger.warning(f'Платеж не найден в YooKassa ID: {payment_id_in_yookassa}')
+            logger.warning('Платеж не найден в YooKassa ID', payment_id_in_yookassa=payment_id_in_yookassa)
             return None
         except Exception as e:
-            logger.error(f'Ошибка получения информации о платеже YooKassa {payment_id_in_yookassa}: {e}', exc_info=True)
+            logger.error(
+                'Ошибка получения информации о платеже YooKassa',
+                payment_id_in_yookassa=payment_id_in_yookassa,
+                error=e,
+                exc_info=True,
+            )
             return None

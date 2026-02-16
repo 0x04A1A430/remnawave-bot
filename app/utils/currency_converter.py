@@ -1,10 +1,10 @@
-import logging
 from datetime import datetime
 
 import aiohttp
+import structlog
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class CurrencyConverter:
@@ -33,7 +33,7 @@ class CurrencyConverter:
         if rate:
             self._cache[cache_key] = rate
             self._last_update[cache_key] = now
-            logger.info(f'Обновлен курс USD/RUB: {rate}')
+            logger.info('Обновлен курс USD/RUB', rate=rate)
             return rate
 
         # Возвращаем из кеша если API недоступен
@@ -56,7 +56,7 @@ class CurrencyConverter:
                 if rate and 50 < rate < 200:  # Разумные границы курса
                     return rate
             except Exception as e:
-                logger.debug(f'Ошибка получения курса из {source.__name__}: {e}')
+                logger.debug('Ошибка получения курса из', __name__=source.__name__, error=e)
                 continue
 
         return None
@@ -71,7 +71,7 @@ class CurrencyConverter:
                         usd_rate = data['Valute']['USD']['Value']
                         return float(usd_rate)
         except Exception as e:
-            logger.debug(f'Ошибка получения курса ЦБ: {e}')
+            logger.debug('Ошибка получения курса ЦБ', error=e)
             return None
 
     async def _fetch_from_exchangerate_api(self) -> float | None:
@@ -84,7 +84,7 @@ class CurrencyConverter:
                         rub_rate = data['rates']['RUB']
                         return float(rub_rate)
         except Exception as e:
-            logger.debug(f'Ошибка получения курса exchangerate-api: {e}')
+            logger.debug('Ошибка получения курса exchangerate-api', error=e)
             return None
 
     async def _fetch_from_fixer(self) -> float | None:
@@ -104,7 +104,7 @@ class CurrencyConverter:
                             usd_rub = rub_eur / usd_eur
                             return float(usd_rub)
         except Exception as e:
-            logger.debug(f'Ошибка получения курса fixer: {e}')
+            logger.debug('Ошибка получения курса fixer', error=e)
             return None
 
     async def usd_to_rub(self, usd_amount: float) -> float:

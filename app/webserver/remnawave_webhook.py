@@ -10,8 +10,8 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
-import logging
 
+import structlog
 from aiogram import Bot
 from fastapi import APIRouter, Request, status
 from fastapi.responses import JSONResponse
@@ -21,7 +21,7 @@ from app.database.database import AsyncSessionLocal
 from app.services.remnawave_webhook_service import RemnaWaveWebhookService
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Max accepted webhook payload size (64 KB) to prevent memory exhaustion DoS
 _MAX_BODY_SIZE = 64 * 1024
@@ -58,7 +58,7 @@ def create_remnawave_webhook_router(bot: Bot) -> APIRouter:
             )
 
         if len(raw_body) > _MAX_BODY_SIZE:
-            logger.warning('RemnaWave webhook: payload too large (%d bytes)', len(raw_body))
+            logger.warning('RemnaWave webhook: payload too large (bytes)', raw_body_count=len(raw_body))
             return JSONResponse(
                 {'status': 'error', 'reason': 'payload_too_large'},
                 status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
@@ -115,7 +115,7 @@ def create_remnawave_webhook_router(bot: Bot) -> APIRouter:
         # RemnaWave sends event as full qualified name (e.g. "user.modified"),
         # so we use event directly instead of concatenating scope + event.
         event_name = event
-        logger.info('RemnaWave webhook received: scope=%s, event=%s', scope, event_name)
+        logger.info('RemnaWave webhook received: scope event', scope=scope, event_name=event_name)
 
         # Process event — return 200 to prevent retries for application-level errors.
         # Only return non-200 for infrastructure failures (DB unavailable).
@@ -125,7 +125,7 @@ def create_remnawave_webhook_router(bot: Bot) -> APIRouter:
                 processed = await webhook_service.process_event(None, event_name, data)
                 return JSONResponse({'status': 'ok', 'processed': processed})
             except Exception:
-                logger.exception('RemnaWave webhook processing error for event %s', event_name)
+                logger.exception('RemnaWave webhook processing error for event', event_name=event_name)
                 return JSONResponse({'status': 'ok', 'processed': False})
 
         # User events require a DB session
@@ -137,7 +137,7 @@ def create_remnawave_webhook_router(bot: Bot) -> APIRouter:
                     return JSONResponse({'status': 'ok', 'processed': processed})
                 except Exception:
                     await db.rollback()
-                    logger.exception('RemnaWave webhook processing error for event %s', event_name)
+                    logger.exception('RemnaWave webhook processing error for event', event_name=event_name)
                     return JSONResponse({'status': 'ok', 'processed': False})
         except Exception:
             logger.error('RemnaWave webhook: failed to get database session')

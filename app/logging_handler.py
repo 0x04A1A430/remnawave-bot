@@ -1,42 +1,44 @@
-"""Кастомный logging handler для отправки ERROR/CRITICAL в админский чат Telegram.
+"""Structlog processor for sending ERROR/CRITICAL logs to admin Telegram chat.
 
-Перехватывает все log records уровня ERROR и CRITICAL и отправляет их
-в админский чат через существующий механизм send_error_to_admin_chat()
-из app.middlewares.global_error.
+Intercepts all log events at ERROR level and above, deduplicates them,
+and schedules async delivery to the admin Telegram chat via the existing
+``send_error_to_admin_chat`` infrastructure.
 
-Дедупликация:
-- Записи, уже обработанные GlobalErrorMiddleware или @error_handler,
-  помечаются атрибутом _admin_notified = True и пропускаются.
-- Хеши недавних сообщений хранятся в LRU-кеше для предотвращения
-  дублирования одинаковых ошибок за короткий период.
+Deduplication:
+- Events already processed by GlobalErrorMiddleware / @error_handler
+  carry ``_admin_notified=True`` and are skipped.
+- Recent message hashes are kept in a TTL cache to prevent duplicate
+  notifications for the same error within a short window.
 
 Async bridge:
-- logging.Handler.emit() -- синхронный. Мы используем
-  asyncio.get_running_loop().call_soon_threadsafe() для планирования
-  asyncio.Task из любого потока (sync или async).
+- structlog processors are synchronous.  We use
+  ``asyncio.get_running_loop().call_soon_threadsafe()`` to schedule an
+  asyncio.Task from any thread.
 
 Deferred init:
-- Bot instance создаётся позже в main.py. Метод set_bot() позволяет
-  передать его после создания. До этого записи молча пропускаются.
+- The Bot instance is created later in main.py.  ``set_bot()`` injects
+  it after creation.  Until then, events are silently passed through.
 """
 
 from __future__ import annotations
 
 import asyncio
 import hashlib
-import logging
+import sys
+import threading
 import time
-from typing import Final
+import traceback
+from typing import Any, Final
 
 from aiogram import Bot
 
 
-# Константы
+# Constants
 RECENT_HASHES_MAX_SIZE: Final[int] = 256
-RECENT_HASH_TTL_SECONDS: Final[float] = 300.0  # 5 минут -- совпадает с cooldown в global_error
+RECENT_HASH_TTL_SECONDS: Final[float] = 300.0  # 5 min — matches cooldown in global_error
 
-# Логгеры, от которых мы гарантированно не хотим получать уведомления,
-# даже если они вдруг выдадут ERROR (шум от транспортного уровня).
+# Logger name prefixes we never want notifications from
+# (noisy transport-level loggers).
 IGNORED_LOGGER_PREFIXES: Final[tuple[str, ...]] = (
     'aiohttp.access',
     'aiohttp.client',
@@ -46,179 +48,236 @@ IGNORED_LOGGER_PREFIXES: Final[tuple[str, ...]] = (
     'uvicorn.protocols',
     'websockets',
     'asyncio',
+    # Payment modules — isolated to payments.log, must not leak to Telegram
+    'app.payments',
+    'app.services.payment',
+    'app.services.yookassa_service',
+    'app.services.tribute_service',
+    'app.services.mulenpay_service',
+    'app.services.cloudpayments_service',
+    'app.services.platega_service',
+    'app.services.pal24_service',
+    'app.services.wata_service',
+    'app.services.kassa_ai_service',
+    'app.services.freekassa_service',
+    'app.external.cryptobot',
+    'app.external.heleket',
+    'app.external.tribute',
+    'app.external.yookassa_webhook',
+    'app.external.wata_webhook',
+    'app.external.heleket_webhook',
+    'app.external.pal24_client',
+    'app.external.telegram_stars',
+    'app.webserver.payments',
 )
 
 
-class TelegramErrorHandler(logging.Handler):
-    """Logging handler, отправляющий ERROR/CRITICAL записи в админский Telegram-чат.
+class TelegramNotifierProcessor:
+    """Structlog processor that sends ERROR/CRITICAL events to the admin Telegram chat.
 
-    Использует существующий механизм троттлинга и буферизации из
+    Uses the existing throttling and buffering from
     ``app.middlewares.global_error.send_error_to_admin_chat``.
 
     Usage::
 
-        handler = TelegramErrorHandler()
-        handler.setLevel(logging.ERROR)
-        logging.getLogger().addHandler(handler)
-
-        # Позже, когда Bot создан:
-        handler.set_bot(bot)
+        notifier = TelegramNotifierProcessor()
+        # Add to shared_processors list in logging_config.py
+        # Later, when Bot is created:
+        notifier.set_bot(bot)
     """
 
-    def __init__(self, level: int = logging.ERROR) -> None:
-        super().__init__(level=level)
+    def __init__(self) -> None:
         self._bot: Bot | None = None
-        # LRU-подобный кеш хешей недавних сообщений: hash -> timestamp
+        # LRU-like cache of recent message hashes: hash -> timestamp
         self._recent_hashes: dict[str, float] = {}
+        self._lock = threading.Lock()
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
     def set_bot(self, bot: Bot) -> None:
-        """Устанавливает Bot instance для отправки сообщений.
+        """Inject the Bot instance for sending messages.
 
-        Вызывается из main.py после создания бота.
+        Called from main.py after the bot is created.
         """
         self._bot = bot
 
     # ------------------------------------------------------------------
-    # logging.Handler interface
+    # Processor interface
     # ------------------------------------------------------------------
 
-    def emit(self, record: logging.LogRecord) -> None:
-        """Обрабатывает log record.
+    def __call__(
+        self,
+        logger: Any,
+        method_name: str,
+        event_dict: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Process a log event. Passthrough — always returns event_dict."""
 
-        Синхронный метод (требование logging). Планирует async-отправку
-        через event loop.
-        """
-        # 1. Фильтр по уровню (на случай если кто-то обойдёт setLevel)
-        if record.levelno < logging.ERROR:
-            return
+        # 1. Only handle error-level events
+        level = event_dict.get('level', '')
+        if level not in ('error', 'critical', 'exception'):
+            return event_dict
 
-        # 2. Уже отправлено через GlobalErrorMiddleware / @error_handler
-        if getattr(record, '_admin_notified', False):
-            return
+        # 2. Already sent via GlobalErrorMiddleware / @error_handler
+        if event_dict.get('_admin_notified'):
+            return event_dict
 
-        # 3. Фильтруем шумные логгеры
-        if any(record.name.startswith(prefix) for prefix in IGNORED_LOGGER_PREFIXES):
-            return
+        # 3. Filter noisy loggers
+        logger_name = event_dict.get('logger', '')
+        if any(logger_name.startswith(prefix) for prefix in IGNORED_LOGGER_PREFIXES):
+            return event_dict
 
-        # 4. Бот ещё не инициализирован -- пропускаем
+        # 4. Resolve exc_info=True to actual tuple while still in except block.
+        # logger.exception() sets exc_info=True (bool); we need the tuple for
+        # traceback extraction. sys.exc_info() works because the processor runs
+        # synchronously inside the except clause.
+        exc_info = event_dict.get('exc_info')
+        if exc_info is True:
+            event_dict['exc_info'] = sys.exc_info()
+
+        # 5. Bot not initialized yet — skip
         bot = self._bot
         if bot is None:
-            return
+            return event_dict
 
-        # 5. Дедупликация по хешу (logger_name + message)
-        msg_hash = self._compute_hash(record)
+        # 6. Deduplication via hash
+        msg_hash = self._compute_hash(event_dict)
         now = time.monotonic()
 
-        # Чистим просроченные записи (ленивая очистка)
-        self._evict_stale(now)
+        with self._lock:
+            self._evict_stale(now)
+            if msg_hash in self._recent_hashes:
+                return event_dict
+            self._recent_hashes[msg_hash] = now
 
-        if msg_hash in self._recent_hashes:
-            return
-        self._recent_hashes[msg_hash] = now
+        # 7. Schedule async send
+        self._schedule_send(bot, event_dict)
 
-        # 6. Планируем отправку через event loop
-        self._schedule_send(bot, record)
+        return event_dict
 
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _compute_hash(record: logging.LogRecord) -> str:
-        """Вычисляет короткий хеш для дедупликации.
+    def _compute_hash(event_dict: dict[str, Any]) -> str:
+        """Compute a short hash for deduplication.
 
-        Хешируем имя логгера + сообщение (без timestamp).
+        Hashes logger name + event message + exception type (if present).
         """
-        raw = f'{record.name}:{record.getMessage()}'
+        logger_name = event_dict.get('logger', '')
+        event_msg = event_dict.get('event', '')
+
+        # Include exception type for better dedup granularity
+        exc_type = ''
+        exc_info = event_dict.get('exc_info')
+        if exc_info and isinstance(exc_info, tuple) and exc_info[0] is not None:
+            exc_type = exc_info[0].__name__
+
+        raw = f'{logger_name}:{event_msg}:{exc_type}'
         return hashlib.md5(raw.encode('utf-8', errors='replace')).hexdigest()
 
     def _evict_stale(self, now: float) -> None:
-        """Удаляет устаревшие записи из кеша хешей."""
+        """Remove expired entries from the hash cache. Must be called under self._lock."""
         if not self._recent_hashes:
             return
         stale_keys = [k for k, ts in self._recent_hashes.items() if (now - ts) > RECENT_HASH_TTL_SECONDS]
         for k in stale_keys:
             self._recent_hashes.pop(k, None)
-        # Принудительная очистка при переполнении — удаляем самые старые
+        # Force eviction on overflow — remove oldest entries
         if len(self._recent_hashes) > RECENT_HASHES_MAX_SIZE:
-            sorted_keys = sorted(self._recent_hashes, key=self._recent_hashes.get)
+            sorted_keys = sorted(self._recent_hashes, key=lambda k: self._recent_hashes[k])
             for k in sorted_keys[: len(self._recent_hashes) - RECENT_HASHES_MAX_SIZE]:
                 self._recent_hashes.pop(k, None)
 
-    def _schedule_send(self, bot: Bot, record: logging.LogRecord) -> None:
-        """Планирует асинхронную отправку в event loop.
+    def _schedule_send(self, bot: Bot, event_dict: dict[str, Any]) -> None:
+        """Schedule async delivery via event loop.
 
-        Работает из любого потока:
-        - Если вызов из async-контекста -- создаём Task напрямую.
-        - Если из другого потока -- используем call_soon_threadsafe.
+        Works from any thread:
+        - From async context: creates Task directly.
+        - From other threads: uses call_soon_threadsafe.
         """
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
-            # Нет running loop -- мы в стороннем потоке без loop.
-            # Пытаемся получить loop, привязанный к основному потоку.
-            try:
-                loop = asyncio.get_event_loop()
-                if loop.is_closed():
-                    return
-                loop.call_soon_threadsafe(self._create_send_task, bot, record, loop)
-            except RuntimeError:
-                return
+            # No running loop — silently skip.
+            # The structlog processor runs in sync context; if there's no loop,
+            # we can't send anything.
+            return
         else:
-            # Мы в async-контексте -- создаём task напрямую
-            self._create_send_task(bot, record, loop)
+            # We're in async context — create task directly
+            self._create_send_task(bot, event_dict, loop)
 
-    def _create_send_task(self, bot: Bot, record: logging.LogRecord, loop: asyncio.AbstractEventLoop) -> None:
-        """Создаёт asyncio.Task для отправки уведомления."""
-        loop.create_task(self._send(bot, record))
+    def _create_send_task(
+        self,
+        bot: Bot,
+        event_dict: dict[str, Any],
+        loop: asyncio.AbstractEventLoop,
+    ) -> None:
+        """Create an asyncio.Task for sending the notification."""
+        loop.create_task(self._send(bot, event_dict))
 
     @staticmethod
-    async def _send(bot: Bot, record: logging.LogRecord) -> None:
-        """Отправляет log record в админский чат через существующую инфраструктуру."""
+    async def _send(bot: Bot, event_dict: dict[str, Any]) -> None:
+        """Send the log event to the admin chat via existing infrastructure."""
         try:
-            # Ленивый импорт -- избегаем циклических зависимостей при старте
+            # Lazy import to avoid circular dependencies at startup
             from app.middlewares.global_error import send_error_to_admin_chat
 
-            # Формируем pseudo-Exception из log record
-            error = _make_log_record_error(record)
+            # Build a pseudo-Exception from the event_dict
+            error = _make_event_dict_error(event_dict)
 
-            context_parts: list[str] = [f'Logger: {record.name}']
-            if record.funcName:
-                context_parts.append(f'Function: {record.funcName}')
-            if record.pathname and record.lineno:
-                context_parts.append(f'Location: {record.pathname}:{record.lineno}')
+            # Build rich context from event_dict
+            context_parts: list[str] = []
+            logger_name = event_dict.get('logger', '')
+            if logger_name:
+                context_parts.append(f'Logger: {logger_name}')
+            user_id = event_dict.get('user_id')
+            username = event_dict.get('username')
+            if user_id:
+                user_str = f'User: {user_id}'
+                if username:
+                    user_str += f' (@{username})'
+                context_parts.append(user_str)
 
             context = '\n'.join(context_parts)
 
-            # Извлекаем traceback из log record (если есть exc_info)
+            # Extract traceback from exc_info if present
             tb_override: str | None = None
-            if record.exc_info and record.exc_info[2] is not None:
-                import traceback
-
-                tb_override = ''.join(traceback.format_exception(*record.exc_info))
-            elif record.exc_text:
-                tb_override = record.exc_text
+            exc_info = event_dict.get('exc_info')
+            if exc_info and isinstance(exc_info, tuple) and exc_info[2] is not None:
+                tb_override = ''.join(traceback.format_exception(*exc_info))
 
             await send_error_to_admin_chat(bot, error, context, tb_override=tb_override)
 
         except Exception:
-            # Ни в коем случае не даём исключению утечь -- это logging handler,
-            # рекурсия убьёт приложение.
+            # Never let an exception leak — this is a logging processor,
+            # recursion would kill the application.
             pass
 
 
-def _make_log_record_error(record: logging.LogRecord) -> Exception:
-    """Создаёт Exception-обёртку для LogRecord.
+def _make_event_dict_error(event_dict: dict[str, Any]) -> Exception:
+    """Create an Exception wrapper for a structlog event_dict.
 
-    send_error_to_admin_chat использует type(error).__name__ как error_type.
-    Мы динамически создаём класс с правильным именем, чтобы не мутировать
-    общий класс между вызовами.
+    ``send_error_to_admin_chat`` uses ``type(error).__name__`` as error_type.
+    If exc_info contains a real exception, use its type name.
+    Otherwise, create a descriptive class from the log level.
     """
-    class_name = f'Log{record.levelname.capitalize()}'
+    # Prefer the real exception type from exc_info or error kwarg
+    exc_info = event_dict.get('exc_info')
+    if exc_info and isinstance(exc_info, tuple) and exc_info[1] is not None:
+        real_exc = exc_info[1]
+        class_name = type(real_exc).__name__
+    else:
+        error_kwarg = event_dict.get('error')
+        if error_kwarg and isinstance(error_kwarg, BaseException):
+            class_name = type(error_kwarg).__name__
+        else:
+            level = event_dict.get('level', 'error')
+            class_name = f'Log{level.capitalize()}'
+
     error_cls = type(
         class_name,
         (Exception,),
@@ -226,6 +285,7 @@ def _make_log_record_error(record: logging.LogRecord) -> Exception:
             '__str__': lambda self: self.args[0] if self.args else '',
         },
     )
-    error = error_cls(record.getMessage())
-    error.record = record  # type: ignore[attr-defined]
+    message = str(event_dict.get('event', ''))
+    error = error_cls(message)
+    error.event_dict = event_dict  # type: ignore[attr-defined]
     return error

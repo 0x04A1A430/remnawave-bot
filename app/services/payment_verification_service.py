@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 import re
 from collections import Counter
 from collections.abc import Iterable
@@ -11,6 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
+import structlog
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -35,7 +35,7 @@ from app.database.models import (
 )
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 PENDING_MAX_AGE = timedelta(hours=24)
@@ -181,9 +181,9 @@ class AutoPaymentVerificationService:
 
         self._task = asyncio.create_task(self._auto_check_loop())
         logger.info(
-            '🔄 Автопроверка пополнений запущена (каждые %s мин) для: %s',
-            interval_minutes,
-            display_names,
+            '🔄 Автопроверка пополнений запущена (каждые мин) для',
+            interval_minutes=interval_minutes,
+            display_names=display_names,
         )
 
     async def stop(self) -> None:
@@ -211,11 +211,7 @@ class AutoPaymentVerificationService:
                 except asyncio.CancelledError:
                     raise
                 except Exception as error:
-                    logger.error(
-                        'Ошибка автопроверки пополнений: %s',
-                        error,
-                        exc_info=True,
-                    )
+                    logger.error('Ошибка автопроверки пополнений', error=error, exc_info=True)
 
                 await asyncio.sleep(max(1, interval_minutes) * 60)
         except asyncio.CancelledError:
@@ -241,9 +237,7 @@ class AutoPaymentVerificationService:
                     for method, count in sorted(counts.items(), key=lambda item: method_display_name(item[0]))
                 )
                 logger.info(
-                    '🔄 Автопроверка пополнений: найдено %s инвойсов (%s)',
-                    len(candidates),
-                    summary,
+                    '🔄 Автопроверка пополнений: найдено инвойсов', candidates_count=len(candidates), summary=summary
                 )
 
                 for record in candidates:
@@ -256,32 +250,32 @@ class AutoPaymentVerificationService:
 
                     if not refreshed:
                         logger.debug(
-                            'Автопроверка пополнений: не удалось обновить %s %s',
-                            method_display_name(record.method),
-                            record.identifier,
+                            'Автопроверка пополнений: не удалось обновить',
+                            method_display_name=method_display_name(record.method),
+                            identifier=record.identifier,
                         )
                         continue
 
                     if refreshed.is_paid and not record.is_paid:
                         logger.info(
-                            '✅ %s %s отмечен как оплаченный после автопроверки',
-                            method_display_name(refreshed.method),
-                            refreshed.identifier,
+                            '✅ отмечен как оплаченный после автопроверки',
+                            method_display_name=method_display_name(refreshed.method),
+                            identifier=refreshed.identifier,
                         )
                     elif refreshed.status != record.status:
                         logger.info(
-                            'ℹ️ %s %s обновлён: %s → %s',
-                            method_display_name(refreshed.method),
-                            refreshed.identifier,
-                            record.status or '—',
-                            refreshed.status or '—',
+                            'ℹ️ обновлён: →',
+                            method_display_name=method_display_name(refreshed.method),
+                            identifier=refreshed.identifier,
+                            record_status=record.status or '—',
+                            refreshed_status=refreshed.status or '—',
                         )
                     else:
                         logger.debug(
-                            'Автопроверка пополнений: %s %s без изменений (%s)',
-                            method_display_name(refreshed.method),
-                            refreshed.identifier,
-                            refreshed.status or '—',
+                            'Автопроверка пополнений: без изменений',
+                            method_display_name=method_display_name(refreshed.method),
+                            identifier=refreshed.identifier,
+                            refreshed_status=refreshed.status or '—',
                         )
 
                 if session.in_transaction():
@@ -399,17 +393,17 @@ def _build_record(
 ) -> PendingPayment | None:
     user = getattr(payment, 'user', None)
     if user is None:
-        logger.debug('Skipping %s payment %s without linked user', method.value, identifier)
+        logger.debug('Skipping payment without linked user', method_value=method.value, identifier=identifier)
         return None
 
     created_at = getattr(payment, 'created_at', None)
     if not isinstance(created_at, datetime):
-        logger.debug('Skipping %s payment %s without valid created_at', method.value, identifier)
+        logger.debug('Skipping payment without valid created_at', method_value=method.value, identifier=identifier)
         return None
 
     local_id = getattr(payment, 'id', None)
     if local_id is None:
-        logger.debug('Skipping %s payment without local id', method.value)
+        logger.debug('Skipping payment without local id', method_value=method.value)
         return None
 
     return PendingPayment(
@@ -835,7 +829,7 @@ async def get_payment_record(
             return None
         await db.refresh(payment, attribute_names=['user'])
         if payment.created_at < cutoff:
-            logger.debug('YooKassa payment %s is older than cutoff', payment.id)
+            logger.debug('YooKassa payment is older than cutoff', payment_id=payment.id)
         return _build_record(
             method,
             payment,
@@ -918,7 +912,7 @@ async def get_payment_record(
             is_paid=bool(transaction.is_completed),
         )
 
-    logger.debug('Unsupported payment method requested: %s', method)
+    logger.debug('Unsupported payment method requested', method=method)
     return None
 
 
@@ -961,7 +955,7 @@ async def run_manual_check(
             result = await payment_service.get_kassa_ai_payment_status(db, local_payment_id)
             payment = result.get('payment') if result else None
         else:
-            logger.warning('Manual check requested for unsupported method %s', method)
+            logger.warning('Manual check requested for unsupported method', method=method)
             return None
 
         if not payment:
@@ -971,10 +965,10 @@ async def run_manual_check(
 
     except Exception as error:  # pragma: no cover - defensive logging
         logger.error(
-            'Manual status check failed for %s payment %s: %s',
-            method.value,
-            local_payment_id,
-            error,
+            'Manual status check failed for payment',
+            method_value=method.value,
+            local_payment_id=local_payment_id,
+            error=error,
             exc_info=True,
         )
         return None

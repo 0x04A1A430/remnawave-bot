@@ -6,12 +6,12 @@
 """
 
 import asyncio
-import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
 
+import structlog
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError, TelegramBadRequest, TelegramForbiddenError
 from sqlalchemy import delete, select
@@ -56,7 +56,7 @@ from app.database.models import (
 from app.services.remnawave_service import RemnaWaveService
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class BlockCheckStatus(Enum):
@@ -148,13 +148,13 @@ class BlockedUsersService:
             if 'chat not found' in error_lower or 'user not found' in error_lower:
                 # Пользователь удалил аккаунт или никогда не начинал диалог
                 return BlockCheckStatus.BLOCKED
-            logger.warning(f'TelegramBadRequest при проверке {telegram_id}: {e}')
+            logger.warning('TelegramBadRequest при проверке', telegram_id=telegram_id, error=e)
             return BlockCheckStatus.ERROR
         except TelegramAPIError as e:
-            logger.warning(f'TelegramAPIError при проверке {telegram_id}: {e}')
+            logger.warning('TelegramAPIError при проверке', telegram_id=telegram_id, error=e)
             return BlockCheckStatus.ERROR
         except Exception as e:
-            logger.error(f'Неожиданная ошибка при проверке {telegram_id}: {e}')
+            logger.error('Неожиданная ошибка при проверке', telegram_id=telegram_id, error=e)
             return BlockCheckStatus.ERROR
 
     async def _check_single_user(self, user: User) -> BlockCheckResult:
@@ -214,7 +214,7 @@ class BlockedUsersService:
         all_users = users_result.scalars().all()
         total_users = len(all_users)
 
-        logger.info(f'Начинаем проверку {total_users} пользователей на блокировку бота')
+        logger.info('Начинаем проверку пользователей на блокировку бота', total_users=total_users)
 
         # Проверяем пользователей батчами с ограничением параллелизма
         semaphore = asyncio.Semaphore(self.MAX_CONCURRENT_CHECKS)
@@ -234,7 +234,7 @@ class BlockedUsersService:
             for check_result in batch_results:
                 if isinstance(check_result, Exception):
                     result.errors += 1
-                    logger.error(f'Ошибка при проверке пользователя: {check_result}')
+                    logger.error('Ошибка при проверке пользователя', check_result=check_result)
                     continue
 
                 result.total_checked += 1
@@ -255,8 +255,10 @@ class BlockedUsersService:
         result.scan_duration_seconds = (datetime.now(tz=UTC) - start_time).total_seconds()
 
         logger.info(
-            f'Сканирование завершено: {result.blocked_count} заблокированных '
-            f'из {result.total_checked} проверенных за {result.scan_duration_seconds:.1f}с'
+            'Сканирование завершено: заблокированных из проверенных за с',
+            blocked_count=result.blocked_count,
+            total_checked=result.total_checked,
+            scan_duration_seconds=round(result.scan_duration_seconds, 1),
         )
 
         return result
@@ -273,14 +275,14 @@ class BlockedUsersService:
 
             async with self.remnawave_service.get_api_client() as api:
                 await api.delete_user(remnawave_uuid)
-                logger.info(f'Удален пользователь {remnawave_uuid} из Remnawave')
+                logger.info('Удален пользователь из Remnawave', remnawave_uuid=remnawave_uuid)
                 return True
         except Exception as e:
             error_msg = str(e).lower()
             if 'not found' in error_msg or '404' in error_msg:
-                logger.info(f'Пользователь {remnawave_uuid} уже удален из Remnawave')
+                logger.info('Пользователь уже удален из Remnawave', remnawave_uuid=remnawave_uuid)
                 return True
-            logger.error(f'Ошибка удаления {remnawave_uuid} из Remnawave: {e}')
+            logger.error('Ошибка удаления из Remnawave', remnawave_uuid=remnawave_uuid, error=e)
             return False
 
     async def delete_user_from_db(self, db: AsyncSession, user_id: int) -> bool:
@@ -295,7 +297,7 @@ class BlockedUsersService:
             user = user_result.scalar_one_or_none()
 
             if not user:
-                logger.warning(f'Пользователь {user_id} не найден в БД')
+                logger.warning('Пользователь не найден в БД', user_id=user_id)
                 return False
 
             user_display = user.telegram_id or user.email or f'#{user.id}'
@@ -360,11 +362,11 @@ class BlockedUsersService:
             await db.delete(user)
             await db.commit()
 
-            logger.info(f'Пользователь {user_display} полностью удален из БД')
+            logger.info('Пользователь полностью удален из БД', user_display=user_display)
             return True
 
         except Exception as e:
-            logger.error(f'Ошибка удаления пользователя {user_id} из БД: {e}')
+            logger.error('Ошибка удаления пользователя из БД', user_id=user_id, error=e)
             await db.rollback()
             return False
 
@@ -381,11 +383,11 @@ class BlockedUsersService:
             user.updated_at = datetime.now(tz=UTC)
             await db.commit()
 
-            logger.info(f'Пользователь {user.telegram_id or user.id} помечен как заблокированный')
+            logger.info('Пользователь помечен как заблокированный', telegram_id=user.telegram_id or user.id)
             return True
 
         except Exception as e:
-            logger.error(f'Ошибка пометки пользователя {user_id}: {e}')
+            logger.error('Ошибка пометки пользователя', user_id=user_id, error=e)
             await db.rollback()
             return False
 

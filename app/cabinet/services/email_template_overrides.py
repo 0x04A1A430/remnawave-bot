@@ -4,17 +4,17 @@ Service for managing email template overrides stored in the database.
 Custom templates override the hardcoded defaults from email_templates.py.
 """
 
-import logging
 from datetime import datetime
 from typing import Any
 
+import structlog
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.database import AsyncSessionLocal
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def get_template_override(
@@ -56,7 +56,9 @@ async def get_template_override(
             return None
 
     except Exception as e:
-        logger.debug('Не удалось получить override шаблона %s/%s: %s', notification_type, language, e)
+        logger.debug(
+            'Не удалось получить override шаблона /', notification_type=notification_type, language=language, e=e
+        )
         return None
 
 

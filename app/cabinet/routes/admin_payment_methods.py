@@ -1,8 +1,8 @@
 """Admin routes for payment method configuration in cabinet."""
 
-import logging
 from datetime import datetime
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,7 +20,7 @@ from app.services.payment_method_config_service import (
 from ..dependencies import get_cabinet_db, get_current_admin_user
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/admin/payment-methods', tags=['Cabinet Admin Payment Methods'])
 
@@ -168,7 +168,7 @@ async def update_payment_methods_order(
 ):
     """Batch update sort order for payment methods."""
     await update_sort_order(db, request.method_ids)
-    logger.info(f'Admin {admin.id} updated payment methods order: {request.method_ids}')
+    logger.info('Admin updated payment methods order', admin_id=admin.id, method_ids=request.method_ids)
     return {'success': True}
 
 
@@ -222,7 +222,7 @@ async def update_payment_method(
             detail=f'Payment method not found: {method_id}',
         )
 
-    logger.info(f'Admin {admin.id} updated payment method config: {method_id}')
+    logger.info('Admin updated payment method config', admin_id=admin.id, method_id=method_id)
 
     defaults = _get_method_defaults()
     return _enrich_config(config, defaults)

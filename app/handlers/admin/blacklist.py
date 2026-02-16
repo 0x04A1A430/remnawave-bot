@@ -2,8 +2,7 @@
 Обработчики админ-панели для управления черным списком
 """
 
-import logging
-
+import structlog
 from aiogram import types
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
@@ -14,7 +13,7 @@ from app.states import BlacklistStates
 from app.utils.decorators import admin_required, error_handler
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @admin_required
@@ -23,7 +22,7 @@ async def show_blacklist_settings(callback: types.CallbackQuery, db_user: User, 
     """
     Показывает настройки черного списка
     """
-    logger.info(f'Вызван обработчик show_blacklist_settings для пользователя {callback.from_user.id}')
+    logger.info('Вызван обработчик show_blacklist_settings для пользователя', from_user_id=callback.from_user.id)
 
     is_enabled = blacklist_service.is_blacklist_check_enabled()
     github_url = blacklist_service.get_blacklist_github_url()

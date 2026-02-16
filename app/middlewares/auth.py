@@ -1,9 +1,9 @@
 import asyncio
-import logging
 from collections.abc import Awaitable, Callable
 from datetime import datetime
 from typing import Any
 
+import structlog
 from aiogram import BaseMiddleware
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.fsm.context import FSMContext
@@ -19,7 +19,7 @@ from app.utils.check_reg_process import is_registration_process
 from app.utils.validators import sanitize_telegram_name
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def _refresh_remnawave_description(remnawave_uuid: str, description: str, telegram_id: int) -> None:
@@ -27,9 +27,11 @@ async def _refresh_remnawave_description(remnawave_uuid: str, description: str, 
         remnawave_service = RemnaWaveService()
         async with remnawave_service.get_api_client() as api:
             await api.update_user(uuid=remnawave_uuid, description=description)
-        logger.info(f'✅ [Middleware] Описание пользователя {telegram_id} обновлено в RemnaWave')
+        logger.info('✅ [Middleware] Описание пользователя обновлено в RemnaWave', telegram_id=telegram_id)
     except Exception as remnawave_error:
-        logger.error(f'❌ [Middleware] Ошибка обновления RemnaWave для {telegram_id}: {remnawave_error}')
+        logger.error(
+            '❌ [Middleware] Ошибка обновления RemnaWave для', telegram_id=telegram_id, remnawave_error=remnawave_error
+        )
 
 
 class AuthMiddleware(BaseMiddleware):
@@ -73,13 +75,13 @@ class AuthMiddleware(BaseMiddleware):
 
                     if is_reg_process or is_channel_check or is_start_command:
                         if is_start_command:
-                            logger.info(f'🚀 Пропускаем команду /start от пользователя {user.id}')
+                            logger.info('🚀 Пропускаем команду /start от пользователя', user_id=user.id)
                         elif is_channel_check:
                             logger.info(
-                                f'🔍 Пропускаем незарегистрированного пользователя {user.id} для проверки канала'
+                                '🔍 Пропускаем незарегистрированного пользователя для проверки канала', user_id=user.id
                             )
                         else:
-                            logger.info(f'🔍 Пропускаем пользователя {user.id} в процессе регистрации')
+                            logger.info('🔍 Пропускаем пользователя в процессе регистрации', user_id=user.id)
                         data['db'] = db
                         data['db_user'] = None
                         data['is_admin'] = False
@@ -90,7 +92,7 @@ class AuthMiddleware(BaseMiddleware):
                         await event.answer('▶️ Для начала работы необходимо выполнить команду /start')
                     elif isinstance(event, CallbackQuery):
                         await event.answer('▶️ Необходимо начать с команды /start', show_alert=True)
-                    logger.info(f'🚫 Заблокирован незарегистрированный пользователь {user.id}')
+                    logger.info('🚫 Заблокирован незарегистрированный пользователь', user_id=user.id)
                     return None
                 from app.database.models import UserStatus
 
@@ -99,7 +101,7 @@ class AuthMiddleware(BaseMiddleware):
                         await event.answer('🚫 Ваш аккаунт заблокирован администратором.')
                     elif isinstance(event, CallbackQuery):
                         await event.answer('🚫 Ваш аккаунт заблокирован администратором.', show_alert=True)
-                    logger.info(f'🚫 Заблокированный пользователь {user.id} попытался использовать бота')
+                    logger.info('🚫 Заблокированный пользователь попытался использовать бота', user_id=user.id)
                     return None
 
                 if db_user.status == UserStatus.DELETED.value:
@@ -137,7 +139,7 @@ class AuthMiddleware(BaseMiddleware):
                     )
 
                     if is_start_or_registration:
-                        logger.info(f'🔄 Удаленный пользователь {user.id} начинает повторную регистрацию')
+                        logger.info('🔄 Удаленный пользователь начинает повторную регистрацию', user_id=user.id)
                         data['db'] = db
                         data['db_user'] = None
                         data['is_admin'] = False
@@ -152,7 +154,7 @@ class AuthMiddleware(BaseMiddleware):
                         await event.answer(
                             '❌ Ваш аккаунт был удален. Для повторной регистрации выполните /start', show_alert=True
                         )
-                    logger.info(f'❌ Удаленный пользователь {user.id} попытался использовать бота без /start')
+                    logger.info('❌ Удаленный пользователь попытался использовать бота без /start', user_id=user.id)
                     return None
 
                 profile_updated = False
@@ -161,7 +163,10 @@ class AuthMiddleware(BaseMiddleware):
                     old_username = db_user.username
                     db_user.username = user.username
                     logger.info(
-                        f"🔄 [Middleware] Username обновлен для {user.id}: '{old_username}' → '{db_user.username}'"
+                        '🔄 [Middleware] Username обновлен для',
+                        user_id=user.id,
+                        old_username=old_username,
+                        username=db_user.username,
                     )
                     profile_updated = True
 
@@ -171,7 +176,10 @@ class AuthMiddleware(BaseMiddleware):
                     old_first_name = db_user.first_name
                     db_user.first_name = safe_first
                     logger.info(
-                        f"🔄 [Middleware] Имя обновлено для {user.id}: '{old_first_name}' → '{db_user.first_name}'"
+                        '🔄 [Middleware] Имя обновлено для',
+                        user_id=user.id,
+                        old_first_name=old_first_name,
+                        first_name=db_user.first_name,
                     )
                     profile_updated = True
 
@@ -179,7 +187,10 @@ class AuthMiddleware(BaseMiddleware):
                     old_last_name = db_user.last_name
                     db_user.last_name = safe_last
                     logger.info(
-                        f"🔄 [Middleware] Фамилия обновлена для {user.id}: '{old_last_name}' → '{db_user.last_name}'"
+                        '🔄 [Middleware] Фамилия обновлена для',
+                        user_id=user.id,
+                        old_last_name=old_last_name,
+                        last_name=db_user.last_name,
                     )
                     profile_updated = True
 
@@ -187,7 +198,7 @@ class AuthMiddleware(BaseMiddleware):
 
                 if profile_updated:
                     db_user.updated_at = datetime.utcnow()
-                    logger.info(f'💾 [Middleware] Профиль пользователя {user.id} обновлен в middleware')
+                    logger.info('💾 [Middleware] Профиль пользователя обновлен в middleware', user_id=user.id)
 
                     if db_user.remnawave_uuid:
                         description = settings.format_remnawave_user_description(
@@ -210,15 +221,15 @@ class AuthMiddleware(BaseMiddleware):
                     await db.commit()
                 except (InterfaceError, OperationalError) as conn_err:
                     # Соединение закрылось (таймаут после долгой операции) - просто логируем
-                    logger.warning(f'⚠️ Соединение с БД закрыто после обработки, пропускаем commit: {conn_err}')
+                    logger.warning('⚠️ Соединение с БД закрыто после обработки, пропускаем commit', conn_err=conn_err)
                 return result
 
             except (InterfaceError, OperationalError) as conn_err:
                 # Соединение с БД закрылось - не пытаемся rollback
-                logger.error(f'Ошибка соединения с БД в AuthMiddleware: {conn_err}')
-                logger.error(f'Event type: {type(event)}')
+                logger.error('Ошибка соединения с БД в AuthMiddleware', conn_err=conn_err)
+                logger.error('Event type', event_type=type(event))
                 if hasattr(event, 'data'):
-                    logger.error(f'Callback data: {event.data}')
+                    logger.error('Callback data', event_data=event.data)
                 raise
             except TelegramForbiddenError:
                 # User blocked the bot — normal, not an error
@@ -230,10 +241,10 @@ class AuthMiddleware(BaseMiddleware):
                     return None
                 raise
             except Exception as e:
-                logger.error(f'Ошибка в AuthMiddleware: {e}')
-                logger.error(f'Event type: {type(event)}')
+                logger.error('Ошибка в AuthMiddleware', error=e)
+                logger.error('Event type', event_type=type(event))
                 if hasattr(event, 'data'):
-                    logger.error(f'Callback data: {event.data}')
+                    logger.error('Callback data', event_data=event.data)
                 try:
                     await db.rollback()
                 except (InterfaceError, OperationalError):

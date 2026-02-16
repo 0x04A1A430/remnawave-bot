@@ -1,6 +1,6 @@
-import logging
 from datetime import datetime, timedelta
 
+import structlog
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -8,7 +8,7 @@ from sqlalchemy.orm import selectinload
 from app.database.models import PaymentMethod, Transaction, TransactionType, User
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Реальные платёжные методы для подсчёта дохода
 # Исключены: MANUAL (админские), BALANCE (оплата с баланса), NULL (колесо, промокоды, бонусы)
@@ -55,7 +55,12 @@ async def create_transaction(
     await db.commit()
     await db.refresh(transaction)
 
-    logger.info(f'💳 Создана транзакция: {type.value} на {amount_kopeks / 100}₽ для пользователя {user_id}')
+    logger.info(
+        '💳 Создана транзакция: на ₽ для пользователя',
+        type_value=type.value,
+        amount_kopeks=amount_kopeks / 100,
+        user_id=user_id,
+    )
 
     # Отправляем событие о транзакции
     try:
@@ -77,7 +82,7 @@ async def create_transaction(
             db=db,
         )
     except Exception as error:
-        logger.warning('Failed to emit transaction event: %s', error)
+        logger.warning('Failed to emit transaction event', error=error)
 
     try:
         from app.services.promo_group_assignment import (
@@ -86,11 +91,7 @@ async def create_transaction(
 
         await maybe_assign_promo_group_by_total_spent(db, user_id)
     except Exception as exc:
-        logger.debug(
-            'Не удалось проверить автовыдачу промогруппы для пользователя %s: %s',
-            user_id,
-            exc,
-        )
+        logger.debug('Не удалось проверить автовыдачу промогруппы для пользователя', user_id=user_id, exc=exc)
     if type == TransactionType.SUBSCRIPTION_PAYMENT:
         try:
             from app.services.referral_contest_service import referral_contest_service
@@ -101,11 +102,7 @@ async def create_transaction(
                 amount_kopeks,
             )
         except Exception as exc:
-            logger.debug(
-                'Не удалось записать событие конкурса для пользователя %s: %s',
-                user_id,
-                exc,
-            )
+            logger.debug('Не удалось записать событие конкурса для пользователя', user_id=user_id, exc=exc)
 
     return transaction
 
@@ -171,7 +168,7 @@ async def complete_transaction(db: AsyncSession, transaction: Transaction) -> Tr
     await db.commit()
     await db.refresh(transaction)
 
-    logger.info(f'✅ Транзакция {transaction.id} завершена')
+    logger.info('✅ Транзакция завершена', transaction_id=transaction.id)
 
     try:
         from app.services.promo_group_assignment import (
@@ -181,9 +178,7 @@ async def complete_transaction(db: AsyncSession, transaction: Transaction) -> Tr
         await maybe_assign_promo_group_by_total_spent(db, transaction.user_id)
     except Exception as exc:
         logger.debug(
-            'Не удалось проверить автовыдачу промогруппы для пользователя %s: %s',
-            transaction.user_id,
-            exc,
+            'Не удалось проверить автовыдачу промогруппы для пользователя', user_id=transaction.user_id, exc=exc
         )
 
     return transaction
@@ -392,7 +387,7 @@ async def check_tribute_payment_duplicate(
     transaction = result.scalar_one_or_none()
 
     if transaction:
-        logger.info(f'🔍 Найден дубликат платежа в течение 24ч: {transaction.id}')
+        logger.info('🔍 Найден дубликат платежа в течение 24ч', transaction_id=transaction.id)
 
     return transaction
 
@@ -408,7 +403,7 @@ async def create_unique_tribute_transaction(
         timestamp = int(datetime.utcnow().timestamp())
         external_id = f'donation_{payment_id}_{amount_kopeks}_{timestamp}'
 
-        logger.info(f'Создан уникальный external_id для избежания дубликатов: {external_id}')
+        logger.info('Создан уникальный external_id для избежания дубликатов', external_id=external_id)
 
     return await create_transaction(
         db=db,

@@ -361,24 +361,24 @@ async def get_subscription_cost(subscription, db: AsyncSession) -> int:
 
         total_cost = base_cost + servers_cost + traffic_cost + devices_cost
 
-        logger.info(f'📊 Месячная стоимость конфигурации подписки {subscription.id}:')
+        logger.info('📊 Месячная стоимость конфигурации подписки', subscription_id=subscription.id)
         base_log = f'   📅 Базовый тариф (30 дней): {base_cost_original / 100}₽'
         if period_discount_percent > 0:
             discount_value = base_cost_original * period_discount_percent // 100
             base_log += f' → {base_cost / 100}₽ (скидка {period_discount_percent}%: -{discount_value / 100}₽)'
         logger.info(base_log)
         if servers_cost > 0:
-            logger.info(f'   🌍 Серверы: {servers_cost / 100}₽')
+            logger.info('🌍 Серверы: ₽', servers_cost=servers_cost / 100)
         if traffic_cost > 0:
-            logger.info(f'   📊 Трафик: {traffic_cost / 100}₽')
+            logger.info('📊 Трафик: ₽', traffic_cost=traffic_cost / 100)
         if devices_cost > 0:
-            logger.info(f'   📱 Устройства: {devices_cost / 100}₽')
-        logger.info(f'   💎 ИТОГО: {total_cost / 100}₽')
+            logger.info('📱 Устройства: ₽', devices_cost=devices_cost / 100)
+        logger.info('💎 ИТОГО: ₽', total_cost=total_cost / 100)
 
         return total_cost
 
     except Exception as e:
-        logger.error(f'⚠️ Ошибка расчета стоимости подписки: {e}')
+        logger.error('⚠️ Ошибка расчета стоимости подписки', error=e)
         return 0
 
 

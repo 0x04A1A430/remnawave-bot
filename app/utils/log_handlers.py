@@ -77,12 +77,17 @@ class PaymentLogFilter(logging.Filter):
         'app.services.platega_service',
         'app.services.pal24_service',
         'app.services.wata_service',
+        'app.services.kassa_ai_service',
+        'app.services.freekassa_service',
         'app.external.cryptobot',
         'app.external.heleket',
         'app.external.tribute',
         'app.external.yookassa_webhook',
         'app.external.wata_webhook',
         'app.external.heleket_webhook',
+        'app.external.pal24_client',
+        'app.external.telegram_stars',
+        'app.webserver.payments',
     )
 
     def filter(self, record: logging.LogRecord) -> bool:

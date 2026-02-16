@@ -2,17 +2,17 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 
+import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.webhook_service import webhook_service
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class EventEmitter:
@@ -39,12 +39,16 @@ class EventEmitter:
     def register_websocket(self, websocket: Any) -> None:
         """Зарегистрировать WebSocket подключение."""
         self._websocket_connections.add(websocket)
-        logger.debug('WebSocket connection registered. Total: %d', len(self._websocket_connections))
+        logger.debug(
+            'WebSocket connection registered. Total', websocket_connections_count=len(self._websocket_connections)
+        )
 
     def unregister_websocket(self, websocket: Any) -> None:
         """Отменить регистрацию WebSocket подключения."""
         self._websocket_connections.discard(websocket)
-        logger.debug('WebSocket connection unregistered. Total: %d', len(self._websocket_connections))
+        logger.debug(
+            'WebSocket connection unregistered. Total', websocket_connections_count=len(self._websocket_connections)
+        )
 
     async def emit(
         self,
@@ -68,7 +72,7 @@ class EventEmitter:
                     else:
                         callback(event_data)
                 except Exception as error:
-                    logger.exception('Error in event listener for %s: %s', event_type, error)
+                    logger.exception('Error in event listener for', event_type=event_type, error=error)
 
         # Отправляем через WebSocket
         await self._broadcast_to_websockets(event_data)
@@ -89,7 +93,7 @@ class EventEmitter:
             try:
                 await ws.send_text(message)
             except Exception as error:
-                logger.warning('Failed to send WebSocket message: %s', error)
+                logger.warning('Failed to send WebSocket message', error=error)
                 disconnected.add(ws)
 
         # Удаляем отключенные соединения

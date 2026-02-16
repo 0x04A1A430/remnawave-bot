@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import logging
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, Security
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
@@ -31,7 +31,7 @@ from ..schemas.logs import (
 
 router = APIRouter()
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 SYSTEM_LOG_PREVIEW_LIMIT_DEFAULT = 4000
@@ -90,7 +90,7 @@ async def get_system_log_preview(
     try:
         content, size_bytes, mtime = await _read_system_log(log_path)
     except FileNotFoundError:
-        logger.warning('Лог-файл %s исчез во время чтения', log_path)
+        logger.warning('Лог-файл исчез во время чтения', log_path=log_path)
         return SystemLogPreviewResponse(
             path=str(log_path),
             exists=False,
@@ -103,7 +103,7 @@ async def get_system_log_preview(
             download_url='/logs/system/download',
         )
     except Exception as error:  # pragma: no cover - защита от неожиданных ошибок чтения
-        logger.error('Ошибка чтения лог-файла %s: %s', log_path, error)
+        logger.error('Ошибка чтения лог-файла', log_path=log_path, error=error)
         raise HTTPException(status_code=500, detail='Не удалось прочитать лог-файл') from error
 
     preview_text = content[-preview_limit:] if preview_limit > 0 else ''
@@ -140,7 +140,7 @@ async def download_system_log(
             filename=log_path.name,
         )
     except Exception as error:  # pragma: no cover - защита от неожиданных ошибок отдачи файла
-        logger.error('Ошибка отправки лог-файла %s: %s', log_path, error)
+        logger.error('Ошибка отправки лог-файла', log_path=log_path, error=error)
         raise HTTPException(status_code=500, detail='Не удалось отправить лог-файл') from error
 
 
@@ -158,7 +158,7 @@ async def get_system_log_full(
     try:
         content, size_bytes, mtime = await _read_system_log(log_path)
     except Exception as error:  # pragma: no cover - защита от неожиданных ошибок чтения
-        logger.error('Ошибка чтения лог-файла %s: %s', log_path, error)
+        logger.error('Ошибка чтения лог-файла', log_path=log_path, error=error)
         raise HTTPException(status_code=500, detail='Не удалось прочитать лог-файл') from error
 
     return SystemLogFullResponse(

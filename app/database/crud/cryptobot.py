@@ -1,6 +1,6 @@
-import logging
 from datetime import datetime
 
+import structlog
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -8,7 +8,7 @@ from sqlalchemy.orm import selectinload
 from app.database.models import CryptoBotPayment
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def create_cryptobot_payment(
@@ -41,7 +41,13 @@ async def create_cryptobot_payment(
     await db.commit()
     await db.refresh(payment)
 
-    logger.info(f'Создан CryptoBot платеж: {invoice_id} на {amount} {asset} для пользователя {user_id}')
+    logger.info(
+        'Создан CryptoBot платеж: на для пользователя',
+        invoice_id=invoice_id,
+        amount=amount,
+        asset=asset,
+        user_id=user_id,
+    )
     return payment
 
 
@@ -78,7 +84,7 @@ async def update_cryptobot_payment_status(
     await db.commit()
     await db.refresh(payment)
 
-    logger.info(f'Обновлен статус CryptoBot платежа {invoice_id}: {status}')
+    logger.info('Обновлен статус CryptoBot платежа', invoice_id=invoice_id, status=status)
     return payment
 
 
@@ -96,7 +102,7 @@ async def link_cryptobot_payment_to_transaction(
     await db.commit()
     await db.refresh(payment)
 
-    logger.info(f'Связан CryptoBot платеж {invoice_id} с транзакцией {transaction_id}')
+    logger.info('Связан CryptoBot платеж с транзакцией', invoice_id=invoice_id, transaction_id=transaction_id)
     return payment
 
 

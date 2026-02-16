@@ -1,7 +1,6 @@
 """Promo code routes for cabinet."""
 
-import logging
-
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,7 +11,7 @@ from app.services.promocode_service import PromoCodeService
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/promocode', tags=['Cabinet Promocode'])
 

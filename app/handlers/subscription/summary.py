@@ -1,6 +1,6 @@
-import logging
 from typing import Optional
 
+import structlog
 from aiogram import types
 from aiogram.fsm.context import FSMContext
 
@@ -10,7 +10,7 @@ from app.services.subscription_checkout_service import save_subscription_checkou
 from app.states import SubscriptionStates
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def present_subscription_summary(
@@ -35,11 +35,7 @@ async def present_subscription_summary(
     try:
         summary_text, prepared_data = await _prepare_subscription_summary(db_user, data, texts)
     except ValueError as exc:
-        logger.error(
-            'Ошибка в расчете цены подписки для пользователя %s: %s',
-            db_user.telegram_id,
-            exc,
-        )
+        logger.error('Ошибка в расчете цены подписки для пользователя', telegram_id=db_user.telegram_id, exc=exc)
         await callback.answer('Ошибка расчета цены. Обратитесь в поддержку.', show_alert=True)
         return False
 

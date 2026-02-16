@@ -1,5 +1,4 @@
-import logging
-
+import structlog
 from aiogram import Dispatcher, F, types
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,7 +12,7 @@ from app.localization.texts import get_texts
 from app.utils.decorators import admin_required, error_handler
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @admin_required

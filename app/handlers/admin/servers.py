@@ -1,6 +1,6 @@
 import html
-import logging
 
+import structlog
 from aiogram import Dispatcher, F, types
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,7 +24,7 @@ from app.utils.cache import cache
 from app.utils.decorators import admin_required, error_handler
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 def _build_server_edit_view(server):
@@ -262,7 +262,7 @@ async def sync_servers_with_remnawave(callback: types.CallbackQuery, db_user: Us
         await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
 
     except Exception as e:
-        logger.error(f'Ошибка синхронизации серверов: {e}')
+        logger.error('Ошибка синхронизации серверов', error=e)
         await callback.message.edit_text(
             f'❌ Ошибка синхронизации: {e!s}',
             reply_markup=types.InlineKeyboardMarkup(
@@ -1092,7 +1092,7 @@ async def sync_server_user_counts_handler(callback: types.CallbackQuery, db_user
         await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
 
     except Exception as e:
-        logger.error(f'Ошибка синхронизации счетчиков: {e}')
+        logger.error('Ошибка синхронизации счетчиков', error=e)
         await callback.message.edit_text(
             f'❌ Ошибка синхронизации: {e!s}',
             reply_markup=types.InlineKeyboardMarkup(

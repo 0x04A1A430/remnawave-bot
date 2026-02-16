@@ -1,7 +1,6 @@
 """Handlers for Platega balance interactions."""
 
-import logging
-
+import structlog
 from aiogram import types
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,7 +14,7 @@ from app.states import BalanceStates
 from app.utils.decorators import error_handler
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 def _get_active_methods() -> list[int]:
@@ -275,7 +274,7 @@ async def process_platega_payment_amount(
             payment_method_code=method_code,
         )
     except Exception as error:
-        logger.exception('Ошибка создания платежа Platega: %s', error)
+        logger.exception('Ошибка создания платежа Platega', error=error)
         payment_result = None
 
     if not payment_result or not payment_result.get('redirect_url'):
@@ -336,16 +335,13 @@ async def process_platega_payment_amount(
     try:
         await message.delete()
     except Exception as delete_error:  # pragma: no cover - зависит от прав бота
-        logger.warning('Не удалось удалить сообщение с суммой Platega: %s', delete_error)
+        logger.warning('Не удалось удалить сообщение с суммой Platega', delete_error=delete_error)
 
     if prompt_message_id:
         try:
             await message.bot.delete_message(prompt_chat_id, prompt_message_id)
         except Exception as delete_error:  # pragma: no cover - диагностический лог
-            logger.warning(
-                'Не удалось удалить сообщение с запросом суммы Platega: %s',
-                delete_error,
-            )
+            logger.warning('Не удалось удалить сообщение с запросом суммы Platega', delete_error=delete_error)
 
     invoice_message = await message.answer(
         instructions_template.format(
@@ -374,7 +370,7 @@ async def process_platega_payment_amount(
                 metadata=payment_metadata,
             )
     except Exception as error:  # pragma: no cover - диагностический лог
-        logger.warning('Не удалось сохранить данные сообщения Platega: %s', error)
+        logger.warning('Не удалось сохранить данные сообщения Platega', error=error)
 
     await state.update_data(
         platega_invoice_message_id=invoice_message.message_id,
@@ -400,7 +396,7 @@ async def check_platega_payment_status(
     try:
         status_info = await payment_service.get_platega_payment_status(db, local_payment_id)
     except Exception as error:
-        logger.exception('Ошибка проверки статуса Platega: %s', error)
+        logger.exception('Ошибка проверки статуса Platega', error=error)
         await callback.answer('⚠️ Ошибка проверки статуса', show_alert=True)
         return
 

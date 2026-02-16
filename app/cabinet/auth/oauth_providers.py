@@ -1,18 +1,18 @@
 """OAuth 2.0 provider implementations for cabinet authentication."""
 
-import logging
 import secrets
 from abc import ABC, abstractmethod
 from typing import Any, TypedDict
 
 import httpx
+import structlog
 from pydantic import BaseModel
 
 from app.config import settings
 from app.utils.cache import cache, cache_key
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 STATE_TTL_SECONDS = 600  # 10 minutes
 

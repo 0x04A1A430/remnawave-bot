@@ -2,8 +2,7 @@
 Обработчики команд для массовой блокировки пользователей
 """
 
-import logging
-
+import structlog
 from aiogram import types
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,7 +13,7 @@ from app.states import AdminStates
 from app.utils.decorators import admin_required, error_handler
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @admin_required
@@ -77,7 +76,7 @@ async def process_bulk_ban_list(message: types.Message, db_user: User, state: FS
     try:
         telegram_ids = await bulk_ban_service.parse_telegram_ids_from_text(input_text)
     except Exception as e:
-        logger.error(f'Ошибка парсинга Telegram ID: {e}')
+        logger.error('Ошибка парсинга Telegram ID', error=e)
         await message.answer(
             '❌ Ошибка при обработке списка ID. Проверьте формат ввода.',
             reply_markup=types.InlineKeyboardMarkup(
@@ -143,7 +142,7 @@ async def process_bulk_ban_list(message: types.Message, db_user: User, state: FS
         )
 
     except Exception as e:
-        logger.error(f'Ошибка при выполнении массовой блокировки: {e}')
+        logger.error('Ошибка при выполнении массовой блокировки', error=e)
         await message.answer(
             '❌ Произошла ошибка при выполнении массовой блокировки',
             reply_markup=types.InlineKeyboardMarkup(

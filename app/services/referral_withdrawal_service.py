@@ -4,9 +4,9 @@
 """
 
 import json
-import logging
 from datetime import datetime, timedelta
 
+import structlog
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,7 +20,7 @@ from app.database.models import (
 )
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class ReferralWithdrawalService:

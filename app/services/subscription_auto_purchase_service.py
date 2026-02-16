@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 
+import structlog
 from aiogram import Bot
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,7 +31,7 @@ from app.utils.pricing_utils import format_period_description
 from app.utils.timezone import format_local_datetime
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 def _format_user_id(user: User) -> str:
@@ -75,8 +75,8 @@ async def _prepare_auto_purchase(
     period_days = int(cart_data.get('period_days') or 0)
     if period_days <= 0:
         logger.info(
-            '🔁 Автопокупка: у пользователя %s нет корректного периода в сохранённой корзине',
-            _format_user_id(user),
+            '🔁 Автопокупка: у пользователя нет корректного периода в сохранённой корзине',
+            format_user_id=_format_user_id(user),
         )
         return None
 
@@ -84,10 +84,7 @@ async def _prepare_auto_purchase(
     # т.к. после db.refresh() в payment-сервисах связи сбрасываются
     fresh_user = await get_user_by_id(db, user.id)
     if not fresh_user:
-        logger.warning(
-            '🔁 Автопокупка: не удалось перезагрузить пользователя %s',
-            _format_user_id(user),
-        )
+        logger.warning('🔁 Автопокупка: не удалось перезагрузить пользователя', format_user_id=_format_user_id(user))
         return None
     user = fresh_user
 
@@ -97,9 +94,9 @@ async def _prepare_auto_purchase(
     period_config = context.period_map.get(f'days:{period_days}')
     if not period_config:
         logger.warning(
-            '🔁 Автопокупка: период %s дней недоступен для пользователя %s',
-            period_days,
-            _format_user_id(user),
+            '🔁 Автопокупка: период дней недоступен для пользователя',
+            period_days=period_days,
+            format_user_id=_format_user_id(user),
         )
         return None
 
@@ -162,9 +159,9 @@ async def _get_tariff_price_for_period(
     tariff = await get_tariff_by_id(db, tariff_id)
     if not tariff or not tariff.is_active:
         logger.warning(
-            '🔁 Автопокупка: тариф %s недоступен для пользователя %s',
-            tariff_id,
-            _format_user_id(user),
+            '🔁 Автопокупка: тариф недоступен для пользователя',
+            tariff_id=tariff_id,
+            format_user_id=_format_user_id(user),
         )
         return None
 
@@ -172,9 +169,7 @@ async def _get_tariff_price_for_period(
     base_price = prices.get(str(period_days))
     if base_price is None:
         logger.warning(
-            '🔁 Автопокупка: период %s дней недоступен для тарифа %s',
-            period_days,
-            tariff_id,
+            '🔁 Автопокупка: период дней недоступен для тарифа', period_days=period_days, tariff_id=tariff_id
         )
         return None
 
@@ -201,8 +196,7 @@ async def _prepare_auto_extend_context(
     subscription = await get_subscription_by_user_id(db, user.id)
     if subscription is None:
         logger.info(
-            '🔁 Автопокупка: у пользователя %s нет активной подписки для продления',
-            _format_user_id(user),
+            '🔁 Автопокупка: у пользователя нет активной подписки для продления', format_user_id=_format_user_id(user)
         )
         return None
 
@@ -211,10 +205,10 @@ async def _prepare_auto_extend_context(
         saved_subscription_id = _safe_int(saved_subscription_id, subscription.id)
         if saved_subscription_id != subscription.id:
             logger.warning(
-                '🔁 Автопокупка: сохранённая подписка %s не совпадает с текущей %s у пользователя %s',
-                saved_subscription_id,
-                subscription.id,
-                _format_user_id(user),
+                '🔁 Автопокупка: сохранённая подписка не совпадает с текущей у пользователя',
+                saved_subscription_id=saved_subscription_id,
+                subscription_id=subscription.id,
+                format_user_id=_format_user_id(user),
             )
             return None
 
@@ -222,9 +216,9 @@ async def _prepare_auto_extend_context(
 
     if period_days <= 0:
         logger.warning(
-            '🔁 Автопокупка: некорректное количество дней продления (%s) у пользователя %s',
-            period_days,
-            _format_user_id(user),
+            '🔁 Автопокупка: некорректное количество дней продления у пользователя',
+            period_days=period_days,
+            format_user_id=_format_user_id(user),
         )
         return None
 
@@ -239,9 +233,9 @@ async def _prepare_auto_extend_context(
                 cart_data.get('total_price') or cart_data.get('price') or cart_data.get('final_price'),
             )
             logger.warning(
-                '🔁 Автопокупка: не удалось пересчитать цену тарифа %s, используем сохранённую: %s',
-                tariff_id,
-                price_kopeks,
+                '🔁 Автопокупка: не удалось пересчитать цену тарифа , используем сохранённую',
+                tariff_id=tariff_id,
+                price_kopeks=price_kopeks,
             )
         # Добавляем стоимость докупленных устройств при продлении того же тарифа
         elif subscription.tariff_id == tariff_id:
@@ -263,9 +257,9 @@ async def _prepare_auto_extend_context(
 
     if price_kopeks <= 0:
         logger.warning(
-            '🔁 Автопокупка: некорректная цена продления (%s) у пользователя %s',
-            price_kopeks,
-            _format_user_id(user),
+            '🔁 Автопокупка: некорректная цена продления у пользователя',
+            price_kopeks=price_kopeks,
+            format_user_id=_format_user_id(user),
         )
         return None
 
@@ -354,9 +348,9 @@ async def _auto_extend_subscription(
         prepared = await _prepare_auto_extend_context(db, user, cart_data)
     except Exception as error:  # pragma: no cover - defensive logging
         logger.error(
-            '❌ Автопокупка: ошибка подготовки данных продления для пользователя %s: %s',
-            _format_user_id(user),
-            error,
+            '❌ Автопокупка: ошибка подготовки данных продления для пользователя',
+            format_user_id=_format_user_id(user),
+            error=error,
             exc_info=True,
         )
         return False
@@ -366,10 +360,10 @@ async def _auto_extend_subscription(
 
     if user.balance_kopeks < prepared.price_kopeks:
         logger.info(
-            '🔁 Автопокупка: у пользователя %s недостаточно средств для продления (%s < %s)',
-            _format_user_id(user),
-            user.balance_kopeks,
-            prepared.price_kopeks,
+            '🔁 Автопокупка: у пользователя недостаточно средств для продления (<)',
+            format_user_id=_format_user_id(user),
+            balance_kopeks=user.balance_kopeks,
+            price_kopeks=prepared.price_kopeks,
         )
         return False
 
@@ -383,17 +377,17 @@ async def _auto_extend_subscription(
         )
     except Exception as error:  # pragma: no cover - defensive logging
         logger.error(
-            '❌ Автопокупка: ошибка списания средств при продлении пользователя %s: %s',
-            _format_user_id(user),
-            error,
+            '❌ Автопокупка: ошибка списания средств при продлении пользователя',
+            format_user_id=_format_user_id(user),
+            error=error,
             exc_info=True,
         )
         return False
 
     if not deducted:
         logger.warning(
-            '❌ Автопокупка: списание средств для продления подписки пользователя %s не выполнено',
-            _format_user_id(user),
+            '❌ Автопокупка: списание средств для продления подписки пользователя не выполнено',
+            format_user_id=_format_user_id(user),
         )
         return False
 
@@ -425,16 +419,16 @@ async def _auto_extend_subscription(
             user.has_had_paid_subscription = True
             await db.commit()
             logger.info(
-                '✅ Триал конвертирован в платную подписку %s для пользователя %s',
-                subscription.id,
-                _format_user_id(user),
+                '✅ Триал конвертирован в платную подписку для пользователя',
+                subscription_id=subscription.id,
+                format_user_id=_format_user_id(user),
             )
 
     except Exception as error:  # pragma: no cover - defensive logging
         logger.error(
-            '❌ Автопокупка: не удалось продлить подписку пользователя %s: %s',
-            _format_user_id(user),
-            error,
+            '❌ Автопокупка: не удалось продлить подписку пользователя',
+            format_user_id=_format_user_id(user),
+            error=error,
             exc_info=True,
         )
         # НОВОЕ: Откатываем изменения при ошибке
@@ -452,9 +446,9 @@ async def _auto_extend_subscription(
         )
     except Exception as error:  # pragma: no cover - defensive logging
         logger.error(
-            '⚠️ Автопокупка: не удалось зафиксировать транзакцию продления для пользователя %s: %s',
-            _format_user_id(user),
-            error,
+            '⚠️ Автопокупка: не удалось зафиксировать транзакцию продления для пользователя',
+            format_user_id=_format_user_id(user),
+            error=error,
             exc_info=True,
         )
 
@@ -470,9 +464,9 @@ async def _auto_extend_subscription(
         )
     except Exception as error:  # pragma: no cover - defensive logging
         logger.error(
-            '⚠️ Автопокупка: не удалось обновить RemnaWave пользователя %s после продления: %s',
-            _format_user_id(user),
-            error,
+            '⚠️ Автопокупка: не удалось обновить RemnaWave пользователя после продления',
+            format_user_id=_format_user_id(user),
+            error=error,
         )
 
     await user_cart_service.delete_user_cart(user.id)
@@ -501,9 +495,9 @@ async def _auto_extend_subscription(
             )
         except Exception as error:  # pragma: no cover - defensive logging
             logger.error(
-                '⚠️ Автопокупка: не удалось уведомить администраторов о продлении пользователя %s: %s',
-                _format_user_id(user),
-                error,
+                '⚠️ Автопокупка: не удалось уведомить администраторов о продлении пользователя',
+                format_user_id=_format_user_id(user),
+                error=error,
             )
 
         # Send user notification only for Telegram users
@@ -551,15 +545,15 @@ async def _auto_extend_subscription(
                 )
             except Exception as error:  # pragma: no cover - defensive logging
                 logger.error(
-                    '⚠️ Автопокупка: не удалось уведомить пользователя %s о продлении: %s',
-                    user.telegram_id or user.id,
-                    error,
+                    '⚠️ Автопокупка: не удалось уведомить пользователя о продлении',
+                    telegram_id=user.telegram_id or user.id,
+                    error=error,
                 )
 
     logger.info(
-        '✅ Автопокупка: подписка продлена на %s дней для пользователя %s',
-        prepared.period_days,
-        _format_user_id(user),
+        '✅ Автопокупка: подписка продлена на дней для пользователя',
+        period_days=prepared.period_days,
+        format_user_id=_format_user_id(user),
     )
 
     # Send WebSocket notification to cabinet frontend
@@ -571,9 +565,9 @@ async def _auto_extend_subscription(
         )
     except Exception as ws_error:
         logger.warning(
-            '⚠️ Автопокупка: не удалось отправить WS уведомление о продлении для %s: %s',
-            _format_user_id(user),
-            ws_error,
+            '⚠️ Автопокупка: не удалось отправить WS уведомление о продлении для',
+            format_user_id=_format_user_id(user),
+            ws_error=ws_error,
         )
 
     return True
@@ -609,19 +603,19 @@ async def _auto_purchase_tariff(
 
     if not tariff_id or period_days <= 0:
         logger.warning(
-            '🔁 Автопокупка тарифа: некорректные данные корзины для пользователя %s (tariff_id=%s, period=%s)',
-            _format_user_id(user),
-            tariff_id,
-            period_days,
+            '🔁 Автопокупка тарифа: некорректные данные корзины для пользователя (tariff_id period=)',
+            format_user_id=_format_user_id(user),
+            tariff_id=tariff_id,
+            period_days=period_days,
         )
         return False
 
     tariff = await get_tariff_by_id(db, tariff_id)
     if not tariff or not tariff.is_active:
         logger.warning(
-            '🔁 Автопокупка тарифа: тариф %s недоступен для пользователя %s',
-            tariff_id,
-            _format_user_id(user),
+            '🔁 Автопокупка тарифа: тариф недоступен для пользователя',
+            tariff_id=tariff_id,
+            format_user_id=_format_user_id(user),
         )
         return False
 
@@ -630,9 +624,7 @@ async def _auto_purchase_tariff(
     base_price = prices.get(str(period_days))
     if base_price is None:
         logger.warning(
-            '🔁 Автопокупка тарифа: период %s дней недоступен для тарифа %s',
-            period_days,
-            tariff_id,
+            '🔁 Автопокупка тарифа: период дней недоступен для тарифа', period_days=period_days, tariff_id=tariff_id
         )
         return False
 
@@ -654,10 +646,10 @@ async def _auto_purchase_tariff(
 
     if user.balance_kopeks < final_price:
         logger.info(
-            '🔁 Автопокупка тарифа: у пользователя %s недостаточно средств (%s < %s)',
-            _format_user_id(user),
-            user.balance_kopeks,
-            final_price,
+            '🔁 Автопокупка тарифа: у пользователя недостаточно средств (<)',
+            format_user_id=_format_user_id(user),
+            balance_kopeks=user.balance_kopeks,
+            final_price=final_price,
         )
         return False
 
@@ -667,15 +659,14 @@ async def _auto_purchase_tariff(
         success = await subtract_user_balance(db, user, final_price, description)
         if not success:
             logger.warning(
-                '❌ Автопокупка тарифа: не удалось списать баланс пользователя %s',
-                _format_user_id(user),
+                '❌ Автопокупка тарифа: не удалось списать баланс пользователя', format_user_id=_format_user_id(user)
             )
             return False
     except Exception as error:
         logger.error(
-            '❌ Автопокупка тарифа: ошибка списания баланса пользователя %s: %s',
-            _format_user_id(user),
-            error,
+            '❌ Автопокупка тарифа: ошибка списания баланса пользователя',
+            format_user_id=_format_user_id(user),
+            error=error,
             exc_info=True,
         )
         return False
@@ -723,9 +714,9 @@ async def _auto_purchase_tariff(
             was_trial_conversion = False
     except Exception as error:
         logger.error(
-            '❌ Автопокупка тарифа: ошибка создания подписки для пользователя %s: %s',
-            _format_user_id(user),
-            error,
+            '❌ Автопокупка тарифа: ошибка создания подписки для пользователя',
+            format_user_id=_format_user_id(user),
+            error=error,
             exc_info=True,
         )
         await db.rollback()
@@ -742,9 +733,9 @@ async def _auto_purchase_tariff(
         )
     except Exception as error:
         logger.warning(
-            '⚠️ Автопокупка тарифа: не удалось создать транзакцию для пользователя %s: %s',
-            _format_user_id(user),
-            error,
+            '⚠️ Автопокупка тарифа: не удалось создать транзакцию для пользователя',
+            format_user_id=_format_user_id(user),
+            error=error,
         )
         transaction = None
 
@@ -760,9 +751,9 @@ async def _auto_purchase_tariff(
         )
     except Exception as error:
         logger.warning(
-            '⚠️ Автопокупка тарифа: не удалось обновить Remnawave для пользователя %s: %s',
-            _format_user_id(user),
-            error,
+            '⚠️ Автопокупка тарифа: не удалось обновить Remnawave для пользователя',
+            format_user_id=_format_user_id(user),
+            error=error,
         )
 
     # Очищаем корзину
@@ -781,9 +772,9 @@ async def _auto_purchase_tariff(
             )
         except Exception as error:
             logger.warning(
-                '⚠️ Автопокупка тарифа: не удалось уведомить админов о покупке пользователя %s: %s',
-                _format_user_id(user),
-                error,
+                '⚠️ Автопокупка тарифа: не удалось уведомить админов о покупке пользователя',
+                format_user_id=_format_user_id(user),
+                error=error,
             )
 
         # Send user notification only for Telegram users
@@ -824,16 +815,16 @@ async def _auto_purchase_tariff(
                 )
             except Exception as error:
                 logger.warning(
-                    '⚠️ Автопокупка тарифа: не удалось уведомить пользователя %s: %s',
-                    user.telegram_id or user.id,
-                    error,
+                    '⚠️ Автопокупка тарифа: не удалось уведомить пользователя',
+                    telegram_id=user.telegram_id or user.id,
+                    error=error,
                 )
 
     logger.info(
-        '✅ Автопокупка тарифа: подписка на тариф %s (%s дней) оформлена для пользователя %s',
-        tariff.name,
-        period_days,
-        _format_user_id(user),
+        '✅ Автопокупка тарифа: подписка на тариф (дней) оформлена для пользователя',
+        tariff_name=tariff.name,
+        period_days=period_days,
+        format_user_id=_format_user_id(user),
     )
 
     # Send WebSocket notification to cabinet frontend
@@ -854,9 +845,9 @@ async def _auto_purchase_tariff(
             )
     except Exception as ws_error:
         logger.warning(
-            '⚠️ Автопокупка тарифа: не удалось отправить WS уведомление для %s: %s',
-            _format_user_id(user),
-            ws_error,
+            '⚠️ Автопокупка тарифа: не удалось отправить WS уведомление для',
+            format_user_id=_format_user_id(user),
+            ws_error=ws_error,
         )
 
     return True
@@ -887,43 +878,43 @@ async def _auto_purchase_daily_tariff(
     tariff_id = _safe_int(cart_data.get('tariff_id'))
     if not tariff_id:
         logger.warning(
-            '🔁 Автопокупка суточного тарифа: нет tariff_id в корзине пользователя %s',
-            _format_user_id(user),
+            '🔁 Автопокупка суточного тарифа: нет tariff_id в корзине пользователя',
+            format_user_id=_format_user_id(user),
         )
         return False
 
     tariff = await get_tariff_by_id(db, tariff_id)
     if not tariff or not tariff.is_active:
         logger.warning(
-            '🔁 Автопокупка суточного тарифа: тариф %s недоступен для пользователя %s',
-            tariff_id,
-            _format_user_id(user),
+            '🔁 Автопокупка суточного тарифа: тариф недоступен для пользователя',
+            tariff_id=tariff_id,
+            format_user_id=_format_user_id(user),
         )
         return False
 
     if not getattr(tariff, 'is_daily', False):
         logger.warning(
-            '🔁 Автопокупка суточного тарифа: тариф %s не является суточным для пользователя %s',
-            tariff_id,
-            _format_user_id(user),
+            '🔁 Автопокупка суточного тарифа: тариф не является суточным для пользователя',
+            tariff_id=tariff_id,
+            format_user_id=_format_user_id(user),
         )
         return False
 
     daily_price = getattr(tariff, 'daily_price_kopeks', 0)
     if daily_price <= 0:
         logger.warning(
-            '🔁 Автопокупка суточного тарифа: некорректная цена тарифа %s для пользователя %s',
-            tariff_id,
-            _format_user_id(user),
+            '🔁 Автопокупка суточного тарифа: некорректная цена тарифа для пользователя',
+            tariff_id=tariff_id,
+            format_user_id=_format_user_id(user),
         )
         return False
 
     if user.balance_kopeks < daily_price:
         logger.info(
-            '🔁 Автопокупка суточного тарифа: у пользователя %s недостаточно средств (%s < %s)',
-            _format_user_id(user),
-            user.balance_kopeks,
-            daily_price,
+            '🔁 Автопокупка суточного тарифа: у пользователя недостаточно средств (<)',
+            format_user_id=_format_user_id(user),
+            balance_kopeks=user.balance_kopeks,
+            daily_price=daily_price,
         )
         return False
 
@@ -933,15 +924,15 @@ async def _auto_purchase_daily_tariff(
         success = await subtract_user_balance(db, user, daily_price, description)
         if not success:
             logger.warning(
-                '❌ Автопокупка суточного тарифа: не удалось списать баланс пользователя %s',
-                _format_user_id(user),
+                '❌ Автопокупка суточного тарифа: не удалось списать баланс пользователя',
+                format_user_id=_format_user_id(user),
             )
             return False
     except Exception as error:
         logger.error(
-            '❌ Автопокупка суточного тарифа: ошибка списания баланса пользователя %s: %s',
-            _format_user_id(user),
-            error,
+            '❌ Автопокупка суточного тарифа: ошибка списания баланса пользователя',
+            format_user_id=_format_user_id(user),
+            error=error,
             exc_info=True,
         )
         return False
@@ -993,9 +984,9 @@ async def _auto_purchase_daily_tariff(
             was_trial_conversion = False
     except Exception as error:
         logger.error(
-            '❌ Автопокупка суточного тарифа: ошибка создания подписки для пользователя %s: %s',
-            _format_user_id(user),
-            error,
+            '❌ Автопокупка суточного тарифа: ошибка создания подписки для пользователя',
+            format_user_id=_format_user_id(user),
+            error=error,
             exc_info=True,
         )
         await db.rollback()
@@ -1012,9 +1003,9 @@ async def _auto_purchase_daily_tariff(
         )
     except Exception as error:
         logger.warning(
-            '⚠️ Автопокупка суточного тарифа: не удалось создать транзакцию для пользователя %s: %s',
-            _format_user_id(user),
-            error,
+            '⚠️ Автопокупка суточного тарифа: не удалось создать транзакцию для пользователя',
+            format_user_id=_format_user_id(user),
+            error=error,
         )
         transaction = None
 
@@ -1030,9 +1021,9 @@ async def _auto_purchase_daily_tariff(
         )
     except Exception as error:
         logger.warning(
-            '⚠️ Автопокупка суточного тарифа: не удалось обновить Remnawave для пользователя %s: %s',
-            _format_user_id(user),
-            error,
+            '⚠️ Автопокупка суточного тарифа: не удалось обновить Remnawave для пользователя',
+            format_user_id=_format_user_id(user),
+            error=error,
         )
 
     # Очищаем корзину
@@ -1050,9 +1041,9 @@ async def _auto_purchase_daily_tariff(
             )
         except Exception as error:
             logger.warning(
-                '⚠️ Автопокупка суточного тарифа: не удалось уведомить админов о покупке пользователя %s: %s',
-                _format_user_id(user),
-                error,
+                '⚠️ Автопокупка суточного тарифа: не удалось уведомить админов о покупке пользователя',
+                format_user_id=_format_user_id(user),
+                error=error,
             )
 
         # Send user notification only for Telegram users
@@ -1090,15 +1081,15 @@ async def _auto_purchase_daily_tariff(
                 )
             except Exception as error:
                 logger.warning(
-                    '⚠️ Автопокупка суточного тарифа: не удалось уведомить пользователя %s: %s',
-                    user.telegram_id or user.id,
-                    error,
+                    '⚠️ Автопокупка суточного тарифа: не удалось уведомить пользователя',
+                    telegram_id=user.telegram_id or user.id,
+                    error=error,
                 )
 
     logger.info(
-        '✅ Автопокупка суточного тарифа: тариф %s активирован для пользователя %s',
-        tariff.name,
-        _format_user_id(user),
+        '✅ Автопокупка суточного тарифа: тариф активирован для пользователя',
+        tariff_name=tariff.name,
+        format_user_id=_format_user_id(user),
     )
 
     # Send WebSocket notification to cabinet frontend
@@ -1119,9 +1110,9 @@ async def _auto_purchase_daily_tariff(
             )
     except Exception as ws_error:
         logger.warning(
-            '⚠️ Автопокупка суточного тарифа: не удалось отправить WS уведомление для %s: %s',
-            _format_user_id(user),
-            ws_error,
+            '⚠️ Автопокупка суточного тарифа: не удалось отправить WS уведомление для',
+            format_user_id=_format_user_id(user),
+            ws_error=ws_error,
         )
 
     return True
@@ -1146,38 +1137,35 @@ async def _auto_add_devices(
 
     if devices_to_add <= 0 or price_kopeks <= 0:
         logger.warning(
-            '🔁 Автопокупка устройств: некорректные данные корзины для пользователя %s (devices=%s, price=%s)',
-            _format_user_id(user),
-            devices_to_add,
-            price_kopeks,
+            '🔁 Автопокупка устройств: некорректные данные корзины для пользователя (devices price=)',
+            format_user_id=_format_user_id(user),
+            devices_to_add=devices_to_add,
+            price_kopeks=price_kopeks,
         )
         return False
 
     # Проверяем баланс
     if user.balance_kopeks < price_kopeks:
         logger.info(
-            '🔁 Автопокупка устройств: у пользователя %s недостаточно средств (%s < %s)',
-            _format_user_id(user),
-            user.balance_kopeks,
-            price_kopeks,
+            '🔁 Автопокупка устройств: у пользователя недостаточно средств (<)',
+            format_user_id=_format_user_id(user),
+            balance_kopeks=user.balance_kopeks,
+            price_kopeks=price_kopeks,
         )
         return False
 
     # Проверяем подписку
     subscription = await get_subscription_by_user_id(db, user.id)
     if not subscription:
-        logger.warning(
-            '🔁 Автопокупка устройств: у пользователя %s нет подписки',
-            _format_user_id(user),
-        )
+        logger.warning('🔁 Автопокупка устройств: у пользователя нет подписки', format_user_id=_format_user_id(user))
         await user_cart_service.delete_user_cart(user.id)
         return False
 
     if subscription.status not in ('active', 'trial', 'ACTIVE', 'TRIAL'):
         logger.warning(
-            '🔁 Автопокупка устройств: подписка пользователя %s не активна (status=%s)',
-            _format_user_id(user),
-            subscription.status,
+            '🔁 Автопокупка устройств: подписка пользователя не активна (status=)',
+            format_user_id=_format_user_id(user),
+            subscription_status=subscription.status,
         )
         await user_cart_service.delete_user_cart(user.id)
         return False
@@ -1195,15 +1183,14 @@ async def _auto_add_devices(
         )
         if not success:
             logger.warning(
-                '❌ Автопокупка устройств: не удалось списать баланс пользователя %s',
-                _format_user_id(user),
+                '❌ Автопокупка устройств: не удалось списать баланс пользователя', format_user_id=_format_user_id(user)
             )
             return False
     except Exception as error:
         logger.error(
-            '❌ Автопокупка устройств: ошибка списания баланса пользователя %s: %s',
-            _format_user_id(user),
-            error,
+            '❌ Автопокупка устройств: ошибка списания баланса пользователя',
+            format_user_id=_format_user_id(user),
+            error=error,
             exc_info=True,
         )
         return False
@@ -1217,9 +1204,9 @@ async def _auto_add_devices(
         await db.refresh(subscription)
     except Exception as error:
         logger.error(
-            '❌ Автопокупка устройств: ошибка сохранения подписки пользователя %s: %s',
-            _format_user_id(user),
-            error,
+            '❌ Автопокупка устройств: ошибка сохранения подписки пользователя',
+            format_user_id=_format_user_id(user),
+            error=error,
             exc_info=True,
         )
         await db.rollback()
@@ -1231,21 +1218,21 @@ async def _auto_add_devices(
         await subscription_service.update_remnawave_user(db, subscription)
     except Exception as error:
         logger.warning(
-            '⚠️ Автопокупка устройств: не удалось обновить Remnawave для пользователя %s: %s',
-            _format_user_id(user),
-            error,
+            '⚠️ Автопокупка устройств: не удалось обновить Remnawave для пользователя',
+            format_user_id=_format_user_id(user),
+            error=error,
         )
 
     # Очищаем корзину (транзакция уже создана в subtract_user_balance)
     await user_cart_service.delete_user_cart(user.id)
 
     logger.info(
-        '✅ Автопокупка устройств: пользователь %s добавил %s устройств (было %s, стало %s) за %s коп.',
-        _format_user_id(user),
-        devices_to_add,
-        old_device_limit,
-        subscription.device_limit,
-        price_kopeks,
+        '✅ Автопокупка устройств: пользователь добавил устройств (было , стало) за коп.',
+        format_user_id=_format_user_id(user),
+        devices_to_add=devices_to_add,
+        old_device_limit=old_device_limit,
+        device_limit=subscription.device_limit,
+        price_kopeks=price_kopeks,
     )
 
     # WebSocket уведомление для кабинета
@@ -1259,10 +1246,7 @@ async def _auto_add_devices(
             amount_kopeks=price_kopeks,
         )
     except Exception as ws_error:
-        logger.warning(
-            '⚠️ Автопокупка устройств: не удалось отправить WebSocket уведомление: %s',
-            ws_error,
-        )
+        logger.warning('⚠️ Автопокупка устройств: не удалось отправить WebSocket уведомление', ws_error=ws_error)
 
     # Уведомление пользователю
     if bot and user.telegram_id:
@@ -1307,9 +1291,7 @@ async def _auto_add_devices(
             )
         except Exception as error:
             logger.warning(
-                '⚠️ Автопокупка устройств: не удалось уведомить пользователя %s: %s',
-                user.telegram_id,
-                error,
+                '⚠️ Автопокупка устройств: не удалось уведомить пользователя', telegram_id=user.telegram_id, error=error
             )
 
     # Уведомление админам
@@ -1326,10 +1308,7 @@ async def _auto_add_devices(
                 price_kopeks,
             )
         except Exception as error:
-            logger.warning(
-                '⚠️ Автопокупка устройств: не удалось уведомить админов: %s',
-                error,
-            )
+            logger.warning('⚠️ Автопокупка устройств: не удалось уведомить админов', error=error)
 
     return True
 
@@ -1353,54 +1332,47 @@ async def _auto_add_traffic(
 
     if traffic_gb <= 0 or price_kopeks <= 0:
         logger.warning(
-            '🔁 Автопокупка трафика: некорректные данные корзины для пользователя %s (traffic_gb=%s, price=%s)',
-            _format_user_id(user),
-            traffic_gb,
-            price_kopeks,
+            '🔁 Автопокупка трафика: некорректные данные корзины для пользователя (traffic_gb price=)',
+            format_user_id=_format_user_id(user),
+            traffic_gb=traffic_gb,
+            price_kopeks=price_kopeks,
         )
         return False
 
     # Verify balance
     if user.balance_kopeks < price_kopeks:
         logger.info(
-            '🔁 Автопокупка трафика: у пользователя %s недостаточно средств (%s < %s)',
-            _format_user_id(user),
-            user.balance_kopeks,
-            price_kopeks,
+            '🔁 Автопокупка трафика: у пользователя недостаточно средств (<)',
+            format_user_id=_format_user_id(user),
+            balance_kopeks=user.balance_kopeks,
+            price_kopeks=price_kopeks,
         )
         return False
 
     # Verify subscription
     subscription = await get_subscription_by_user_id(db, user.id)
     if not subscription:
-        logger.warning(
-            '🔁 Автопокупка трафика: у пользователя %s нет подписки',
-            _format_user_id(user),
-        )
+        logger.warning('🔁 Автопокупка трафика: у пользователя нет подписки', format_user_id=_format_user_id(user))
         await user_cart_service.delete_user_cart(user.id)
         return False
 
     if subscription.status not in ('active', 'trial', 'ACTIVE', 'TRIAL'):
         logger.warning(
-            '🔁 Автопокупка трафика: подписка пользователя %s не активна (status=%s)',
-            _format_user_id(user),
-            subscription.status,
+            '🔁 Автопокупка трафика: подписка пользователя не активна (status=)',
+            format_user_id=_format_user_id(user),
+            subscription_status=subscription.status,
         )
         await user_cart_service.delete_user_cart(user.id)
         return False
 
     if subscription.is_trial:
-        logger.warning(
-            '🔁 Автопокупка трафика: у пользователя %s пробная подписка',
-            _format_user_id(user),
-        )
+        logger.warning('🔁 Автопокупка трафика: у пользователя пробная подписка', format_user_id=_format_user_id(user))
         await user_cart_service.delete_user_cart(user.id)
         return False
 
     if subscription.traffic_limit_gb == 0:
         logger.warning(
-            '🔁 Автопокупка трафика: у пользователя %s уже безлимитный трафик',
-            _format_user_id(user),
+            '🔁 Автопокупка трафика: у пользователя уже безлимитный трафик', format_user_id=_format_user_id(user)
         )
         await user_cart_service.delete_user_cart(user.id)
         return False
@@ -1418,15 +1390,14 @@ async def _auto_add_traffic(
         )
         if not success:
             logger.warning(
-                '❌ Автопокупка трафика: не удалось списать баланс пользователя %s',
-                _format_user_id(user),
+                '❌ Автопокупка трафика: не удалось списать баланс пользователя', format_user_id=_format_user_id(user)
             )
             return False
     except Exception as error:
         logger.error(
-            '❌ Автопокупка трафика: ошибка списания баланса пользователя %s: %s',
-            _format_user_id(user),
-            error,
+            '❌ Автопокупка трафика: ошибка списания баланса пользователя',
+            format_user_id=_format_user_id(user),
+            error=error,
             exc_info=True,
         )
         return False
@@ -1439,9 +1410,9 @@ async def _auto_add_traffic(
         await db.refresh(subscription)
     except Exception as error:
         logger.error(
-            '❌ Автопокупка трафика: ошибка добавления трафика пользователю %s: %s',
-            _format_user_id(user),
-            error,
+            '❌ Автопокупка трафика: ошибка добавления трафика пользователю',
+            format_user_id=_format_user_id(user),
+            error=error,
             exc_info=True,
         )
         await db.rollback()
@@ -1453,21 +1424,21 @@ async def _auto_add_traffic(
         await subscription_service.update_remnawave_user(db, subscription)
     except Exception as error:
         logger.warning(
-            '⚠️ Автопокупка трафика: не удалось обновить Remnawave для пользователя %s: %s',
-            _format_user_id(user),
-            error,
+            '⚠️ Автопокупка трафика: не удалось обновить Remnawave для пользователя',
+            format_user_id=_format_user_id(user),
+            error=error,
         )
 
     # Clear cart (transaction already created in subtract_user_balance)
     await user_cart_service.delete_user_cart(user.id)
 
     logger.info(
-        '✅ Автопокупка трафика: пользователь %s добавил %s ГБ (было %s, стало %s) за %s коп.',
-        _format_user_id(user),
-        traffic_gb,
-        old_traffic_limit,
-        subscription.traffic_limit_gb,
-        price_kopeks,
+        '✅ Автопокупка трафика: пользователь добавил ГБ (было , стало) за коп.',
+        format_user_id=_format_user_id(user),
+        traffic_gb=traffic_gb,
+        old_traffic_limit=old_traffic_limit,
+        traffic_limit_gb=subscription.traffic_limit_gb,
+        price_kopeks=price_kopeks,
     )
 
     # WebSocket notification for cabinet
@@ -1481,10 +1452,7 @@ async def _auto_add_traffic(
             amount_kopeks=price_kopeks,
         )
     except Exception as ws_error:
-        logger.warning(
-            '⚠️ Автопокупка трафика: не удалось отправить WebSocket уведомление: %s',
-            ws_error,
-        )
+        logger.warning('⚠️ Автопокупка трафика: не удалось отправить WebSocket уведомление', ws_error=ws_error)
 
     # User notification
     if bot and user.telegram_id:
@@ -1529,9 +1497,7 @@ async def _auto_add_traffic(
             )
         except Exception as error:
             logger.warning(
-                '⚠️ Автопокупка трафика: не удалось уведомить пользователя %s: %s',
-                user.telegram_id,
-                error,
+                '⚠️ Автопокупка трафика: не удалось уведомить пользователя', telegram_id=user.telegram_id, error=error
             )
 
     # Admin notification
@@ -1548,10 +1514,7 @@ async def _auto_add_traffic(
                 price_kopeks,
             )
         except Exception as error:
-            logger.warning(
-                '⚠️ Автопокупка трафика: не удалось уведомить админов: %s',
-                error,
-            )
+            logger.warning('⚠️ Автопокупка трафика: не удалось уведомить админов', error=error)
 
     return True
 
@@ -1582,7 +1545,7 @@ async def auto_purchase_saved_cart_after_topup(
     if not cart_data:
         return False
 
-    logger.info('🔁 Автопокупка: обнаружена сохранённая корзина у пользователя %s', _format_user_id(user))
+    logger.info('🔁 Автопокупка: обнаружена сохранённая корзина у пользователя', format_user_id=_format_user_id(user))
 
     cart_mode = cart_data.get('cart_mode') or cart_data.get('mode')
 
@@ -1599,18 +1562,18 @@ async def auto_purchase_saved_cart_after_topup(
                     and (datetime.utcnow() - last_tx.created_at) < timedelta(seconds=60)
                 ):
                     logger.info(
-                        '🔁 Автопокупка: пропускаем для пользователя %s - подписка уже куплена %s секунд назад',
-                        _format_user_id(user),
-                        (datetime.utcnow() - last_tx.created_at).total_seconds(),
+                        '🔁 Автопокупка: пропускаем для пользователя - подписка уже куплена секунд назад',
+                        format_user_id=_format_user_id(user),
+                        total_seconds=(datetime.utcnow() - last_tx.created_at).total_seconds(),
                     )
                     # Очищаем корзину чтобы не срабатывало повторно
                     await user_cart_service.delete_user_cart(user.id)
                     return False
         except Exception as check_error:
             logger.warning(
-                '🔁 Автопокупка: ошибка проверки последней транзакции для %s: %s',
-                _format_user_id(user),
-                check_error,
+                '🔁 Автопокупка: ошибка проверки последней транзакции для',
+                format_user_id=_format_user_id(user),
+                check_error=check_error,
             )
 
     # Обработка продления подписки
@@ -1637,16 +1600,14 @@ async def auto_purchase_saved_cart_after_topup(
         prepared = await _prepare_auto_purchase(db, user, cart_data)
     except PurchaseValidationError as error:
         logger.error(
-            '❌ Автопокупка: ошибка валидации корзины пользователя %s: %s',
-            _format_user_id(user),
-            error,
+            '❌ Автопокупка: ошибка валидации корзины пользователя', format_user_id=_format_user_id(user), error=error
         )
         return False
     except Exception as error:  # pragma: no cover - defensive logging
         logger.error(
-            '❌ Автопокупка: непредвиденная ошибка при подготовке корзины %s: %s',
-            _format_user_id(user),
-            error,
+            '❌ Автопокупка: непредвиденная ошибка при подготовке корзины',
+            format_user_id=_format_user_id(user),
+            error=error,
             exc_info=True,
         )
         return False
@@ -1659,18 +1620,18 @@ async def auto_purchase_saved_cart_after_topup(
 
     if pricing.final_total <= 0:
         logger.warning(
-            '❌ Автопокупка: итоговая сумма для пользователя %s некорректна (%s)',
-            _format_user_id(user),
-            pricing.final_total,
+            '❌ Автопокупка: итоговая сумма для пользователя некорректна',
+            format_user_id=_format_user_id(user),
+            final_total=pricing.final_total,
         )
         return False
 
     if user.balance_kopeks < pricing.final_total:
         logger.info(
-            '🔁 Автопокупка: у пользователя %s недостаточно средств (%s < %s)',
-            _format_user_id(user),
-            user.balance_kopeks,
-            pricing.final_total,
+            '🔁 Автопокупка: у пользователя недостаточно средств (<)',
+            format_user_id=_format_user_id(user),
+            balance_kopeks=user.balance_kopeks,
+            final_total=pricing.final_total,
         )
         return False
 
@@ -1684,22 +1645,21 @@ async def auto_purchase_saved_cart_after_topup(
         )
     except PurchaseBalanceError:
         logger.info(
-            '🔁 Автопокупка: баланс пользователя %s изменился и стал недостаточным',
-            _format_user_id(user),
+            '🔁 Автопокупка: баланс пользователя изменился и стал недостаточным', format_user_id=_format_user_id(user)
         )
         return False
     except PurchaseValidationError as error:
         logger.error(
-            '❌ Автопокупка: не удалось подтвердить корзину пользователя %s: %s',
-            _format_user_id(user),
-            error,
+            '❌ Автопокупка: не удалось подтвердить корзину пользователя',
+            format_user_id=_format_user_id(user),
+            error=error,
         )
         return False
     except Exception as error:  # pragma: no cover - defensive logging
         logger.error(
-            '❌ Автопокупка: ошибка оформления подписки для пользователя %s: %s',
-            _format_user_id(user),
-            error,
+            '❌ Автопокупка: ошибка оформления подписки для пользователя',
+            format_user_id=_format_user_id(user),
+            error=error,
             exc_info=True,
         )
         return False
@@ -1725,9 +1685,9 @@ async def auto_purchase_saved_cart_after_topup(
             )
         except Exception as error:  # pragma: no cover - defensive logging
             logger.error(
-                '⚠️ Автопокупка: не удалось отправить уведомление админам (%s): %s',
-                _format_user_id(user),
-                error,
+                '⚠️ Автопокупка: не удалось отправить уведомление админам',
+                format_user_id=_format_user_id(user),
+                error=error,
             )
 
         # Send user notification only for Telegram users
@@ -1777,15 +1737,15 @@ async def auto_purchase_saved_cart_after_topup(
                 )
             except Exception as error:  # pragma: no cover - defensive logging
                 logger.error(
-                    '⚠️ Автопокупка: не удалось уведомить пользователя %s: %s',
-                    user.telegram_id or user.id,
-                    error,
+                    '⚠️ Автопокупка: не удалось уведомить пользователя',
+                    telegram_id=user.telegram_id or user.id,
+                    error=error,
                 )
 
     logger.info(
-        '✅ Автопокупка: подписка на %s дней оформлена для пользователя %s',
-        selection.period.days,
-        _format_user_id(user),
+        '✅ Автопокупка: подписка на дней оформлена для пользователя',
+        days=selection.period.days,
+        format_user_id=_format_user_id(user),
     )
 
     # Send WebSocket notification to cabinet frontend
@@ -1806,9 +1766,9 @@ async def auto_purchase_saved_cart_after_topup(
             )
     except Exception as ws_error:
         logger.warning(
-            '⚠️ Автопокупка: не удалось отправить WS уведомление для %s: %s',
-            _format_user_id(user),
-            ws_error,
+            '⚠️ Автопокупка: не удалось отправить WS уведомление для',
+            format_user_id=_format_user_id(user),
+            ws_error=ws_error,
         )
 
     return True

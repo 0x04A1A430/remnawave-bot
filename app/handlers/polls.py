@@ -1,7 +1,7 @@
 import asyncio
-import logging
 from datetime import datetime
 
+import structlog
 from aiogram import Dispatcher, F, types
 from aiogram.exceptions import TelegramBadRequest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,7 +16,7 @@ from app.localization.texts import get_texts
 from app.services.poll_service import get_next_question, get_question_option, reward_user_for_poll
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def _delete_message_later(bot, chat_id: int, message_id: int, delay: int = 10) -> None:
@@ -24,7 +24,7 @@ async def _delete_message_later(bot, chat_id: int, message_id: int, delay: int =
         await asyncio.sleep(delay)
         await bot.delete_message(chat_id, message_id)
     except Exception as error:  # pragma: no cover - cleanup best effort
-        logger.debug('Не удалось удалить сообщение опроса %s: %s', message_id, error)
+        logger.debug('Не удалось удалить сообщение опроса', message_id=message_id, error=error)
 
 
 async def _render_question_text(
@@ -60,22 +60,13 @@ async def _update_poll_message(
     except TelegramBadRequest as error:
         error_text = str(error).lower()
         if 'message is not modified' in error_text:
-            logger.debug(
-                'Опросное сообщение уже актуально, пропускаем обновление: %s',
-                error,
-            )
+            logger.debug('Опросное сообщение уже актуально, пропускаем обновление', error=error)
             return True
 
-        logger.warning(
-            'Не удалось обновить сообщение опроса %s: %s',
-            message.message_id,
-            error,
-        )
+        logger.warning('Не удалось обновить сообщение опроса', message_id=message.message_id, error=error)
     except Exception as error:  # pragma: no cover - defensive logging
         logger.exception(
-            'Непредвиденная ошибка при обновлении сообщения опроса %s: %s',
-            message.message_id,
-            error,
+            'Непредвиденная ошибка при обновлении сообщения опроса', message_id=message.message_id, error=error
         )
 
     return False
@@ -197,11 +188,7 @@ async def handle_poll_answer(
     try:
         await db.refresh(response, attribute_names=['answers'])
     except Exception as error:  # pragma: no cover - defensive cache busting
-        logger.debug(
-            'Не удалось обновить локальные ответы опроса %s: %s',
-            response.id,
-            error,
-        )
+        logger.debug('Не удалось обновить локальные ответы опроса', response_id=response.id, error=error)
         response = await get_poll_response_by_id(db, response.id)
         if not response:
             await callback.answer(texts.t('POLL_ERROR', 'Опрос недоступен.'), show_alert=True)

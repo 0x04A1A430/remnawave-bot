@@ -1,9 +1,9 @@
 """Support tickets routes for cabinet."""
 
-import logging
 import math
 from datetime import datetime
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,7 +26,7 @@ from ..schemas.tickets import (
 )
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/tickets', tags=['Cabinet Tickets'])
 
@@ -164,7 +164,7 @@ async def create_ticket(
     try:
         await notify_admins_about_new_ticket(ticket, db)
     except Exception as e:
-        logger.error(f'Error notifying admins about new ticket from cabinet: {e}')
+        logger.error('Error notifying admins about new ticket from cabinet', error=e)
 
     # Уведомить админов в кабинете
     try:
@@ -173,7 +173,7 @@ async def create_ticket(
             # Отправить WebSocket уведомление
             await notify_admins_new_ticket(ticket.id, ticket.title, user.id)
     except Exception as e:
-        logger.error(f'Error creating cabinet notification for new ticket: {e}')
+        logger.error('Error creating cabinet notification for new ticket', error=e)
 
     messages = [_message_to_response(m) for m in ticket.messages]
 
@@ -284,7 +284,7 @@ async def add_ticket_message(
     try:
         await notify_admins_about_ticket_reply(ticket, request.message, db)
     except Exception as e:
-        logger.error(f'Error notifying admins about ticket reply from cabinet: {e}')
+        logger.error('Error notifying admins about ticket reply from cabinet', error=e)
 
     # Уведомить админов в кабинете
     try:
@@ -295,6 +295,6 @@ async def add_ticket_message(
             # Отправить WebSocket уведомление
             await notify_admins_ticket_reply(ticket.id, (request.message or '')[:100], user.id)
     except Exception as e:
-        logger.error(f'Error creating cabinet notification for user reply: {e}')
+        logger.error('Error creating cabinet notification for user reply', error=e)
 
     return _message_to_response(message)

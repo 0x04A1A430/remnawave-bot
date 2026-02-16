@@ -1,5 +1,4 @@
-import logging
-
+import structlog
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -7,7 +6,7 @@ from sqlalchemy.orm import selectinload
 from app.database.models import PromoGroup, Subscription, Tariff
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 def _normalize_period_prices(period_prices: dict[int, int] | None) -> dict[str, int]:
@@ -241,13 +240,13 @@ async def create_tariff(
     await db.refresh(tariff)
 
     logger.info(
-        "Создан тариф '%s' (id=%s, tier=%s, traffic=%sGB, devices=%s, prices=%s)",
-        tariff.name,
-        tariff.id,
-        tariff.tier_level,
-        tariff.traffic_limit_gb,
-        tariff.device_limit,
-        normalized_prices,
+        "Создан тариф '' (id tier traffic=GB, devices prices=)",
+        tariff_name=tariff.name,
+        tariff_id=tariff.id,
+        tier_level=tariff.tier_level,
+        traffic_limit_gb=tariff.traffic_limit_gb,
+        device_limit=tariff.device_limit,
+        normalized_prices=normalized_prices,
     )
 
     return tariff
@@ -365,11 +364,7 @@ async def update_tariff(
     await db.commit()
     await db.refresh(tariff)
 
-    logger.info(
-        "Обновлен тариф '%s' (id=%s)",
-        tariff.name,
-        tariff.id,
-    )
+    logger.info("Обновлен тариф '' (id=)", tariff_name=tariff.name, tariff_id=tariff.id)
 
     return tariff
 
@@ -393,10 +388,10 @@ async def delete_tariff(db: AsyncSession, tariff: Tariff) -> bool:
     await db.commit()
 
     logger.info(
-        "Удален тариф '%s' (id=%s), затронуто подписок: %s",
-        tariff_name,
-        tariff_id,
-        affected_subscriptions,
+        "Удален тариф '' (id=), затронуто подписок",
+        tariff_name=tariff_name,
+        tariff_id=tariff_id,
+        affected_subscriptions=affected_subscriptions,
     )
 
     return True
@@ -486,7 +481,7 @@ async def reorder_tariffs(
     for order, tariff_id in enumerate(tariff_order):
         await db.execute(update(Tariff).where(Tariff.id == tariff_id).values(display_order=order))
 
-    logger.info('Изменен порядок тарифов: %s', tariff_order)
+    logger.info('Изменен порядок тарифов', tariff_order=tariff_order)
 
 
 async def sync_default_tariff_from_config(db: AsyncSession) -> Tariff | None:
@@ -522,7 +517,8 @@ async def sync_default_tariff_from_config(db: AsyncSession) -> Tariff | None:
         # Тариф уже существует — НЕ перезаписываем настройки из конфига.
         # Админ управляет тарифом через кабинет, синхронизация не нужна.
         logger.info(
-            "Дефолтный тариф 'Стандартный' (id=%s) уже существует, пропускаем sync из конфига", existing_tariff.id
+            "Дефолтный тариф 'Стандартный' (id=) уже существует, пропускаем sync из конфига",
+            existing_tariff_id=existing_tariff.id,
         )
         return existing_tariff
 
@@ -544,7 +540,7 @@ async def sync_default_tariff_from_config(db: AsyncSession) -> Tariff | None:
         db.add(new_tariff)
         await db.commit()
         await db.refresh(new_tariff)
-        logger.info("Создан дефолтный тариф 'Стандартный' из конфига: %s", period_prices)
+        logger.info("Создан дефолтный тариф 'Стандартный' из конфига", period_prices=period_prices)
         return new_tariff
 
     return None
@@ -574,7 +570,7 @@ async def load_period_prices_from_db(db: AsyncSession) -> None:
             return
 
         if not tariff.period_prices:
-            logger.warning("Тариф '%s' (id=%s) найден, но period_prices пуст", tariff.name, tariff.id)
+            logger.warning("Тариф '' (id=) найден, но period_prices пуст", tariff_name=tariff.name, tariff_id=tariff.id)
             return
 
         # Преобразуем строковые ключи в int
@@ -588,10 +584,10 @@ async def load_period_prices_from_db(db: AsyncSession) -> None:
                 {f'{d}д': f'{p // 100}₽' for d, p in period_prices.items()},
             )
         else:
-            logger.warning("Тариф '%s' не имеет активных периодов (все цены = 0)", tariff.name)
+            logger.warning("Тариф '' не имеет активных периодов (все цены = 0)", tariff_name=tariff.name)
 
     except Exception as e:
-        logger.error('Ошибка загрузки периодов из БД: %s', e)
+        logger.error('Ошибка загрузки периодов из БД', e=e)
 
 
 async def ensure_tariffs_synced(db: AsyncSession) -> None:
@@ -604,4 +600,4 @@ async def ensure_tariffs_synced(db: AsyncSession) -> None:
         # Загружаем периоды из БД в PERIOD_PRICES
         await load_period_prices_from_db(db)
     except Exception as e:
-        logger.error('Ошибка синхронизации тарифов: %s', e)
+        logger.error('Ошибка синхронизации тарифов', e=e)

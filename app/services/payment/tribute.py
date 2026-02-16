@@ -36,14 +36,12 @@ class TributePaymentMixin:
             payment_url = f'https://tribute.ru/pay?amount={amount_kopeks}&user={user_id}'
 
             logger.info(
-                'Создан Tribute платеж на %s₽ для пользователя %s',
-                amount_kopeks / 100,
-                user_id,
+                'Создан Tribute платеж на ₽ для пользователя', amount_kopeks=amount_kopeks / 100, user_id=user_id
             )
             return payment_url
 
         except Exception as error:
-            logger.error('Ошибка создания Tribute платежа: %s', error)
+            logger.error('Ошибка создания Tribute платежа', error=error)
             raise
 
     def verify_tribute_webhook(self, data: dict[str, object], signature: str) -> bool:
@@ -62,5 +60,5 @@ class TributePaymentMixin:
             return hmac.compare_digest(signature, expected_signature)
 
         except Exception as error:
-            logger.error('Ошибка проверки Tribute webhook: %s', error)
+            logger.error('Ошибка проверки Tribute webhook', error=error)
             return False

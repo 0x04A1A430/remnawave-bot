@@ -1,5 +1,4 @@
-import logging
-
+import structlog
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -25,7 +24,7 @@ def _normalize_period_discounts(period_discounts: dict[int, int] | None) -> dict
     return normalized
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def get_promo_groups_with_counts(
@@ -194,11 +193,7 @@ async def update_promo_group(
     await db.commit()
     await db.refresh(group)
 
-    logger.info(
-        "Обновлена промогруппа '%s' (id=%s)",
-        group.name,
-        group.id,
-    )
+    logger.info("Обновлена промогруппа '' (id=)", group_name=group.name, group_id=group.id)
     return group
 
 
@@ -246,10 +241,10 @@ async def delete_promo_group(db: AsyncSession, group: PromoGroup) -> bool:
     await db.commit()
 
     logger.info(
-        "Промогруппа '%s' (id=%s) удалена, пользователи переведены в '%s'",
-        group.name,
-        group.id,
-        default_group.name,
+        "Промогруппа '' (id=) удалена, пользователи переведены в ''",
+        group_name=group.name,
+        group_id=group.id,
+        default_group_name=default_group.name,
     )
     return True
 

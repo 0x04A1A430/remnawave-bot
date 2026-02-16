@@ -1,5 +1,4 @@
-import logging
-
+import structlog
 from aiogram import types
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,7 +12,7 @@ from app.states import BalanceStates
 from app.utils.decorators import error_handler
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @error_handler
@@ -47,7 +46,7 @@ async def start_cryptobot_payment(callback: types.CallbackQuery, db_user: User, 
         current_rate = await currency_converter.get_usd_to_rub_rate()
         rate_text = f'💱 Текущий курс: 1 USD = {current_rate:.2f} ₽'
     except Exception as e:
-        logger.warning(f'Не удалось получить курс валют: {e}')
+        logger.warning('Не удалось получить курс валют', error=e)
         current_rate = 95.0
         rate_text = f'💱 Курс: 1 USD ≈ {current_rate:.0f} ₽'
 
@@ -208,19 +207,13 @@ async def process_cryptobot_payment_amount(
         try:
             await message.delete()
         except Exception as delete_error:  # pragma: no cover - depends on bot rights
-            logger.warning(
-                'Не удалось удалить сообщение с суммой CryptoBot: %s',
-                delete_error,
-            )
+            logger.warning('Не удалось удалить сообщение с суммой CryptoBot', delete_error=delete_error)
 
         if prompt_message_id:
             try:
                 await message.bot.delete_message(prompt_chat_id, prompt_message_id)
             except Exception as delete_error:  # pragma: no cover - diagnostics
-                logger.warning(
-                    'Не удалось удалить сообщение с запросом суммы CryptoBot: %s',
-                    delete_error,
-                )
+                logger.warning('Не удалось удалить сообщение с запросом суммы CryptoBot', delete_error=delete_error)
 
         invoice_message = await message.answer(
             f'🪙 <b>Оплата криптовалютой</b>\n\n'
@@ -249,12 +242,15 @@ async def process_cryptobot_payment_amount(
         await state.clear()
 
         logger.info(
-            f'Создан CryptoBot платеж для пользователя {db_user.telegram_id}: '
-            f'{amount_rubles:.0f} ₽ ({amount_usd:.2f} USD), ID: {payment_result["invoice_id"]}'
+            'Создан CryptoBot платеж для пользователя ₽ ( USD), ID',
+            telegram_id=db_user.telegram_id,
+            amount_rubles=round(amount_rubles, 0),
+            amount_usd=round(amount_usd, 2),
+            payment_result=payment_result['invoice_id'],
         )
 
     except Exception as e:
-        logger.error(f'Ошибка создания CryptoBot платежа: {e}')
+        logger.error('Ошибка создания CryptoBot платежа', error=e)
         await message.answer('❌ Ошибка создания платежа. Попробуйте позже или обратитесь в поддержку.')
         await state.clear()
 
@@ -297,5 +293,5 @@ async def check_cryptobot_payment_status(callback: types.CallbackQuery, db: Asyn
         await callback.answer(message_text, show_alert=True)
 
     except Exception as e:
-        logger.error(f'Ошибка проверки статуса CryptoBot платежа: {e}')
+        logger.error('Ошибка проверки статуса CryptoBot платежа', error=e)
         await callback.answer('❌ Ошибка проверки статуса', show_alert=True)

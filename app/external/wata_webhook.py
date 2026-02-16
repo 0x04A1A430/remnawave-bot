@@ -3,11 +3,11 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
-import logging
 from datetime import datetime, timedelta
 from typing import Any
 
 import aiohttp
+import structlog
 from aiohttp import web
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
@@ -18,7 +18,7 @@ from app.database.database import AsyncSessionLocal
 from app.services.payment_service import PaymentService
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class WataPublicKeyProvider:
@@ -67,28 +67,24 @@ class WataPublicKeyProvider:
             async with aiohttp.ClientSession(timeout=timeout) as session, session.get(url) as response:
                 text = await response.text()
                 if response.status >= 400:
-                    logger.error(
-                        'Ошибка получения публичного ключа WATA %s: %s',
-                        response.status,
-                        text,
-                    )
+                    logger.error('Ошибка получения публичного ключа WATA', response_status=response.status, text=text)
                     return None
 
                 try:
                     payload = await response.json()
                 except aiohttp.ContentTypeError:
-                    logger.error('Ответ WATA public-key не является JSON: %s', text)
+                    logger.error('Ответ WATA public-key не является JSON', text=text)
                     return None
 
             if isinstance(payload, dict):
                 value = payload.get('value')
                 if value:
                     return value
-                logger.error('Ответ WATA public-key не содержит ключ: %s', payload)
+                logger.error('Ответ WATA public-key не содержит ключ', payload=payload)
             else:
-                logger.error('Неожиданный формат ответа WATA public-key: %s', payload)
+                logger.error('Неожиданный формат ответа WATA public-key', payload=payload)
         except Exception as error:
-            logger.error('Ошибка запроса публичного ключа WATA: %s', error)
+            logger.error('Ошибка запроса публичного ключа WATA', error=error)
 
         return None
 
@@ -125,7 +121,7 @@ class WataWebhookHandler:
         try:
             public_key = serialization.load_pem_public_key(public_key_pem.encode('utf-8'))
         except ValueError as error:
-            logger.error('Ошибка загрузки публичного ключа WATA: %s', error)
+            logger.error('Ошибка загрузки публичного ключа WATA', error=error)
             return False
 
         try:
@@ -140,7 +136,7 @@ class WataWebhookHandler:
             logger.warning('Подпись WATA webhook не прошла проверку')
             return False
         except Exception as error:
-            logger.error('Ошибка проверки подписи WATA: %s', error)
+            logger.error('Ошибка проверки подписи WATA', error=error)
             return False
 
     async def handle_webhook(self, request: web.Request) -> web.Response:
@@ -164,9 +160,9 @@ class WataWebhookHandler:
             return web.json_response({'status': 'error', 'reason': 'invalid_json'}, status=400)
 
         logger.info(
-            'Получен WATA webhook: order_id=%s, status=%s',
-            payload.get('orderId'),
-            payload.get('transactionStatus'),
+            'Получен WATA webhook: order_id status',
+            payload=payload.get('orderId'),
+            payload_2=payload.get('transactionStatus'),
         )
 
         processed: bool | None = None
@@ -175,7 +171,7 @@ class WataWebhookHandler:
                 processed = await self.payment_service.process_wata_webhook(db, payload)
                 await db.commit()
             except Exception as e:
-                logger.error(f'Ошибка обработки WATA webhook: {e}')
+                logger.error('Ошибка обработки WATA webhook', error=e)
                 await db.rollback()
                 return web.json_response({'status': 'error', 'reason': 'internal_error'}, status=500)
 
@@ -218,10 +214,7 @@ def create_wata_webhook_app(payment_service: PaymentService) -> web.Application:
     app.router.add_options(settings.WATA_WEBHOOK_PATH, handler.options_handler)
     app.router.add_get('/health', handler.health_check)
 
-    logger.info(
-        'Настроен WATA webhook endpoint на %s',
-        settings.WATA_WEBHOOK_PATH,
-    )
+    logger.info('Настроен WATA webhook endpoint на', WATA_WEBHOOK_PATH=settings.WATA_WEBHOOK_PATH)
 
     return app
 
@@ -244,15 +237,15 @@ async def start_wata_webhook_server(payment_service: PaymentService) -> None:
     try:
         await site.start()
         logger.info(
-            'WATA webhook сервер запущен на %s:%s',
-            settings.WATA_WEBHOOK_HOST,
-            settings.WATA_WEBHOOK_PORT,
+            'WATA webhook сервер запущен на',
+            WATA_WEBHOOK_HOST=settings.WATA_WEBHOOK_HOST,
+            WATA_WEBHOOK_PORT=settings.WATA_WEBHOOK_PORT,
         )
         logger.info(
-            'WATA webhook URL: http://%s:%s%s',
-            settings.WATA_WEBHOOK_HOST,
-            settings.WATA_WEBHOOK_PORT,
-            settings.WATA_WEBHOOK_PATH,
+            'WATA webhook URL: http://',
+            WATA_WEBHOOK_HOST=settings.WATA_WEBHOOK_HOST,
+            WATA_WEBHOOK_PORT=settings.WATA_WEBHOOK_PORT,
+            WATA_WEBHOOK_PATH=settings.WATA_WEBHOOK_PATH,
         )
 
         while True:

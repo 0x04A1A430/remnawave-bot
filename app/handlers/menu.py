@@ -1,8 +1,8 @@
 import html
-import logging
 from datetime import datetime
 from decimal import Decimal
 
+import structlog
 from aiogram import Dispatcher, F, types
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
@@ -43,7 +43,7 @@ from app.utils.promo_offer import (
 from app.utils.timezone import format_local_datetime
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 def _format_rubles(amount_kopeks: int) -> str:
@@ -183,7 +183,7 @@ async def show_main_menu(
     try:
         has_saved_cart = await user_cart_service.has_user_cart(db_user.id)
     except Exception as e:
-        logger.error(f'Ошибка проверки сохраненной корзины для пользователя {db_user.id}: {e}')
+        logger.error('Ошибка проверки сохраненной корзины для пользователя', db_user_id=db_user.id, error=e)
         has_saved_cart = False
 
     is_admin = settings.is_admin(db_user.telegram_id)
@@ -1029,7 +1029,7 @@ async def handle_back_to_menu(callback: types.CallbackQuery, state: FSMContext, 
     try:
         has_saved_cart = await user_cart_service.has_user_cart(db_user.id)
     except Exception as e:
-        logger.error(f'Ошибка проверки сохраненной корзины для пользователя {db_user.id}: {e}')
+        logger.error('Ошибка проверки сохраненной корзины для пользователя', db_user_id=db_user.id, error=e)
         has_saved_cart = False
 
     is_admin = settings.is_admin(db_user.telegram_id)
@@ -1182,7 +1182,7 @@ async def get_main_menu_text(user, texts, db: AsyncSession):
                 # Формируем краткий блок информации о тарифе для главного меню
                 tariff_info_block = f'\n📦 Тариф: {tariff.name}'
         except Exception as e:
-            logger.debug(f'Не удалось загрузить тариф для главного меню: {e}')
+            logger.debug('Не удалось загрузить тариф для главного меню', error=e)
 
     base_text = texts.MAIN_MENU.format(
         user_name=user.full_name, subscription_status=_get_subscription_status(user, texts, is_daily_tariff)
@@ -1204,9 +1204,9 @@ async def get_main_menu_text(user, texts, db: AsyncSession):
             info_sections.append(promo_hint.strip())
     except Exception as hint_error:
         logger.debug(
-            'Не удалось построить подсказку промо-предложения для пользователя %s: %s',
-            getattr(user, 'id', None),
-            hint_error,
+            'Не удалось построить подсказку промо-предложения для пользователя',
+            getattr=getattr(user, 'id', None),
+            hint_error=hint_error,
         )
 
     try:
@@ -1215,9 +1215,9 @@ async def get_main_menu_text(user, texts, db: AsyncSession):
             info_sections.append(test_access_hint.strip())
     except Exception as test_error:
         logger.debug(
-            'Не удалось построить подсказку тестового доступа для пользователя %s: %s',
-            getattr(user, 'id', None),
-            test_error,
+            'Не удалось построить подсказку тестового доступа для пользователя',
+            getattr=getattr(user, 'id', None),
+            test_error=test_error,
         )
 
     if info_sections:
@@ -1231,7 +1231,7 @@ async def get_main_menu_text(user, texts, db: AsyncSession):
             return _insert_random_message(base_text, random_message, action_prompt)
 
     except Exception as e:
-        logger.error(f'Ошибка получения случайного сообщения: {e}')
+        logger.error('Ошибка получения случайного сообщения', error=e)
 
     return base_text
 
@@ -1373,7 +1373,7 @@ async def handle_activate_button(callback: types.CallbackQuery, db_user: User, d
 
     except Exception as e:
         user_id_display = db_user.telegram_id or db_user.email or f'#{db_user.id}'
-        logger.error(f'Ошибка автоматической активации для {user_id_display}: {e}')
+        logger.error('Ошибка автоматической активации для', user_id_display=user_id_display, error=e)
         await db.rollback()
         await callback.answer(
             texts.t('ACTIVATION_ERROR', '❌ Ошибка активации. Попробуйте позже.'),

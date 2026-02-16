@@ -1,8 +1,8 @@
 import asyncio
-import logging
 from collections.abc import Iterable
 from types import SimpleNamespace
 
+import structlog
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -22,7 +22,7 @@ from app.database.models import (
 from app.localization.texts import get_texts
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 def _build_poll_invitation_text(poll: Poll, language: str) -> str:
@@ -158,18 +158,18 @@ async def send_poll_to_users(
                     # Проверяем, является ли ошибка связанной с лимитом подключений
                     if 'too many clients' in str(error).lower():
                         logger.warning(
-                            '⚠️ Ограничение на количество подключений к БД: %s пользователю %s',
-                            poll_id,
-                            user_snapshot.telegram_id,
+                            '⚠️ Ограничение на количество подключений к БД: пользователю',
+                            poll_id=poll_id,
+                            telegram_id=user_snapshot.telegram_id,
                         )
                         # Уменьшаем вероятность переполнения, делая небольшую задержку
                         await asyncio.sleep(0.1)
                     else:
                         logger.error(
-                            '❌ Ошибка отправки опроса %s пользователю %s: %s',
-                            poll_id,
-                            user_snapshot.telegram_id,
-                            error,
+                            '❌ Ошибка отправки опроса пользователю',
+                            poll_id=poll_id,
+                            telegram_id=user_snapshot.telegram_id,
+                            error=error,
                         )
                     return 'failed'
 

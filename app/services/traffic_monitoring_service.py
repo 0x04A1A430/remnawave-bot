@@ -4,10 +4,10 @@
 """
 
 import asyncio
-import logging
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 
+import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -18,7 +18,7 @@ from app.services.remnawave_service import RemnaWaveService
 from app.utils.cache import cache, cache_key
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Ключи для хранения snapshot в Redis
 TRAFFIC_SNAPSHOT_KEY = 'traffic:snapshot'
@@ -122,12 +122,16 @@ class TrafficMonitoringServiceV2:
             if success:
                 # Сохраняем время создания snapshot
                 await cache.set(TRAFFIC_SNAPSHOT_TIME_KEY, datetime.utcnow().isoformat(), expire=ttl)
-                logger.info(f'📦 Snapshot сохранён в Redis: {len(snapshot)} пользователей, TTL {ttl // 3600}ч')
+                logger.info(
+                    '📦 Snapshot сохранён в Redis: пользователей, TTL ч',
+                    snapshot_count=len(snapshot),
+                    value=ttl // 3600,
+                )
             else:
                 logger.warning('⚠️ Не удалось сохранить snapshot в Redis')
             return success
         except Exception as e:
-            logger.error(f'❌ Ошибка сохранения snapshot в Redis: {e}')
+            logger.error('❌ Ошибка сохранения snapshot в Redis', error=e)
             return False
 
     async def _load_snapshot_from_redis(self) -> dict[str, float] | None:
@@ -138,11 +142,11 @@ class TrafficMonitoringServiceV2:
             if snapshot_data is not None and isinstance(snapshot_data, dict):
                 # Конвертируем обратно в float
                 result = {uuid: float(bytes_val) for uuid, bytes_val in snapshot_data.items()}
-                logger.debug(f'📦 Snapshot загружен из Redis: {len(result)} пользователей')
+                logger.debug('📦 Snapshot загружен из Redis: пользователей', result_count=len(result))
                 return result
             return None
         except Exception as e:
-            logger.error(f'❌ Ошибка загрузки snapshot из Redis: {e}')
+            logger.error('❌ Ошибка загрузки snapshot из Redis', error=e)
             return None
 
     async def _get_snapshot_time_from_redis(self) -> datetime | None:
@@ -153,7 +157,7 @@ class TrafficMonitoringServiceV2:
                 return datetime.fromisoformat(time_str)
             return None
         except Exception as e:
-            logger.error(f'❌ Ошибка получения времени snapshot: {e}')
+            logger.error('❌ Ошибка получения времени snapshot', error=e)
             return None
 
     async def _save_notification_to_redis(self, user_uuid: str) -> bool:
@@ -163,7 +167,7 @@ class TrafficMonitoringServiceV2:
             ttl = 24 * 3600  # 24 часа
             return await cache.set(key, datetime.utcnow().isoformat(), expire=ttl)
         except Exception as e:
-            logger.error(f'❌ Ошибка сохранения уведомления в Redis: {e}')
+            logger.error('❌ Ошибка сохранения уведомления в Redis', error=e)
             return False
 
     async def _get_notification_time_from_redis(self, user_uuid: str) -> datetime | None:
@@ -175,7 +179,7 @@ class TrafficMonitoringServiceV2:
                 return datetime.fromisoformat(time_str)
             return None
         except Exception as e:
-            logger.error(f'❌ Ошибка получения времени уведомления: {e}')
+            logger.error('❌ Ошибка получения времени уведомления', error=e)
             return None
 
     # ============== Работа с нодами ==============
@@ -185,9 +189,9 @@ class TrafficMonitoringServiceV2:
         try:
             nodes = await self.remnawave_service.get_all_nodes()
             self._nodes_cache = {node['uuid']: node['name'] for node in nodes if node.get('uuid') and node.get('name')}
-            logger.debug(f'📋 Загружено {len(self._nodes_cache)} нод в кеш')
+            logger.debug('📋 Загружено нод в кеш', _nodes_cache_count=len(self._nodes_cache))
         except Exception as e:
-            logger.error(f'❌ Ошибка загрузки нод в кеш: {e}')
+            logger.error('❌ Ошибка загрузки нод в кеш', error=e)
 
     def get_node_name(self, node_uuid: str | None) -> str | None:
         """Возвращает название ноды по UUID из кеша"""
@@ -249,7 +253,7 @@ class TrafficMonitoringServiceV2:
         for uuid in expired:
             del self._memory_notification_cache[uuid]
         if expired:
-            logger.debug(f'🧹 Очищено {len(expired)} записей из памяти уведомлений о трафике')
+            logger.debug('🧹 Очищено записей из памяти уведомлений о трафике', expired_count=len(expired))
 
     # ============== Получение пользователей ==============
 
@@ -272,18 +276,18 @@ class TrafficMonitoringServiceV2:
                         break
 
                     all_users.extend(users)
-                    logger.debug(f'📊 Загружено {len(all_users)} пользователей...')
+                    logger.debug('📊 Загружено пользователей...', all_users_count=len(all_users))
 
                     if len(users) < batch_size:
                         break
 
                     offset += batch_size
 
-            logger.info(f'✅ Всего загружено {len(all_users)} пользователей из Remnawave')
+            logger.info('✅ Всего загружено пользователей из Remnawave', all_users_count=len(all_users))
             return all_users
 
         except Exception as e:
-            logger.error(f'❌ Ошибка при получении пользователей: {e}')
+            logger.error('❌ Ошибка при получении пользователей', error=e)
             return []
 
     # ============== Быстрая проверка ==============
@@ -349,8 +353,9 @@ class TrafficMonitoringServiceV2:
         if existing_snapshot is not None:
             age = await self.get_snapshot_age_minutes()
             logger.info(
-                f'📦 Найден существующий snapshot в Redis: {len(existing_snapshot)} пользователей, '
-                f'возраст {age:.1f} мин'
+                '📦 Найден существующий snapshot в Redis: пользователей, возраст мин',
+                existing_snapshot_count=len(existing_snapshot),
+                age=round(age, 1),
             )
             return len(existing_snapshot)
 
@@ -373,13 +378,15 @@ class TrafficMonitoringServiceV2:
                 new_snapshot[user.uuid] = current_bytes
 
             except Exception as e:
-                logger.error(f'❌ Ошибка при создании snapshot для {user.uuid}: {e}')
+                logger.error('❌ Ошибка при создании snapshot для', uuid=user.uuid, error=e)
 
         # Сохраняем в Redis (с fallback на память)
         await self._save_snapshot(new_snapshot)
 
         elapsed = (datetime.utcnow() - start_time).total_seconds()
-        logger.info(f'✅ Snapshot создан за {elapsed:.1f}с: {len(new_snapshot)} пользователей')
+        logger.info(
+            '✅ Snapshot создан за с: пользователей', elapsed=round(elapsed, 1), new_snapshot_count=len(new_snapshot)
+        )
 
         return len(new_snapshot)
 
@@ -407,21 +414,23 @@ class TrafficMonitoringServiceV2:
         excluded_user_uuids = self.get_excluded_user_uuids()
 
         if monitored_nodes:
-            logger.info(f'🔍 Мониторим только ноды: {monitored_nodes}')
+            logger.info('🔍 Мониторим только ноды', monitored_nodes=monitored_nodes)
         elif ignored_nodes:
-            logger.info(f'🚫 Игнорируем ноды: {ignored_nodes}')
+            logger.info('🚫 Игнорируем ноды', ignored_nodes=ignored_nodes)
         else:
             logger.info('📊 Мониторим все ноды')
 
         if excluded_user_uuids:
-            logger.info(f'🚫 Исключены пользователи: {excluded_user_uuids}')
+            logger.info('🚫 Исключены пользователи', excluded_user_uuids=excluded_user_uuids)
 
         if is_first_run:
             logger.info('🚀 Первый запуск быстрой проверки — создаём snapshot...')
         else:
             age = await self.get_snapshot_age_minutes()
             logger.info(
-                f'🚀 Быстрая проверка трафика (snapshot {age:.1f} мин назад, порог {self.get_fast_check_threshold_gb()} ГБ)...'
+                '🚀 Быстрая проверка трафика (snapshot мин назад, порог ГБ)...',
+                age=round(age, 1),
+                get_fast_check_threshold_gb=self.get_fast_check_threshold_gb(),
             )
 
         violations: list[TrafficViolation] = []
@@ -432,7 +441,11 @@ class TrafficMonitoringServiceV2:
 
         # Загружаем предыдущий snapshot (из Redis или памяти)
         previous_snapshot = await self._get_current_snapshot()
-        logger.info(f'📦 Предыдущий snapshot: {len(previous_snapshot)} пользователей (is_first_run={is_first_run})')
+        logger.info(
+            '📦 Предыдущий snapshot: пользователей (is_first_run=)',
+            previous_snapshot_count=len(previous_snapshot),
+            is_first_run=is_first_run,
+        )
 
         users_with_delta = 0
 
@@ -455,7 +468,7 @@ class TrafficMonitoringServiceV2:
 
                 # Пользователя не было в предыдущем snapshot — пропускаем (новый пользователь)
                 if user.uuid not in previous_snapshot:
-                    logger.debug(f'Пользователь {user.uuid[:8]} не найден в предыдущем snapshot, пропускаем')
+                    logger.debug('Пользователь не найден в предыдущем snapshot, пропускаем', uuid=user.uuid[:8])
                     continue
 
                 # Получаем предыдущее значение
@@ -474,13 +487,18 @@ class TrafficMonitoringServiceV2:
                     continue
 
                 logger.info(
-                    f'⚠️ Превышение дельты: {user.uuid[:8]}... +{delta_gb:.2f} ГБ (порог {self.get_fast_check_threshold_gb()} ГБ, previous={previous_bytes / (1024**3):.2f} ГБ, current={current_bytes / (1024**3):.2f} ГБ)'
+                    '⚠️ Превышение дельты: ... + ГБ (порог ГБ, previous= ГБ, current= ГБ)',
+                    uuid=user.uuid[:8],
+                    delta_gb=round(delta_gb, 2),
+                    get_fast_check_threshold_gb=self.get_fast_check_threshold_gb(),
+                    previous_bytes=round(previous_bytes / 1024**3, 2),
+                    current_bytes=round(current_bytes / 1024**3, 2),
                 )
 
                 # Проверяем исключённых пользователей (служебные/тунельные)
                 if user.uuid.lower() in excluded_user_uuids:
                     logger.info(
-                        f'⏭️ Пропускаем {user.uuid[:8]}... - пользователь в списке исключений (служебный/тунельный)'
+                        '⏭️ Пропускаем ... пользователь в списке исключений (служебный/тунельный)', uuid=user.uuid[:8]
                     )
                     continue
 
@@ -488,7 +506,9 @@ class TrafficMonitoringServiceV2:
                 last_node_uuid = user_traffic.last_connected_node_uuid
                 if not self.should_monitor_node(last_node_uuid):
                     logger.warning(
-                        f'⏭️ Пропускаем {user.uuid[:8]} - нода {last_node_uuid or "неизвестна"} не в списке мониторинга'
+                        '⏭️ Пропускаем нода не в списке мониторинга',
+                        uuid=user.uuid[:8],
+                        last_node_uuid=last_node_uuid or 'неизвестна',
                     )
                     continue
 
@@ -509,23 +529,27 @@ class TrafficMonitoringServiceV2:
                 violations.append(violation)
 
             except Exception as e:
-                logger.error(f'❌ Ошибка обработки пользователя {user.uuid}: {e}')
+                logger.error('❌ Ошибка обработки пользователя', uuid=user.uuid, error=e)
 
         # Обновляем snapshot (в Redis с fallback на память)
         await self._save_snapshot(new_snapshot)
-        logger.info(f'💾 Новый snapshot сохранён: {len(new_snapshot)} пользователей')
+        logger.info('💾 Новый snapshot сохранён: пользователей', new_snapshot_count=len(new_snapshot))
 
         elapsed = (datetime.utcnow() - start_time).total_seconds()
 
         if is_first_run:
             logger.info(
-                f'✅ Snapshot создан за {elapsed:.1f}с: {len(new_snapshot)} пользователей. '
-                f'Следующая проверка покажет превышения.'
+                '✅ Snapshot создан за с: пользователей. Следующая проверка покажет превышения.',
+                elapsed=round(elapsed, 1),
+                new_snapshot_count=len(new_snapshot),
             )
         else:
             logger.info(
-                f'✅ Быстрая проверка завершена за {elapsed:.1f}с: '
-                f'{len(users)} пользователей, {users_with_delta} с дельтой >0, {len(violations)} превышений'
+                '✅ Быстрая проверка завершена за с: пользователей, с дельтой >0, превышений',
+                elapsed=round(elapsed, 1),
+                users_count=len(users),
+                users_with_delta=users_with_delta,
+                violations_count=len(violations),
             )
             # Отправляем уведомления только если это не первый запуск
             await self._send_violation_notifications(violations, bot)
@@ -604,7 +628,7 @@ class TrafficMonitoringServiceV2:
                     )
 
                 except Exception as e:
-                    logger.error(f'❌ Ошибка суточной проверки для {user.uuid}: {e}')
+                    logger.error('❌ Ошибка суточной проверки для', uuid=user.uuid, error=e)
                     return None
 
         # Параллельная проверка
@@ -617,8 +641,10 @@ class TrafficMonitoringServiceV2:
 
         elapsed = (datetime.utcnow() - start_time).total_seconds()
         logger.info(
-            f'✅ Суточная проверка завершена за {elapsed:.1f}с: '
-            f'{len(users)} пользователей, {len(violations)} превышений'
+            '✅ Суточная проверка завершена за с: пользователей, превышений',
+            elapsed=round(elapsed, 1),
+            users_count=len(users),
+            violations_count=len(violations),
         )
 
         # Отправляем уведомления
@@ -640,7 +666,9 @@ class TrafficMonitoringServiceV2:
         max_notifications = 10
         if len(violations) > max_notifications:
             logger.warning(
-                f'⚠️ Слишком много превышений ({len(violations)}), отправляем только первые {max_notifications}'
+                '⚠️ Слишком много превышений отправляем только первые',
+                violations_count=len(violations),
+                max_notifications=max_notifications,
             )
             violations = violations[:max_notifications]
 
@@ -648,7 +676,9 @@ class TrafficMonitoringServiceV2:
             try:
                 if not await self.should_send_notification(violation.user_uuid):
                     logger.info(
-                        f'⏭️ Кулдаун для {violation.user_uuid[:8]}... - пропускаем уведомление (кулдаун {self.get_notification_cooldown_seconds() // 60} мин)'
+                        '⏭️ Кулдаун для ... пропускаем уведомление (кулдаун мин)',
+                        user_uuid=violation.user_uuid[:8],
+                        value=self.get_notification_cooldown_seconds() // 60,
                     )
                     continue
 
@@ -700,14 +730,14 @@ class TrafficMonitoringServiceV2:
                 await admin_service.send_suspicious_traffic_notification(message, bot, topic_id)
                 await self.record_notification(violation.user_uuid)
 
-                logger.info(f'📨 Уведомление отправлено для {violation.user_uuid}')
+                logger.info('📨 Уведомление отправлено для', user_uuid=violation.user_uuid)
 
                 # Задержка между отправками (защита от flood)
                 if i < len(violations) - 1:
                     await asyncio.sleep(0.5)
 
             except Exception as e:
-                logger.error(f'❌ Ошибка отправки уведомления для {violation.user_uuid}: {e}')
+                logger.error('❌ Ошибка отправки уведомления для', user_uuid=violation.user_uuid, error=e)
 
 
 class TrafficMonitoringSchedulerV2:
@@ -747,14 +777,14 @@ class TrafficMonitoringSchedulerV2:
         # Запускаем быструю проверку
         if self.service.is_fast_check_enabled():
             interval = self.service.get_fast_check_interval_seconds()
-            logger.info(f'🚀 Запуск быстрой проверки трафика каждые {interval // 60} мин')
+            logger.info('🚀 Запуск быстрой проверки трафика каждые мин', value=interval // 60)
             self._fast_check_task = asyncio.create_task(self._run_fast_check_loop(interval))
 
         # Запускаем суточную проверку
         if self.service.is_daily_check_enabled():
             check_time = self.service.get_daily_check_time()
             if check_time:
-                logger.info(f'🚀 Запуск суточной проверки трафика в {check_time.strftime("%H:%M")}')
+                logger.info('🚀 Запуск суточной проверки трафика в', check_time=check_time.strftime('%H:%M'))
                 self._daily_check_task = asyncio.create_task(self._run_daily_check_loop(check_time))
 
     async def stop(self):
@@ -782,7 +812,7 @@ class TrafficMonitoringSchedulerV2:
     async def _run_fast_check_loop(self, interval_seconds: int):
         """Цикл быстрой проверки"""
         # Сначала ждём интервал (snapshot уже создан в start())
-        logger.info(f'⏳ Первая проверка через {interval_seconds // 60} минут...')
+        logger.info('⏳ Первая проверка через минут...', value=interval_seconds // 60)
         await asyncio.sleep(interval_seconds)
 
         while self._is_running:
@@ -793,7 +823,7 @@ class TrafficMonitoringSchedulerV2:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f'❌ Ошибка в цикле быстрой проверки: {e}')
+                logger.error('❌ Ошибка в цикле быстрой проверки', error=e)
                 await asyncio.sleep(interval_seconds)
 
     async def _run_daily_check_loop(self, check_time: time):
@@ -807,7 +837,7 @@ class TrafficMonitoringSchedulerV2:
                     next_run += timedelta(days=1)
 
                 delay = (next_run - now).total_seconds()
-                logger.debug(f'⏰ Следующая суточная проверка через {delay / 3600:.1f}ч')
+                logger.debug('⏰ Следующая суточная проверка через ч', delay=round(delay / 3600, 1))
 
                 await asyncio.sleep(delay)
 
@@ -817,7 +847,7 @@ class TrafficMonitoringSchedulerV2:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f'❌ Ошибка в цикле суточной проверки: {e}')
+                logger.error('❌ Ошибка в цикле суточной проверки', error=e)
                 await asyncio.sleep(3600)  # Ждём час при ошибке
 
     async def run_fast_check_now(self) -> list[TrafficViolation]:
@@ -878,7 +908,7 @@ class TrafficMonitoringService:
             return is_exceeded, traffic_info
 
         except Exception as e:
-            logger.error(f'Ошибка проверки трафика для {user_uuid}: {e}')
+            logger.error('Ошибка проверки трафика для', user_uuid=user_uuid, error=e)
             return False, {'total_gb': 0, 'nodes': []}
 
     async def process_suspicious_traffic(self, db: AsyncSession, user_uuid: str, traffic_info: dict, bot):

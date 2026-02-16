@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import base64
 import json
-import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 from uuid import uuid4
 
+import structlog
 from aiogram import Bot
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,7 +33,7 @@ from app.utils.pricing_utils import (
 )
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class SubscriptionRenewalError(Exception):
@@ -300,7 +300,7 @@ async def with_admin_notification_service(
         service = AdminNotificationService(bot)
         await handler(service)
     except Exception as error:  # pragma: no cover - defensive logging
-        logger.error('Failed to send admin notification from renewal service: %s', error)
+        logger.error('Failed to send admin notification from renewal service', error=error)
     finally:
         if bot is not None:
             await bot.session.close()
@@ -371,9 +371,9 @@ class SubscriptionRenewalService:
             discounted_total,
         ):
             logger.warning(
-                'Renewal pricing validation failed for subscription %s (period %s)',
-                subscription.id,
-                period_days,
+                'Renewal pricing validation failed for subscription (period)',
+                subscription_id=subscription.id,
+                period_days=period_days,
             )
 
         from app.utils.promo_offer import get_user_active_promo_discount_percent
@@ -467,10 +467,10 @@ class SubscriptionRenewalService:
                     )
                 except Exception as refund_error:
                     logger.critical(
-                        'CRITICAL: Failed to refund %s kopeks to user %s after extension failure: %s',
-                        charge_from_balance,
-                        user.id,
-                        refund_error,
+                        'CRITICAL: Failed to refund kopeks to user after extension failure',
+                        charge_from_balance=charge_from_balance,
+                        user_id=user.id,
+                        refund_error=refund_error,
                     )
             raise
 
@@ -486,9 +486,9 @@ class SubscriptionRenewalService:
                 )
             except Exception as error:  # pragma: no cover - defensive logging
                 logger.warning(
-                    'Failed to record renewal server prices for subscription %s: %s',
-                    subscription_after.id,
-                    error,
+                    'Failed to record renewal server prices for subscription',
+                    subscription_after_id=subscription_after.id,
+                    error=error,
                 )
 
         subscription_service = SubscriptionService()
@@ -500,12 +500,12 @@ class SubscriptionRenewalService:
                 reset_reason='subscription renewal',
             )
         except RemnaWaveConfigurationError as error:  # pragma: no cover - configuration issues
-            logger.warning('RemnaWave update skipped: %s', error)
+            logger.warning('RemnaWave update skipped', error=error)
         except Exception as error:  # pragma: no cover - defensive logging
             logger.error(
-                'Failed to update RemnaWave user for subscription %s: %s',
-                subscription_after.id,
-                error,
+                'Failed to update RemnaWave user for subscription',
+                subscription_after_id=subscription_after.id,
+                error=error,
             )
 
         transaction: Transaction | None = None
@@ -520,9 +520,9 @@ class SubscriptionRenewalService:
             )
         except Exception as error:  # pragma: no cover - defensive logging
             logger.warning(
-                'Failed to create renewal transaction for subscription %s: %s',
-                subscription_after.id,
-                error,
+                'Failed to create renewal transaction for subscription',
+                subscription_after_id=subscription_after.id,
+                error=error,
             )
 
         await db.refresh(user)
@@ -584,10 +584,10 @@ class SubscriptionRenewalService:
         if unavailable_servers:
             user_identifier = user.telegram_id or user.email or f'user#{user.id}'
             logger.warning(
-                f'⚠️ Пользователь {user_identifier} (promo_group={user_promo_group.name}) '
-                f'продлевает подписку с серверами, недоступными для его промогруппы: '
-                f'{", ".join(unavailable_servers)}. '
-                f'Это может привести к неправильному расчёту цены!'
+                '⚠️ Пользователь (promo_group=) продлевает подписку с серверами, недоступными для его промогруппы: . Это может привести к неправильному расчёту цены!',
+                user_identifier=user_identifier,
+                user_promo_group_name=user_promo_group.name,
+                value=', '.join(unavailable_servers),
             )
 
     def build_option_payload(

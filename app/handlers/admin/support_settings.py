@@ -1,8 +1,8 @@
 import contextlib
 import html
-import logging
 import re
 
+import structlog
 from aiogram import Dispatcher, F, types
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -16,7 +16,7 @@ from app.states import SupportSettingsStates
 from app.utils.decorators import admin_required, error_handler
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 def _get_support_settings_keyboard(language: str) -> types.InlineKeyboardMarkup:

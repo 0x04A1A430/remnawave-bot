@@ -1,13 +1,13 @@
-import logging
 from datetime import datetime
 
+import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import PrivacyPolicy
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def get_privacy_policy(db: AsyncSession, language: str) -> PrivacyPolicy | None:
@@ -38,11 +38,7 @@ async def upsert_privacy_policy(
     await db.commit()
     await db.refresh(policy)
 
-    logger.info(
-        '✅ Политика конфиденциальности для языка %s обновлена (ID: %s)',
-        language,
-        policy.id,
-    )
+    logger.info('✅ Политика конфиденциальности для языка обновлена (ID:)', language=language, policy_id=policy.id)
 
     return policy
 

@@ -1,7 +1,6 @@
 import asyncio
 import base64
 import json
-import logging
 import ssl
 from dataclasses import dataclass
 from datetime import datetime
@@ -10,9 +9,10 @@ from typing import Any
 from urllib.parse import urlparse
 
 import aiohttp
+import structlog
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class UserStatus(Enum):
@@ -310,7 +310,7 @@ class RemnaWaveAPI:
     async def __aenter__(self):
         conn_type = self._detect_connection_type()
 
-        logger.debug(f'Подключение к Remnawave: {self.base_url} (тип: {conn_type})')
+        logger.debug('Подключение к Remnawave: (тип: )', base_url=self.base_url, conn_type=conn_type)
 
         headers = self._prepare_auth_headers()
 
@@ -319,10 +319,10 @@ class RemnaWaveAPI:
             if ':' in self.secret_key:
                 key_name, key_value = self.secret_key.split(':', 1)
                 cookies = {key_name: key_value}
-                logger.debug(f'Используем куки: {key_name}=***')
+                logger.debug('Используем куки: =***', key_name=key_name)
             else:
                 cookies = {self.secret_key: self.secret_key}
-                logger.debug(f'Используем куки: {self.secret_key}=***')
+                logger.debug('Используем куки: =***', secret_key=self.secret_key)
 
         connector_kwargs = {}
 
@@ -388,12 +388,12 @@ class RemnaWaveAPI:
                     if response.status == 429 and attempt < max_retries:
                         retry_after = float(response.headers.get('Retry-After', base_delay * (2**attempt)))
                         logger.warning(
-                            'Rate limited (429) on %s %s, retry %d/%d after %.1fs',
-                            method,
-                            endpoint,
-                            attempt + 1,
-                            max_retries,
-                            retry_after,
+                            'Rate limited (429) on , retry / after s',
+                            method=method,
+                            endpoint=endpoint,
+                            attempt=attempt + 1,
+                            max_retries=max_retries,
+                            retry_after=retry_after,
                         )
                         await asyncio.sleep(retry_after)
                         continue
@@ -411,17 +411,17 @@ class RemnaWaveAPI:
                 if attempt < max_retries:
                     delay = base_delay * (2**attempt)
                     logger.warning(
-                        'Request failed on %s %s: %s, retry %d/%d after %.1fs',
-                        method,
-                        endpoint,
-                        e,
-                        attempt + 1,
-                        max_retries,
-                        delay,
+                        'Request failed on retry / after s',
+                        method=method,
+                        endpoint=endpoint,
+                        e=e,
+                        attempt=attempt + 1,
+                        max_retries=max_retries,
+                        delay=delay,
                     )
                     await asyncio.sleep(delay)
                     continue
-                logger.error(f'Request failed: {e}')
+                logger.error('Request failed', error=e)
                 raise RemnaWaveAPIError(f'Request failed: {e!s}')
 
         raise RemnaWaveAPIError(f'Max retries exceeded for {method} {endpoint}')
@@ -461,7 +461,7 @@ class RemnaWaveAPI:
         if active_internal_squads:
             data['activeInternalSquads'] = active_internal_squads
 
-        logger.debug('Создание пользователя в панели: %s', data)
+        logger.debug('Создание пользователя в панели', data=data)
         response = await self._make_request('POST', '/api/users', data)
         user = self._parse_user(response['response'])
         return await self.enrich_user_with_happ_link(user)
@@ -1049,13 +1049,13 @@ class RemnaWaveAPI:
                         delete_data = {'userUuid': user_uuid, 'hwid': device_hwid}
                         await self._make_request('POST', '/api/hwid/devices/delete', data=delete_data)
                     except Exception as device_error:
-                        logger.error(f'Ошибка удаления устройства {device_hwid}: {device_error}')
+                        logger.error('Ошибка удаления устройства', device_hwid=device_hwid, device_error=device_error)
                         failed_count += 1
 
             return failed_count < len(devices) / 2
 
         except Exception as e:
-            logger.error(f'Ошибка при сбросе устройств: {e}')
+            logger.error('Ошибка при сбросе устройств', error=e)
             return False
 
     async def remove_device(self, user_uuid: str, device_hwid: str) -> bool:
@@ -1064,7 +1064,7 @@ class RemnaWaveAPI:
             await self._make_request('POST', '/api/hwid/devices/delete', data=delete_data)
             return True
         except Exception as e:
-            logger.error(f'Ошибка удаления устройства {device_hwid}: {e}')
+            logger.error('Ошибка удаления устройства', device_hwid=device_hwid, error=e)
             return False
 
     async def encrypt_happ_crypto_link(self, link_to_encrypt: str) -> str | None:
@@ -1073,10 +1073,10 @@ class RemnaWaveAPI:
             response = await self._make_request('POST', '/api/system/tools/happ/encrypt', data)
             return response.get('response', {}).get('encryptedLink')
         except RemnaWaveAPIError as e:
-            logger.warning(f'Не удалось зашифровать happ ссылку: {e.message}')
+            logger.warning('Не удалось зашифровать happ ссылку', message=e.message)
             return None
         except Exception as e:
-            logger.warning(f'Ошибка при шифровании happ ссылки: {e}')
+            logger.warning('Ошибка при шифровании happ ссылки', error=e)
             return None
 
     async def enrich_user_with_happ_link(self, user: RemnaWaveUser) -> RemnaWaveUser:
@@ -1112,7 +1112,7 @@ class RemnaWaveAPI:
         try:
             status = UserStatus(status_str)
         except ValueError:
-            logger.warning(f'Неизвестный статус пользователя: {status_str}, используем ACTIVE')
+            logger.warning('Неизвестный статус пользователя: используем ACTIVE', status_str=status_str)
             status = UserStatus.ACTIVE
 
         # Получаем trafficLimitStrategy с fallback
@@ -1120,7 +1120,7 @@ class RemnaWaveAPI:
         try:
             traffic_strategy = TrafficLimitStrategy(strategy_str)
         except ValueError:
-            logger.warning(f'Неизвестная стратегия трафика: {strategy_str}, используем NO_RESET')
+            logger.warning('Неизвестная стратегия трафика: используем NO_RESET', strategy_str=strategy_str)
             traffic_strategy = TrafficLimitStrategy.NO_RESET
 
         return RemnaWaveUser(
@@ -1285,5 +1285,5 @@ async def test_api_connection(api: RemnaWaveAPI) -> bool:
         await api.get_system_stats()
         return True
     except Exception as e:
-        logger.warning('API connection test failed: %s', e)
+        logger.warning('API connection test failed', e=e)
         return False

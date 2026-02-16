@@ -1,12 +1,11 @@
-import logging
-
+import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import Squad
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def get_squad_by_uuid(db: AsyncSession, uuid: str) -> Squad | None:
@@ -28,7 +27,7 @@ async def create_squad(
     await db.commit()
     await db.refresh(squad)
 
-    logger.info(f'✅ Создан сквад: {name}')
+    logger.info('✅ Создан сквад', name=name)
     return squad
 
 

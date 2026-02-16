@@ -1,10 +1,10 @@
 """Branding routes for cabinet - logo, project name, and theme colors management."""
 
 import json
-import logging
 import os
 from pathlib import Path
 
+import structlog
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -17,7 +17,7 @@ from app.database.models import SystemSetting, User
 from ..dependencies import get_cabinet_db, get_current_admin_user
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/branding', tags=['Branding'])
 
@@ -307,7 +307,7 @@ async def update_branding_name(
 
     await set_setting_value(db, BRANDING_NAME_KEY, name)
 
-    logger.info(f'Admin {admin.telegram_id} updated branding name to: {name}')
+    logger.info('Admin updated branding name to', telegram_id=admin.telegram_id, name=name)
 
     # Return updated branding
     custom_logo = has_custom_logo()
@@ -368,7 +368,7 @@ async def upload_logo(
     # Mark that we have a custom logo
     await set_setting_value(db, BRANDING_LOGO_KEY, 'custom')
 
-    logger.info(f'Admin {admin.telegram_id} uploaded new logo: {logo_path}')
+    logger.info('Admin uploaded new logo', telegram_id=admin.telegram_id, logo_path=logo_path)
 
     # Get current name for response
     name = await get_setting_value(db, BRANDING_NAME_KEY)
@@ -398,7 +398,7 @@ async def delete_logo(
     # Update setting
     await set_setting_value(db, BRANDING_LOGO_KEY, 'default')
 
-    logger.info(f'Admin {admin.telegram_id} deleted custom logo')
+    logger.info('Admin deleted custom logo', telegram_id=admin.telegram_id)
 
     # Get current name for response
     name = await get_setting_value(db, BRANDING_NAME_KEY)
@@ -486,7 +486,7 @@ async def update_theme_colors(
     # Save to database
     await set_setting_value(db, THEME_COLORS_KEY, json.dumps(current_colors))
 
-    logger.info(f'Admin {admin.telegram_id} updated theme colors: {list(update_data.keys())}')
+    logger.info('Admin updated theme colors', telegram_id=admin.telegram_id, value=list(update_data.keys()))
 
     return ThemeColorsResponse(**current_colors)
 
@@ -500,7 +500,7 @@ async def reset_theme_colors(
     # Save default colors
     await set_setting_value(db, THEME_COLORS_KEY, json.dumps(DEFAULT_THEME_COLORS))
 
-    logger.info(f'Admin {admin.telegram_id} reset theme colors to defaults')
+    logger.info('Admin reset theme colors to defaults', telegram_id=admin.telegram_id)
 
     return ThemeColorsResponse(**DEFAULT_THEME_COLORS)
 
@@ -558,7 +558,7 @@ async def update_enabled_themes(
     # Save to database
     await set_setting_value(db, ENABLED_THEMES_KEY, json.dumps(current_themes))
 
-    logger.info(f'Admin {admin.telegram_id} updated enabled themes: {current_themes}')
+    logger.info('Admin updated enabled themes', telegram_id=admin.telegram_id, current_themes=current_themes)
 
     return EnabledThemesResponse(**current_themes)
 
@@ -593,7 +593,7 @@ async def update_animation_enabled(
     """Update animation enabled setting. Admin only."""
     await set_setting_value(db, ANIMATION_ENABLED_KEY, str(payload.enabled).lower())
 
-    logger.info(f'Admin {admin.telegram_id} set animation enabled: {payload.enabled}')
+    logger.info('Admin set animation enabled', telegram_id=admin.telegram_id, enabled=payload.enabled)
 
     return AnimationEnabledResponse(enabled=payload.enabled)
 
@@ -628,7 +628,7 @@ async def update_fullscreen_enabled(
     """Update fullscreen enabled setting. Admin only."""
     await set_setting_value(db, FULLSCREEN_ENABLED_KEY, str(payload.enabled).lower())
 
-    logger.info(f'Admin {admin.telegram_id} set fullscreen enabled: {payload.enabled}')
+    logger.info('Admin set fullscreen enabled', telegram_id=admin.telegram_id, enabled=payload.enabled)
 
     return FullscreenEnabledResponse(enabled=payload.enabled)
 
@@ -664,7 +664,7 @@ async def update_email_auth_enabled(
     """Update email auth enabled setting. Admin only."""
     await set_setting_value(db, EMAIL_AUTH_ENABLED_KEY, str(payload.enabled).lower())
 
-    logger.info(f'Admin {admin.telegram_id} set email auth enabled: {payload.enabled}')
+    logger.info('Admin set email auth enabled', telegram_id=admin.telegram_id, enabled=payload.enabled)
 
     return EmailAuthEnabledResponse(enabled=payload.enabled)
 
@@ -719,7 +719,7 @@ async def update_analytics_counters(
     if payload.google_ads_label is not None:
         await set_setting_value(db, GOOGLE_ADS_LABEL_KEY, payload.google_ads_label.strip())
 
-    logger.info(f'Admin {admin.telegram_id} updated analytics counters')
+    logger.info('Admin updated analytics counters', telegram_id=admin.telegram_id)
 
     # Return current state
     yandex_id = await get_setting_value(db, YANDEX_METRIKA_ID_KEY) or ''
@@ -764,6 +764,6 @@ async def update_lite_mode_enabled(
     """Update lite mode enabled setting. Admin only."""
     await set_setting_value(db, LITE_MODE_ENABLED_KEY, str(payload.enabled).lower())
 
-    logger.info(f'Admin {admin.telegram_id} set lite mode enabled: {payload.enabled}')
+    logger.info('Admin set lite mode enabled', telegram_id=admin.telegram_id, enabled=payload.enabled)
 
     return LiteModeEnabledResponse(enabled=payload.enabled)

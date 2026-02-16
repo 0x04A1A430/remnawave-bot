@@ -1,8 +1,8 @@
 """Покупка подписки по тарифам."""
 
-import logging
 from datetime import timedelta
 
+import structlog
 from aiogram import Dispatcher, F, types
 from aiogram.fsm.context import FSMContext
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -22,7 +22,7 @@ from app.utils.decorators import error_handler
 from app.utils.promo_offer import get_user_active_promo_discount_percent
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 def _format_traffic(gb: int) -> str:
@@ -873,7 +873,7 @@ async def handle_custom_confirm(
                 reset_reason='покупка тарифа',
             )
         except Exception as e:
-            logger.error(f'Ошибка обновления Remnawave: {e}')
+            logger.error('Ошибка обновления Remnawave', error=e)
 
         # Создаем транзакцию
         await create_transaction(
@@ -897,13 +897,13 @@ async def handle_custom_confirm(
                 amount_kopeks=total_price,
             )
         except Exception as e:
-            logger.error(f'Ошибка отправки уведомления админу: {e}')
+            logger.error('Ошибка отправки уведомления админу', error=e)
 
         # Очищаем корзину после успешной покупки
         try:
             await user_cart_service.delete_user_cart(db_user.id)
         except Exception as e:
-            logger.error(f'Ошибка очистки корзины: {e}')
+            logger.error('Ошибка очистки корзины', error=e)
 
         await state.clear()
 
@@ -928,7 +928,7 @@ async def handle_custom_confirm(
         await callback.answer('Подписка оформлена!', show_alert=True)
 
     except Exception as e:
-        logger.error(f'Ошибка при покупке тарифа с кастомными параметрами: {e}', exc_info=True)
+        logger.error('Ошибка при покупке тарифа с кастомными параметрами', error=e, exc_info=True)
         await callback.answer('Произошла ошибка при оформлении подписки', show_alert=True)
 
 
@@ -1180,7 +1180,7 @@ async def confirm_tariff_purchase(
                 reset_reason='покупка тарифа',
             )
         except Exception as e:
-            logger.error(f'Ошибка обновления Remnawave: {e}')
+            logger.error('Ошибка обновления Remnawave', error=e)
 
         # Создаем транзакцию
         await create_transaction(
@@ -1204,14 +1204,14 @@ async def confirm_tariff_purchase(
                 amount_kopeks=final_price,
             )
         except Exception as e:
-            logger.error(f'Ошибка отправки уведомления админу: {e}')
+            logger.error('Ошибка отправки уведомления админу', error=e)
 
         # Очищаем корзину после успешной покупки
         try:
             await user_cart_service.delete_user_cart(db_user.id)
-            logger.info(f'Корзина очищена после покупки тарифа для пользователя {db_user.telegram_id}')
+            logger.info('Корзина очищена после покупки тарифа для пользователя', telegram_id=db_user.telegram_id)
         except Exception as e:
-            logger.error(f'Ошибка очистки корзины: {e}')
+            logger.error('Ошибка очистки корзины', error=e)
 
         await state.clear()
 
@@ -1236,7 +1236,7 @@ async def confirm_tariff_purchase(
         await callback.answer('Подписка оформлена!', show_alert=True)
 
     except Exception as e:
-        logger.error(f'Ошибка при покупке тарифа: {e}', exc_info=True)
+        logger.error('Ошибка при покупке тарифа', error=e, exc_info=True)
         await callback.answer('Произошла ошибка при оформлении подписки', show_alert=True)
 
 
@@ -1360,7 +1360,7 @@ async def confirm_daily_tariff_purchase(
                 reset_reason='покупка суточного тарифа',
             )
         except Exception as e:
-            logger.error(f'Ошибка обновления Remnawave: {e}')
+            logger.error('Ошибка обновления Remnawave', error=e)
 
         # Создаем транзакцию
         await create_transaction(
@@ -1384,14 +1384,16 @@ async def confirm_daily_tariff_purchase(
                 amount_kopeks=daily_price,
             )
         except Exception as e:
-            logger.error(f'Ошибка отправки уведомления админу: {e}')
+            logger.error('Ошибка отправки уведомления админу', error=e)
 
         # Очищаем корзину после успешной покупки
         try:
             await user_cart_service.delete_user_cart(db_user.id)
-            logger.info(f'Корзина очищена после покупки суточного тарифа для пользователя {db_user.telegram_id}')
+            logger.info(
+                'Корзина очищена после покупки суточного тарифа для пользователя', telegram_id=db_user.telegram_id
+            )
         except Exception as e:
-            logger.error(f'Ошибка очистки корзины: {e}')
+            logger.error('Ошибка очистки корзины', error=e)
 
         await state.clear()
 
@@ -1417,7 +1419,7 @@ async def confirm_daily_tariff_purchase(
         await callback.answer('Подписка оформлена!', show_alert=True)
 
     except Exception as e:
-        logger.error(f'Ошибка при покупке суточного тарифа: {e}', exc_info=True)
+        logger.error('Ошибка при покупке суточного тарифа', error=e, exc_info=True)
         await callback.answer('Произошла ошибка при оформлении подписки', show_alert=True)
 
 
@@ -1714,7 +1716,7 @@ async def confirm_tariff_extend(
                 reset_reason='продление тарифа',
             )
         except Exception as e:
-            logger.error(f'Ошибка обновления Remnawave: {e}')
+            logger.error('Ошибка обновления Remnawave', error=e)
 
         # Создаем транзакцию
         await create_transaction(
@@ -1738,14 +1740,14 @@ async def confirm_tariff_extend(
                 amount_kopeks=final_price,
             )
         except Exception as e:
-            logger.error(f'Ошибка отправки уведомления админу: {e}')
+            logger.error('Ошибка отправки уведомления админу', error=e)
 
         # Очищаем корзину после успешной покупки
         try:
             await user_cart_service.delete_user_cart(db_user.id)
-            logger.info(f'Корзина очищена после продления тарифа для пользователя {db_user.telegram_id}')
+            logger.info('Корзина очищена после продления тарифа для пользователя', telegram_id=db_user.telegram_id)
         except Exception as e:
-            logger.error(f'Ошибка очистки корзины: {e}')
+            logger.error('Ошибка очистки корзины', error=e)
 
         await state.clear()
 
@@ -1769,7 +1771,7 @@ async def confirm_tariff_extend(
         await callback.answer('Подписка продлена!', show_alert=True)
 
     except Exception as e:
-        logger.error(f'Ошибка при продлении тарифа: {e}', exc_info=True)
+        logger.error('Ошибка при продлении тарифа', error=e, exc_info=True)
         await callback.answer('Произошла ошибка при продлении подписки', show_alert=True)
 
 
@@ -2271,7 +2273,7 @@ async def confirm_tariff_switch(
                 reset_reason='переключение тарифа',
             )
         except Exception as e:
-            logger.error(f'Ошибка обновления Remnawave при переключении тарифа: {e}')
+            logger.error('Ошибка обновления Remnawave при переключении тарифа', error=e)
 
         # Гарантированный сброс устройств при смене тарифа
         await db.refresh(db_user)
@@ -2282,9 +2284,9 @@ async def confirm_tariff_switch(
                 service = RemnaWaveService()
                 async with service.get_api_client() as api:
                     await api.reset_user_devices(db_user.remnawave_uuid)
-                    logger.info(f'🔧 Сброшены устройства при смене тарифа для user_id={db_user.id}')
+                    logger.info('🔧 Сброшены устройства при смене тарифа для user_id', db_user_id=db_user.id)
             except Exception as e:
-                logger.error(f'Ошибка сброса устройств при смене тарифа: {e}')
+                logger.error('Ошибка сброса устройств при смене тарифа', error=e)
 
         # Создаем транзакцию
         await create_transaction(
@@ -2309,14 +2311,14 @@ async def confirm_tariff_switch(
                 purchase_type='tariff_switch',
             )
         except Exception as e:
-            logger.error(f'Ошибка отправки уведомления админу: {e}')
+            logger.error('Ошибка отправки уведомления админу', error=e)
 
         # Очищаем корзину после успешной покупки
         try:
             await user_cart_service.delete_user_cart(db_user.id)
-            logger.info(f'Корзина очищена после смены тарифа для пользователя {db_user.telegram_id}')
+            logger.info('Корзина очищена после смены тарифа для пользователя', telegram_id=db_user.telegram_id)
         except Exception as e:
-            logger.error(f'Ошибка очистки корзины: {e}')
+            logger.error('Ошибка очистки корзины', error=e)
 
         await state.clear()
 
@@ -2344,7 +2346,7 @@ async def confirm_tariff_switch(
         await callback.answer('Тариф изменён!', show_alert=True)
 
     except Exception as e:
-        logger.error(f'Ошибка при переключении тарифа: {e}', exc_info=True)
+        logger.error('Ошибка при переключении тарифа', error=e, exc_info=True)
         await callback.answer('Произошла ошибка при переключении тарифа', show_alert=True)
 
 
@@ -2450,7 +2452,7 @@ async def confirm_daily_tariff_switch(
                 reset_reason='смена на суточный тариф',
             )
         except Exception as e:
-            logger.error(f'Ошибка обновления Remnawave: {e}')
+            logger.error('Ошибка обновления Remnawave', error=e)
 
         # Гарантированный сброс устройств при смене тарифа
         await db.refresh(db_user)
@@ -2461,9 +2463,9 @@ async def confirm_daily_tariff_switch(
                 service = RemnaWaveService()
                 async with service.get_api_client() as api:
                     await api.reset_user_devices(db_user.remnawave_uuid)
-                    logger.info(f'🔧 Сброшены устройства при смене на суточный тариф для user_id={db_user.id}')
+                    logger.info('🔧 Сброшены устройства при смене на суточный тариф для user_id', db_user_id=db_user.id)
             except Exception as e:
-                logger.error(f'Ошибка сброса устройств при смене тарифа: {e}')
+                logger.error('Ошибка сброса устройств при смене тарифа', error=e)
 
         # Создаем транзакцию
         await create_transaction(
@@ -2488,7 +2490,7 @@ async def confirm_daily_tariff_switch(
                 purchase_type='tariff_switch',
             )
         except Exception as e:
-            logger.error(f'Ошибка отправки уведомления админу: {e}')
+            logger.error('Ошибка отправки уведомления админу', error=e)
 
         await state.clear()
 
@@ -2513,7 +2515,7 @@ async def confirm_daily_tariff_switch(
         await callback.answer('Тариф изменён!', show_alert=True)
 
     except Exception as e:
-        logger.error(f'Ошибка при смене на суточный тариф: {e}', exc_info=True)
+        logger.error('Ошибка при смене на суточный тариф', error=e, exc_info=True)
         await callback.answer('Произошла ошибка при смене тарифа', show_alert=True)
 
 
@@ -3029,7 +3031,7 @@ async def confirm_instant_switch(
                 reset_reason='мгновенное переключение тарифа',
             )
         except Exception as e:
-            logger.error(f'Ошибка обновления Remnawave при мгновенном переключении: {e}')
+            logger.error('Ошибка обновления Remnawave при мгновенном переключении', error=e)
 
         # Гарантированный сброс устройств при смене тарифа
         await db.refresh(db_user)
@@ -3040,9 +3042,11 @@ async def confirm_instant_switch(
                 service = RemnaWaveService()
                 async with service.get_api_client() as api:
                     await api.reset_user_devices(db_user.remnawave_uuid)
-                    logger.info(f'🔧 Сброшены устройства при мгновенном переключении тарифа для user_id={db_user.id}')
+                    logger.info(
+                        '🔧 Сброшены устройства при мгновенном переключении тарифа для user_id', db_user_id=db_user.id
+                    )
             except Exception as e:
-                logger.error(f'Ошибка сброса устройств при переключении тарифа: {e}')
+                logger.error('Ошибка сброса устройств при переключении тарифа', error=e)
 
         # Создаем транзакцию если была оплата
         if is_upgrade and upgrade_cost > 0:
@@ -3068,7 +3072,7 @@ async def confirm_instant_switch(
                     purchase_type='tariff_switch',
                 )
             except Exception as e:
-                logger.error(f'Ошибка отправки уведомления админу: {e}')
+                logger.error('Ошибка отправки уведомления админу', error=e)
 
         await state.clear()
 
@@ -3117,7 +3121,7 @@ async def confirm_instant_switch(
         await callback.answer('Тариф изменён!', show_alert=True)
 
     except Exception as e:
-        logger.error(f'Ошибка при мгновенном переключении тарифа: {e}', exc_info=True)
+        logger.error('Ошибка при мгновенном переключении тарифа', error=e, exc_info=True)
         await callback.answer('Произошла ошибка при переключении тарифа', show_alert=True)
 
 

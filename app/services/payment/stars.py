@@ -68,14 +68,14 @@ class TelegramStarsMixin:
             )
 
             logger.info(
-                'Создан Stars invoice на %s звезд (~%s)',
-                stars_amount,
-                settings.format_price(amount_kopeks),
+                'Создан Stars invoice на звезд (~)',
+                stars_amount=stars_amount,
+                format_price=settings.format_price(amount_kopeks),
             )
             return invoice_link
 
         except Exception as error:
-            logger.error('Ошибка создания Stars invoice: %s', error)
+            logger.error('Ошибка создания Stars invoice', error=error)
             raise
 
     async def process_stars_payment(
@@ -116,10 +116,7 @@ class TelegramStarsMixin:
 
             user = await get_user_by_id(db, user_id)
             if not user:
-                logger.error(
-                    'Пользователь с ID %s не найден при обработке Stars платежа',
-                    user_id,
-                )
+                logger.error('Пользователь с ID не найден при обработке Stars платежа', user_id=user_id)
                 return False
 
             if simple_payload:
@@ -143,7 +140,7 @@ class TelegramStarsMixin:
             )
 
         except Exception as error:
-            logger.error('Ошибка обработки Stars платежа: %s', error, exc_info=True)
+            logger.error('Ошибка обработки Stars платежа', error=error, exc_info=True)
             return False
 
     @staticmethod
@@ -160,10 +157,7 @@ class TelegramStarsMixin:
         tail = payload[len(prefix) :]
         parts = tail.split('_', 2)
         if len(parts) < 3:
-            logger.warning(
-                'Payload Stars simple subscription имеет некорректный формат: %s',
-                payload,
-            )
+            logger.warning('Payload Stars simple subscription имеет некорректный формат', payload=payload)
             return None
 
         user_part, subscription_part, period_part = parts
@@ -171,37 +165,28 @@ class TelegramStarsMixin:
         try:
             payload_user_id = int(user_part)
         except ValueError:
-            logger.warning(
-                'Не удалось разобрать user_id в payload Stars simple subscription: %s',
-                payload,
-            )
+            logger.warning('Не удалось разобрать user_id в payload Stars simple subscription', payload=payload)
             return None
 
         if payload_user_id != expected_user_id:
             logger.warning(
-                'Получен payload Stars simple subscription с чужим user_id: %s (ожидался %s)',
-                payload_user_id,
-                expected_user_id,
+                'Получен payload Stars simple subscription с чужим user_id: (ожидался)',
+                payload_user_id=payload_user_id,
+                expected_user_id=expected_user_id,
             )
             return None
 
         try:
             subscription_id = int(subscription_part)
         except ValueError:
-            logger.warning(
-                'Не удалось разобрать subscription_id в payload Stars simple subscription: %s',
-                payload,
-            )
+            logger.warning('Не удалось разобрать subscription_id в payload Stars simple subscription', payload=payload)
             return None
 
         period_days: int | None = None
         try:
             period_days = int(period_part)
         except ValueError:
-            logger.warning(
-                'Не удалось разобрать период в payload Stars simple subscription: %s',
-                payload,
-            )
+            logger.warning('Не удалось разобрать период в payload Stars simple subscription', payload=payload)
 
         return _SimpleSubscriptionPayload(
             subscription_id=subscription_id,
@@ -238,19 +223,19 @@ class TelegramStarsMixin:
                 pending_subscription = result.scalar_one_or_none()
             except Exception as lookup_error:  # pragma: no cover - диагностический лог
                 logger.error(
-                    'Ошибка поиска pending подписки %s для пользователя %s: %s',
-                    payload_data.subscription_id,
-                    user.id,
-                    lookup_error,
+                    'Ошибка поиска pending подписки для пользователя',
+                    subscription_id=payload_data.subscription_id,
+                    user_id=user.id,
+                    lookup_error=lookup_error,
                     exc_info=True,
                 )
                 pending_subscription = None
 
             if not pending_subscription:
                 logger.error(
-                    'Не найдена pending подписка %s для пользователя %s',
-                    payload_data.subscription_id,
-                    user.id,
+                    'Не найдена pending подписка для пользователя',
+                    subscription_id=payload_data.subscription_id,
+                    user_id=user.id,
                 )
                 return False
 
@@ -270,18 +255,12 @@ class TelegramStarsMixin:
             )
         except Exception as error:
             logger.error(
-                'Ошибка активации pending подписки для пользователя %s: %s',
-                user.id,
-                error,
-                exc_info=True,
+                'Ошибка активации pending подписки для пользователя', user_id=user.id, error=error, exc_info=True
             )
             return False
 
         if not subscription:
-            logger.error(
-                'Не удалось активировать pending подписку пользователя %s',
-                user.id,
-            )
+            logger.error('Не удалось активировать pending подписку пользователя', user_id=user.id)
             return False
 
         try:
@@ -296,9 +275,9 @@ class TelegramStarsMixin:
                 await db.refresh(subscription)
         except Exception as sync_error:  # pragma: no cover - диагностический лог
             logger.error(
-                'Ошибка синхронизации подписки с RemnaWave для пользователя %s: %s',
-                user.id,
-                sync_error,
+                'Ошибка синхронизации подписки с RemnaWave для пользователя',
+                user_id=user.id,
+                sync_error=sync_error,
                 exc_info=True,
             )
 
@@ -352,15 +331,10 @@ class TelegramStarsMixin:
                     parse_mode='HTML',
                 )
                 logger.info(
-                    '✅ Пользователь %s получил уведомление об оплате подписки через Stars',
-                    user.telegram_id,
+                    '✅ Пользователь получил уведомление об оплате подписки через Stars', telegram_id=user.telegram_id
                 )
             except Exception as error:  # pragma: no cover - диагностический лог
-                logger.error(
-                    'Ошибка отправки уведомления о подписке через Stars: %s',
-                    error,
-                    exc_info=True,
-                )
+                logger.error('Ошибка отправки уведомления о подписке через Stars', error=error, exc_info=True)
 
         if getattr(self, 'bot', None):
             try:
@@ -377,9 +351,7 @@ class TelegramStarsMixin:
                 )
             except Exception as admin_error:  # pragma: no cover - диагностический лог
                 logger.error(
-                    'Ошибка уведомления администраторов о подписке через Stars: %s',
-                    admin_error,
-                    exc_info=True,
+                    'Ошибка уведомления администраторов о подписке через Stars', admin_error=admin_error, exc_info=True
                 )
 
         # Начисляем реферальную комиссию за прямую покупку подписки
@@ -393,16 +365,13 @@ class TelegramStarsMixin:
                 getattr(self, 'bot', None),
             )
         except Exception as ref_error:
-            logger.error(
-                'Ошибка реферального начисления при покупке подписки через Stars: %s',
-                ref_error,
-            )
+            logger.error('Ошибка реферального начисления при покупке подписки через Stars', ref_error=ref_error)
 
         logger.info(
-            '✅ Обработан Stars платеж как покупка подписки: пользователь %s, %s звезд → %s',
-            user.id,
-            stars_amount,
-            settings.format_price(amount_kopeks),
+            '✅ Обработан Stars платеж как покупка подписки: пользователь , звезд →',
+            user_id=user.id,
+            stars_amount=stars_amount,
+            format_price=settings.format_price(amount_kopeks),
         )
         return True
 
@@ -434,8 +403,7 @@ class TelegramStarsMixin:
 
         description_for_referral = f'Пополнение Stars: {settings.format_price(amount_kopeks)} ({stars_amount} ⭐)'
         logger.info(
-            "🔍 Проверка реферальной логики для описания: '%s'",
-            description_for_referral,
+            "🔍 Проверка реферальной логики для описания: ''", description_for_referral=description_for_referral
         )
 
         lower_description = description_for_referral.lower()
@@ -446,10 +414,7 @@ class TelegramStarsMixin:
         allow_referral = contains_allowed_keywords and not contains_forbidden_keywords
 
         if allow_referral:
-            logger.info(
-                '🔞 Вызов process_referral_topup для пользователя %s',
-                user.id,
-            )
+            logger.info('🔞 Вызов process_referral_topup для пользователя', user_id=user.id)
             try:
                 from app.services.referral_service import process_referral_topup
 
@@ -460,14 +425,10 @@ class TelegramStarsMixin:
                     getattr(self, 'bot', None),
                 )
             except Exception as error:  # pragma: no cover - диагностический лог
-                logger.error(
-                    'Ошибка обработки реферального пополнения: %s',
-                    error,
-                )
+                logger.error('Ошибка обработки реферального пополнения', error=error)
         else:
             logger.info(
-                "❌ Описание '%s' не подходит для реферальной логики",
-                description_for_referral,
+                "❌ Описание '' не подходит для реферальной логики", description_for_referral=description_for_referral
             )
 
         if was_first_topup and not user.has_made_first_topup:
@@ -477,11 +438,11 @@ class TelegramStarsMixin:
         await db.refresh(user)
 
         logger.info(
-            '💰 Баланс пользователя %s изменен: %s → %s (Δ +%s)',
-            user.telegram_id,
-            old_balance,
-            user.balance_kopeks,
-            amount_kopeks,
+            '💰 Баланс пользователя изменен: → (Δ +)',
+            telegram_id=user.telegram_id,
+            old_balance=old_balance,
+            balance_kopeks=user.balance_kopeks,
+            amount_kopeks=amount_kopeks,
         )
 
         if getattr(self, 'bot', None):
@@ -500,11 +461,7 @@ class TelegramStarsMixin:
                     db=db,
                 )
             except Exception as error:  # pragma: no cover - диагностический лог
-                logger.error(
-                    'Ошибка отправки уведомления о пополнении Stars: %s',
-                    error,
-                    exc_info=True,
-                )
+                logger.error('Ошибка отправки уведомления о пополнении Stars', error=error, exc_info=True)
 
         # Проверяем наличие сохраненной корзины для возврата к оформлению подписки
         try:
@@ -524,9 +481,9 @@ class TelegramStarsMixin:
                     )
                 except Exception as auto_error:  # pragma: no cover - диагностический лог
                     logger.error(
-                        'Ошибка автоматической покупки подписки для пользователя %s: %s',
-                        user.id,
-                        auto_error,
+                        'Ошибка автоматической покупки подписки для пользователя',
+                        user_id=user.id,
+                        auto_error=auto_error,
                         exc_info=True,
                     )
 
@@ -573,21 +530,17 @@ class TelegramStarsMixin:
                     reply_markup=keyboard,
                 )
                 logger.info(
-                    'Отправлено уведомление с кнопкой возврата к оформлению подписки пользователю %s',
-                    user.id,
+                    'Отправлено уведомление с кнопкой возврата к оформлению подписки пользователю', user_id=user.id
                 )
         except Exception as error:  # pragma: no cover - диагностический лог
             logger.error(
-                'Ошибка при работе с сохраненной корзиной для пользователя %s: %s',
-                user.id,
-                error,
-                exc_info=True,
+                'Ошибка при работе с сохраненной корзиной для пользователя', user_id=user.id, error=error, exc_info=True
             )
 
         logger.info(
-            '✅ Обработан Stars платеж: пользователь %s, %s звезд → %s',
-            user.id,
-            stars_amount,
-            settings.format_price(amount_kopeks),
+            '✅ Обработан Stars платеж: пользователь , звезд →',
+            user_id=user.id,
+            stars_amount=stars_amount,
+            format_price=settings.format_price(amount_kopeks),
         )
         return True

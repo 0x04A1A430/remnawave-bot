@@ -5,17 +5,17 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
-import logging
 import time
 from typing import Any
 from urllib.parse import unquote_plus
 
 import httpx
+import structlog
 
 from app.config import settings
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class CloudPaymentsAPIError(RuntimeError):
@@ -83,13 +83,13 @@ class CloudPaymentsService:
                 data = response.json()
 
                 if response.status_code >= 400:
-                    logger.error('CloudPayments API error %s: %s', response.status_code, data)
+                    logger.error('CloudPayments API error', status_code=response.status_code, data=data)
                     raise CloudPaymentsAPIError(f'CloudPayments API returned status {response.status_code}')
 
                 return data
 
         except httpx.RequestError as error:
-            logger.error('Error communicating with CloudPayments API: %s', error)
+            logger.error('Error communicating with CloudPayments API', error=error)
             raise CloudPaymentsAPIError('Failed to communicate with CloudPayments API') from error
 
     @staticmethod
@@ -167,21 +167,17 @@ class CloudPaymentsService:
 
         if not response.get('Success'):
             error_message = response.get('Message', 'Unknown error')
-            logger.error('CloudPayments orders/create failed: %s', error_message)
+            logger.error('CloudPayments orders/create failed', error_message=error_message)
             raise CloudPaymentsAPIError(f'Failed to create order: {error_message}')
 
         model = response.get('Model', {})
         payment_url = model.get('Url')
 
         if not payment_url:
-            logger.error('CloudPayments orders/create returned no URL: %s', response)
+            logger.error('CloudPayments orders/create returned no URL', response=response)
             raise CloudPaymentsAPIError('CloudPayments API returned no payment URL')
 
-        logger.info(
-            'CloudPayments order created: id=%s, url=%s',
-            model.get('Id'),
-            payment_url,
-        )
+        logger.info('CloudPayments order created: id url', model=model.get('Id'), payment_url=payment_url)
 
         return payment_url
 
@@ -316,10 +312,10 @@ class CloudPaymentsService:
             pass
 
         logger.warning(
-            'CloudPayments signature mismatch: expected_raw=%s..., expected_decoded=%s..., got=%s...',
-            calculated_raw[:20],
-            calculated_decoded[:20] if calculated_decoded else 'N/A',
-            signature[:20],
+            'CloudPayments signature mismatch: expected_raw=..., expected_decoded=..., got=...',
+            calculated_raw=calculated_raw[:20],
+            calculated_decoded=calculated_decoded[:20] if calculated_decoded else 'N/A',
+            signature=signature[:20],
         )
         return False
 

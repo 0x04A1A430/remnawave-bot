@@ -65,15 +65,15 @@ class PaymentCommonMixin:
                             has_active_subscription = bool(is_active and not row.is_trial)
                 except Exception as db_error:
                     logger.warning(
-                        'Не удалось загрузить подписку пользователя %s из БД: %s',
-                        getattr(user, 'id', None),
-                        db_error,
+                        'Не удалось загрузить подписку пользователя из БД',
+                        getattr=getattr(user, 'id', None),
+                        db_error=db_error,
                     )
             except Exception as error:  # pragma: no cover - защитный код
                 logger.error(
-                    'Ошибка загрузки подписки пользователя %s при построении клавиатуры после пополнения: %s',
-                    getattr(user, 'id', None),
-                    error,
+                    'Ошибка загрузки подписки пользователя при построении клавиатуры после пополнения',
+                    getattr=getattr(user, 'id', None),
+                    error=error,
                 )
 
         # Создаем основную кнопку: если есть активная подписка - продлить, иначе купить
@@ -92,9 +92,9 @@ class PaymentCommonMixin:
                 has_saved_cart = await user_cart_service.has_user_cart(user.id)
             except Exception as cart_error:
                 logger.warning(
-                    'Не удалось проверить наличие сохраненной корзины у пользователя %s: %s',
-                    user.id,
-                    cart_error,
+                    'Не удалось проверить наличие сохраненной корзины у пользователя',
+                    user_id=user.id,
+                    cart_error=cart_error,
                 )
                 has_saved_cart = False
 
@@ -166,9 +166,9 @@ class PaymentCommonMixin:
                 )
             except Exception as ws_error:
                 logger.warning(
-                    'Не удалось отправить WS уведомление о пополнении баланса для user_id=%s: %s',
-                    user_id,
-                    ws_error,
+                    'Не удалось отправить WS уведомление о пополнении баланса для user_id',
+                    user_id=user_id,
+                    ws_error=ws_error,
                 )
 
         if not getattr(self, 'bot', None):
@@ -208,11 +208,7 @@ class PaymentCommonMixin:
                 reply_markup=keyboard,
             )
         except Exception as error:
-            logger.error(
-                'Ошибка отправки уведомления пользователю %s: %s',
-                telegram_id,
-                error,
-            )
+            logger.error('Ошибка отправки уведомления пользователю', telegram_id=telegram_id, error=error)
 
     async def _ensure_user_snapshot(
         self,
@@ -260,9 +256,9 @@ class PaymentCommonMixin:
                 return _build_snapshot(fetched_user)
             except Exception as fetch_error:
                 logger.warning(
-                    'Не удалось обновить пользователя %s из переданной сессии: %s',
-                    telegram_id,
-                    fetch_error,
+                    'Не удалось обновить пользователя из переданной сессии',
+                    telegram_id=telegram_id,
+                    fetch_error=fetch_error,
                 )
 
         try:
@@ -271,9 +267,7 @@ class PaymentCommonMixin:
                 return _build_snapshot(fetched_user)
         except Exception as fetch_error:
             logger.warning(
-                'Не удалось получить пользователя %s для уведомления: %s',
-                telegram_id,
-                fetch_error,
+                'Не удалось получить пользователя для уведомления', telegram_id=telegram_id, fetch_error=fetch_error
             )
 
         return None
@@ -288,13 +282,13 @@ class PaymentCommonMixin:
         """Общая точка учёта успешных платежей (используется провайдерами при необходимости)."""
         try:
             logger.info(
-                'Обработан успешный платеж: %s, %s₽, пользователь %s, метод %s',
-                payment_id,
-                amount_kopeks / 100,
-                user_id,
-                payment_method,
+                'Обработан успешный платеж ₽, пользователь , метод',
+                payment_id=payment_id,
+                amount_kopeks=amount_kopeks / 100,
+                user_id=user_id,
+                payment_method=payment_method,
             )
             return True
         except Exception as error:
-            logger.error('Ошибка обработки платежа %s: %s', payment_id, error)
+            logger.error('Ошибка обработки платежа', payment_id=payment_id, error=error)
             return False

@@ -2,16 +2,17 @@
 
 from __future__ import annotations
 
-import logging
 from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any
+
+import structlog
 
 from app.config import settings
 from app.external.pal24_client import Pal24APIError, Pal24Client
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class Pal24Service:
@@ -57,11 +58,11 @@ class Pal24Service:
         filtered_payload = {k: v for k, v in extra_payload.items() if v not in (None, {})}
 
         logger.info(
-            'Создаем Pal24 счет: user_id=%s, order_id=%s, amount=%s, ttl=%s',
-            user_id,
-            order_id,
-            amount_decimal,
-            ttl_seconds,
+            'Создаем Pal24 счет: user_id order_id amount ttl',
+            user_id=user_id,
+            order_id=order_id,
+            amount_decimal=amount_decimal,
+            ttl_seconds=ttl_seconds,
         )
 
         response = await self.client.create_bill(
@@ -73,21 +74,21 @@ class Pal24Service:
             **filtered_payload,
         )
 
-        logger.info('Pal24 счет создан: %s', response)
+        logger.info('Pal24 счет создан', response=response)
         return response
 
     async def get_bill_status(self, bill_id: str) -> dict[str, Any]:
-        logger.debug('Запрашиваем статус Pal24 счета %s', bill_id)
+        logger.debug('Запрашиваем статус Pal24 счета', bill_id=bill_id)
         return await self.client.get_bill_status(bill_id)
 
     async def get_payment_status(self, payment_id: str) -> dict[str, Any]:
-        logger.debug('Запрашиваем статус Pal24 платежа %s', payment_id)
+        logger.debug('Запрашиваем статус Pal24 платежа', payment_id=payment_id)
         return await self.client.get_payment_status(payment_id)
 
     async def get_bill_payments(self, bill_id: str) -> dict[str, Any]:
         """Возвращает список платежей, связанных со счетом."""
 
-        logger.debug('Запрашиваем платежи Pal24 счёта %s', bill_id)
+        logger.debug('Запрашиваем платежи Pal24 счёта', bill_id=bill_id)
         return await self.client.get_bill_payments(bill_id)
 
     @staticmethod
@@ -105,10 +106,10 @@ class Pal24Service:
             raise Pal24APIError('Pal24 callback signature mismatch')
 
         logger.info(
-            'Получен Pal24 callback: InvId=%s, Status=%s, TrsId=%s',
-            inv_id,
-            payload.get('Status'),
-            payload.get('TrsId'),
+            'Получен Pal24 callback: InvId Status TrsId',
+            inv_id=inv_id,
+            payload=payload.get('Status'),
+            payload_2=payload.get('TrsId'),
         )
 
         return payload

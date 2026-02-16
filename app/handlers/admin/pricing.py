@@ -1,9 +1,9 @@
-import logging
 from collections.abc import Iterable
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
 
+import structlog
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
@@ -17,7 +17,7 @@ from app.states import PricingStates
 from app.utils.decorators import admin_required, error_handler
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 PriceItem = tuple[str, str, int]
@@ -825,7 +825,7 @@ async def _render_message(
     try:
         await message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
     except TelegramBadRequest as error:  # message changed elsewhere
-        logger.debug('Failed to edit pricing message: %s', error)
+        logger.debug('Failed to edit pricing message', error=error)
         await message.answer(text, reply_markup=keyboard, parse_mode='HTML')
 
 
@@ -845,7 +845,7 @@ async def _render_message_by_id(
             parse_mode='HTML',
         )
     except TelegramBadRequest as error:
-        logger.debug('Failed to edit pricing message by id: %s', error)
+        logger.debug('Failed to edit pricing message by id', error=error)
         await bot.send_message(chat_id, text, reply_markup=keyboard, parse_mode='HTML')
 
 
@@ -1136,7 +1136,7 @@ async def process_pricing_input(
         try:
             await message.delete()
         except TelegramBadRequest as error:
-            logger.debug('Failed to delete pricing input message: %s', error)
+            logger.debug('Failed to delete pricing input message', error=error)
         await state.clear()
         return
     entry = SETTING_ENTRY_BY_KEY.get(key)

@@ -1,7 +1,6 @@
 import hashlib
 import hmac
 import html
-import logging
 import math
 import os
 import re
@@ -11,6 +10,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
+import structlog
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
 
@@ -23,7 +23,7 @@ DEFAULT_DISPLAY_NAME_BANNED_KEYWORDS: list[str] = [
 USER_TAG_PATTERN = re.compile(r'^[A-Z0-9_]{1,16}$')
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class Settings(BaseSettings):
@@ -1297,7 +1297,7 @@ class Settings(BaseSettings):
                 raise ValueError
             return time(hour=hours, minute=minutes)
         except (ValueError, AttributeError):
-            logging.getLogger(__name__).warning('Некорректное значение ADMIN_REPORTS_SEND_TIME: %s', value)
+            logger.warning('Некорректное значение ADMIN_REPORTS_SEND_TIME', send_time_value=value)
             return None
 
     def kopeks_to_rubles(self, kopeks: int) -> float:
@@ -1317,17 +1317,14 @@ class Settings(BaseSettings):
 
         if len(cleaned) > 16:
             logger.warning(
-                'Некорректная длина %s: максимум 16 символов, получено %s',
-                setting_name,
-                len(cleaned),
+                'Некорректная длина : максимум 16 символов, получено',
+                setting_name=setting_name,
+                cleaned_count=len(cleaned),
             )
             return None
 
         if not USER_TAG_PATTERN.fullmatch(cleaned):
-            logger.warning(
-                'Некорректный формат %s: допустимы только A-Z, 0-9 и подчёркивание',
-                setting_name,
-            )
+            logger.warning('Некорректный формат : допустимы только A-Z, 0-9 и подчёркивание', setting_name=setting_name)
             return None
 
         return cleaned
@@ -1448,9 +1445,9 @@ class Settings(BaseSettings):
         try:
             return int(self.EXTERNAL_ADMIN_TOKEN_BOT_ID) if self.EXTERNAL_ADMIN_TOKEN_BOT_ID else None
         except (TypeError, ValueError):  # pragma: no cover - защитная ветка для некорректных значений
-            logging.getLogger(__name__).warning(
-                'Некорректный идентификатор бота для внешней админки: %s',
-                self.EXTERNAL_ADMIN_TOKEN_BOT_ID,
+            logger.warning(
+                'Некорректный идентификатор бота для внешней админки',
+                EXTERNAL_ADMIN_TOKEN_BOT_ID=self.EXTERNAL_ADMIN_TOKEN_BOT_ID,
             )
             return None
 
@@ -1531,10 +1528,7 @@ class Settings(BaseSettings):
         try:
             value = int(raw_value)
         except (TypeError, ValueError):
-            logger.warning(
-                'Некорректное значение DEVICES_SELECTION_DISABLED_AMOUNT: %s',
-                raw_value,
-            )
+            logger.warning('Некорректное значение DEVICES_SELECTION_DISABLED_AMOUNT', raw_value=raw_value)
             return None
 
         if value < 0:
@@ -1574,8 +1568,7 @@ class Settings(BaseSettings):
             value = int(self.TRIAL_ACTIVATION_PRICE)
         except (TypeError, ValueError):
             logger.warning(
-                'Некорректное значение TRIAL_ACTIVATION_PRICE: %s',
-                self.TRIAL_ACTIVATION_PRICE,
+                'Некорректное значение TRIAL_ACTIVATION_PRICE', TRIAL_ACTIVATION_PRICE=self.TRIAL_ACTIVATION_PRICE
             )
             return 0
 
@@ -1694,7 +1687,7 @@ class Settings(BaseSettings):
             try:
                 method_code = int(part)
             except ValueError:
-                logger.warning('Некорректный код метода Platega: %s', part)
+                logger.warning('Некорректный код метода Platega', part=part)
                 continue
             if method_code in {2, 10, 11, 12, 13} and method_code not in seen:
                 methods.append(method_code)
@@ -1789,8 +1782,8 @@ class Settings(BaseSettings):
 
         if minutes <= 0:
             logger.warning(
-                'Некорректный интервал автопроверки платежей: %s. Используется значение по умолчанию 10 минут.',
-                self.PAYMENT_VERIFICATION_AUTO_CHECK_INTERVAL_MINUTES,
+                'Некорректный интервал автопроверки платежей: . Используется значение по умолчанию 10 минут.',
+                PAYMENT_VERIFICATION_AUTO_CHECK_INTERVAL_MINUTES=self.PAYMENT_VERIFICATION_AUTO_CHECK_INTERVAL_MINUTES,
             )
             return 10
 
@@ -2144,21 +2137,12 @@ class Settings(BaseSettings):
         return self.REFERRAL_NOTIFICATIONS_ENABLED
 
     def get_traffic_packages(self) -> list[dict]:
-        import logging
-
-        logger = logging.getLogger(__name__)
-
         try:
             packages = []
             config_str = self.TRAFFIC_PACKAGES_CONFIG.strip()
 
-            logger.debug(f"CONFIG STRING: '{config_str}'")
-
             if not config_str:
-                logger.debug('CONFIG EMPTY, USING FALLBACK')
                 return self._get_fallback_traffic_packages()
-
-            logger.debug('PARSING CONFIG...')
 
             for package_config in config_str.split(','):
                 package_config = package_config.strip()
@@ -2178,11 +2162,10 @@ class Settings(BaseSettings):
                 except ValueError:
                     continue
 
-            logger.debug(f'PARSED {len(packages)} packages from config')
             return packages if packages else self._get_fallback_traffic_packages()
 
         except Exception as e:
-            logger.info(f'ERROR PARSING CONFIG: {e}')
+            logger.warning('ERROR PARSING CONFIG', error=e)
             return self._get_fallback_traffic_packages()
 
     def is_version_check_enabled(self) -> bool:

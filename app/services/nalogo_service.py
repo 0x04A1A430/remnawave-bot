@@ -1,7 +1,8 @@
-import logging
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
+
+import structlog
 
 from app.config import settings
 
@@ -11,7 +12,7 @@ from app.lib.nalogo.dto.income import IncomeClient, IncomeType
 from app.utils.cache import cache
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 NALOGO_QUEUE_KEY = 'nalogo:receipt_queue'
 NALOGO_PENDING_VERIFICATION_KEY = 'nalogo:pending_verification'
@@ -49,13 +50,9 @@ class NaloGoService:
                 self.inn = inn
                 self.password = password
                 self.configured = True
-                logger.info(f'NaloGO клиент инициализирован для ИНН: {inn[:5]}...')
+                logger.info('NaloGO клиент инициализирован для ИНН: ...', inn=inn[:5])
             except Exception as error:
-                logger.error(
-                    'Ошибка инициализации NaloGO клиента: %s',
-                    error,
-                    exc_info=True,
-                )
+                logger.error('Ошибка инициализации NaloGO клиента', error=error, exc_info=True)
                 self.configured = False
 
     @staticmethod
@@ -97,7 +94,11 @@ class NaloGoService:
             created_key = f'nalogo:created:{payment_id}'
             already_created = await cache.get(created_key)
             if already_created:
-                logger.info(f'Чек для payment_id={payment_id} уже создан ({already_created}), не добавляем в очередь')
+                logger.info(
+                    'Чек для payment_id= уже создан не добавляем в очередь',
+                    payment_id=payment_id,
+                    already_created=already_created,
+                )
                 return False
 
             # Атомарная проверка и установка флага "в очереди" (защита от race condition)
@@ -105,7 +106,7 @@ class NaloGoService:
             lock_acquired = await cache.setnx(queued_key, 'queued', expire=7 * 24 * 3600)
             if not lock_acquired:
                 # Ключ уже существует — чек уже в очереди
-                logger.info(f'Чек для payment_id={payment_id} уже в очереди, пропускаем дубликат')
+                logger.info('Чек для payment_id= уже в очереди, пропускаем дубликат', payment_id=payment_id)
                 return False
 
         receipt_data = {
@@ -122,7 +123,12 @@ class NaloGoService:
         success = await cache.lpush(NALOGO_QUEUE_KEY, receipt_data)
         if success:
             queue_len = await cache.llen(NALOGO_QUEUE_KEY)
-            logger.info(f'Чек добавлен в очередь (payment_id={payment_id}, сумма={amount}₽, в очереди: {queue_len})')
+            logger.info(
+                'Чек добавлен в очередь (payment_id=, сумма=₽, в очереди: )',
+                payment_id=payment_id,
+                amount=amount,
+                queue_len=queue_len,
+            )
         # Если не удалось добавить в очередь — удаляем флаг
         elif payment_id:
             queued_key = f'nalogo:queued:{payment_id}'
@@ -161,8 +167,10 @@ class NaloGoService:
         if success:
             count = await cache.llen(NALOGO_PENDING_VERIFICATION_KEY)
             logger.warning(
-                f'Чек сохранён для ручной проверки (payment_id={payment_id}, '
-                f'сумма={amount}₽, всего ожидают проверки: {count})'
+                'Чек сохранён для ручной проверки (payment_id=, сумма=₽, всего ожидают проверки: )',
+                payment_id=payment_id,
+                amount=amount,
+                count=count,
             )
         return success
 
@@ -201,7 +209,7 @@ class NaloGoService:
                     # Сохраняем что чек создан
                     created_key = f'nalogo:created:{payment_id}'
                     await cache.set(created_key, receipt_uuid, expire=30 * 24 * 3600)
-                    logger.info(f'Чек {payment_id} помечен как созданный: {receipt_uuid}')
+                    logger.info('Чек помечен как созданный', payment_id=payment_id, receipt_uuid=receipt_uuid)
             else:
                 updated_receipts.append(receipt)
 
@@ -210,7 +218,7 @@ class NaloGoService:
             await cache.delete(NALOGO_PENDING_VERIFICATION_KEY)
             for r in reversed(updated_receipts):  # reversed чтобы сохранить порядок
                 await cache.lpush(NALOGO_PENDING_VERIFICATION_KEY, r)
-            logger.info(f'Чек {payment_id} удалён из очереди проверки')
+            logger.info('Чек удалён из очереди проверки', payment_id=payment_id)
 
         return removed_receipt
 
@@ -231,7 +239,7 @@ class NaloGoService:
                 break
 
         if not target_receipt:
-            logger.warning(f'Чек {payment_id} не найден в очереди проверки')
+            logger.warning('Чек не найден в очереди проверки', payment_id=payment_id)
             return None
 
         # Пытаемся создать чек
@@ -249,7 +257,7 @@ class NaloGoService:
         if receipt_uuid:
             # Удаляем из очереди проверки
             await self.mark_pending_as_verified(payment_id, receipt_uuid, was_created=True)
-            logger.info(f'Чек {payment_id} успешно создан после ручной проверки: {receipt_uuid}')
+            logger.info('Чек успешно создан после ручной проверки', payment_id=payment_id, receipt_uuid=receipt_uuid)
 
         return receipt_uuid
 
@@ -258,7 +266,7 @@ class NaloGoService:
         count = await self.get_pending_verification_count()
         if count > 0:
             await cache.delete(NALOGO_PENDING_VERIFICATION_KEY)
-            logger.info(f'Очередь проверки очищена: удалено {count} чеков')
+            logger.info('Очередь проверки очищена: удалено чеков', count=count)
         return count
 
     async def authenticate(self) -> bool:
@@ -273,9 +281,9 @@ class NaloGoService:
             return True
         except Exception as error:
             if self._is_service_unavailable(error):
-                logger.warning('NaloGO временно недоступен (техработы): %s', str(error)[:200])
+                logger.warning('NaloGO временно недоступен (техработы)', error=str(error)[:200])
             else:
-                logger.error('Ошибка аутентификации в NaloGO: %s', error, exc_info=True)
+                logger.error('Ошибка аутентификации в NaloGO', error=error, exc_info=True)
             return False
 
     async def create_receipt(
@@ -316,7 +324,9 @@ class NaloGoService:
             already_created = await cache.get(created_key)
             if already_created:
                 logger.info(
-                    f'Чек для payment_id={payment_id} уже был создан ({already_created}), пропускаем повторное создание'
+                    'Чек для payment_id= уже был создан пропускаем повторное создание',
+                    payment_id=payment_id,
+                    already_created=already_created,
                 )
                 return already_created  # Возвращаем ранее созданный uuid
 
@@ -336,14 +346,16 @@ class NaloGoService:
             # Ошибка аутентификации — чек не создавался, безопасно в очередь
             if self._is_service_unavailable(auth_error):
                 logger.warning(
-                    f'NaloGO недоступен при аутентификации, чек в очередь (payment_id={payment_id}, сумма={amount}₽)'
+                    'NaloGO недоступен при аутентификации, чек в очередь (payment_id=, сумма=₽)',
+                    payment_id=payment_id,
+                    amount=amount,
                 )
                 if queue_on_failure:
                     await self._queue_receipt(
                         name, amount, quantity, client_info, payment_id, telegram_user_id, amount_kopeks
                     )
             else:
-                logger.error('Ошибка аутентификации NaloGO: %s', auth_error, exc_info=True)
+                logger.error('Ошибка аутентификации NaloGO', auth_error=auth_error, exc_info=True)
             return None
 
         # ЭТАП 2: Создание чека
@@ -373,7 +385,7 @@ class NaloGoService:
 
             receipt_uuid = result.get('approvedReceiptUuid')
             if receipt_uuid:
-                logger.info(f'Чек создан успешно: {receipt_uuid} на сумму {amount}₽')
+                logger.info('Чек создан успешно: на сумму ₽', receipt_uuid=receipt_uuid, amount=amount)
 
                 # Сохраняем в Redis чтобы предотвратить дубли (TTL 30 дней)
                 if payment_id:
@@ -381,7 +393,7 @@ class NaloGoService:
                     await cache.set(created_key, receipt_uuid, expire=30 * 24 * 3600)
 
                 return receipt_uuid
-            logger.error(f'Ошибка создания чека: {result}')
+            logger.error('Ошибка создания чека', result=result)
             return None
 
         except Exception as error:
@@ -390,9 +402,9 @@ class NaloGoService:
             if self._is_service_unavailable(error):
                 error_msg = str(error)[:200]
                 logger.error(
-                    f'⚠️ ТАЙМАУТ после успешной аутентификации! Чек МОГ быть создан! '
-                    f'(payment_id={payment_id}, сумма={amount}₽). '
-                    f'Сохраняем в очередь проверки. Проверьте lknpd.nalog.ru'
+                    '⚠️ ТАЙМАУТ после успешной аутентификации! Чек МОГ быть создан! (payment_id=, сумма=₽). Сохраняем в очередь проверки. Проверьте lknpd.nalog.ru',
+                    payment_id=payment_id,
+                    amount=amount,
                 )
                 # Сохраняем в очередь для ручной проверки
                 await self._save_pending_verification(
@@ -406,7 +418,7 @@ class NaloGoService:
                     error_message=error_msg,
                 )
             else:
-                logger.error('Ошибка создания чека в NaloGO: %s', error, exc_info=True)
+                logger.error('Ошибка создания чека в NaloGO', error=error, exc_info=True)
             return None
 
     async def get_queue_length(self) -> int:
@@ -488,19 +500,21 @@ class NaloGoService:
                             receipt_uuid = income.get('approvedReceiptUuid', income.get('receiptUuid'))
                             if receipt_uuid:
                                 logger.info(
-                                    f'Найден дубликат чека: {receipt_uuid} '
-                                    f'(сумма={income_amount}₽, время={operation_time}, '
-                                    f'разница={time_diff:.0f}с)'
+                                    'Найден дубликат чека: (сумма=₽, время=, разница=с)',
+                                    receipt_uuid=receipt_uuid,
+                                    income_amount=income_amount,
+                                    operation_time=operation_time,
+                                    time_diff=round(time_diff, 0),
                                 )
                                 return receipt_uuid
                     except Exception as parse_error:
-                        logger.debug(f'Ошибка парсинга времени чека: {parse_error}')
+                        logger.debug('Ошибка парсинга времени чека', parse_error=parse_error)
                         continue
 
             return None
 
         except Exception as error:
-            logger.warning(f'Ошибка проверки дубликата чека: {error}')
+            logger.warning('Ошибка проверки дубликата чека', error=error)
             return None
 
     async def get_incomes(
@@ -539,12 +553,12 @@ class NaloGoService:
 
             # API возвращает структуру с полем content или items
             incomes = result.get('content', result.get('items', []))
-            logger.info(f'Получено {len(incomes)} доходов из NaloGO')
+            logger.info('Получено доходов из NaloGO', incomes_count=len(incomes))
             return incomes
 
         except Exception as error:
             if self._is_service_unavailable(error):
-                logger.warning(f'NaloGO временно недоступен: {error}')
+                logger.warning('NaloGO временно недоступен', error=error)
             else:
-                logger.error(f'Ошибка получения списка доходов: {error}', exc_info=True)
+                logger.error('Ошибка получения списка доходов', error=error, exc_info=True)
             return None  # None = ошибка, [] = нет чеков

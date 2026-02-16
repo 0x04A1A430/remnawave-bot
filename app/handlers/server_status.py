@@ -1,6 +1,6 @@
-import logging
 from datetime import datetime
 
+import structlog
 from aiogram import Dispatcher, F, types
 
 from app.config import settings
@@ -14,7 +14,7 @@ from app.services.server_status_service import (
 )
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 _status_service = ServerStatusService()
 
@@ -47,14 +47,14 @@ async def _render_server_status(
     try:
         servers = await _status_service.get_servers()
     except ServerStatusError as error:
-        logger.warning('Server status error: %s', error)
+        logger.warning('Server status error', error=error)
         await callback.answer(
             texts.t('SERVER_STATUS_ERROR_SHORT', 'Не удалось получить данные'),
             show_alert=True,
         )
         return
     except Exception as error:  # pragma: no cover - defensive logging
-        logger.error('Unexpected server status error: %s', error)
+        logger.error('Unexpected server status error', error=error)
         await callback.answer(
             texts.t('SERVER_STATUS_ERROR_SHORT', 'Не удалось получить данные'),
             show_alert=True,

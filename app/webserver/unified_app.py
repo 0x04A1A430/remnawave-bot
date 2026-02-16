@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 
+import structlog
 from aiogram import Bot, Dispatcher
 from fastapi import FastAPI, status
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -18,7 +18,7 @@ from app.webapi.docs import add_redoc_endpoint
 from . import payments, telegram
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 def _attach_docs_alias(app: FastAPI, docs_url: str | None) -> None:
@@ -82,14 +82,14 @@ def _create_base_app() -> FastAPI:
 def _mount_miniapp_static(app: FastAPI) -> tuple[bool, Path]:
     static_path: Path = settings.get_miniapp_static_path()
     if not static_path.exists():
-        logger.debug('Miniapp static path %s does not exist, skipping mount', static_path)
+        logger.debug('Miniapp static path does not exist, skipping mount', static_path=static_path)
         return False, static_path
 
     try:
         app.mount('/miniapp/static', StaticFiles(directory=static_path), name='miniapp-static')
-        logger.info('📦 Miniapp static files mounted at /miniapp/static from %s', static_path)
+        logger.info('📦 Miniapp static files mounted at /miniapp/static from', static_path=static_path)
     except RuntimeError as error:  # pragma: no cover - defensive guard
-        logger.warning('Не удалось смонтировать статические файлы миниаппа: %s', error)
+        logger.warning('Не удалось смонтировать статические файлы миниаппа', error=error)
         return False, static_path
 
     return True, static_path
@@ -119,7 +119,7 @@ def create_unified_app(
 
         remnawave_router = create_remnawave_webhook_router(bot)
         app.include_router(remnawave_router)
-        logger.info('RemnaWave webhook router mounted at %s', settings.REMNAWAVE_WEBHOOK_PATH)
+        logger.info('RemnaWave webhook router mounted at', REMNAWAVE_WEBHOOK_PATH=settings.REMNAWAVE_WEBHOOK_PATH)
 
     payment_providers_state = {
         'tribute': settings.TRIBUTE_ENABLED,

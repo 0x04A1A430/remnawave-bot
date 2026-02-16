@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-import logging
 from datetime import datetime
 from typing import Any
 
+import structlog
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import Pal24Payment
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def create_pal24_payment(
@@ -51,11 +51,11 @@ async def create_pal24_payment(
     await db.refresh(payment)
 
     logger.info(
-        'Создан Pal24 платеж #%s для пользователя %s: %s копеек (статус %s)',
-        payment.id,
-        user_id,
-        amount_kopeks,
-        status,
+        'Создан Pal24 платеж # для пользователя : копеек (статус)',
+        payment_id=payment.id,
+        user_id=user_id,
+        amount_kopeks=amount_kopeks,
+        status=status,
     )
 
     return payment
@@ -128,10 +128,10 @@ async def update_pal24_payment_status(
     await db.refresh(payment)
 
     logger.info(
-        'Обновлен Pal24 платеж %s: статус=%s, is_paid=%s',
-        payment.bill_id,
-        payment.status,
-        payment.is_paid,
+        'Обновлен Pal24 платеж : статус is_paid',
+        bill_id=payment.bill_id,
+        payment_status=payment.status,
+        is_paid=payment.is_paid,
     )
 
     return payment
@@ -145,9 +145,5 @@ async def link_pal24_payment_to_transaction(
     await db.execute(update(Pal24Payment).where(Pal24Payment.id == payment.id).values(transaction_id=transaction_id))
     await db.commit()
     await db.refresh(payment)
-    logger.info(
-        'Pal24 платеж %s привязан к транзакции %s',
-        payment.bill_id,
-        transaction_id,
-    )
+    logger.info('Pal24 платеж привязан к транзакции', bill_id=payment.bill_id, transaction_id=transaction_id)
     return payment

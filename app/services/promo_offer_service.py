@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import logging
 from collections.abc import Sequence
 from datetime import datetime, timedelta
 
+import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -18,7 +18,7 @@ from app.database.models import (
 from app.services.subscription_service import SubscriptionService
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class PromoOfferService:
@@ -120,8 +120,7 @@ class PromoOfferService:
                 await db.rollback()
                 await db.refresh(subscription)
                 logger.error(
-                    'Не удалось синхронизировать временный доступ подписки %s с RemnaWave',
-                    subscription.id,
+                    'Не удалось синхронизировать временный доступ подписки с RemnaWave', subscription_id=subscription.id
                 )
                 return False, None, None, 'remnawave_sync_failed'
 
@@ -192,9 +191,9 @@ class PromoOfferService:
                     await self.subscription_service.update_remnawave_user(db, subscription)
                 except Exception as exc:  # pragma: no cover - defensive logging
                     logger.error(
-                        'Ошибка обновления Remnawave при отзыве тестового доступа подписки %s: %s',
-                        subscription.id,
-                        exc,
+                        'Ошибка обновления Remnawave при отзыве тестового доступа подписки',
+                        subscription_id=subscription.id,
+                        exc=exc,
                     )
 
         await db.commit()
@@ -212,16 +211,16 @@ class PromoOfferService:
                 )
             except Exception as exc:  # pragma: no cover - defensive logging
                 logger.warning(
-                    'Failed to record promo offer test access disable log for user %s: %s',
-                    payload.get('user_id'),
-                    exc,
+                    'Failed to record promo offer test access disable log for user',
+                    payload=payload.get('user_id'),
+                    exc=exc,
                 )
                 try:
                     await db.rollback()
                 except Exception as rollback_error:  # pragma: no cover - defensive logging
                     logger.warning(
-                        'Failed to rollback session after promo offer test access log failure: %s',
-                        rollback_error,
+                        'Failed to rollback session after promo offer test access log failure',
+                        rollback_error=rollback_error,
                     )
         return len(entries)
 

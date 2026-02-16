@@ -5,12 +5,13 @@ by keeping the cache and its helpers in a dedicated module.
 """
 
 import json
-import logging
+
+import structlog
 
 from app.database.database import AsyncSessionLocal
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # ---- Defaults per section ------------------------------------------------
 
@@ -116,5 +117,5 @@ async def load_button_styles_cache() -> dict[str, dict]:
         logger.exception('Failed to load button styles from DB, using defaults')
 
     _cached_styles = merged
-    logger.info('Button styles cache loaded: %s', list(merged.keys()))
+    logger.info('Button styles cache loaded', list=list(merged.keys()))
     return merged

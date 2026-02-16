@@ -1,6 +1,6 @@
-import logging
 import re
 
+import structlog
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,7 +33,7 @@ from app.states import AdminStates
 from app.utils.decorators import admin_required, error_handler
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 _CAMPAIGN_PARAM_REGEX = re.compile(r'^[A-Za-z0-9_-]{3,32}$')
 _CAMPAIGNS_PAGE_SIZE = 5
@@ -1120,7 +1120,7 @@ async def toggle_campaign_status(
     new_status = not campaign.is_active
     await update_campaign(db, campaign, is_active=new_status)
     status_text = 'включена' if new_status else 'выключена'
-    logger.info('🔄 Кампания %s переключена: %s', campaign_id, status_text)
+    logger.info('🔄 Кампания переключена', campaign_id=campaign_id, status_text=status_text)
 
     await show_campaign_detail(callback, db_user, db)
 

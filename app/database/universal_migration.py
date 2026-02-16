@@ -1,6 +1,6 @@
-import logging
 from datetime import datetime
 
+import structlog
 from sqlalchemy import select, text
 
 from app.config import settings
@@ -9,7 +9,7 @@ from app.database.models import WebApiToken
 from app.utils.security import hash_api_token
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def get_database_type():
@@ -22,7 +22,7 @@ async def sync_postgres_sequences() -> bool:
     db_type = await get_database_type()
 
     if db_type != 'postgresql':
-        logger.debug('Пропускаем синхронизацию последовательностей: тип БД %s', db_type)
+        logger.debug('Пропускаем синхронизацию последовательностей: тип БД', db_type=db_type)
         return True
 
     try:
@@ -88,16 +88,16 @@ async def sync_postgres_sequences() -> bool:
                     {'sequence_name': sequence_path, 'new_value': max_value},
                 )
                 logger.info(
-                    '🔄 Последовательность %s синхронизирована: MAX=%s, следующий ID=%s',
-                    sequence_path,
-                    max_value,
-                    max_value + 1,
+                    '🔄 Последовательность синхронизирована: MAX следующий ID',
+                    sequence_path=sequence_path,
+                    max_value=max_value,
+                    max_value_2=max_value + 1,
                 )
 
         return True
 
     except Exception as error:
-        logger.error('❌ Ошибка синхронизации последовательностей PostgreSQL: %s', error)
+        logger.error('❌ Ошибка синхронизации последовательностей PostgreSQL', error=error)
         return False
 
 
@@ -138,7 +138,7 @@ async def check_table_exists(table_name: str) -> bool:
             return False
 
     except Exception as e:
-        logger.error(f'Ошибка проверки существования таблицы {table_name}: {e}')
+        logger.error('Ошибка проверки существования таблицы', table_name=table_name, error=e)
         return False
 
 
@@ -179,7 +179,7 @@ async def check_column_exists(table_name: str, column_name: str) -> bool:
             return False
 
     except Exception as e:
-        logger.error(f'Ошибка проверки существования колонки {column_name}: {e}')
+        logger.error('Ошибка проверки существования колонки', column_name=column_name, error=e)
         return False
 
 
@@ -226,7 +226,12 @@ async def check_constraint_exists(table_name: str, constraint_name: str) -> bool
             return False
 
     except Exception as e:
-        logger.error(f'Ошибка проверки существования ограничения {constraint_name} для {table_name}: {e}')
+        logger.error(
+            'Ошибка проверки существования ограничения для',
+            constraint_name=constraint_name,
+            table_name=table_name,
+            error=e,
+        )
         return False
 
 
@@ -273,7 +278,7 @@ async def check_index_exists(table_name: str, index_name: str) -> bool:
             return False
 
     except Exception as e:
-        logger.error(f'Ошибка проверки существования индекса {index_name} для {table_name}: {e}')
+        logger.error('Ошибка проверки существования индекса для', index_name=index_name, table_name=table_name, error=e)
         return False
 
 
@@ -443,11 +448,11 @@ async def enforce_wata_payment_link_constraints(
 
             return unique_index_exists, legacy_index_exists
 
-        logger.warning('⚠️ Неизвестный тип БД %s — не удалось усилить ограничения payment_link_id', db_type)
+        logger.warning('⚠️ Неизвестный тип БД — не удалось усилить ограничения payment_link_id', db_type=db_type)
         return unique_index_exists, legacy_index_exists
 
     except Exception as e:
-        logger.error(f'Ошибка настройки ограничений payment_link_id: {e}')
+        logger.error('Ошибка настройки ограничений payment_link_id', error=e)
         return unique_index_exists, legacy_index_exists
 
 
@@ -542,7 +547,7 @@ async def create_cryptobot_payments_table():
                 CREATE INDEX idx_cryptobot_payments_status ON cryptobot_payments(status);
                 """
             else:
-                logger.error(f'Неподдерживаемый тип БД для создания таблицы: {db_type}')
+                logger.error('Неподдерживаемый тип БД для создания таблицы', db_type=db_type)
                 return False
 
             await conn.execute(text(create_sql))
@@ -550,7 +555,7 @@ async def create_cryptobot_payments_table():
             return True
 
     except Exception as e:
-        logger.error(f'Ошибка создания таблицы cryptobot_payments: {e}')
+        logger.error('Ошибка создания таблицы cryptobot_payments', error=e)
         return False
 
 
@@ -656,7 +661,7 @@ async def create_heleket_payments_table():
                 """
 
             else:
-                logger.error(f'Неподдерживаемый тип БД для таблицы heleket_payments: {db_type}')
+                logger.error('Неподдерживаемый тип БД для таблицы heleket_payments', db_type=db_type)
                 return False
 
             await conn.execute(text(create_sql))
@@ -664,7 +669,7 @@ async def create_heleket_payments_table():
             return True
 
     except Exception as e:
-        logger.error(f'Ошибка создания таблицы heleket_payments: {e}')
+        logger.error('Ошибка создания таблицы heleket_payments', error=e)
         return False
 
 
@@ -758,7 +763,7 @@ async def create_mulenpay_payments_table():
                 """
 
             else:
-                logger.error(f'Неподдерживаемый тип БД для таблицы mulenpay_payments: {db_type}')
+                logger.error('Неподдерживаемый тип БД для таблицы mulenpay_payments', db_type=db_type)
                 return False
 
             await conn.execute(text(create_sql))
@@ -766,7 +771,7 @@ async def create_mulenpay_payments_table():
             return True
 
     except Exception as e:
-        logger.error(f'Ошибка создания таблицы mulenpay_payments: {e}')
+        logger.error('Ошибка создания таблицы mulenpay_payments', error=e)
         return False
 
 
@@ -793,8 +798,7 @@ async def ensure_mulenpay_payment_schema() -> bool:
                     alter_sql = 'ALTER TABLE mulenpay_payments ADD COLUMN mulen_payment_id INT NULL'
                 else:
                     logger.error(
-                        'Неподдерживаемый тип БД для добавления mulen_payment_id в mulenpay_payments: %s',
-                        db_type,
+                        'Неподдерживаемый тип БД для добавления mulen_payment_id в mulenpay_payments', db_type=db_type
                     )
                     return False
 
@@ -811,10 +815,7 @@ async def ensure_mulenpay_payment_schema() -> bool:
                 elif db_type == 'mysql':
                     alter_paid_at_sql = 'ALTER TABLE mulenpay_payments ADD COLUMN paid_at DATETIME NULL'
                 else:
-                    logger.error(
-                        'Неподдерживаемый тип БД для добавления paid_at в mulenpay_payments: %s',
-                        db_type,
-                    )
+                    logger.error('Неподдерживаемый тип БД для добавления paid_at в mulenpay_payments', db_type=db_type)
                     return False
 
                 await conn.execute(text(alter_paid_at_sql))
@@ -830,10 +831,7 @@ async def ensure_mulenpay_payment_schema() -> bool:
                 elif db_type == 'mysql':
                     create_index_sql = 'CREATE INDEX idx_mulenpay_payment_id ON mulenpay_payments(mulen_payment_id)'
                 else:
-                    logger.error(
-                        'Неподдерживаемый тип БД для создания индекса mulenpay_payment_id: %s',
-                        db_type,
-                    )
+                    logger.error('Неподдерживаемый тип БД для создания индекса mulenpay_payment_id', db_type=db_type)
                     return False
 
                 await conn.execute(text(create_index_sql))
@@ -844,7 +842,7 @@ async def ensure_mulenpay_payment_schema() -> bool:
         return True
 
     except Exception as e:
-        logger.error(f'Ошибка обновления схемы mulenpay_payments: {e}')
+        logger.error('Ошибка обновления схемы mulenpay_payments', error=e)
         return False
 
 
@@ -980,7 +978,7 @@ async def create_pal24_payments_table():
                 """
 
             else:
-                logger.error(f'Неподдерживаемый тип БД для таблицы pal24_payments: {db_type}')
+                logger.error('Неподдерживаемый тип БД для таблицы pal24_payments', db_type=db_type)
                 return False
 
             await conn.execute(text(create_sql))
@@ -988,7 +986,7 @@ async def create_pal24_payments_table():
             return True
 
     except Exception as e:
-        logger.error(f'Ошибка создания таблицы pal24_payments: {e}')
+        logger.error('Ошибка создания таблицы pal24_payments', error=e)
         return False
 
 
@@ -1100,7 +1098,7 @@ async def create_wata_payments_table():
                 """
 
             else:
-                logger.error(f'Неподдерживаемый тип БД для таблицы wata_payments: {db_type}')
+                logger.error('Неподдерживаемый тип БД для таблицы wata_payments', db_type=db_type)
                 return False
 
             await conn.execute(text(create_sql))
@@ -1108,7 +1106,7 @@ async def create_wata_payments_table():
             return True
 
     except Exception as e:
-        logger.error(f'Ошибка создания таблицы wata_payments: {e}')
+        logger.error('Ошибка создания таблицы wata_payments', error=e)
         return False
 
 
@@ -1153,10 +1151,7 @@ async def ensure_wata_payment_schema() -> bool:
                     await conn.execute(text('ALTER TABLE wata_payments ADD COLUMN payment_link_id VARCHAR(64)'))
                     payment_link_column_exists = True
                 else:
-                    logger.warning(
-                        '⚠️ Неизвестный тип БД %s — пропущено добавление payment_link_id',
-                        db_type,
-                    )
+                    logger.warning('⚠️ Неизвестный тип БД — пропущено добавление payment_link_id', db_type=db_type)
 
                 if payment_link_column_exists:
                     logger.info('✅ Добавлена колонка payment_link_id в wata_payments')
@@ -1180,10 +1175,7 @@ async def ensure_wata_payment_schema() -> bool:
                     await conn.execute(text('ALTER TABLE wata_payments ADD COLUMN order_id VARCHAR(255)'))
                     order_id_column_exists = True
                 else:
-                    logger.warning(
-                        '⚠️ Неизвестный тип БД %s — пропущено добавление order_id',
-                        db_type,
-                    )
+                    logger.warning('⚠️ Неизвестный тип БД — пропущено добавление order_id', db_type=db_type)
 
                 if order_id_column_exists:
                     logger.info('✅ Добавлена колонка order_id в wata_payments')
@@ -1203,8 +1195,7 @@ async def ensure_wata_payment_schema() -> bool:
                         index_created = True
                     else:
                         logger.warning(
-                            '⚠️ Неизвестный тип БД %s — пропущено создание индекса idx_wata_order_id',
-                            db_type,
+                            '⚠️ Неизвестный тип БД — пропущено создание индекса idx_wata_order_id', db_type=db_type
                         )
 
                     if index_created:
@@ -1215,7 +1206,7 @@ async def ensure_wata_payment_schema() -> bool:
         return True
 
     except Exception as e:
-        logger.error(f'Ошибка обновления схемы wata_payments: {e}')
+        logger.error('Ошибка обновления схемы wata_payments', error=e)
         return False
 
 
@@ -1319,7 +1310,7 @@ async def create_freekassa_payments_table():
                 """
 
             else:
-                logger.error(f'Неподдерживаемый тип БД для таблицы freekassa_payments: {db_type}')
+                logger.error('Неподдерживаемый тип БД для таблицы freekassa_payments', db_type=db_type)
                 return False
 
             await conn.execute(text(create_sql))
@@ -1327,7 +1318,7 @@ async def create_freekassa_payments_table():
             return True
 
     except Exception as e:
-        logger.error(f'Ошибка создания таблицы freekassa_payments: {e}')
+        logger.error('Ошибка создания таблицы freekassa_payments', error=e)
         return False
 
 
@@ -1431,7 +1422,7 @@ async def create_kassa_ai_payments_table():
                 """
 
             else:
-                logger.error(f'Неподдерживаемый тип БД для таблицы kassa_ai_payments: {db_type}')
+                logger.error('Неподдерживаемый тип БД для таблицы kassa_ai_payments', db_type=db_type)
                 return False
 
             await conn.execute(text(create_sql))
@@ -1439,7 +1430,7 @@ async def create_kassa_ai_payments_table():
             return True
 
     except Exception as e:
-        logger.error(f'Ошибка создания таблицы kassa_ai_payments: {e}')
+        logger.error('Ошибка создания таблицы kassa_ai_payments', error=e)
         return False
 
 
@@ -1545,7 +1536,7 @@ async def create_discount_offers_table():
         return True
 
     except Exception as e:
-        logger.error(f'Ошибка создания таблицы discount_offers: {e}')
+        logger.error('Ошибка создания таблицы discount_offers', error=e)
         return False
 
 
@@ -1638,7 +1629,7 @@ async def create_referral_contests_table() -> bool:
         logger.info('✅ Таблица referral_contests создана')
         return True
     except Exception as error:
-        logger.error(f'Ошибка создания таблицы referral_contests: {error}')
+        logger.error('Ошибка создания таблицы referral_contests', error=error)
         return False
 
 
@@ -1727,7 +1718,7 @@ async def create_referral_contest_events_table() -> bool:
         logger.info('✅ Таблица referral_contest_events создана')
         return True
     except Exception as error:
-        logger.error(f'Ошибка создания таблицы referral_contest_events: {error}')
+        logger.error('Ошибка создания таблицы referral_contest_events', error=error)
     return False
 
 
@@ -1786,7 +1777,7 @@ async def create_referral_contest_virtual_participants_table() -> bool:
         logger.info('✅ Таблица referral_contest_virtual_participants создана')
         return True
     except Exception as error:
-        logger.error(f'Ошибка создания таблицы referral_contest_virtual_participants: {error}')
+        logger.error('Ошибка создания таблицы referral_contest_virtual_participants', error=error)
     return False
 
 
@@ -1795,7 +1786,7 @@ async def ensure_referral_contest_summary_columns() -> bool:
     for column in ['daily_summary_times', 'last_daily_summary_at']:
         exists = await check_column_exists('referral_contests', column)
         if exists:
-            logger.info('Колонка %s в referral_contests уже существует', column)
+            logger.info('Колонка в referral_contests уже существует', column=column)
             continue
         try:
             async with engine.begin() as conn:
@@ -1814,10 +1805,10 @@ async def ensure_referral_contest_summary_columns() -> bool:
                             + ('VARCHAR(255)' if column == 'daily_summary_times' else 'DATETIME')
                         )
                     )
-            logger.info('✅ Колонка %s в referral_contests добавлена', column)
+            logger.info('✅ Колонка в referral_contests добавлена', column=column)
         except Exception as error:
             ok = False
-            logger.error('Ошибка добавления %s в referral_contests: %s', column, error)
+            logger.error('Ошибка добавления в referral_contests', column=column, error=error)
     return ok
 
 
@@ -1900,7 +1891,7 @@ async def create_contest_templates_table() -> bool:
         logger.info('✅ Таблица contest_templates создана')
         return True
     except Exception as error:
-        logger.error(f'Ошибка создания таблицы contest_templates: {error}')
+        logger.error('Ошибка создания таблицы contest_templates', error=error)
         return False
 
 
@@ -1996,7 +1987,7 @@ async def create_contest_rounds_table() -> bool:
         logger.info('✅ Таблица contest_rounds создана')
         return True
     except Exception as error:
-        logger.error(f'Ошибка создания таблицы contest_rounds: {error}')
+        logger.error('Ошибка создания таблицы contest_rounds', error=error)
         return False
 
 
@@ -2069,7 +2060,7 @@ async def create_contest_attempts_table() -> bool:
         logger.info('✅ Таблица contest_attempts создана')
         return True
     except Exception as error:
-        logger.error(f'Ошибка создания таблицы contest_attempts: {error}')
+        logger.error('Ошибка создания таблицы contest_attempts', error=error)
         return False
 
 
@@ -2096,7 +2087,7 @@ async def ensure_referral_contest_type_column() -> bool:
         logger.info('✅ Колонка contest_type в referral_contests добавлена')
         return True
     except Exception as error:
-        logger.error(f'Ошибка добавления contest_type в referral_contests: {error}')
+        logger.error('Ошибка добавления contest_type в referral_contests', error=error)
         return False
 
 
@@ -2133,7 +2124,7 @@ async def ensure_discount_offer_columns():
         return True
 
     except Exception as e:
-        logger.error(f'Ошибка обновления колонок discount_offers: {e}')
+        logger.error('Ошибка обновления колонок discount_offers', error=e)
         return False
 
 
@@ -2180,7 +2171,7 @@ async def ensure_user_promo_offer_discount_columns():
         logger.info('✅ Колонки promo_offer_discount_* для users проверены')
         return True
     except Exception as e:
-        logger.error(f'Ошибка обновления колонок promo_offer_discount_*: {e}')
+        logger.error('Ошибка обновления колонок promo_offer_discount_*', error=e)
         return False
 
 
@@ -2209,7 +2200,7 @@ async def ensure_user_notification_settings_column() -> bool:
         logger.info('✅ Колонка notification_settings для users добавлена')
         return True
     except Exception as e:
-        logger.error(f'Ошибка добавления колонки notification_settings: {e}')
+        logger.error('Ошибка добавления колонки notification_settings', error=e)
         return False
 
 
@@ -2244,7 +2235,7 @@ async def ensure_promo_offer_template_active_duration_column() -> bool:
         logger.info('✅ Колонка active_discount_hours в promo_offer_templates актуальна')
         return True
     except Exception as e:
-        logger.error(f'Ошибка обновления active_discount_hours в promo_offer_templates: {e}')
+        logger.error('Ошибка обновления active_discount_hours в promo_offer_templates', error=e)
         return False
 
 
@@ -2257,7 +2248,7 @@ async def migrate_discount_offer_effect_types():
         logger.info('✅ Типы эффектов discount_offers обновлены на percent_discount')
         return True
     except Exception as e:
-        logger.error(f'Ошибка обновления типов эффектов discount_offers: {e}')
+        logger.error('Ошибка обновления типов эффектов discount_offers', error=e)
         return False
 
 
@@ -2273,7 +2264,7 @@ async def reset_discount_offer_bonuses():
         logger.info('✅ Бонусы промо-предложений сброшены до нуля')
         return True
     except Exception as e:
-        logger.error(f'Ошибка обнуления бонусов промо-предложений: {e}')
+        logger.error('Ошибка обнуления бонусов промо-предложений', error=e)
         return False
 
 
@@ -2364,7 +2355,7 @@ async def create_promo_offer_templates_table():
         return True
 
     except Exception as e:
-        logger.error(f'Ошибка создания таблицы promo_offer_templates: {e}')
+        logger.error('Ошибка создания таблицы promo_offer_templates', error=e)
         return False
 
 
@@ -2427,7 +2418,7 @@ async def create_main_menu_buttons_table() -> bool:
                 CREATE INDEX ix_main_menu_buttons_order ON main_menu_buttons(display_order, id);
                 """
             else:
-                logger.error(f'Неподдерживаемый тип БД для таблицы main_menu_buttons: {db_type}')
+                logger.error('Неподдерживаемый тип БД для таблицы main_menu_buttons', db_type=db_type)
                 return False
 
             await conn.execute(text(create_sql))
@@ -2436,7 +2427,7 @@ async def create_main_menu_buttons_table() -> bool:
         return True
 
     except Exception as e:
-        logger.error(f'Ошибка создания таблицы main_menu_buttons: {e}')
+        logger.error('Ошибка создания таблицы main_menu_buttons', error=e)
         return False
 
 
@@ -2509,13 +2500,13 @@ async def create_promo_offer_logs_table() -> bool:
                 """)
                 )
             else:
-                logger.warning('Неизвестный тип БД для создания promo_offer_logs: %s', db_type)
+                logger.warning('Неизвестный тип БД для создания promo_offer_logs', db_type=db_type)
                 return False
 
         logger.info('✅ Таблица promo_offer_logs успешно создана')
         return True
     except Exception as e:
-        logger.error(f'Ошибка создания таблицы promo_offer_logs: {e}')
+        logger.error('Ошибка создания таблицы promo_offer_logs', error=e)
         return False
 
 
@@ -2596,7 +2587,7 @@ async def create_subscription_temporary_access_table():
         return True
 
     except Exception as e:
-        logger.error(f'Ошибка создания таблицы subscription_temporary_access: {e}')
+        logger.error('Ошибка создания таблицы subscription_temporary_access', error=e)
         return False
 
 
@@ -2661,7 +2652,7 @@ async def create_user_messages_table():
                 CREATE INDEX idx_user_messages_sort ON user_messages(sort_order, created_at);
                 """
             else:
-                logger.error(f'Неподдерживаемый тип БД для создания таблицы: {db_type}')
+                logger.error('Неподдерживаемый тип БД для создания таблицы', db_type=db_type)
                 return False
 
             await conn.execute(text(create_sql))
@@ -2669,7 +2660,7 @@ async def create_user_messages_table():
             return True
 
     except Exception as e:
-        logger.error(f'Ошибка создания таблицы user_messages: {e}')
+        logger.error('Ошибка создания таблицы user_messages', error=e)
         return False
 
 
@@ -2740,7 +2731,7 @@ async def ensure_promo_groups_setup():
                         )
                     )
                 else:
-                    logger.error(f'Неподдерживаемый тип БД для promo_groups: {db_type}')
+                    logger.error('Неподдерживаемый тип БД для promo_groups', db_type=db_type)
                     return False
 
                 logger.info('Создана таблица promo_groups')
@@ -2751,7 +2742,7 @@ async def ensure_promo_groups_setup():
                         text('ALTER TABLE promo_groups ADD CONSTRAINT uq_promo_groups_name UNIQUE (name)')
                     )
                 except Exception as e:
-                    logger.warning(f'Не удалось добавить уникальное ограничение uq_promo_groups_name: {e}')
+                    logger.warning('Не удалось добавить уникальное ограничение uq_promo_groups_name', error=e)
 
             period_discounts_column_exists = await check_column_exists('promo_groups', 'period_discounts')
 
@@ -2772,7 +2763,7 @@ async def ensure_promo_groups_setup():
                         text('UPDATE promo_groups SET period_discounts = JSON_OBJECT() WHERE period_discounts IS NULL')
                     )
                 else:
-                    logger.error(f'Неподдерживаемый тип БД для promo_groups.period_discounts: {db_type}')
+                    logger.error('Неподдерживаемый тип БД для promo_groups.period_discounts', db_type=db_type)
                     return False
 
                 logger.info('Добавлена колонка promo_groups.period_discounts')
@@ -2789,7 +2780,9 @@ async def ensure_promo_groups_setup():
                         text('ALTER TABLE promo_groups ADD COLUMN auto_assign_total_spent_kopeks INT DEFAULT 0')
                     )
                 else:
-                    logger.error(f'Неподдерживаемый тип БД для promo_groups.auto_assign_total_spent_kopeks: {db_type}')
+                    logger.error(
+                        'Неподдерживаемый тип БД для promo_groups.auto_assign_total_spent_kopeks', db_type=db_type
+                    )
                     return False
 
                 logger.info('Добавлена колонка promo_groups.auto_assign_total_spent_kopeks')
@@ -2830,7 +2823,7 @@ async def ensure_promo_groups_setup():
                         )
                     )
                 else:
-                    logger.error(f'Неподдерживаемый тип БД для promo_groups.apply_discounts_to_addons: {db_type}')
+                    logger.error('Неподдерживаемый тип БД для promo_groups.apply_discounts_to_addons', db_type=db_type)
                     return False
 
                 logger.info('Добавлена колонка promo_groups.apply_discounts_to_addons')
@@ -2844,7 +2837,7 @@ async def ensure_promo_groups_setup():
                 elif db_type == 'mysql':
                     await conn.execute(text('ALTER TABLE users ADD COLUMN promo_group_id INT'))
                 else:
-                    logger.error(f'Неподдерживаемый тип БД для promo_group_id: {db_type}')
+                    logger.error('Неподдерживаемый тип БД для promo_group_id', db_type=db_type)
                     return False
 
                 logger.info('Добавлена колонка users.promo_group_id')
@@ -2863,7 +2856,7 @@ async def ensure_promo_groups_setup():
                         text('ALTER TABLE users ADD COLUMN auto_promo_group_assigned TINYINT(1) DEFAULT 0')
                     )
                 else:
-                    logger.error(f'Неподдерживаемый тип БД для users.auto_promo_group_assigned: {db_type}')
+                    logger.error('Неподдерживаемый тип БД для users.auto_promo_group_assigned', db_type=db_type)
                     return False
 
                 logger.info('Добавлена колонка users.auto_promo_group_assigned')
@@ -2882,7 +2875,7 @@ async def ensure_promo_groups_setup():
                         text('ALTER TABLE users ADD COLUMN auto_promo_group_threshold_kopeks BIGINT NOT NULL DEFAULT 0')
                     )
                 else:
-                    logger.error(f'Неподдерживаемый тип БД для users.auto_promo_group_threshold_kopeks: {db_type}')
+                    logger.error('Неподдерживаемый тип БД для users.auto_promo_group_threshold_kopeks', db_type=db_type)
                     return False
 
                 logger.info('Добавлена колонка users.auto_promo_group_threshold_kopeks')
@@ -2899,7 +2892,7 @@ async def ensure_promo_groups_setup():
                         await conn.execute(text('CREATE INDEX ix_users_promo_group_id ON users(promo_group_id)'))
                     logger.info('Создан индекс ix_users_promo_group_id')
                 except Exception as e:
-                    logger.warning(f'Не удалось создать индекс ix_users_promo_group_id: {e}')
+                    logger.warning('Не удалось создать индекс ix_users_promo_group_id', error=e)
 
             default_group_name = 'Базовый юзер'
             default_group_id = None
@@ -3023,12 +3016,12 @@ async def ensure_promo_groups_setup():
                         )
                         logger.info('Добавлен внешний ключ users -> promo_groups')
                     except Exception as e:
-                        logger.warning(f'Не удалось добавить внешний ключ users.promo_group_id: {e}')
+                        logger.warning('Не удалось добавить внешний ключ users.promo_group_id', error=e)
 
                 try:
                     await conn.execute(text('ALTER TABLE users ALTER COLUMN promo_group_id SET NOT NULL'))
                 except Exception as e:
-                    logger.warning(f'Не удалось сделать users.promo_group_id NOT NULL: {e}')
+                    logger.warning('Не удалось сделать users.promo_group_id NOT NULL', error=e)
 
             elif db_type == 'mysql':
                 constraint_exists = await check_constraint_exists('users', 'fk_users_promo_group_id_promo_groups')
@@ -3047,18 +3040,18 @@ async def ensure_promo_groups_setup():
                         )
                         logger.info('Добавлен внешний ключ users -> promo_groups')
                     except Exception as e:
-                        logger.warning(f'Не удалось добавить внешний ключ users.promo_group_id: {e}')
+                        logger.warning('Не удалось добавить внешний ключ users.promo_group_id', error=e)
 
                 try:
                     await conn.execute(text('ALTER TABLE users MODIFY promo_group_id INT NOT NULL'))
                 except Exception as e:
-                    logger.warning(f'Не удалось сделать users.promo_group_id NOT NULL: {e}')
+                    logger.warning('Не удалось сделать users.promo_group_id NOT NULL', error=e)
 
             logger.info('✅ Промо группы настроены')
             return True
 
     except Exception as e:
-        logger.error(f'Ошибка настройки промо групп: {e}')
+        logger.error('Ошибка настройки промо групп', error=e)
         return False
 
 
@@ -3077,7 +3070,7 @@ async def add_welcome_text_is_enabled_column():
             elif db_type == 'postgresql' or db_type == 'mysql':
                 alter_sql = 'ALTER TABLE welcome_texts ADD COLUMN is_enabled BOOLEAN DEFAULT TRUE NOT NULL'
             else:
-                logger.error(f'Неподдерживаемый тип БД для добавления колонки: {db_type}')
+                logger.error('Неподдерживаемый тип БД для добавления колонки', db_type=db_type)
                 return False
 
             await conn.execute(text(alter_sql))
@@ -3090,12 +3083,12 @@ async def add_welcome_text_is_enabled_column():
 
             result = await conn.execute(text(update_sql))
             updated_count = result.rowcount
-            logger.info(f'Обновлено {updated_count} существующих записей welcome_texts')
+            logger.info('Обновлено существующих записей welcome_texts', updated_count=updated_count)
 
             return True
 
     except Exception as e:
-        logger.error(f'Ошибка при добавлении поля is_enabled: {e}')
+        logger.error('Ошибка при добавлении поля is_enabled', error=e)
         return False
 
 
@@ -3163,7 +3156,7 @@ async def create_welcome_texts_table():
                 CREATE INDEX idx_welcome_texts_updated ON welcome_texts(updated_at);
                 """
             else:
-                logger.error(f'Неподдерживаемый тип БД для создания таблицы: {db_type}')
+                logger.error('Неподдерживаемый тип БД для создания таблицы', db_type=db_type)
                 return False
 
             await conn.execute(text(create_sql))
@@ -3171,7 +3164,7 @@ async def create_welcome_texts_table():
             return True
 
     except Exception as e:
-        logger.error(f'Ошибка создания таблицы welcome_texts: {e}')
+        logger.error('Ошибка создания таблицы welcome_texts', error=e)
         return False
 
 
@@ -3242,7 +3235,7 @@ async def create_pinned_messages_table():
                 """
 
             else:
-                logger.error(f'Неподдерживаемый тип БД для создания таблицы pinned_messages: {db_type}')
+                logger.error('Неподдерживаемый тип БД для создания таблицы pinned_messages', db_type=db_type)
                 return False
 
             await conn.execute(text(create_sql))
@@ -3251,7 +3244,7 @@ async def create_pinned_messages_table():
         return True
 
     except Exception as e:
-        logger.error(f'Ошибка создания таблицы pinned_messages: {e}')
+        logger.error('Ошибка создания таблицы pinned_messages', error=e)
         return False
 
 
@@ -3300,7 +3293,7 @@ async def ensure_pinned_message_media_columns():
         return True
 
     except Exception as e:
-        logger.error(f'Ошибка обновления медиа полей pinned_messages: {e}')
+        logger.error('Ошибка обновления медиа полей pinned_messages', error=e)
         return False
 
 
@@ -3312,7 +3305,7 @@ async def ensure_user_last_pinned_column():
         logger.info('✅ Поле last_pinned_message_id у пользователей готово')
         return True
     except Exception as e:
-        logger.error(f'Ошибка добавления поля last_pinned_message_id: {e}')
+        logger.error('Ошибка добавления поля last_pinned_message_id', error=e)
         return False
 
 
@@ -3334,7 +3327,7 @@ async def add_media_fields_to_broadcast_history():
                 field_exists = await check_column_exists('broadcast_history', field_name)
 
                 if not field_exists:
-                    logger.info(f'Добавление поля {field_name} в таблицу broadcast_history')
+                    logger.info('Добавление поля в таблицу broadcast_history', field_name=field_name)
 
                     if db_type == 'sqlite':
                         if 'BOOLEAN' in field_type:
@@ -3345,15 +3338,15 @@ async def add_media_fields_to_broadcast_history():
 
                     alter_sql = f'ALTER TABLE broadcast_history ADD COLUMN {field_name} {field_type}'
                     await conn.execute(text(alter_sql))
-                    logger.info(f'✅ Поле {field_name} успешно добавлено')
+                    logger.info('✅ Поле успешно добавлено', field_name=field_name)
                 else:
-                    logger.info(f'Поле {field_name} уже существует в broadcast_history')
+                    logger.info('Поле уже существует в broadcast_history', field_name=field_name)
 
             logger.info('✅ Все поля медиа в broadcast_history готовы')
             return True
 
     except Exception as e:
-        logger.error(f'Ошибка при добавлении полей медиа в broadcast_history: {e}')
+        logger.error('Ошибка при добавлении полей медиа в broadcast_history', error=e)
         return False
 
 
@@ -3376,13 +3369,13 @@ async def add_email_fields_to_broadcast_history():
                 field_exists = await check_column_exists('broadcast_history', field_name)
 
                 if not field_exists:
-                    logger.info(f'Добавление поля {field_name} в таблицу broadcast_history')
+                    logger.info('Добавление поля в таблицу broadcast_history', field_name=field_name)
 
                     alter_sql = f'ALTER TABLE broadcast_history ADD COLUMN {field_name} {field_type}'
                     await conn.execute(text(alter_sql))
-                    logger.info(f'✅ Поле {field_name} успешно добавлено')
+                    logger.info('✅ Поле успешно добавлено', field_name=field_name)
                 else:
-                    logger.info(f'Поле {field_name} уже существует в broadcast_history')
+                    logger.info('Поле уже существует в broadcast_history', field_name=field_name)
 
             # Сделать message_text nullable для email-only рассылок
             try:
@@ -3395,13 +3388,13 @@ async def add_email_fields_to_broadcast_history():
                 # SQLite не поддерживает ALTER COLUMN, но там по умолчанию nullable
             except Exception as e:
                 # Игнорируем если уже nullable или другая ошибка
-                logger.debug(f'message_text nullable: {e}')
+                logger.debug('message_text nullable', error=e)
 
             logger.info('✅ Все поля email в broadcast_history готовы')
             return True
 
     except Exception as e:
-        logger.error(f'Ошибка при добавлении полей email в broadcast_history: {e}')
+        logger.error('Ошибка при добавлении полей email в broadcast_history', error=e)
         return False
 
 
@@ -3424,7 +3417,7 @@ async def add_ticket_reply_block_columns():
                         'ALTER TABLE tickets ADD COLUMN user_reply_block_permanent BOOLEAN DEFAULT FALSE NOT NULL'
                     )
                 else:
-                    logger.error(f'Неподдерживаемый тип БД для добавления user_reply_block_permanent: {db_type}')
+                    logger.error('Неподдерживаемый тип БД для добавления user_reply_block_permanent', db_type=db_type)
                     return False
                 await conn.execute(text(alter_sql))
                 logger.info('✅ Добавлена колонка tickets.user_reply_block_permanent')
@@ -3437,14 +3430,14 @@ async def add_ticket_reply_block_columns():
                 elif db_type == 'mysql':
                     alter_sql = 'ALTER TABLE tickets ADD COLUMN user_reply_block_until DATETIME NULL'
                 else:
-                    logger.error(f'Неподдерживаемый тип БД для добавления user_reply_block_until: {db_type}')
+                    logger.error('Неподдерживаемый тип БД для добавления user_reply_block_until', db_type=db_type)
                     return False
                 await conn.execute(text(alter_sql))
                 logger.info('✅ Добавлена колонка tickets.user_reply_block_until')
 
             return True
     except Exception as e:
-        logger.error(f'Ошибка добавления колонок блокировок в tickets: {e}')
+        logger.error('Ошибка добавления колонок блокировок в tickets', error=e)
         return False
 
 
@@ -3462,13 +3455,13 @@ async def add_ticket_sla_columns():
             elif db_type == 'mysql':
                 alter_sql = 'ALTER TABLE tickets ADD COLUMN last_sla_reminder_at DATETIME NULL'
             else:
-                logger.error(f'Неподдерживаемый тип БД для добавления last_sla_reminder_at: {db_type}')
+                logger.error('Неподдерживаемый тип БД для добавления last_sla_reminder_at', db_type=db_type)
                 return False
             await conn.execute(text(alter_sql))
             logger.info('✅ Добавлена колонка tickets.last_sla_reminder_at')
             return True
     except Exception as e:
-        logger.error(f'Ошибка добавления SLA колонки в tickets: {e}')
+        logger.error('Ошибка добавления SLA колонки в tickets', error=e)
         return False
 
 
@@ -3496,7 +3489,7 @@ async def add_user_restriction_columns() -> bool:
                         text('ALTER TABLE users ADD COLUMN restriction_topup BOOLEAN DEFAULT FALSE NOT NULL')
                     )
                 else:
-                    logger.error(f'Неподдерживаемый тип БД: {db_type}')
+                    logger.error('Неподдерживаемый тип БД', db_type=db_type)
                     return False
                 logger.info('✅ Добавлена колонка users.restriction_topup')
 
@@ -3510,7 +3503,7 @@ async def add_user_restriction_columns() -> bool:
                         text('ALTER TABLE users ADD COLUMN restriction_subscription BOOLEAN DEFAULT FALSE NOT NULL')
                     )
                 else:
-                    logger.error(f'Неподдерживаемый тип БД: {db_type}')
+                    logger.error('Неподдерживаемый тип БД', db_type=db_type)
                     return False
                 logger.info('✅ Добавлена колонка users.restriction_subscription')
 
@@ -3518,14 +3511,14 @@ async def add_user_restriction_columns() -> bool:
                 if db_type == 'sqlite' or db_type == 'postgresql' or db_type == 'mysql':
                     await conn.execute(text('ALTER TABLE users ADD COLUMN restriction_reason VARCHAR(500) NULL'))
                 else:
-                    logger.error(f'Неподдерживаемый тип БД: {db_type}')
+                    logger.error('Неподдерживаемый тип БД', db_type=db_type)
                     return False
                 logger.info('✅ Добавлена колонка users.restriction_reason')
 
             return True
 
     except Exception as e:
-        logger.error(f'Ошибка добавления колонок ограничений пользователей: {e}')
+        logger.error('Ошибка добавления колонок ограничений пользователей', error=e)
         return False
 
 
@@ -3565,17 +3558,17 @@ async def add_user_cabinet_columns() -> bool:
 
                 await conn.execute(text(f'ALTER TABLE users ADD COLUMN {col_name} {col_type}'))
                 added_count += 1
-                logger.info(f'✅ Добавлена колонка users.{col_name}')
+                logger.info('✅ Добавлена колонка users.', col_name=col_name)
 
         if added_count == 0:
             logger.info('ℹ️ Все колонки cabinet уже существуют в таблице users')
         else:
-            logger.info(f'✅ Добавлено {added_count} колонок cabinet в таблицу users')
+            logger.info('✅ Добавлено колонок cabinet в таблицу users', added_count=added_count)
 
         return True
 
     except Exception as e:
-        logger.error(f'Ошибка добавления колонок cabinet: {e}')
+        logger.error('Ошибка добавления колонок cabinet', error=e)
         return False
 
 
@@ -3596,7 +3589,7 @@ async def add_subscription_crypto_link_column() -> bool:
             elif db_type == 'mysql':
                 await conn.execute(text('ALTER TABLE subscriptions ADD COLUMN subscription_crypto_link VARCHAR(512)'))
             else:
-                logger.error(f'Неподдерживаемый тип БД для добавления subscription_crypto_link: {db_type}')
+                logger.error('Неподдерживаемый тип БД для добавления subscription_crypto_link', db_type=db_type)
                 return False
 
             await conn.execute(
@@ -3609,7 +3602,7 @@ async def add_subscription_crypto_link_column() -> bool:
         logger.info('✅ Добавлена колонка subscription_crypto_link в таблицу subscriptions')
         return True
     except Exception as e:
-        logger.error(f'Ошибка добавления колонки subscription_crypto_link: {e}')
+        logger.error('Ошибка добавления колонки subscription_crypto_link', error=e)
         return False
 
 
@@ -3630,13 +3623,13 @@ async def add_subscription_last_webhook_update_column() -> bool:
             elif db_type == 'mysql':
                 await conn.execute(text('ALTER TABLE subscriptions ADD COLUMN last_webhook_update_at DATETIME'))
             else:
-                logger.error(f'Неподдерживаемый тип БД для добавления last_webhook_update_at: {db_type}')
+                logger.error('Неподдерживаемый тип БД для добавления last_webhook_update_at', db_type=db_type)
                 return False
 
         logger.info('✅ Добавлена колонка last_webhook_update_at в таблицу subscriptions')
         return True
     except Exception as e:
-        logger.error(f'Ошибка добавления колонки last_webhook_update_at: {e}')
+        logger.error('Ошибка добавления колонки last_webhook_update_at', error=e)
         return False
 
 
@@ -3663,7 +3656,7 @@ async def fix_foreign_keys_for_user_deletion():
                     )
                     logger.info('Обновлен внешний ключ user_messages.created_by')
                 except Exception as e:
-                    logger.warning(f'Ошибка обновления FK user_messages: {e}')
+                    logger.warning('Ошибка обновления FK user_messages', error=e)
 
                 try:
                     await conn.execute(
@@ -3682,13 +3675,13 @@ async def fix_foreign_keys_for_user_deletion():
                     )
                     logger.info('Обновлен внешний ключ promocodes.created_by')
                 except Exception as e:
-                    logger.warning(f'Ошибка обновления FK promocodes: {e}')
+                    logger.warning('Ошибка обновления FK promocodes', error=e)
 
             logger.info('Внешние ключи обновлены для безопасного удаления пользователей')
             return True
 
     except Exception as e:
-        logger.error(f'Ошибка обновления внешних ключей: {e}')
+        logger.error('Ошибка обновления внешних ключей', error=e)
         return False
 
 
@@ -3707,7 +3700,7 @@ async def add_referral_commission_percent_column() -> bool:
             elif db_type == 'mysql':
                 alter_sql = 'ALTER TABLE users ADD COLUMN referral_commission_percent INT NULL'
             else:
-                logger.error(f'Неподдерживаемый тип БД для добавления referral_commission_percent: {db_type}')
+                logger.error('Неподдерживаемый тип БД для добавления referral_commission_percent', db_type=db_type)
                 return False
 
             await conn.execute(text(alter_sql))
@@ -3715,7 +3708,7 @@ async def add_referral_commission_percent_column() -> bool:
             return True
 
     except Exception as error:
-        logger.error(f'Ошибка добавления referral_commission_percent: {error}')
+        logger.error('Ошибка добавления referral_commission_percent', error=error)
         return False
 
 
@@ -3757,7 +3750,7 @@ async def add_referral_system_columns():
                 result = await conn.execute(text(update_sql))
                 updated_count = result.rowcount
 
-                logger.info(f'Обновлено {updated_count} пользователей с has_made_first_topup = TRUE')
+                logger.info('Обновлено пользователей с has_made_first_topup TRUE', updated_count=updated_count)
                 logger.info('✅ Миграция реферальной системы завершена')
 
                 return True
@@ -3765,7 +3758,7 @@ async def add_referral_system_columns():
             return True
 
     except Exception as e:
-        logger.error(f'Ошибка миграции реферальной системы: {e}')
+        logger.error('Ошибка миграции реферальной системы', error=e)
         return False
 
 
@@ -3833,7 +3826,7 @@ async def create_subscription_conversions_table():
                 CREATE INDEX idx_subscription_conversions_converted_at ON subscription_conversions(converted_at);
                 """
             else:
-                logger.error(f'Неподдерживаемый тип БД для создания таблицы: {db_type}')
+                logger.error('Неподдерживаемый тип БД для создания таблицы', db_type=db_type)
                 return False
 
             await conn.execute(text(create_sql))
@@ -3841,7 +3834,7 @@ async def create_subscription_conversions_table():
             return True
 
     except Exception as e:
-        logger.error(f'Ошибка создания таблицы subscription_conversions: {e}')
+        logger.error('Ошибка создания таблицы subscription_conversions', error=e)
         return False
 
 
@@ -3921,7 +3914,7 @@ async def create_subscription_events_table():
                 CREATE INDEX ix_subscription_events_user_id ON subscription_events(user_id);
                 """
             else:
-                logger.error(f'Неподдерживаемый тип БД для создания таблицы subscription_events: {db_type}')
+                logger.error('Неподдерживаемый тип БД для создания таблицы subscription_events', db_type=db_type)
                 return False
 
             await conn.execute(text(create_sql))
@@ -3929,14 +3922,14 @@ async def create_subscription_events_table():
             return True
 
     except Exception as e:
-        logger.error(f'Ошибка создания таблицы subscription_events: {e}')
+        logger.error('Ошибка создания таблицы subscription_events', error=e)
         return False
 
 
 async def fix_subscription_duplicates_universal():
     async with engine.begin() as conn:
         db_type = await get_database_type()
-        logger.info(f'Обнаружен тип базы данных: {db_type}')
+        logger.info('Обнаружен тип базы данных', db_type=db_type)
 
         try:
             result = await conn.execute(
@@ -3954,7 +3947,7 @@ async def fix_subscription_duplicates_universal():
                 logger.info('Дублирующихся подписок не найдено')
                 return 0
 
-            logger.info(f'Найдено {len(duplicates)} пользователей с дублирующимися подписками')
+            logger.info('Найдено пользователей с дублирующимися подписками', duplicates_count=len(duplicates))
 
             total_deleted = 0
 
@@ -4016,13 +4009,15 @@ async def fix_subscription_duplicates_universal():
 
                 deleted_count = delete_result.rowcount
                 total_deleted += deleted_count
-                logger.info(f'Удалено {deleted_count} дублирующихся подписок для пользователя {user_id}')
+                logger.info(
+                    'Удалено дублирующихся подписок для пользователя', deleted_count=deleted_count, user_id=user_id
+                )
 
-            logger.info(f'Всего удалено дублирующихся подписок: {total_deleted}')
+            logger.info('Всего удалено дублирующихся подписок', total_deleted=total_deleted)
             return total_deleted
 
         except Exception as e:
-            logger.error(f'Ошибка при очистке дублирующихся подписок: {e}')
+            logger.error('Ошибка при очистке дублирующихся подписок', error=e)
             raise
 
 
@@ -4113,14 +4108,14 @@ async def ensure_server_promo_groups_setup() -> bool:
                 assigned_count += 1
 
             if assigned_count:
-                logger.info(f'✅ Базовая промогруппа назначена {assigned_count} серверам')
+                logger.info('✅ Базовая промогруппа назначена серверам', assigned_count=assigned_count)
             else:
                 logger.info('ℹ️ Все серверы уже имеют назначенные промогруппы')
 
         return True
 
     except Exception as e:
-        logger.error(f'Ошибка настройки таблицы server_squad_promo_groups: {e}')
+        logger.error('Ошибка настройки таблицы server_squad_promo_groups', error=e)
         return False
 
 
@@ -4150,7 +4145,7 @@ async def add_server_trial_flag_column() -> bool:
         return True
 
     except Exception as error:
-        logger.error(f'Ошибка добавления колонки is_trial_eligible: {error}')
+        logger.error('Ошибка добавления колонки is_trial_eligible', error=error)
         return False
 
 
@@ -4203,7 +4198,7 @@ async def create_system_settings_table() -> bool:
             return True
 
     except Exception as error:
-        logger.error(f'Ошибка создания таблицы system_settings: {error}')
+        logger.error('Ошибка создания таблицы system_settings', error=error)
         return False
 
 
@@ -4258,7 +4253,7 @@ async def create_menu_layout_history_table() -> bool:
             return True
 
     except Exception as error:
-        logger.error(f'❌ Ошибка создания таблицы menu_layout_history: {error}')
+        logger.error('❌ Ошибка создания таблицы menu_layout_history', error=error)
         return False
 
 
@@ -4328,7 +4323,7 @@ async def create_button_click_logs_table() -> bool:
             return True
 
     except Exception as error:
-        logger.error(f'❌ Ошибка создания таблицы button_click_logs: {error}')
+        logger.error('❌ Ошибка создания таблицы button_click_logs', error=error)
         return False
 
 
@@ -4396,7 +4391,7 @@ async def fix_button_click_logs_fk() -> bool:
             return True
 
     except Exception as error:
-        logger.error(f'❌ Ошибка исправления FK button_click_logs: {error}')
+        logger.error('❌ Ошибка исправления FK button_click_logs', error=error)
         return False
 
 
@@ -4476,7 +4471,7 @@ async def create_web_api_tokens_table() -> bool:
             return True
 
     except Exception as error:
-        logger.error(f'❌ Ошибка создания таблицы web_api_tokens: {error}')
+        logger.error('❌ Ошибка создания таблицы web_api_tokens', error=error)
         return False
 
 
@@ -4529,7 +4524,7 @@ async def create_privacy_policies_table() -> bool:
             return True
 
     except Exception as error:
-        logger.error(f'❌ Ошибка создания таблицы privacy_policies: {error}')
+        logger.error('❌ Ошибка создания таблицы privacy_policies', error=error)
         return False
 
 
@@ -4582,7 +4577,7 @@ async def create_public_offers_table() -> bool:
             return True
 
     except Exception as error:
-        logger.error(f'❌ Ошибка создания таблицы public_offers: {error}')
+        logger.error('❌ Ошибка создания таблицы public_offers', error=error)
         return False
 
 
@@ -4632,7 +4627,7 @@ async def create_faq_settings_table() -> bool:
             return True
 
     except Exception as error:
-        logger.error(f'❌ Ошибка создания таблицы faq_settings: {error}')
+        logger.error('❌ Ошибка создания таблицы faq_settings', error=error)
         return False
 
 
@@ -4696,7 +4691,7 @@ async def create_faq_pages_table() -> bool:
             return True
 
     except Exception as error:
-        logger.error(f'❌ Ошибка создания таблицы faq_pages: {error}')
+        logger.error('❌ Ошибка создания таблицы faq_pages', error=error)
         return False
 
 
@@ -4743,7 +4738,7 @@ async def ensure_default_web_api_token() -> bool:
             return True
 
     except Exception as error:
-        logger.error(f'❌ Ошибка создания дефолтного веб-API токена: {error}')
+        logger.error('❌ Ошибка создания дефолтного веб-API токена', error=error)
         return False
 
 
@@ -4777,7 +4772,7 @@ async def add_promo_group_priority_column() -> bool:
         return True
 
     except Exception as error:
-        logger.error(f'Ошибка добавления колонки priority: {error}')
+        logger.error('Ошибка добавления колонки priority', error=error)
         return False
 
 
@@ -4838,7 +4833,7 @@ async def create_user_promo_groups_table() -> bool:
             return True
 
     except Exception as error:
-        logger.error(f'❌ Ошибка создания таблицы user_promo_groups: {error}')
+        logger.error('❌ Ошибка создания таблицы user_promo_groups', error=error)
         return False
 
 
@@ -4861,7 +4856,7 @@ async def migrate_existing_user_promo_groups_data() -> bool:
             count = result.scalar()
 
             if count > 0:
-                logger.info(f'ℹ️ В таблице user_promo_groups уже есть {count} записей, пропускаем миграцию')
+                logger.info('ℹ️ В таблице user_promo_groups уже есть записей, пропускаем миграцию', count=count)
                 return True
 
             # Переносим данные из users.promo_group_id
@@ -4885,11 +4880,11 @@ async def migrate_existing_user_promo_groups_data() -> bool:
             result = await conn.execute(text(migrate_sql))
             migrated_count = result.rowcount if hasattr(result, 'rowcount') else 0
 
-            logger.info(f'✅ Перенесено {migrated_count} связей пользователей с промогруппами')
+            logger.info('✅ Перенесено связей пользователей с промогруппами', migrated_count=migrated_count)
             return True
 
     except Exception as error:
-        logger.error(f'❌ Ошибка миграции данных user_promo_groups: {error}')
+        logger.error('❌ Ошибка миграции данных user_promo_groups', error=error)
         return False
 
 
@@ -4940,7 +4935,7 @@ async def add_promocode_promo_group_column() -> bool:
         return True
 
     except Exception as error:
-        logger.error(f'❌ Ошибка добавления promo_group_id в promocodes: {error}')
+        logger.error('❌ Ошибка добавления promo_group_id в promocodes', error=error)
         return False
 
 
@@ -4964,7 +4959,7 @@ async def add_promocode_first_purchase_only_column() -> bool:
         return True
 
     except Exception as error:
-        logger.error(f'❌ Ошибка добавления first_purchase_only в promocodes: {error}')
+        logger.error('❌ Ошибка добавления first_purchase_only в promocodes', error=error)
         return False
 
 
@@ -5018,7 +5013,7 @@ async def migrate_contest_templates_prize_columns() -> bool:
         return True
 
     except Exception as error:
-        logger.error(f'❌ Ошибка миграции prize_type/prize_value в contest_templates: {error}')
+        logger.error('❌ Ошибка миграции prize_type/prize_value в contest_templates', error=error)
         return False
 
 
@@ -5044,7 +5039,7 @@ async def add_subscription_modem_enabled_column() -> bool:
         return True
 
     except Exception as error:
-        logger.error(f'❌ Ошибка добавления modem_enabled в subscriptions: {error}')
+        logger.error('❌ Ошибка добавления modem_enabled в subscriptions', error=error)
         return False
 
 
@@ -5068,7 +5063,7 @@ async def add_subscription_purchased_traffic_column() -> bool:
         return True
 
     except Exception as error:
-        logger.error(f'❌ Ошибка добавления purchased_traffic_gb в subscriptions: {error}')
+        logger.error('❌ Ошибка добавления purchased_traffic_gb в subscriptions', error=error)
         return False
 
 
@@ -5112,12 +5107,12 @@ async def add_transaction_receipt_columns() -> bool:
                 else:
                     await conn.execute(text('CREATE INDEX ix_transactions_receipt_uuid ON transactions (receipt_uuid)'))
         except Exception as idx_error:
-            logger.warning(f'Индекс на receipt_uuid возможно уже существует: {idx_error}')
+            logger.warning('Индекс на receipt_uuid возможно уже существует', idx_error=idx_error)
 
         return True
 
     except Exception as error:
-        logger.error(f'❌ Ошибка добавления колонок чеков в transactions: {error}')
+        logger.error('❌ Ошибка добавления колонок чеков в transactions', error=error)
         return False
 
 
@@ -5164,12 +5159,12 @@ async def add_oauth_provider_columns() -> bool:
                     else:
                         await conn.execute(text(f'CREATE UNIQUE INDEX uq_users_{col} ON users ({col})'))
             except Exception as idx_error:
-                logger.warning(f'Индекс uq_users_{col} возможно уже существует: {idx_error}')
+                logger.warning('Индекс uq_users_ возможно уже существует', col=col, idx_error=idx_error)
 
         return True
 
     except Exception as error:
-        logger.error(f'❌ Ошибка добавления колонок OAuth провайдеров в users: {error}')
+        logger.error('❌ Ошибка добавления колонок OAuth провайдеров в users', error=error)
         return False
 
 
@@ -5251,7 +5246,7 @@ async def create_withdrawal_requests_table() -> bool:
 
         return True
     except Exception as error:
-        logger.error(f'❌ Ошибка создания таблицы withdrawal_requests: {error}')
+        logger.error('❌ Ошибка создания таблицы withdrawal_requests', error=error)
         return False
 
 
@@ -5314,7 +5309,7 @@ async def create_traffic_purchases_table() -> bool:
 
         return True
     except Exception as error:
-        logger.error(f'❌ Ошибка создания таблицы traffic_purchases: {error}')
+        logger.error('❌ Ошибка создания таблицы traffic_purchases', error=error)
         return False
 
 
@@ -5398,7 +5393,7 @@ async def create_tariffs_table() -> bool:
             return True
 
     except Exception as error:
-        logger.error(f'❌ Ошибка создания таблицы tariffs: {error}')
+        logger.error('❌ Ошибка создания таблицы tariffs', error=error)
         return False
 
 
@@ -5451,7 +5446,7 @@ async def create_tariff_promo_groups_table() -> bool:
             return True
 
     except Exception as error:
-        logger.error(f'❌ Ошибка создания таблицы tariff_promo_groups: {error}')
+        logger.error('❌ Ошибка создания таблицы tariff_promo_groups', error=error)
         return False
 
 
@@ -5475,7 +5470,7 @@ async def ensure_tariff_max_device_limit_column() -> bool:
             return True
 
     except Exception as error:
-        logger.error(f'❌ Ошибка добавления колонки max_device_limit: {error}')
+        logger.error('❌ Ошибка добавления колонки max_device_limit', error=error)
         return False
 
 
@@ -5517,7 +5512,7 @@ async def add_subscription_tariff_id_column() -> bool:
             return True
 
     except Exception as error:
-        logger.error(f'❌ Ошибка добавления колонки tariff_id: {error}')
+        logger.error('❌ Ошибка добавления колонки tariff_id', error=error)
         return False
 
 
@@ -5606,7 +5601,7 @@ async def add_campaign_tariff_columns() -> bool:
             return True
 
     except Exception as error:
-        logger.error(f'❌ Ошибка добавления колонок tariff в рекламные кампании: {error}')
+        logger.error('❌ Ошибка добавления колонок tariff в рекламные кампании', error=error)
         return False
 
 
@@ -5629,7 +5624,7 @@ async def add_tariff_device_price_column() -> bool:
             return True
 
     except Exception as error:
-        logger.error(f'❌ Ошибка добавления колонки device_price_kopeks: {error}')
+        logger.error('❌ Ошибка добавления колонки device_price_kopeks', error=error)
         return False
 
 
@@ -5654,7 +5649,7 @@ async def add_tariff_server_traffic_limits_column() -> bool:
             return True
 
     except Exception as error:
-        logger.error(f'❌ Ошибка добавления колонки server_traffic_limits: {error}')
+        logger.error('❌ Ошибка добавления колонки server_traffic_limits', error=error)
         return False
 
 
@@ -5685,7 +5680,7 @@ async def add_tariff_allow_traffic_topup_column() -> bool:
             return True
 
     except Exception as error:
-        logger.error(f'❌ Ошибка добавления колонки allow_traffic_topup: {error}')
+        logger.error('❌ Ошибка добавления колонки allow_traffic_topup', error=error)
         return False
 
 
@@ -5916,7 +5911,7 @@ async def create_wheel_tables() -> bool:
         return True
 
     except Exception as error:
-        logger.error(f'❌ Ошибка создания таблиц для колеса удачи: {error}')
+        logger.error('❌ Ошибка создания таблиц для колеса удачи', error=error)
         return False
 
 
@@ -5987,7 +5982,7 @@ async def add_tariff_traffic_topup_columns() -> bool:
         return True
 
     except Exception as error:
-        logger.error(f'❌ Ошибка добавления колонок для докупки трафика: {error}')
+        logger.error('❌ Ошибка добавления колонок для докупки трафика', error=error)
         return False
 
 
@@ -6033,7 +6028,7 @@ async def add_tariff_daily_columns() -> bool:
         return True
 
     except Exception as error:
-        logger.error(f'❌ Ошибка добавления колонок суточного тарифа: {error}')
+        logger.error('❌ Ошибка добавления колонок суточного тарифа', error=error)
         return False
 
 
@@ -6144,12 +6139,12 @@ async def add_tariff_custom_days_traffic_columns() -> bool:
             logger.info('ℹ️ Колонка max_traffic_gb уже существует в tariffs')
 
         if columns_added > 0:
-            logger.info(f'✅ Добавлено {columns_added} колонок для произвольных дней/трафика')
+            logger.info('✅ Добавлено колонок для произвольных дней/трафика', columns_added=columns_added)
 
         return True
 
     except Exception as error:
-        logger.error(f'❌ Ошибка добавления колонок произвольных дней/трафика: {error}')
+        logger.error('❌ Ошибка добавления колонок произвольных дней/трафика', error=error)
         return False
 
 
@@ -6169,7 +6164,7 @@ async def add_tariff_traffic_reset_mode_column() -> bool:
             return True
 
     except Exception as error:
-        logger.error(f'❌ Ошибка добавления колонки traffic_reset_mode: {error}')
+        logger.error('❌ Ошибка добавления колонки traffic_reset_mode', error=error)
         return False
 
 
@@ -6221,7 +6216,7 @@ async def add_subscription_daily_columns() -> bool:
         return True
 
     except Exception as error:
-        logger.error(f'❌ Ошибка добавления колонок суточной подписки: {error}')
+        logger.error('❌ Ошибка добавления колонок суточной подписки', error=error)
         return False
 
 
@@ -6246,7 +6241,7 @@ async def add_subscription_traffic_reset_at_column() -> bool:
             return True
 
     except Exception as error:
-        logger.error(f'❌ Ошибка добавления колонки traffic_reset_at: {error}')
+        logger.error('❌ Ошибка добавления колонки traffic_reset_at', error=error)
         return False
 
 
@@ -6271,7 +6266,7 @@ async def add_user_email_auth_columns() -> bool:
                         text("ALTER TABLE users ADD COLUMN auth_type VARCHAR(20) DEFAULT 'telegram' NOT NULL")
                     )
                 else:
-                    logger.error(f'Неподдерживаемый тип БД: {db_type}')
+                    logger.error('Неподдерживаемый тип БД', db_type=db_type)
                     return False
                 logger.info('✅ Добавлена колонка users.auth_type')
             else:
@@ -6325,7 +6320,7 @@ async def add_user_email_auth_columns() -> bool:
         return True
 
     except Exception as error:
-        logger.error(f'❌ Ошибка миграции email auth: {error}')
+        logger.error('❌ Ошибка миграции email auth', error=error)
         return False
 
 
@@ -6389,7 +6384,7 @@ async def create_email_templates_table() -> bool:
             return True
 
     except Exception as error:
-        logger.error(f'❌ Ошибка создания таблицы email_templates: {error}')
+        logger.error('❌ Ошибка создания таблицы email_templates', error=error)
         return False
 
 
@@ -6455,7 +6450,7 @@ async def migrate_cloudpayments_transaction_id_to_bigint() -> bool:
             return True
 
     except Exception as error:
-        logger.error(f'❌ Ошибка миграции transaction_id_cp на BIGINT: {error}')
+        logger.error('❌ Ошибка миграции transaction_id_cp на BIGINT', error=error)
         return False
 
 
@@ -6464,7 +6459,7 @@ async def run_universal_migration():
 
     try:
         db_type = await get_database_type()
-        logger.info(f'Тип базы данных: {db_type}')
+        logger.info('Тип базы данных', db_type=db_type)
 
         if db_type == 'postgresql':
             logger.info('=== СИНХРОНИЗАЦИЯ ПОСЛЕДОВАТЕЛЬНОСТЕЙ PostgreSQL ===')
@@ -6576,18 +6571,18 @@ async def run_universal_migration():
             logger.warning('⚠️ Проблемы с таблицей Heleket payments')
 
         mulenpay_name = settings.get_mulenpay_display_name()
-        logger.info('=== СОЗДАНИЕ ТАБЛИЦЫ %s ===', mulenpay_name)
+        logger.info('=== СОЗДАНИЕ ТАБЛИЦЫ =', mulenpay_name=mulenpay_name)
         mulenpay_created = await create_mulenpay_payments_table()
         if mulenpay_created:
-            logger.info('✅ Таблица %s payments готова', mulenpay_name)
+            logger.info('✅ Таблица payments готова', mulenpay_name=mulenpay_name)
         else:
-            logger.warning('⚠️ Проблемы с таблицей %s payments', mulenpay_name)
+            logger.warning('⚠️ Проблемы с таблицей payments', mulenpay_name=mulenpay_name)
 
         mulenpay_schema_ok = await ensure_mulenpay_payment_schema()
         if mulenpay_schema_ok:
-            logger.info('✅ Схема %s payments актуальна', mulenpay_name)
+            logger.info('✅ Схема payments актуальна', mulenpay_name=mulenpay_name)
         else:
-            logger.warning('⚠️ Не удалось обновить схему %s payments', mulenpay_name)
+            logger.warning('⚠️ Не удалось обновить схему payments', mulenpay_name=mulenpay_name)
 
         logger.info('=== СОЗДАНИЕ ТАБЛИЦЫ PAL24 ===')
         pal24_created = await create_pal24_payments_table()
@@ -6821,14 +6816,12 @@ async def run_universal_migration():
         else:
             logger.warning('⚠️ Не удалось обновить колонку last_pinned_message_id')
 
-        logger.info('=== ДОБАВЛЕНИЕ МЕДИА ПОЛЕЙ В BROADCAST_HISTORY ===')
         media_fields_added = await add_media_fields_to_broadcast_history()
         if media_fields_added:
             logger.info('✅ Медиа поля в broadcast_history готовы')
         else:
             logger.warning('⚠️ Проблемы с добавлением медиа полей')
 
-        logger.info('=== ДОБАВЛЕНИЕ EMAIL ПОЛЕЙ В BROADCAST_HISTORY ===')
         email_fields_added = await add_email_fields_to_broadcast_history()
         if email_fields_added:
             logger.info('✅ Email поля в broadcast_history готовы')
@@ -6948,9 +6941,8 @@ async def run_universal_migration():
                 else:
                     logger.info('ℹ️ Таблица support_audit_logs уже существует')
         except Exception as e:
-            logger.warning(f'⚠️ Проблемы с созданием таблицы support_audit_logs: {e}')
+            logger.warning('⚠️ Проблемы с созданием таблицы support_audit_logs', error=e)
 
-        logger.info('=== НАСТРОЙКА ПРОМО ГРУПП ===')
         promo_groups_ready = await ensure_promo_groups_setup()
         if promo_groups_ready:
             logger.info('✅ Промо группы готовы')
@@ -7145,8 +7137,8 @@ async def run_universal_migration():
             total_count = total_subs.fetchone()[0]
             unique_count = unique_users.fetchone()[0]
 
-            logger.info(f'Всего подписок: {total_count}')
-            logger.info(f'Уникальных пользователей: {unique_count}')
+            logger.info('Всего подписок', total_count=total_count)
+            logger.info('Уникальных пользователей', unique_count=unique_count)
 
             if total_count == unique_count:
                 logger.info('База данных уже в корректном состоянии')
@@ -7168,7 +7160,9 @@ async def run_universal_migration():
             remaining_duplicates = final_check.fetchall()
 
             if remaining_duplicates:
-                logger.warning(f'Остались дубликаты у {len(remaining_duplicates)} пользователей')
+                logger.warning(
+                    'Остались дубликаты у пользователей', remaining_duplicates_count=len(remaining_duplicates)
+                )
                 return False
             logger.info('=== МИГРАЦИЯ ЗАВЕРШЕНА УСПЕШНО ===')
             logger.info('✅ Реферальная система обновлена')
@@ -7182,7 +7176,7 @@ async def run_universal_migration():
             return True
 
     except Exception as e:
-        logger.error(f'=== ОШИБКА ВЫПОЛНЕНИЯ МИГРАЦИИ: {e} ===')
+        logger.error('ОШИБКА ВЫПОЛНЕНИЯ МИГРАЦИИ', error=e)
         return False
 
 
@@ -7470,7 +7464,9 @@ async def check_migration_status():
         for check_key, check_status in status.items():
             check_name = check_names.get(check_key, check_key)
             icon = '✅' if check_status else '❌'
-            logger.info(f'{icon} {check_name}: {"OK" if check_status else "ТРЕБУЕТ ВНИМАНИЯ"}')
+            logger.info(
+                'log event', icon=icon, check_name=check_name, value='OK' if check_status else 'ТРЕБУЕТ ВНИМАНИЯ'
+            )
 
         all_good = all(status.values())
         if all_good:
@@ -7489,18 +7485,22 @@ async def check_migration_status():
                     broadcast_count = broadcasts_count.fetchone()[0]
 
                     logger.info(
-                        f'📊 Статистика: {usr_count} пользователей, {conv_count} конверсий, {welcome_count} приветственных текстов, {broadcast_count} рассылок'
+                        '📊 Статистика: пользователей, конверсий, приветственных текстов, рассылок',
+                        usr_count=usr_count,
+                        conv_count=conv_count,
+                        welcome_count=welcome_count,
+                        broadcast_count=broadcast_count,
                     )
             except Exception as stats_error:
-                logger.debug(f'Не удалось получить дополнительную статистику: {stats_error}')
+                logger.debug('Не удалось получить дополнительную статистику', stats_error=stats_error)
 
         else:
             logger.warning('⚠️ Некоторые миграции требуют внимания')
             missing_migrations = [check_names[k] for k, v in status.items() if not v]
-            logger.warning(f'Требуют выполнения: {", ".join(missing_migrations)}')
+            logger.warning('Требуют выполнения', value=', '.join(missing_migrations))
 
         return status
 
     except Exception as e:
-        logger.error(f'Ошибка проверки статуса миграций: {e}')
+        logger.error('Ошибка проверки статуса миграций', error=e)
         return None

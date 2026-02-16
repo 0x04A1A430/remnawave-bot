@@ -1,8 +1,8 @@
 """Polls routes for cabinet - user participation in polls/surveys."""
 
-import logging
 from datetime import datetime
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -20,7 +20,7 @@ from app.services.poll_service import get_next_question, get_question_option, re
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/polls', tags=['Cabinet Polls'])
 

@@ -1,16 +1,16 @@
 """CRUD операции для платежей KassaAI."""
 
 import json
-import logging
 from datetime import datetime
 
+import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import KassaAiPayment
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def create_kassa_ai_payment(
@@ -43,7 +43,7 @@ async def create_kassa_ai_payment(
     db.add(payment)
     await db.commit()
     await db.refresh(payment)
-    logger.info(f'Создан платеж KassaAI: order_id={order_id}, user_id={user_id}')
+    logger.info('Создан платеж KassaAI: order_id=, user_id', order_id=order_id, user_id=user_id)
     return payment
 
 
@@ -94,7 +94,12 @@ async def update_kassa_ai_payment_status(
 
     await db.commit()
     await db.refresh(payment)
-    logger.info(f'Обновлен статус платежа KassaAI: order_id={payment.order_id}, status={status}, is_paid={is_paid}')
+    logger.info(
+        'Обновлен статус платежа KassaAI: order_id=, status=, is_paid',
+        order_id=payment.order_id,
+        status=status,
+        is_paid=is_paid,
+    )
     return payment
 
 

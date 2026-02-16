@@ -121,7 +121,7 @@ class YooKassaPaymentMixin:
                         payment_metadata['user_telegram_id'] = str(user.telegram_id)
                         payment_metadata['user_username'] = user.username or ''
                 except Exception as e:
-                    logger.warning(f'Не удалось получить telegram_id для user_id={user_id}: {e}')
+                    logger.warning('Не удалось получить telegram_id для user_id', user_id=user_id, error=e)
 
             # Preserve existing type from metadata if passed (e.g., "trial")
             existing_type = payment_metadata.get('type')
@@ -143,7 +143,7 @@ class YooKassaPaymentMixin:
             )
 
             if not yookassa_response or yookassa_response.get('error'):
-                logger.error('Ошибка создания платежа YooKassa: %s', yookassa_response)
+                logger.error('Ошибка создания платежа YooKassa', yookassa_response=yookassa_response)
                 return None
 
             yookassa_created_at: datetime | None = None
@@ -152,7 +152,7 @@ class YooKassaPaymentMixin:
                     dt_with_tz = datetime.fromisoformat(yookassa_response['created_at'].replace('Z', '+00:00'))
                     yookassa_created_at = dt_with_tz.replace(tzinfo=None)
                 except Exception as error:
-                    logger.warning('Не удалось распарсить created_at: %s', error)
+                    logger.warning('Не удалось распарсить created_at', error=error)
                     yookassa_created_at = None
 
             local_payment = await payment_module.create_yookassa_payment(
@@ -171,10 +171,10 @@ class YooKassaPaymentMixin:
             )
 
             logger.info(
-                'Создан платеж YooKassa %s на %s₽ для пользователя %s',
-                yookassa_response['id'],
-                amount_rubles,
-                user_id,
+                'Создан платеж YooKassa на ₽ для пользователя',
+                yookassa_response=yookassa_response['id'],
+                amount_rubles=amount_rubles,
+                user_id=user_id,
             )
 
             return {
@@ -188,7 +188,7 @@ class YooKassaPaymentMixin:
             }
 
         except Exception as error:
-            logger.error('Ошибка создания платежа YooKassa: %s', error)
+            logger.error('Ошибка создания платежа YooKassa', error=error)
             return None
 
     async def create_yookassa_sbp_payment(
@@ -223,7 +223,7 @@ class YooKassaPaymentMixin:
                         payment_metadata['user_telegram_id'] = str(user.telegram_id)
                         payment_metadata['user_username'] = user.username or ''
                 except Exception as e:
-                    logger.warning(f'Не удалось получить telegram_id для user_id={user_id}: {e}')
+                    logger.warning('Не удалось получить telegram_id для user_id', user_id=user_id, error=e)
 
             # Preserve existing type from metadata if passed (e.g., "trial")
             existing_type = payment_metadata.get('type')
@@ -245,10 +245,7 @@ class YooKassaPaymentMixin:
             )
 
             if not yookassa_response or yookassa_response.get('error'):
-                logger.error(
-                    'Ошибка создания платежа YooKassa СБП: %s',
-                    yookassa_response,
-                )
+                logger.error('Ошибка создания платежа YooKassa СБП', yookassa_response=yookassa_response)
                 return None
 
             local_payment = await payment_module.create_yookassa_payment(
@@ -267,10 +264,10 @@ class YooKassaPaymentMixin:
             )
 
             logger.info(
-                'Создан платеж YooKassa СБП %s на %s₽ для пользователя %s',
-                yookassa_response['id'],
-                amount_rubles,
-                user_id,
+                'Создан платеж YooKassa СБП на ₽ для пользователя',
+                yookassa_response=yookassa_response['id'],
+                amount_rubles=amount_rubles,
+                user_id=user_id,
             )
 
             confirmation_token = (yookassa_response.get('confirmation', {}) or {}).get('confirmation_token')
@@ -288,7 +285,7 @@ class YooKassaPaymentMixin:
             }
 
         except Exception as error:
-            logger.error('Ошибка создания платежа YooKassa СБП: %s', error)
+            logger.error('Ошибка создания платежа YooKassa СБП', error=error)
             return None
 
     async def get_yookassa_payment_status(
@@ -313,9 +310,7 @@ class YooKassaPaymentMixin:
                 )
             except Exception as error:  # pragma: no cover - defensive logging
                 logger.error(
-                    'Ошибка получения статуса YooKassa %s: %s',
-                    payment.yookassa_payment_id,
-                    error,
+                    'Ошибка получения статуса YooKassa', yookassa_payment_id=payment.yookassa_payment_id, error=error
                 )
 
         if remote_data:
@@ -328,9 +323,7 @@ class YooKassaPaymentMixin:
                     captured_at = datetime.fromisoformat(str(captured_raw).replace('Z', '+00:00')).replace(tzinfo=None)
                 except Exception as parse_error:  # pragma: no cover - diagnostic log
                     logger.debug(
-                        'Не удалось распарсить captured_at %s: %s',
-                        captured_raw,
-                        parse_error,
+                        'Не удалось распарсить captured_at', captured_raw=captured_raw, parse_error=parse_error
                     )
                     captured_at = None
 
@@ -358,26 +351,26 @@ class YooKassaPaymentMixin:
                     transaction_id = getattr(payment, 'transaction_id', None)
                 except Exception as refresh_error:  # pragma: no cover - defensive logging
                     logger.warning(
-                        'Не удалось обновить состояние платежа YooKassa %s перед повторной обработкой: %s',
-                        payment.yookassa_payment_id,
-                        refresh_error,
+                        'Не удалось обновить состояние платежа YooKassa перед повторной обработкой',
+                        yookassa_payment_id=payment.yookassa_payment_id,
+                        refresh_error=refresh_error,
                         exc_info=True,
                     )
 
             if transaction_id:
                 logger.info(
-                    'Пропускаем повторную обработку платежа YooKassa %s: уже связан с транзакцией %s',
-                    payment.yookassa_payment_id,
-                    transaction_id,
+                    'Пропускаем повторную обработку платежа YooKassa : уже связан с транзакцией',
+                    yookassa_payment_id=payment.yookassa_payment_id,
+                    transaction_id=transaction_id,
                 )
             else:
                 try:
                     await self._process_successful_yookassa_payment(db, payment)
                 except Exception as process_error:  # pragma: no cover - defensive logging
                     logger.error(
-                        'Ошибка обработки успешного платежа YooKassa %s: %s',
-                        payment.yookassa_payment_id,
-                        process_error,
+                        'Ошибка обработки успешного платежа YooKassa',
+                        yookassa_payment_id=payment.yookassa_payment_id,
+                        process_error=process_error,
                         exc_info=True,
                     )
 
@@ -406,9 +399,9 @@ class YooKassaPaymentMixin:
             # Fast-path: already processed
             if getattr(payment, 'transaction_id', None):
                 logger.info(
-                    'Платеж YooKassa %s уже обработан (transaction_id=%s), пропускаем.',
-                    payment.yookassa_payment_id,
-                    payment.transaction_id,
+                    'Платеж YooKassa уже обработан (transaction_id=), пропускаем.',
+                    yookassa_payment_id=payment.yookassa_payment_id,
+                    transaction_id=payment.transaction_id,
                 )
                 return True
 
@@ -430,9 +423,9 @@ class YooKassaPaymentMixin:
             if existing_transaction:
                 # Если транзакция уже существует, просто завершаем обработку
                 logger.info(
-                    'Платеж YooKassa %s уже был обработан транзакцией %s. Пропускаем повторную обработку.',
-                    payment.yookassa_payment_id,
-                    existing_transaction.id,
+                    'Платеж YooKassa уже был обработан транзакцией . Пропускаем повторную обработку.',
+                    yookassa_payment_id=payment.yookassa_payment_id,
+                    existing_transaction_id=existing_transaction.id,
                 )
 
                 # Убедимся, что платеж связан с транзакцией
@@ -453,10 +446,10 @@ class YooKassaPaymentMixin:
                                 payment.transaction = linked_payment.transaction
                     except Exception as link_error:  # pragma: no cover - защитный лог
                         logger.warning(
-                            'Не удалось привязать платеж YooKassa %s к существующей транзакции %s: %s',
-                            payment.yookassa_payment_id,
-                            existing_transaction.id,
-                            link_error,
+                            'Не удалось привязать платеж YooKassa к существующей транзакции',
+                            yookassa_payment_id=payment.yookassa_payment_id,
+                            existing_transaction_id=existing_transaction.id,
+                            link_error=link_error,
                             exc_info=True,
                         )
 
@@ -471,9 +464,9 @@ class YooKassaPaymentMixin:
                         payment_metadata = json.loads(payment.metadata_json)
                     elif isinstance(payment.metadata_json, dict):
                         payment_metadata = payment.metadata_json
-                    logger.info(f'Метаданные платежа: {payment_metadata}')
+                    logger.info('Метаданные платежа', payment_metadata=payment_metadata)
             except Exception as parse_error:
-                logger.error(f'Ошибка парсинга метаданных платежа: {parse_error}')
+                logger.error('Ошибка парсинга метаданных платежа', parse_error=parse_error)
 
             invoice_message = payment_metadata.get('invoice_message') or {}
             if getattr(self, 'bot', None):
@@ -484,9 +477,7 @@ class YooKassaPaymentMixin:
                         await self.bot.delete_message(chat_id, message_id)
                     except Exception as delete_error:  # pragma: no cover - depends on bot rights
                         logger.warning(
-                            'Не удалось удалить сообщение YooKassa %s: %s',
-                            message_id,
-                            delete_error,
+                            'Не удалось удалить сообщение YooKassa', message_id=message_id, delete_error=delete_error
                         )
                     else:
                         payment_metadata.pop('invoice_message', None)
@@ -503,26 +494,26 @@ class YooKassaPaymentMixin:
                     transaction = await get_transaction_by_id(db, existing_transaction_id)
                 except Exception as fetch_error:  # pragma: no cover - диагностический лог
                     logger.warning(
-                        'Не удалось получить транзакцию %s для платежа YooKassa %s: %s',
-                        existing_transaction_id,
-                        payment.yookassa_payment_id,
-                        fetch_error,
+                        'Не удалось получить транзакцию для платежа YooKassa',
+                        existing_transaction_id=existing_transaction_id,
+                        yookassa_payment_id=payment.yookassa_payment_id,
+                        fetch_error=fetch_error,
                         exc_info=True,
                     )
 
                 if transaction and processing_completed:
                     logger.info(
-                        'Пропускаем повторную обработку платежа YooKassa %s: транзакция %s уже завершила начисление.',
-                        payment.yookassa_payment_id,
-                        existing_transaction_id,
+                        'Пропускаем повторную обработку платежа YooKassa : транзакция уже завершила начисление.',
+                        yookassa_payment_id=payment.yookassa_payment_id,
+                        existing_transaction_id=existing_transaction_id,
                     )
                     return True
 
                 if transaction:
                     logger.info(
-                        'Транзакция %s для платежа YooKassa %s найдена, но обработка ранее не была завершена — повторяем критические шаги.',
-                        existing_transaction_id,
-                        payment.yookassa_payment_id,
+                        'Транзакция для платежа YooKassa найдена, но обработка ранее не была завершена — повторяем критические шаги.',
+                        existing_transaction_id=existing_transaction_id,
+                        yookassa_payment_id=payment.yookassa_payment_id,
                     )
 
             if transaction is None:
@@ -542,9 +533,9 @@ class YooKassaPaymentMixin:
                 if existing_transaction:
                     # Если транзакция уже существует, пропускаем обработку
                     logger.info(
-                        'Платеж YooKassa %s уже был обработан транзакцией %s. Пропускаем повторную обработку.',
-                        payment.yookassa_payment_id,
-                        existing_transaction.id,
+                        'Платеж YooKassa уже был обработан транзакцией . Пропускаем повторную обработку.',
+                        yookassa_payment_id=payment.yookassa_payment_id,
+                        existing_transaction_id=existing_transaction.id,
                     )
 
                     # Убедимся, что платеж связан с транзакцией
@@ -565,10 +556,10 @@ class YooKassaPaymentMixin:
                                     payment.transaction = linked_payment.transaction
                         except Exception as link_error:  # pragma: no cover - защитный лог
                             logger.warning(
-                                'Не удалось привязать платеж YooKassa %s к существующей транзакции %s: %s',
-                                payment.yookassa_payment_id,
-                                existing_transaction.id,
-                                link_error,
+                                'Не удалось привязать платеж YooKassa к существующей транзакции',
+                                yookassa_payment_id=payment.yookassa_payment_id,
+                                existing_transaction_id=existing_transaction.id,
+                                link_error=link_error,
                                 exc_info=True,
                             )
 
@@ -627,9 +618,9 @@ class YooKassaPaymentMixin:
                 if is_trial_payment:
                     # Обработка платного триала
                     logger.info(
-                        'YooKassa платеж %s обработан как оплата триала. Баланс пользователя %s не изменяется.',
-                        payment.yookassa_payment_id,
-                        user.id,
+                        'YooKassa платеж обработан как оплата триала. Баланс пользователя не изменяется.',
+                        yookassa_payment_id=payment.yookassa_payment_id,
+                        user_id=user.id,
                     )
                     try:
                         subscription_id = payment_metadata.get('subscription_id')
@@ -646,7 +637,9 @@ class YooKassaPaymentMixin:
 
                             if subscription:
                                 logger.info(
-                                    f'Триальная подписка {subscription_id} активирована для пользователя {user.id}'
+                                    'Триальная подписка активирована для пользователя',
+                                    subscription_id=subscription_id,
+                                    user_id=user.id,
                                 )
 
                                 # Создаем пользователя в RemnaWave
@@ -654,7 +647,7 @@ class YooKassaPaymentMixin:
                                 try:
                                     await subscription_service.create_remnawave_user(db, subscription)
                                 except Exception as rw_error:
-                                    logger.error(f'Ошибка создания RemnaWave для триала: {rw_error}')
+                                    logger.error('Ошибка создания RemnaWave для триала', rw_error=rw_error)
 
                                 # Уведомление админам
                                 if getattr(self, 'bot', None):
@@ -667,7 +660,7 @@ class YooKassaPaymentMixin:
                                             payment_method='YooKassa',
                                         )
                                     except Exception as admin_error:
-                                        logger.warning(f'Ошибка уведомления админов о триале: {admin_error}')
+                                        logger.warning('Ошибка уведомления админов о триале', admin_error=admin_error)
 
                                 # Уведомление пользователю (только для Telegram-пользователей)
                                 if getattr(self, 'bot', None) and user.telegram_id:
@@ -684,23 +677,31 @@ class YooKassaPaymentMixin:
                                             parse_mode='HTML',
                                         )
                                     except Exception as notify_error:
-                                        logger.warning(f'Ошибка уведомления пользователя о триале: {notify_error}')
+                                        logger.warning(
+                                            'Ошибка уведомления пользователя о триале', notify_error=notify_error
+                                        )
                                 elif not user.telegram_id:
                                     logger.info(
-                                        f'Пропуск Telegram-уведомления о триале для email-пользователя {user.id}'
+                                        'Пропуск Telegram-уведомления о триале для email-пользователя', user_id=user.id
                                     )
                             else:
-                                logger.error(f'Не удалось активировать триал {subscription_id} для {user.id}')
+                                logger.error(
+                                    'Не удалось активировать триал для',
+                                    subscription_id=subscription_id,
+                                    user_id=user.id,
+                                )
                         else:
                             logger.error('Отсутствует subscription_id в metadata триального платежа YooKassa')
                     except Exception as trial_error:
-                        logger.error(f'Ошибка обработки триального платежа YooKassa: {trial_error}', exc_info=True)
+                        logger.error(
+                            'Ошибка обработки триального платежа YooKassa', trial_error=trial_error, exc_info=True
+                        )
 
                 elif is_simple_subscription:
                     logger.info(
-                        'YooKassa платеж %s обработан как покупка подписки. Баланс пользователя %s не изменяется.',
-                        payment.yookassa_payment_id,
-                        user.id,
+                        'YooKassa платеж обработан как покупка подписки. Баланс пользователя не изменяется.',
+                        yookassa_payment_id=payment.yookassa_payment_id,
+                        user_id=user.id,
                     )
 
                     # Начисляем реферальную комиссию за прямую покупку подписки
@@ -715,8 +716,7 @@ class YooKassaPaymentMixin:
                         )
                     except Exception as ref_error:
                         logger.error(
-                            'Ошибка реферального начисления при покупке подписки YooKassa: %s',
-                            ref_error,
+                            'Ошибка реферального начисления при покупке подписки YooKassa', ref_error=ref_error
                         )
                 else:
                     old_balance = getattr(user, 'balance_kopeks', 0)
@@ -772,10 +772,7 @@ class YooKassaPaymentMixin:
                             getattr(self, 'bot', None),
                         )
                     except Exception as error:
-                        logger.error(
-                            'Ошибка обработки реферального пополнения YooKassa: %s',
-                            error,
-                        )
+                        logger.error('Ошибка обработки реферального пополнения YooKassa', error=error)
 
                     if was_first_topup and not getattr(user, 'has_made_first_topup', False):
                         user.has_made_first_topup = True
@@ -806,9 +803,7 @@ class YooKassaPaymentMixin:
                             logger.info('Уведомление админам о пополнении отправлено успешно')
                         except Exception as error:
                             logger.error(
-                                'Ошибка отправки уведомления админам о YooKassa пополнении: %s',
-                                error,
-                                exc_info=True,  # Добавляем полный стек вызовов для отладки
+                                'Ошибка отправки уведомления админам о YooKassa пополнении', error=error, exc_info=True
                             )
 
                     # Отправляем уведомление пользователю (только Telegram-пользователям)
@@ -824,23 +819,19 @@ class YooKassaPaymentMixin:
                             )
                             logger.info('Уведомление пользователю о платеже отправлено успешно')
                         except Exception as error:
-                            logger.error(
-                                'Ошибка отправки уведомления о платеже: %s',
-                                error,
-                                exc_info=True,  # Добавляем полный стек вызовов для отладки
-                            )
+                            logger.error('Ошибка отправки уведомления о платеже', error=error, exc_info=True)
 
                     # Проверяем наличие сохраненной корзины для возврата к оформлению подписки
                     # ВАЖНО: этот код должен выполняться даже при ошибках в уведомлениях
-                    logger.info(f'Проверяем наличие сохраненной корзины для пользователя {user.id}')
+                    logger.info('Проверяем наличие сохраненной корзины для пользователя', user_id=user.id)
                     from app.services.user_cart_service import user_cart_service
 
                     try:
                         has_saved_cart = await user_cart_service.has_user_cart(user.id)
                         logger.info(
-                            'Результат проверки корзины для пользователя %s: %s',
-                            user.id,
-                            has_saved_cart,
+                            'Результат проверки корзины для пользователя',
+                            user_id=user.id,
+                            has_saved_cart=has_saved_cart,
                         )
 
                         auto_purchase_success = False
@@ -853,9 +844,9 @@ class YooKassaPaymentMixin:
                                 )
                             except Exception as auto_error:
                                 logger.error(
-                                    'Ошибка автоматической покупки подписки для пользователя %s: %s',
-                                    user.id,
-                                    auto_error,
+                                    'Ошибка автоматической покупки подписки для пользователя',
+                                    user_id=user.id,
+                                    auto_error=auto_error,
                                     exc_info=True,
                                 )
 
@@ -908,21 +899,24 @@ class YooKassaPaymentMixin:
                                 reply_markup=keyboard,
                             )
                             logger.info(
-                                f'Отправлено уведомление с кнопкой возврата к оформлению подписки пользователю {user.id}'
+                                'Отправлено уведомление с кнопкой возврата к оформлению подписки пользователю',
+                                user_id=user.id,
                             )
                         else:
                             logger.info(
-                                'У пользователя %s нет сохраненной корзины, бот недоступен или покупка уже выполнена',
-                                user.id,
+                                'У пользователя нет сохраненной корзины, бот недоступен или покупка уже выполнена',
+                                user_id=user.id,
                             )
                     except Exception as e:
                         logger.error(
-                            f'Критическая ошибка при работе с сохраненной корзиной для пользователя {user.id}: {e}',
+                            'Критическая ошибка при работе с сохраненной корзиной для пользователя',
+                            user_id=user.id,
+                            error=e,
                             exc_info=True,
                         )
 
                 if is_simple_subscription:
-                    logger.info(f'Обнаружен платеж простой покупки подписки для пользователя {user.id}')
+                    logger.info('Обнаружен платеж простой покупки подписки для пользователя', user_id=user.id)
                     try:
                         # Активируем подписку
                         from app.services.subscription_service import SubscriptionService
@@ -933,7 +927,11 @@ class YooKassaPaymentMixin:
                         subscription_period = int(payment_metadata.get('subscription_period', 30))
                         order_id = payment_metadata.get('order_id')
 
-                        logger.info(f'Активация подписки: период={subscription_period} дней, заказ={order_id}')
+                        logger.info(
+                            'Активация подписки: период= дней, заказ',
+                            subscription_period=subscription_period,
+                            order_id=order_id,
+                        )
 
                         # Активируем pending подписку пользователя
                         from app.database.crud.subscription import activate_pending_subscription
@@ -943,7 +941,7 @@ class YooKassaPaymentMixin:
                         )
 
                         if subscription:
-                            logger.info(f'Подписка успешно активирована для пользователя {user.id}')
+                            logger.info('Подписка успешно активирована для пользователя', user_id=user.id)
 
                             # Обновляем данные подписки в RemnaWave, чтобы получить актуальные ссылки
                             try:
@@ -952,9 +950,9 @@ class YooKassaPaymentMixin:
                                     await db.refresh(subscription)
                             except Exception as sync_error:
                                 logger.error(
-                                    'Ошибка синхронизации подписки с RemnaWave для пользователя %s: %s',
-                                    user.id,
-                                    sync_error,
+                                    'Ошибка синхронизации подписки с RemnaWave для пользователя',
+                                    user_id=user.id,
+                                    sync_error=sync_error,
                                     exc_info=True,
                                 )
 
@@ -997,7 +995,9 @@ class YooKassaPaymentMixin:
                                     parse_mode='HTML',
                                 )
                             elif not user.telegram_id:
-                                logger.info(f'Пропуск Telegram-уведомления о подписке для email-пользователя {user.id}')
+                                logger.info(
+                                    'Пропуск Telegram-уведомления о подписке для email-пользователя', user_id=user.id
+                                )
 
                             if getattr(self, 'bot', None):
                                 try:
@@ -1038,14 +1038,16 @@ class YooKassaPaymentMixin:
                                     )
                                 except Exception as admin_error:
                                     logger.error(
-                                        'Ошибка отправки уведомления админам о покупке подписки через YooKassa: %s',
-                                        admin_error,
+                                        'Ошибка отправки уведомления админам о покупке подписки через YooKassa',
+                                        admin_error=admin_error,
                                         exc_info=True,
                                     )
                         else:
-                            logger.error(f'Ошибка активации подписки для пользователя {user.id}')
+                            logger.error('Ошибка активации подписки для пользователя', user_id=user.id)
                     except Exception as e:
-                        logger.error(f'Ошибка активации подписки для пользователя {user.id}: {e}', exc_info=True)
+                        logger.error(
+                            'Ошибка активации подписки для пользователя', user_id=user.id, error=e, exc_info=True
+                        )
 
                     if not processing_marked:
                         payment_metadata = await self._mark_yookassa_payment_processing_completed(
@@ -1059,9 +1061,9 @@ class YooKassaPaymentMixin:
                 critical_flow_completed = True
             else:
                 logger.warning(
-                    'Пользователь %s для платежа YooKassa %s не найден — начисление баланса невозможно',
-                    payment.user_id,
-                    payment.yookassa_payment_id,
+                    'Пользователь для платежа YooKassa не найден — начисление баланса невозможно',
+                    user_id=payment.user_id,
+                    yookassa_payment_id=payment.yookassa_payment_id,
                 )
 
             if critical_flow_completed and not processing_marked:
@@ -1074,17 +1076,17 @@ class YooKassaPaymentMixin:
 
             if is_simple_subscription:
                 logger.info(
-                    'Успешно обработан платеж YooKassa %s как покупка подписки: пользователь %s, сумма %s₽',
-                    payment.yookassa_payment_id,
-                    payment.user_id,
-                    payment.amount_kopeks / 100,
+                    'Успешно обработан платеж YooKassa как покупка подписки: пользователь , сумма ₽',
+                    yookassa_payment_id=payment.yookassa_payment_id,
+                    user_id=payment.user_id,
+                    amount_kopeks=payment.amount_kopeks / 100,
                 )
             else:
                 logger.info(
-                    'Успешно обработан платеж YooKassa %s: пользователь %s пополнил баланс на %s₽',
-                    payment.yookassa_payment_id,
-                    payment.user_id,
-                    payment.amount_kopeks / 100,
+                    'Успешно обработан платеж YooKassa : пользователь пополнил баланс на ₽',
+                    yookassa_payment_id=payment.yookassa_payment_id,
+                    user_id=payment.user_id,
+                    amount_kopeks=payment.amount_kopeks / 100,
                 )
 
             # Создаем чек через NaloGO (если NALOGO_ENABLED=true)
@@ -1100,9 +1102,9 @@ class YooKassaPaymentMixin:
 
         except Exception as error:
             logger.error(
-                'Ошибка обработки успешного платежа YooKassa %s: %s',
-                payment.yookassa_payment_id,
-                error,
+                'Ошибка обработки успешного платежа YooKassa',
+                yookassa_payment_id=payment.yookassa_payment_id,
+                error=error,
             )
             return False
 
@@ -1139,9 +1141,9 @@ class YooKassaPaymentMixin:
             payment.metadata_json = updated_metadata
         except Exception as mark_error:  # pragma: no cover - защитный лог
             logger.warning(
-                'Не удалось отметить платеж YooKassa %s как завершенный: %s',
-                payment.yookassa_payment_id,
-                mark_error,
+                'Не удалось отметить платеж YooKassa как завершенный',
+                yookassa_payment_id=payment.yookassa_payment_id,
+                mark_error=mark_error,
                 exc_info=True,
             )
 
@@ -1162,8 +1164,9 @@ class YooKassaPaymentMixin:
         # Защита от дублей: если у транзакции уже есть чек — не создаём новый
         if transaction and getattr(transaction, 'receipt_uuid', None):
             logger.info(
-                f'Чек для платежа {payment.yookassa_payment_id} уже создан: {transaction.receipt_uuid}, '
-                'пропускаем повторное создание'
+                'Чек для платежа уже создан: пропускаем повторное создание',
+                yookassa_payment_id=payment.yookassa_payment_id,
+                receipt_uuid=transaction.receipt_uuid,
             )
             return
 
@@ -1182,7 +1185,11 @@ class YooKassaPaymentMixin:
             )
 
             if receipt_uuid:
-                logger.info(f'Чек NaloGO создан для платежа {payment.yookassa_payment_id}: {receipt_uuid}')
+                logger.info(
+                    'Чек NaloGO создан для платежа',
+                    yookassa_payment_id=payment.yookassa_payment_id,
+                    receipt_uuid=receipt_uuid,
+                )
 
                 # Сохраняем receipt_uuid в транзакцию
                 if transaction:
@@ -1190,16 +1197,18 @@ class YooKassaPaymentMixin:
                         transaction.receipt_uuid = receipt_uuid
                         transaction.receipt_created_at = datetime.utcnow()
                         await db.commit()
-                        logger.debug(f'Чек {receipt_uuid} привязан к транзакции {transaction.id}')
+                        logger.debug(
+                            'Чек привязан к транзакции', receipt_uuid=receipt_uuid, transaction_id=transaction.id
+                        )
                     except Exception as save_error:
-                        logger.warning(f'Не удалось сохранить receipt_uuid в транзакцию: {save_error}')
+                        logger.warning('Не удалось сохранить receipt_uuid в транзакцию', save_error=save_error)
             # При временной недоступности чек добавляется в очередь автоматически
 
         except Exception as error:
             logger.error(
-                'Ошибка создания чека NaloGO для платежа %s: %s',
-                payment.yookassa_payment_id,
-                error,
+                'Ошибка создания чека NaloGO для платежа',
+                yookassa_payment_id=payment.yookassa_payment_id,
+                error=error,
                 exc_info=True,
             )
 
@@ -1213,7 +1222,7 @@ class YooKassaPaymentMixin:
         yookassa_payment_id = event_object.get('id')
 
         if not yookassa_payment_id:
-            logger.warning('Webhook без payment id: %s', event)
+            logger.warning('Webhook без payment id', event=event)
             return False
 
         remote_data: dict[str, Any] | None = None
@@ -1224,9 +1233,9 @@ class YooKassaPaymentMixin:
                 )
             except Exception as error:  # pragma: no cover - диагностический лог
                 logger.warning(
-                    'Не удалось запросить актуальный статус платежа YooKassa %s: %s',
-                    yookassa_payment_id,
-                    error,
+                    'Не удалось запросить актуальный статус платежа YooKassa',
+                    yookassa_payment_id=yookassa_payment_id,
+                    error=error,
                     exc_info=True,
                 )
 
@@ -1235,10 +1244,10 @@ class YooKassaPaymentMixin:
             event_object = self._merge_remote_yookassa_payload(event_object, remote_data)
             if previous_status and event_object.get('status') != previous_status:
                 logger.info(
-                    'Статус платежа YooKassa %s скорректирован по данным API: %s → %s',
-                    yookassa_payment_id,
-                    previous_status,
-                    event_object.get('status'),
+                    'Статус платежа YooKassa скорректирован по данным API: →',
+                    yookassa_payment_id=yookassa_payment_id,
+                    previous_status=previous_status,
+                    event_object=event_object.get('status'),
                 )
             event['object'] = event_object
 
@@ -1246,13 +1255,12 @@ class YooKassaPaymentMixin:
 
         payment = await payment_module.get_yookassa_payment_by_id(db, yookassa_payment_id)
         if not payment:
-            logger.warning('Локальный платеж для YooKassa id %s не найден', yookassa_payment_id)
+            logger.warning('Локальный платеж для YooKassa id не найден', yookassa_payment_id=yookassa_payment_id)
             payment = await self._restore_missing_yookassa_payment(db, event_object)
 
             if not payment:
                 logger.error(
-                    'Не удалось восстановить локальную запись платежа YooKassa %s',
-                    yookassa_payment_id,
+                    'Не удалось восстановить локальную запись платежа YooKassa', yookassa_payment_id=yookassa_payment_id
                 )
                 return False
 
@@ -1274,11 +1282,7 @@ class YooKassaPaymentMixin:
                     tzinfo=None
                 )
             except Exception as error:
-                logger.debug(
-                    'Не удалось распарсить captured_at=%s: %s',
-                    captured_at_raw,
-                    error,
-                )
+                logger.debug('Не удалось распарсить captured_at', captured_at_raw=captured_at_raw, error=error)
 
         await db.commit()
         await db.refresh(payment)
@@ -1287,9 +1291,9 @@ class YooKassaPaymentMixin:
             return await self._process_successful_yookassa_payment(db, payment)
 
         logger.info(
-            'Webhook YooKassa обновил платеж %s до статуса %s',
-            yookassa_payment_id,
-            payment.status,
+            'Webhook YooKassa обновил платеж до статуса',
+            yookassa_payment_id=yookassa_payment_id,
+            payment_status=payment.status,
         )
         return True
 
@@ -1309,8 +1313,8 @@ class YooKassaPaymentMixin:
 
         if user_id_raw is None:
             logger.error(
-                'Webhook YooKassa %s не содержит user_id в metadata. Невозможно восстановить платеж.',
-                yookassa_payment_id,
+                'Webhook YooKassa не содержит user_id в metadata. Невозможно восстановить платеж.',
+                yookassa_payment_id=yookassa_payment_id,
             )
             return None
 
@@ -1318,9 +1322,9 @@ class YooKassaPaymentMixin:
             user_id = int(user_id_raw)
         except (TypeError, ValueError):
             logger.error(
-                'Webhook YooKassa %s содержит некорректный user_id=%s',
-                yookassa_payment_id,
-                user_id_raw,
+                'Webhook YooKassa содержит некорректный user_id',
+                yookassa_payment_id=yookassa_payment_id,
+                user_id_raw=user_id_raw,
             )
             return None
 
@@ -1331,17 +1335,17 @@ class YooKassaPaymentMixin:
             user = await get_user_by_id(db, user_id)
             if not user:
                 logger.warning(
-                    'Webhook YooKassa %s: user_id=%s не найден в БД, пропускаем восстановление платежа',
-                    yookassa_payment_id,
-                    user_id,
+                    'Webhook YooKassa : user_id= не найден в БД, пропускаем восстановление платежа',
+                    yookassa_payment_id=yookassa_payment_id,
+                    user_id=user_id,
                 )
                 return None
         except Exception as e:
             logger.warning(
-                'Webhook YooKassa %s: не удалось проверить user_id=%s: %s',
-                yookassa_payment_id,
-                user_id,
-                e,
+                'Webhook YooKassa : не удалось проверить user_id',
+                yookassa_payment_id=yookassa_payment_id,
+                user_id=user_id,
+                e=e,
             )
             return None
 
@@ -1350,20 +1354,17 @@ class YooKassaPaymentMixin:
         currency = (amount_info.get('currency') or 'RUB').upper()
 
         if amount_value is None:
-            logger.error(
-                'Webhook YooKassa %s не содержит сумму платежа',
-                yookassa_payment_id,
-            )
+            logger.error('Webhook YooKassa не содержит сумму платежа', yookassa_payment_id=yookassa_payment_id)
             return None
 
         try:
             amount_kopeks = int((Decimal(str(amount_value)) * 100).quantize(Decimal(1)))
         except (InvalidOperation, ValueError) as error:
             logger.error(
-                'Некорректная сумма в webhook YooKassa %s: %s (%s)',
-                yookassa_payment_id,
-                amount_value,
-                error,
+                'Некорректная сумма в webhook YooKassa',
+                yookassa_payment_id=yookassa_payment_id,
+                amount_value=amount_value,
+                error=error,
             )
             return None
 
@@ -1377,10 +1378,10 @@ class YooKassaPaymentMixin:
                 yookassa_created_at = datetime.fromisoformat(created_at_raw.replace('Z', '+00:00')).replace(tzinfo=None)
             except Exception as error:  # pragma: no cover - диагностический лог
                 logger.debug(
-                    'Не удалось распарсить created_at=%s для YooKassa %s: %s',
-                    created_at_raw,
-                    yookassa_payment_id,
-                    error,
+                    'Не удалось распарсить created_at= для YooKassa',
+                    created_at_raw=created_at_raw,
+                    yookassa_payment_id=yookassa_payment_id,
+                    error=error,
                 )
 
         payment_module = import_module('app.services.payment_service')
@@ -1436,7 +1437,7 @@ class YooKassaPaymentMixin:
                 if isinstance(parsed, dict):
                     return parsed
             except json.JSONDecodeError:
-                logger.debug('Не удалось распарсить metadata webhook YooKassa: %s', metadata)
+                logger.debug('Не удалось распарсить metadata webhook YooKassa', metadata=metadata)
 
         return {}
 

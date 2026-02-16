@@ -4,13 +4,13 @@ Ban System API Client.
 Client for interacting with the BedolagaBan monitoring system.
 """
 
-import logging
 from typing import Any
 
 import aiohttp
+import structlog
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class BanSystemAPIError(Exception):
@@ -78,7 +78,7 @@ class BanSystemAPI:
                 response_text = await response.text()
 
                 if response.status >= 400:
-                    logger.error(f'Ban System API error: {response.status} - {response_text}')
+                    logger.error('Ban System API error', status=response.status, response_text=response_text)
                     raise BanSystemAPIError(
                         message=f'API error {response.status}: {response_text}',
                         status_code=response.status,
@@ -93,7 +93,7 @@ class BanSystemAPI:
                 return {}
 
         except aiohttp.ClientError as e:
-            logger.error(f'Ban System API connection error: {e}')
+            logger.error('Ban System API connection error', error=e)
             raise BanSystemAPIError(message=f'Connection error: {e!s}', status_code=None, response_data=None)
         except TimeoutError:
             logger.error('Ban System API request timeout')

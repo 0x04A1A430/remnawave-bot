@@ -1,10 +1,10 @@
 """Admin routes for statistics dashboard in cabinet."""
 
-import logging
 import sys
 import time
 from datetime import datetime, timedelta
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import and_, func, select
@@ -29,7 +29,7 @@ from app.services.version_service import version_service
 from ..dependencies import get_cabinet_db, get_current_admin_user
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 _start_time = time.time()
 
@@ -317,7 +317,7 @@ async def get_dashboard_stats(
         )
 
     except Exception as e:
-        logger.error(f'Failed to get dashboard stats: {e}')
+        logger.error('Failed to get dashboard stats', error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Failed to load dashboard statistics',
@@ -349,7 +349,7 @@ async def get_system_info(
             subscriptions_active=subscriptions_active,
         )
     except Exception as e:
-        logger.error(f'Failed to get system info: {e}')
+        logger.error('Failed to get system info', error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Failed to load system information',
@@ -364,7 +364,7 @@ async def get_nodes_status(
     try:
         return await _get_nodes_overview()
     except Exception as e:
-        logger.error(f'Failed to get nodes status: {e}')
+        logger.error('Failed to get nodes status', error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Failed to load nodes status',
@@ -382,7 +382,7 @@ async def restart_node(
         success = await service.manage_node(node_uuid, 'restart')
 
         if success:
-            logger.info(f'Admin {admin.id} restarted node {node_uuid}')
+            logger.info('Admin restarted node', admin_id=admin.id, node_uuid=node_uuid)
             return {'success': True, 'message': 'Node restart initiated'}
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -391,7 +391,7 @@ async def restart_node(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f'Failed to restart node {node_uuid}: {e}')
+        logger.error('Failed to restart node', node_uuid=node_uuid, error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Failed to restart node',
@@ -420,7 +420,7 @@ async def toggle_node(
         success = await service.manage_node(node_uuid, action)
 
         if success:
-            logger.info(f'Admin {admin.id} {action}d node {node_uuid}')
+            logger.info('Admin d node', admin_id=admin.id, action=action, node_uuid=node_uuid)
             return {'success': True, 'message': f'Node {action}d', 'is_disabled': not is_disabled}
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -429,7 +429,7 @@ async def toggle_node(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f'Failed to toggle node {node_uuid}: {e}')
+        logger.error('Failed to toggle node', node_uuid=node_uuid, error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Failed to toggle node',
@@ -480,7 +480,7 @@ async def _get_nodes_overview() -> NodesOverview:
             nodes=node_statuses,
         )
     except Exception as e:
-        logger.warning(f'Failed to get nodes from RemnaWave: {e}')
+        logger.warning('Failed to get nodes from RemnaWave', error=e)
         # Return empty data if RemnaWave is unavailable
         return NodesOverview(
             total=0,
@@ -560,7 +560,9 @@ async def _get_tariff_stats(db: AsyncSession) -> TariffStats | None:
             )
             purchased_month = month_result.scalar() or 0
 
-            logger.info(f"📊 Тариф '{tariff.name}': активных={active_count}, триал={trial_count}")
+            logger.info(
+                '📊 Тариф активных=, триал', tariff_name=tariff.name, active_count=active_count, trial_count=trial_count
+            )
 
             tariff_items.append(
                 TariffStatItem(
@@ -576,7 +578,7 @@ async def _get_tariff_stats(db: AsyncSession) -> TariffStats | None:
 
             total_tariff_subscriptions += active_count
 
-        logger.info(f'📊 Всего подписок по тарифам: {total_tariff_subscriptions}')
+        logger.info('📊 Всего подписок по тарифам', total_tariff_subscriptions=total_tariff_subscriptions)
 
         return TariffStats(
             tariffs=tariff_items,
@@ -584,7 +586,7 @@ async def _get_tariff_stats(db: AsyncSession) -> TariffStats | None:
         )
 
     except Exception as e:
-        logger.error(f'Failed to get tariff stats: {e}', exc_info=True)
+        logger.error('Failed to get tariff stats', error=e, exc_info=True)
         return None
 
 
@@ -800,7 +802,7 @@ async def get_top_referrers(
         )
 
     except Exception as e:
-        logger.error(f'Failed to get top referrers: {e}', exc_info=True)
+        logger.error('Failed to get top referrers', error=e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Failed to load referrers statistics',
@@ -857,7 +859,7 @@ async def get_top_campaigns(
         )
 
     except Exception as e:
-        logger.error(f'Failed to get top campaigns: {e}', exc_info=True)
+        logger.error('Failed to get top campaigns', error=e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Failed to load campaigns statistics',
@@ -996,7 +998,7 @@ async def get_recent_payments(
         )
 
     except Exception as e:
-        logger.error(f'Failed to get recent payments: {e}', exc_info=True)
+        logger.error('Failed to get recent payments', error=e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Failed to load recent payments',

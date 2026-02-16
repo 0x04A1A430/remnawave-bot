@@ -1,8 +1,8 @@
-import logging
 import math
 from datetime import datetime
 from typing import Any
 
+import structlog
 from aiogram import Dispatcher, F, types
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -37,7 +37,7 @@ from app.utils.decorators import admin_required, error_handler
 from app.utils.formatters import format_bytes, format_datetime
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 squad_inbound_selections = {}
 squad_create_data = {}
@@ -1403,7 +1403,7 @@ async def show_node_statistics(callback: types.CallbackQuery, db_user: User, db:
         await callback.answer()
 
     except Exception as e:
-        logger.error(f'Ошибка получения статистики ноды {node_uuid}: {e}')
+        logger.error('Ошибка получения статистики ноды', node_uuid=node_uuid, error=e)
 
         text = f"""
 📊 <b>Статистика ноды: {node['name']}</b>
@@ -1842,7 +1842,7 @@ async def save_squad_inbounds(callback: types.CallbackQuery, db_user: User, db: 
             await callback.answer('❌ Ошибка сохранения изменений', show_alert=True)
 
     except Exception as e:
-        logger.error(f'Error saving squad inbounds: {e}')
+        logger.error('Error saving squad inbounds', error=e)
         await callback.answer('❌ Ошибка при сохранении', show_alert=True)
 
 

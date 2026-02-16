@@ -1,22 +1,35 @@
-"""Специальный логгер для платежей.
+"""Specialized logger for payment operations.
 
-Выделенный логгер для всех платежных операций.
-Записи идут в отдельный файл payments.log.
+Provides a dedicated structlog logger for all payment-related events.
+The underlying stdlib logger backend writes to a separate ``payments.log``
+file with ``propagate=False`` to avoid duplicating payment entries in the
+general log.
 
-Использование:
+Usage::
+
     from app.utils.payment_logger import payment_logger
 
-    payment_logger.info("Создан YooKassa платеж %s на %s", payment_id, amount)
-    payment_logger.error("Ошибка обработки webhook: %s", error)
+    payment_logger.info('Created YooKassa payment', payment_id=payment_id, amount=amount)
+    payment_logger.error('Webhook processing error', error=error)
 """
 
 from __future__ import annotations
 
 import logging
 
+import structlog
 
-# Выделенный логгер для всех платежных операций
-payment_logger = logging.getLogger('app.payments')
+
+# The stdlib backend logger — keeps propagate=False so payment events
+# only go to the dedicated file handler, not the root logger.
+_stdlib_payment_logger = logging.getLogger('app.payments')
+
+# Structlog frontend wrapping the stdlib backend.
+# All structlog processors (timestamper, notifier, etc.) apply normally.
+payment_logger: structlog.stdlib.BoundLogger = structlog.wrap_logger(
+    _stdlib_payment_logger,
+    wrapper_class=structlog.stdlib.BoundLogger,
+)
 
 
 def configure_payment_logger(
@@ -24,31 +37,28 @@ def configure_payment_logger(
     formatter: logging.Formatter | None = None,
     level: int = logging.INFO,
 ) -> None:
-    """Настроить payment_logger с указанным хэндлером.
+    """Configure the payment logger with the given handler.
 
     Args:
-        handler: Хэндлер для записи логов (FileHandler, StreamHandler и т.д.)
-        formatter: Форматтер для логов (опционально)
-        level: Уровень логирования (по умолчанию INFO)
+        handler: Handler for writing logs (FileHandler, StreamHandler, etc.)
+        formatter: Formatter for log output (optional)
+        level: Logging level (default INFO)
     """
-    payment_logger.setLevel(level)
+    _stdlib_payment_logger.setLevel(level)
 
     if formatter:
         handler.setFormatter(formatter)
 
-    payment_logger.addHandler(handler)
+    _stdlib_payment_logger.addHandler(handler)
 
-    # Предотвращаем дублирование в родительских логгерах
-    payment_logger.propagate = False
+    # Prevent duplication in parent loggers
+    _stdlib_payment_logger.propagate = False
 
 
-def get_payment_logger() -> logging.Logger:
-    """Получить экземпляр payment_logger.
+def get_payment_logger() -> structlog.stdlib.BoundLogger:
+    """Return the payment logger instance.
 
-    Альтернативный способ получения логгера для модулей,
-    которые предпочитают явный вызов функции.
-
-    Returns:
-        Настроенный логгер платежей
+    Alternative way to obtain the logger for modules that prefer
+    an explicit function call.
     """
     return payment_logger

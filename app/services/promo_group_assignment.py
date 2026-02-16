@@ -1,6 +1,6 @@
-import logging
 from datetime import datetime
 
+import structlog
 from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
 from sqlalchemy import select
@@ -12,7 +12,7 @@ from app.database.models import PromoGroup, User
 from app.services.admin_notification_service import AdminNotificationService
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def _notify_admins_about_auto_assignment(
@@ -49,9 +49,9 @@ async def _notify_admins_about_auto_assignment(
         )
     except Exception as exc:
         logger.error(
-            'Ошибка отправки уведомления о автоназначении промогруппы пользователю %s: %s',
-            user.telegram_id,
-            exc,
+            'Ошибка отправки уведомления о автоназначении промогруппы пользователю',
+            telegram_id=user.telegram_id,
+            exc=exc,
         )
     finally:
         try:
@@ -96,7 +96,7 @@ async def maybe_assign_promo_group_by_total_spent(
 
     user = await db.get(User, user_id)
     if not user:
-        logger.debug('Не удалось найти пользователя %s для автовыдачи промогруппы', user_id)
+        logger.debug('Не удалось найти пользователя для автовыдачи промогруппы', user_id=user_id)
         return None
 
     # Получаем текущую primary промогруппу
@@ -121,11 +121,11 @@ async def maybe_assign_promo_group_by_total_spent(
 
         if target_threshold <= previous_threshold:
             logger.debug(
-                "Порог промогруппы '%s' (%s) не превышает ранее назначенный (%s) для пользователя %s",
-                target_group.name,
-                target_threshold,
-                previous_threshold,
-                user.telegram_id,
+                "Порог промогруппы '' не превышает ранее назначенный для пользователя",
+                target_group_name=target_group.name,
+                target_threshold=target_threshold,
+                previous_threshold=previous_threshold,
+                telegram_id=user.telegram_id,
             )
             return None
 
@@ -134,9 +134,9 @@ async def maybe_assign_promo_group_by_total_spent(
 
         if user.auto_promo_group_assigned and already_has_group:
             logger.debug(
-                "Пользователь %s уже имеет промогруппу '%s', повторная выдача не требуется",
-                user.telegram_id,
-                target_group.name,
+                "Пользователь уже имеет промогруппу '', повторная выдача не требуется",
+                telegram_id=user.telegram_id,
+                target_group_name=target_group.name,
             )
             await sync_user_primary_promo_group(db, user_id)
             if target_threshold > previous_threshold:
@@ -154,16 +154,16 @@ async def maybe_assign_promo_group_by_total_spent(
             # Добавляем новую промогруппу к существующим
             await add_user_to_promo_group(db, user_id, target_group.id, assigned_by='auto')
             logger.info(
-                "🤖 Пользователю %s добавлена промогруппа '%s' за траты %s ₽",
-                user.telegram_id,
-                target_group.name,
-                total_spent / 100,
+                "🤖 Пользователю добавлена промогруппа '' за траты ₽",
+                telegram_id=user.telegram_id,
+                target_group_name=target_group.name,
+                total_spent=total_spent / 100,
             )
         else:
             logger.info(
-                "🤖 Пользователь %s уже имеет промогруппу '%s', отмечаем автоприсвоение",
-                user.telegram_id,
-                target_group.name,
+                "🤖 Пользователь уже имеет промогруппу '', отмечаем автоприсвоение",
+                telegram_id=user.telegram_id,
+                target_group_name=target_group.name,
             )
 
         await db.commit()
@@ -180,10 +180,6 @@ async def maybe_assign_promo_group_by_total_spent(
 
         return target_group
     except Exception as exc:
-        logger.error(
-            'Ошибка при автоматическом назначении промогруппы пользователю %s: %s',
-            user_id,
-            exc,
-        )
+        logger.error('Ошибка при автоматическом назначении промогруппы пользователю', user_id=user_id, exc=exc)
         await db.rollback()
         return None

@@ -3,6 +3,7 @@ from __future__ import annotations
 import html
 import math
 
+import structlog
 from aiogram import Dispatcher, F, types
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,6 +22,8 @@ from app.services.payment_verification_service import (
 from app.utils.decorators import admin_required, error_handler
 from app.utils.formatters import format_datetime, format_time_ago, format_username
 
+
+logger = structlog.get_logger(__name__)
 
 PAGE_SIZE = 6
 
@@ -603,32 +606,29 @@ async def manual_check_payment(
     db_user: User,
     db: AsyncSession,
 ) -> None:
-    import logging
-
-    logger = logging.getLogger(__name__)
-    logger.info('manual_check_payment called: %s', callback.data)
+    logger.info('manual_check_payment called', callback_data=callback.data)
 
     parsed = _parse_method_and_id(callback.data, prefix='admin_payment_check_')
     if not parsed:
-        logger.warning('Failed to parse: %s', callback.data)
+        logger.warning('Failed to parse', callback_data=callback.data)
         await callback.answer('❌ Invalid payment reference', show_alert=True)
         return
 
     method, payment_id = parsed
-    logger.info('Checking payment: method=%s, id=%s', method, payment_id)
+    logger.info('Checking payment: method id', method=method, payment_id=payment_id)
 
     record = await get_payment_record(db, method, payment_id)
     texts = get_texts(db_user.language)
 
     if not record:
-        logger.warning('Payment not found: method=%s, id=%s', method, payment_id)
+        logger.warning('Payment not found: method id', method=method, payment_id=payment_id)
         await callback.answer(texts.t('ADMIN_PAYMENT_NOT_FOUND', 'Payment not found.'), show_alert=True)
         return
 
-    logger.info('Record found: status=%s, is_paid=%s', record.status, record.is_paid)
+    logger.info('Record found: status is_paid', record_status=record.status, is_paid=record.is_paid)
 
     if not _is_checkable(record):
-        logger.info('Payment not checkable: method=%s, status=%s', method, record.status)
+        logger.info('Payment not checkable: method status', method=method, record_status=record.status)
         await callback.answer(
             texts.t('ADMIN_PAYMENT_CHECK_NOT_AVAILABLE', 'Manual check is not available for this invoice.'),
             show_alert=True,
@@ -638,7 +638,7 @@ async def manual_check_payment(
     logger.info('Running manual check...')
     payment_service = PaymentService(callback.bot)
     updated = await run_manual_check(db, method, payment_id, payment_service)
-    logger.info('Check result: updated=%s', updated is not None)
+    logger.info('Check result', updated=updated is not None)
 
     if not updated:
         await callback.answer(
@@ -672,19 +672,16 @@ async def check_all_payments(
     db: AsyncSession,
 ) -> None:
     """Массовая проверка всех ожидающих платежей."""
-    import logging
-
-    logger = logging.getLogger(__name__)
     logger.info('check_all_payments called')
 
     texts = get_texts(db_user.language)
 
     # Получаем все ожидающие платежи
     records = await list_recent_pending_payments(db)
-    logger.info('Found %d total records', len(records))
+    logger.info('Found total records', records_count=len(records))
 
     checkable_records = [r for r in records if _is_checkable(r) and not r.is_paid]
-    logger.info('Found %d checkable records', len(checkable_records))
+    logger.info('Found checkable records', checkable_records_count=len(checkable_records))
 
     if not checkable_records:
         await callback.answer(
@@ -704,17 +701,17 @@ async def check_all_payments(
 
     for record in checkable_records:
         try:
-            logger.info('Checking %s payment id=%s', record.method.value, record.local_id)
+            logger.info('Checking payment', method=record.method.value, local_id=record.local_id)
             updated = await run_manual_check(db, record.method, record.local_id, payment_service)
             checked += 1
-            logger.info('Check result: is_paid=%s', updated.is_paid if updated else None)
+            logger.info('Check result: is_paid', is_paid=updated.is_paid if updated else None)
             if updated and updated.is_paid and not record.is_paid:
                 confirmed += 1
         except Exception as e:
-            logger.error('Check failed for %s id=%s: %s', record.method.value, record.local_id, e, exc_info=True)
+            logger.error('Check failed', method=record.method.value, local_id=record.local_id, error=e, exc_info=True)
             failed += 1
 
-    logger.info('Check complete: checked=%d, confirmed=%d, failed=%d', checked, confirmed, failed)
+    logger.info('Check complete: checked confirmed failed', checked=checked, confirmed=confirmed, failed=failed)
 
     # Показываем результат
     result_lines = [
@@ -759,7 +756,7 @@ async def check_all_payments(
         )
         logger.info('Message updated successfully')
     except Exception as e:
-        logger.error('Failed to update message: %s', e, exc_info=True)
+        logger.error('Failed to update message', e=e, exc_info=True)
 
 
 @admin_required

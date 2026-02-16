@@ -3,17 +3,17 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 import re
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import aiohttp
+import structlog
 
 from app.config import settings
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class WataAPIError(RuntimeError):
@@ -100,21 +100,21 @@ class WataService:
                         retry_delay = self._parse_retry_after(response, response_text)
                         if attempt < self._MAX_RETRIES:
                             logger.warning(
-                                'WATA API 429 on %s %s, retry %d/%d after %.0fs',
-                                method,
-                                path,
-                                attempt + 1,
-                                self._MAX_RETRIES,
-                                retry_delay,
+                                'WATA API 429 on , retry / after s',
+                                method=method,
+                                path=path,
+                                attempt=attempt + 1,
+                                MAX_RETRIES=self._MAX_RETRIES,
+                                retry_delay=retry_delay,
                             )
                             await asyncio.sleep(retry_delay)
                             continue
-                        logger.warning('WATA API 429 on %s %s, retries exhausted', method, path)
+                        logger.warning('WATA API 429 on , retries exhausted', method=method, path=path)
                         last_error = WataAPIError(f'WATA API rate limited on {method} {path}')
                         break
 
                     if response.status >= 400:
-                        logger.error('WATA API error %s: %s', response.status, response_text)
+                        logger.error('WATA API error', response_status=response.status, response_text=response_text)
                         raise WataAPIError(f'WATA API returned status {response.status}: {response_text}')
 
                     if not response_text:
@@ -123,12 +123,12 @@ class WataService:
                     try:
                         data = await response.json()
                     except aiohttp.ContentTypeError as error:
-                        logger.error('WATA API returned non-JSON response: %s', error)
+                        logger.error('WATA API returned non-JSON response', error=error)
                         raise WataAPIError('WATA API returned invalid JSON') from error
 
                     return data
             except aiohttp.ClientError as error:
-                logger.error('Error communicating with WATA API: %s', error)
+                logger.error('Error communicating with WATA API', error=error)
                 raise WataAPIError('Failed to communicate with WATA API') from error
 
         raise last_error or WataAPIError('WATA API request failed')
@@ -156,7 +156,7 @@ class WataService:
                 return parsed
             return parsed.astimezone(UTC).replace(tzinfo=None)
         except (ValueError, TypeError):
-            logger.debug('Failed to parse WATA datetime: %s', raw)
+            logger.debug('Failed to parse WATA datetime', raw=raw)
             return None
 
     async def create_payment_link(
@@ -201,18 +201,18 @@ class WataService:
                 payload['arbitraryAmountPrompts'] = arbitrary_amount_prompts
 
         logger.info(
-            'Создаем WATA платежную ссылку: order_id=%s, amount=%s %s',
-            order_id,
-            payload['amount'],
-            currency,
+            'Создаем WATA платежную ссылку: order_id amount',
+            order_id=order_id,
+            payload=payload['amount'],
+            currency=currency,
         )
 
         response = await self._request('POST', '/links', json=payload)
-        logger.debug('WATA create link response: %s', response)
+        logger.debug('WATA create link response', response=response)
         return response
 
     async def get_payment_link(self, payment_link_id: str) -> dict[str, Any]:
-        logger.debug('Запрашиваем WATA ссылку %s', payment_link_id)
+        logger.debug('Запрашиваем WATA ссылку', payment_link_id=payment_link_id)
         return await self._request('GET', f'/links/{payment_link_id}')
 
     async def search_transactions(
@@ -234,9 +234,11 @@ class WataService:
         if payment_link_id:
             params['paymentLinkId'] = payment_link_id
 
-        logger.debug('Ищем WATA транзакции: order_id=%s, payment_link_id=%s', order_id, payment_link_id)
+        logger.debug(
+            'Ищем WATA транзакции: order_id payment_link_id', order_id=order_id, payment_link_id=payment_link_id
+        )
         return await self._request('GET', '/transactions', params=params)
 
     async def get_transaction(self, transaction_id: str) -> dict[str, Any]:
-        logger.debug('Получаем WATA транзакцию %s', transaction_id)
+        logger.debug('Получаем WATA транзакцию', transaction_id=transaction_id)
         return await self._request('GET', f'/transactions/{transaction_id}')

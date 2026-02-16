@@ -2,11 +2,11 @@
 API роуты колеса удачи для пользователей.
 """
 
-import logging
 import math
 import time
 
 import httpx
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,7 +32,7 @@ from app.database.models import User
 from app.services.wheel_service import wheel_service
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/wheel', tags=['Fortune Wheel'])
 
@@ -253,14 +253,16 @@ async def create_stars_invoice(
             result = response.json()
 
             if not result.get('ok'):
-                logger.error(f'Telegram API error: {result}')
+                logger.error('Telegram API error', result=result)
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail='Ошибка создания инвойса',
                 )
 
             invoice_url = result['result']
-            logger.info(f'Created Stars invoice for wheel spin: user={user.id}, stars={stars_amount}')
+            logger.info(
+                'Created Stars invoice for wheel spin: user=, stars', user_id=user.id, stars_amount=stars_amount
+            )
 
             return StarsInvoiceResponse(
                 invoice_url=invoice_url,
@@ -268,7 +270,7 @@ async def create_stars_invoice(
             )
 
     except httpx.HTTPError as e:
-        logger.error(f'HTTP error creating invoice: {e}')
+        logger.error('HTTP error creating invoice', error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Ошибка соединения с Telegram',

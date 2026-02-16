@@ -1,8 +1,8 @@
 """Media upload/download routes for cabinet tickets."""
 
-import logging
 import mimetypes
 
+import structlog
 from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
@@ -16,7 +16,7 @@ from app.database.models import User
 from ..dependencies import get_current_cabinet_user
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/media', tags=['Cabinet Media'])
 
@@ -125,7 +125,12 @@ async def upload_media(
 
         media_url = _build_media_url(request, media.file_id)
 
-        logger.info(f'User {user.telegram_id} uploaded {media_type_normalized}: {media.file_id}')
+        logger.info(
+            'User uploaded',
+            telegram_id=user.telegram_id,
+            media_type_normalized=media_type_normalized,
+            file_id=media.file_id,
+        )
 
         return MediaUploadResponse(
             media_type=media_type_normalized,
@@ -136,7 +141,7 @@ async def upload_media(
     except HTTPException:
         raise
     except Exception as error:
-        logger.error(f'Failed to upload media for user {user.telegram_id}: {error}')
+        logger.error('Failed to upload media for user', telegram_id=user.telegram_id, error=error)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Failed to upload media',
@@ -187,7 +192,7 @@ async def download_media(
     except HTTPException:
         raise
     except Exception as error:
-        logger.error(f'Failed to download media {file_id}: {error}')
+        logger.error('Failed to download media', file_id=file_id, error=error)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Failed to download media',

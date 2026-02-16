@@ -1,8 +1,8 @@
-import logging
 from datetime import datetime
 from html import escape
 from pathlib import Path
 
+import structlog
 from aiogram import Dispatcher, F, types
 from aiogram.types import FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,7 +12,7 @@ from app.database.models import User
 from app.utils.decorators import admin_required, error_handler
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 LOG_PREVIEW_LIMIT = 2300
 
@@ -41,7 +41,7 @@ def _build_logs_message(log_path: Path) -> str:
     try:
         content = log_path.read_text(encoding='utf-8', errors='ignore')
     except Exception as error:  # pragma: no cover - защита от проблем чтения
-        logger.error('Ошибка чтения лог-файла %s: %s', log_path, error)
+        logger.error('Ошибка чтения лог-файла', log_path=log_path, error=error)
         message = f'❌ <b>Ошибка чтения логов</b>\n\nНе удалось прочитать файл <code>{log_path}</code>.'
         return message
 
@@ -134,7 +134,7 @@ async def download_system_logs(
         )
         await callback.message.answer_document(document=document, caption=caption, parse_mode='HTML')
     except Exception as error:  # pragma: no cover - защита от ошибок отправки
-        logger.error('Ошибка отправки лог-файла %s: %s', log_path, error)
+        logger.error('Ошибка отправки лог-файла', log_path=log_path, error=error)
         await callback.message.answer(
             '❌ <b>Не удалось отправить лог-файл</b>\n\nПроверьте журналы приложения или повторите попытку позже.',
             parse_mode='HTML',

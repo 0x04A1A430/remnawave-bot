@@ -1,6 +1,6 @@
-import logging
 from datetime import datetime
 
+import structlog
 from aiogram import Dispatcher, F, types
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -12,7 +12,7 @@ from app.services.backup_service import backup_service
 from app.utils.decorators import admin_required, error_handler
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class BackupStates(StatesGroup):
@@ -446,7 +446,7 @@ async def handle_backup_file_upload(message: types.Message, db_user: User, db: A
         await state.clear()
 
     except Exception as e:
-        logger.error(f'Ошибка загрузки файла бекапа: {e}')
+        logger.error('Ошибка загрузки файла бекапа', error=e)
         await message.answer(
             f'❌ Ошибка загрузки файла: {e!s}',
             reply_markup=InlineKeyboardMarkup(

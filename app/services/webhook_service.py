@@ -4,11 +4,11 @@ import asyncio
 import hashlib
 import hmac
 import json
-import logging
 from dataclasses import dataclass
 from typing import Any
 
 import aiohttp
+import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.crud.webhook import (
@@ -18,7 +18,7 @@ from app.database.crud.webhook import (
 )
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @dataclass
@@ -70,7 +70,7 @@ class WebhookService:
         webhooks = await get_active_webhooks_for_event(db, event_type)
 
         if not webhooks:
-            logger.debug('No active webhooks for event type: %s', event_type)
+            logger.debug('No active webhooks for event type', event_type=event_type)
             return
 
         # Выполняем HTTP запросы параллельно (без операций с БД)
@@ -80,7 +80,7 @@ class WebhookService:
         # Записываем результаты в БД последовательно (избегаем concurrent session access)
         for result in results:
             if isinstance(result, Exception):
-                logger.exception('Unexpected error during webhook delivery: %s', result)
+                logger.exception('Unexpected error during webhook delivery', result=result)
                 continue
             if isinstance(result, DeliveryResult):
                 await self._record_result(db, result)
@@ -166,23 +166,11 @@ class WebhookService:
             await update_webhook_stats(db, result.webhook, result.status == 'success')
 
             if result.status == 'success':
-                logger.info(
-                    'Webhook %s delivered successfully to %s',
-                    result.webhook.id,
-                    result.webhook.url,
-                )
+                logger.info('Webhook delivered successfully to', id=result.webhook.id, url=result.webhook.url)
             else:
-                logger.warning(
-                    'Webhook %s delivery failed: %s',
-                    result.webhook.id,
-                    result.error_message,
-                )
+                logger.warning('Webhook delivery failed', id=result.webhook.id, error_message=result.error_message)
         except Exception as error:
-            logger.exception(
-                'Failed to record webhook delivery result for %s: %s',
-                result.webhook.id,
-                error,
-            )
+            logger.exception('Failed to record webhook delivery result for', id=result.webhook.id, error=error)
 
 
 # Глобальный экземпляр сервиса

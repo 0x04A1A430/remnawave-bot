@@ -1,9 +1,9 @@
 """Admin tickets routes for cabinet."""
 
-import logging
 import math
 from datetime import datetime
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, func, select
@@ -20,7 +20,7 @@ from ..dependencies import get_cabinet_db, get_current_admin_user
 from ..schemas.tickets import TicketMessageResponse
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/admin/tickets', tags=['Cabinet Admin Tickets'])
 
@@ -317,7 +317,7 @@ async def update_ticket_settings(
             env_file.write_text('\n'.join(new_lines) + '\n')
             logger.info('Updated ticket settings in .env file')
     except Exception as e:
-        logger.warning(f'Failed to update .env file: {e}')
+        logger.warning('Failed to update .env file', error=e)
 
     return TicketSettingsResponse(
         sla_enabled=settings.SUPPORT_TICKET_SLA_ENABLED,
@@ -473,11 +473,11 @@ async def reply_to_ticket(
 
             await notify_user_about_ticket_reply(bot, ticket, request.message, db)
         except Exception as e:
-            logger.warning(f'Failed to notify user about ticket reply: {e}')
+            logger.warning('Failed to notify user about ticket reply', error=e)
         finally:
             await bot.session.close()
     except Exception as e:
-        logger.warning(f'Failed to send Telegram notification: {e}')
+        logger.warning('Failed to send Telegram notification', error=e)
 
     # Уведомить пользователя в кабинете
     try:
@@ -488,7 +488,7 @@ async def reply_to_ticket(
             # Отправить WebSocket уведомление
             await notify_user_ticket_reply(ticket.user_id, ticket.id, (request.message or '')[:100])
     except Exception as e:
-        logger.warning(f'Failed to create cabinet notification for admin reply: {e}')
+        logger.warning('Failed to create cabinet notification for admin reply', error=e)
 
     return _message_to_response(message)
 

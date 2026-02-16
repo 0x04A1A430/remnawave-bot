@@ -1,6 +1,6 @@
-import logging
 from datetime import datetime, timedelta
 
+import structlog
 from aiogram import Dispatcher, F, types
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,7 +15,7 @@ from app.utils.decorators import admin_required, error_handler
 from app.utils.formatters import format_datetime, format_percentage
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @admin_required
@@ -75,7 +75,7 @@ async def show_users_statistics(callback: types.CallbackQuery, db_user: User, db
         if 'message is not modified' in str(e):
             await callback.answer('📊 Данные актуальны', show_alert=False)
         else:
-            logger.error(f'Ошибка обновления статистики пользователей: {e}')
+            logger.error('Ошибка обновления статистики пользователей', error=e)
             await callback.answer('❌ Ошибка обновления данных', show_alert=True)
             return
 
@@ -126,7 +126,7 @@ async def show_subscriptions_statistics(callback: types.CallbackQuery, db_user: 
         if 'message is not modified' in str(e):
             await callback.answer('📊 Данные актуальны', show_alert=False)
         else:
-            logger.error(f'Ошибка обновления статистики подписок: {e}')
+            logger.error('Ошибка обновления статистики подписок', error=e)
             await callback.answer('❌ Ошибка обновления данных', show_alert=True)
 
 
@@ -181,7 +181,7 @@ async def show_revenue_statistics(callback: types.CallbackQuery, db_user: User, 
         if 'message is not modified' in str(e):
             await callback.answer('📊 Данные актуальны', show_alert=False)
         else:
-            logger.error(f'Ошибка обновления статистики доходов: {e}')
+            logger.error('Ошибка обновления статистики доходов', error=e)
             await callback.answer('❌ Ошибка обновления данных', show_alert=True)
 
 
@@ -239,7 +239,7 @@ async def show_referral_statistics(callback: types.CallbackQuery, db_user: User,
         if 'message is not modified' in str(e):
             await callback.answer('📊 Данные актуальны', show_alert=False)
         else:
-            logger.error(f'Ошибка обновления реферальной статистики: {e}')
+            logger.error('Ошибка обновления реферальной статистики', error=e)
             await callback.answer('❌ Ошибка обновления данных', show_alert=True)
 
 
@@ -302,7 +302,7 @@ async def show_summary_statistics(callback: types.CallbackQuery, db_user: User, 
         if 'message is not modified' in str(e):
             await callback.answer('📊 Данные актуальны', show_alert=False)
         else:
-            logger.error(f'Ошибка обновления общей статистики: {e}')
+            logger.error('Ошибка обновления общей статистики', error=e)
             await callback.answer('❌ Ошибка обновления данных', show_alert=True)
 
 

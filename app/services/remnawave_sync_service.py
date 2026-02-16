@@ -1,10 +1,10 @@
 import asyncio
-import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 from typing import Any
 
+import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -17,7 +17,7 @@ from app.services.remnawave_service import (
 from app.utils.cache import cache
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -143,7 +143,7 @@ class RemnaWaveAutoSyncService:
                 self._last_user_stats = None
                 self._last_server_stats = None
                 self._last_run_finished_at = datetime.utcnow()
-                logger.error('❌ Автосинхронизация RemnaWave: %s', message)
+                logger.error('❌ Автосинхронизация RemnaWave', message=message)
                 return {
                     'started': True,
                     'success': False,
@@ -158,7 +158,7 @@ class RemnaWaveAutoSyncService:
                 self._last_user_stats = None
                 self._last_server_stats = None
                 self._last_run_finished_at = datetime.utcnow()
-                logger.exception('❌ Ошибка автосинхронизации RemnaWave: %s', error)
+                logger.exception('❌ Ошибка автосинхронизации RemnaWave', error=error)
                 return {
                     'started': True,
                     'success': False,
@@ -247,7 +247,7 @@ class RemnaWaveAutoSyncService:
         try:
             await cache.delete_pattern('available_countries*')
         except Exception as error:
-            logger.warning('⚠️ Не удалось очистить кеш стран после автосинхронизации: %s', error)
+            logger.warning('⚠️ Не удалось очистить кеш стран после автосинхронизации', error=error)
 
         return {
             'created': created,

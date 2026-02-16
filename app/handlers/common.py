@@ -1,5 +1,4 @@
-import logging
-
+import structlog
 from aiogram import Dispatcher, F, types
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
@@ -10,7 +9,7 @@ from app.keyboards.inline import get_back_keyboard
 from app.localization.texts import get_rules, get_texts
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def handle_delete_ban_notification(
@@ -21,7 +20,7 @@ async def handle_delete_ban_notification(
         await callback.message.delete()
         await callback.answer('Уведомление удалено')
     except Exception as e:
-        logger.warning(f'Не удалось удалить уведомление: {e}')
+        logger.warning('Не удалось удалить уведомление', error=e)
         await callback.answer('Не удалось удалить', show_alert=False)
 
 
@@ -36,7 +35,7 @@ async def handle_webhook_notification_close(
     try:
         await callback.message.delete()
     except Exception as e:
-        logger.warning('Не удалось удалить webhook-уведомление: %s', e)
+        logger.warning('Не удалось удалить webhook-уведомление', e=e)
         try:
             await callback.message.edit_reply_markup(reply_markup=None)
         except Exception:
@@ -54,7 +53,9 @@ async def handle_unknown_callback(callback: types.CallbackQuery, db_user: User):
         show_alert=True,
     )
 
-    logger.warning(f'Неизвестный callback: {callback.data} от пользователя {callback.from_user.id}')
+    logger.warning(
+        'Неизвестный callback: от пользователя', callback_data=callback.data, from_user_id=callback.from_user.id
+    )
 
 
 async def handle_noop(callback: types.CallbackQuery, db_user: User):

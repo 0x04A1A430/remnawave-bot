@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import logging
 from importlib import import_module
 
+import structlog
 from aiogram import Bot
 
 from app.config import settings
@@ -36,7 +36,7 @@ from app.services.yookassa_service import YooKassaService
 from app.utils.currency_converter import currency_converter  # noqa: F401
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 # --- Совместимость: экспортируем функции, которые активно мокаются в тестах ---
@@ -326,15 +326,15 @@ class PaymentService(
 
         mulenpay_name = settings.get_mulenpay_display_name()
         logger.debug(
-            'PaymentService инициализирован (YooKassa=%s, Stars=%s, CryptoBot=%s, Heleket=%s, %s=%s, Pal24=%s, Platega=%s, Wata=%s, CloudPayments=%s)',
-            bool(self.yookassa_service),
-            bool(self.stars_service),
-            bool(self.cryptobot_service),
-            bool(self.heleket_service),
-            mulenpay_name,
-            bool(self.mulenpay_service),
-            bool(self.pal24_service),
-            bool(self.platega_service),
-            bool(self.wata_service),
-            bool(self.cloudpayments_service),
+            'PaymentService инициализирован (YooKassa Stars CryptoBot Heleket Pal24 Platega Wata CloudPayments=)',
+            yookassa_service=bool(self.yookassa_service),
+            stars_service=bool(self.stars_service),
+            cryptobot_service=bool(self.cryptobot_service),
+            heleket_service=bool(self.heleket_service),
+            mulenpay_name=mulenpay_name,
+            mulenpay_service=bool(self.mulenpay_service),
+            pal24_service=bool(self.pal24_service),
+            platega_service=bool(self.platega_service),
+            wata_service=bool(self.wata_service),
+            cloudpayments_service=bool(self.cloudpayments_service),
         )

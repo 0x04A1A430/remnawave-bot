@@ -1,7 +1,7 @@
-import logging
 from datetime import datetime
 from typing import Any
 
+import structlog
 from aiogram import Bot, types
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from sqlalchemy.exc import MissingGreenlet
@@ -23,7 +23,7 @@ from app.database.models import (
 from app.utils.timezone import format_local_datetime
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class AdminNotificationService:
@@ -52,7 +52,7 @@ class AdminNotificationService:
             return f'User#{referred_by_id}'
 
         except Exception as e:
-            logger.error(f'Ошибка получения данных рефера {referred_by_id}: {e}')
+            logger.error('Ошибка получения данных рефера', referred_by_id=referred_by_id, error=e)
             return f'ID {referred_by_id}'
 
     async def _get_user_promo_group(self, db: AsyncSession, user: User) -> PromoGroup | None:
@@ -75,10 +75,10 @@ class AdminNotificationService:
             return await get_promo_group_by_id(db, user.promo_group_id)
         except Exception as e:
             logger.error(
-                'Ошибка загрузки промогруппы %s пользователя %s: %s',
-                user.promo_group_id,
-                user.telegram_id,
-                e,
+                'Ошибка загрузки промогруппы пользователя',
+                promo_group_id=user.promo_group_id,
+                telegram_id=user.telegram_id,
+                e=e,
             )
             return None
 
@@ -151,9 +151,9 @@ class AdminNotificationService:
             )
         except Exception:
             logger.error(
-                'Не удалось сохранить событие подписки (%s) для пользователя %s',
-                event_type,
-                getattr(user, 'id', 'unknown'),
+                'Не удалось сохранить событие подписки для пользователя',
+                event_type=event_type,
+                getattr=getattr(user, 'id', 'unknown'),
                 exc_info=True,
             )
 
@@ -161,8 +161,8 @@ class AdminNotificationService:
                 await db.rollback()
             except Exception:
                 logger.error(
-                    'Не удалось выполнить rollback после ошибки события подписки пользователя %s',
-                    getattr(user, 'id', 'unknown'),
+                    'Не удалось выполнить rollback после ошибки события подписки пользователя',
+                    getattr=getattr(user, 'id', 'unknown'),
                     exc_info=True,
                 )
 
@@ -361,7 +361,7 @@ class AdminNotificationService:
             return await self._send_message('\n'.join(message_lines))
 
         except Exception as e:
-            logger.error(f'Ошибка отправки уведомления о триале: {e}')
+            logger.error('Ошибка отправки уведомления о триале', error=e)
             return False
 
     async def _get_tariff_name(self, db: AsyncSession, subscription: Subscription) -> str | None:
@@ -489,7 +489,7 @@ class AdminNotificationService:
             return await self._send_message('\n'.join(message_lines))
 
         except Exception as e:
-            logger.error(f'Ошибка отправки уведомления о покупке: {e}')
+            logger.error('Ошибка отправки уведомления о покупке', error=e)
             return False
 
     async def send_version_update_notification(self, current_version: str, latest_version, total_updates: int) -> bool:
@@ -552,7 +552,7 @@ class AdminNotificationService:
             return await self._send_message(message)
 
         except Exception as e:
-            logger.error(f'Ошибка отправки уведомления об обновлении: {e}')
+            logger.error('Ошибка отправки уведомления об обновлении', error=e)
             return False
 
     async def send_version_check_error_notification(self, error_message: str, current_version: str) -> bool:
@@ -573,7 +573,7 @@ class AdminNotificationService:
             return await self._send_message(message)
 
         except Exception as e:
-            logger.error(f'Ошибка отправки уведомления об ошибке проверки версий: {e}')
+            logger.error('Ошибка отправки уведомления об ошибке проверки версий', error=e)
             return False
 
     def _build_balance_topup_message(
@@ -730,8 +730,8 @@ class AdminNotificationService:
                 )
             except Exception:
                 logger.error(
-                    'Не удалось сохранить событие пополнения баланса пользователя %s',
-                    getattr(user, 'id', 'unknown'),
+                    'Не удалось сохранить событие пополнения баланса пользователя',
+                    getattr=getattr(user, 'id', 'unknown'),
                     exc_info=True,
                 )
 
@@ -751,26 +751,23 @@ class AdminNotificationService:
             )
             logger.info('Сообщение уведомления создано успешно')
         except Exception as error:
-            logger.info(f'Перехвачена ошибка при создании сообщения уведомления: {type(error).__name__}: {error}')
+            logger.info(
+                'Перехвачена ошибка при создании сообщения уведомления', __name__=type(error).__name__, error=error
+            )
             if not self._is_lazy_loading_error(error):
-                logger.error(
-                    'Ошибка подготовки уведомления о пополнении: %s',
-                    error,
-                    exc_info=True,
-                )
+                logger.error('Ошибка подготовки уведомления о пополнении', error=error, exc_info=True)
                 return False
 
             if db is None:
                 logger.error(
-                    'Недостаточно данных для уведомления о пополнении и отсутствует доступ к БД: %s',
-                    error,
+                    'Недостаточно данных для уведомления о пополнении и отсутствует доступ к БД',
+                    error=error,
                     exc_info=True,
                 )
                 return False
 
             logger.warning(
-                'Повторная загрузка данных для уведомления о пополнении после ошибки ленивой загрузки: %s',
-                error,
+                'Повторная загрузка данных для уведомления о пополнении после ошибки ленивой загрузки', error=error
             )
 
             try:
@@ -784,8 +781,8 @@ class AdminNotificationService:
                 logger.info('Данные успешно перезагружены')
             except Exception as reload_error:
                 logger.error(
-                    'Ошибка повторной загрузки данных для уведомления о пополнении: %s',
-                    reload_error,
+                    'Ошибка повторной загрузки данных для уведомления о пополнении',
+                    reload_error=reload_error,
                     exc_info=True,
                 )
                 return False
@@ -804,8 +801,8 @@ class AdminNotificationService:
                 logger.info('Сообщение успешно создано после перезагрузки данных')
             except Exception as rebuild_error:
                 logger.error(
-                    'Ошибка повторной подготовки уведомления о пополнении после повторной загрузки: %s',
-                    rebuild_error,
+                    'Ошибка повторной подготовки уведомления о пополнении после повторной загрузки',
+                    rebuild_error=rebuild_error,
                     exc_info=True,
                 )
                 return False
@@ -813,10 +810,7 @@ class AdminNotificationService:
         try:
             return await self._send_message(message)
         except Exception as e:
-            logger.error(
-                f'Ошибка отправки уведомления о пополнении: {e}',
-                exc_info=True,
-            )
+            logger.error('Ошибка отправки уведомления о пополнении', error=e, exc_info=True)
             return False
 
     async def send_subscription_extension_notification(
@@ -894,7 +888,7 @@ class AdminNotificationService:
             return await self._send_message(message)
 
         except Exception as e:
-            logger.error(f'Ошибка отправки уведомления о продлении: {e}')
+            logger.error('Ошибка отправки уведомления о продлении', error=e)
             return False
 
     async def send_promocode_activation_notification(
@@ -933,8 +927,8 @@ class AdminNotificationService:
             )
         except Exception:
             logger.error(
-                'Не удалось сохранить событие активации промокода пользователя %s',
-                getattr(user, 'id', 'unknown'),
+                'Не удалось сохранить событие активации промокода пользователя',
+                getattr=getattr(user, 'id', 'unknown'),
                 exc_info=True,
             )
 
@@ -1001,7 +995,7 @@ class AdminNotificationService:
             return await self._send_message('\n'.join(message_lines))
 
         except Exception as e:
-            logger.error(f'Ошибка отправки уведомления об активации промокода: {e}')
+            logger.error('Ошибка отправки уведомления об активации промокода', error=e)
             return False
 
     async def send_campaign_link_visit_notification(
@@ -1031,8 +1025,8 @@ class AdminNotificationService:
                 )
             except Exception:
                 logger.error(
-                    'Не удалось сохранить событие перехода по кампании для пользователя %s',
-                    getattr(user, 'id', 'unknown'),
+                    'Не удалось сохранить событие перехода по кампании для пользователя',
+                    getattr=getattr(user, 'id', 'unknown'),
                     exc_info=True,
                 )
 
@@ -1080,7 +1074,7 @@ class AdminNotificationService:
             return await self._send_message('\n'.join(message_lines))
 
         except Exception as e:
-            logger.error(f'Ошибка отправки уведомления о переходе по кампании: {e}')
+            logger.error('Ошибка отправки уведомления о переходе по кампании', error=e)
             return False
 
     async def send_user_promo_group_change_notification(
@@ -1116,8 +1110,8 @@ class AdminNotificationService:
             )
         except Exception:
             logger.error(
-                'Не удалось сохранить событие смены промогруппы пользователя %s',
-                getattr(user, 'id', 'unknown'),
+                'Не удалось сохранить событие смены промогруппы пользователя',
+                getattr=getattr(user, 'id', 'unknown'),
                 exc_info=True,
             )
 
@@ -1170,7 +1164,7 @@ class AdminNotificationService:
             return await self._send_message('\n'.join(message_lines))
 
         except Exception as e:
-            logger.error(f'Ошибка отправки уведомления о смене промогруппы: {e}')
+            logger.error('Ошибка отправки уведомления о смене промогруппы', error=e)
             return False
 
     async def _send_message(
@@ -1200,17 +1194,17 @@ class AdminNotificationService:
                 message_kwargs['reply_markup'] = reply_markup
 
             await self.bot.send_message(**message_kwargs)
-            logger.info(f'Уведомление отправлено в чат {self.chat_id}')
+            logger.info('Уведомление отправлено в чат', chat_id=self.chat_id)
             return True
 
         except TelegramForbiddenError:
-            logger.error(f'Бот не имеет прав для отправки в чат {self.chat_id}')
+            logger.error('Бот не имеет прав для отправки в чат', chat_id=self.chat_id)
             return False
         except TelegramBadRequest as e:
-            logger.error(f'Ошибка отправки уведомления: {e}')
+            logger.error('Ошибка отправки уведомления', error=e)
             return False
         except Exception as e:
-            logger.error(f'Неожиданная ошибка при отправке уведомления: {e}')
+            logger.error('Неожиданная ошибка при отправке уведомления', error=e)
             return False
 
     def _is_enabled(self) -> bool:
@@ -1279,7 +1273,7 @@ class AdminNotificationService:
             servers_names = await get_servers_display_names(squad_uuids)
             return f'{len(squad_uuids)} шт. ({servers_names})'
         except Exception as e:
-            logger.warning(f'Не удалось получить названия серверов: {e}')
+            logger.warning('Не удалось получить названия серверов', error=e)
             return f'{len(squad_uuids)} шт.'
 
     async def send_maintenance_status_notification(
@@ -1422,7 +1416,7 @@ class AdminNotificationService:
             return await self._send_message(message)
 
         except Exception as e:
-            logger.error(f'Ошибка отправки уведомления о техработах: {e}')
+            logger.error('Ошибка отправки уведомления о техработах', error=e)
             return False
 
     async def send_remnawave_panel_status_notification(self, status: str, details: dict[str, Any] = None) -> bool:
@@ -1509,7 +1503,7 @@ class AdminNotificationService:
             return await self._send_message(message)
 
         except Exception as e:
-            logger.error(f'Ошибка отправки уведомления о статусе панели Remnawave: {e}')
+            logger.error('Ошибка отправки уведомления о статусе панели Remnawave', error=e)
             return False
 
     async def send_subscription_update_notification(
@@ -1602,7 +1596,7 @@ class AdminNotificationService:
             return await self._send_message('\n'.join(message_lines))
 
         except Exception as e:
-            logger.error(f'Ошибка отправки уведомления об изменении подписки: {e}')
+            logger.error('Ошибка отправки уведомления об изменении подписки', error=e)
             return False
 
     async def _format_servers_detailed(self, server_uuids: list[str]) -> str:
@@ -1619,7 +1613,7 @@ class AdminNotificationService:
             return f'{len(server_uuids)} серверов'
 
         except Exception as e:
-            logger.warning(f'Ошибка получения названий серверов для уведомления: {e}')
+            logger.warning('Ошибка получения названий серверов для уведомления', error=e)
             return f'{len(server_uuids)} серверов'
 
     def _format_update_value(self, value: Any, update_type: str) -> str:
@@ -1676,7 +1670,7 @@ class AdminNotificationService:
             return await self._send_message(message)
 
         except Exception as e:
-            logger.error(f'Ошибка отправки уведомления о массовой блокировке: {e}')
+            logger.error('Ошибка отправки уведомления о массовой блокировке', error=e)
             return False
 
     async def send_ticket_event_notification(
@@ -1694,7 +1688,9 @@ class AdminNotificationService:
             runtime_enabled = True
         if not (self._is_enabled() and runtime_enabled):
             logger.info(
-                f'Ticket notification skipped: _is_enabled={self._is_enabled()}, runtime_enabled={runtime_enabled}'
+                'Ticket notification skipped: _is_enabled=, runtime_enabled',
+                _is_enabled=self._is_enabled(),
+                runtime_enabled=runtime_enabled,
             )
             return False
         return await self._send_message(text, reply_markup=keyboard, ticket_event=True)
@@ -1728,16 +1724,18 @@ class AdminNotificationService:
 
             await bot.send_message(**message_kwargs)
             logger.info(
-                f'Уведомление о подозрительной активности отправлено в чат {self.chat_id}, топик {notification_topic_id}'
+                'Уведомление о подозрительной активности отправлено в чат топик',
+                chat_id=self.chat_id,
+                notification_topic_id=notification_topic_id,
             )
             return True
 
         except TelegramForbiddenError:
-            logger.error(f'Бот не имеет прав для отправки в чат {self.chat_id}')
+            logger.error('Бот не имеет прав для отправки в чат', chat_id=self.chat_id)
             return False
         except TelegramBadRequest as e:
-            logger.error(f'Ошибка отправки уведомления о подозрительной активности: {e}')
+            logger.error('Ошибка отправки уведомления о подозрительной активности', error=e)
             return False
         except Exception as e:
-            logger.error(f'Неожиданная ошибка при отправке уведомления о подозрительной активности: {e}')
+            logger.error('Неожиданная ошибка при отправке уведомления о подозрительной активности', error=e)
             return False

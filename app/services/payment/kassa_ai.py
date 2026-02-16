@@ -54,17 +54,17 @@ class KassaAiPaymentMixin:
         # Валидация лимитов
         if amount_kopeks < settings.KASSA_AI_MIN_AMOUNT_KOPEKS:
             logger.warning(
-                'KassaAI: сумма %s меньше минимальной %s',
-                amount_kopeks,
-                settings.KASSA_AI_MIN_AMOUNT_KOPEKS,
+                'KassaAI: сумма меньше минимальной',
+                amount_kopeks=amount_kopeks,
+                KASSA_AI_MIN_AMOUNT_KOPEKS=settings.KASSA_AI_MIN_AMOUNT_KOPEKS,
             )
             return None
 
         if amount_kopeks > settings.KASSA_AI_MAX_AMOUNT_KOPEKS:
             logger.warning(
-                'KassaAI: сумма %s больше максимальной %s',
-                amount_kopeks,
-                settings.KASSA_AI_MAX_AMOUNT_KOPEKS,
+                'KassaAI: сумма больше максимальной',
+                amount_kopeks=amount_kopeks,
+                KASSA_AI_MAX_AMOUNT_KOPEKS=settings.KASSA_AI_MAX_AMOUNT_KOPEKS,
             )
             return None
 
@@ -105,11 +105,7 @@ class KassaAiPaymentMixin:
                 logger.error('KassaAI API не вернул URL платежа')
                 return None
 
-            logger.info(
-                'KassaAI API: создан заказ order_id=%s, url=%s',
-                order_id,
-                payment_url,
-            )
+            logger.info('KassaAI API: создан заказ order_id url', order_id=order_id, payment_url=payment_url)
 
             # Импортируем CRUD модуль
             kassa_ai_crud = import_module('app.database.crud.kassa_ai')
@@ -129,11 +125,11 @@ class KassaAiPaymentMixin:
             )
 
             logger.info(
-                'KassaAI: создан платеж order_id=%s, user_id=%s, amount=%s %s',
-                order_id,
-                user_id,
-                amount_rubles,
-                currency,
+                'KassaAI: создан платеж order_id user_id amount',
+                order_id=order_id,
+                user_id=user_id,
+                amount_rubles=amount_rubles,
+                currency=currency,
             )
 
             return {
@@ -147,7 +143,7 @@ class KassaAiPaymentMixin:
             }
 
         except Exception as e:
-            logger.exception('KassaAI: ошибка создания платежа: %s', e)
+            logger.exception('KassaAI: ошибка создания платежа', e=e)
             return None
 
     async def process_kassa_ai_webhook(
@@ -179,7 +175,7 @@ class KassaAiPaymentMixin:
         try:
             # Проверка подписи
             if not kassa_ai_service.verify_webhook_signature(merchant_id, amount, order_id, sign):
-                logger.warning('KassaAI webhook: неверная подпись для order_id=%s', order_id)
+                logger.warning('KassaAI webhook: неверная подпись для order_id', order_id=order_id)
                 return False
 
             # Импортируем CRUD модуль
@@ -188,21 +184,21 @@ class KassaAiPaymentMixin:
             # Получаем платеж из БД
             payment = await kassa_ai_crud.get_kassa_ai_payment_by_order_id(db, order_id)
             if not payment:
-                logger.warning('KassaAI webhook: платеж не найден order_id=%s', order_id)
+                logger.warning('KassaAI webhook: платеж не найден order_id', order_id=order_id)
                 return False
 
             # Проверка дублирования
             if payment.is_paid:
-                logger.info('KassaAI webhook: платеж уже обработан order_id=%s', order_id)
+                logger.info('KassaAI webhook: платеж уже обработан order_id', order_id=order_id)
                 return True
 
             # Проверка суммы
             expected_amount = payment.amount_kopeks / 100
             if abs(amount - expected_amount) > 0.01:
                 logger.warning(
-                    'KassaAI webhook: несоответствие суммы ожидалось=%s, получено=%s',
-                    expected_amount,
-                    amount,
+                    'KassaAI webhook: несоответствие суммы ожидалось получено',
+                    expected_amount=expected_amount,
+                    amount=amount,
                 )
                 return False
 
@@ -229,7 +225,7 @@ class KassaAiPaymentMixin:
             return await self._finalize_kassa_ai_payment(db, payment, intid=intid, trigger='webhook')
 
         except Exception as e:
-            logger.exception('KassaAI webhook: ошибка обработки: %s', e)
+            logger.exception('KassaAI webhook: ошибка обработки', e=e)
             return False
 
     async def _finalize_kassa_ai_payment(
@@ -245,9 +241,7 @@ class KassaAiPaymentMixin:
 
         if payment.transaction_id:
             logger.info(
-                'KassaAI платеж %s уже привязан к транзакции (trigger=%s)',
-                payment.order_id,
-                trigger,
+                'KassaAI платеж уже привязан к транзакции (trigger=)', order_id=payment.order_id, trigger=trigger
             )
             return True
 
@@ -255,10 +249,10 @@ class KassaAiPaymentMixin:
         user = await payment_module.get_user_by_id(db, payment.user_id)
         if not user:
             logger.error(
-                'Пользователь %s не найден для KassaAI платежа %s (trigger=%s)',
-                payment.user_id,
-                payment.order_id,
-                trigger,
+                'Пользователь не найден для KassaAI платежа (trigger=)',
+                user_id=payment.user_id,
+                order_id=payment.order_id,
+                trigger=trigger,
             )
             return False
 
@@ -304,7 +298,7 @@ class KassaAiPaymentMixin:
 
             await process_referral_topup(db, user.id, payment.amount_kopeks, getattr(self, 'bot', None))
         except Exception as error:
-            logger.error('Ошибка обработки реферального пополнения KassaAI: %s', error)
+            logger.error('Ошибка обработки реферального пополнения KassaAI', error=error)
 
         if was_first_topup and not user.has_made_first_topup:
             user.has_made_first_topup = True
@@ -332,7 +326,7 @@ class KassaAiPaymentMixin:
                     db=db,
                 )
             except Exception as error:
-                logger.error('Ошибка отправки админ уведомления KassaAI: %s', error)
+                logger.error('Ошибка отправки админ уведомления KassaAI', error=error)
 
         # Отправка уведомления пользователю (только Telegram-пользователям)
         if getattr(self, 'bot', None) and user.telegram_id:
@@ -355,7 +349,7 @@ class KassaAiPaymentMixin:
                     reply_markup=keyboard,
                 )
             except Exception as error:
-                logger.error('Ошибка отправки уведомления пользователю KassaAI: %s', error)
+                logger.error('Ошибка отправки уведомления пользователю KassaAI', error=error)
 
         # Автопокупка подписки
         try:
@@ -375,9 +369,9 @@ class KassaAiPaymentMixin:
                     )
                 except Exception as auto_error:
                     logger.error(
-                        'Ошибка автоматической покупки подписки для пользователя %s: %s',
-                        user.id,
-                        auto_error,
+                        'Ошибка автоматической покупки подписки для пользователя',
+                        user_id=user.id,
+                        auto_error=auto_error,
                         exc_info=True,
                     )
 
@@ -420,17 +414,14 @@ class KassaAiPaymentMixin:
                 )
         except Exception as error:
             logger.error(
-                'Ошибка при работе с сохраненной корзиной для пользователя %s: %s',
-                user.id,
-                error,
-                exc_info=True,
+                'Ошибка при работе с сохраненной корзиной для пользователя', user_id=user.id, error=error, exc_info=True
             )
 
         logger.info(
-            '✅ Обработан KassaAI платеж %s для пользователя %s (trigger=%s)',
-            payment.order_id,
-            payment.user_id,
-            trigger,
+            '✅ Обработан KassaAI платеж для пользователя (trigger=)',
+            order_id=payment.order_id,
+            user_id=payment.user_id,
+            trigger=trigger,
         )
 
         return True
@@ -454,7 +445,7 @@ class KassaAiPaymentMixin:
             status_data = await kassa_ai_service.get_order_status(order_id)
             return status_data
         except Exception as e:
-            logger.exception('KassaAI: ошибка проверки статуса: %s', e)
+            logger.exception('KassaAI: ошибка проверки статуса', e=e)
             return None
 
     async def get_kassa_ai_payment_status(
@@ -466,12 +457,12 @@ class KassaAiPaymentMixin:
         Проверяет статус платежа KassaAI по локальному ID через API.
         Если платёж оплачен — автоматически начисляет баланс.
         """
-        logger.info('KassaAI: checking payment status for id=%s', local_payment_id)
+        logger.info('KassaAI: checking payment status for id', local_payment_id=local_payment_id)
         kassa_ai_crud = import_module('app.database.crud.kassa_ai')
 
         payment = await kassa_ai_crud.get_kassa_ai_payment_by_id(db, local_payment_id)
         if not payment:
-            logger.warning('KassaAI payment not found: id=%s', local_payment_id)
+            logger.warning('KassaAI payment not found: id', local_payment_id=local_payment_id)
             return None
 
         if payment.is_paid:
@@ -508,7 +499,7 @@ class KassaAiPaymentMixin:
                 kai_status = int(target_order.get('status', 0))
 
                 if kai_status == 1:
-                    logger.info('KassaAI payment %s confirmed via API', payment.order_id)
+                    logger.info('KassaAI payment confirmed via API', order_id=payment.order_id)
 
                     callback_payload = {
                         'check_source': 'api',
@@ -537,7 +528,7 @@ class KassaAiPaymentMixin:
                         trigger='api_check',
                     )
         except Exception as e:
-            logger.error('Error checking KassaAI payment status: %s', e)
+            logger.error('Error checking KassaAI payment status', e=e)
 
         return {
             'payment': payment,

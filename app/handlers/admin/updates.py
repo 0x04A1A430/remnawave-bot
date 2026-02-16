@@ -1,5 +1,4 @@
-import logging
-
+import structlog
 from aiogram import Dispatcher, F, types
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,7 +8,7 @@ from app.services.version_service import version_service
 from app.utils.decorators import admin_required, error_handler
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 def get_updates_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
@@ -73,7 +72,7 @@ async def show_updates_menu(callback: types.CallbackQuery, db_user: User, db: As
             logger.debug('📝 Сообщение не изменено в show_updates_menu')
             await callback.answer()
             return
-        logger.error(f'Ошибка показа меню обновлений: {e}')
+        logger.error('Ошибка показа меню обновлений', error=e)
         await callback.answer('❌ Ошибка загрузки меню обновлений', show_alert=True)
 
 
@@ -125,7 +124,7 @@ async def check_updates(callback: types.CallbackQuery, db_user: User, db: AsyncS
         if 'message is not modified' in str(e).lower():
             logger.debug('📝 Сообщение не изменено в check_updates')
             return
-        logger.error(f'Ошибка проверки обновлений: {e}')
+        logger.error('Ошибка проверки обновлений', error=e)
         await callback.message.edit_text(
             f'❌ <b>ОШИБКА ПРОВЕРКИ ОБНОВЛЕНИЙ</b>\n\n'
             f'Не удалось связаться с сервером GitHub.\n'
@@ -207,7 +206,7 @@ async def show_version_info(callback: types.CallbackQuery, db_user: User, db: As
         if 'message is not modified' in str(e).lower():
             logger.debug('📝 Сообщение не изменено в show_version_info')
             return
-        logger.error(f'Ошибка получения информации о версиях: {e}')
+        logger.error('Ошибка получения информации о версиях', error=e)
         await callback.message.edit_text(
             f'❌ <b>ОШИБКА ЗАГРУЗКИ</b>\n\n'
             f'Не удалось получить информацию о версиях.\n\n'

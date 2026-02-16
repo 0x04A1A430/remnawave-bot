@@ -1,9 +1,9 @@
 """Promo offers routes for cabinet - personal discounts and offers."""
 
-import logging
 from datetime import datetime, timedelta
 from typing import Any
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import and_, select
@@ -22,7 +22,7 @@ from app.services.promo_offer_service import promo_offer_service
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/promo', tags=['Cabinet Promo'])
 

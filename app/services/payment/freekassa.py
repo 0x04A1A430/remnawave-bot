@@ -54,17 +54,17 @@ class FreekassaPaymentMixin:
         # Валидация лимитов
         if amount_kopeks < settings.FREEKASSA_MIN_AMOUNT_KOPEKS:
             logger.warning(
-                'Freekassa: сумма %s меньше минимальной %s',
-                amount_kopeks,
-                settings.FREEKASSA_MIN_AMOUNT_KOPEKS,
+                'Freekassa: сумма меньше минимальной',
+                amount_kopeks=amount_kopeks,
+                FREEKASSA_MIN_AMOUNT_KOPEKS=settings.FREEKASSA_MIN_AMOUNT_KOPEKS,
             )
             return None
 
         if amount_kopeks > settings.FREEKASSA_MAX_AMOUNT_KOPEKS:
             logger.warning(
-                'Freekassa: сумма %s больше максимальной %s',
-                amount_kopeks,
-                settings.FREEKASSA_MAX_AMOUNT_KOPEKS,
+                'Freekassa: сумма больше максимальной',
+                amount_kopeks=amount_kopeks,
+                FREEKASSA_MAX_AMOUNT_KOPEKS=settings.FREEKASSA_MAX_AMOUNT_KOPEKS,
             )
             return None
 
@@ -96,11 +96,7 @@ class FreekassaPaymentMixin:
                     email=email,
                     payment_system_id=settings.FREEKASSA_PAYMENT_SYSTEM_ID,
                 )
-                logger.info(
-                    'Freekassa API: создан заказ order_id=%s, url=%s',
-                    order_id,
-                    payment_url,
-                )
+                logger.info('Freekassa API: создан заказ order_id url', order_id=order_id, payment_url=payment_url)
             else:
                 # Генерируем URL для формы оплаты (стандартный способ)
                 payment_url = freekassa_service.build_payment_url(
@@ -128,12 +124,12 @@ class FreekassaPaymentMixin:
             )
 
             logger.info(
-                'Freekassa: создан платеж order_id=%s, user_id=%s, amount=%s %s, use_api=%s',
-                order_id,
-                user_id,
-                amount_rubles,
-                currency,
-                settings.FREEKASSA_USE_API,
+                'Freekassa: создан платеж order_id user_id amount use_api',
+                order_id=order_id,
+                user_id=user_id,
+                amount_rubles=amount_rubles,
+                currency=currency,
+                FREEKASSA_USE_API=settings.FREEKASSA_USE_API,
             )
 
             return {
@@ -147,7 +143,7 @@ class FreekassaPaymentMixin:
             }
 
         except Exception as e:
-            logger.exception('Freekassa: ошибка создания платежа: %s', e)
+            logger.exception('Freekassa: ошибка создания платежа', e=e)
             return None
 
     async def process_freekassa_webhook(
@@ -181,12 +177,12 @@ class FreekassaPaymentMixin:
         try:
             # Проверка IP
             if not freekassa_service.verify_webhook_ip(client_ip):
-                logger.warning('Freekassa webhook: недоверенный IP %s', client_ip)
+                logger.warning('Freekassa webhook: недоверенный IP', client_ip=client_ip)
                 return False
 
             # Проверка подписи
             if not freekassa_service.verify_webhook_signature(merchant_id, amount, order_id, sign):
-                logger.warning('Freekassa webhook: неверная подпись для order_id=%s', order_id)
+                logger.warning('Freekassa webhook: неверная подпись для order_id', order_id=order_id)
                 return False
 
             # Импортируем CRUD модуль
@@ -195,21 +191,21 @@ class FreekassaPaymentMixin:
             # Получаем платеж из БД
             payment = await freekassa_crud.get_freekassa_payment_by_order_id(db, order_id)
             if not payment:
-                logger.warning('Freekassa webhook: платеж не найден order_id=%s', order_id)
+                logger.warning('Freekassa webhook: платеж не найден order_id', order_id=order_id)
                 return False
 
             # Проверка дублирования
             if payment.is_paid:
-                logger.info('Freekassa webhook: платеж уже обработан order_id=%s', order_id)
+                logger.info('Freekassa webhook: платеж уже обработан order_id', order_id=order_id)
                 return True
 
             # Проверка суммы
             expected_amount = payment.amount_kopeks / 100
             if abs(amount - expected_amount) > 0.01:
                 logger.warning(
-                    'Freekassa webhook: несоответствие суммы ожидалось=%s, получено=%s',
-                    expected_amount,
-                    amount,
+                    'Freekassa webhook: несоответствие суммы ожидалось получено',
+                    expected_amount=expected_amount,
+                    amount=amount,
                 )
                 return False
 
@@ -236,7 +232,7 @@ class FreekassaPaymentMixin:
             return await self._finalize_freekassa_payment(db, payment, intid=intid, trigger='webhook')
 
         except Exception as e:
-            logger.exception('Freekassa webhook: ошибка обработки: %s', e)
+            logger.exception('Freekassa webhook: ошибка обработки', e=e)
             return False
 
     async def _finalize_freekassa_payment(
@@ -252,9 +248,7 @@ class FreekassaPaymentMixin:
 
         if payment.transaction_id:
             logger.info(
-                'Freekassa платеж %s уже привязан к транзакции (trigger=%s)',
-                payment.order_id,
-                trigger,
+                'Freekassa платеж уже привязан к транзакции (trigger=)', order_id=payment.order_id, trigger=trigger
             )
             return True
 
@@ -262,10 +256,10 @@ class FreekassaPaymentMixin:
         user = await payment_module.get_user_by_id(db, payment.user_id)
         if not user:
             logger.error(
-                'Пользователь %s не найден для Freekassa платежа %s (trigger=%s)',
-                payment.user_id,
-                payment.order_id,
-                trigger,
+                'Пользователь не найден для Freekassa платежа (trigger=)',
+                user_id=payment.user_id,
+                order_id=payment.order_id,
+                trigger=trigger,
             )
             return False
 
@@ -311,7 +305,7 @@ class FreekassaPaymentMixin:
 
             await process_referral_topup(db, user.id, payment.amount_kopeks, getattr(self, 'bot', None))
         except Exception as error:
-            logger.error('Ошибка обработки реферального пополнения Freekassa: %s', error)
+            logger.error('Ошибка обработки реферального пополнения Freekassa', error=error)
 
         if was_first_topup and not user.has_made_first_topup:
             user.has_made_first_topup = True
@@ -339,7 +333,7 @@ class FreekassaPaymentMixin:
                     db=db,
                 )
             except Exception as error:
-                logger.error('Ошибка отправки админ уведомления Freekassa: %s', error)
+                logger.error('Ошибка отправки админ уведомления Freekassa', error=error)
 
         # Отправка уведомления пользователю
         if getattr(self, 'bot', None) and user.telegram_id:
@@ -359,7 +353,7 @@ class FreekassaPaymentMixin:
                     reply_markup=keyboard,
                 )
             except Exception as error:
-                logger.error('Ошибка отправки уведомления пользователю Freekassa: %s', error)
+                logger.error('Ошибка отправки уведомления пользователю Freekassa', error=error)
 
         # Автопокупка подписки
         try:
@@ -379,9 +373,9 @@ class FreekassaPaymentMixin:
                     )
                 except Exception as auto_error:
                     logger.error(
-                        'Ошибка автоматической покупки подписки для пользователя %s: %s',
-                        user.id,
-                        auto_error,
+                        'Ошибка автоматической покупки подписки для пользователя',
+                        user_id=user.id,
+                        auto_error=auto_error,
                         exc_info=True,
                     )
 
@@ -424,17 +418,14 @@ class FreekassaPaymentMixin:
                 )
         except Exception as error:
             logger.error(
-                'Ошибка при работе с сохраненной корзиной для пользователя %s: %s',
-                user.id,
-                error,
-                exc_info=True,
+                'Ошибка при работе с сохраненной корзиной для пользователя', user_id=user.id, error=error, exc_info=True
             )
 
         logger.info(
-            '✅ Обработан Freekassa платеж %s для пользователя %s (trigger=%s)',
-            payment.order_id,
-            payment.user_id,
-            trigger,
+            '✅ Обработан Freekassa платеж для пользователя (trigger=)',
+            order_id=payment.order_id,
+            user_id=payment.user_id,
+            trigger=trigger,
         )
 
         return True
@@ -458,7 +449,7 @@ class FreekassaPaymentMixin:
             status_data = await freekassa_service.get_order_status(order_id)
             return status_data
         except Exception as e:
-            logger.exception('Freekassa: ошибка проверки статуса: %s', e)
+            logger.exception('Freekassa: ошибка проверки статуса', e=e)
             return None
 
     async def get_freekassa_payment_status(
@@ -473,7 +464,7 @@ class FreekassaPaymentMixin:
 
         payment = await freekassa_crud.get_freekassa_payment_by_id(db, local_payment_id)
         if not payment:
-            logger.warning('Freekassa payment not found: id=%s', local_payment_id)
+            logger.warning('Freekassa payment not found: id', local_payment_id=local_payment_id)
             return None
 
         if payment.is_paid:
@@ -512,7 +503,7 @@ class FreekassaPaymentMixin:
                 fk_status = int(target_order.get('status', 0))
 
                 if fk_status == 1:
-                    logger.info('Freekassa payment %s confirmed via API', payment.order_id)
+                    logger.info('Freekassa payment confirmed via API', order_id=payment.order_id)
 
                     callback_payload = {
                         'check_source': 'api',
@@ -541,7 +532,7 @@ class FreekassaPaymentMixin:
                         trigger='api_check',
                     )
         except Exception as e:
-            logger.error('Error checking Freekassa payment status: %s', e)
+            logger.error('Error checking Freekassa payment status', e=e)
 
         return {
             'payment': payment,

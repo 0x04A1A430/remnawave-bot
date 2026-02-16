@@ -1,6 +1,6 @@
-import logging
 from datetime import datetime
 
+import structlog
 from sqlalchemy import and_, desc, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -8,7 +8,7 @@ from sqlalchemy.orm import selectinload
 from app.database.models import SupportAuditLog, Ticket, TicketMessage, TicketStatus
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class TicketCRUD:
@@ -64,7 +64,7 @@ class TicketCRUD:
                 db=db,
             )
         except Exception as error:
-            logger.warning('Failed to emit ticket.created event: %s', error)
+            logger.warning('Failed to emit ticket.created event', error=error)
 
         return ticket
 
@@ -248,7 +248,7 @@ class TicketCRUD:
                 db=db,
             )
         except Exception as error:
-            logger.warning('Failed to emit ticket.status_changed event: %s', error)
+            logger.warning('Failed to emit ticket.status_changed event', error=error)
 
         return True
 
@@ -440,7 +440,7 @@ class TicketMessageCRUD:
                 db=db,
             )
         except Exception as error:
-            logger.warning('Failed to emit ticket.message_added event: %s', error)
+            logger.warning('Failed to emit ticket.message_added event', error=error)
 
         return message
 

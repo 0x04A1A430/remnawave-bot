@@ -1,6 +1,6 @@
-import logging
 from datetime import datetime
 
+import structlog
 from aiogram import types
 from aiogram.fsm.context import FSMContext
 from sqlalchemy import update
@@ -15,7 +15,7 @@ from app.states import BalanceStates
 from app.utils.decorators import error_handler
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @error_handler
@@ -228,16 +228,13 @@ async def process_heleket_payment_amount(
     try:
         await message.delete()
     except Exception as delete_error:  # pragma: no cover - depends on bot rights
-        logger.warning('Не удалось удалить сообщение с суммой Heleket: %s', delete_error)
+        logger.warning('Не удалось удалить сообщение с суммой Heleket', delete_error=delete_error)
 
     if prompt_message_id:
         try:
             await message.bot.delete_message(prompt_chat_id, prompt_message_id)
         except Exception as delete_error:  # pragma: no cover - diagnostic
-            logger.warning(
-                'Не удалось удалить сообщение с запросом суммы Heleket: %s',
-                delete_error,
-            )
+            logger.warning('Не удалось удалить сообщение с запросом суммы Heleket', delete_error=delete_error)
 
     invoice_message = await message.answer('\n'.join(details), parse_mode='HTML', reply_markup=keyboard)
 
@@ -258,7 +255,7 @@ async def process_heleket_payment_amount(
             )
             await db.commit()
     except Exception as error:  # pragma: no cover - diagnostics
-        logger.warning('Не удалось сохранить сообщение Heleket: %s', error)
+        logger.warning('Не удалось сохранить сообщение Heleket', error=error)
 
     await state.update_data(
         heleket_invoice_message_id=invoice_message.message_id,

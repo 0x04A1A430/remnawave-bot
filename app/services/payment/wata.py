@@ -83,17 +83,17 @@ class WataPaymentMixin:
 
         if amount_kopeks < settings.WATA_MIN_AMOUNT_KOPEKS:
             logger.warning(
-                'Сумма WATA меньше минимальной: %s < %s',
-                amount_kopeks,
-                settings.WATA_MIN_AMOUNT_KOPEKS,
+                'Сумма WATA меньше минимальной: <',
+                amount_kopeks=amount_kopeks,
+                WATA_MIN_AMOUNT_KOPEKS=settings.WATA_MIN_AMOUNT_KOPEKS,
             )
             return None
 
         if amount_kopeks > settings.WATA_MAX_AMOUNT_KOPEKS:
             logger.warning(
-                'Сумма WATA больше максимальной: %s > %s',
-                amount_kopeks,
-                settings.WATA_MAX_AMOUNT_KOPEKS,
+                'Сумма WATA больше максимальной: >',
+                amount_kopeks=amount_kopeks,
+                WATA_MAX_AMOUNT_KOPEKS=settings.WATA_MAX_AMOUNT_KOPEKS,
             )
             return None
 
@@ -108,7 +108,7 @@ class WataPaymentMixin:
                 elif user.email:
                     description = f'{description} | {user.email}'
         except Exception as error:
-            logger.debug('Не удалось получить данные пользователя для описания WATA: %s', error)
+            logger.debug('Не удалось получить данные пользователя для описания WATA', error=error)
 
         order_id = f'wata_{user_id}_{uuid.uuid4().hex[:12]}'
 
@@ -120,10 +120,10 @@ class WataPaymentMixin:
                 order_id=order_id,
             )
         except WataAPIError as error:
-            logger.error('Ошибка создания WATA платежа: %s', error)
+            logger.error('Ошибка создания WATA платежа', error=error)
             return None
         except Exception as error:  # pragma: no cover - safety net
-            logger.exception('Непредвиденная ошибка при создании WATA платежа: %s', error)
+            logger.exception('Непредвиденная ошибка при создании WATA платежа', error=error)
             return None
 
         payment_link_id = response.get('id')
@@ -134,7 +134,7 @@ class WataPaymentMixin:
         fail_url = response.get('failRedirectUrl')
 
         if not payment_link_id:
-            logger.error('WATA API не вернула идентификатор платежной ссылки: %s', response)
+            logger.error('WATA API не вернула идентификатор платежной ссылки', response=response)
             return None
 
         expiration_raw = response.get('expirationDateTime')
@@ -164,10 +164,10 @@ class WataPaymentMixin:
         )
 
         logger.info(
-            'Создан WATA платеж %s на %s₽ для пользователя %s',
-            payment_link_id,
-            amount_kopeks / 100,
-            user_id,
+            'Создан WATA платеж на ₽ для пользователя',
+            payment_link_id=payment_link_id,
+            amount_kopeks=amount_kopeks / 100,
+            user_id=user_id,
         )
 
         return {
@@ -188,7 +188,7 @@ class WataPaymentMixin:
         payment_module = import_module('app.services.payment_service')
 
         if not isinstance(payload, dict):
-            logger.error('WATA webhook payload не является словарём: %s', payload)
+            logger.error('WATA webhook payload не является словарём', payload=payload)
             return False
 
         order_id_raw = payload.get('orderId')
@@ -200,14 +200,11 @@ class WataPaymentMixin:
         transaction_status = (transaction_status_raw or '').strip()
 
         if not order_id and not payment_link_id:
-            logger.error(
-                'WATA webhook без orderId и paymentLinkId: %s',
-                payload,
-            )
+            logger.error('WATA webhook без orderId и paymentLinkId', payload=payload)
             return False
 
         if not transaction_status:
-            logger.error('WATA webhook без статуса транзакции: %s', payload)
+            logger.error('WATA webhook без статуса транзакции', payload=payload)
             return False
 
         payment = None
@@ -218,9 +215,7 @@ class WataPaymentMixin:
 
         if not payment:
             logger.error(
-                'WATA платеж не найден (order_id=%s, payment_link_id=%s)',
-                order_id,
-                payment_link_id,
+                'WATA платеж не найден (order_id payment_link_id=)', order_id=order_id, payment_link_id=payment_link_id
             )
             return False
 
@@ -252,20 +247,14 @@ class WataPaymentMixin:
 
         if status_lower == 'paid':
             if payment.is_paid:
-                logger.info(
-                    'WATA платеж %s уже помечен как оплачен',
-                    payment.payment_link_id,
-                )
+                logger.info('WATA платеж уже помечен как оплачен', payment_link_id=payment.payment_link_id)
                 return True
 
             await self._finalize_wata_payment(db, payment, payload)
             return True
 
         if status_lower == 'declined':
-            logger.info(
-                'WATA платеж %s отклонён',
-                payment.payment_link_id,
-            )
+            logger.info('WATA платеж отклонён', payment_link_id=payment.payment_link_id)
 
         return True
 
@@ -288,9 +277,9 @@ class WataPaymentMixin:
             try:
                 remote_link = await self.wata_service.get_payment_link(payment.payment_link_id)  # type: ignore[union-attr]
             except WataAPIError as error:
-                logger.error('Ошибка получения WATA ссылки %s: %s', payment.payment_link_id, error)
+                logger.error('Ошибка получения WATA ссылки', payment_link_id=payment.payment_link_id, error=error)
             except Exception as error:  # pragma: no cover - safety net
-                logger.exception('Непредвиденная ошибка при запросе WATA ссылки: %s', error)
+                logger.exception('Непредвиденная ошибка при запросе WATA ссылки', error=error)
 
         if remote_link:
             remote_status = remote_link.get('status') or payment.status
@@ -317,16 +306,12 @@ class WataPaymentMixin:
                             transaction_id
                         )
                     except WataAPIError as error:
-                        logger.error(
-                            'Ошибка получения WATA транзакции %s: %s',
-                            transaction_id,
-                            error,
-                        )
+                        logger.error('Ошибка получения WATA транзакции', transaction_id=transaction_id, error=error)
                     except Exception as error:  # pragma: no cover - safety net
                         logger.exception(
-                            'Непредвиденная ошибка при запросе WATA транзакции %s: %s',
-                            transaction_id,
-                            error,
+                            'Непредвиденная ошибка при запросе WATA транзакции',
+                            transaction_id=transaction_id,
+                            error=error,
                         )
                 if not transaction_payload:
                     try:
@@ -343,12 +328,10 @@ class WataPaymentMixin:
                                 break
                     except WataAPIError as error:
                         logger.error(
-                            'Ошибка поиска WATA транзакций для %s: %s',
-                            payment.payment_link_id,
-                            error,
+                            'Ошибка поиска WATA транзакций для', payment_link_id=payment.payment_link_id, error=error
                         )
                     except Exception as error:  # pragma: no cover - safety net
-                        logger.exception('Непредвиденная ошибка при поиске WATA транзакции: %s', error)
+                        logger.exception('Непредвиденная ошибка при поиске WATA транзакции', error=error)
 
         if not transaction_payload and not payment.is_paid and getattr(self, 'wata_service', None):
             fallback_transaction_id = transaction_id or _extract_transaction_id(payment)
@@ -359,15 +342,15 @@ class WataPaymentMixin:
                     )
                 except WataAPIError as error:
                     logger.error(
-                        'Ошибка повторного запроса WATA транзакции %s: %s',
-                        fallback_transaction_id,
-                        error,
+                        'Ошибка повторного запроса WATA транзакции',
+                        fallback_transaction_id=fallback_transaction_id,
+                        error=error,
                     )
                 except Exception as error:  # pragma: no cover - safety net
                     logger.exception(
-                        'Непредвиденная ошибка при повторном запросе WATA транзакции %s: %s',
-                        fallback_transaction_id,
-                        error,
+                        'Непредвиденная ошибка при повторном запросе WATA транзакции',
+                        fallback_transaction_id=fallback_transaction_id,
+                        error=error,
                     )
 
         if transaction_payload and not payment.is_paid:
@@ -380,9 +363,9 @@ class WataPaymentMixin:
                 payment = await self._finalize_wata_payment(db, payment, transaction_payload)
             else:
                 logger.debug(
-                    'WATA транзакция %s в статусе %s, повторная обработка не требуется',
-                    transaction_id or getattr(payment, 'payment_link_id', ''),
-                    normalized_status or 'unknown',
+                    'WATA транзакция в статусе , повторная обработка не требуется',
+                    transaction_id=transaction_id or getattr(payment, 'payment_link_id', ''),
+                    normalized_status=normalized_status or 'unknown',
                 )
 
         return {
@@ -407,9 +390,9 @@ class WataPaymentMixin:
             paid_status = None
         if paid_status and str(paid_status).lower() not in {'paid', 'declined', 'pending'}:
             logger.debug(
-                'Неизвестный статус WATA транзакции %s: %s',
-                getattr(payment, 'payment_link_id', ''),
-                paid_status,
+                'Неизвестный статус WATA транзакции',
+                getattr=getattr(payment, 'payment_link_id', ''),
+                paid_status=paid_status,
             )
 
         paid_at = None
@@ -427,11 +410,7 @@ class WataPaymentMixin:
                 try:
                     await self.bot.delete_message(chat_id, message_id)
                 except Exception as delete_error:  # pragma: no cover - depends on rights
-                    logger.warning(
-                        'Не удалось удалить счёт WATA %s: %s',
-                        message_id,
-                        delete_error,
-                    )
+                    logger.warning('Не удалось удалить счёт WATA', message_id=message_id, delete_error=delete_error)
                 else:
                     existing_metadata.pop('invoice_message', None)
 
@@ -449,15 +428,15 @@ class WataPaymentMixin:
 
         if payment.transaction_id:
             logger.info(
-                'WATA платеж %s уже привязан к транзакции %s',
-                payment.payment_link_id,
-                payment.transaction_id,
+                'WATA платеж уже привязан к транзакции',
+                payment_link_id=payment.payment_link_id,
+                transaction_id=payment.transaction_id,
             )
             return payment
 
         user = await payment_module.get_user_by_id(db, payment.user_id)
         if not user:
-            logger.error('Пользователь %s не найден при обработке WATA', payment.user_id)
+            logger.error('Пользователь не найден при обработке WATA', user_id=payment.user_id)
             return payment
 
         transaction_external_id = str(transaction_payload.get('id') or transaction_payload.get('transactionId') or '')
@@ -485,7 +464,7 @@ class WataPaymentMixin:
         await db.commit()
         user = await payment_module.get_user_by_id(db, user.id)
         if not user:
-            logger.error('Пользователь %s не найден после коммита WATA', payment.user_id)
+            logger.error('Пользователь не найден после коммита WATA', user_id=payment.user_id)
             return payment
 
         promo_group = user.get_primary_promo_group()
@@ -503,7 +482,7 @@ class WataPaymentMixin:
                 getattr(self, 'bot', None),
             )
         except Exception as error:
-            logger.error('Ошибка обработки реферального пополнения WATA: %s', error)
+            logger.error('Ошибка обработки реферального пополнения WATA', error=error)
 
         if was_first_topup and not user.has_made_first_topup:
             user.has_made_first_topup = True
@@ -526,7 +505,7 @@ class WataPaymentMixin:
                     db=db,
                 )
             except Exception as error:
-                logger.error('Ошибка отправки админ уведомления WATA: %s', error)
+                logger.error('Ошибка отправки админ уведомления WATA', error=error)
 
         if getattr(self, 'bot', None) and user.telegram_id:
             try:
@@ -548,7 +527,7 @@ class WataPaymentMixin:
                     reply_markup=keyboard,
                 )
             except Exception as error:
-                logger.error('Ошибка отправки уведомления пользователю WATA: %s', error)
+                logger.error('Ошибка отправки уведомления пользователю WATA', error=error)
 
         try:
             from aiogram import types
@@ -566,9 +545,9 @@ class WataPaymentMixin:
                     )
                 except Exception as auto_error:
                     logger.error(
-                        'Ошибка автоматической покупки подписки для пользователя %s: %s',
-                        user.id,
-                        auto_error,
+                        'Ошибка автоматической покупки подписки для пользователя',
+                        user_id=user.id,
+                        auto_error=auto_error,
                         exc_info=True,
                     )
 
@@ -613,6 +592,6 @@ class WataPaymentMixin:
                     reply_markup=keyboard,
                 )
         except Exception as error:
-            logger.debug('Не удалось отправить напоминание о корзине после WATA: %s', error)
+            logger.debug('Не удалось отправить напоминание о корзине после WATA', error=error)
 
         return payment

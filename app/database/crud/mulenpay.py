@@ -1,6 +1,6 @@
-import logging
 from datetime import datetime
 
+import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,7 +8,7 @@ from app.config import settings
 from app.database.models import MulenPayPayment
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def create_mulenpay_payment(
@@ -41,12 +41,12 @@ async def create_mulenpay_payment(
     await db.refresh(payment)
 
     logger.info(
-        'Создан %s платеж #%s (uuid=%s) на сумму %s копеек для пользователя %s',
-        settings.get_mulenpay_display_name(),
-        payment.mulen_payment_id,
-        uuid,
-        amount_kopeks,
-        user_id,
+        'Создан платеж # (uuid=) на сумму копеек для пользователя',
+        get_mulenpay_display_name=settings.get_mulenpay_display_name(),
+        mulen_payment_id=payment.mulen_payment_id,
+        uuid=uuid,
+        amount_kopeks=amount_kopeks,
+        user_id=user_id,
     )
 
     return payment

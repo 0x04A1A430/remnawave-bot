@@ -66,7 +66,7 @@ async def get_current_devices_detailed(db_user: User) -> dict:
             return {'count': 0, 'devices': []}
 
     except Exception as e:
-        logger.error(f'Ошибка получения детальной информации об устройствах: {e}')
+        logger.error('Ошибка получения детальной информации об устройствах', error=e)
         return {'count': 0, 'devices': []}
 
 
@@ -85,9 +85,9 @@ async def get_servers_display_names(squad_uuids: list[str]) -> str:
                 server = await get_server_squad_by_uuid(db, uuid)
                 if server:
                     server_names.append(server.display_name)
-                    logger.debug(f'Найден сервер в БД: {uuid} -> {server.display_name}')
+                    logger.debug('Найден сервер в БД', uuid=uuid, display_name=server.display_name)
                 else:
-                    logger.warning(f'Сервер с UUID {uuid} не найден в БД')
+                    logger.warning('Сервер с UUID не найден в БД', uuid=uuid)
 
         if not server_names:
             countries = await _get_available_countries()
@@ -95,7 +95,7 @@ async def get_servers_display_names(squad_uuids: list[str]) -> str:
                 for country in countries:
                     if country['uuid'] == uuid:
                         server_names.append(country['name'])
-                        logger.debug(f'Найден сервер в кэше: {uuid} -> {country["name"]}')
+                        logger.debug('Найден сервер в кэше', uuid=uuid, country=country['name'])
                         break
 
         if not server_names:
@@ -110,7 +110,7 @@ async def get_servers_display_names(squad_uuids: list[str]) -> str:
         return ', '.join(server_names)
 
     except Exception as e:
-        logger.error(f'Ошибка получения названий серверов: {e}')
+        logger.error('Ошибка получения названий серверов', error=e)
         if len(squad_uuids) == 1:
             return '🎯 Тестовый сервер'
         return f'{len(squad_uuids)} стран'
@@ -134,7 +134,7 @@ async def get_current_devices_count(db_user: User) -> str:
             return '—'
 
     except Exception as e:
-        logger.error(f'Ошибка получения количества устройств: {e}')
+        logger.error('Ошибка получения количества устройств', error=e)
         return '—'
 
 
@@ -387,10 +387,10 @@ async def confirm_change_devices(callback: types.CallbackQuery, db_user: User, d
                 },
             )
             logger.info(
-                'Сохранена корзина add_devices для пользователя %s: +%s устройств, цена %s коп.',
-                db_user.telegram_id,
-                devices_difference,
-                price,
+                'Сохранена корзина add_devices для пользователя : + устройств, цена коп.',
+                telegram_id=db_user.telegram_id,
+                devices_difference=devices_difference,
+                price=price,
             )
 
             await callback.message.answer(
@@ -457,7 +457,7 @@ async def confirm_change_devices(callback: types.CallbackQuery, db_user: User, d
                             ),
                         ).format(connected=connected_count, new=new_devices_count)
         except Exception as e:
-            logger.error(f'Ошибка проверки устройств: {e}')
+            logger.error('Ошибка проверки устройств', error=e)
 
     confirm_text = texts.t(
         'DEVICE_CHANGE_CONFIRMATION',
@@ -577,9 +577,10 @@ async def execute_change_devices(callback: types.CallbackQuery, db_user: User, d
                         if connected_count > new_devices_count:
                             devices_to_remove = connected_count - new_devices_count
                             logger.info(
-                                f'🔧 Удаление лишних устройств при уменьшении лимита: '
-                                f'подключено {connected_count}, новый лимит {new_devices_count}, '
-                                f'удаляем {devices_to_remove}'
+                                '🔧 Удаление лишних устройств при уменьшении лимита: подключено новый лимит удаляем',
+                                connected_count=connected_count,
+                                new_devices_count=new_devices_count,
+                                devices_to_remove=devices_to_remove,
                             )
 
                             # Сортируем по дате (последние в конце) и удаляем последние
@@ -596,11 +597,13 @@ async def execute_change_devices(callback: types.CallbackQuery, db_user: User, d
                                         delete_data = {'userUuid': db_user.remnawave_uuid, 'hwid': device_hwid}
                                         await api._make_request('POST', '/api/hwid/devices/delete', data=delete_data)
                                         devices_reset_count += 1
-                                        logger.info(f'✅ Удалено устройство {device_hwid}')
+                                        logger.info('✅ Удалено устройство', device_hwid=device_hwid)
                                     except Exception as del_error:
-                                        logger.error(f'Ошибка удаления устройства {device_hwid}: {del_error}')
+                                        logger.error(
+                                            'Ошибка удаления устройства', device_hwid=device_hwid, del_error=del_error
+                                        )
             except Exception as reset_error:
-                logger.error(f'Ошибка удаления устройств при уменьшении лимита: {reset_error}')
+                logger.error('Ошибка удаления устройств при уменьшении лимита', reset_error=reset_error)
 
         await db.refresh(db_user)
         await db.refresh(subscription)
@@ -613,7 +616,7 @@ async def execute_change_devices(callback: types.CallbackQuery, db_user: User, d
                 db, db_user, subscription, 'devices', current_devices, new_devices_count, price
             )
         except Exception as e:
-            logger.error(f'Ошибка отправки уведомления об изменении устройств: {e}')
+            logger.error('Ошибка отправки уведомления об изменении устройств', error=e)
 
         if new_devices_count > current_devices:
             success_text = texts.t(
@@ -651,11 +654,15 @@ async def execute_change_devices(callback: types.CallbackQuery, db_user: User, d
         await callback.message.edit_text(success_text, reply_markup=get_back_keyboard(db_user.language))
 
         logger.info(
-            f'✅ Пользователь {db_user.telegram_id} изменил количество устройств с {current_devices} на {new_devices_count}, доплата: {price / 100}₽'
+            '✅ Пользователь изменил количество устройств с на доплата: ₽',
+            telegram_id=db_user.telegram_id,
+            current_devices=current_devices,
+            new_devices_count=new_devices_count,
+            price=price / 100,
         )
 
     except Exception as e:
-        logger.error(f'Ошибка изменения количества устройств: {e}')
+        logger.error('Ошибка изменения количества устройств', error=e)
         await callback.message.edit_text(texts.ERROR, reply_markup=get_back_keyboard(db_user.language))
 
     await callback.answer()
@@ -711,7 +718,7 @@ async def handle_device_management(callback: types.CallbackQuery, db_user: User,
                 )
 
     except Exception as e:
-        logger.error(f'Ошибка получения списка устройств: {e}')
+        logger.error('Ошибка получения списка устройств', error=e)
         await callback.answer(
             texts.t(
                 'DEVICE_FETCH_INFO_ERROR',
@@ -790,7 +797,7 @@ async def handle_devices_page(callback: types.CallbackQuery, db_user: User, db: 
                 )
 
     except Exception as e:
-        logger.error(f'Ошибка перехода на страницу устройств: {e}')
+        logger.error('Ошибка перехода на страницу устройств', error=e)
         await callback.answer(
             texts.t('DEVICE_PAGE_LOAD_ERROR', '❌ Ошибка загрузки страницы'),
             show_alert=True,
@@ -801,7 +808,7 @@ async def handle_single_device_reset(callback: types.CallbackQuery, db_user: Use
     try:
         callback_parts = callback.data.split('_')
         if len(callback_parts) < 4:
-            logger.error(f'Некорректный формат callback_data: {callback.data}')
+            logger.error('Некорректный формат callback_data', callback_data=callback.data)
             await callback.answer(
                 texts.t('DEVICE_RESET_INVALID_REQUEST', '❌ Ошибка: некорректный запрос'),
                 show_alert=True,
@@ -811,10 +818,10 @@ async def handle_single_device_reset(callback: types.CallbackQuery, db_user: Use
         device_index = int(callback_parts[2])
         page = int(callback_parts[3])
 
-        logger.info(f'🔧 Сброс устройства: index={device_index}, page={page}')
+        logger.info('🔧 Сброс устройства: index=, page', device_index=device_index, page=page)
 
     except (ValueError, IndexError) as e:
-        logger.error(f'❌ Ошибка парсинга callback_data {callback.data}: {e}')
+        logger.error('❌ Ошибка парсинга callback_data', callback_data=callback.data, error=e)
         await callback.answer(
             texts.t('DEVICE_RESET_PARSE_ERROR', '❌ Ошибка обработки запроса'),
             show_alert=True,
@@ -879,7 +886,11 @@ async def handle_single_device_reset(callback: types.CallbackQuery, db_user: Use
                                     reply_markup=get_back_keyboard(db_user.language),
                                 )
 
-                        logger.info(f'✅ Пользователь {db_user.telegram_id} сбросил устройство {device_info}')
+                        logger.info(
+                            '✅ Пользователь сбросил устройство',
+                            telegram_id=db_user.telegram_id,
+                            device_info=device_info,
+                        )
                     else:
                         await callback.answer(
                             texts.t(
@@ -900,7 +911,7 @@ async def handle_single_device_reset(callback: types.CallbackQuery, db_user: Use
                 )
 
     except Exception as e:
-        logger.error(f'Ошибка сброса устройства: {e}')
+        logger.error('Ошибка сброса устройства', error=e)
         await callback.answer(
             texts.t('DEVICE_RESET_ERROR', '❌ Ошибка сброса устройства'),
             show_alert=True,
@@ -944,7 +955,7 @@ async def handle_all_devices_reset_from_management(callback: types.CallbackQuery
                 )
                 return
 
-            logger.info(f'🔧 Найдено {len(devices_list)} устройств для сброса')
+            logger.info('🔧 Найдено устройств для сброса', devices_list_count=len(devices_list))
 
             success_count = 0
             failed_count = 0
@@ -957,14 +968,16 @@ async def handle_all_devices_reset_from_management(callback: types.CallbackQuery
 
                         await api._make_request('POST', '/api/hwid/devices/delete', data=delete_data)
                         success_count += 1
-                        logger.info(f'✅ Устройство {device_hwid} удалено')
+                        logger.info('✅ Устройство удалено', device_hwid=device_hwid)
 
                     except Exception as device_error:
                         failed_count += 1
-                        logger.error(f'❌ Ошибка удаления устройства {device_hwid}: {device_error}')
+                        logger.error(
+                            '❌ Ошибка удаления устройства', device_hwid=device_hwid, device_error=device_error
+                        )
                 else:
                     failed_count += 1
-                    logger.warning(f'⚠️ У устройства нет HWID: {device}')
+                    logger.warning('⚠️ У устройства нет HWID', device=device)
 
             if success_count > 0:
                 if failed_count == 0:
@@ -981,7 +994,11 @@ async def handle_all_devices_reset_from_management(callback: types.CallbackQuery
                         reply_markup=get_back_keyboard(db_user.language),
                         parse_mode='HTML',
                     )
-                    logger.info(f'✅ Пользователь {db_user.telegram_id} успешно сбросил {success_count} устройств')
+                    logger.info(
+                        '✅ Пользователь успешно сбросил устройств',
+                        telegram_id=db_user.telegram_id,
+                        success_count=success_count,
+                    )
                 else:
                     await callback.message.edit_text(
                         texts.t(
@@ -997,7 +1014,10 @@ async def handle_all_devices_reset_from_management(callback: types.CallbackQuery
                         parse_mode='HTML',
                     )
                     logger.warning(
-                        f'⚠️ Частичный сброс у пользователя {db_user.telegram_id}: {success_count}/{len(devices_list)}'
+                        '⚠️ Частичный сброс у пользователя /',
+                        telegram_id=db_user.telegram_id,
+                        success_count=success_count,
+                        devices_list_count=len(devices_list),
                     )
             else:
                 await callback.message.edit_text(
@@ -1012,10 +1032,12 @@ async def handle_all_devices_reset_from_management(callback: types.CallbackQuery
                     reply_markup=get_back_keyboard(db_user.language),
                     parse_mode='HTML',
                 )
-                logger.error(f'❌ Не удалось сбросить ни одного устройства у пользователя {db_user.telegram_id}')
+                logger.error(
+                    '❌ Не удалось сбросить ни одного устройства у пользователя', telegram_id=db_user.telegram_id
+                )
 
     except Exception as e:
-        logger.error(f'Ошибка сброса всех устройств: {e}')
+        logger.error('Ошибка сброса всех устройств', error=e)
         await callback.message.edit_text(texts.ERROR, reply_markup=get_back_keyboard(db_user.language))
 
     await callback.answer()
@@ -1111,12 +1133,12 @@ async def confirm_add_devices(callback: types.CallbackQuery, db_user: User, db: 
         period_label = f'{charged_months} мес'
 
     logger.info(
-        'Добавление %s устройств: %.2f₽/мес × %s = %.2f₽ (скидка %.2f₽)',
-        devices_count,
-        discounted_per_month / 100,
-        period_label,
-        price / 100,
-        total_discount / 100,
+        'Добавление устройств: ₽/мес × = ₽ (скидка ₽)',
+        devices_count=devices_count,
+        discounted_per_month=discounted_per_month / 100,
+        period_label=period_label,
+        price=price / 100,
+        total_discount=total_discount / 100,
     )
 
     if db_user.balance_kopeks < price:
@@ -1147,10 +1169,10 @@ async def confirm_add_devices(callback: types.CallbackQuery, db_user: User, db: 
             },
         )
         logger.info(
-            'Сохранена корзина add_devices для пользователя %s: +%s устройств, цена %s коп.',
-            db_user.telegram_id,
-            devices_count,
-            price,
+            'Сохранена корзина add_devices для пользователя : + устройств, цена коп.',
+            telegram_id=db_user.telegram_id,
+            devices_count=devices_count,
+            price=price,
         )
 
         await callback.message.edit_text(
@@ -1201,7 +1223,7 @@ async def confirm_add_devices(callback: types.CallbackQuery, db_user: User, db: 
                 db, db_user, subscription, 'devices', old_device_limit, subscription.device_limit, price
             )
         except Exception as e:
-            logger.error(f'Ошибка отправки уведомления о докупке устройств: {e}')
+            logger.error('Ошибка отправки уведомления о докупке устройств', error=e)
 
         success_text = (
             '✅ Устройства успешно добавлены!\n\n'
@@ -1214,10 +1236,15 @@ async def confirm_add_devices(callback: types.CallbackQuery, db_user: User, db: 
 
         await callback.message.edit_text(success_text, reply_markup=get_back_keyboard(db_user.language))
 
-        logger.info(f'✅ Пользователь {db_user.telegram_id} добавил {devices_count} устройств за {price / 100}₽')
+        logger.info(
+            '✅ Пользователь добавил устройств за ₽',
+            telegram_id=db_user.telegram_id,
+            devices_count=devices_count,
+            price=price / 100,
+        )
 
     except Exception as e:
-        logger.error(f'Ошибка добавления устройств: {e}')
+        logger.error('Ошибка добавления устройств', error=e)
         await callback.message.edit_text(texts.ERROR, reply_markup=get_back_keyboard(db_user.language))
 
     await callback.answer()

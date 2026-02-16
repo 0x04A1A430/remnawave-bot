@@ -1,13 +1,13 @@
-import logging
 from datetime import datetime
 
+import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import PublicOffer
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def get_public_offer(db: AsyncSession, language: str) -> PublicOffer | None:
@@ -38,11 +38,7 @@ async def upsert_public_offer(
     await db.commit()
     await db.refresh(offer)
 
-    logger.info(
-        '✅ Публичная оферта для языка %s обновлена (ID: %s)',
-        language,
-        offer.id,
-    )
+    logger.info('✅ Публичная оферта для языка обновлена (ID:)', language=language, offer_id=offer.id)
 
     return offer
 

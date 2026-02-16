@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+import structlog
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError, TelegramRetryAfter
 from aiogram.types import InlineKeyboardMarkup
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from app.cabinet.services.email_service import EmailService
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 VALID_MEDIA_TYPES = {'photo', 'video', 'document'}
@@ -103,7 +103,7 @@ class BroadcastService:
 
     async def start_broadcast(self, broadcast_id: int, config: BroadcastConfig) -> None:
         if self._bot is None:
-            logger.error('Невозможно запустить рассылку %s: бот не инициализирован', broadcast_id)
+            logger.error('Невозможно запустить рассылку : бот не инициализирован', broadcast_id=broadcast_id)
             await self._mark_failed(broadcast_id)
             return
 
@@ -111,7 +111,7 @@ class BroadcastService:
 
         async with self._lock:
             if broadcast_id in self._tasks and not self._tasks[broadcast_id].task.done():
-                logger.warning('Рассылка %s уже запущена', broadcast_id)
+                logger.warning('Рассылка уже запущена', broadcast_id=broadcast_id)
                 return
 
             task = asyncio.create_task(
@@ -147,7 +147,7 @@ class BroadcastService:
             async with AsyncSessionLocal() as session:
                 broadcast = await session.get(BroadcastHistory, broadcast_id)
                 if not broadcast:
-                    logger.error('Запись рассылки %s не найдена в БД', broadcast_id)
+                    logger.error('Запись рассылки не найдена в БД', broadcast_id=broadcast_id)
                     return
 
                 broadcast.status = 'in_progress'
@@ -161,7 +161,7 @@ class BroadcastService:
             async with AsyncSessionLocal() as session:
                 broadcast = await session.get(BroadcastHistory, broadcast_id)
                 if not broadcast:
-                    logger.error('Запись рассылки %s удалена до запуска', broadcast_id)
+                    logger.error('Запись рассылки удалена до запуска', broadcast_id=broadcast_id)
                     return
 
                 broadcast.total_count = len(recipient_ids)
@@ -172,18 +172,18 @@ class BroadcastService:
                 return
 
             if not recipient_ids:
-                logger.info('Рассылка %s: получатели не найдены', broadcast_id)
+                logger.info('Рассылка : получатели не найдены', broadcast_id=broadcast_id)
                 await self._mark_finished(broadcast_id, sent_count, failed_count, cancelled=False)
                 return
 
             keyboard = self._build_keyboard(config.selected_buttons)
 
             logger.info(
-                'Рассылка %s: начинаем отправку %d получателям (batch=%d, delay=%.1fs)',
-                broadcast_id,
-                len(recipient_ids),
-                _TG_BATCH_SIZE,
-                _TG_BATCH_DELAY,
+                'Рассылка : начинаем отправку получателям (batch delay=s)',
+                broadcast_id=broadcast_id,
+                recipient_ids_count=len(recipient_ids),
+                TG_BATCH_SIZE=_TG_BATCH_SIZE,
+                TG_BATCH_DELAY=_TG_BATCH_DELAY,
             )
 
             sent_count, failed_count, cancelled_during_run = await self._send_batched(
@@ -196,15 +196,15 @@ class BroadcastService:
 
             if cancelled_during_run:
                 logger.info(
-                    'Рассылка %s была отменена во время выполнения, финальный статус уже установлен',
-                    broadcast_id,
+                    'Рассылка была отменена во время выполнения, финальный статус уже установлен',
+                    broadcast_id=broadcast_id,
                 )
                 return
 
             if cancel_event.is_set():
                 logger.info(
-                    'Запрос на отмену рассылки %s пришел после завершения отправки, фиксируем итоговый статус',
-                    broadcast_id,
+                    'Запрос на отмену рассылки пришел после завершения отправки, фиксируем итоговый статус',
+                    broadcast_id=broadcast_id,
                 )
 
             await self._mark_finished(
@@ -218,7 +218,7 @@ class BroadcastService:
             await self._mark_cancelled(broadcast_id, sent_count, failed_count)
             raise
         except Exception as exc:
-            logger.exception('Критическая ошибка при выполнении рассылки %s: %s', broadcast_id, exc)
+            logger.exception('Критическая ошибка при выполнении рассылки', broadcast_id=broadcast_id, exc=exc)
             await self._mark_failed(broadcast_id, sent_count, failed_count)
 
     async def _fetch_recipients(self, target: str) -> list[int]:
@@ -277,12 +277,12 @@ class BroadcastService:
                     wait_seconds = e.retry_after + 1
                     flood_wait_until = asyncio.get_event_loop().time() + wait_seconds
                     logger.warning(
-                        'FloodWait рассылки %s: Telegram просит %d сек (user=%d, попытка %d/%d)',
-                        broadcast_id,
-                        e.retry_after,
-                        telegram_id,
-                        attempt + 1,
-                        _TG_MAX_RETRIES,
+                        'FloodWait рассылки : Telegram просит сек (user попытка /)',
+                        broadcast_id=broadcast_id,
+                        retry_after=e.retry_after,
+                        telegram_id=telegram_id,
+                        attempt=attempt + 1,
+                        TG_MAX_RETRIES=_TG_MAX_RETRIES,
                     )
                     await asyncio.sleep(wait_seconds)
 
@@ -294,12 +294,12 @@ class BroadcastService:
 
                 except Exception as exc:
                     logger.error(
-                        'Ошибка отправки рассылки %s пользователю %d (попытка %d/%d): %s',
-                        broadcast_id,
-                        telegram_id,
-                        attempt + 1,
-                        _TG_MAX_RETRIES,
-                        exc,
+                        'Ошибка отправки рассылки пользователю (попытка /)',
+                        broadcast_id=broadcast_id,
+                        telegram_id=telegram_id,
+                        attempt=attempt + 1,
+                        TG_MAX_RETRIES=_TG_MAX_RETRIES,
+                        exc=exc,
                     )
                     if attempt < _TG_MAX_RETRIES - 1:
                         await asyncio.sleep(0.5 * (attempt + 1))
@@ -325,7 +325,7 @@ class BroadcastService:
                         failed_count += 1
                 elif isinstance(result, Exception):
                     failed_count += 1
-                    logger.error('Необработанное исключение в рассылке %s: %s', broadcast_id, result)
+                    logger.error('Необработанное исключение в рассылке', broadcast_id=broadcast_id, result=result)
 
             # Обновляем прогресс в БД периодически
             processed = sent_count + failed_count
@@ -474,14 +474,14 @@ class BroadcastService:
             except InterfaceError as exc:
                 attempts += 1
                 logger.warning(
-                    'Проблемы с соединением при обновлении статуса рассылки %s: %s. Повтор %s/2',
-                    broadcast_id,
-                    exc,
-                    attempts,
+                    'Проблемы с соединением при обновлении статуса рассылки : . Повтор /2',
+                    broadcast_id=broadcast_id,
+                    exc=exc,
+                    attempts=attempts,
                 )
                 await asyncio.sleep(0.2)
             except SQLAlchemyError:
-                logger.exception('Не удалось обновить статус рассылки %s', broadcast_id)
+                logger.exception('Не удалось обновить статус рассылки', broadcast_id=broadcast_id)
                 return
 
 
@@ -508,12 +508,12 @@ class EmailBroadcastService:
     async def start_broadcast(self, broadcast_id: int, config: EmailBroadcastConfig) -> None:
         """Start email broadcast in background."""
         if self._email_service is None:
-            logger.error('Cannot start email broadcast %s: email service not initialized', broadcast_id)
+            logger.error('Cannot start email broadcast : email service not initialized', broadcast_id=broadcast_id)
             await self._mark_failed(broadcast_id)
             return
 
         if not self._email_service.is_configured():
-            logger.error('Cannot start email broadcast %s: SMTP not configured', broadcast_id)
+            logger.error('Cannot start email broadcast : SMTP not configured', broadcast_id=broadcast_id)
             await self._mark_failed(broadcast_id)
             return
 
@@ -521,7 +521,7 @@ class EmailBroadcastService:
 
         async with self._lock:
             if broadcast_id in self._tasks and not self._tasks[broadcast_id].task.done():
-                logger.warning('Email broadcast %s is already running', broadcast_id)
+                logger.warning('Email broadcast is already running', broadcast_id=broadcast_id)
                 return
 
             task = asyncio.create_task(
@@ -560,7 +560,7 @@ class EmailBroadcastService:
             async with AsyncSessionLocal() as session:
                 broadcast = await session.get(BroadcastHistory, broadcast_id)
                 if not broadcast:
-                    logger.error('Broadcast record %s not found', broadcast_id)
+                    logger.error('Broadcast record not found', broadcast_id=broadcast_id)
                     return
 
                 broadcast.status = 'in_progress'
@@ -575,7 +575,7 @@ class EmailBroadcastService:
             async with AsyncSessionLocal() as session:
                 broadcast = await session.get(BroadcastHistory, broadcast_id)
                 if not broadcast:
-                    logger.error('Broadcast record %s deleted before start', broadcast_id)
+                    logger.error('Broadcast record deleted before start', broadcast_id=broadcast_id)
                     return
 
                 broadcast.total_count = len(recipients)
@@ -586,7 +586,7 @@ class EmailBroadcastService:
                 return
 
             if not recipients:
-                logger.info('Email broadcast %s: no recipients found', broadcast_id)
+                logger.info('Email broadcast : no recipients found', broadcast_id=broadcast_id)
                 await self._mark_finished(broadcast_id, sent_count, failed_count, cancelled=False)
                 return
 
@@ -599,7 +599,7 @@ class EmailBroadcastService:
             )
 
             if was_cancelled:
-                logger.info('Email broadcast %s was cancelled during execution', broadcast_id)
+                logger.info('Email broadcast was cancelled during execution', broadcast_id=broadcast_id)
                 return
 
             await self._mark_finished(broadcast_id, sent_count, failed_count, cancelled=False)
@@ -608,7 +608,7 @@ class EmailBroadcastService:
             await self._mark_cancelled(broadcast_id, sent_count, failed_count)
             raise
         except Exception as exc:
-            logger.exception('Critical error in email broadcast %s: %s', broadcast_id, exc)
+            logger.exception('Critical error in email broadcast', broadcast_id=broadcast_id, exc=exc)
             await self._mark_failed(broadcast_id, sent_count, failed_count)
 
     async def _fetch_email_recipients(self, target: str) -> list[_EmailRecipient]:
@@ -672,7 +672,7 @@ class EmailBroadcastService:
                 )
 
             else:
-                logger.warning('Unknown email target filter: %s', target)
+                logger.warning('Unknown email target filter', target=target)
                 return []
 
             # Загружаем батчами и извлекаем скаляры сразу
@@ -748,10 +748,7 @@ class EmailBroadcastService:
                     return success
                 except Exception as exc:
                     logger.error(
-                        'Ошибка отправки email рассылки %s на %s: %s',
-                        broadcast_id,
-                        recipient.email,
-                        exc,
+                        'Ошибка отправки email рассылки на', broadcast_id=broadcast_id, email=recipient.email, exc=exc
                     )
                     return False
 
@@ -875,14 +872,14 @@ class EmailBroadcastService:
             except InterfaceError as exc:
                 attempts += 1
                 logger.warning(
-                    'Connection issue updating email broadcast %s: %s. Retry %s/2',
-                    broadcast_id,
-                    exc,
-                    attempts,
+                    'Connection issue updating email broadcast : . Retry /2',
+                    broadcast_id=broadcast_id,
+                    exc=exc,
+                    attempts=attempts,
                 )
                 await asyncio.sleep(0.2)
             except SQLAlchemyError:
-                logger.exception('Failed to update email broadcast status %s', broadcast_id)
+                logger.exception('Failed to update email broadcast status', broadcast_id=broadcast_id)
                 return
 
 

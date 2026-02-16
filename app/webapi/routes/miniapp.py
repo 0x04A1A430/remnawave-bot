@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import logging
 import math
 import re
 from collections.abc import Collection
@@ -11,6 +10,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+import structlog
 from aiogram import Bot
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import ValidationError
@@ -198,7 +198,7 @@ from ..schemas.miniapp import (
 )
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter()
 
@@ -281,7 +281,7 @@ def _load_app_config_data() -> dict[str, Any] | None:
             with path.open('r', encoding='utf-8') as file:
                 data = json.load(file)
         except (OSError, json.JSONDecodeError) as error:
-            logger.warning('Failed to load app-config from %s: %s', path, error)
+            logger.warning('Failed to load app-config from', path=path, error=error)
             continue
 
         if isinstance(data, dict):
@@ -701,7 +701,7 @@ def _build_mulenpay_iframe_config() -> MiniAppPaymentIframeConfig | None:
     try:
         return MiniAppPaymentIframeConfig(expected_origin=expected_origin)
     except ValidationError as error:  # pragma: no cover - defensive logging
-        logger.error("Invalid MulenPay expected origin '%s': %s", expected_origin, error)
+        logger.error("Invalid MulenPay expected origin ''", expected_origin=expected_origin, error=error)
         return None
 
 
@@ -986,7 +986,7 @@ async def create_payment_link(
         try:
             stars_amount, amount_kopeks = _normalize_stars_amount(amount_kopeks)
         except ValueError as exc:
-            logger.error('Failed to normalize Stars amount: %s', exc)
+            logger.error('Failed to normalize Stars amount', exc=exc)
             raise HTTPException(
                 status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail='Failed to prepare Stars payment',
@@ -2800,7 +2800,7 @@ async def _resolve_connected_servers(
         except RemnaWaveConfigurationError:
             logger.debug('RemnaWave is not configured; skipping server name enrichment')
         except Exception as error:  # pragma: no cover - defensive logging
-            logger.warning('Failed to resolve server names from RemnaWave: %s', error)
+            logger.warning('Failed to resolve server names from RemnaWave', error=error)
 
     connected_servers: list[MiniAppConnectedServer] = []
     for squad_uuid in squad_uuids:
@@ -2818,7 +2818,7 @@ async def _load_devices_info(user: User) -> tuple[int, list[MiniAppDevice]]:
     try:
         service = RemnaWaveService()
     except Exception as error:  # pragma: no cover - defensive logging
-        logger.warning('Failed to initialise RemnaWave service: %s', error)
+        logger.warning('Failed to initialise RemnaWave service', error=error)
         return 0, []
 
     if not service.is_configured:
@@ -2831,7 +2831,7 @@ async def _load_devices_info(user: User) -> tuple[int, list[MiniAppDevice]]:
         logger.debug('RemnaWave configuration missing while loading devices')
         return 0, []
     except Exception as error:  # pragma: no cover - defensive logging
-        logger.warning('Failed to load devices from RemnaWave: %s', error)
+        logger.warning('Failed to load devices from RemnaWave', error=error)
         return 0, []
 
     total_devices = int(response.get('total') or 0)
@@ -2910,7 +2910,7 @@ async def _load_subscription_links(
         service = SubscriptionService()
         info = await service.get_subscription_info(subscription.remnawave_short_uuid)
     except Exception as error:  # pragma: no cover - defensive logging
-        logger.warning('Failed to load subscription info from RemnaWave: %s', error)
+        logger.warning('Failed to load subscription info from RemnaWave', error=error)
         return {}
 
     if not info:
@@ -3118,7 +3118,7 @@ async def get_subscription_details(
         except HTTPException:
             raise
         except Exception as e:
-            logger.warning(f'Failed to check channel subscription for user {telegram_id}: {e}')
+            logger.warning('Failed to check channel subscription for user', telegram_id=telegram_id, error=e)
             # Don't block user if check fails
 
     user = await get_user_by_telegram_id(db, telegram_id)
@@ -3146,27 +3146,19 @@ async def get_subscription_details(
             usage_synced = await service.sync_subscription_usage(db, subscription)
         except Exception as error:  # pragma: no cover - defensive logging
             logger.warning(
-                'Failed to sync subscription usage for user %s: %s',
-                getattr(user, 'id', 'unknown'),
-                error,
+                'Failed to sync subscription usage for user', getattr=getattr(user, 'id', 'unknown'), error=error
             )
 
     if usage_synced:
         try:
             await db.refresh(subscription, attribute_names=['traffic_used_gb', 'updated_at'])
         except Exception as refresh_error:  # pragma: no cover - defensive logging
-            logger.debug(
-                'Failed to refresh subscription after usage sync: %s',
-                refresh_error,
-            )
+            logger.debug('Failed to refresh subscription after usage sync', refresh_error=refresh_error)
 
         try:
             await db.refresh(user)
         except Exception as refresh_error:  # pragma: no cover - defensive logging
-            logger.debug(
-                'Failed to refresh user after usage sync: %s',
-                refresh_error,
-            )
+            logger.debug('Failed to refresh user after usage sync', refresh_error=refresh_error)
             user = await get_user_by_telegram_id(db, telegram_id)
 
         subscription = getattr(user, 'subscription', subscription)
@@ -3876,9 +3868,9 @@ async def activate_subscription_trial_endpoint(
                 tariff_trial_days = getattr(trial_tariff, 'trial_duration_days', None)
                 if tariff_trial_days:
                     trial_duration = tariff_trial_days
-                logger.info(f'Miniapp: используем триальный тариф {trial_tariff.name}')
+                logger.info('Miniapp: используем триальный тариф', trial_tariff_name=trial_tariff.name)
         except Exception as e:
-            logger.error(f'Ошибка получения триального тарифа: {e}')
+            logger.error('Ошибка получения триального тарифа', error=e)
 
     try:
         subscription = await create_trial_subscription(
@@ -3891,11 +3883,7 @@ async def activate_subscription_trial_endpoint(
             tariff_id=tariff_id_for_trial,
         )
     except Exception as error:  # pragma: no cover - defensive logging
-        logger.error(
-            'Failed to activate trial subscription for user %s: %s',
-            user.id,
-            error,
-        )
+        logger.error('Failed to activate trial subscription for user', user_id=user.id, error=error)
         raise HTTPException(
             status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
@@ -3919,11 +3907,7 @@ async def activate_subscription_trial_endpoint(
                 },
             ) from error
 
-        logger.error(
-            'Balance check failed after trial creation for user %s: %s',
-            user.id,
-            error,
-        )
+        logger.error('Balance check failed after trial creation for user', user_id=user.id, error=error)
         raise HTTPException(
             status.HTTP_402_PAYMENT_REQUIRED,
             detail={
@@ -3947,9 +3931,9 @@ async def activate_subscription_trial_endpoint(
             ) from error
 
         logger.error(
-            'Failed to charge balance for trial activation after subscription %s creation: %s',
-            subscription.id,
-            error,
+            'Failed to charge balance for trial activation after subscription creation',
+            subscription_id=subscription.id,
+            error=error,
         )
         raise HTTPException(
             status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -3966,7 +3950,7 @@ async def activate_subscription_trial_endpoint(
     try:
         await subscription_service.create_remnawave_user(db, subscription)
     except RemnaWaveConfigurationError as error:  # pragma: no cover - configuration issues
-        logger.error('RemnaWave update skipped due to configuration error: %s', error)
+        logger.error('RemnaWave update skipped due to configuration error', error=error)
         revert_result = await revert_trial_activation(
             db,
             user,
@@ -4000,9 +3984,7 @@ async def activate_subscription_trial_endpoint(
         ) from error
     except Exception as error:  # pragma: no cover - defensive logging
         logger.error(
-            'Failed to create RemnaWave user for trial subscription %s: %s',
-            subscription.id,
-            error,
+            'Failed to create RemnaWave user for trial subscription', subscription_id=subscription.id, error=error
         )
         revert_result = await revert_trial_activation(
             db,
@@ -4407,12 +4389,7 @@ async def remove_connected_device(
             detail={'code': 'service_unavailable', 'message': str(error)},
         ) from error
     except Exception as error:  # pragma: no cover - defensive
-        logger.warning(
-            'Failed to remove device %s for user %s: %s',
-            hwid,
-            telegram_id,
-            error,
-        )
+        logger.warning('Failed to remove device for user', hwid=hwid, telegram_id=telegram_id, error=error)
         raise HTTPException(
             status.HTTP_502_BAD_GATEWAY,
             detail={'code': 'remnawave_error', 'message': 'Failed to remove device'},
@@ -4696,10 +4673,10 @@ async def _prepare_subscription_renewal_options(
                 pricing = pricing_model.to_payload()
             except Exception as error:  # pragma: no cover - defensive logging
                 logger.warning(
-                    'Failed to calculate renewal pricing for subscription %s (period %s): %s',
-                    subscription.id,
-                    period_days,
-                    error,
+                    'Failed to calculate renewal pricing for subscription (period)',
+                    subscription_id=subscription.id,
+                    period_days=period_days,
+                    error=error,
                 )
                 continue
 
@@ -5371,10 +5348,10 @@ async def submit_subscription_renewal_endpoint(
             raise
         except Exception as error:
             logger.error(
-                'Failed to calculate renewal pricing for subscription %s (period %s): %s',
-                subscription.id,
-                period_days,
-                error,
+                'Failed to calculate renewal pricing for subscription (period)',
+                subscription_id=subscription.id,
+                period_days=period_days,
+                error=error,
             )
             raise HTTPException(
                 status.HTTP_502_BAD_GATEWAY,
@@ -5430,7 +5407,7 @@ async def submit_subscription_renewal_endpoint(
                         reset_reason='subscription renewal (miniapp)',
                     )
                 except Exception as e:
-                    logger.error(f'Ошибка синхронизации с RemnaWave при продлении (miniapp): {e}')
+                    logger.error('Ошибка синхронизации с RemnaWave при продлении (miniapp)', error=e)
 
                 lang = getattr(user, 'language', settings.DEFAULT_LANGUAGE)
                 if lang == 'ru':
@@ -5447,11 +5424,7 @@ async def submit_subscription_renewal_endpoint(
                 )
             except Exception as error:
                 await db.rollback()
-                logger.error(
-                    'Failed to renew tariff subscription %s: %s',
-                    subscription.id,
-                    error,
-                )
+                logger.error('Failed to renew tariff subscription', subscription_id=subscription.id, error=error)
                 raise HTTPException(
                     status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail={'code': 'renewal_failed', 'message': 'Failed to renew subscription'},
@@ -5468,9 +5441,7 @@ async def submit_subscription_renewal_endpoint(
                 )
             except SubscriptionRenewalChargeError as error:
                 logger.error(
-                    'Failed to charge balance for subscription renewal %s: %s',
-                    subscription.id,
-                    error,
+                    'Failed to charge balance for subscription renewal', subscription_id=subscription.id, error=error
                 )
                 raise HTTPException(
                     status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -5941,7 +5912,7 @@ async def update_subscription_servers_endpoint(
                 remove_ids=removed_server_ids or None,
             )
         except Exception as e:
-            logger.error('Ошибка обновления счётчика серверов: %s', e)
+            logger.error('Ошибка обновления счётчика серверов', e=e)
 
     ordered_selection = []
     seen_selection = set()
@@ -6734,9 +6705,11 @@ async def purchase_tariff_endpoint(
         }
         await user_cart_service.save_user_cart(user.id, cart_data)
         user_id_display = user.telegram_id or user.email or f'#{user.id}'
-        logger.info(f'Корзина тарифа сохранена для автопродления (miniapp) пользователя {user_id_display}')
+        logger.info(
+            'Корзина тарифа сохранена для автопродления (miniapp) пользователя', user_id_display=user_id_display
+        )
     except Exception as e:
-        logger.error(f'Ошибка сохранения корзины тарифа (miniapp): {e}')
+        logger.error('Ошибка сохранения корзины тарифа (miniapp)', error=e)
 
     await db.refresh(user)
 
@@ -7067,7 +7040,7 @@ async def switch_tariff_endpoint(
         subscription.last_daily_charge_at = datetime.utcnow()
         # Для суточного тарифа end_date = сейчас + 1 день
         subscription.end_date = datetime.utcnow() + timedelta(days=1)
-        logger.info(f'🔄 Смена на суточный тариф: установлены daily поля, end_date={subscription.end_date}')
+        logger.info('🔄 Смена на суточный тариф: установлены daily поля, end_date', end_date=subscription.end_date)
     elif old_is_daily and not new_is_daily:
         # Переход с суточного на обычный тариф - очищаем daily поля
         subscription.is_daily_paused = False
@@ -7076,7 +7049,9 @@ async def switch_tariff_endpoint(
         if new_period_days > 0:
             subscription.end_date = datetime.utcnow() + timedelta(days=new_period_days)
             logger.info(
-                f'🔄 Смена с суточного на периодный тариф: end_date={subscription.end_date} ({new_period_days} дней)'
+                '🔄 Смена с суточного на периодный тариф: end_date= ( дней)',
+                end_date=subscription.end_date,
+                new_period_days=new_period_days,
             )
         else:
             logger.info('🔄 Смена с суточного на обычный тариф: очищены daily поля')
@@ -7090,7 +7065,7 @@ async def switch_tariff_endpoint(
         service = SubscriptionService()
         await service.update_remnawave_user(db, subscription)
     except Exception as e:
-        logger.error(f'Ошибка синхронизации с RemnaWave при смене тарифа: {e}')
+        logger.error('Ошибка синхронизации с RemnaWave при смене тарифа', error=e)
 
     lang = getattr(user, 'language', settings.DEFAULT_LANGUAGE)
     if upgrade_cost > 0:
@@ -7269,7 +7244,7 @@ async def purchase_traffic_topup_endpoint(
         service = SubscriptionService()
         await service.update_remnawave_user(db, subscription)
     except Exception as e:
-        logger.error(f'Ошибка синхронизации с RemnaWave при докупке трафика: {e}')
+        logger.error('Ошибка синхронизации с RemnaWave при докупке трафика', error=e)
 
     # Создаем транзакцию
     await create_transaction(
@@ -7352,7 +7327,7 @@ async def toggle_daily_subscription_pause_endpoint(
             # Обновляем время последнего списания для корректного расчёта следующего
             subscription.last_daily_charge_at = datetime.utcnow()
             subscription.end_date = datetime.utcnow() + timedelta(days=1)
-            logger.info(f'✅ Суточная подписка {subscription.id} восстановлена из DISABLED в ACTIVE')
+            logger.info('✅ Суточная подписка восстановлена из DISABLED в ACTIVE', subscription_id=subscription.id)
 
     await db.commit()
     await db.refresh(subscription)
@@ -7368,7 +7343,7 @@ async def toggle_daily_subscription_pause_endpoint(
             if user.remnawave_uuid:
                 await service.enable_remnawave_user(user.remnawave_uuid)
         except Exception as e:
-            logger.error(f'Ошибка синхронизации с RemnaWave при возобновлении: {e}')
+            logger.error('Ошибка синхронизации с RemnaWave при возобновлении', error=e)
 
     lang = getattr(user, 'language', settings.DEFAULT_LANGUAGE)
     if new_paused_state:

@@ -4,10 +4,10 @@
 Отправляет красивое сообщение с информацией о системе при запуске бота.
 """
 
-import logging
 from datetime import datetime
 from typing import Final
 
+import structlog
 from aiogram import Bot
 from aiogram.enums import ParseMode
 from aiogram.types import BufferedInputFile, InlineKeyboardButton, InlineKeyboardMarkup
@@ -20,7 +20,7 @@ from app.external.remnawave_api import RemnaWaveAPI, test_api_connection
 from app.utils.timezone import format_local_datetime
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Константы
 DEFAULT_VERSION: Final[str] = 'dev'
@@ -91,7 +91,7 @@ class StartupNotificationService:
                 result = await db.execute(select(func.count(User.id)).where(User.status == UserStatus.ACTIVE.value))
                 return result.scalar() or 0
         except Exception as e:
-            logger.error('Ошибка получения количества пользователей: %s', e)
+            logger.error('Ошибка получения количества пользователей', e=e)
             return 0
 
     async def _get_total_balance(self) -> int:
@@ -105,7 +105,7 @@ class StartupNotificationService:
                 )
                 return result.scalar() or 0
         except Exception as e:
-            logger.error('Ошибка получения суммы балансов: %s', e)
+            logger.error('Ошибка получения суммы балансов', e=e)
             return 0
 
     async def _get_open_tickets_count(self) -> int:
@@ -115,7 +115,7 @@ class StartupNotificationService:
                 result = await db.execute(select(func.count(Ticket.id)).where(Ticket.status == TicketStatus.OPEN.value))
                 return result.scalar() or 0
         except Exception as e:
-            logger.error('Ошибка получения количества открытых тикетов: %s', e)
+            logger.error('Ошибка получения количества открытых тикетов', e=e)
             return 0
 
     async def _get_paid_subscriptions_count(self) -> int:
@@ -130,7 +130,7 @@ class StartupNotificationService:
                 )
                 return result.scalar() or 0
         except Exception as e:
-            logger.error('Ошибка получения количества платных подписок: %s', e)
+            logger.error('Ошибка получения количества платных подписок', e=e)
             return 0
 
     async def _get_trial_subscriptions_count(self) -> int:
@@ -140,7 +140,7 @@ class StartupNotificationService:
                 result = await db.execute(select(func.count(Subscription.id)).where(Subscription.is_trial == True))
                 return result.scalar() or 0
         except Exception as e:
-            logger.error('Ошибка получения количества триальных подписок: %s', e)
+            logger.error('Ошибка получения количества триальных подписок', e=e)
             return 0
 
     async def _check_remnawave_connection(self) -> tuple[bool, str]:
@@ -181,7 +181,7 @@ class StartupNotificationService:
                 return False, 'Недоступна'
 
         except Exception as e:
-            logger.error('Ошибка проверки соединения с Remnawave: %s', e)
+            logger.error('Ошибка проверки соединения с Remnawave', e=e)
             return False, 'Ошибка подключения'
 
     def _format_balance(self, kopeks: int) -> str:
@@ -272,11 +272,11 @@ class StartupNotificationService:
                 message_kwargs['message_thread_id'] = self.topic_id
 
             await self.bot.send_message(**message_kwargs)
-            logger.info('Стартовое уведомление отправлено в чат %s', self.chat_id)
+            logger.info('Стартовое уведомление отправлено в чат', chat_id=self.chat_id)
             return True
 
         except Exception as e:
-            logger.error('Ошибка отправки стартового уведомления: %s', e)
+            logger.error('Ошибка отправки стартового уведомления', e=e)
             return False
 
 
@@ -452,9 +452,9 @@ async def send_crash_notification(bot: Bot, error: Exception, traceback_str: str
             message_kwargs['message_thread_id'] = topic_id
 
         await bot.send_document(**message_kwargs)
-        logger.info('Уведомление о падении отправлено в чат %s', chat_id)
+        logger.info('Уведомление о падении отправлено в чат', chat_id=chat_id)
         return True
 
     except Exception as e:
-        logger.error('Ошибка отправки уведомления о падении: %s', e)
+        logger.error('Ошибка отправки уведомления о падении', e=e)
         return False

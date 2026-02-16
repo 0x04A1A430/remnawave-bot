@@ -1,7 +1,6 @@
 """Service for managing payment method display configurations in cabinet."""
 
-import logging
-
+import structlog
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -10,7 +9,7 @@ from app.config import settings
 from app.database.models import PaymentMethodConfig, PromoGroup
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 # ============ Default method definitions ============
@@ -199,7 +198,10 @@ async def ensure_payment_method_configs(db: AsyncSession) -> None:
             db.add(config)
 
         await db.commit()
-        logger.info(f'Payment method configurations initialized ({len(DEFAULT_METHOD_ORDER)} methods).')
+        logger.info(
+            'Payment method configurations initialized ( methods).',
+            DEFAULT_METHOD_ORDER_count=len(DEFAULT_METHOD_ORDER),
+        )
         return
 
     # Add missing methods (for cases when new methods are added to code)
@@ -207,7 +209,7 @@ async def ensure_payment_method_configs(db: AsyncSession) -> None:
     missing_methods = [m for m in DEFAULT_METHOD_ORDER if m not in existing_method_ids]
 
     if missing_methods:
-        logger.info(f'Adding missing payment methods: {missing_methods}')
+        logger.info('Adding missing payment methods', missing_methods=missing_methods)
         # Get max sort_order to append new methods at the end
         max_order_result = await db.execute(select(func.max(PaymentMethodConfig.sort_order)))
         max_order = max_order_result.scalar() or 0
@@ -235,7 +237,7 @@ async def ensure_payment_method_configs(db: AsyncSession) -> None:
             db.add(config)
 
         await db.commit()
-        logger.info(f'Added {len(missing_methods)} missing payment method(s).')
+        logger.info('Added missing payment method(s).', missing_methods_count=len(missing_methods))
 
 
 # ============ CRUD ============

@@ -5,11 +5,11 @@
 и выполнять очистку БД и панели Remnawave.
 """
 
-import logging
 from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
+import structlog
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.enums import ParseMode
 from aiogram.fsm.context import FSMContext
@@ -26,7 +26,7 @@ from app.services.blocked_users_service import (
 from app.utils.decorators import admin_required, error_handler
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 # =============================================================================
@@ -644,9 +644,11 @@ async def handle_confirm_action(
     )
 
     logger.info(
-        f'Очистка заблокированных пользователей завершена: '
-        f'DB={result.deleted_from_db}, RW={result.deleted_from_remnawave}, '
-        f'marked={result.marked_as_blocked}, errors={len(result.errors)}'
+        'Очистка заблокированных пользователей завершена: DB=, RW=, marked=, errors',
+        deleted_from_db=result.deleted_from_db,
+        deleted_from_remnawave=result.deleted_from_remnawave,
+        marked_as_blocked=result.marked_as_blocked,
+        errors_count=len(result.errors),
     )
 
     await callback.answer()

@@ -1,8 +1,8 @@
 """Admin routes for broadcasts in cabinet."""
 
-import logging
 from datetime import datetime
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import distinct, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -40,7 +40,7 @@ from ..schemas.broadcasts import (
 )
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/admin/broadcasts', tags=['Cabinet Admin Broadcasts'])
 
@@ -255,7 +255,7 @@ async def get_filters(
         try:
             count = await get_target_users_count(db, key)
         except Exception as e:
-            logger.warning(f'Failed to get count for filter {key}: {e}')
+            logger.warning('Failed to get count for filter', key=key, error=e)
             count = 0
         filters.append(
             BroadcastFilter(
@@ -272,7 +272,7 @@ async def get_filters(
         try:
             count = await get_target_users_count(db, key)
         except Exception as e:
-            logger.warning(f'Failed to get count for custom filter {key}: {e}')
+            logger.warning('Failed to get count for custom filter', key=key, error=e)
             count = 0
         custom_filters.append(
             BroadcastFilter(
@@ -367,7 +367,7 @@ async def preview_broadcast(
     try:
         count = await get_target_users_count(db, request.target)
     except Exception as e:
-        logger.error(f'Failed to get count for target {request.target}: {e}')
+        logger.error('Failed to get count for target', target=request.target, error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Failed to count recipients',
@@ -450,7 +450,9 @@ async def create_broadcast(
     await broadcast_service.start_broadcast(broadcast.id, config)
     await db.refresh(broadcast)
 
-    logger.info(f"Admin {admin.id} created broadcast {broadcast.id} for target '{request.target}'")
+    logger.info(
+        'Admin created broadcast for target', admin_id=admin.id, broadcast_id=broadcast.id, target=request.target
+    )
 
     return _serialize_broadcast(broadcast)
 
@@ -494,7 +496,7 @@ async def get_email_filters(
         try:
             count = await _get_email_filter_count(db, key)
         except Exception as e:
-            logger.warning(f'Failed to get count for email filter {key}: {e}')
+            logger.warning('Failed to get count for email filter', key=key, error=e)
             count = 0
 
         filters.append(
@@ -532,7 +534,7 @@ async def preview_email_broadcast(
     try:
         count = await _get_email_filter_count(db, request.target)
     except Exception as e:
-        logger.error(f'Failed to get email count for target {request.target}: {e}')
+        logger.error('Failed to get email count for target', target=request.target, error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Failed to count email recipients',
@@ -661,7 +663,13 @@ async def create_combined_broadcast(
 
     await db.refresh(broadcast)
 
-    logger.info(f"Admin {admin.id} created {request.channel} broadcast {broadcast.id} for target '{request.target}'")
+    logger.info(
+        'Admin created broadcast for target',
+        admin_id=admin.id,
+        channel=request.channel,
+        broadcast_id=broadcast.id,
+        target=request.target,
+    )
 
     return _serialize_broadcast(broadcast)
 
@@ -721,6 +729,6 @@ async def stop_broadcast(
     await db.commit()
     await db.refresh(broadcast)
 
-    logger.info(f'Admin {admin.id} stopped broadcast {broadcast_id}')
+    logger.info('Admin stopped broadcast', admin_id=admin.id, broadcast_id=broadcast_id)
 
     return _serialize_broadcast(broadcast)
