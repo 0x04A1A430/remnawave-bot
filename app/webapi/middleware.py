@@ -17,7 +17,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """Логирование входящих запросов в административный API."""
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
-        async with bound_contextvars(http_method=request.method, http_path=request.url.path):
+        with bound_contextvars(http_method=request.method, http_path=request.url.path):
             start = monotonic()
             response: Response | None = None
             try:

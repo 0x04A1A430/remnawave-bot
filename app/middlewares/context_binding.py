@@ -23,5 +23,5 @@ class ContextVarsMiddleware(BaseMiddleware):
             ctx['username'] = event.from_user.username or ''
         if hasattr(event, 'chat') and event.chat:
             ctx['chat_id'] = event.chat.id
-        async with bound_contextvars(**ctx):
+        with bound_contextvars(**ctx):
             return await handler(event, data)
