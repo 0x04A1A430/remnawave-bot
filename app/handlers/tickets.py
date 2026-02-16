@@ -100,40 +100,18 @@ async def handle_ticket_title_input(message: types.Message, state: FSMContext, d
     asyncio.create_task(_try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0))
     if len(title) < 5:
         texts = get_texts(db_user.language)
-        if prompt_chat_id and prompt_message_id:
-            text_val = texts.t(
-                'TICKET_TITLE_TOO_SHORT', 'Заголовок должен содержать минимум 5 символов. Попробуйте еще раз:'
-            )
-            await message.bot.edit_message_text(
-                chat_id=prompt_chat_id,
-                message_id=prompt_message_id,
-                text=text_val,
-                reply_markup=get_ticket_cancel_keyboard(db_user.language),
-            )
-        else:
-            await message.answer(
-                texts.t('TICKET_TITLE_TOO_SHORT', 'Заголовок должен содержать минимум 5 символов. Попробуйте еще раз:')
-            )
+        text_val = texts.t(
+            'TICKET_TITLE_TOO_SHORT', 'Заголовок должен содержать минимум 5 символов. Попробуйте еще раз:'
+        )
+        await _edit_or_send(message, prompt_chat_id, prompt_message_id, text_val, db_user.language)
         return
 
     if len(title) > 255:
         texts = get_texts(db_user.language)
-        if prompt_chat_id and prompt_message_id:
-            text_val = texts.t(
-                'TICKET_TITLE_TOO_LONG', 'Заголовок слишком длинный. Максимум 255 символов. Попробуйте еще раз:'
-            )
-            await message.bot.edit_message_text(
-                chat_id=prompt_chat_id,
-                message_id=prompt_message_id,
-                text=text_val,
-                reply_markup=get_ticket_cancel_keyboard(db_user.language),
-            )
-        else:
-            await message.answer(
-                texts.t(
-                    'TICKET_TITLE_TOO_LONG', 'Заголовок слишком длинный. Максимум 255 символов. Попробуйте еще раз:'
-                )
-            )
+        text_val = texts.t(
+            'TICKET_TITLE_TOO_LONG', 'Заголовок слишком длинный. Максимум 255 символов. Попробуйте еще раз:'
+        )
+        await _edit_or_send(message, prompt_chat_id, prompt_message_id, text_val, db_user.language)
         return
 
     # Глобальный блок
@@ -156,20 +134,8 @@ async def handle_ticket_title_input(message: types.Message, state: FSMContext, d
     await state.update_data(title=title)
 
     texts = get_texts(db_user.language)
-
-    if prompt_chat_id and prompt_message_id:
-        text_val = texts.t('TICKET_MESSAGE_INPUT', 'Опишите проблему (до 500 символов) или отправьте фото с подписью:')
-        await message.bot.edit_message_text(
-            chat_id=prompt_chat_id,
-            message_id=prompt_message_id,
-            text=text_val,
-            reply_markup=get_ticket_cancel_keyboard(db_user.language),
-        )
-    else:
-        await message.answer(
-            texts.t('TICKET_MESSAGE_INPUT', 'Опишите проблему (до 500 символов) или отправьте фото с подписью:'),
-            reply_markup=get_ticket_cancel_keyboard(db_user.language),
-        )
+    text_val = texts.t('TICKET_MESSAGE_INPUT', 'Опишите проблему (до 500 символов) или отправьте фото с подписью:')
+    await _edit_or_send(message, prompt_chat_id, prompt_message_id, text_val, db_user.language)
 
     await state.set_state(TicketStates.waiting_for_message)
 
@@ -244,7 +210,10 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
             )
         )
         if prompt_chat_id and prompt_message_id:
-            await message.bot.edit_message_text(chat_id=prompt_chat_id, message_id=prompt_message_id, text=text_msg)
+            try:
+                await message.bot.edit_message_text(chat_id=prompt_chat_id, message_id=prompt_message_id, text=text_msg)
+            except TelegramBadRequest:
+                await message.answer(text_msg)
         else:
             await message.answer(text_msg)
         await state.clear()
@@ -261,15 +230,7 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
         err_text = texts.t(
             'TICKET_MESSAGE_TOO_SHORT', 'Сообщение слишком короткое. Опишите проблему подробнее или отправьте фото:'
         )
-        if prompt_chat_id and prompt_message_id:
-            await message.bot.edit_message_text(
-                chat_id=prompt_chat_id,
-                message_id=prompt_message_id,
-                text=err_text,
-                reply_markup=get_ticket_cancel_keyboard(db_user.language),
-            )
-        else:
-            await message.answer(err_text)
+        await _edit_or_send(message, prompt_chat_id, prompt_message_id, err_text, db_user.language)
         return
 
     data = await state.get_data()
@@ -323,13 +284,16 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
             ]
         )
         if prompt_chat_id and prompt_message_id:
-            await message.bot.edit_message_text(
-                chat_id=prompt_chat_id,
-                message_id=prompt_message_id,
-                text=creation_text,
-                reply_markup=keyboard,
-                parse_mode='HTML',
-            )
+            try:
+                await message.bot.edit_message_text(
+                    chat_id=prompt_chat_id,
+                    message_id=prompt_message_id,
+                    text=creation_text,
+                    reply_markup=keyboard,
+                    parse_mode='HTML',
+                )
+            except TelegramBadRequest:
+                await message.answer(creation_text, reply_markup=keyboard, parse_mode='HTML')
         else:
             await message.answer(creation_text, reply_markup=keyboard, parse_mode='HTML')
 
@@ -723,6 +687,28 @@ async def user_delete_message(callback: types.CallbackQuery):
     await callback.answer('✅')
 
 
+async def _edit_or_send(
+    message: types.Message,
+    chat_id: int | None,
+    message_id: int | None,
+    text: str,
+    language: str,
+) -> None:
+    """Попытаться отредактировать prompt-сообщение, при неудаче — отправить новое."""
+    if chat_id and message_id:
+        try:
+            await message.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message_id,
+                text=text,
+                reply_markup=get_ticket_cancel_keyboard(language),
+            )
+            return
+        except TelegramBadRequest:
+            pass
+    await message.answer(text, reply_markup=get_ticket_cancel_keyboard(language))
+
+
 async def _try_delete_message_later(bot: Bot, chat_id: int, message_id: int, delay_seconds: float = 1.0):
     try:
         await asyncio.sleep(delay_seconds)
@@ -740,10 +726,20 @@ async def reply_to_ticket(callback: types.CallbackQuery, state: FSMContext, db_u
 
     texts = get_texts(db_user.language)
 
-    await callback.message.edit_text(
-        texts.t('TICKET_REPLY_INPUT', 'Введите ваш ответ:'),
-        reply_markup=get_ticket_reply_cancel_keyboard(db_user.language),
-    )
+    try:
+        await callback.message.edit_text(
+            texts.t('TICKET_REPLY_INPUT', 'Введите ваш ответ:'),
+            reply_markup=get_ticket_reply_cancel_keyboard(db_user.language),
+        )
+    except TelegramBadRequest:
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
+        await callback.message.answer(
+            texts.t('TICKET_REPLY_INPUT', 'Введите ваш ответ:'),
+            reply_markup=get_ticket_reply_cancel_keyboard(db_user.language),
+        )
 
     await state.set_state(TicketStates.waiting_for_reply)
     await callback.answer()
