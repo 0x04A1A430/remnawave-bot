@@ -102,13 +102,13 @@ def setup_logging() -> tuple[logging.Formatter, logging.Formatter, Any]:
         ],
     )
 
-    # Console formatter: colors auto-detected via FORCE_COLOR env var / TTY.
+    # Console formatter: colors enabled by default on non-Windows.
     # Rich tracebacks are used automatically when the `rich` package is installed.
     console_formatter = structlog.stdlib.ProcessorFormatter(
         foreign_pre_chain=shared_processors,
         processors=[
             structlog.stdlib.ProcessorFormatter.remove_processors_meta,
-            structlog.dev.ConsoleRenderer(),
+            structlog.dev.ConsoleRenderer(pad_event_to=0),
         ],
     )
 

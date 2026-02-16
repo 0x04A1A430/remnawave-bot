@@ -39,5 +39,5 @@ class LoggingMiddleware(BaseMiddleware):
 
         except Exception as e:
             execution_time = monotonic() - start_time
-            logger.error('❌ Ошибка при обработке события за', execution_time=round(execution_time, 2), error=e)
+            logger.exception('❌ Ошибка при обработке события за', execution_time=round(execution_time, 2), error=e)
             raise
