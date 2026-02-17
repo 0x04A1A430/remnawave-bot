@@ -154,7 +154,10 @@ class TrafficMonitoringServiceV2:
         try:
             time_str = await cache.get(TRAFFIC_SNAPSHOT_TIME_KEY)
             if time_str:
-                return datetime.fromisoformat(time_str)
+                dt = datetime.fromisoformat(time_str)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=UTC)
+                return dt
             return None
         except Exception as e:
             logger.error('❌ Ошибка получения времени snapshot', error=e)
@@ -176,7 +179,10 @@ class TrafficMonitoringServiceV2:
             key = cache_key(TRAFFIC_NOTIFICATION_CACHE_KEY, user_uuid)
             time_str = await cache.get(key)
             if time_str:
-                return datetime.fromisoformat(time_str)
+                dt = datetime.fromisoformat(time_str)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=UTC)
+                return dt
             return None
         except Exception as e:
             logger.error('❌ Ошибка получения времени уведомления', error=e)
