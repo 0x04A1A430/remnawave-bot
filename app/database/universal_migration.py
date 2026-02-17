@@ -4370,11 +4370,11 @@ async def fix_button_click_logs_fk() -> bool:
                         text('ALTER TABLE button_click_logs DROP CONSTRAINT IF EXISTS button_click_logs_user_id_fkey')
                     )
 
-                    # Меняем тип колонки и добавляем правильный FK
-                    await conn.execute(text('ALTER TABLE button_click_logs ALTER COLUMN user_id TYPE INTEGER'))
-
                     # Обнуляем все значения, т.к. они были записаны неправильно
                     await conn.execute(text('UPDATE button_click_logs SET user_id = NULL'))
+
+                    # Меняем тип колонки на INTEGER (users.id) — после обнуления, чтобы BIGINT-значения не мешали
+                    await conn.execute(text('ALTER TABLE button_click_logs ALTER COLUMN user_id TYPE INTEGER'))
 
                     await conn.execute(
                         text(
