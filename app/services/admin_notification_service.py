@@ -1215,9 +1215,7 @@ class AdminNotificationService:
         """Public check for whether admin notifications are configured and active."""
         return self._is_enabled()
 
-    async def send_admin_notification(
-        self, text: str, reply_markup: types.InlineKeyboardMarkup | None = None
-    ) -> bool:
+    async def send_admin_notification(self, text: str, reply_markup: types.InlineKeyboardMarkup | None = None) -> bool:
         """Send a generic notification to admin chat with optional inline keyboard."""
         if not self._is_enabled():
             return False

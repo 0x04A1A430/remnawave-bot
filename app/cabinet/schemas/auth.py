@@ -9,7 +9,9 @@ class TelegramAuthRequest(BaseModel):
     """Request for Telegram WebApp initData authentication."""
 
     init_data: str = Field(..., description='Telegram WebApp initData string')
-    campaign_slug: str | None = Field(None, min_length=1, max_length=64, pattern=r'^[a-zA-Z0-9_-]+$', description='Campaign slug from web link')
+    campaign_slug: str | None = Field(
+        None, min_length=1, max_length=64, pattern=r'^[a-zA-Z0-9_-]+$', description='Campaign slug from web link'
+    )
 
 
 class TelegramWidgetAuthRequest(BaseModel):
@@ -22,7 +24,9 @@ class TelegramWidgetAuthRequest(BaseModel):
     photo_url: str | None = Field(None, description="User's photo URL")
     auth_date: int = Field(..., description='Unix timestamp of authentication')
     hash: str = Field(..., description='Authentication hash')
-    campaign_slug: str | None = Field(None, min_length=1, max_length=64, pattern=r'^[a-zA-Z0-9_-]+$', description='Campaign slug from web link')
+    campaign_slug: str | None = Field(
+        None, min_length=1, max_length=64, pattern=r'^[a-zA-Z0-9_-]+$', description='Campaign slug from web link'
+    )
 
 
 class EmailRegisterRequest(BaseModel):
@@ -36,7 +40,9 @@ class EmailVerifyRequest(BaseModel):
     """Request to verify email with token."""
 
     token: str = Field(..., description='Email verification token')
-    campaign_slug: str | None = Field(None, min_length=1, max_length=64, pattern=r'^[a-zA-Z0-9_-]+$', description='Campaign slug from web link')
+    campaign_slug: str | None = Field(
+        None, min_length=1, max_length=64, pattern=r'^[a-zA-Z0-9_-]+$', description='Campaign slug from web link'
+    )
 
 
 class EmailLoginRequest(BaseModel):
@@ -44,7 +50,9 @@ class EmailLoginRequest(BaseModel):
 
     email: EmailStr = Field(..., description='Email address')
     password: str = Field(..., description='Password')
-    campaign_slug: str | None = Field(None, min_length=1, max_length=64, pattern=r'^[a-zA-Z0-9_-]+$', description='Campaign slug from web link')
+    campaign_slug: str | None = Field(
+        None, min_length=1, max_length=64, pattern=r'^[a-zA-Z0-9_-]+$', description='Campaign slug from web link'
+    )
 
 
 class RefreshTokenRequest(BaseModel):
