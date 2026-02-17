@@ -158,7 +158,7 @@ async def get_user_total_spent_kopeks(db: AsyncSession, user_id: int) -> int:
             )
         )
     )
-    return int(result.scalar_one())
+    return abs(int(result.scalar_one()))
 
 
 async def complete_transaction(db: AsyncSession, transaction: Transaction) -> Transaction:

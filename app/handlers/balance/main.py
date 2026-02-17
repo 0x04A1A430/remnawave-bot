@@ -279,7 +279,7 @@ async def show_balance_history(callback: types.CallbackQuery, db_user: User, db:
         amount_text = (
             f'+{texts.format_price(transaction.amount_kopeks)}'
             if transaction.type == TransactionType.DEPOSIT.value
-            else f'-{texts.format_price(transaction.amount_kopeks)}'
+            else f'-{texts.format_price(abs(transaction.amount_kopeks))}'
         )
 
         text += f'{emoji} {amount_text}\n'
