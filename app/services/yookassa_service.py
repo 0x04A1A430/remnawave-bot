@@ -5,6 +5,7 @@ from typing import Any
 import structlog
 from yookassa import Configuration, Payment as YooKassaPayment
 from yookassa.domain.common.confirmation_type import ConfirmationType
+from yookassa.domain.exceptions.not_found_error import NotFoundError as YooKassaNotFoundError
 from yookassa.domain.request.payment_request_builder import PaymentRequestBuilder
 
 from app.config import settings
@@ -411,6 +412,12 @@ class YooKassaService:
                     'test_mode': payment_info_yk.test if hasattr(payment_info_yk, 'test') else None,
                 }
             logger.warning('Платеж не найден в YooKassa ID', payment_id_in_yookassa=payment_id_in_yookassa)
+            return None
+        except YooKassaNotFoundError:
+            logger.warning(
+                'Платеж не найден в YooKassa (404)',
+                payment_id_in_yookassa=payment_id_in_yookassa,
+            )
             return None
         except Exception as e:
             logger.error(
