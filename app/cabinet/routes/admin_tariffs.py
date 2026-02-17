@@ -535,7 +535,7 @@ async def get_tariff_stats(
 
     # Calculate revenue from subscription payments for users on this tariff
     revenue_result = await db.execute(
-        select(func.coalesce(func.sum(Transaction.amount_kopeks), 0))
+        select(func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0))
         .join(Subscription, Transaction.user_id == Subscription.user_id)
         .where(
             Subscription.tariff_id == tariff_id,

@@ -229,7 +229,7 @@ async def get_transactions_statistics(
     total_expenses = expenses_result.scalar()
 
     subscription_income_result = await db.execute(
-        select(func.coalesce(func.sum(Transaction.amount_kopeks), 0)).where(
+        select(func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0)).where(
             and_(
                 Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
                 Transaction.is_completed == True,
@@ -244,7 +244,7 @@ async def get_transactions_statistics(
         select(
             Transaction.type,
             func.count(Transaction.id).label('count'),
-            func.coalesce(func.sum(Transaction.amount_kopeks), 0).label('total_amount'),
+            func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0).label('total_amount'),
         )
         .where(
             and_(

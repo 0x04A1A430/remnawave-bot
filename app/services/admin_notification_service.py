@@ -867,7 +867,7 @@ class AdminNotificationService:
 {promo_block}
 
 💰 <b>Платеж:</b>
-💵 Сумма: {settings.format_price(transaction.amount_kopeks)}
+💵 Сумма: {settings.format_price(abs(transaction.amount_kopeks))}
 💳 Способ: {payment_method}
 🆔 ID транзакции: {transaction.id}
 

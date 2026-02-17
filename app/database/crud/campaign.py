@@ -331,7 +331,7 @@ async def get_campaign_statistics(
         first_payment_time_by_user[user_id] = converted_at
 
     for user_id, amount_kopeks, created_at in subscription_payments:
-        amount_value = int(amount_kopeks or 0)
+        amount_value = abs(int(amount_kopeks or 0))
         subscription_payments_total += amount_value
         paid_users_from_transactions.add(user_id)
 

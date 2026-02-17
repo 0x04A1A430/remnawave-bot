@@ -440,7 +440,7 @@ async def get_contest_transaction_breakdown(
 
     # Сумма покупок подписок
     subscription_result = await db.execute(
-        select(func.coalesce(func.sum(Transaction.amount_kopeks), 0)).where(
+        select(func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0)).where(
             and_(
                 Transaction.user_id.in_(referral_ids),
                 Transaction.is_completed.is_(True),
@@ -621,7 +621,7 @@ async def debug_contest_transactions(
         tx.amount_kopeks for tx in txs_in if tx.type == TransactionType.DEPOSIT.value and tx.payment_method is not None
     )
     subscription_in_period = sum(
-        tx.amount_kopeks for tx in txs_in if tx.type == TransactionType.SUBSCRIPTION_PAYMENT.value
+        abs(tx.amount_kopeks) for tx in txs_in if tx.type == TransactionType.SUBSCRIPTION_PAYMENT.value
     )
     total_in_period = deposit_in_period + subscription_in_period
     total_outside = sum(tx.amount_kopeks for tx in txs_out)
@@ -642,7 +642,7 @@ async def debug_contest_transactions(
     full_deposit_total = int(full_deposit_result.scalar_one() or 0)
 
     full_subscription_result = await db.execute(
-        select(func.coalesce(func.sum(Transaction.amount_kopeks), 0)).where(
+        select(func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0)).where(
             and_(
                 Transaction.user_id.in_(referral_ids),
                 Transaction.is_completed.is_(True),
@@ -773,7 +773,7 @@ async def sync_contest_events(
 
     for event in events:
         # Считаем ТОЛЬКО покупки подписок (реальные траты на подписки)
-        subscription_query = select(func.coalesce(func.sum(Transaction.amount_kopeks), 0)).where(
+        subscription_query = select(func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0)).where(
             and_(
                 Transaction.user_id == event.referral_id,
                 Transaction.is_completed.is_(True),

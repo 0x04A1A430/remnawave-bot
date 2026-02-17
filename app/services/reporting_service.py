@@ -461,7 +461,7 @@ class ReportingService:
     def _txn_query_base(self, txn_type: str, start_utc: datetime, end_utc: datetime):
         return select(
             func.count(Transaction.id),
-            func.coalesce(func.sum(Transaction.amount_kopeks), 0),
+            func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0),
         ).where(
             Transaction.type == txn_type,
             Transaction.is_completed == true(),
