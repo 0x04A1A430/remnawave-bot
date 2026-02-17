@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import Callable
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -60,7 +60,7 @@ class EventEmitter:
         event_data = {
             'type': event_type,
             'payload': payload,
-            'timestamp': str(datetime.utcnow()),
+            'timestamp': str(datetime.now(UTC)),
         }
 
         # Вызываем локальные слушатели

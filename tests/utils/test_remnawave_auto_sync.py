@@ -1,6 +1,6 @@
 import asyncio
 from collections import deque
-from datetime import datetime, time as time_cls
+from datetime import UTC, datetime, time as time_cls
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -30,30 +30,30 @@ def _patch_datetime(monkeypatch, current):
     monkeypatch.setattr(
         'app.services.remnawave_sync_service.datetime',
         SimpleNamespace(
-            utcnow=lambda: current,
-            combine=lambda date_obj, time_obj: real_datetime.combine(date_obj, time_obj),
+            now=lambda tz=None: current,
+            combine=lambda date_obj, time_obj, tzinfo=None: real_datetime.combine(date_obj, time_obj, tzinfo=tzinfo),
         ),
     )
 
 
 def test_calculate_next_run_same_day(monkeypatch):
     service = RemnaWaveAutoSyncService()
-    current = datetime(2024, 1, 1, 2, 30)
+    current = datetime(2024, 1, 1, 2, 30, tzinfo=UTC)
     _patch_datetime(monkeypatch, current)
 
     next_run = service._calculate_next_run([time_cls(1, 0), time_cls(3, 0)])
 
-    assert next_run == datetime(2024, 1, 1, 3, 0)
+    assert next_run == datetime(2024, 1, 1, 3, 0, tzinfo=UTC)
 
 
 def test_calculate_next_run_rollover(monkeypatch):
     service = RemnaWaveAutoSyncService()
-    current = datetime(2024, 1, 1, 23, 45)
+    current = datetime(2024, 1, 1, 23, 45, tzinfo=UTC)
     _patch_datetime(monkeypatch, current)
 
     next_run = service._calculate_next_run([time_cls(1, 0), time_cls(10, 0)])
 
-    assert next_run == datetime(2024, 1, 2, 1, 0)
+    assert next_run == datetime(2024, 1, 2, 1, 0, tzinfo=UTC)
 
 
 def test_perform_sync_rebuilds_service_on_each_run(monkeypatch):

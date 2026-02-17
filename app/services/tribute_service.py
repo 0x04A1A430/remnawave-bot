@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -148,7 +148,7 @@ class TributeService:
                 was_first_topup = not user.has_made_first_topup
 
                 user.balance_kopeks += amount_kopeks
-                user.updated_at = datetime.utcnow()
+                user.updated_at = datetime.now(UTC)
 
                 promo_group = user.get_primary_promo_group()
                 subscription = getattr(user, 'subscription', None)
@@ -440,7 +440,7 @@ class TributeService:
                     logger.error('⌘ Пользователь не найден', user_id=user_id)
                     return False
 
-                external_id = f'force_donation_{payment_id}_{int(datetime.utcnow().timestamp())}'
+                external_id = f'force_donation_{payment_id}_{int(datetime.now(UTC).timestamp())}'
 
                 await create_transaction(
                     db=session,
@@ -455,7 +455,7 @@ class TributeService:
 
                 old_balance = user.balance_kopeks
                 user.balance_kopeks += amount_kopeks
-                user.updated_at = datetime.utcnow()
+                user.updated_at = datetime.now(UTC)
 
                 await session.commit()
 

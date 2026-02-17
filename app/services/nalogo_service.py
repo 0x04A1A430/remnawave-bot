@@ -1,4 +1,4 @@
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -117,7 +117,7 @@ class NaloGoService:
             'payment_id': payment_id,
             'telegram_user_id': telegram_user_id,
             'amount_kopeks': amount_kopeks,
-            'created_at': datetime.now().isoformat(),
+            'created_at': datetime.now(UTC).isoformat(),
             'attempts': 0,
         }
         success = await cache.lpush(NALOGO_QUEUE_KEY, receipt_data)
@@ -159,7 +159,7 @@ class NaloGoService:
             'payment_id': payment_id,
             'telegram_user_id': telegram_user_id,
             'amount_kopeks': amount_kopeks,
-            'created_at': datetime.now().isoformat(),
+            'created_at': datetime.now(UTC).isoformat(),
             'error': error_message,
             'status': 'pending_verification',
         }
@@ -489,13 +489,10 @@ class NaloGoService:
                         from dateutil.parser import isoparse
 
                         operation_time = isoparse(operation_time_str)
+                        if operation_time.tzinfo is None:
+                            operation_time = operation_time.replace(tzinfo=UTC)
 
-                        # Убираем timezone для сравнения
-                        if operation_time.tzinfo:
-                            operation_time = operation_time.replace(tzinfo=None)
-                        created_at_naive = created_at.replace(tzinfo=None) if created_at.tzinfo else created_at
-
-                        time_diff = abs((operation_time - created_at_naive).total_seconds())
+                        time_diff = abs((operation_time - created_at).total_seconds())
                         if time_diff <= time_window_minutes * 60:
                             receipt_uuid = income.get('approvedReceiptUuid', income.get('receiptUuid'))
                             if receipt_uuid:

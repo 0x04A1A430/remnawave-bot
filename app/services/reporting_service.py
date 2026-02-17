@@ -232,8 +232,8 @@ class ReportingService:
         report_date: date | None,
     ) -> str:
         period_range = self._get_period_range(period, report_date)
-        start_utc = period_range.start_msk.astimezone(UTC).replace(tzinfo=None)
-        end_utc = period_range.end_msk.astimezone(UTC).replace(tzinfo=None)
+        start_utc = period_range.start_msk.astimezone(UTC)
+        end_utc = period_range.end_msk.astimezone(UTC)
 
         async with AsyncSessionLocal() as session:
             totals = await self._collect_current_totals(session)
@@ -461,7 +461,7 @@ class ReportingService:
     def _txn_query_base(self, txn_type: str, start_utc: datetime, end_utc: datetime):
         return select(
             func.count(Transaction.id),
-            func.coalesce(func.sum(Transaction.amount_kopeks), 0),
+            func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0),
         ).where(
             Transaction.type == txn_type,
             Transaction.is_completed == true(),
@@ -523,7 +523,7 @@ class ReportingService:
         ]
 
     async def _get_user_usage_stats(self, session) -> dict[str, int]:
-        now_utc = datetime.now(UTC).replace(tzinfo=None)
+        now_utc = datetime.now(UTC)
 
         active_paid_q = await session.execute(
             select(func.count(func.distinct(Subscription.user_id))).where(

@@ -7,7 +7,7 @@ import shutil
 import tarfile
 import tempfile
 from dataclasses import asdict, dataclass
-from datetime import date as dt_date, datetime, time as dt_time, timedelta
+from datetime import UTC, date as dt_date, datetime, time as dt_time, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -262,7 +262,7 @@ class BackupService:
             return default_hours, default_minutes
 
     def _calculate_next_backup_datetime(self, reference: datetime | None = None) -> datetime:
-        reference = reference or datetime.now()
+        reference = reference or datetime.now(UTC)
         hours, minutes = self._parse_backup_time()
 
         next_run = reference.replace(hour=hours, minute=minutes, second=0, microsecond=0)
@@ -319,7 +319,7 @@ class BackupService:
 
             overview = await self._collect_database_overview()
 
-            timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+            timestamp = datetime.now(UTC).strftime('%Y%m%d_%H%M%S')
             archive_suffix = '.tar.gz' if compress else '.tar'
             filename = f'backup_{timestamp}{archive_suffix}'
             backup_path = self.backup_dir / filename
@@ -337,7 +337,7 @@ class BackupService:
 
                 metadata = {
                     'format_version': self.archive_format_version,
-                    'timestamp': datetime.utcnow().isoformat(),
+                    'timestamp': datetime.now(UTC).isoformat(),
                     'database_type': 'postgresql' if settings.is_postgresql() else 'sqlite',
                     'backup_type': 'full',
                     'tables_count': overview.get('tables_count', 0),
@@ -525,7 +525,7 @@ class BackupService:
         dump_path = staging_dir / 'database.json'
         dump_structure = {
             'metadata': {
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(UTC).isoformat(),
                 'version': 'orm-1.0',
                 'database_type': 'postgresql',
                 'tables_count': tables_count,
@@ -1171,10 +1171,10 @@ class BackupService:
                     if 'T' in value:
                         processed_data[key] = datetime.fromisoformat(value.replace('Z', '+00:00'))
                     else:
-                        processed_data[key] = datetime.strptime(value, '%Y-%m-%d %H:%M:%S')
+                        processed_data[key] = datetime.strptime(value, '%Y-%m-%d %H:%M:%S').replace(tzinfo=UTC)
                 except (ValueError, TypeError) as e:
                     logger.warning('Не удалось парсить дату для поля', value=value, key=key, error=e)
-                    processed_data[key] = datetime.utcnow()
+                    processed_data[key] = datetime.now(UTC)
             elif column_type_str == 'TIME' and isinstance(value, str):
                 try:
                     processed_data[key] = dt_time.fromisoformat(value)
@@ -1494,7 +1494,7 @@ class BackupService:
                     snapshots['app_config'] = {
                         'path': str(path_obj),
                         'content': content,
-                        'modified_at': datetime.fromtimestamp(path_obj.stat().st_mtime).isoformat(),
+                        'modified_at': datetime.fromtimestamp(path_obj.stat().st_mtime, tz=UTC).isoformat(),
                     }
                     logger.info('📁 Добавлен в бекап файл конфигурации', path_obj=path_obj)
                 except Exception as e:
@@ -1557,7 +1557,9 @@ class BackupService:
                     backup_info = {
                         'filename': backup_file.name,
                         'filepath': str(backup_file),
-                        'timestamp': metadata.get('timestamp', datetime.fromtimestamp(file_stats.st_mtime).isoformat()),
+                        'timestamp': metadata.get(
+                            'timestamp', datetime.fromtimestamp(file_stats.st_mtime, tz=UTC).isoformat()
+                        ),
                         'tables_count': metadata.get(
                             'tables_count', metadata.get('database', {}).get('tables_count', 0)
                         ),
@@ -1583,7 +1585,7 @@ class BackupService:
                         {
                             'filename': backup_file.name,
                             'filepath': str(backup_file),
-                            'timestamp': datetime.fromtimestamp(file_stats.st_mtime).isoformat(),
+                            'timestamp': datetime.fromtimestamp(file_stats.st_mtime, tz=UTC).isoformat(),
                             'tables_count': '?',
                             'total_records': '?',
                             'compressed': backup_file.suffix == '.gz',
@@ -1683,7 +1685,7 @@ class BackupService:
 
         while True:
             try:
-                now = datetime.now()
+                now = datetime.now(UTC)
                 delay = (next_run - now).total_seconds()
 
                 if delay > 0:
@@ -1713,7 +1715,7 @@ class BackupService:
                 break
             except Exception as e:
                 logger.error('Ошибка в цикле автобекапов', error=e)
-                next_run = datetime.now() + interval
+                next_run = datetime.now(UTC) + interval
 
     async def _send_backup_notification(self, event_type: str, message: str, file_path: str = None):
         try:
@@ -1728,7 +1730,7 @@ class BackupService:
             if file_path:
                 notification_text += f'\n📁 <code>{Path(file_path).name}</code>'
 
-            notification_text += f'\n\n⏰ <i>{datetime.now().strftime("%d.%m.%Y %H:%M:%S")}</i>'
+            notification_text += f'\n\n⏰ <i>{datetime.now(UTC).strftime("%d.%m.%Y %H:%M:%S")}</i>'
 
             try:
                 from app.services.admin_notification_service import AdminNotificationService
@@ -1762,7 +1764,7 @@ class BackupService:
             caption = '📦 <b>Резервная копия</b>\n\n'
             if temp_zip_path:
                 caption += '🔐 <b>Архив защищён паролем</b>\n\n'
-            caption += f'⏰ <i>{datetime.now().strftime("%d.%m.%Y %H:%M:%S")}</i>'
+            caption += f'⏰ <i>{datetime.now(UTC).strftime("%d.%m.%Y %H:%M:%S")}</i>'
 
             send_kwargs = {
                 'chat_id': chat_id,

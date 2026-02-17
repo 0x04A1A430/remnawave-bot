@@ -2,7 +2,7 @@
 Fixtures for promocode and promo group testing
 """
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -59,8 +59,8 @@ def sample_promocode_balance():
         promo_group_id=None,
         promo_group=None,
         valid_until=None,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
         created_by=1,
     )
 
@@ -79,9 +79,9 @@ def sample_promocode_subscription():
         is_active=True,
         promo_group_id=None,
         promo_group=None,
-        valid_until=datetime.utcnow() + timedelta(days=60),
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        valid_until=datetime.now(UTC) + timedelta(days=60),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
         created_by=1,
     )
 
@@ -101,8 +101,8 @@ def sample_promocode_promo_group(sample_promo_group):
         promo_group_id=sample_promo_group.id,
         promo_group=sample_promo_group,
         valid_until=None,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
         created_by=1,
     )
 
@@ -121,9 +121,9 @@ def sample_promocode_invalid():
         is_active=False,
         promo_group_id=None,
         promo_group=None,
-        valid_until=datetime.utcnow() - timedelta(days=1),  # Expired
-        created_at=datetime.utcnow() - timedelta(days=30),
-        updated_at=datetime.utcnow(),
+        valid_until=datetime.now(UTC) - timedelta(days=1),  # Expired
+        created_at=datetime.now(UTC) - timedelta(days=30),
+        updated_at=datetime.now(UTC),
         created_by=1,
     )
 

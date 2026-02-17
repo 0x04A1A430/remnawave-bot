@@ -5,7 +5,7 @@
 """
 
 import asyncio
-from datetime import datetime
+from datetime import UTC, datetime
 
 import structlog
 from aiogram import Bot
@@ -290,7 +290,7 @@ class DailySubscriptionService:
             async with AsyncSessionLocal() as db:
                 try:
                     # Находим все истекшие докупки
-                    now = datetime.utcnow()
+                    now = datetime.now(UTC)
                     query = select(TrafficPurchase).where(TrafficPurchase.expires_at <= now)
                     result = await db.execute(query)
                     expired_purchases = result.scalars().all()
@@ -400,7 +400,7 @@ class DailySubscriptionService:
         subscription.purchased_traffic_gb = max(0, new_purchased)
 
         # Проверяем, остались ли активные докупки
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         remaining_query = (
             select(TrafficPurchase)
             .where(TrafficPurchase.subscription_id == subscription_id)
@@ -417,7 +417,7 @@ class DailySubscriptionService:
             next_expiry = min(p.expires_at for p in remaining_purchases)
             subscription.traffic_reset_at = next_expiry
 
-        subscription.updated_at = datetime.utcnow()
+        subscription.updated_at = datetime.now(UTC)
 
         await db.commit()
 

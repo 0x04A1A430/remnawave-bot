@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -35,7 +35,7 @@ class DummySession:
 class DummyLocalPayment:
     def __init__(self, payment_id: int = 101) -> None:
         self.id = payment_id
-        self.created_at = datetime.utcnow()
+        self.created_at = datetime.now(UTC)
 
 
 class StubPlategaService:

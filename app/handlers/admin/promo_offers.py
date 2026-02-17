@@ -4,7 +4,7 @@ import asyncio
 import html
 import re
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import UTC, datetime
 
 import structlog
 from aiogram import Dispatcher, F, types
@@ -260,7 +260,7 @@ def _format_offer_remaining(offer, texts) -> str:
     if not offer.expires_at:
         return texts.t('ADMIN_PROMO_OFFER_SEND_USER_OFFER_NO_EXPIRY', 'без срока')
 
-    remaining_seconds = int((offer.expires_at - datetime.utcnow()).total_seconds())
+    remaining_seconds = int((offer.expires_at - datetime.now(UTC)).total_seconds())
     if remaining_seconds <= 0:
         return texts.t('ADMIN_PROMO_OFFER_SEND_USER_OFFER_TIME_LEFT_EXPIRED', 'истекло')
 
@@ -1512,7 +1512,7 @@ async def show_selected_user_details(
         lines.append('')
         lines.append(texts.t('ADMIN_PROMO_OFFER_SEND_USER_NO_SUBSCRIPTION', '💳 Подписка отсутствует'))
 
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     percent = 0
     try:
         percent = int(getattr(user, 'promo_offer_discount_percent', 0) or 0)
@@ -1772,7 +1772,7 @@ async def show_selected_user_details(
         )
 
     if subscription:
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         result = await db.execute(
             select(SubscriptionTemporaryAccess)
             .options(selectinload(SubscriptionTemporaryAccess.offer))

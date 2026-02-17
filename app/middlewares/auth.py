@@ -1,6 +1,6 @@
 import asyncio
 from collections.abc import Awaitable, Callable
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -194,10 +194,10 @@ class AuthMiddleware(BaseMiddleware):
                     )
                     profile_updated = True
 
-                db_user.last_activity = datetime.utcnow()
+                db_user.last_activity = datetime.now(UTC)
 
                 if profile_updated:
-                    db_user.updated_at = datetime.utcnow()
+                    db_user.updated_at = datetime.now(UTC)
                     logger.info('💾 [Middleware] Профиль пользователя обновлен в middleware', user_id=user.id)
 
                     if db_user.remnawave_uuid:

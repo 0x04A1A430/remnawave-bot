@@ -1,7 +1,7 @@
 """Тесты Pal24 сценариев PaymentService."""
 
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -32,7 +32,7 @@ class DummySession:
 class DummyLocalPayment:
     def __init__(self, payment_id: int = 404) -> None:
         self.id = payment_id
-        self.created_at = datetime(2024, 1, 2, 10, 0, 0)
+        self.created_at = datetime(2024, 1, 2, 10, 0, 0, tzinfo=UTC)
 
 
 class StubPal24Service:

@@ -1,5 +1,5 @@
 from collections.abc import Iterable
-from datetime import datetime
+from datetime import UTC, datetime
 
 import structlog
 from sqlalchemy import delete, func, select, update
@@ -21,7 +21,7 @@ async def set_faq_enabled(db: AsyncSession, language: str, enabled: bool) -> Faq
 
     if setting:
         setting.is_enabled = bool(enabled)
-        setting.updated_at = datetime.utcnow()
+        setting.updated_at = datetime.now(UTC)
     else:
         setting = FaqSetting(
             language=language,
@@ -117,7 +117,7 @@ async def update_faq_page(
     if is_active is not None:
         page.is_active = bool(is_active)
 
-    page.updated_at = datetime.utcnow()
+    page.updated_at = datetime.now(UTC)
 
     await db.commit()
     await db.refresh(page)
@@ -139,6 +139,6 @@ async def bulk_update_order(
 ) -> None:
     for page_id, order in pages:
         await db.execute(
-            update(FaqPage).where(FaqPage.id == page_id).values(display_order=order, updated_at=datetime.utcnow())
+            update(FaqPage).where(FaqPage.id == page_id).values(display_order=order, updated_at=datetime.now(UTC))
         )
     await db.commit()

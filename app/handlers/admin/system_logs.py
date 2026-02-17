@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from html import escape
 from pathlib import Path
 
@@ -47,7 +47,7 @@ def _build_logs_message(log_path: Path) -> str:
 
     total_length = len(content)
     stats = log_path.stat()
-    updated_at = datetime.fromtimestamp(stats.st_mtime)
+    updated_at = datetime.fromtimestamp(stats.st_mtime, tz=UTC)
 
     if not content:
         preview_text = 'Лог-файл пуст.'
@@ -128,7 +128,7 @@ async def download_system_logs(
 
         document = FSInputFile(log_path)
         stats = log_path.stat()
-        updated_at = datetime.fromtimestamp(stats.st_mtime).strftime('%d.%m.%Y %H:%M:%S')
+        updated_at = datetime.fromtimestamp(stats.st_mtime, tz=UTC).strftime('%d.%m.%Y %H:%M:%S')
         caption = (
             f'🧾 Лог-файл <code>{log_path.name}</code>\n📁 Путь: <code>{log_path}</code>\n🕒 Обновлен: {updated_at}'
         )

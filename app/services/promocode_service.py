@@ -189,7 +189,7 @@ class PromoCodeService:
 
         # Обработка DISCOUNT типа (одноразовая скидка)
         if promocode.type == PromoCodeType.DISCOUNT.value:
-            from datetime import datetime, timedelta
+            from datetime import UTC, datetime, timedelta
 
             # Проверка на наличие активной скидки
             current_discount = getattr(user, 'promo_offer_discount_percent', 0) or 0
@@ -197,7 +197,7 @@ class PromoCodeService:
 
             # Если есть активная скидка (процент > 0 и срок не истек)
             if current_discount > 0:
-                if expires_at is None or expires_at > datetime.utcnow():
+                if expires_at is None or expires_at > datetime.now(UTC):
                     logger.warning(
                         '⚠️ Пользователь попытался активировать промокод но у него уже есть активная скидка до',
                         _format_user_log=self._format_user_log(user),
@@ -218,7 +218,7 @@ class PromoCodeService:
 
             # Устанавливаем срок действия скидки
             if discount_hours > 0:
-                user.promo_offer_discount_expires_at = datetime.utcnow() + timedelta(hours=discount_hours)
+                user.promo_offer_discount_expires_at = datetime.now(UTC) + timedelta(hours=discount_hours)
                 effects.append(f'💸 Получена скидка {discount_percent}% (действует {discount_hours} ч.)')
             else:
                 # 0 часов = бессрочно до первой покупки
@@ -373,16 +373,16 @@ class PromoCodeService:
             if current_discount <= 0 or not source or not source.startswith('promocode:'):
                 return {'success': False, 'error': 'no_active_discount_promocode'}
 
-            from datetime import datetime
+            from datetime import UTC, datetime
 
             expires_at = getattr(user, 'promo_offer_discount_expires_at', None)
             # Если скидка уже истекла по времени -- тоже нечего деактивировать
-            if expires_at is not None and expires_at <= datetime.utcnow():
+            if expires_at is not None and expires_at <= datetime.now(UTC):
                 # Просто зачистим протухшие данные
                 user.promo_offer_discount_percent = 0
                 user.promo_offer_discount_source = None
                 user.promo_offer_discount_expires_at = None
-                user.updated_at = datetime.utcnow()
+                user.updated_at = datetime.now(UTC)
                 await db.commit()
                 return {'success': False, 'error': 'discount_already_expired'}
 
@@ -394,14 +394,14 @@ class PromoCodeService:
             user.promo_offer_discount_percent = 0
             user.promo_offer_discount_source = None
             user.promo_offer_discount_expires_at = None
-            user.updated_at = datetime.utcnow()
+            user.updated_at = datetime.now(UTC)
 
             # 2. Откатываем использование промокода (если нашли запись)
             if promocode and promo_use:
                 await db.delete(promo_use)
                 if promocode.current_uses > 0:
                     promocode.current_uses -= 1
-                    promocode.updated_at = datetime.utcnow()
+                    promocode.updated_at = datetime.now(UTC)
 
                 # 3. Если промокод назначал промогруппу -- снимаем её
                 if promocode.promo_group_id:

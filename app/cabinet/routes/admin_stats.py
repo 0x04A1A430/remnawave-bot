@@ -2,7 +2,7 @@
 
 import sys
 import time
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -258,7 +258,7 @@ async def get_dashboard_stats(
         sub_stats = await get_subscriptions_statistics(db)
 
         # Get financial statistics
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
         trans_stats = await get_transactions_statistics(db, month_start, now)
@@ -503,7 +503,7 @@ async def _get_tariff_stats(db: AsyncSession) -> TariffStats | None:
             logger.info('📊 Нет тарифов в системе, пропускаем статистику')
             return None
 
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         week_ago = now - timedelta(days=7)
         month_ago = now - timedelta(days=30)
@@ -601,7 +601,7 @@ async def get_top_referrers(
 ):
     """Get top referrers with earnings breakdown by period."""
     try:
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         week_ago = now - timedelta(days=7)
         month_ago = now - timedelta(days=30)
@@ -874,7 +874,7 @@ async def get_recent_payments(
 ):
     """Get recent payments with user info."""
     try:
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         week_ago = now - timedelta(days=7)
 

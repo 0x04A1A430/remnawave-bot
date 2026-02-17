@@ -5,7 +5,7 @@
 
 import asyncio
 from dataclasses import dataclass
-from datetime import datetime, time, timedelta
+from datetime import UTC, datetime, time, timedelta
 
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -121,7 +121,7 @@ class TrafficMonitoringServiceV2:
             success = await cache.set(TRAFFIC_SNAPSHOT_KEY, snapshot_data, expire=ttl)
             if success:
                 # Сохраняем время создания snapshot
-                await cache.set(TRAFFIC_SNAPSHOT_TIME_KEY, datetime.utcnow().isoformat(), expire=ttl)
+                await cache.set(TRAFFIC_SNAPSHOT_TIME_KEY, datetime.now(UTC).isoformat(), expire=ttl)
                 logger.info(
                     '📦 Snapshot сохранён в Redis: пользователей, TTL ч',
                     snapshot_count=len(snapshot),
@@ -165,7 +165,7 @@ class TrafficMonitoringServiceV2:
         try:
             key = cache_key(TRAFFIC_NOTIFICATION_CACHE_KEY, user_uuid)
             ttl = 24 * 3600  # 24 часа
-            return await cache.set(key, datetime.utcnow().isoformat(), expire=ttl)
+            return await cache.set(key, datetime.now(UTC).isoformat(), expire=ttl)
         except Exception as e:
             logger.error('❌ Ошибка сохранения уведомления в Redis', error=e)
             return False
@@ -235,7 +235,7 @@ class TrafficMonitoringServiceV2:
             return True
 
         cooldown = self.get_notification_cooldown_seconds()
-        return (datetime.utcnow() - last_notification).total_seconds() > cooldown
+        return (datetime.now(UTC) - last_notification).total_seconds() > cooldown
 
     async def record_notification(self, user_uuid: str):
         """Записывает время отправки уведомления (Redis + fallback на память)"""
@@ -244,11 +244,11 @@ class TrafficMonitoringServiceV2:
 
         # Fallback на память
         if not saved:
-            self._memory_notification_cache[user_uuid] = datetime.utcnow()
+            self._memory_notification_cache[user_uuid] = datetime.now(UTC)
 
     async def cleanup_notification_cache(self):
         """Очищает старые записи из памяти (Redis очищается автоматически через TTL)"""
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         expired = [uuid for uuid, dt in self._memory_notification_cache.items() if (now - dt) > timedelta(hours=24)]
         for uuid in expired:
             del self._memory_notification_cache[uuid]
@@ -313,7 +313,7 @@ class TrafficMonitoringServiceV2:
 
         if not snapshot_time:
             return float('inf')
-        return (datetime.utcnow() - snapshot_time).total_seconds() / 60
+        return (datetime.now(UTC) - snapshot_time).total_seconds() / 60
 
     async def _get_current_snapshot(self) -> dict[str, float]:
         """Получает текущий snapshot (Redis + fallback на память)"""
@@ -338,7 +338,7 @@ class TrafficMonitoringServiceV2:
 
         # Fallback на память
         self._memory_snapshot = snapshot.copy()
-        self._memory_snapshot_time = datetime.utcnow()
+        self._memory_snapshot_time = datetime.now(UTC)
         logger.warning('⚠️ Redis недоступен, snapshot сохранён в память')
         return True
 
@@ -360,7 +360,7 @@ class TrafficMonitoringServiceV2:
             return len(existing_snapshot)
 
         logger.info('📸 Создание начального snapshot трафика...')
-        start_time = datetime.utcnow()
+        start_time = datetime.now(UTC)
 
         users = await self.get_all_users_with_traffic()
         new_snapshot: dict[str, float] = {}
@@ -383,7 +383,7 @@ class TrafficMonitoringServiceV2:
         # Сохраняем в Redis (с fallback на память)
         await self._save_snapshot(new_snapshot)
 
-        elapsed = (datetime.utcnow() - start_time).total_seconds()
+        elapsed = (datetime.now(UTC) - start_time).total_seconds()
         logger.info(
             '✅ Snapshot создан за с: пользователей', elapsed=round(elapsed, 1), new_snapshot_count=len(new_snapshot)
         )
@@ -402,7 +402,7 @@ class TrafficMonitoringServiceV2:
         if not self.is_fast_check_enabled():
             return []
 
-        start_time = datetime.utcnow()
+        start_time = datetime.now(UTC)
         is_first_run = not await self.has_snapshot()
 
         # Загружаем кеш нод для красивых названий в уведомлениях
@@ -535,7 +535,7 @@ class TrafficMonitoringServiceV2:
         await self._save_snapshot(new_snapshot)
         logger.info('💾 Новый snapshot сохранён: пользователей', new_snapshot_count=len(new_snapshot))
 
-        elapsed = (datetime.utcnow() - start_time).total_seconds()
+        elapsed = (datetime.now(UTC) - start_time).total_seconds()
 
         if is_first_run:
             logger.info(
@@ -567,7 +567,7 @@ class TrafficMonitoringServiceV2:
             return []
 
         logger.info('🚀 Запуск суточной проверки трафика...')
-        start_time = datetime.utcnow()
+        start_time = datetime.now(UTC)
 
         # Загружаем кеш нод для красивых названий в уведомлениях
         await self._load_nodes_cache()
@@ -576,7 +576,7 @@ class TrafficMonitoringServiceV2:
         threshold_bytes = self.get_daily_threshold_gb() * (1024**3)
 
         # Получаем период за последние 24 часа
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         start_date = (now - timedelta(hours=24)).strftime('%Y-%m-%d')
         end_date = now.strftime('%Y-%m-%d')
 
@@ -639,7 +639,7 @@ class TrafficMonitoringServiceV2:
             if isinstance(result, TrafficViolation):
                 violations.append(result)
 
-        elapsed = (datetime.utcnow() - start_time).total_seconds()
+        elapsed = (datetime.now(UTC) - start_time).total_seconds()
         logger.info(
             '✅ Суточная проверка завершена за с: пользователей, превышений',
             elapsed=round(elapsed, 1),
@@ -725,7 +725,7 @@ class TrafficMonitoringServiceV2:
                 elif violation.last_node_uuid:
                     message += f'\n🖥 Сервер: <code>{violation.last_node_uuid}</code>'
 
-                message += f'\n\n⏰ {datetime.utcnow().strftime("%d.%m.%Y %H:%M:%S")} UTC'
+                message += f'\n\n⏰ {datetime.now(UTC).strftime("%d.%m.%Y %H:%M:%S")} UTC'
 
                 await admin_service.send_suspicious_traffic_notification(message, bot, topic_id)
                 await self.record_notification(violation.user_uuid)
@@ -831,8 +831,8 @@ class TrafficMonitoringSchedulerV2:
         while self._is_running:
             try:
                 # Вычисляем время до следующей проверки
-                now = datetime.utcnow()
-                next_run = datetime.combine(now.date(), check_time)
+                now = datetime.now(UTC)
+                next_run = datetime.combine(now.date(), check_time, tzinfo=UTC)
                 if next_run <= now:
                     next_run += timedelta(days=1)
 

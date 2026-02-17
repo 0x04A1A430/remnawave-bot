@@ -1,5 +1,6 @@
 import datetime
 import json
+from datetime import UTC
 
 import structlog
 from aiogram import Dispatcher, F, types
@@ -33,7 +34,7 @@ async def show_referral_statistics(callback: types.CallbackQuery, db_user: User,
         if stats.get('active_referrers', 0) > 0:
             avg_per_referrer = stats.get('total_paid_kopeks', 0) / stats['active_referrers']
 
-        current_time = datetime.datetime.now().strftime('%H:%M:%S')
+        current_time = datetime.datetime.now(UTC).strftime('%H:%M:%S')
 
         text = f"""
 🤝 <b>Реферальная статистика</b>
@@ -114,7 +115,7 @@ async def show_referral_statistics(callback: types.CallbackQuery, db_user: User,
     except Exception as e:
         logger.error('Ошибка в show_referral_statistics', error=e, exc_info=True)
 
-        current_time = datetime.datetime.now().strftime('%H:%M:%S')
+        current_time = datetime.datetime.now(UTC).strftime('%H:%M:%S')
         text = f"""
 🤝 <b>Реферальная статистика</b>
 
@@ -656,7 +657,7 @@ async def process_test_referral_earning(message: types.Message, db_user: User, d
 
 def _get_period_dates(period: str) -> tuple[datetime.datetime, datetime.datetime]:
     """Возвращает начальную и конечную даты для заданного периода."""
-    now = datetime.datetime.now()
+    now = datetime.datetime.now(UTC)
     today = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
     if period == 'today':
@@ -1153,9 +1154,9 @@ async def sync_referrals_with_contest(
     await callback.answer('🏆 Синхронизирую с конкурсами...')
 
     try:
-        from datetime import datetime
+        from datetime import UTC, datetime
 
-        now_utc = datetime.utcnow()
+        now_utc = datetime.now(UTC)
 
         # Получаем активные конкурсы
         paid_contests = await get_contests_for_events(db, now_utc, contest_types=['referral_paid'])

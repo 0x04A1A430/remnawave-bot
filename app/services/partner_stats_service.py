@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
@@ -30,7 +30,7 @@ class PartnerStatsService:
         user_id: int,
     ) -> dict[str, Any]:
         """Получить детальную статистику реферера."""
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         week_ago = now - timedelta(days=7)
         month_ago = now - timedelta(days=30)
@@ -137,7 +137,7 @@ class PartnerStatsService:
         days: int = 30,
     ) -> list[dict[str, Any]]:
         """Получить статистику реферера по дням."""
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         start_date = now - timedelta(days=days)
 
         # Рефералы по дням
@@ -196,7 +196,7 @@ class PartnerStatsService:
         limit: int = 10,
     ) -> list[dict[str, Any]]:
         """Получить топ рефералов по доходу для реферера."""
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
 
         # Получаем рефералов с их доходами
         result = await db.execute(
@@ -266,7 +266,7 @@ class PartnerStatsService:
         previous_days: int = 7,
     ) -> dict[str, Any]:
         """Сравнить текущий и предыдущий период."""
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         current_start = now - timedelta(days=current_days)
         previous_start = current_start - timedelta(days=previous_days)
         previous_end = current_start
@@ -345,7 +345,7 @@ class PartnerStatsService:
         days: int = 30,
     ) -> dict[str, Any]:
         """Глобальная статистика партнёрской программы."""
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         week_ago = now - timedelta(days=7)
         month_ago = now - timedelta(days=30)
@@ -449,7 +449,7 @@ class PartnerStatsService:
         days: int = 30,
     ) -> list[dict[str, Any]]:
         """Глобальная статистика по дням."""
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         start_date = now - timedelta(days=days)
 
         # Рефералы по дням
@@ -501,7 +501,7 @@ class PartnerStatsService:
         days: int | None = None,
     ) -> list[dict[str, Any]]:
         """Получить топ рефереров."""
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         start_date = now - timedelta(days=days) if days else None
 
         # Подсчёт рефералов и заработков

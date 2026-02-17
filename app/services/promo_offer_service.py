@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import structlog
 from sqlalchemy import select
@@ -63,7 +63,7 @@ class PromoOfferService:
         if duration_hours <= 0:
             duration_hours = 24
 
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         expires_at = now + timedelta(hours=duration_hours)
 
         original_connected = set(connected)
@@ -132,7 +132,7 @@ class PromoOfferService:
         return True, newly_added, expires_at, 'ok'
 
     async def cleanup_expired_test_access(self, db: AsyncSession) -> int:
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         result = await db.execute(
             select(SubscriptionTemporaryAccess)
             .options(

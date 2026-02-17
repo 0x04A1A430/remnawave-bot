@@ -1,6 +1,6 @@
 import asyncio
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -76,7 +76,7 @@ class MaintenanceService:
             emoji_map = {'error': '🚨', 'warning': '⚠️', 'success': '✅', 'info': 'ℹ️'}
             emoji = emoji_map.get(alert_type, 'ℹ️')
 
-            timestamp = format_local_datetime(datetime.utcnow(), '%d.%m.%Y %H:%M:%S %Z')
+            timestamp = format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S %Z')
             formatted_message = f'{emoji} <b>ТЕХНИЧЕСКИЕ РАБОТЫ</b>\n\n{message}\n\n⏰ <i>{timestamp}</i>'
 
             return await notification_service._send_message(formatted_message)
@@ -135,7 +135,7 @@ class MaintenanceService:
                 return True
 
             self._status.is_active = True
-            self._status.enabled_at = datetime.utcnow()
+            self._status.enabled_at = datetime.now(UTC)
             self._status.reason = reason or ('Автоматическое включение' if auto else 'Включено администратором')
             self._status.auto_enabled = auto
 
@@ -168,7 +168,7 @@ class MaintenanceService:
             was_auto = self._status.auto_enabled
             duration = None
             if self._status.enabled_at:
-                duration = datetime.utcnow() - self._status.enabled_at
+                duration = datetime.now(UTC) - self._status.enabled_at
 
             self._status.is_active = False
             self._status.enabled_at = None
@@ -187,7 +187,7 @@ class MaintenanceService:
                 else:
                     duration_str = f'\n⏱️ <b>Длительность:</b> {minutes}мин'
 
-            notification_time = format_local_datetime(datetime.utcnow(), '%d.%m.%Y %H:%M:%S %Z')
+            notification_time = format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S %Z')
             notification_msg = f"""Режим технических работ ВЫКЛЮЧЕН
 
 🤖 <b>Автоматически:</b> {'Да' if was_auto else 'Нет'}
@@ -252,7 +252,7 @@ class MaintenanceService:
                 return self._status.api_status
 
             self._is_checking = True
-            self._status.last_check = datetime.utcnow()
+            self._status.last_check = datetime.now(UTC)
 
             auth_params = settings.get_remnawave_auth_params()
             base_url = (auth_params.get('base_url') or '').strip()
@@ -356,7 +356,7 @@ API снова отвечает на запросы.""",
             logger.error('Ошибка проверки API', error=e)
 
             if self._status.api_status:
-                error_time = format_local_datetime(datetime.utcnow(), '%H:%M:%S %Z')
+                error_time = format_local_datetime(datetime.now(UTC), '%H:%M:%S %Z')
                 await self._notify_admins(
                     f"""Ошибка при проверке API Remnawave
 
@@ -442,11 +442,11 @@ API снова отвечает на запросы.""",
         }
 
     async def force_api_check(self) -> dict[str, Any]:
-        start_time = datetime.utcnow()
+        start_time = datetime.now(UTC)
 
         try:
             api_status = await self.check_api_status()
-            end_time = datetime.utcnow()
+            end_time = datetime.now(UTC)
             response_time = (end_time - start_time).total_seconds()
 
             return {
@@ -458,7 +458,7 @@ API снова отвечает на запросы.""",
             }
 
         except Exception as e:
-            end_time = datetime.utcnow()
+            end_time = datetime.now(UTC)
             response_time = (end_time - start_time).total_seconds()
 
             return {

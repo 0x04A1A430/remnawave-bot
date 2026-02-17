@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from importlib import import_module
 from typing import Any
 
@@ -198,7 +198,7 @@ class CloudPaymentsPaymentMixin:
         payment.transaction_id_cp = transaction_id_cp
         payment.status = 'completed'
         payment.is_paid = True
-        payment.paid_at = datetime.utcnow()
+        payment.paid_at = datetime.now(UTC)
         payment.token = token
         payment.card_first_six = webhook_data.get('card_first_six')
         payment.card_last_four = webhook_data.get('card_last_four')

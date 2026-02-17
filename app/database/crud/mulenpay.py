@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 import structlog
 from sqlalchemy import select
@@ -90,7 +90,7 @@ async def update_mulenpay_payment_status(
     if metadata is not None:
         payment.metadata_json = metadata
 
-    payment.updated_at = datetime.utcnow()
+    payment.updated_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(payment)
     return payment
@@ -103,7 +103,7 @@ async def update_mulenpay_payment_metadata(
     metadata: dict,
 ) -> MulenPayPayment:
     payment.metadata_json = metadata
-    payment.updated_at = datetime.utcnow()
+    payment.updated_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(payment)
     return payment
@@ -116,7 +116,7 @@ async def link_mulenpay_payment_to_transaction(
     transaction_id: int,
 ) -> MulenPayPayment:
     payment.transaction_id = transaction_id
-    payment.updated_at = datetime.utcnow()
+    payment.updated_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(payment)
     return payment

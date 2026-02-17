@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import structlog
 from sqlalchemy import and_, func, select
@@ -178,7 +178,7 @@ async def get_referral_statistics(db: AsyncSession) -> dict:
                 }
             )
 
-    today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
 
     today_referral_earnings_result = await db.execute(
         select(func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0)).where(ReferralEarning.created_at >= today)
@@ -190,7 +190,7 @@ async def get_referral_statistics(db: AsyncSession) -> dict:
     )
     today_earnings = today_referral_earnings_result.scalar() + today_transaction_earnings_result.scalar()
 
-    week_ago = datetime.utcnow() - timedelta(days=7)
+    week_ago = datetime.now(UTC) - timedelta(days=7)
     week_referral_earnings_result = await db.execute(
         select(func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0)).where(ReferralEarning.created_at >= week_ago)
     )
@@ -201,7 +201,7 @@ async def get_referral_statistics(db: AsyncSession) -> dict:
     )
     week_earnings = week_referral_earnings_result.scalar() + week_transaction_earnings_result.scalar()
 
-    month_ago = datetime.utcnow() - timedelta(days=30)
+    month_ago = datetime.now(UTC) - timedelta(days=30)
     month_referral_earnings_result = await db.execute(
         select(func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0)).where(ReferralEarning.created_at >= month_ago)
     )
@@ -249,7 +249,7 @@ async def get_top_referrers_by_period(
     """
     from app.database.models import Transaction, TransactionType
 
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     if period == 'week':
         start_date = now - timedelta(days=7)
     else:  # month
@@ -380,12 +380,12 @@ async def get_user_referral_stats(db: AsyncSession, user_id: int) -> dict:
 
     total_earned = await get_referral_earnings_sum(db, user_id)
 
-    month_ago = datetime.utcnow() - timedelta(days=30)
+    month_ago = datetime.now(UTC) - timedelta(days=30)
     month_earned = await get_referral_earnings_sum(db, user_id, start_date=month_ago)
 
     from app.database.models import Subscription, SubscriptionStatus
 
-    current_time = datetime.utcnow()
+    current_time = datetime.now(UTC)
 
     active_referrals_result = await db.execute(
         select(func.count(User.id))

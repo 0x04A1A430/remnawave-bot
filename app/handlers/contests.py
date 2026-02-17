@@ -1,6 +1,6 @@
 """Contest handlers for daily games."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 import structlog
 from aiogram import Dispatcher, F, types
@@ -34,7 +34,7 @@ _attempt_service = ContestAttemptService()
 def _check_rate_limit(user_id: int, action: str, limit: int = 1, window_seconds: int = 5) -> bool:
     """Check if user exceeds rate limit for contest actions."""
     key = f'{user_id}_{action}'
-    now = datetime.utcnow().timestamp()
+    now = datetime.now(UTC).timestamp()
 
     if key not in _rate_limits:
         _rate_limits[key] = []

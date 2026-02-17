@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import structlog
@@ -467,7 +467,7 @@ class BroadcastService:
                     broadcast.status = status
 
                     if update_completed_at:
-                        broadcast.completed_at = datetime.utcnow()
+                        broadcast.completed_at = datetime.now(UTC)
 
                     await session.commit()
                     return
@@ -865,7 +865,7 @@ class EmailBroadcastService:
                     broadcast.status = status
 
                     if update_completed_at:
-                        broadcast.completed_at = datetime.utcnow()
+                        broadcast.completed_at = datetime.now(UTC)
 
                     await session.commit()
                     return

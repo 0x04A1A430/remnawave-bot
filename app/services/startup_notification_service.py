@@ -4,7 +4,7 @@
 Отправляет красивое сообщение с информацией о системе при запуске бота.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Final
 
 import structlog
@@ -228,7 +228,7 @@ class StartupNotificationService:
             ]
             system_info = '\n'.join(system_info_lines)
 
-            timestamp = format_local_datetime(datetime.utcnow(), DATETIME_FORMAT)
+            timestamp = format_local_datetime(datetime.now(UTC), DATETIME_FORMAT)
 
             message = (
                 f'<b>Remnawave Bedolaga Bot</b>\n\n'
@@ -388,7 +388,7 @@ async def send_crash_notification(bot: Bot, error: Exception, traceback_str: str
         return False
 
     try:
-        timestamp = format_local_datetime(datetime.utcnow(), DATETIME_FORMAT)
+        timestamp = format_local_datetime(datetime.now(UTC), DATETIME_FORMAT)
         error_type = type(error).__name__
         error_message = str(error)[:CRASH_ERROR_MESSAGE_MAX_LENGTH]
         separator = '=' * REPORT_SEPARATOR_WIDTH
@@ -407,7 +407,7 @@ async def send_crash_notification(bot: Bot, error: Exception, traceback_str: str
         )
 
         # Создаем файл для отправки
-        file_name = f'crash_report_{datetime.utcnow().strftime(DATETIME_FORMAT_FILENAME)}.txt'
+        file_name = f'crash_report_{datetime.now(UTC).strftime(DATETIME_FORMAT_FILENAME)}.txt'
         file = BufferedInputFile(
             file=log_content.encode('utf-8'),
             filename=file_name,

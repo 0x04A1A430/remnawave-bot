@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 import structlog
 from sqlalchemy import and_, delete, func, select, update
@@ -151,7 +151,7 @@ async def update_campaign(
     if not update_data:
         return campaign
 
-    update_data['updated_at'] = datetime.utcnow()
+    update_data['updated_at'] = datetime.now(UTC)
 
     await db.execute(update(AdvertisingCampaign).where(AdvertisingCampaign.id == campaign.id).values(**update_data))
     await db.commit()
@@ -331,7 +331,7 @@ async def get_campaign_statistics(
         first_payment_time_by_user[user_id] = converted_at
 
     for user_id, amount_kopeks, created_at in subscription_payments:
-        amount_value = int(amount_kopeks or 0)
+        amount_value = abs(int(amount_kopeks or 0))
         subscription_payments_total += amount_value
         paid_users_from_transactions.add(user_id)
 

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 import structlog
 from aiogram import Dispatcher, F, types
@@ -106,7 +106,7 @@ def _build_status_message(
         offline=len(offline_servers),
     )
 
-    updated_at = datetime.now().strftime('%H:%M:%S')
+    updated_at = datetime.now(UTC).strftime('%H:%M:%S')
 
     lines.extend(
         [

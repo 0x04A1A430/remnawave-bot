@@ -1,6 +1,6 @@
 import secrets
 import string
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import structlog
 from sqlalchemy import and_, func, select, update
@@ -54,7 +54,7 @@ async def generate_unique_referral_code(db: AsyncSession, telegram_id: int) -> s
         if not result.scalar_one_or_none():
             return code
 
-    timestamp = str(int(datetime.utcnow().timestamp()))[-6:]
+    timestamp = str(int(datetime.now(UTC).timestamp()))[-6:]
     return f'ref{timestamp}'
 
 
@@ -85,7 +85,7 @@ async def mark_user_as_had_paid_subscription(db: AsyncSession, user: User) -> bo
             return True
 
         await db.execute(
-            update(User).where(User.id == user.id).values(has_had_paid_subscription=True, updated_at=datetime.utcnow())
+            update(User).where(User.id == user.id).values(has_had_paid_subscription=True, updated_at=datetime.now(UTC))
         )
 
         await db.commit()
@@ -116,7 +116,7 @@ async def get_user_referral_summary(db: AsyncSession, user_id: int) -> dict:
         )
         total_earned_kopeks = total_earnings_result.scalar() or 0
 
-        month_ago = datetime.utcnow() - timedelta(days=30)
+        month_ago = datetime.now(UTC) - timedelta(days=30)
         month_earnings_result = await db.execute(
             select(func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0)).where(
                 and_(ReferralEarning.user_id == user_id, ReferralEarning.created_at >= month_ago)
@@ -223,11 +223,11 @@ async def get_detailed_referral_list(db: AsyncSession, user_id: int, limit: int 
             )
             topups_count = topups_result.scalar() or 0
 
-            days_since_registration = (datetime.utcnow() - referral.created_at).days
+            days_since_registration = (datetime.now(UTC) - referral.created_at).days
 
             days_since_activity = None
             if referral.last_activity:
-                days_since_activity = (datetime.utcnow() - referral.last_activity).days
+                days_since_activity = (datetime.now(UTC) - referral.last_activity).days
 
             detailed_referrals.append(
                 {
@@ -270,7 +270,7 @@ async def get_detailed_referral_list(db: AsyncSession, user_id: int, limit: int 
 
 async def get_referral_analytics(db: AsyncSession, user_id: int) -> dict:
     try:
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         periods = {
             'today': now.replace(hour=0, minute=0, second=0, microsecond=0),
             'week': now - timedelta(days=7),

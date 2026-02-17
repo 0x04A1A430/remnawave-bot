@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -69,7 +69,7 @@ async def test_create_payment_success(monkeypatch: pytest.MonkeyPatch) -> None:
         metadata={'meta': 'value'},
         amount=SimpleNamespace(value='140.00', currency='RUB'),
         refundable=True,
-        created_at=datetime(2024, 1, 1, 12, 0, 0),
+        created_at=datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC),
         description='Desc',
         test=False,
     )
@@ -154,7 +154,7 @@ async def test_create_sbp_payment_success(monkeypatch: pytest.MonkeyPatch) -> No
         metadata={'meta': 'value'},
         amount=SimpleNamespace(value='200.00', currency='RUB'),
         refundable=False,
-        created_at=datetime(2024, 2, 1, 9, 0, 0),
+        created_at=datetime(2024, 2, 1, 9, 0, 0, tzinfo=UTC),
         description='SBP payment',
         test=True,
     )

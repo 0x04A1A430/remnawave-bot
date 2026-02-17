@@ -457,7 +457,7 @@ class RemnaWaveWebhookService:
     @staticmethod
     def _stamp_webhook_update(subscription: Subscription) -> None:
         """Mark subscription as recently updated by webhook to prevent sync overwrite."""
-        subscription.last_webhook_update_at = datetime.now(UTC).replace(tzinfo=None)
+        subscription.last_webhook_update_at = datetime.now(UTC)
 
     # ------------------------------------------------------------------
     # User event handlers
@@ -569,7 +569,7 @@ class RemnaWaveWebhookService:
         if expire_at:
             try:
                 parsed_dt = datetime.fromisoformat(expire_at.replace('Z', '+00:00'))
-                new_end_date = parsed_dt.astimezone(UTC).replace(tzinfo=None)
+                new_end_date = parsed_dt.astimezone(UTC)
                 if subscription.end_date != new_end_date:
                     subscription.end_date = new_end_date
                     changed = True
@@ -579,7 +579,7 @@ class RemnaWaveWebhookService:
         # Sync status from panel
         panel_status = data.get('status')
         if panel_status:
-            now = datetime.now(UTC).replace(tzinfo=None)
+            now = datetime.now(UTC)
             end_date = subscription.end_date
             if panel_status == 'ACTIVE' and end_date and end_date > now:
                 if subscription.status != SubscriptionStatus.ACTIVE.value:
@@ -609,7 +609,7 @@ class RemnaWaveWebhookService:
         # Always stamp to protect from sync overwrite, even if no fields changed
         self._stamp_webhook_update(subscription)
         if changed:
-            subscription.updated_at = datetime.now(UTC).replace(tzinfo=None)
+            subscription.updated_at = datetime.now(UTC)
             logger.info(
                 'Webhook: subscription modified (synced from panel) for user',
                 subscription_id=subscription.id,
@@ -668,7 +668,7 @@ class RemnaWaveWebhookService:
             subscription.subscription_crypto_link = None
             subscription.remnawave_short_uuid = None
             subscription.connected_squads = None
-            subscription.updated_at = datetime.now(UTC).replace(tzinfo=None)
+            subscription.updated_at = datetime.now(UTC)
 
             # Remove SubscriptionServer link rows
             await db.execute(delete(SubscriptionServer).where(SubscriptionServer.subscription_id == sub_id))
@@ -703,7 +703,7 @@ class RemnaWaveWebhookService:
             # Always stamp to protect from sync overwrite
             self._stamp_webhook_update(subscription)
             if changed:
-                subscription.updated_at = datetime.now(UTC).replace(tzinfo=None)
+                subscription.updated_at = datetime.now(UTC)
                 logger.info(
                     'Webhook: subscription credentials revoked/updated for user',
                     subscription_id=subscription.id,

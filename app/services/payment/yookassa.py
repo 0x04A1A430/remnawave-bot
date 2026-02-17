@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from importlib import import_module
 from typing import TYPE_CHECKING, Any
@@ -150,7 +150,7 @@ class YooKassaPaymentMixin:
             if yookassa_response.get('created_at'):
                 try:
                     dt_with_tz = datetime.fromisoformat(yookassa_response['created_at'].replace('Z', '+00:00'))
-                    yookassa_created_at = dt_with_tz.replace(tzinfo=None)
+                    yookassa_created_at = dt_with_tz
                 except Exception as error:
                     logger.warning('Не удалось распарсить created_at', error=error)
                     yookassa_created_at = None
@@ -320,7 +320,7 @@ class YooKassaPaymentMixin:
             captured_at = None
             if captured_raw:
                 try:
-                    captured_at = datetime.fromisoformat(str(captured_raw).replace('Z', '+00:00')).replace(tzinfo=None)
+                    captured_at = datetime.fromisoformat(str(captured_raw).replace('Z', '+00:00'))
                 except Exception as parse_error:  # pragma: no cover - diagnostic log
                     logger.debug(
                         'Не удалось распарсить captured_at', captured_raw=captured_raw, parse_error=parse_error
@@ -723,7 +723,7 @@ class YooKassaPaymentMixin:
                     was_first_topup = not getattr(user, 'has_made_first_topup', False)
 
                     user.balance_kopeks += payment.amount_kopeks
-                    user.updated_at = datetime.utcnow()
+                    user.updated_at = datetime.now(UTC)
 
                     # Обновляем пользователя с нужными связями, чтобы избежать проблем с ленивой загрузкой
                     from sqlalchemy.orm import selectinload
@@ -1132,7 +1132,7 @@ class YooKassaPaymentMixin:
             await db.execute(
                 update(YooKassaPaymentModel)
                 .where(YooKassaPaymentModel.id == payment.id)
-                .values(metadata_json=updated_metadata, updated_at=datetime.utcnow())
+                .values(metadata_json=updated_metadata, updated_at=datetime.now(UTC))
             )
             if commit:
                 await db.commit()
@@ -1195,7 +1195,7 @@ class YooKassaPaymentMixin:
                 if transaction:
                     try:
                         transaction.receipt_uuid = receipt_uuid
-                        transaction.receipt_created_at = datetime.utcnow()
+                        transaction.receipt_created_at = datetime.now(UTC)
                         await db.commit()
                         logger.debug(
                             'Чек привязан к транзакции', receipt_uuid=receipt_uuid, transaction_id=transaction.id
@@ -1278,9 +1278,7 @@ class YooKassaPaymentMixin:
         captured_at_raw = event_object.get('captured_at')
         if captured_at_raw:
             try:
-                payment.captured_at = datetime.fromisoformat(captured_at_raw.replace('Z', '+00:00')).replace(
-                    tzinfo=None
-                )
+                payment.captured_at = datetime.fromisoformat(captured_at_raw.replace('Z', '+00:00'))
             except Exception as error:
                 logger.debug('Не удалось распарсить captured_at', captured_at_raw=captured_at_raw, error=error)
 
@@ -1375,7 +1373,7 @@ class YooKassaPaymentMixin:
         created_at_raw = event_object.get('created_at')
         if created_at_raw:
             try:
-                yookassa_created_at = datetime.fromisoformat(created_at_raw.replace('Z', '+00:00')).replace(tzinfo=None)
+                yookassa_created_at = datetime.fromisoformat(created_at_raw.replace('Z', '+00:00'))
             except Exception as error:  # pragma: no cover - диагностический лог
                 logger.debug(
                     'Не удалось распарсить created_at= для YooKassa',
@@ -1458,6 +1456,6 @@ class YooKassaPaymentMixin:
             return None
 
         try:
-            return datetime.fromisoformat(raw_value.replace('Z', '+00:00')).replace(tzinfo=None)
+            return datetime.fromisoformat(raw_value.replace('Z', '+00:00'))
         except Exception:
             return None

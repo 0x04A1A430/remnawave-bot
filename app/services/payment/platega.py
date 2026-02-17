@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from importlib import import_module
 from typing import Any
 
@@ -271,7 +271,8 @@ class PlategaPaymentMixin:
             paid_at_raw = payload.get('paidAt') or payload.get('confirmedAt')
             if paid_at_raw:
                 try:
-                    paid_at = datetime.fromisoformat(str(paid_at_raw))
+                    paid_at_parsed = datetime.fromisoformat(str(paid_at_raw))
+                    paid_at = paid_at_parsed if paid_at_parsed.tzinfo else paid_at_parsed.replace(tzinfo=UTC)
                 except ValueError:
                     paid_at = None
 
@@ -378,7 +379,7 @@ class PlategaPaymentMixin:
         was_first_topup = not user.has_made_first_topup
 
         user.balance_kopeks += payment.amount_kopeks
-        user.updated_at = datetime.utcnow()
+        user.updated_at = datetime.now(UTC)
         await db.commit()
         await db.refresh(user)
         topup_status = '🆕 Первое пополнение' if was_first_topup else '🔄 Пополнение'
@@ -518,7 +519,7 @@ class PlategaPaymentMixin:
         metadata['balance_change'] = {
             'old_balance': old_balance,
             'new_balance': user.balance_kopeks,
-            'credited_at': datetime.utcnow().isoformat(),
+            'credited_at': datetime.now(UTC).isoformat(),
         }
         metadata['balance_credited'] = True
 

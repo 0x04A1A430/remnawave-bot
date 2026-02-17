@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 import structlog
 from sqlalchemy import select
@@ -26,7 +26,7 @@ async def upsert_privacy_policy(
 
     if policy:
         policy.content = content or ''
-        policy.updated_at = datetime.utcnow()
+        policy.updated_at = datetime.now(UTC)
     else:
         policy = PrivacyPolicy(
             language=language,
@@ -52,7 +52,7 @@ async def set_privacy_policy_enabled(
 
     if policy:
         policy.is_enabled = bool(enabled)
-        policy.updated_at = datetime.utcnow()
+        policy.updated_at = datetime.now(UTC)
     else:
         policy = PrivacyPolicy(
             language=language,

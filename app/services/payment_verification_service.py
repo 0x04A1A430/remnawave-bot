@@ -7,7 +7,7 @@ import re
 from collections import Counter
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 import structlog
@@ -57,7 +57,7 @@ class PendingPayment:
     expires_at: datetime | None = None
 
     def is_recent(self, max_age: timedelta = PENDING_MAX_AGE) -> bool:
-        return (datetime.utcnow() - self.created_at) <= max_age
+        return (datetime.now(UTC) - self.created_at) <= max_age
 
 
 SUPPORTED_MANUAL_CHECK_METHODS: frozenset[PaymentMethod] = frozenset(
@@ -715,7 +715,7 @@ async def list_recent_pending_payments(
 ) -> list[PendingPayment]:
     """Return pending payments (top-ups) from supported providers within the age window."""
 
-    cutoff = datetime.utcnow() - max_age
+    cutoff = datetime.now(UTC) - max_age
 
     tasks: Iterable[list[PendingPayment]] = (
         await _fetch_yookassa_payments(db, cutoff),
@@ -746,7 +746,7 @@ async def get_payment_record(
 ) -> PendingPayment | None:
     """Load single payment record and normalize it to :class:`PendingPayment`."""
 
-    cutoff = datetime.utcnow() - PENDING_MAX_AGE
+    cutoff = datetime.now(UTC) - PENDING_MAX_AGE
 
     if method == PaymentMethod.PAL24:
         payment = await db.get(Pal24Payment, local_payment_id)

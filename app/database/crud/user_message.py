@@ -1,5 +1,5 @@
 import random
-from datetime import datetime
+from datetime import UTC, datetime
 
 import structlog
 from sqlalchemy import func, select
@@ -111,7 +111,7 @@ async def update_user_message(
     if sort_order is not None:
         message.sort_order = sort_order
 
-    message.updated_at = datetime.utcnow()
+    message.updated_at = datetime.now(UTC)
 
     await db.commit()
     await db.refresh(message)
@@ -127,7 +127,7 @@ async def toggle_user_message_status(db: AsyncSession, message_id: int) -> UserM
         return None
 
     message.is_active = not message.is_active
-    message.updated_at = datetime.utcnow()
+    message.updated_at = datetime.now(UTC)
 
     await db.commit()
     await db.refresh(message)

@@ -135,7 +135,7 @@ def _subscription_to_response(
     traffic_purchases: list[dict[str, Any]] | None = None,
 ) -> SubscriptionData:
     """Convert Subscription model to response."""
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
 
     # Use actual_status property for correct status (same as bot uses)
     actual_status = subscription.actual_status
@@ -276,7 +276,7 @@ async def get_subscription(
     traffic_purchases_data = []
     from app.database.models import TrafficPurchase
 
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     purchases_query = (
         select(TrafficPurchase)
         .where(TrafficPurchase.subscription_id == fresh_user.subscription.id)
@@ -515,7 +515,7 @@ async def renew_subscription(
         user.promo_offer_discount_expires_at = None
 
     # Extend from end_date or now if expired
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     if user.subscription.end_date and user.subscription.end_date > now:
         user.subscription.end_date = user.subscription.end_date + timedelta(days=request.period_days)
     else:
@@ -832,9 +832,9 @@ async def purchase_traffic(
     # Устанавливаем дату сброса трафика (только при первой докупке)
     # При повторной докупке дата НЕ продлевается
     if not subscription.traffic_reset_at:
-        from datetime import timedelta
+        from datetime import UTC, timedelta
 
-        subscription.traffic_reset_at = datetime.utcnow() + timedelta(days=30)
+        subscription.traffic_reset_at = datetime.now(UTC) + timedelta(days=30)
         logger.info(
             'Set traffic_reset_at for subscription',
             subscription_id=subscription.id,
@@ -1137,7 +1137,7 @@ async def get_trial_info(
 
     # Check if user already has an active subscription
     if user.subscription:
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         is_active = (
             user.subscription.status == 'active' and user.subscription.end_date and user.subscription.end_date > now
         )
@@ -1194,7 +1194,7 @@ async def activate_trial(
 
     # Check if user already has an active subscription
     if user.subscription:
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         is_active = (
             user.subscription.status == 'active' and user.subscription.end_date and user.subscription.end_date > now
         )
@@ -2010,7 +2010,7 @@ async def purchase_tariff(
 
         # For daily tariffs, set last_daily_charge_at
         if is_daily_tariff:
-            subscription.last_daily_charge_at = datetime.utcnow()
+            subscription.last_daily_charge_at = datetime.now(UTC)
             subscription.is_daily_paused = False
             await db.commit()
             await db.refresh(subscription)
@@ -2088,7 +2088,7 @@ async def purchase_tariff(
             try:
                 # Determine if this is a new subscription or extension
                 was_new_subscription = (
-                    subscription.start_date and (datetime.utcnow() - subscription.start_date).total_seconds() < 60
+                    subscription.start_date and (datetime.now(UTC) - subscription.start_date).total_seconds() < 60
                 )
                 notification_type = (
                     NotificationType.SUBSCRIPTION_ACTIVATED
@@ -2124,7 +2124,7 @@ async def purchase_tariff(
                     notification_service = AdminNotificationService(bot)
                     # Определяем тип покупки: новая подписка или продление
                     was_new_subscription = (
-                        subscription.start_date and (datetime.utcnow() - subscription.start_date).total_seconds() < 60
+                        subscription.start_date and (datetime.now(UTC) - subscription.start_date).total_seconds() < 60
                     )
                     await notification_service.send_subscription_purchase_notification(
                         db=db,
@@ -2211,7 +2211,7 @@ async def purchase_devices(
             )
 
         # Calculate prorated price based on remaining days
-        from datetime import datetime
+        from datetime import UTC, datetime
 
         now = datetime.now(UTC)
         end_date = subscription.end_date
@@ -2627,7 +2627,7 @@ async def get_device_price(
         }
 
     # Calculate prorated price
-    from datetime import datetime
+    from datetime import UTC, datetime
 
     now = datetime.now(UTC)
     end_date = subscription.end_date
@@ -3079,9 +3079,9 @@ async def get_available_countries(
         connected_squads = user.subscription.connected_squads or []
         # Calculate days left for prorated pricing
         if user.subscription.end_date:
-            from datetime import datetime
+            from datetime import UTC, datetime
 
-            delta = user.subscription.end_date - datetime.utcnow()
+            delta = user.subscription.end_date - datetime.now(UTC)
             days_left = max(0, delta.days)
 
     # Get discount from promo group
@@ -3263,7 +3263,7 @@ async def update_countries(
 
     # Update connected squads
     user.subscription.connected_squads = selected_countries
-    user.subscription.updated_at = datetime.utcnow()
+    user.subscription.updated_at = datetime.now(UTC)
     await db.commit()
 
     # Sync with RemnaWave
@@ -3910,7 +3910,7 @@ async def reduce_devices(
 
     # Update subscription
     subscription.device_limit = new_device_limit
-    subscription.updated_at = datetime.utcnow()
+    subscription.updated_at = datetime.now(UTC)
     await db.commit()
 
     # Update RemnaWave
@@ -4010,8 +4010,8 @@ async def preview_tariff_switch(
 
     # Calculate remaining days
     remaining_days = 0
-    if user.subscription.end_date and user.subscription.end_date > datetime.utcnow():
-        delta = user.subscription.end_date - datetime.utcnow()
+    if user.subscription.end_date and user.subscription.end_date > datetime.now(UTC):
+        delta = user.subscription.end_date - datetime.now(UTC)
         remaining_days = max(0, delta.days)
 
     # Calculate switch cost
@@ -4128,7 +4128,7 @@ async def switch_tariff(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> dict[str, Any]:
     """Switch to a different tariff without changing end date."""
-    from datetime import timedelta
+    from datetime import UTC, timedelta
 
     if not settings.is_tariffs_mode():
         raise HTTPException(
@@ -4195,8 +4195,8 @@ async def switch_tariff(
 
     # Calculate remaining days
     remaining_days = 0
-    if user.subscription.end_date and user.subscription.end_date > datetime.utcnow():
-        delta = user.subscription.end_date - datetime.utcnow()
+    if user.subscription.end_date and user.subscription.end_date > datetime.now(UTC):
+        delta = user.subscription.end_date - datetime.now(UTC)
         remaining_days = max(0, delta.days)
 
     # Calculate cost
@@ -4334,14 +4334,14 @@ async def switch_tariff(
 
     if switching_to_daily:
         # Switching TO daily - reset end_date to 1 day, set last_daily_charge_at
-        user.subscription.end_date = datetime.utcnow() + timedelta(days=1)
-        user.subscription.last_daily_charge_at = datetime.utcnow()
+        user.subscription.end_date = datetime.now(UTC) + timedelta(days=1)
+        user.subscription.last_daily_charge_at = datetime.now(UTC)
         user.subscription.is_daily_paused = False
     elif switching_from_daily:
-        user.subscription.end_date = datetime.utcnow() + timedelta(days=new_period_days)
+        user.subscription.end_date = datetime.now(UTC) + timedelta(days=new_period_days)
         user.subscription.is_daily_paused = False
 
-    user.subscription.updated_at = datetime.utcnow()
+    user.subscription.updated_at = datetime.now(UTC)
     await db.commit()
 
     # Sync with RemnaWave
@@ -4425,7 +4425,7 @@ async def toggle_subscription_pause(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> dict[str, Any]:
     """Toggle pause/resume for daily subscription."""
-    from datetime import timedelta
+    from datetime import UTC, timedelta
 
     await db.refresh(user, ['subscription'])
 
@@ -4476,8 +4476,8 @@ async def toggle_subscription_pause(
         # Restore ACTIVE status if was DISABLED
         if was_disabled:
             user.subscription.status = SubscriptionStatus.ACTIVE.value
-            user.subscription.last_daily_charge_at = datetime.utcnow()
-            user.subscription.end_date = datetime.utcnow() + timedelta(days=1)
+            user.subscription.last_daily_charge_at = datetime.now(UTC)
+            user.subscription.end_date = datetime.now(UTC) + timedelta(days=1)
 
     await db.commit()
     await db.refresh(user.subscription)
@@ -4614,7 +4614,7 @@ async def switch_traffic_package(
     user.subscription.traffic_limit_gb = new_traffic
     user.subscription.purchased_traffic_gb = 0  # Reset purchased traffic on switch
     user.subscription.traffic_reset_at = None  # Reset traffic reset date
-    user.subscription.updated_at = datetime.utcnow()
+    user.subscription.updated_at = datetime.now(UTC)
     await db.commit()
 
     # Sync with RemnaWave
@@ -4733,7 +4733,7 @@ async def refresh_traffic(
         used_gb = traffic_stats.get('used_traffic_gb', 0)
         if abs((user.subscription.traffic_used_gb or 0) - used_gb) > 0.01:
             user.subscription.traffic_used_gb = used_gb
-            user.subscription.updated_at = datetime.utcnow()
+            user.subscription.updated_at = datetime.now(UTC)
             await db.commit()
 
         # Calculate percentage

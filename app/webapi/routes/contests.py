@@ -73,7 +73,7 @@ def _to_utc_naive(dt: datetime, tz_name: str | None = None) -> datetime:
     tz = ZoneInfo(tz_name or settings.TIMEZONE)
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=tz)
-    return dt.astimezone(UTC).replace(tzinfo=None)
+    return dt.astimezone(UTC)
 
 
 def _serialize_template(tpl: ContestTemplate) -> ContestTemplateResponse:
@@ -301,7 +301,7 @@ async def start_round_now(
     if existing and payload.force:
         await finish_round(db, existing)
 
-    starts_at = payload.starts_at or datetime.utcnow()
+    starts_at = payload.starts_at or datetime.now(UTC)
     ends_at = payload.ends_at
     if payload.cooldown_hours and not ends_at:
         ends_at = starts_at + timedelta(hours=payload.cooldown_hours)
@@ -619,7 +619,7 @@ async def delete_referral(
     contest = await get_referral_contest(db, contest_id)
     if not contest:
         raise HTTPException(status.HTTP_404_NOT_FOUND, 'Contest not found')
-    now_utc = datetime.utcnow()
+    now_utc = datetime.now(UTC)
     if contest.is_active or contest.end_at > now_utc:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,

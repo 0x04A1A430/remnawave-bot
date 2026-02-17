@@ -1,6 +1,6 @@
 """Notification settings routes for cabinet."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -112,7 +112,7 @@ async def update_notification_settings(
         user.notification_settings = {}
 
     user.notification_settings = new_settings
-    user.updated_at = datetime.utcnow()
+    user.updated_at = datetime.now(UTC)
 
     await db.commit()
     await db.refresh(user)

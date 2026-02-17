@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -275,7 +275,7 @@ class AdminNotificationService:
                 transaction=None,
                 amount_kopeks=charged_amount_kopeks,
                 message='Trial activation',
-                occurred_at=datetime.utcnow(),
+                occurred_at=datetime.now(UTC),
                 extra={
                     'charged_amount_kopeks': charged_amount_kopeks,
                     'trial_duration_days': settings.TRIAL_DURATION_DAYS,
@@ -356,7 +356,7 @@ class AdminNotificationService:
                     message_lines.append(f'🔗 <b>Реферер:</b> {referrer_info}')
 
             message_lines.append('')
-            message_lines.append(f'⏰ <i>{format_local_datetime(datetime.utcnow(), "%d.%m.%Y %H:%M:%S")}</i>')
+            message_lines.append(f'⏰ <i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>')
 
             return await self._send_message('\n'.join(message_lines))
 
@@ -403,7 +403,7 @@ class AdminNotificationService:
                 transaction=transaction,
                 amount_kopeks=total_amount,
                 message='Subscription purchase',
-                occurred_at=(transaction.completed_at or transaction.created_at) if transaction else datetime.utcnow(),
+                occurred_at=(transaction.completed_at or transaction.created_at) if transaction else datetime.now(UTC),
                 extra={
                     'period_days': period_days,
                     'was_trial_conversion': was_trial_conversion,
@@ -482,7 +482,7 @@ class AdminNotificationService:
             message_lines.extend(
                 [
                     '',
-                    f'<i>{format_local_datetime(datetime.utcnow(), "%d.%m.%Y %H:%M")}</i>',
+                    f'<i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M")}</i>',
                 ]
             )
 
@@ -503,7 +503,7 @@ class AdminNotificationService:
             repo = getattr(settings, 'VERSION_CHECK_REPO', 'fr1ngg/remnawave-bedolaga-telegram-bot')
             release_url = f'https://github.com/{repo}/releases/tag/{latest_version.tag_name}'
             repo_url = f'https://github.com/{repo}'
-            timestamp = format_local_datetime(datetime.utcnow(), '%d.%m.%Y %H:%M:%S')
+            timestamp = format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S')
 
             if latest_version.prerelease:
                 header = '🧪 <b>Pre-release</b>'
@@ -568,7 +568,7 @@ class AdminNotificationService:
     🔄 Следующая попытка через час.
     ⚙️ Проверьте доступность GitHub API и настройки сети.
 
-    ⚙️ <i>Система автоматических обновлений • {format_local_datetime(datetime.utcnow(), '%d.%m.%Y %H:%M:%S')}</i>"""
+    ⚙️ <i>Система автоматических обновлений • {format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S')}</i>"""
 
             return await self._send_message(message)
 
@@ -590,7 +590,7 @@ class AdminNotificationService:
         payment_method = self._get_payment_method_display(transaction.payment_method)
         balance_change = user.balance_kopeks - old_balance
         subscription_status = self._get_subscription_status(subscription)
-        timestamp = format_local_datetime(datetime.utcnow(), '%d.%m.%Y %H:%M:%S')
+        timestamp = format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S')
         user_display = self._get_user_display(user)
         user_id_display = self._get_user_identifier_display(user)
 
@@ -867,7 +867,7 @@ class AdminNotificationService:
 {promo_block}
 
 💰 <b>Платеж:</b>
-💵 Сумма: {settings.format_price(transaction.amount_kopeks)}
+💵 Сумма: {settings.format_price(abs(transaction.amount_kopeks))}
 💳 Способ: {payment_method}
 🆔 ID транзакции: {transaction.id}
 
@@ -883,7 +883,7 @@ class AdminNotificationService:
 
 💰 <b>Баланс после операции:</b> {settings.format_price(current_balance)}
 
-⏰ <i>{format_local_datetime(datetime.utcnow(), '%d.%m.%Y %H:%M:%S')}</i>"""
+⏰ <i>{format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S')}</i>"""
 
             return await self._send_message(message)
 
@@ -909,7 +909,7 @@ class AdminNotificationService:
                 transaction=None,
                 amount_kopeks=promocode_data.get('balance_bonus_kopeks'),
                 message='Promocode activation',
-                occurred_at=datetime.utcnow(),
+                occurred_at=datetime.now(UTC),
                 extra={
                     'code': promocode_data.get('code'),
                     'type': promocode_data.get('type'),
@@ -988,7 +988,7 @@ class AdminNotificationService:
                     '📝 <b>Эффект:</b>',
                     effect_description.strip() or '✅ Промокод активирован',
                     '',
-                    f'⏰ <i>{format_local_datetime(datetime.utcnow(), "%d.%m.%Y %H:%M:%S")}</i>',
+                    f'⏰ <i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>',
                 ]
             )
 
@@ -1015,7 +1015,7 @@ class AdminNotificationService:
                     transaction=None,
                     amount_kopeks=None,
                     message='Referral link visit',
-                    occurred_at=datetime.utcnow(),
+                    occurred_at=datetime.now(UTC),
                     extra={
                         'campaign_id': campaign.id,
                         'campaign_name': campaign.name,
@@ -1067,7 +1067,7 @@ class AdminNotificationService:
             message_lines.extend(
                 [
                     '',
-                    f'⏰ <i>{format_local_datetime(datetime.utcnow(), "%d.%m.%Y %H:%M:%S")}</i>',
+                    f'⏰ <i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>',
                 ]
             )
 
@@ -1096,7 +1096,7 @@ class AdminNotificationService:
                 subscription=None,
                 transaction=None,
                 message='Promo group change',
-                occurred_at=datetime.utcnow(),
+                occurred_at=datetime.now(UTC),
                 extra={
                     'old_group_id': getattr(old_group, 'id', None),
                     'old_group_name': getattr(old_group, 'name', None),
@@ -1157,7 +1157,7 @@ class AdminNotificationService:
                 [
                     '',
                     f'💰 Баланс пользователя: {settings.format_price(user.balance_kopeks)}',
-                    f'⏰ <i>{format_local_datetime(datetime.utcnow(), "%d.%m.%Y %H:%M:%S")}</i>',
+                    f'⏰ <i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>',
                 ]
             )
 
@@ -1325,7 +1325,7 @@ class AdminNotificationService:
                 if details.get('enabled_at'):
                     enabled_at = details['enabled_at']
                     if isinstance(enabled_at, str):
-                        from datetime import datetime
+                        from datetime import UTC, datetime
 
                         enabled_at = datetime.fromisoformat(enabled_at)
                     message_parts.append(
@@ -1342,7 +1342,7 @@ class AdminNotificationService:
                 if details.get('disabled_at'):
                     disabled_at = details['disabled_at']
                     if isinstance(disabled_at, str):
-                        from datetime import datetime
+                        from datetime import UTC, datetime
 
                         disabled_at = datetime.fromisoformat(disabled_at)
                     message_parts.append(
@@ -1409,7 +1409,7 @@ class AdminNotificationService:
                     message_parts.append('Автоматический мониторинг API остановлен.')
 
             message_parts.append('')
-            message_parts.append(f'⏰ <i>{format_local_datetime(datetime.utcnow(), "%d.%m.%Y %H:%M:%S")}</i>')
+            message_parts.append(f'⏰ <i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>')
 
             message = '\n'.join(message_parts)
 
@@ -1446,7 +1446,7 @@ class AdminNotificationService:
             if details.get('last_check'):
                 last_check = details['last_check']
                 if isinstance(last_check, str):
-                    from datetime import datetime
+                    from datetime import UTC, datetime
 
                     last_check = datetime.fromisoformat(last_check)
                 message_parts.append(f'🕐 <b>Последняя проверка:</b> {format_local_datetime(last_check, "%H:%M:%S")}')
@@ -1496,7 +1496,7 @@ class AdminNotificationService:
                 message_parts.append('Панель временно недоступна для обслуживания.')
 
             message_parts.append('')
-            message_parts.append(f'⏰ <i>{format_local_datetime(datetime.utcnow(), "%d.%m.%Y %H:%M:%S")}</i>')
+            message_parts.append(f'⏰ <i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>')
 
             message = '\n'.join(message_parts)
 
@@ -1589,7 +1589,7 @@ class AdminNotificationService:
             message_lines.extend(
                 [
                     '',
-                    f'<i>{format_local_datetime(datetime.utcnow(), "%d.%m.%Y %H:%M")}</i>',
+                    f'<i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M")}</i>',
                 ]
             )
 
@@ -1662,7 +1662,7 @@ class AdminNotificationService:
             message_lines.extend(
                 [
                     '',
-                    f'⏰ <i>{format_local_datetime(datetime.utcnow(), "%d.%m.%Y %H:%M:%S")}</i>',
+                    f'⏰ <i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>',
                 ]
             )
 

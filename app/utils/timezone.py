@@ -31,16 +31,16 @@ def get_local_timezone() -> ZoneInfo:
         return ZoneInfo('UTC')
 
 
-def panel_datetime_to_naive_utc(dt: datetime) -> datetime:
-    """Convert a panel datetime to naive UTC.
+def panel_datetime_to_utc(dt: datetime) -> datetime:
+    """Convert a panel datetime to aware UTC.
 
     Panel API returns local time with a misleading UTC offset (+00:00 / Z).
     This strips the offset, interprets the raw value as panel-local time,
-    then converts to naive UTC for database storage.
+    then converts to aware UTC for database storage.
     """
-    naive = dt.replace(tzinfo=None)
+    naive = dt
     localized = naive.replace(tzinfo=get_local_timezone())
-    return localized.astimezone(ZoneInfo('UTC')).replace(tzinfo=None)
+    return localized.astimezone(ZoneInfo('UTC'))
 
 
 def to_local_datetime(dt: datetime | None) -> datetime | None:

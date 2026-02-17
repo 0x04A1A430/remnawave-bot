@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from importlib import import_module
 from typing import Any
 
@@ -257,7 +257,7 @@ class Pal24PaymentMixin:
                     payment,
                     status=status,
                     is_paid=True,
-                    paid_at=datetime.utcnow(),
+                    paid_at=datetime.now(UTC),
                     callback_payload=callback,
                     payment_id=payment_id,
                     payment_status=callback.get('Status') or status,
@@ -381,7 +381,7 @@ class Pal24PaymentMixin:
         was_first_topup = not user.has_made_first_topup
 
         user.balance_kopeks += payment.amount_kopeks
-        user.updated_at = datetime.utcnow()
+        user.updated_at = datetime.now(UTC)
 
         promo_group = user.get_primary_promo_group()
         subscription = getattr(user, 'subscription', None)
@@ -654,7 +654,7 @@ class Pal24PaymentMixin:
             if is_paid_update is not None and is_paid_update != bool(payment.is_paid):
                 update_kwargs['is_paid'] = is_paid_update
                 if is_paid_update and not payment.paid_at:
-                    update_kwargs.setdefault('paid_at', datetime.utcnow())
+                    update_kwargs.setdefault('paid_at', datetime.now(UTC))
 
             current_status = payment.status or ''
             effective_status = update_status or current_status or 'NEW'

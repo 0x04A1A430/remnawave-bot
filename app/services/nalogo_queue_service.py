@@ -5,7 +5,7 @@
 """
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import structlog
 from aiogram import Bot
@@ -101,7 +101,7 @@ class NalogoQueueService:
 
         # Проверяем cooldown (можно пропустить для важных уведомлений)
         if not skip_cooldown:
-            now = datetime.now()
+            now = datetime.now(UTC)
             if self._last_notification_time:
                 if now - self._last_notification_time < self._notification_cooldown:
                     logger.debug('Уведомление о чеках пропущено (cooldown)')
@@ -114,7 +114,7 @@ class NalogoQueueService:
                 text=message,
                 parse_mode='HTML',
             )
-            self._last_notification_time = datetime.now()
+            self._last_notification_time = datetime.now(UTC)
             logger.info('Отправлено уведомление о чеках NaloGO')
         except Exception as error:
             logger.error('Ошибка отправки уведомления о чеках', error=error)
@@ -172,6 +172,8 @@ class NalogoQueueService:
                 if created_at_str:
                     try:
                         operation_time = isoparse(created_at_str)
+                        if operation_time.tzinfo is None:
+                            operation_time = operation_time.replace(tzinfo=UTC)
                     except (ValueError, TypeError) as parse_error:
                         logger.warning(
                             'Не удалось распарсить created_at', created_at_str=created_at_str, parse_error=parse_error

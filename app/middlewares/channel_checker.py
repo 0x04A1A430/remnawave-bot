@@ -1,5 +1,5 @@
 from collections.abc import Awaitable, Callable
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import redis.asyncio as aioredis
@@ -404,7 +404,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                     return
 
                 # Проверяем что подписка ещё не истекла
-                if subscription.end_date and subscription.end_date <= datetime.utcnow():
+                if subscription.end_date and subscription.end_date <= datetime.now(UTC):
                     return
 
                 # Реактивируем в БД

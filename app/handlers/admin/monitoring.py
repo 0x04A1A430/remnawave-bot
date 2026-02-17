@@ -139,7 +139,7 @@ def _build_notification_settings_view(language: str):
 
 def _build_notification_preview_message(language: str, notification_type: str):
     texts = get_texts(language)
-    now = datetime.now()
+    now = datetime.now(UTC)
     price_30_days = settings.format_price(settings.PRICE_30_DAYS)
 
     from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -694,7 +694,7 @@ async def force_check_callback(callback: CallbackQuery):
 • Истекающих подписок: {results['expiring']}
 • Готовых к автооплате: {results['autopay_ready']}
 
-🕐 <b>Время проверки:</b> {datetime.now().strftime('%H:%M:%S')}
+🕐 <b>Время проверки:</b> {datetime.now(UTC).strftime('%H:%M:%S')}
 
 Нажмите "Назад" для возврата в меню мониторинга.
 """
@@ -748,7 +748,7 @@ async def traffic_check_callback(callback: CallbackQuery):
 • Порог дельты: {threshold_gb} ГБ
 • Возраст snapshot: {snapshot_age:.1f} мин
 
-🕐 <b>Время проверки:</b> {datetime.now().strftime('%H:%M:%S')}
+🕐 <b>Время проверки:</b> {datetime.now(UTC).strftime('%H:%M:%S')}
 """
 
         if violations:
@@ -862,7 +862,7 @@ async def test_notifications_callback(callback: CallbackQuery):
 📊 <b>Статус системы:</b>
 • Мониторинг: {'🟢 Работает' if monitoring_service.is_running else '🔴 Остановлен'}
 • Уведомления: {'🟢 Включены' if settings.ENABLE_NOTIFICATIONS else '🔴 Отключены'}
-• Время теста: {datetime.now().strftime('%H:%M:%S %d.%m.%Y')}
+• Время теста: {datetime.now(UTC).strftime('%H:%M:%S %d.%m.%Y')}
 
 ✅ Если вы получили это сообщение, система уведомлений работает корректно!
 """
@@ -887,7 +887,7 @@ async def monitoring_statistics_callback(callback: CallbackQuery):
 
             mon_status = await monitoring_service.get_monitoring_status(db)
 
-            week_ago = datetime.now() - timedelta(days=7)
+            week_ago = datetime.now(UTC) - timedelta(days=7)
             week_logs = await monitoring_service.get_monitoring_logs(db, limit=1000)
             week_logs = [log for log in week_logs if log['created_at'] >= week_ago]
 
@@ -1013,7 +1013,7 @@ async def nalogo_force_process_callback(callback: CallbackQuery):
             sub_stats = await get_subscriptions_statistics(db)
             mon_status = await monitoring_service.get_monitoring_status(db)
 
-            week_ago = datetime.now() - timedelta(days=7)
+            week_ago = datetime.now(UTC) - timedelta(days=7)
             week_logs = await monitoring_service.get_monitoring_logs(db, limit=1000)
             week_logs = [log for log in week_logs if log['created_at'] >= week_ago]
             week_success = sum(1 for log in week_logs if log['is_success'])
@@ -1235,7 +1235,7 @@ async def receipts_missing_callback(callback: CallbackQuery):
 async def receipts_link_old_callback(callback: CallbackQuery):
     """Привязать старые чеки из NaloGO к транзакциям по сумме и дате."""
     try:
-        from datetime import date, timedelta
+        from datetime import UTC, date, timedelta
 
         from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
         from sqlalchemy import and_, select
@@ -1245,7 +1245,7 @@ async def receipts_link_old_callback(callback: CallbackQuery):
 
         await callback.answer('🔄 Загружаю чеки из NaloGO...', show_alert=False)
 
-        TRACKING_START_DATE = datetime(2024, 12, 29, 0, 0, 0)
+        TRACKING_START_DATE = datetime(2024, 12, 29, 0, 0, 0, tzinfo=UTC)
 
         async with AsyncSessionLocal() as db:
             # Получаем старые транзакции без чеков
@@ -1311,9 +1311,12 @@ async def receipts_link_old_callback(callback: CallbackQuery):
                                 try:
                                     from dateutil.parser import isoparse
 
-                                    t.receipt_created_at = isoparse(operation_time)
+                                    parsed_time = isoparse(operation_time)
+                                    t.receipt_created_at = (
+                                        parsed_time if parsed_time.tzinfo else parsed_time.replace(tzinfo=UTC)
+                                    )
                                 except Exception:
-                                    t.receipt_created_at = datetime.utcnow()
+                                    t.receipt_created_at = datetime.now(UTC)
                             linked += 1
 
             if linked > 0:

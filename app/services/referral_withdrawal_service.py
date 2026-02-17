@@ -4,7 +4,7 @@
 """
 
 import json
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import structlog
 from sqlalchemy import func, select
@@ -195,8 +195,8 @@ class ReferralWithdrawalService:
                 cooldown_days = settings.REFERRAL_WITHDRAWAL_COOLDOWN_DAYS
                 cooldown_end = last_request.created_at + timedelta(days=cooldown_days)
 
-                if datetime.utcnow() < cooldown_end:
-                    days_left = (cooldown_end - datetime.utcnow()).days + 1
+                if datetime.now(UTC) < cooldown_end:
+                    days_left = (cooldown_end - datetime.now(UTC)).days + 1
                     return False, f'Следующий запрос на вывод будет доступен через {days_left} дн.'
 
             # Проверяем, нет ли активной заявки
@@ -245,7 +245,7 @@ class ReferralWithdrawalService:
 
         if referral_ids:
             # Получаем детальную статистику по каждому рефералу за последний месяц
-            month_ago = datetime.utcnow() - timedelta(days=30)
+            month_ago = datetime.now(UTC) - timedelta(days=30)
 
             for ref_id in referral_ids:
                 ref_user = next((r for r in referrals_list if r.id == ref_id), None)
@@ -334,7 +334,7 @@ class ReferralWithdrawalService:
         analysis['details']['earnings_by_reason'] = earnings_by_reason
 
         # 5. Проверка: много начислений за последнюю неделю
-        week_ago = datetime.utcnow() - timedelta(days=7)
+        week_ago = datetime.now(UTC) - timedelta(days=7)
         recent_earnings = await db.execute(
             select(func.count(), func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0)).where(
                 ReferralEarning.user_id == user_id, ReferralEarning.created_at >= week_ago
@@ -480,14 +480,14 @@ class ReferralWithdrawalService:
             amount_kopeks=-request.amount_kopeks,
             description=f'Вывод реферального баланса (заявка #{request.id})',
             is_completed=True,
-            completed_at=datetime.utcnow(),
+            completed_at=datetime.now(UTC),
         )
         db.add(withdrawal_tx)
 
         # Обновляем статус заявки
         request.status = WithdrawalRequestStatus.APPROVED.value
         request.processed_by = admin_id
-        request.processed_at = datetime.utcnow()
+        request.processed_at = datetime.now(UTC)
         request.admin_comment = comment
 
         await db.commit()
@@ -505,7 +505,7 @@ class ReferralWithdrawalService:
 
         request.status = WithdrawalRequestStatus.REJECTED.value
         request.processed_by = admin_id
-        request.processed_at = datetime.utcnow()
+        request.processed_at = datetime.now(UTC)
         request.admin_comment = comment
 
         await db.commit()
@@ -523,7 +523,7 @@ class ReferralWithdrawalService:
 
         request.status = WithdrawalRequestStatus.COMPLETED.value
         request.processed_by = admin_id
-        request.processed_at = datetime.utcnow()
+        request.processed_at = datetime.now(UTC)
         if comment:
             request.admin_comment = (request.admin_comment or '') + f'\n{comment}'
 

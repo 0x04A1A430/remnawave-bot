@@ -1,6 +1,6 @@
 """Admin routes for RemnaWave management in cabinet."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
@@ -109,7 +109,10 @@ def _parse_datetime(value: Any) -> datetime | None:
         return value
     if isinstance(value, str):
         try:
-            return datetime.fromisoformat(value)
+            parsed = datetime.fromisoformat(value)
+            if parsed.tzinfo is None:
+                return parsed.replace(tzinfo=UTC)
+            return parsed
         except ValueError:
             return None
     return None
@@ -338,7 +341,7 @@ async def get_node_usage(
     service = _get_service()
     _ensure_configured(service)
 
-    end_dt = end or datetime.utcnow()
+    end_dt = end or datetime.now(UTC)
     start_dt = start or (end_dt - timedelta(days=7))
 
     if start_dt >= end_dt:

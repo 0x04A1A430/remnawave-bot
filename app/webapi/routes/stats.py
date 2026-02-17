@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Security
 from sqlalchemy import func, select
@@ -73,7 +73,7 @@ async def _get_overview(db: AsyncSession) -> dict[str, object]:
         or 0
     )
 
-    today = datetime.utcnow().date()
+    today = datetime.now(UTC).date()
     today_transactions = (
         await db.scalar(
             select(func.coalesce(func.sum(Transaction.amount_kopeks), 0)).where(

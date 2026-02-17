@@ -2,7 +2,7 @@ import asyncio
 import re
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import asdict, is_dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
@@ -204,14 +204,14 @@ class RemnaWaveService:
                 getattr_2=getattr(user, 'telegram_id', '?'),
             )
             mutation.set_user_uuid(conflicting_user, None)
-            mutation.set_user_updated_at(conflicting_user, datetime.utcnow())
+            mutation.set_user_updated_at(conflicting_user, datetime.now(UTC))
             mutation.remove_map_entry(panel_uuid)
 
         if current_uuid:
             mutation.remove_map_entry(current_uuid)
 
         mutation.set_user_uuid(user, panel_uuid)
-        mutation.set_user_updated_at(user, datetime.utcnow())
+        mutation.set_user_updated_at(user, datetime.now(UTC))
         mutation.set_map_entry(panel_uuid, user)
 
         logger.info(
@@ -236,7 +236,7 @@ class RemnaWaveService:
 
     def _now_utc(self) -> datetime:
         """Возвращает текущее время в UTC без привязки к часовому поясу."""
-        return datetime.now(self._utc_timezone).replace(tzinfo=None)
+        return datetime.now(self._utc_timezone)
 
     def _local_to_utc(self, local_dt: datetime) -> datetime:
         """Конвертирует naive локальную дату (в таймзоне панели/бота) в naive UTC.
@@ -245,10 +245,10 @@ class RemnaWaveService:
         """
         if local_dt.tzinfo is not None:
             # Уже есть tzinfo - конвертируем напрямую
-            return local_dt.astimezone(self._utc_timezone).replace(tzinfo=None)
+            return local_dt.astimezone(self._utc_timezone)
         # Naive datetime - интерпретируем как локальное время панели
         local_aware = local_dt.replace(tzinfo=self._panel_timezone)
-        return local_aware.astimezone(self._utc_timezone).replace(tzinfo=None)
+        return local_aware.astimezone(self._utc_timezone)
 
     def _parse_remnawave_date(self, date_str: str) -> datetime:
         if not date_str:
@@ -270,9 +270,9 @@ class RemnaWaveService:
             # Панель RemnaWave всегда отдаёт время в UTC
             # Если есть tzinfo - конвертируем в UTC, иначе считаем что уже UTC
             if parsed_date.tzinfo is not None:
-                utc_normalized = parsed_date.astimezone(self._utc_timezone).replace(tzinfo=None)
+                utc_normalized = parsed_date.astimezone(self._utc_timezone)
             else:
-                utc_normalized = parsed_date
+                utc_normalized = parsed_date.replace(tzinfo=UTC)
 
             logger.debug('Успешно распарсена дата: (UTC)', date_str=date_str, utc_normalized=utc_normalized)
             return utc_normalized
@@ -294,8 +294,6 @@ class RemnaWaveService:
             result = minimum_expire
         else:
             normalized_expire = expire_at
-            if normalized_expire.tzinfo is not None:
-                normalized_expire = normalized_expire.replace(tzinfo=None)
 
             if normalized_expire < minimum_expire:
                 logger.debug(
@@ -316,11 +314,11 @@ class RemnaWaveService:
         expire_at_value = panel_user.get('expireAt')
 
         if expire_at_value is None:
-            return datetime.min.replace(tzinfo=None)
+            return datetime.min.replace(tzinfo=UTC)
 
         expire_at_str = str(expire_at_value).strip()
         if not expire_at_str:
-            return datetime.min.replace(tzinfo=None)
+            return datetime.min.replace(tzinfo=UTC)
 
         return self._parse_remnawave_date(expire_at_str)
 
@@ -681,7 +679,7 @@ class RemnaWaveService:
                     },
                     'nodes_realtime': realtime_usage,
                     'nodes_weekly': nodes_weekly_data,
-                    'last_updated': datetime.now(),
+                    'last_updated': datetime.now(UTC),
                 }
 
                 logger.info(
@@ -1039,7 +1037,7 @@ class RemnaWaveService:
                         continue
 
                 subscription.connected_squads = new_squads
-                subscription.updated_at = datetime.utcnow()
+                subscription.updated_at = datetime.now(UTC)
 
                 source_decrement += 1
                 if not had_target_before:
@@ -1160,7 +1158,7 @@ class RemnaWaveService:
                             'status': user_obj.status.value,
                             'telegramId': user_obj.telegram_id,
                             'email': user_obj.email,  # Email для синхронизации email-only пользователей
-                            'expireAt': user_obj.expire_at.replace(tzinfo=None).isoformat(),
+                            'expireAt': user_obj.expire_at.isoformat(),
                             'trafficLimitBytes': user_obj.traffic_limit_bytes,
                             'usedTrafficBytes': user_obj.used_traffic_bytes,
                             'hwidDeviceLimit': user_obj.hwid_device_limit,
@@ -1550,7 +1548,7 @@ class RemnaWaveService:
                             else:
                                 # Для триальных подписок - сбрасываем как раньше
                                 subscription.is_trial = True
-                                subscription.end_date = datetime.utcnow()
+                                subscription.end_date = datetime.now(UTC)
                                 subscription.traffic_limit_gb = 0
                                 subscription.traffic_used_gb = 0.0
                                 subscription.device_limit = 1
@@ -1566,7 +1564,7 @@ class RemnaWaveService:
                             if old_uuid:
                                 cleanup_mutation.remove_map_entry(old_uuid)
                             cleanup_mutation.set_user_uuid(db_user, None)
-                            cleanup_mutation.set_user_updated_at(db_user, datetime.utcnow())
+                            cleanup_mutation.set_user_updated_at(db_user, datetime.now(UTC))
 
                             stats['deleted'] += 1
                             logger.info(
@@ -1773,10 +1771,8 @@ class RemnaWaveService:
                         if expire_at > local_end_date_utc:
                             # RemnaWave имеет более позднюю дату - обновляем
                             # Конвертируем UTC обратно в локальное время для сохранения в БД
-                            new_end_date_local = (
-                                expire_at.replace(tzinfo=self._utc_timezone)
-                                .astimezone(self._panel_timezone)
-                                .replace(tzinfo=None)
+                            new_end_date_local = expire_at.replace(tzinfo=self._utc_timezone).astimezone(
+                                self._panel_timezone
                             )
                             logger.info(
                                 '✅ Sync: обновлена end_date для user -> (разница: с)',
@@ -1941,14 +1937,10 @@ class RemnaWaveService:
                                 expire_at = self._safe_expire_at_for_panel(sub.end_date)
 
                                 # Определяем статус для панели
-                                is_subscription_active = (
-                                    sub.status
-                                    in (
-                                        SubscriptionStatus.ACTIVE.value,
-                                        SubscriptionStatus.TRIAL.value,
-                                    )
-                                    and sub.end_date > datetime.utcnow()
-                                )
+                                is_subscription_active = sub.status in (
+                                    SubscriptionStatus.ACTIVE.value,
+                                    SubscriptionStatus.TRIAL.value,
+                                ) and sub.end_date > datetime.now(UTC)
                                 status = UserStatus.ACTIVE if is_subscription_active else UserStatus.DISABLED
 
                                 username = settings.format_remnawave_username(
@@ -2350,7 +2342,7 @@ class RemnaWaveService:
                     node_realtime = stats
                     break
 
-            end_date = datetime.now()
+            end_date = datetime.now(UTC)
             start_date = end_date - timedelta(days=7)
 
             usage_history = await self.get_node_user_usage_by_range(node_uuid, start_date, end_date)
@@ -2359,7 +2351,7 @@ class RemnaWaveService:
                 'node': node,
                 'realtime': node_realtime,
                 'usage_history': usage_history,
-                'last_updated': datetime.now().isoformat(),
+                'last_updated': datetime.now(UTC).isoformat(),
             }
 
         except Exception as e:
@@ -2886,7 +2878,7 @@ class RemnaWaveService:
 
             details = {
                 'api_url': settings.REMNAWAVE_API_URL,
-                'last_check': datetime.utcnow(),
+                'last_check': datetime.now(UTC),
                 'manual_message': message,
             }
 
@@ -2944,7 +2936,7 @@ class RemnaWaveService:
                 'api_available': False,
                 'nodes_status': 'неизвестно',
                 'users_online': 0,
-                'last_check': datetime.utcnow(),
+                'last_check': datetime.now(UTC),
                 'has_issues': True,
                 'recommendation': 'Обратитесь к системному администратору',
                 'error': str(e),
@@ -2959,7 +2951,7 @@ class RemnaWaveService:
 
         for attempt in range(1, attempts + 1):
             try:
-                start_time = datetime.utcnow()
+                start_time = datetime.now(UTC)
 
                 async with self.get_api_client() as api:
                     try:
@@ -2981,7 +2973,7 @@ class RemnaWaveService:
                         total_nodes = 0
                         nodes_health = 'unknown'
 
-                    end_time = datetime.utcnow()
+                    end_time = datetime.now(UTC)
                     response_time = (end_time - start_time).total_seconds()
 
                     if not api_available:
@@ -3045,7 +3037,7 @@ class RemnaWaveService:
             'nodes_online': 0,
             'total_nodes': 0,
             'nodes_health': 'unknown',
-            'last_check': datetime.utcnow(),
+            'last_check': datetime.now(UTC),
             'api_url': settings.REMNAWAVE_API_URL,
             'attempts_used': attempts,
         }

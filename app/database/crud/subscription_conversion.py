@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import structlog
 from sqlalchemy import func, select
@@ -20,7 +20,7 @@ async def create_subscription_conversion(
 ) -> SubscriptionConversion:
     conversion = SubscriptionConversion(
         user_id=user_id,
-        converted_at=datetime.utcnow(),
+        converted_at=datetime.now(UTC),
         trial_duration_days=trial_duration_days,
         payment_method=payment_method,
         first_payment_amount_kopeks=first_payment_amount_kopeks,
@@ -82,7 +82,7 @@ async def get_conversion_statistics(db: AsyncSession) -> dict:
     avg_first_payment_result = await db.execute(select(func.avg(SubscriptionConversion.first_payment_amount_kopeks)))
     avg_first_payment = avg_first_payment_result.scalar() or 0
 
-    month_ago = datetime.utcnow() - timedelta(days=30)
+    month_ago = datetime.now(UTC) - timedelta(days=30)
     month_conversions_result = await db.execute(
         select(func.count(SubscriptionConversion.id)).where(SubscriptionConversion.converted_at >= month_ago)
     )

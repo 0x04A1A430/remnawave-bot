@@ -2,7 +2,7 @@
 Тесты для хранения snapshot трафика в Redis.
 """
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -120,7 +120,7 @@ async def test_load_snapshot_from_redis_exception(service, mock_cache):
 
 async def test_get_snapshot_time_from_redis_success(service, mock_cache):
     """Тест получения времени snapshot."""
-    test_time = datetime(2024, 1, 15, 12, 30, 0)
+    test_time = datetime(2024, 1, 15, 12, 30, 0, tzinfo=UTC)
     mock_cache.get = AsyncMock(return_value=test_time.isoformat())
 
     result = await service._get_snapshot_time_from_redis()
@@ -156,7 +156,7 @@ async def test_has_snapshot_memory_fallback(service, mock_cache):
 
     # Устанавливаем данные в память
     service._memory_snapshot = {'uuid-1': 1000.0}
-    service._memory_snapshot_time = datetime.utcnow()
+    service._memory_snapshot_time = datetime.now(UTC)
 
     result = await service.has_snapshot()
 
@@ -180,7 +180,7 @@ async def test_has_snapshot_none(service, mock_cache):
 async def test_get_snapshot_age_minutes_from_redis(service, mock_cache):
     """Тест возраста snapshot из Redis."""
     # Snapshot создан 30 минут назад
-    past_time = datetime.utcnow() - timedelta(minutes=30)
+    past_time = datetime.now(UTC) - timedelta(minutes=30)
     mock_cache.get = AsyncMock(return_value=past_time.isoformat())
 
     result = await service.get_snapshot_age_minutes()
@@ -191,7 +191,7 @@ async def test_get_snapshot_age_minutes_from_redis(service, mock_cache):
 async def test_get_snapshot_age_minutes_memory_fallback(service, mock_cache):
     """Тест возраста snapshot из памяти."""
     mock_cache.get = AsyncMock(return_value=None)
-    service._memory_snapshot_time = datetime.utcnow() - timedelta(minutes=15)
+    service._memory_snapshot_time = datetime.now(UTC) - timedelta(minutes=15)
 
     result = await service.get_snapshot_age_minutes()
 
@@ -217,7 +217,7 @@ async def test_save_snapshot_redis_success(service, mock_cache, sample_snapshot)
 
     # Заполняем память чтобы проверить что она очистится
     service._memory_snapshot = {'old': 123.0}
-    service._memory_snapshot_time = datetime.utcnow()
+    service._memory_snapshot_time = datetime.now(UTC)
 
     result = await service._save_snapshot(sample_snapshot)
 
@@ -276,7 +276,7 @@ async def test_save_notification_to_redis(service, mock_cache):
 
 async def test_get_notification_time_from_redis(service, mock_cache):
     """Тест получения времени уведомления."""
-    test_time = datetime(2024, 1, 15, 10, 0, 0)
+    test_time = datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC)
     mock_cache.get = AsyncMock(return_value=test_time.isoformat())
 
     result = await service._get_notification_time_from_redis('uuid-123')
@@ -297,7 +297,7 @@ async def test_should_send_notification_no_previous(service, mock_cache):
 async def test_should_send_notification_cooldown_active(service, mock_cache):
     """Тест should_send_notification когда кулдаун активен."""
     # Уведомление было 5 минут назад, кулдаун 60 минут
-    recent_time = datetime.utcnow() - timedelta(minutes=5)
+    recent_time = datetime.now(UTC) - timedelta(minutes=5)
     mock_cache.get = AsyncMock(return_value=recent_time.isoformat())
 
     result = await service.should_send_notification('uuid-123')
@@ -308,7 +308,7 @@ async def test_should_send_notification_cooldown_active(service, mock_cache):
 async def test_should_send_notification_cooldown_expired(service, mock_cache):
     """Тест should_send_notification когда кулдаун истёк."""
     # Уведомление было 120 минут назад, кулдаун 60 минут
-    old_time = datetime.utcnow() - timedelta(minutes=120)
+    old_time = datetime.now(UTC) - timedelta(minutes=120)
     mock_cache.get = AsyncMock(return_value=old_time.isoformat())
 
     result = await service.should_send_notification('uuid-123')
@@ -342,7 +342,7 @@ async def test_create_initial_snapshot_uses_existing_redis(service, mock_cache, 
     mock_cache.get = AsyncMock(
         side_effect=[
             sample_snapshot,  # _load_snapshot_from_redis
-            (datetime.utcnow() - timedelta(minutes=10)).isoformat(),  # _get_snapshot_time_from_redis
+            (datetime.now(UTC) - timedelta(minutes=10)).isoformat(),  # _get_snapshot_time_from_redis
         ]
     )
 
@@ -379,8 +379,8 @@ async def test_create_initial_snapshot_creates_new(service, mock_cache):
 
 async def test_cleanup_notification_cache_removes_old(service, mock_cache):
     """Тест очистки старых записей из памяти."""
-    old_time = datetime.utcnow() - timedelta(hours=25)
-    recent_time = datetime.utcnow() - timedelta(hours=1)
+    old_time = datetime.now(UTC) - timedelta(hours=25)
+    recent_time = datetime.now(UTC) - timedelta(hours=1)
 
     service._memory_notification_cache = {
         'uuid-old': old_time,

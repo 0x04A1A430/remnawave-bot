@@ -1,7 +1,7 @@
 """Support tickets routes for cabinet."""
 
 import math
-from datetime import datetime
+from datetime import UTC, datetime
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -137,8 +137,8 @@ async def create_ticket(
         title=request.title,
         status='open',
         priority='normal',
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
     db.add(ticket)
     await db.flush()
@@ -152,7 +152,7 @@ async def create_ticket(
         media_type=request.media_type,
         media_file_id=request.media_file_id,
         media_caption=request.media_caption,
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(UTC),
     )
     db.add(message)
     await db.commit()
@@ -268,14 +268,14 @@ async def add_ticket_message(
         media_type=request.media_type,
         media_file_id=request.media_file_id,
         media_caption=request.media_caption,
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(UTC),
     )
     db.add(message)
 
     # Update ticket status and timestamp
     if ticket.status == 'answered':
         ticket.status = 'pending'
-    ticket.updated_at = datetime.utcnow()
+    ticket.updated_at = datetime.now(UTC)
 
     await db.commit()
     await db.refresh(message)

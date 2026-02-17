@@ -1,6 +1,6 @@
 """Admin routes for version and release information."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import aiohttp
 import structlog
@@ -53,7 +53,7 @@ async def _fetch_cabinet_releases(force: bool = False) -> list[dict]:
     global _cabinet_last_check
 
     if not force and _cabinet_cache.get('releases') and _cabinet_last_check:
-        if datetime.now() - _cabinet_last_check < timedelta(seconds=_CACHE_TTL):
+        if datetime.now(UTC) - _cabinet_last_check < timedelta(seconds=_CACHE_TTL):
             return _cabinet_cache['releases']
 
     url = f'https://api.github.com/repos/{CABINET_REPO}/releases'
@@ -75,7 +75,7 @@ async def _fetch_cabinet_releases(force: bool = False) -> list[dict]:
                         }
                     )
                 _cabinet_cache['releases'] = releases
-                _cabinet_last_check = datetime.now()
+                _cabinet_last_check = datetime.now(UTC)
                 logger.info('Fetched cabinet releases from GitHub', releases_count=len(releases))
                 return releases
             logger.warning('GitHub API returned status for cabinet releases', response_status=response.status)

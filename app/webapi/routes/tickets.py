@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -121,7 +121,7 @@ async def update_ticket_status(
     except ValueError as error:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Invalid ticket status') from error
 
-    closed_at = datetime.utcnow() if status_value == TicketStatus.CLOSED.value else None
+    closed_at = datetime.now(UTC) if status_value == TicketStatus.CLOSED.value else None
     success = await TicketCRUD.update_ticket_status(db, ticket_id, status_value, closed_at)
     if not success:
         raise HTTPException(status.HTTP_404_NOT_FOUND, 'Ticket not found')
@@ -146,7 +146,7 @@ async def update_ticket_priority(
         raise HTTPException(status.HTTP_404_NOT_FOUND, 'Ticket not found')
 
     ticket.priority = payload.priority
-    ticket.updated_at = datetime.utcnow()
+    ticket.updated_at = datetime.now(UTC)
     await db.commit()
 
     ticket = await TicketCRUD.get_ticket_by_id(db, ticket_id, load_messages=True, load_user=False)
@@ -161,7 +161,7 @@ async def update_reply_block(
     db: AsyncSession = Depends(get_db_session),
 ) -> TicketResponse:
     until = payload.until
-    if not payload.permanent and until and until <= datetime.utcnow():
+    if not payload.permanent and until and until <= datetime.now(UTC):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Block expiration must be in the future')
 
     success = await TicketCRUD.set_user_reply_block(

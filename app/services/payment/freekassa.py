@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from importlib import import_module
 from typing import Any
 
@@ -74,7 +74,7 @@ class FreekassaPaymentMixin:
         currency = settings.FREEKASSA_CURRENCY
 
         # Срок действия платежа
-        expires_at = datetime.utcnow() + timedelta(seconds=settings.FREEKASSA_PAYMENT_TIMEOUT_SECONDS)
+        expires_at = datetime.now(UTC) + timedelta(seconds=settings.FREEKASSA_PAYMENT_TIMEOUT_SECONDS)
 
         # Метаданные
         metadata = {
@@ -290,7 +290,7 @@ class FreekassaPaymentMixin:
 
         # Начисляем баланс
         user.balance_kopeks += payment.amount_kopeks
-        user.updated_at = datetime.utcnow()
+        user.updated_at = datetime.now(UTC)
 
         promo_group = user.get_primary_promo_group()
         subscription = getattr(user, 'subscription', None)

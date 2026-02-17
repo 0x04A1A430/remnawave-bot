@@ -383,7 +383,7 @@ async def _get_bulk_spending(db: AsyncSession, user_ids: list[int]) -> dict[int,
     if not user_ids:
         return {}
     result = await db.execute(
-        select(Transaction.user_id, func.coalesce(func.sum(Transaction.amount_kopeks), 0))
+        select(Transaction.user_id, func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0))
         .where(
             and_(
                 Transaction.user_id.in_(user_ids),

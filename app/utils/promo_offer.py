@@ -3,7 +3,7 @@ from __future__ import annotations
 import html
 import math
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,7 +29,7 @@ def get_user_active_promo_discount_percent(user: User | None) -> int:
         return 0
 
     expires_at = getattr(user, 'promo_offer_discount_expires_at', None)
-    if expires_at and expires_at <= datetime.utcnow():
+    if expires_at and expires_at <= datetime.now(UTC):
         return 0
 
     return max(0, min(100, percent))
@@ -78,7 +78,7 @@ async def build_promo_offer_timer_line(
     if not expires_at:
         return None
 
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     if expires_at <= now:
         return None
 
@@ -161,7 +161,7 @@ async def build_test_access_hint(
     if not subscription_id:
         return None
 
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
 
     result = await db.execute(
         select(SubscriptionTemporaryAccess)

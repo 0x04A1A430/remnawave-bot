@@ -1,7 +1,7 @@
 import os
 import sys
 import types
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -105,7 +105,7 @@ async def test_submit_subscription_renewal_uses_balance_when_sufficient(monkeypa
         connected_squads=[],
         traffic_limit_gb=100,
         device_limit=5,
-        end_date=datetime.utcnow(),
+        end_date=datetime.now(UTC),
     )
 
     pricing_model = SubscriptionRenewalPricing(
@@ -139,7 +139,7 @@ async def test_submit_subscription_renewal_uses_balance_when_sufficient(monkeypa
         captured['charge'] = charge
         captured['description'] = description
         return SubscriptionRenewalResult(
-            subscription=types.SimpleNamespace(id=sub.id, end_date=datetime.utcnow()),
+            subscription=types.SimpleNamespace(id=sub.id, end_date=datetime.now(UTC)),
             transaction=types.SimpleNamespace(id=501),
             total_amount_kopeks=pricing.final_total,
             charged_from_balance_kopeks=charge,
@@ -185,7 +185,7 @@ async def test_submit_subscription_renewal_returns_cryptobot_invoice(monkeypatch
         connected_squads=[],
         traffic_limit_gb=100,
         device_limit=5,
-        end_date=datetime.utcnow(),
+        end_date=datetime.now(UTC),
     )
 
     pricing_model = SubscriptionRenewalPricing(
@@ -276,7 +276,7 @@ async def test_submit_subscription_renewal_rounds_up_cryptobot_amount(monkeypatc
         connected_squads=[],
         traffic_limit_gb=100,
         device_limit=5,
-        end_date=datetime.utcnow(),
+        end_date=datetime.now(UTC),
     )
 
     pricing_model = SubscriptionRenewalPricing(
@@ -397,7 +397,7 @@ async def test_cryptobot_renewal_uses_pricing_snapshot(monkeypatch):
         captured['description'] = description
         captured['payment_method'] = payment_method
         return SubscriptionRenewalResult(
-            subscription=types.SimpleNamespace(id=sub.id, end_date=datetime.utcnow()),
+            subscription=types.SimpleNamespace(id=sub.id, end_date=datetime.now(UTC)),
             transaction=types.SimpleNamespace(id=999),
             total_amount_kopeks=pricing.final_total,
             charged_from_balance_kopeks=charge_balance_amount or pricing.final_total,
@@ -477,7 +477,7 @@ async def test_cryptobot_renewal_accepts_changed_pricing_without_snapshot(monkey
         captured['pricing'] = pricing
         captured['charge'] = charge_balance_amount
         return SubscriptionRenewalResult(
-            subscription=types.SimpleNamespace(id=sub.id, end_date=datetime.utcnow()),
+            subscription=types.SimpleNamespace(id=sub.id, end_date=datetime.now(UTC)),
             transaction=None,
             total_amount_kopeks=pricing.final_total,
             charged_from_balance_kopeks=charge_balance_amount or pricing.final_total,
@@ -572,7 +572,7 @@ async def test_cryptobot_webhook_uses_inline_payload_when_db_missing(monkeypatch
         captured['description'] = description
         captured['payment_method'] = payment_method
         return SubscriptionRenewalResult(
-            subscription=types.SimpleNamespace(id=sub.id, end_date=datetime.utcnow()),
+            subscription=types.SimpleNamespace(id=sub.id, end_date=datetime.now(UTC)),
             transaction=types.SimpleNamespace(id=1234),
             total_amount_kopeks=pricing.final_total,
             charged_from_balance_kopeks=charge_balance_amount or pricing.final_total,
@@ -733,7 +733,7 @@ async def test_resolve_yookassa_status_includes_identifiers(monkeypatch):
         is_paid=False,
         captured_at=None,
         updated_at=None,
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(UTC),
         transaction_id=42,
         yookassa_payment_id='yk_1',
     )
@@ -780,7 +780,7 @@ async def test_resolve_payment_status_supports_yookassa_sbp(monkeypatch):
         is_paid=False,
         captured_at=None,
         updated_at=None,
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(UTC),
         transaction_id=None,
         yookassa_payment_id='yk_sbp_1',
     )
@@ -831,7 +831,7 @@ async def test_resolve_pal24_status_includes_identifiers(monkeypatch):
     )
     monkeypatch.setitem(sys.modules, 'app.database.crud.pal24', stub_module)
 
-    paid_at = datetime.utcnow()
+    paid_at = datetime.now(UTC)
 
     payment = types.SimpleNamespace(
         id=321,
@@ -886,7 +886,7 @@ async def test_resolve_pal24_status_includes_identifiers(monkeypatch):
 
 @pytest.mark.anyio('asyncio')
 async def test_resolve_wata_payment_status_success():
-    paid_at = datetime.utcnow()
+    paid_at = datetime.now(UTC)
     payment = types.SimpleNamespace(
         id=404,
         user_id=9,
@@ -938,7 +938,7 @@ async def test_resolve_wata_payment_status_success():
 
 @pytest.mark.anyio('asyncio')
 async def test_resolve_wata_payment_status_uses_payment_link_lookup(monkeypatch):
-    created_at = datetime.utcnow()
+    created_at = datetime.now(UTC)
     payment = types.SimpleNamespace(
         id=505,
         user_id=7,
@@ -1128,7 +1128,7 @@ async def test_get_payment_methods_marks_mulenpay_iframe(monkeypatch):
 
 @pytest.mark.anyio('asyncio')
 async def test_find_recent_deposit_ignores_transactions_before_attempt():
-    started_at = datetime(2024, 5, 1, 12, 0, 0)
+    started_at = datetime(2024, 5, 1, 12, 0, 0, tzinfo=UTC)
 
     transaction = types.SimpleNamespace(
         id=10,
@@ -1164,7 +1164,7 @@ async def test_find_recent_deposit_ignores_transactions_before_attempt():
 
 @pytest.mark.anyio('asyncio')
 async def test_find_recent_deposit_accepts_recent_transactions():
-    started_at = datetime(2024, 5, 1, 12, 0, 0)
+    started_at = datetime(2024, 5, 1, 12, 0, 0, tzinfo=UTC)
 
     transaction = types.SimpleNamespace(
         id=11,

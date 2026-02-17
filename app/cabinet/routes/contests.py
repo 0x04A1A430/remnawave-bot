@@ -1,7 +1,7 @@
 """Contests routes for cabinet - user participation in games/contests."""
 
 import random
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
@@ -102,7 +102,7 @@ async def _award_prize(db: AsyncSession, user_id: int, prize_type: str, prize_va
             return 'Error: subscription not found'
 
         subscription.end_date = subscription.end_date + timedelta(days=days)
-        subscription.updated_at = datetime.utcnow()
+        subscription.updated_at = datetime.now(UTC)
         await db.commit()
         await db.refresh(subscription)
 

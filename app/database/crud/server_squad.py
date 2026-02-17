@@ -1,6 +1,6 @@
 import random
 from collections.abc import Iterable, Sequence
-from datetime import datetime
+from datetime import UTC, datetime
 
 import structlog
 from sqlalchemy import (
@@ -360,7 +360,7 @@ async def sync_with_remnawave(db: AsyncSession, remnawave_squads: list[dict]) ->
 
             if len(filtered_squads) != len(current_squads):
                 subscription.connected_squads = filtered_squads
-                subscription.updated_at = datetime.utcnow()
+                subscription.updated_at = datetime.now(UTC)
                 cleaned_subscriptions += 1
 
         # Clean up stale UUIDs from tariff allowed_squads
@@ -373,7 +373,7 @@ async def sync_with_remnawave(db: AsyncSession, remnawave_squads: list[dict]) ->
             filtered = [u for u in current if u not in removed_uuids]
             if len(filtered) != len(current):
                 tariff.allowed_squads = filtered
-                tariff.updated_at = datetime.utcnow()
+                tariff.updated_at = datetime.now(UTC)
                 cleaned_tariffs += 1
                 logger.info(
                     '🧹 Тариф "%s" (ID: %s): удалены несуществующие сквады %s',

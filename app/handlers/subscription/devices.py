@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 from aiogram import types
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -320,7 +320,7 @@ async def confirm_change_devices(callback: types.CallbackQuery, db_user: User, d
 
         if is_daily_tariff:
             # Для суточных тарифов считаем по дням (как в кабинете)
-            now = datetime.utcnow()
+            now = datetime.now(UTC)
             days_left = max(1, (subscription.end_date - now).days)
             period_hint_days = days_left
 
@@ -555,7 +555,7 @@ async def execute_change_devices(callback: types.CallbackQuery, db_user: User, d
             )
 
         subscription.device_limit = new_devices_count
-        subscription.updated_at = datetime.utcnow()
+        subscription.updated_at = datetime.now(UTC)
 
         await db.commit()
 
@@ -1093,7 +1093,7 @@ async def confirm_add_devices(callback: types.CallbackQuery, db_user: User, db: 
 
     if is_daily_tariff:
         # Для суточных тарифов считаем по дням (как в кабинете)
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         days_left = max(1, (subscription.end_date - now).days)
         period_hint_days = days_left
 

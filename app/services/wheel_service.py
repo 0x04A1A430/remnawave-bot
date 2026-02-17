@@ -5,7 +5,7 @@
 import random
 import secrets
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -305,7 +305,7 @@ class FortuneWheelService:
 
         # Уменьшаем end_date
         subscription.end_date -= timedelta(days=config.spin_cost_days)
-        subscription.updated_at = datetime.utcnow()
+        subscription.updated_at = datetime.now(UTC)
 
         # Оцениваем стоимость в копейках (для статистики)
         # Берем цену 30-дневного периода и делим на 30
@@ -395,7 +395,7 @@ class FortuneWheelService:
                 else:
                     # Обычная подписка - добавляем дни и синхронизируем с RemnaWave
                     subscription.end_date += timedelta(days=prize.prize_value)
-                    subscription.updated_at = datetime.utcnow()
+                    subscription.updated_at = datetime.now(UTC)
                     logger.info('📅 Начислено дней подписки user_id', prize_value=prize.prize_value, user_id=user.id)
 
                     # Синхронизируем с RemnaWave
@@ -422,7 +422,7 @@ class FortuneWheelService:
             subscription = await get_subscription_by_user_id(db, user.id)
             if subscription and subscription.traffic_limit_gb > 0:
                 subscription.traffic_limit_gb += prize.prize_value
-                subscription.updated_at = datetime.utcnow()
+                subscription.updated_at = datetime.now(UTC)
                 logger.info('📊 Начислено трафика user_id', prize_value=prize.prize_value, user_id=user.id)
 
                 # Синхронизируем с RemnaWave
@@ -470,7 +470,7 @@ class FortuneWheelService:
             balance_bonus_kopeks=prize.promo_balance_bonus_kopeks,
             subscription_days=prize.promo_subscription_days,
             max_uses=1,
-            valid_until=datetime.utcnow() + timedelta(days=config.promo_validity_days),
+            valid_until=datetime.now(UTC) + timedelta(days=config.promo_validity_days),
             is_active=True,
             created_by=user.id,
         )

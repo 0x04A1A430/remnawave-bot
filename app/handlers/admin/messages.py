@@ -1,6 +1,6 @@
 import asyncio
 import html
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import structlog
 from aiogram import Dispatcher, F, types
@@ -148,7 +148,7 @@ async def _persist_broadcast_result(
         failed_count: Количество неудачных отправок
         status: Финальный статус рассылки ('completed', 'partial', 'failed')
     """
-    completed_at = datetime.utcnow()
+    completed_at = datetime.now(UTC)
     max_retries = 3
     retry_delay = 1.0
 
@@ -309,7 +309,7 @@ async def toggle_pinned_message_position(
         return
 
     pinned_message.send_before_menu = not pinned_message.send_before_menu
-    pinned_message.updated_at = datetime.utcnow()
+    pinned_message.updated_at = datetime.now(UTC)
     await db.commit()
 
     await show_pinned_message_menu(callback, db_user, db, state)
@@ -329,7 +329,7 @@ async def toggle_pinned_message_start_mode(
         return
 
     pinned_message.send_on_every_start = not pinned_message.send_on_every_start
-    pinned_message.updated_at = datetime.utcnow()
+    pinned_message.updated_at = datetime.now(UTC)
     await db.commit()
 
     await show_pinned_message_menu(callback, db_user, db, state)
@@ -1449,7 +1449,7 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
 
 async def get_target_users_count(db: AsyncSession, target: str) -> int:
     """Быстрый подсчёт пользователей через SQL COUNT вместо загрузки всех в память."""
-    from datetime import datetime, timedelta
+    from datetime import UTC, datetime, timedelta
 
     from sqlalchemy import distinct, func as sql_func
 
@@ -1503,7 +1503,7 @@ async def get_target_users_count(db: AsyncSession, target: str) -> int:
 
     if target == 'expiring':
         # Истекающие в ближайшие 3 дня
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         expiry_threshold = now + timedelta(days=3)
         query = (
             select(sql_func.count(distinct(User.id)))
@@ -1520,7 +1520,7 @@ async def get_target_users_count(db: AsyncSession, target: str) -> int:
 
     if target == 'expiring_subscribers':
         # Истекающие в ближайшие 7 дней
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         expiry_threshold = now + timedelta(days=7)
         query = (
             select(sql_func.count(distinct(User.id)))
@@ -1537,7 +1537,7 @@ async def get_target_users_count(db: AsyncSession, target: str) -> int:
 
     if target == 'expired':
         # Истекшие подписки
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         expired_statuses = [SubscriptionStatus.EXPIRED.value, SubscriptionStatus.DISABLED.value]
         query = (
             select(sql_func.count(distinct(User.id)))
@@ -1556,7 +1556,7 @@ async def get_target_users_count(db: AsyncSession, target: str) -> int:
 
     if target == 'expired_subscribers':
         # То же что и expired
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         expired_statuses = [SubscriptionStatus.EXPIRED.value, SubscriptionStatus.DISABLED.value]
         query = (
             select(sql_func.count(distinct(User.id)))
@@ -1634,7 +1634,7 @@ async def get_target_users_count(db: AsyncSession, target: str) -> int:
 
     # Custom filters — быстрый COUNT вместо загрузки всех пользователей
     if target.startswith('custom_'):
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         today = now.replace(hour=0, minute=0, second=0, microsecond=0)
         criteria = target[len('custom_') :]
 
@@ -1704,7 +1704,7 @@ async def get_target_users(db: AsyncSession, target: str) -> list:
         return [sub.user for sub in expiring_subs if sub.user]
 
     if target == 'expired':
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         expired_statuses = {
             SubscriptionStatus.EXPIRED.value,
             SubscriptionStatus.DISABLED.value,
@@ -1755,7 +1755,7 @@ async def get_target_users(db: AsyncSession, target: str) -> list:
         return [sub.user for sub in expiring_subs if sub.user]
 
     if target == 'expired_subscribers':
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         expired_statuses = {
             SubscriptionStatus.EXPIRED.value,
             SubscriptionStatus.DISABLED.value,
@@ -1782,7 +1782,7 @@ async def get_target_users(db: AsyncSession, target: str) -> list:
         ]
 
     if target == 'trial_ending':
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         in_3_days = now + timedelta(days=3)
         return [
             user
@@ -1794,7 +1794,7 @@ async def get_target_users(db: AsyncSession, target: str) -> list:
         ]
 
     if target == 'trial_expired':
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         return [
             user
             for user in users
@@ -1804,7 +1804,7 @@ async def get_target_users(db: AsyncSession, target: str) -> list:
     if target == 'autopay_failed':
         from app.database.models import SubscriptionEvent
 
-        week_ago = datetime.utcnow() - timedelta(days=7)
+        week_ago = datetime.now(UTC) - timedelta(days=7)
         stmt = (
             select(SubscriptionEvent.user_id)
             .where(
@@ -1826,15 +1826,15 @@ async def get_target_users(db: AsyncSession, target: str) -> list:
         ]
 
     if target == 'inactive_30d':
-        threshold = datetime.utcnow() - timedelta(days=30)
+        threshold = datetime.now(UTC) - timedelta(days=30)
         return [user for user in users if user.last_activity and user.last_activity < threshold]
 
     if target == 'inactive_60d':
-        threshold = datetime.utcnow() - timedelta(days=60)
+        threshold = datetime.now(UTC) - timedelta(days=60)
         return [user for user in users if user.last_activity and user.last_activity < threshold]
 
     if target == 'inactive_90d':
-        threshold = datetime.utcnow() - timedelta(days=90)
+        threshold = datetime.now(UTC) - timedelta(days=90)
         return [user for user in users if user.last_activity and user.last_activity < threshold]
 
     # Фильтр по тарифу
@@ -1855,7 +1855,7 @@ async def get_custom_users_count(db: AsyncSession, criteria: str) -> int:
 
 
 async def get_custom_users(db: AsyncSession, criteria: str) -> list:
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     today = now.replace(hour=0, minute=0, second=0, microsecond=0)
     week_ago = now - timedelta(days=7)
     month_ago = now - timedelta(days=30)
@@ -1884,7 +1884,7 @@ async def get_custom_users(db: AsyncSession, criteria: str) -> list:
 
 
 async def get_users_statistics(db: AsyncSession) -> dict:
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     today = now.replace(hour=0, minute=0, second=0, microsecond=0)
     week_ago = now - timedelta(days=7)
     month_ago = now - timedelta(days=30)

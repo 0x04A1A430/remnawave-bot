@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import structlog
 from sqlalchemy import func, select
@@ -28,7 +28,7 @@ async def upsert_discount_offer(
 ) -> DiscountOffer:
     """Create or refresh a discount offer for a user."""
 
-    expires_at = datetime.utcnow() + timedelta(hours=valid_hours)
+    expires_at = datetime.now(UTC) + timedelta(hours=valid_hours)
 
     result = await db.execute(
         select(DiscountOffer)
@@ -116,7 +116,7 @@ async def list_active_discount_offers_for_user(
 ) -> list[DiscountOffer]:
     """Return active (not yet claimed) offers for a user."""
 
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     stmt = (
         select(DiscountOffer)
         .options(
@@ -161,7 +161,7 @@ async def mark_offer_claimed(
     *,
     details: dict | None = None,
 ) -> DiscountOffer:
-    offer.claimed_at = datetime.utcnow()
+    offer.claimed_at = datetime.now(UTC)
     offer.is_active = False
     await db.commit()
     await db.refresh(offer)
@@ -190,7 +190,7 @@ async def mark_offer_claimed(
 
 
 async def deactivate_expired_offers(db: AsyncSession) -> int:
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     result = await db.execute(
         select(DiscountOffer).where(
             DiscountOffer.is_active == True,

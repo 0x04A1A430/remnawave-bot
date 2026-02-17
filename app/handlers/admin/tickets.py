@@ -1,6 +1,6 @@
 import html
 import time
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import structlog
 from aiogram import Bot, Dispatcher, F, types
@@ -449,7 +449,7 @@ async def handle_admin_ticket_reply(message: types.Message, state: FSMContext, d
             except ValueError:
                 await message.answer('❌ Введите целое число минут')
                 return
-            until = datetime.utcnow() + timedelta(minutes=minutes)
+            until = datetime.now(UTC) + timedelta(minutes=minutes)
             ok = await TicketCRUD.set_user_reply_block(db, ticket_id, permanent=False, until=until)
             if ok:
                 await message.answer(f'✅ Пользователь заблокирован на {minutes} минут')
@@ -769,7 +769,7 @@ async def handle_admin_block_duration_input(message: types.Message, state: FSMCo
             await state.clear()
             return
 
-        until = datetime.utcnow() + timedelta(minutes=minutes)
+        until = datetime.now(UTC) + timedelta(minutes=minutes)
         ok = await TicketCRUD.set_user_reply_block(db, ticket_id, permanent=False, until=until)
         if not ok:
             await message.answer('❌ Ошибка блокировки')

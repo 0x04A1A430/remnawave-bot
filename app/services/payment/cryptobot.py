@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from importlib import import_module
 from typing import Any
 
@@ -168,11 +168,11 @@ class CryptoBotPaymentMixin:
             paid_at_str = payload.get('paid_at')
             if paid_at_str:
                 try:
-                    paid_at = datetime.fromisoformat(paid_at_str.replace('Z', '+00:00')).replace(tzinfo=None)
+                    paid_at = datetime.fromisoformat(paid_at_str.replace('Z', '+00:00'))
                 except Exception:
-                    paid_at = datetime.utcnow()
+                    paid_at = datetime.now(UTC)
             else:
-                paid_at = datetime.utcnow()
+                paid_at = datetime.now(UTC)
 
             updated_payment = await cryptobot_crud.update_cryptobot_payment_status(db, invoice_id, status, paid_at)
 
@@ -266,7 +266,7 @@ class CryptoBotPaymentMixin:
                 was_first_topup = not user.has_made_first_topup
 
                 user.balance_kopeks += amount_kopeks
-                user.updated_at = datetime.utcnow()
+                user.updated_at = datetime.now(UTC)
 
                 referrer_info = format_referrer_info(user)
                 topup_status = '🆕 Первое пополнение' if was_first_topup else '🔄 Пополнение'
@@ -698,7 +698,7 @@ class CryptoBotPaymentMixin:
         paid_at = None
         if paid_at_str:
             try:
-                paid_at = datetime.fromisoformat(paid_at_str.replace('Z', '+00:00')).replace(tzinfo=None)
+                paid_at = datetime.fromisoformat(paid_at_str.replace('Z', '+00:00'))
             except Exception:  # pragma: no cover - defensive parsing
                 paid_at = None
 

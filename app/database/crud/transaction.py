@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import structlog
 from sqlalchemy import and_, func, or_, select
@@ -47,7 +47,7 @@ async def create_transaction(
         payment_method=payment_method.value if payment_method else None,
         external_id=external_id,
         is_completed=is_completed,
-        completed_at=datetime.utcnow() if is_completed else None,
+        completed_at=datetime.now(UTC) if is_completed else None,
         **({'created_at': created_at} if created_at else {}),
     )
 
@@ -150,7 +150,7 @@ async def get_user_transactions_count(
 
 async def get_user_total_spent_kopeks(db: AsyncSession, user_id: int) -> int:
     result = await db.execute(
-        select(func.coalesce(func.sum(Transaction.amount_kopeks), 0)).where(
+        select(func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0)).where(
             and_(
                 Transaction.user_id == user_id,
                 Transaction.is_completed.is_(True),
@@ -163,7 +163,7 @@ async def get_user_total_spent_kopeks(db: AsyncSession, user_id: int) -> int:
 
 async def complete_transaction(db: AsyncSession, transaction: Transaction) -> Transaction:
     transaction.is_completed = True
-    transaction.completed_at = datetime.utcnow()
+    transaction.completed_at = datetime.now(UTC)
 
     await db.commit()
     await db.refresh(transaction)
@@ -198,9 +198,9 @@ async def get_transactions_statistics(
     db: AsyncSession, start_date: datetime | None = None, end_date: datetime | None = None
 ) -> dict:
     if not start_date:
-        start_date = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        start_date = datetime.now(UTC).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     if not end_date:
-        end_date = datetime.utcnow()
+        end_date = datetime.now(UTC)
 
     # Доход считаем только по реальным платежам (исключаем колесо, промокоды, админские пополнения)
     income_result = await db.execute(
@@ -229,7 +229,7 @@ async def get_transactions_statistics(
     total_expenses = expenses_result.scalar()
 
     subscription_income_result = await db.execute(
-        select(func.coalesce(func.sum(Transaction.amount_kopeks), 0)).where(
+        select(func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0)).where(
             and_(
                 Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
                 Transaction.is_completed == True,
@@ -279,7 +279,7 @@ async def get_transactions_statistics(
         row.payment_method: {'count': row.count, 'amount': row.total_amount} for row in payment_methods_result
     }
 
-    today = datetime.utcnow().date()
+    today = datetime.now(UTC).date()
     today_result = await db.execute(
         select(func.count(Transaction.id)).where(
             and_(Transaction.is_completed == True, Transaction.created_at >= today)
@@ -316,7 +316,7 @@ async def get_transactions_statistics(
 
 async def get_revenue_by_period(db: AsyncSession, days: int = 30) -> list[dict]:
     """Доход по дням - только реальные платежи."""
-    start_date = datetime.utcnow() - timedelta(days=days)
+    start_date = datetime.now(UTC) - timedelta(days=days)
 
     result = await db.execute(
         select(
@@ -363,7 +363,7 @@ async def find_tribute_transactions_by_payment_id(
 async def check_tribute_payment_duplicate(
     db: AsyncSession, payment_id: str, amount_kopeks: int, user_telegram_id: int
 ) -> Transaction | None:
-    cutoff_time = datetime.utcnow() - timedelta(hours=24)
+    cutoff_time = datetime.now(UTC) - timedelta(hours=24)
 
     exact_external_id = f'donation_{payment_id}'
 
@@ -400,7 +400,7 @@ async def create_unique_tribute_transaction(
     existing = await get_transaction_by_external_id(db, external_id, PaymentMethod.TRIBUTE)
 
     if existing:
-        timestamp = int(datetime.utcnow().timestamp())
+        timestamp = int(datetime.now(UTC).timestamp())
         external_id = f'donation_{payment_id}_{amount_kopeks}_{timestamp}'
 
         logger.info('Создан уникальный external_id для избежания дубликатов', external_id=external_id)

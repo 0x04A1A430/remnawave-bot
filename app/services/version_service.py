@@ -1,6 +1,6 @@
 import asyncio
 import re
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import aiohttp
 import structlog
@@ -132,7 +132,7 @@ class VersionService:
 
     async def _fetch_releases(self, force: bool = False) -> list[VersionInfo]:
         if not force and self._cache and self._last_check:
-            if datetime.now() - self._last_check < timedelta(seconds=self.cache_ttl):
+            if datetime.now(UTC) - self._last_check < timedelta(seconds=self.cache_ttl):
                 return self._cache.get('releases', [])
 
         url = f'https://api.github.com/repos/{self.repo}/releases'
@@ -155,7 +155,7 @@ class VersionService:
                         releases.append(release)
 
                     self._cache['releases'] = releases
-                    self._last_check = datetime.now()
+                    self._last_check = datetime.now(UTC)
 
                     logger.info('Получено релизов из GitHub', releases_count=len(releases))
                     return releases

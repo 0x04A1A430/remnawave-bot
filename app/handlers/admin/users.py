@@ -1,6 +1,6 @@
 import re
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any
 
@@ -146,7 +146,7 @@ def _build_user_button_text(
         if user.balance_kopeks > 0:
             button_text += f' | 💰 {settings.format_price(user.balance_kopeks)}'
         if user.subscription and user.subscription.end_date:
-            days_left = (user.subscription.end_date - datetime.utcnow()).days
+            days_left = (user.subscription.end_date - datetime.now(UTC)).days
             button_text += f' | 📅 {days_left}д'
 
     elif filter_type == UserFilterType.CAMPAIGN:
@@ -425,7 +425,7 @@ async def show_users_ready_to_renew(
     text += 'Нажмите на пользователя для управления:'
 
     keyboard = []
-    current_time = datetime.utcnow()
+    current_time = datetime.now(UTC)
 
     for user in users_data['users']:
         subscription = user.subscription
@@ -730,7 +730,7 @@ async def show_users_statistics(callback: types.CallbackQuery, db_user: User, db
 
     from sqlalchemy import func, or_, select
 
-    current_time = datetime.utcnow()
+    current_time = datetime.now(UTC)
 
     active_subscription_query = (
         select(func.count(Subscription.id))
@@ -859,7 +859,7 @@ async def _render_user_subscription_overview(callback: types.CallbackQuery, db: 
         text += f'<b>Устройства:</b> {subscription.device_limit}\n'
 
         if subscription.is_active:
-            days_left = (subscription.end_date - datetime.utcnow()).days
+            days_left = (subscription.end_date - datetime.now(UTC)).days
             text += f'<b>Осталось дней:</b> {days_left}\n'
 
         current_squads = subscription.connected_squads or []
@@ -1558,7 +1558,7 @@ async def _update_referral_commission_percent(
             return False, None
 
         user.referral_commission_percent = percent
-        user.updated_at = datetime.utcnow()
+        user.updated_at = datetime.now(UTC)
 
         await db.commit()
 
@@ -2817,7 +2817,7 @@ async def get_detailed_referral_stats(db: AsyncSession, user_id: int) -> dict:
         earnings_by_referral[referral_id] += earning.amount_kopeks
 
     referrals_detail = []
-    current_time = datetime.utcnow()
+    current_time = datetime.now(UTC)
 
     for referral in referrals:
         earned = earnings_by_referral.get(referral.id, 0)
@@ -3469,7 +3469,7 @@ async def toggle_user_server(callback: types.CallbackQuery, db_user: User, db: A
             action_text = 'добавлен'
 
         subscription.connected_squads = current_squads
-        subscription.updated_at = datetime.utcnow()
+        subscription.updated_at = datetime.now(UTC)
         await db.commit()
         await db.refresh(subscription)
 
@@ -3872,7 +3872,7 @@ async def _update_user_devices(db: AsyncSession, user_id: int, devices: int, adm
         subscription = user.subscription
         old_devices = subscription.device_limit
         subscription.device_limit = devices
-        subscription.updated_at = datetime.utcnow()
+        subscription.updated_at = datetime.now(UTC)
 
         await db.commit()
 
@@ -3916,7 +3916,7 @@ async def _update_user_traffic(db: AsyncSession, user_id: int, traffic_gb: int, 
         subscription = user.subscription
         old_traffic = subscription.traffic_limit_gb
         subscription.traffic_limit_gb = traffic_gb
-        subscription.updated_at = datetime.utcnow()
+        subscription.updated_at = datetime.now(UTC)
 
         await db.commit()
 
@@ -4038,7 +4038,7 @@ async def _deactivate_user_subscription(db: AsyncSession, user_id: int, admin_id
 
 async def _activate_user_subscription(db: AsyncSession, user_id: int, admin_id: int) -> bool:
     try:
-        from datetime import datetime
+        from datetime import UTC, datetime
 
         from app.database.crud.subscription import get_subscription_by_user_id
         from app.database.models import SubscriptionStatus
@@ -4050,8 +4050,8 @@ async def _activate_user_subscription(db: AsyncSession, user_id: int, admin_id: 
             return False
 
         subscription.status = SubscriptionStatus.ACTIVE.value
-        if subscription.end_date <= datetime.utcnow():
-            subscription.end_date = datetime.utcnow() + timedelta(days=1)
+        if subscription.end_date <= datetime.now(UTC):
+            subscription.end_date = datetime.now(UTC) + timedelta(days=1)
 
         await db.commit()
         await db.refresh(subscription)
@@ -4506,7 +4506,7 @@ async def admin_buy_subscription_execute(callback: types.CallbackQuery, db_user:
             return
 
         if subscription:
-            current_time = datetime.utcnow()
+            current_time = datetime.now(UTC)
             bonus_period = timedelta()
 
             if subscription.is_trial and settings.TRIAL_ADD_REMAINING_DAYS_TO_PAID and subscription.end_date:
@@ -5102,7 +5102,7 @@ async def _change_subscription_type(db: AsyncSession, user_id: int, new_type: st
         new_type_text = 'триальной' if new_is_trial else 'платной'
 
         subscription.is_trial = new_is_trial
-        subscription.updated_at = datetime.utcnow()
+        subscription.updated_at = datetime.now(UTC)
 
         if not new_is_trial and subscription.is_trial:
             user = await get_user_by_id(db, user_id)
@@ -5306,7 +5306,7 @@ async def confirm_admin_tariff_change(callback: types.CallbackQuery, db_user: Us
         subscription.device_limit = tariff.device_limit
         subscription.traffic_limit_gb = tariff.traffic_limit_gb
         subscription.connected_squads = tariff.allowed_squads or []
-        subscription.updated_at = datetime.utcnow()
+        subscription.updated_at = datetime.now(UTC)
 
         # Сбрасываем докупленный трафик при смене тарифа
         from sqlalchemy import delete as sql_delete

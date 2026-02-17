@@ -1,7 +1,7 @@
 """CRUD операции для платежей KassaAI."""
 
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 
 import structlog
 from sqlalchemy import select
@@ -79,10 +79,10 @@ async def update_kassa_ai_payment_status(
     """Обновляет статус платежа."""
     payment.status = status
     payment.is_paid = is_paid
-    payment.updated_at = datetime.utcnow()
+    payment.updated_at = datetime.now(UTC)
 
     if is_paid:
-        payment.paid_at = datetime.utcnow()
+        payment.paid_at = datetime.now(UTC)
     if kassa_ai_order_id:
         payment.kassa_ai_order_id = kassa_ai_order_id
     if payment_system_id is not None:
@@ -136,7 +136,7 @@ async def get_expired_pending_kassa_ai_payments(
     db: AsyncSession,
 ) -> list[KassaAiPayment]:
     """Получает просроченные платежи в статусе pending."""
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     result = await db.execute(
         select(KassaAiPayment).where(
             KassaAiPayment.status == 'pending',

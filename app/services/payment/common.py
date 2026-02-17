@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
 
@@ -61,7 +61,7 @@ class PaymentCommonMixin:
                         )
                         row = result.one_or_none()
                         if row:
-                            is_active = row.status == 'active' and row.end_date > datetime.utcnow()
+                            is_active = row.status == 'active' and row.end_date > datetime.now(UTC)
                             has_active_subscription = bool(is_active and not row.is_trial)
                 except Exception as db_error:
                     logger.warning(

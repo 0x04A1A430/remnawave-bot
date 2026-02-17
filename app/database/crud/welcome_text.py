@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 import structlog
 from sqlalchemy import func, select, update
@@ -77,7 +77,7 @@ async def toggle_welcome_text_status(db: AsyncSession, admin_id: int) -> bool:
 
         if welcome_text:
             welcome_text.is_enabled = not welcome_text.is_enabled
-            welcome_text.updated_at = datetime.utcnow()
+            welcome_text.updated_at = datetime.now(UTC)
 
             await db.commit()
             await db.refresh(welcome_text)
@@ -182,7 +182,7 @@ async def update_welcome_text(
     if is_active is not None:
         welcome_text.is_active = is_active
 
-    welcome_text.updated_at = datetime.utcnow()
+    welcome_text.updated_at = datetime.now(UTC)
 
     await db.commit()
     await db.refresh(welcome_text)

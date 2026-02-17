@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -138,7 +138,7 @@ async def stop_broadcast(
         broadcast.status = 'cancelling'
     else:
         broadcast.status = 'cancelled'
-        broadcast.completed_at = datetime.utcnow()
+        broadcast.completed_at = datetime.now(UTC)
 
     await db.commit()
     await db.refresh(broadcast)

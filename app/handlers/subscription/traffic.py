@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 from aiogram import types
 from aiogram.fsm.context import FSMContext
@@ -303,7 +303,7 @@ async def confirm_reset_traffic(callback: types.CallbackQuery, db_user: User, db
             return
 
         subscription.traffic_used_gb = 0.0
-        subscription.updated_at = datetime.utcnow()
+        subscription.updated_at = datetime.now(UTC)
         await db.commit()
 
         SubscriptionService()
@@ -826,7 +826,7 @@ async def execute_switch_traffic(callback: types.CallbackQuery, db_user: User, d
         await db.execute(delete(TrafficPurchase).where(TrafficPurchase.subscription_id == subscription.id))
         subscription.purchased_traffic_gb = 0
         subscription.traffic_reset_at = None  # Сбрасываем дату сброса трафика
-        subscription.updated_at = datetime.utcnow()
+        subscription.updated_at = datetime.now(UTC)
 
         await db.commit()
 

@@ -1,6 +1,6 @@
 """CRUD операции для связи пользователей с промогруппами (Many-to-Many)."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 import structlog
 from sqlalchemy import and_, desc, select
@@ -36,7 +36,7 @@ async def _sync_user_primary_promo_group(
 
         if user.promo_group_id != new_primary_id:
             user.promo_group_id = new_primary_id
-            user.updated_at = datetime.utcnow()
+            user.updated_at = datetime.now(UTC)
 
     except Exception as error:
         logger.error('Ошибка синхронизации primary промогруппы пользователя', user_id=user_id, error=error)

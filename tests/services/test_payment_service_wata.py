@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -36,7 +36,7 @@ class DummySession:
 class DummyLocalPayment:
     def __init__(self, payment_id: int = 42) -> None:
         self.id = payment_id
-        self.created_at = datetime.utcnow()
+        self.created_at = datetime.now(UTC)
 
 
 class StubWataService:
@@ -79,20 +79,20 @@ def _make_service(stub: StubWataService | None) -> PaymentService:
     return service
 
 
-def test_wata_service_format_datetime_accepts_naive_utc() -> None:
-    value = datetime(2024, 5, 20, 12, 30, 0)
+def test_wata_service_format_datetime_accepts_utc() -> None:
+    value = datetime(2024, 5, 20, 12, 30, 0, tzinfo=UTC)
     formatted = WataService._format_datetime(value)
     assert formatted == '2024-05-20T12:30:00Z'
 
 
 def test_wata_service_parse_datetime_returns_naive_utc() -> None:
     parsed = WataService._parse_datetime('2024-05-20T12:30:00Z')
-    assert parsed == datetime(2024, 5, 20, 12, 30, 0)
-    assert parsed.tzinfo is None
+    assert parsed == datetime(2024, 5, 20, 12, 30, 0, tzinfo=UTC)
+    assert parsed.tzinfo is not None
 
     parsed_with_offset = WataService._parse_datetime('2024-05-20T15:30:00+03:00')
-    assert parsed_with_offset == datetime(2024, 5, 20, 12, 30, 0)
-    assert parsed_with_offset.tzinfo is None
+    assert parsed_with_offset == datetime(2024, 5, 20, 12, 30, 0, tzinfo=UTC)
+    assert parsed_with_offset.tzinfo is not None
 
 
 @pytest.mark.anyio('asyncio')

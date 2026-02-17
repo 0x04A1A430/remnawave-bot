@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sys
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -134,4 +134,4 @@ def test_convert_to_kopeks_and_expiration() -> None:
     assert Pal24Service.convert_to_kopeks('10.50') == 1050
     expiration = Pal24Service.get_expiration(60)
     assert isinstance(expiration, datetime)
-    assert expiration - datetime.utcnow() <= timedelta(seconds=61)
+    assert expiration - datetime.now(UTC) <= timedelta(seconds=61)

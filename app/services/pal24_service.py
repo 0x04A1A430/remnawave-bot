@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -123,4 +123,4 @@ class Pal24Service:
     def get_expiration(ttl_seconds: int | None) -> datetime | None:
         if not ttl_seconds:
             return None
-        return datetime.utcnow() + timedelta(seconds=ttl_seconds)
+        return datetime.now(UTC) + timedelta(seconds=ttl_seconds)

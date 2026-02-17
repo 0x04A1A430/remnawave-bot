@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from urllib.parse import quote, urlparse, urlunparse
 
 import structlog
@@ -54,7 +54,7 @@ async def update_or_create_subscription(db: AsyncSession, user_id: int, **subscr
             if hasattr(existing_subscription, key):
                 setattr(existing_subscription, key, value)
 
-        existing_subscription.updated_at = datetime.utcnow()
+        existing_subscription.updated_at = datetime.now(UTC)
         await db.commit()
         await db.refresh(existing_subscription)
 

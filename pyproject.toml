@@ -149,7 +149,6 @@ ignore = [
     'B904',
     'TID252',
     'DTZ001',
-    'DTZ003',
     'DTZ005',
     'FAST001',
     'FAST002',

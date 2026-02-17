@@ -1,7 +1,7 @@
 """Тесты для Telegram Stars-сценариев внутри PaymentService."""
 
 import sys
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -89,7 +89,7 @@ class DummySubscription:
         self.traffic_limit_gb = traffic_limit_gb
         self.device_limit = device_limit
         self.status = 'pending'
-        self.start_date = datetime(2024, 1, 1)
+        self.start_date = datetime(2024, 1, 1, tzinfo=UTC)
         self.end_date = self.start_date + timedelta(days=period_days)
 
 
