@@ -281,8 +281,9 @@ class NotificationDeliveryService:
                 logger.warning('Не найден email шаблон для', notification_type_value=notification_type.value)
                 return False
 
-            # Send email
-            success = self.email_service.send_email(
+            # Send email (sync smtplib — run in thread to avoid blocking event loop)
+            success = await asyncio.to_thread(
+                self.email_service.send_email,
                 to_email=user.email,
                 subject=template['subject'],
                 body_html=template['body_html'],

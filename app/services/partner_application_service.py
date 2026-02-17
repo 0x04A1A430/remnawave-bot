@@ -76,14 +76,18 @@ class PartnerApplicationService:
         Одобряет заявку на партнёрство.
         Возвращает (success, error_message).
         """
-        application = await db.get(PartnerApplication, application_id)
+        result = await db.execute(
+            select(PartnerApplication).where(PartnerApplication.id == application_id).with_for_update()
+        )
+        application = result.scalar_one_or_none()
         if not application:
             return False, 'Заявка не найдена'
 
         if application.status != PartnerStatus.PENDING.value:
             return False, 'Заявка уже обработана'
 
-        user = await db.get(User, application.user_id)
+        user_result = await db.execute(select(User).where(User.id == application.user_id).with_for_update())
+        user = user_result.scalar_one_or_none()
         if not user:
             return False, 'Пользователь не найден'
 
@@ -120,14 +124,18 @@ class PartnerApplicationService:
         comment: str | None = None,
     ) -> tuple[bool, str]:
         """Отклоняет заявку на партнёрство."""
-        application = await db.get(PartnerApplication, application_id)
+        result = await db.execute(
+            select(PartnerApplication).where(PartnerApplication.id == application_id).with_for_update()
+        )
+        application = result.scalar_one_or_none()
         if not application:
             return False, 'Заявка не найдена'
 
         if application.status != PartnerStatus.PENDING.value:
             return False, 'Заявка уже обработана'
 
-        user = await db.get(User, application.user_id)
+        user_result = await db.execute(select(User).where(User.id == application.user_id).with_for_update())
+        user = user_result.scalar_one_or_none()
         if user:
             user.partner_status = PartnerStatus.REJECTED.value
 

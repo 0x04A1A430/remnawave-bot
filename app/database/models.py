@@ -983,7 +983,7 @@ class User(Base):
     balance_kopeks = Column(Integer, default=0)
     used_promocodes = Column(Integer, default=0)
     has_had_paid_subscription = Column(Boolean, default=False, nullable=False)
-    referred_by_id = Column(Integer, ForeignKey('users.id'), nullable=True)
+    referred_by_id = Column(Integer, ForeignKey('users.id'), nullable=True, index=True)
     referral_code = Column(String(20), unique=True, nullable=True)
     created_at = Column(DateTime(timezone=True), default=func.now())
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
@@ -1041,7 +1041,7 @@ class User(Base):
     restriction_reason = Column(String(500), nullable=True)  # Причина ограничения
 
     # Партнёрская система
-    partner_status = Column(String(20), default=PartnerStatus.NONE.value, nullable=False)
+    partner_status = Column(String(20), default=PartnerStatus.NONE.value, nullable=False, index=True)
 
     @property
     def is_partner(self) -> bool:
@@ -1469,8 +1469,8 @@ class ReferralEarning(Base):
     __tablename__ = 'referral_earnings'
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
-    referral_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    referral_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
 
     amount_kopeks = Column(Integer, nullable=False)
     reason = Column(String(100), nullable=False)
@@ -1504,10 +1504,10 @@ class WithdrawalRequest(Base):
     __tablename__ = 'withdrawal_requests'
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
 
     amount_kopeks = Column(Integer, nullable=False)  # Сумма к выводу
-    status = Column(String(50), default=WithdrawalRequestStatus.PENDING.value, nullable=False)
+    status = Column(String(50), default=WithdrawalRequestStatus.PENDING.value, nullable=False, index=True)
 
     # Данные для вывода (заполняет пользователь)
     payment_details = Column(Text, nullable=True)  # Реквизиты для перевода
@@ -2207,7 +2207,7 @@ class AdvertisingCampaign(Base):
     is_active = Column(Boolean, default=True)
 
     # Привязка к партнёру
-    partner_user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    partner_user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
 
     created_by = Column(Integer, ForeignKey('users.id'), nullable=True)
     created_at = Column(DateTime(timezone=True), default=func.now())

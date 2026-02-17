@@ -388,6 +388,9 @@ class ReferralWithdrawalService:
         Создаёт заявку на вывод с анализом на отмывание.
         Возвращает (request, error_message).
         """
+        # Блокируем строку пользователя для предотвращения параллельного создания заявок
+        await db.execute(select(User).where(User.id == user_id).with_for_update())
+
         # Проверяем возможность вывода
         can_request, reason = await self.can_request_withdrawal(db, user_id)
         if not can_request:
@@ -446,7 +449,7 @@ class ReferralWithdrawalService:
         Одобряет заявку на вывод и списывает средства с баланса.
         Возвращает (success, error_message).
         """
-        result = await db.execute(select(WithdrawalRequest).where(WithdrawalRequest.id == request_id))
+        result = await db.execute(select(WithdrawalRequest).where(WithdrawalRequest.id == request_id).with_for_update())
         request = result.scalar_one_or_none()
 
         if not request:
@@ -455,13 +458,8 @@ class ReferralWithdrawalService:
         if request.status != WithdrawalRequestStatus.PENDING.value:
             return False, 'Заявка уже обработана'
 
-        # Проверяем, что баланс всё ещё достаточен
-        stats = await self.get_referral_balance_stats(db, request.user_id)
-        if request.amount_kopeks > stats['available_total']:
-            return False, f'Недостаточно средств у пользователя. Доступно: {stats["available_total"] / 100:.0f}₽'
-
-        # Получаем пользователя для списания с баланса
-        user_result = await db.execute(select(User).where(User.id == request.user_id))
+        # Получаем пользователя для списания с баланса (с блокировкой строки)
+        user_result = await db.execute(select(User).where(User.id == request.user_id).with_for_update())
         user = user_result.scalar_one_or_none()
 
         if not user:
@@ -497,7 +495,7 @@ class ReferralWithdrawalService:
         self, db: AsyncSession, request_id: int, admin_id: int, comment: str | None = None
     ) -> bool:
         """Отклоняет заявку на вывод."""
-        result = await db.execute(select(WithdrawalRequest).where(WithdrawalRequest.id == request_id))
+        result = await db.execute(select(WithdrawalRequest).where(WithdrawalRequest.id == request_id).with_for_update())
         request = result.scalar_one_or_none()
 
         if not request or request.status != WithdrawalRequestStatus.PENDING.value:
@@ -515,7 +513,7 @@ class ReferralWithdrawalService:
         self, db: AsyncSession, request_id: int, admin_id: int, comment: str | None = None
     ) -> bool:
         """Отмечает заявку как выполненную (деньги переведены)."""
-        result = await db.execute(select(WithdrawalRequest).where(WithdrawalRequest.id == request_id))
+        result = await db.execute(select(WithdrawalRequest).where(WithdrawalRequest.id == request_id).with_for_update())
         request = result.scalar_one_or_none()
 
         if not request or request.status != WithdrawalRequestStatus.APPROVED.value:

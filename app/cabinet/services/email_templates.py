@@ -4,6 +4,7 @@ Email notification templates for different notification types.
 Supports multiple languages: ru, en, zh, ua, fa
 """
 
+import html
 from typing import Any
 
 from app.config import settings
@@ -532,7 +533,7 @@ class EmailNotificationTemplates:
 
     def _autopay_failed_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
         """Template for failed autopay notification."""
-        reason = context.get('reason', '')
+        reason = html.escape(context.get('reason', ''))
 
         subjects = {
             'ru': 'Ошибка автопродления',
@@ -719,7 +720,7 @@ class EmailNotificationTemplates:
 
     def _ban_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
         """Template for ban notification."""
-        reason = context.get('reason', '')
+        reason = html.escape(context.get('reason', ''))
 
         subjects = {
             'ru': 'Аккаунт заблокирован',
@@ -787,7 +788,7 @@ class EmailNotificationTemplates:
 
     def _warning_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
         """Template for warning notification."""
-        message = context.get('message', '')
+        message = html.escape(context.get('message', ''))
 
         subjects = {
             'ru': 'Предупреждение',
@@ -823,7 +824,7 @@ class EmailNotificationTemplates:
     def _referral_bonus_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
         """Template for referral bonus notification."""
         bonus = context.get('formatted_bonus', f'{context.get("bonus_rubles", 0):.2f} ₽')
-        referral_name = context.get('referral_name', '')
+        referral_name = html.escape(context.get('referral_name', ''))
 
         subjects = {
             'ru': f'Реферальный бонус: +{bonus}',
@@ -860,7 +861,7 @@ class EmailNotificationTemplates:
 
     def _referral_registered_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
         """Template for new referral registered notification."""
-        referral_name = context.get('referral_name', '')
+        referral_name = html.escape(context.get('referral_name', ''))
 
         subjects = {
             'ru': 'Новый реферал зарегистрирован',
@@ -900,7 +901,7 @@ class EmailNotificationTemplates:
     def _partner_approved_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
         """Template for partner application approved notification."""
         commission = context.get('commission_percent', 0)
-        comment = context.get('comment', '')
+        comment = html.escape(context.get('comment', ''))
 
         subjects = {
             'ru': 'Заявка на партнёрство одобрена',
@@ -959,7 +960,7 @@ class EmailNotificationTemplates:
 
     def _partner_rejected_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
         """Template for partner application rejected notification."""
-        comment = context.get('comment', '')
+        comment = html.escape(context.get('comment', ''))
 
         subjects = {
             'ru': 'Заявка на партнёрство отклонена',
@@ -1019,7 +1020,7 @@ class EmailNotificationTemplates:
     def _withdrawal_approved_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
         """Template for withdrawal approved notification."""
         amount = context.get('formatted_amount', f'{context.get("amount_rubles", 0):.2f} ₽')
-        comment = context.get('comment', '')
+        comment = html.escape(context.get('comment', ''))
 
         subjects = {
             'ru': f'Запрос на вывод {amount} одобрен',
@@ -1079,7 +1080,7 @@ class EmailNotificationTemplates:
     def _withdrawal_rejected_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
         """Template for withdrawal rejected notification."""
         amount = context.get('formatted_amount', f'{context.get("amount_rubles", 0):.2f} ₽')
-        comment = context.get('comment', '')
+        comment = html.escape(context.get('comment', ''))
 
         subjects = {
             'ru': f'Запрос на вывод {amount} отклонён',
