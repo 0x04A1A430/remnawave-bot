@@ -307,7 +307,7 @@ async def _continue_registration_after_language(
                 await state.set_data(data)
                 logger.info('✅ LANGUAGE: Реферер найден', referrer_id=referrer.id)
 
-        if settings.SKIP_REFERRAL_CODE or data.get('referral_code'):
+        if settings.SKIP_REFERRAL_CODE or data.get('referral_code') or data.get('referrer_id'):
             await _complete_registration_wrapper()
         else:
             try:
@@ -391,6 +391,12 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
                 start_parameter=campaign.start_parameter,
             )
             await state.update_data(campaign_id=campaign.id)
+            if campaign.partner_user_id:
+                await state.update_data(referrer_id=campaign.partner_user_id)
+                logger.info(
+                    '👤 Кампания привязана к партнёру',
+                    partner_user_id=campaign.partner_user_id,
+                )
         else:
             referral_code = start_parameter
             logger.info('🔎 Найден реферальный код', referral_code=referral_code)
@@ -796,8 +802,8 @@ async def _continue_registration_after_rules(
             logger.info('✅ Реферер найден', referrer_id=referrer.id)
 
         await complete_registration_from_callback(callback, state, db)
-    elif settings.SKIP_REFERRAL_CODE:
-        logger.info('⚙️ SKIP_REFERRAL_CODE включен - пропускаем запрос реферального кода')
+    elif settings.SKIP_REFERRAL_CODE or data.get('referrer_id'):
+        logger.info('⚙️ Пропускаем запрос реферального кода')
         await complete_registration_from_callback(callback, state, db)
     else:
         try:
@@ -934,8 +940,8 @@ async def process_privacy_policy_accept(callback: types.CallbackQuery, state: FS
                     logger.info('✅ Реферер найден', referrer_id=referrer.id)
 
                 await complete_registration_from_callback(callback, state, db)
-            elif settings.SKIP_REFERRAL_CODE:
-                logger.info('⚙️ SKIP_REFERRAL_CODE включен - пропускаем запрос реферального кода')
+            elif settings.SKIP_REFERRAL_CODE or data.get('referrer_id'):
+                logger.info('⚙️ Пропускаем запрос реферального кода')
                 await complete_registration_from_callback(callback, state, db)
             else:
                 try:
@@ -2017,17 +2023,18 @@ async def required_sub_channel_check(
             await state.set_data(state_data)
 
             if settings.SKIP_RULES_ACCEPT:
-                if settings.SKIP_REFERRAL_CODE or state_data.get('referral_code'):
+                if settings.SKIP_REFERRAL_CODE or state_data.get('referral_code') or state_data.get('referrer_id'):
                     from app.utils.user_utils import generate_unique_referral_code
 
-                    # Проверяем реферальный код из ссылки
-                    referrer_id = None
-                    ref_code_from_link = state_data.get('referral_code')
-                    if ref_code_from_link:
-                        referrer = await get_user_by_referral_code(db, ref_code_from_link)
-                        if referrer:
-                            referrer_id = referrer.id
-                            logger.info('✅ CHANNEL CHECK: Реферер найден из ссылки', referrer_id=referrer.id)
+                    # Проверяем реферальный код из ссылки или партнёра кампании
+                    referrer_id = state_data.get('referrer_id')
+                    if not referrer_id:
+                        ref_code_from_link = state_data.get('referral_code')
+                        if ref_code_from_link:
+                            referrer = await get_user_by_referral_code(db, ref_code_from_link)
+                            if referrer:
+                                referrer_id = referrer.id
+                                logger.info('✅ CHANNEL CHECK: Реферер найден из ссылки', referrer_id=referrer.id)
 
                     referral_code = await generate_unique_referral_code(db, query.from_user.id)
 
