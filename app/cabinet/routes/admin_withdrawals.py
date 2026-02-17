@@ -233,7 +233,7 @@ async def reject_withdrawal(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Reject a withdrawal request."""
-    success = await referral_withdrawal_service.reject_request(
+    success, error = await referral_withdrawal_service.reject_request(
         db,
         request_id=withdrawal_id,
         admin_id=admin.id,
@@ -243,7 +243,7 @@ async def reject_withdrawal(
     if not success:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Не удалось отклонить заявку',
+            detail=error or 'Не удалось отклонить заявку',
         )
 
     # Notify user about rejection
@@ -284,7 +284,7 @@ async def complete_withdrawal(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Mark a withdrawal as completed (money transferred)."""
-    success = await referral_withdrawal_service.complete_request(
+    success, error = await referral_withdrawal_service.complete_request(
         db,
         request_id=withdrawal_id,
         admin_id=admin.id,
@@ -293,7 +293,7 @@ async def complete_withdrawal(
     if not success:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Не удалось завершить заявку',
+            detail=error or 'Не удалось завершить заявку',
         )
 
     return {'success': True}

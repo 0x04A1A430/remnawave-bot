@@ -520,7 +520,7 @@ async def show_withdrawal_info(callback: types.CallbackQuery, db_user: User, db:
     cooldown_days = settings.REFERRAL_WITHDRAWAL_COOLDOWN_DAYS
 
     # Проверяем возможность вывода
-    can_request, reason = await referral_withdrawal_service.can_request_withdrawal(db, db_user.id)
+    can_request, reason, _stats = await referral_withdrawal_service.can_request_withdrawal(db, db_user.id)
 
     text = texts.t('REFERRAL_WITHDRAWAL_TITLE', '💸 <b>Вывод реферального баланса</b>') + '\n\n'
 
@@ -565,12 +565,12 @@ async def start_withdrawal_request(callback: types.CallbackQuery, db_user: User,
     texts = get_texts(db_user.language)
 
     # Повторная проверка
-    can_request, reason = await referral_withdrawal_service.can_request_withdrawal(db, db_user.id)
+    can_request, reason, wd_stats = await referral_withdrawal_service.can_request_withdrawal(db, db_user.id)
     if not can_request:
         await callback.answer(reason, show_alert=True)
         return
 
-    available = await referral_withdrawal_service.get_available_for_withdrawal(db, db_user.id)
+    available = wd_stats.get('available_total', 0) if wd_stats else 0
 
     # Сохраняем доступный баланс в состоянии
     await state.update_data(available_balance=available)

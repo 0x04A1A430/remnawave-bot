@@ -30,8 +30,7 @@ async def get_withdrawal_balance(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get withdrawal balance stats for current user."""
-    stats = await referral_withdrawal_service.get_referral_balance_stats(db, user.id)
-    can_request, reason = await referral_withdrawal_service.can_request_withdrawal(db, user.id)
+    can_request, reason, stats = await referral_withdrawal_service.can_request_withdrawal(db, user.id)
 
     return WithdrawalBalanceResponse(
         total_earned=stats['total_earned'],

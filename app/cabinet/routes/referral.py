@@ -150,12 +150,17 @@ async def get_referral_earnings(
     result = await db.execute(query)
     earnings = result.scalars().all()
 
+    # Batch-fetch referral users to avoid N+1
+    referral_ids = list({e.referral_id for e in earnings if e.referral_id})
+    if referral_ids:
+        referral_users_result = await db.execute(select(User).where(User.id.in_(referral_ids)))
+        referral_users_map = {u.id: u for u in referral_users_result.scalars().all()}
+    else:
+        referral_users_map = {}
+
     items = []
     for e in earnings:
-        # Get referral user info
-        referral_query = select(User).where(User.id == e.referral_id)
-        referral_result = await db.execute(referral_query)
-        referral_user = referral_result.scalar_one_or_none()
+        referral_user = referral_users_map.get(e.referral_id) if e.referral_id else None
 
         items.append(
             ReferralEarningResponse(

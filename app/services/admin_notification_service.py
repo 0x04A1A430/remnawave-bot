@@ -1,3 +1,4 @@
+import html
 from datetime import UTC, datetime
 from typing import Any
 
@@ -1661,23 +1662,25 @@ class AdminNotificationService:
             message_lines.append('')
 
             if application_data.get('company_name'):
-                message_lines.append(f'🏢 Компания: {application_data["company_name"]}')
+                message_lines.append(f'🏢 Компания: {html.escape(str(application_data["company_name"]))}')
             if application_data.get('telegram_channel'):
-                message_lines.append(f'📢 Канал: {application_data["telegram_channel"]}')
+                message_lines.append(f'📢 Канал: {html.escape(str(application_data["telegram_channel"]))}')
             if application_data.get('website_url'):
-                message_lines.append(f'🌐 Сайт: {application_data["website_url"]}')
+                message_lines.append(f'🌐 Сайт: {html.escape(str(application_data["website_url"]))}')
             if application_data.get('description'):
-                desc = application_data['description']
+                desc = str(application_data['description'])
                 if len(desc) > 200:
                     desc = desc[:197] + '...'
-                message_lines.append(f'📝 {desc}')
+                message_lines.append(f'📝 {html.escape(desc)}')
             if application_data.get('expected_monthly_referrals'):
                 message_lines.append(f'👥 Ожидаемых рефералов: {application_data["expected_monthly_referrals"]}/мес')
 
-            message_lines.extend([
-                '',
-                f'⏰ <i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>',
-            ])
+            message_lines.extend(
+                [
+                    '',
+                    f'⏰ <i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>',
+                ]
+            )
 
             return await self._send_message('\n'.join(message_lines))
 
@@ -1709,22 +1712,26 @@ class AdminNotificationService:
             if username:
                 message_lines.append(f'📱 @{username}')
 
-            message_lines.extend([
-                '',
-                f'💵 <b>Сумма: {settings.format_price(amount_kopeks)}</b>',
-                f'💰 Баланс: {settings.format_price(user.balance_kopeks)}',
-            ])
+            message_lines.extend(
+                [
+                    '',
+                    f'💵 <b>Сумма: {settings.format_price(amount_kopeks)}</b>',
+                    f'💰 Баланс: {settings.format_price(user.balance_kopeks)}',
+                ]
+            )
 
             if payment_details:
-                details = payment_details
+                details = str(payment_details)
                 if len(details) > 200:
                     details = details[:197] + '...'
-                message_lines.extend(['', f'💳 Реквизиты: {details}'])
+                message_lines.extend(['', f'💳 Реквизиты: {html.escape(details)}'])
 
-            message_lines.extend([
-                '',
-                f'⏰ <i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>',
-            ])
+            message_lines.extend(
+                [
+                    '',
+                    f'⏰ <i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>',
+                ]
+            )
 
             return await self._send_message('\n'.join(message_lines))
 

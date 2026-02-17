@@ -472,7 +472,9 @@ async def reject_withdrawal_request(callback: types.CallbackQuery, db_user: User
         await callback.answer('Заявка не найдена', show_alert=True)
         return
 
-    success = await referral_withdrawal_service.reject_request(db, request_id, db_user.id, 'Отклонено администратором')
+    success, _error = await referral_withdrawal_service.reject_request(
+        db, request_id, db_user.id, 'Отклонено администратором'
+    )
 
     if success:
         # Уведомляем пользователя (только если есть telegram_id)
@@ -513,7 +515,7 @@ async def complete_withdrawal_request(callback: types.CallbackQuery, db_user: Us
         await callback.answer('Заявка не найдена', show_alert=True)
         return
 
-    success = await referral_withdrawal_service.complete_request(db, request_id, db_user.id, 'Перевод выполнен')
+    success, _error = await referral_withdrawal_service.complete_request(db, request_id, db_user.id, 'Перевод выполнен')
 
     if success:
         # Уведомляем пользователя (только если есть telegram_id)
