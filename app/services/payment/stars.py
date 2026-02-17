@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import ROUND_HALF_UP, Decimal
 
 from aiogram.types import LabeledPrice
@@ -240,7 +240,7 @@ class TelegramStarsMixin:
                 return False
 
             if payload_data.period_days is None:
-                start_point = pending_subscription.start_date or datetime.utcnow()
+                start_point = pending_subscription.start_date or datetime.now(UTC)
                 end_point = pending_subscription.end_date or start_point
                 computed_days = max(1, (end_point - start_point).days or 0)
                 period_days = max(period_days, computed_days)
@@ -392,7 +392,7 @@ class TelegramStarsMixin:
 
         # Обновляем баланс в БД.
         user.balance_kopeks += amount_kopeks
-        user.updated_at = datetime.utcnow()
+        user.updated_at = datetime.now(UTC)
 
         promo_group = user.get_primary_promo_group()
         subscription = getattr(user, 'subscription', None)

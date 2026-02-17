@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import aiohttp
@@ -33,12 +33,12 @@ class WataPublicKeyProvider:
     async def get_public_key(self) -> str | None:
         """Returns a cached public key or fetches a new one from WATA."""
 
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         if self._cached_key and self._expires_at and now < self._expires_at:
             return self._cached_key
 
         async with self._lock:
-            now = datetime.utcnow()
+            now = datetime.now(UTC)
             if self._cached_key and self._expires_at and now < self._expires_at:
                 return self._cached_key
 
@@ -46,7 +46,7 @@ class WataPublicKeyProvider:
             if key:
                 self._cached_key = key
                 if self._cache_seconds > 0:
-                    self._expires_at = datetime.utcnow() + timedelta(seconds=self._cache_seconds)
+                    self._expires_at = datetime.now(UTC) + timedelta(seconds=self._cache_seconds)
                 else:
                     self._expires_at = None
                 logger.debug('Получен и закеширован публичный ключ WATA')

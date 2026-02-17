@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 import structlog
 from aiogram import Bot, Dispatcher, F, types
@@ -439,10 +439,10 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             logger.info('📝 Фамилия обновлена', old_last_name=old_last_name, last_name=user.last_name)
             profile_updated = True
 
-        user.last_activity = datetime.utcnow()
+        user.last_activity = datetime.now(UTC)
 
         if profile_updated:
-            user.updated_at = datetime.utcnow()
+            user.updated_at = datetime.now(UTC)
             await db.commit()
             await db.refresh(user)
             logger.info('💾 Профиль пользователя обновлен', telegram_id=user.telegram_id)
@@ -589,8 +589,8 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             user.username = message.from_user.username
             user.first_name = message.from_user.first_name
             user.last_name = message.from_user.last_name
-            user.updated_at = datetime.utcnow()
-            user.last_activity = datetime.utcnow()
+            user.updated_at = datetime.now(UTC)
+            user.last_activity = datetime.now(UTC)
 
             from app.utils.user_utils import generate_unique_referral_code
 
@@ -1177,10 +1177,10 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
         existing_user.balance_kopeks = 0
         existing_user.has_had_paid_subscription = False
 
-        from datetime import datetime
+        from datetime import UTC, datetime
 
-        existing_user.updated_at = datetime.utcnow()
-        existing_user.last_activity = datetime.utcnow()
+        existing_user.updated_at = datetime.now(UTC)
+        existing_user.last_activity = datetime.now(UTC)
 
         await db.commit()
         await db.refresh(existing_user, ['subscription'])
@@ -1211,10 +1211,10 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
         if referrer_id and not existing_user.referred_by_id:
             existing_user.referred_by_id = referrer_id
 
-        from datetime import datetime
+        from datetime import UTC, datetime
 
-        existing_user.updated_at = datetime.utcnow()
-        existing_user.last_activity = datetime.utcnow()
+        existing_user.updated_at = datetime.now(UTC)
+        existing_user.last_activity = datetime.now(UTC)
 
         await db.commit()
         await db.refresh(existing_user, ['subscription'])
@@ -1443,10 +1443,10 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
         existing_user.balance_kopeks = 0
         existing_user.has_had_paid_subscription = False
 
-        from datetime import datetime
+        from datetime import UTC, datetime
 
-        existing_user.updated_at = datetime.utcnow()
-        existing_user.last_activity = datetime.utcnow()
+        existing_user.updated_at = datetime.now(UTC)
+        existing_user.last_activity = datetime.now(UTC)
 
         await db.commit()
         await db.refresh(existing_user, ['subscription'])
@@ -1477,10 +1477,10 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
         if referrer_id and not existing_user.referred_by_id:
             existing_user.referred_by_id = referrer_id
 
-        from datetime import datetime
+        from datetime import UTC, datetime
 
-        existing_user.updated_at = datetime.utcnow()
-        existing_user.last_activity = datetime.utcnow()
+        existing_user.updated_at = datetime.now(UTC)
+        existing_user.last_activity = datetime.now(UTC)
 
         await db.commit()
         await db.refresh(existing_user, ['subscription'])
@@ -1661,11 +1661,11 @@ def _get_subscription_status(user, texts):
     subscription = user.subscription
     actual_status = getattr(subscription, 'actual_status', None)
 
-    from datetime import datetime
+    from datetime import UTC, datetime
 
     end_date = getattr(subscription, 'end_date', None)
     end_date_display = format_local_datetime(end_date, '%d.%m.%Y') if end_date else None
-    current_time = datetime.utcnow()
+    current_time = datetime.now(UTC)
 
     if actual_status == 'disabled':
         return texts.t('SUB_STATUS_DISABLED', '⚫ Отключена')
@@ -1927,7 +1927,7 @@ async def required_sub_channel_check(
             subscription = user.subscription
             if subscription.is_trial and subscription.status == SubscriptionStatus.DISABLED.value:
                 subscription.status = SubscriptionStatus.ACTIVE.value
-                subscription.updated_at = datetime.utcnow()
+                subscription.updated_at = datetime.now(UTC)
                 await db.commit()
                 await db.refresh(subscription)
                 logger.info(

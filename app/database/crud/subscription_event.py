@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import and_, func, select
@@ -32,7 +32,7 @@ async def create_subscription_event(
         amount_kopeks=amount_kopeks,
         currency=currency,
         message=message,
-        occurred_at=occurred_at or datetime.utcnow(),
+        occurred_at=occurred_at or datetime.now(UTC),
         extra=extra or None,
     )
     db.add(event)

@@ -1,6 +1,6 @@
 """CRUD operations for TicketNotification."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 import structlog
 from sqlalchemy import desc, func, select, update
@@ -40,7 +40,7 @@ class TicketNotificationCRUD:
             message=message,
             is_for_admin=is_for_admin,
             is_read=False,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(UTC),
         )
         db.add(notification)
         await db.commit()
@@ -130,7 +130,7 @@ class TicketNotificationCRUD:
         query = (
             update(TicketNotification)
             .where(TicketNotification.id == notification_id)
-            .values(is_read=True, read_at=datetime.utcnow())
+            .values(is_read=True, read_at=datetime.now(UTC))
         )
         result = await db.execute(query)
         await db.commit()
@@ -146,7 +146,7 @@ class TicketNotificationCRUD:
                 TicketNotification.is_for_admin == False,
                 TicketNotification.is_read == False,
             )
-            .values(is_read=True, read_at=datetime.utcnow())
+            .values(is_read=True, read_at=datetime.now(UTC))
         )
         result = await db.execute(query)
         await db.commit()
@@ -161,7 +161,7 @@ class TicketNotificationCRUD:
                 TicketNotification.is_for_admin == True,
                 TicketNotification.is_read == False,
             )
-            .values(is_read=True, read_at=datetime.utcnow())
+            .values(is_read=True, read_at=datetime.now(UTC))
         )
         result = await db.execute(query)
         await db.commit()
@@ -178,7 +178,7 @@ class TicketNotificationCRUD:
                 TicketNotification.ticket_id == ticket_id,
                 TicketNotification.is_read == False,
             )
-            .values(is_read=True, read_at=datetime.utcnow())
+            .values(is_read=True, read_at=datetime.now(UTC))
         )
 
         if is_admin:

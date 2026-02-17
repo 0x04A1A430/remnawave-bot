@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Optional
 
 from aiogram import Bot
@@ -200,7 +200,7 @@ async def update_pinned_message(
     if payload.send_on_every_start is not None:
         msg.send_on_every_start = payload.send_on_every_start
 
-    msg.updated_at = datetime.utcnow()
+    msg.updated_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(msg)
 
@@ -231,7 +231,7 @@ async def update_pinned_message_settings(
     if payload.send_on_every_start is not None:
         msg.send_on_every_start = payload.send_on_every_start
 
-    msg.updated_at = datetime.utcnow()
+    msg.updated_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(msg)
 
@@ -263,12 +263,12 @@ async def activate_pinned_message(
     await db.execute(
         update(PinnedMessage)
         .where(PinnedMessage.is_active.is_(True))
-        .values(is_active=False, updated_at=datetime.utcnow())
+        .values(is_active=False, updated_at=datetime.now(UTC))
     )
 
     # Активируем указанное
     msg.is_active = True
-    msg.updated_at = datetime.utcnow()
+    msg.updated_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(msg)
 

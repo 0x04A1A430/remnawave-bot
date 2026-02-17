@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -71,7 +71,7 @@ async def update_token(
     for key, value in kwargs.items():
         if hasattr(token, key):
             setattr(token, key, value)
-    token.updated_at = datetime.utcnow()
+    token.updated_at = datetime.now(UTC)
     await db.flush()
     await db.refresh(token)
     return token
@@ -86,7 +86,7 @@ async def set_tokens_active_status(
     await db.execute(
         update(WebApiToken)
         .where(WebApiToken.id.in_(list(token_ids)))
-        .values(is_active=is_active, updated_at=datetime.utcnow())
+        .values(is_active=is_active, updated_at=datetime.now(UTC))
     )
 
 

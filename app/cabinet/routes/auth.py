@@ -25,7 +25,7 @@ from app.database.crud.user import (
 from app.database.models import CabinetRefreshToken, User
 from app.services.disposable_email_service import disposable_email_service
 from app.services.referral_service import process_referral_registration
-from app.utils.timezone import panel_datetime_to_naive_utc
+from app.utils.timezone import panel_datetime_to_utc
 
 from ..auth import (
     create_access_token,
@@ -175,7 +175,7 @@ async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -
             existing_sub = await get_subscription_by_user_id(db, user.id)
 
             # Parse panel data — panel returns local time with misleading +00:00 offset
-            expire_at = panel_datetime_to_naive_utc(panel_user.expire_at)
+            expire_at = panel_datetime_to_utc(panel_user.expire_at)
             traffic_limit_gb = panel_user.traffic_limit_bytes // (1024**3) if panel_user.traffic_limit_bytes > 0 else 0
             traffic_used_gb = panel_user.used_traffic_bytes / (1024**3) if panel_user.used_traffic_bytes > 0 else 0
 
@@ -186,7 +186,7 @@ async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -
             device_limit = panel_user.hwid_device_limit or 1
 
             # Determine status — expire_at is now naive UTC
-            current_time = datetime.now(UTC).replace(tzinfo=None)
+            current_time = datetime.now(UTC)
 
             if panel_user.status.value == 'ACTIVE' and expire_at > current_time:
                 sub_status = SubscriptionStatus.ACTIVE
@@ -313,7 +313,7 @@ async def auth_telegram(
         )
 
     # Update last login
-    user.cabinet_last_login = datetime.utcnow()
+    user.cabinet_last_login = datetime.now(UTC)
     await db.commit()
 
     response = _create_auth_response(user)
@@ -374,7 +374,7 @@ async def auth_telegram_widget(
     if request.last_name != user.last_name:
         user.last_name = request.last_name
 
-    user.cabinet_last_login = datetime.utcnow()
+    user.cabinet_last_login = datetime.now(UTC)
     await db.commit()
 
     response = _create_auth_response(user)
@@ -546,7 +546,7 @@ async def register_email_standalone(
     # Для тестового email - автоматически верифицировать
     if is_test_email:
         user.email_verified = True
-        user.email_verified_at = datetime.utcnow()
+        user.email_verified_at = datetime.now(UTC)
         await db.commit()
         logger.info('Test email auto-verified: user_id', email=request.email, user_id=user.id)
     else:
@@ -633,10 +633,10 @@ async def verify_email(
 
     # Mark email as verified
     user.email_verified = True
-    user.email_verified_at = datetime.utcnow()
+    user.email_verified_at = datetime.now(UTC)
     user.email_verification_token = None
     user.email_verification_expires = None
-    user.cabinet_last_login = datetime.utcnow()
+    user.cabinet_last_login = datetime.now(UTC)
 
     await db.commit()
 
@@ -750,7 +750,7 @@ async def login_email(
                 language='ru',
             )
             user.email_verified = True
-            user.email_verified_at = datetime.utcnow()
+            user.email_verified_at = datetime.now(UTC)
             await db.commit()
         else:
             raise HTTPException(
@@ -783,7 +783,7 @@ async def login_email(
             detail='User account is not active',
         )
 
-    user.cabinet_last_login = datetime.utcnow()
+    user.cabinet_last_login = datetime.now(UTC)
     await db.commit()
 
     response = _create_auth_response(user)
@@ -871,7 +871,7 @@ async def logout(
     token_record = result.scalar_one_or_none()
 
     if token_record:
-        token_record.revoked_at = datetime.utcnow()
+        token_record.revoked_at = datetime.now(UTC)
         await db.commit()
 
     return {'message': 'Logged out successfully'}

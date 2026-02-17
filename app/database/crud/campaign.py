@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 import structlog
 from sqlalchemy import and_, delete, func, select, update
@@ -151,7 +151,7 @@ async def update_campaign(
     if not update_data:
         return campaign
 
-    update_data['updated_at'] = datetime.utcnow()
+    update_data['updated_at'] = datetime.now(UTC)
 
     await db.execute(update(AdvertisingCampaign).where(AdvertisingCampaign.id == campaign.id).values(**update_data))
     await db.commit()

@@ -446,13 +446,13 @@ async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSess
 
     # Отображаем докупленный трафик
     if (subscription.traffic_limit_gb or 0) > 0:  # Только для лимитированных тарифов
-        from datetime import datetime
+        from datetime import UTC, datetime
 
         from sqlalchemy import select as sql_select
 
         from app.database.models import TrafficPurchase
 
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         purchases_query = (
             sql_select(TrafficPurchase)
             .where(TrafficPurchase.subscription_id == subscription.id)

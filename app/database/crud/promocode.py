@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 import structlog
 from sqlalchemy import and_, func, select
@@ -114,7 +114,7 @@ async def check_user_promocode_usage(db: AsyncSession, user_id: int, promocode_i
 
 
 async def create_promocode_use(db: AsyncSession, promocode_id: int, user_id: int) -> PromoCodeUse:
-    promocode_use = PromoCodeUse(promocode_id=promocode_id, user_id=user_id, used_at=datetime.utcnow())
+    promocode_use = PromoCodeUse(promocode_id=promocode_id, user_id=user_id, used_at=datetime.now(UTC))
 
     db.add(promocode_use)
     await db.commit()
@@ -133,9 +133,9 @@ async def get_promocode_use_by_user_and_code(db: AsyncSession, user_id: int, pro
 
 async def count_user_recent_activations(db: AsyncSession, user_id: int, hours: int = 24) -> int:
     """Подсчитывает количество активаций промокодов пользователем за последние N часов."""
-    from datetime import timedelta
+    from datetime import UTC, timedelta
 
-    cutoff = datetime.utcnow() - timedelta(hours=hours)
+    cutoff = datetime.now(UTC) - timedelta(hours=hours)
     result = await db.execute(
         select(func.count(PromoCodeUse.id)).where(and_(PromoCodeUse.user_id == user_id, PromoCodeUse.used_at >= cutoff))
     )
@@ -178,7 +178,7 @@ async def update_promocode(db: AsyncSession, promocode: PromoCode, **kwargs) -> 
         if hasattr(promocode, field):
             setattr(promocode, field, value)
 
-    promocode.updated_at = datetime.utcnow()
+    promocode.updated_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(promocode)
 
@@ -239,7 +239,7 @@ async def get_promocode_statistics(db: AsyncSession, promocode_id: int) -> dict:
     )
     total_uses = total_uses_result.scalar()
 
-    today = datetime.utcnow().date()
+    today = datetime.now(UTC).date()
     today_uses_result = await db.execute(
         select(func.count(PromoCodeUse.id)).where(
             and_(PromoCodeUse.promocode_id == promocode_id, PromoCodeUse.used_at >= today)

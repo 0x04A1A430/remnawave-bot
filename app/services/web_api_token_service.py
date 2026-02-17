@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import secrets
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -47,10 +47,10 @@ class WebApiTokenService:
         if not token or not token.is_active:
             return None
 
-        if token.expires_at and token.expires_at < datetime.utcnow():
+        if token.expires_at and token.expires_at < datetime.now(UTC):
             return None
 
-        token.last_used_at = datetime.utcnow()
+        token.last_used_at = datetime.now(UTC)
         if remote_ip:
             token.last_used_ip = remote_ip
         await db.flush()
@@ -83,14 +83,14 @@ class WebApiTokenService:
 
     async def revoke_token(self, db: AsyncSession, token: WebApiToken) -> WebApiToken:
         token.is_active = False
-        token.updated_at = datetime.utcnow()
+        token.updated_at = datetime.now(UTC)
         await db.flush()
         await db.refresh(token)
         return token
 
     async def activate_token(self, db: AsyncSession, token: WebApiToken) -> WebApiToken:
         token.is_active = True
-        token.updated_at = datetime.utcnow()
+        token.updated_at = datetime.now(UTC)
         await db.flush()
         await db.refresh(token)
         return token

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 import structlog
 from sqlalchemy import and_, desc, func, or_, select, update
@@ -154,18 +154,18 @@ class TicketCRUD:
         tickets = result.scalars().all()
         if not tickets:
             return None
-        from datetime import datetime
+        from datetime import UTC, datetime
 
         # Если есть вечная блокировка в любом тикете — блок активен без срока
         for t in tickets:
             if t.user_reply_block_permanent:
-                return datetime.max
+                return datetime.max.replace(tzinfo=UTC)
         # Иначе ищем максимальный срок блокировки, если он в будущем
         future_until = [t.user_reply_block_until for t in tickets if t.user_reply_block_until]
         if not future_until:
             return None
         max_until = max(future_until)
-        return max_until if max_until > datetime.utcnow() else None
+        return max_until if max_until > datetime.now(UTC) else None
 
     @staticmethod
     async def get_all_tickets(
@@ -225,7 +225,7 @@ class TicketCRUD:
             return False
 
         ticket.status = status
-        ticket.updated_at = datetime.utcnow()
+        ticket.updated_at = datetime.now(UTC)
 
         if status == TicketStatus.CLOSED.value and closed_at:
             ticket.closed_at = closed_at
@@ -259,14 +259,14 @@ class TicketCRUD:
             return False
         ticket.user_reply_block_permanent = bool(permanent)
         ticket.user_reply_block_until = until
-        ticket.updated_at = datetime.utcnow()
+        ticket.updated_at = datetime.now(UTC)
         await db.commit()
         return True
 
     @staticmethod
     async def close_ticket(db: AsyncSession, ticket_id: int) -> bool:
         """Закрыть тикет"""
-        return await TicketCRUD.update_ticket_status(db, ticket_id, TicketStatus.CLOSED.value, datetime.utcnow())
+        return await TicketCRUD.update_ticket_status(db, ticket_id, TicketStatus.CLOSED.value, datetime.now(UTC))
 
     @staticmethod
     async def close_all_open_tickets(
@@ -280,7 +280,7 @@ class TicketCRUD:
         if not ticket_ids:
             return []
 
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         await db.execute(
             update(Ticket)
             .where(Ticket.id.in_(ticket_ids))
@@ -417,7 +417,7 @@ class TicketMessageCRUD:
                 except Exception:
                     pass
 
-            ticket.updated_at = datetime.utcnow()
+            ticket.updated_at = datetime.now(UTC)
 
         await db.commit()
         await db.refresh(message)

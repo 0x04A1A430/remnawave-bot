@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -118,13 +118,13 @@ async def ensure_default_templates(db: AsyncSession, *, created_by: int | None =
 
             if should_update and new_message:
                 existing.message_text = new_message
-                existing.updated_at = datetime.utcnow()
+                existing.updated_at = datetime.now(UTC)
                 await db.flush()
 
             target_active_hours = template_data.get('active_discount_hours')
             if target_active_hours is not None and target_active_hours > 0 and not existing.active_discount_hours:
                 existing.active_discount_hours = target_active_hours
-                existing.updated_at = datetime.utcnow()
+                existing.updated_at = datetime.now(UTC)
                 await db.flush()
             templates.append(existing)
             continue
@@ -204,7 +204,7 @@ async def update_promo_offer_template(
     if is_active is not None:
         template.is_active = is_active
 
-    template.updated_at = datetime.utcnow()
+    template.updated_at = datetime.now(UTC)
 
     await db.commit()
     await db.refresh(template)

@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import structlog
 from aiogram import Dispatcher, F, types
@@ -722,7 +722,7 @@ async def process_promocode_expiry(message: types.Message, db_user: User, state:
 
         valid_until = None
         if expiry_days > 0:
-            valid_until = datetime.utcnow() + timedelta(days=expiry_days)
+            valid_until = datetime.now(UTC) + timedelta(days=expiry_days)
 
         type_map = {
             'balance': PromoCodeType.BALANCE,
@@ -803,7 +803,7 @@ async def process_discount_hours(message: types.Message, db_user: User, state: F
 
         valid_until = None
         if expiry_days > 0:
-            valid_until = datetime.utcnow() + timedelta(days=expiry_days)
+            valid_until = datetime.now(UTC) + timedelta(days=expiry_days)
 
         # Создаем DISCOUNT промокод
         # balance_bonus_kopeks = процент скидки (НЕ копейки!)
@@ -877,7 +877,7 @@ async def handle_edit_expiry(message: types.Message, db_user: User, state: FSMCo
 
         valid_until = None
         if expiry_days > 0:
-            valid_until = datetime.utcnow() + timedelta(days=expiry_days)
+            valid_until = datetime.now(UTC) + timedelta(days=expiry_days)
 
         await update_promocode(db, promo, valid_until=valid_until)
 

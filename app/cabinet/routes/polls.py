@@ -1,6 +1,6 @@
 """Polls routes for cabinet - user participation in polls/surveys."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -247,7 +247,7 @@ async def start_poll(
 
     # Mark as started if not already
     if not response.started_at:
-        response.started_at = datetime.utcnow()
+        response.started_at = datetime.now(UTC)
         await db.commit()
 
     # Get next unanswered question
@@ -346,7 +346,7 @@ async def answer_question(
         )
 
     # Poll completed
-    response.completed_at = datetime.utcnow()
+    response.completed_at = datetime.now(UTC)
     await db.commit()
 
     # Award reward if any

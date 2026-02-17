@@ -9,7 +9,7 @@
 
 import re
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -305,13 +305,13 @@ class ReferralDiagnosticsService:
 
     def _find_log_file(self) -> Path:
         """Ищет существующий лог-файл, предпочитая свежие."""
-        today = datetime.now().date()
+        today = datetime.now(UTC).date()
         candidates = []
 
         for path_str in self.LOG_PATHS:
             path = Path(path_str)
             if path.exists() and path.stat().st_size > 0:
-                mtime = datetime.fromtimestamp(path.stat().st_mtime).date()
+                mtime = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC).date()
                 is_fresh = mtime >= today - timedelta(days=1)
                 candidates.append((path, is_fresh, path.stat().st_mtime))
                 logger.info('📁 Найден лог: (свежий: )', path=path, is_fresh=is_fresh)
@@ -339,7 +339,7 @@ class ReferralDiagnosticsService:
 
     async def analyze_today(self, db: AsyncSession) -> DiagnosticReport:
         """Анализирует реферальные события за сегодня."""
-        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        today = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
         tomorrow = today + timedelta(days=1)
         return await self.analyze_period(db, today, tomorrow)
 
@@ -382,8 +382,8 @@ class ReferralDiagnosticsService:
 
         # Парсим весь файл без фильтра по дате
         # Используем широкий диапазон дат (все время)
-        start_date = datetime(2000, 1, 1)
-        end_date = datetime(2100, 1, 1)
+        start_date = datetime(2000, 1, 1, tzinfo=UTC)
+        end_date = datetime(2100, 1, 1, tzinfo=UTC)
 
         # Временно меняем путь к логу
         original_log_path = self.log_path
@@ -473,7 +473,7 @@ class ReferralDiagnosticsService:
 
                     timestamp_str, message = match.groups()
                     try:
-                        timestamp = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
+                        timestamp = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S').replace(tzinfo=UTC)
                     except ValueError:
                         continue
 
@@ -596,14 +596,12 @@ class ReferralDiagnosticsService:
         - Реферал зарегистрирован в период конкурса
         - Событие ещё не было добавлено
         """
-        from datetime import datetime
-
         from app.database.crud.referral_contest import add_contest_event, get_contests_for_events
 
         if not settings.is_contests_enabled():
             return
 
-        now_utc = datetime.utcnow()
+        now_utc = datetime.now(UTC)
 
         # Проверяем конкурсы по оплаченным рефералам
         contests = await get_contests_for_events(db, now_utc, contest_types=['referral_paid'])
@@ -611,15 +609,9 @@ class ReferralDiagnosticsService:
         for contest in contests:
             try:
                 # Проверяем что реферал зарегистрировался В ПЕРИОД конкурса
-                user_created_at = (
-                    referral.created_at
-                    if referral.created_at.tzinfo is None
-                    else referral.created_at.replace(tzinfo=None)
-                )
-                contest_start = (
-                    contest.start_at if contest.start_at.tzinfo is None else contest.start_at.replace(tzinfo=None)
-                )
-                contest_end = contest.end_at if contest.end_at.tzinfo is None else contest.end_at.replace(tzinfo=None)
+                user_created_at = referral.created_at
+                contest_start = contest.start_at
+                contest_end = contest.end_at
 
                 if user_created_at < contest_start or user_created_at > contest_end:
                     logger.debug(
@@ -650,15 +642,9 @@ class ReferralDiagnosticsService:
 
         for contest in reg_contests:
             try:
-                user_created_at = (
-                    referral.created_at
-                    if referral.created_at.tzinfo is None
-                    else referral.created_at.replace(tzinfo=None)
-                )
-                contest_start = (
-                    contest.start_at if contest.start_at.tzinfo is None else contest.start_at.replace(tzinfo=None)
-                )
-                contest_end = contest.end_at if contest.end_at.tzinfo is None else contest.end_at.replace(tzinfo=None)
+                user_created_at = referral.created_at
+                contest_start = contest.start_at
+                contest_end = contest.end_at
 
                 if user_created_at < contest_start or user_created_at > contest_end:
                     continue

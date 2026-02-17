@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime
+from datetime import UTC, datetime
 
 import structlog
 from aiogram import Dispatcher, F, types
@@ -113,7 +113,7 @@ async def handle_poll_start(
         return
 
     if not response.started_at:
-        response.started_at = datetime.utcnow()
+        response.started_at = datetime.now(UTC)
         await db.commit()
 
     index, question = await get_next_question(response)
@@ -213,7 +213,7 @@ async def handle_poll_answer(
         await callback.answer()
         return
 
-    response.completed_at = datetime.utcnow()
+    response.completed_at = datetime.now(UTC)
     await db.commit()
 
     reward_amount = await reward_user_for_poll(db, response)

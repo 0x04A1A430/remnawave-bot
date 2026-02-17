@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 import structlog
 from sqlalchemy import select, update
@@ -30,7 +30,7 @@ async def create_or_update_rules(
 
     for rule in existing_rules:
         rule.is_active = False
-        rule.updated_at = datetime.utcnow()
+        rule.updated_at = datetime.now(UTC)
 
     new_rules = ServiceRule(title=title, content=content, language=language, is_active=True, order=0)
 
@@ -47,7 +47,7 @@ async def clear_all_rules(db: AsyncSession, language: str = 'ru') -> bool:
         result = await db.execute(
             update(ServiceRule)
             .where(ServiceRule.language == language, ServiceRule.is_active == True)
-            .values(is_active=False, updated_at=datetime.utcnow())
+            .values(is_active=False, updated_at=datetime.now(UTC))
         )
 
         await db.commit()
@@ -110,7 +110,7 @@ async def restore_rules_version(db: AsyncSession, rule_id: int, language: str = 
         await db.execute(
             update(ServiceRule)
             .where(ServiceRule.language == language, ServiceRule.is_active == True)
-            .values(is_active=False, updated_at=datetime.utcnow())
+            .values(is_active=False, updated_at=datetime.now(UTC))
         )
 
         restored_rule = ServiceRule(

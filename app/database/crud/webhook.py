@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -94,7 +94,7 @@ async def update_webhook(
     if is_active is not None:
         webhook.is_active = is_active
 
-    webhook.updated_at = datetime.utcnow()
+    webhook.updated_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(webhook)
     return webhook
@@ -127,7 +127,7 @@ async def record_webhook_delivery(
         response_body=response_body,
         error_message=error_message,
         attempt_number=attempt_number,
-        delivered_at=datetime.utcnow() if status == 'success' else None,
+        delivered_at=datetime.now(UTC) if status == 'success' else None,
     )
     db.add(delivery)
     await db.commit()
@@ -145,7 +145,7 @@ async def update_webhook_stats(
         webhook.success_count += 1
     else:
         webhook.failure_count += 1
-    webhook.last_triggered_at = datetime.utcnow()
+    webhook.last_triggered_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(webhook)
     return webhook

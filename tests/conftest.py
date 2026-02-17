@@ -88,7 +88,7 @@ if 'yookassa' not in sys.modules:
                 metadata = {}
                 amount = types.SimpleNamespace(value='0.00', currency='RUB')
                 confirmation = types.SimpleNamespace(confirmation_url='https://example.com')
-                created_at = datetime.utcnow()
+                created_at = datetime.now(UTC)
                 description = ''
                 test = False
 

@@ -3,7 +3,7 @@
 """
 
 import tempfile
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -23,7 +23,7 @@ def temp_log_file():
 @pytest.fixture
 def sample_log_content():
     """Пример содержимого лог-файла с реферальными событиями."""
-    today = datetime.now().strftime('%Y-%m-%d')
+    today = datetime.now(UTC).strftime('%Y-%m-%d')
     return f"""
 {today} 10:00:00,123 - app.handlers.start - INFO - 🔎 Найден реферальный код: <ABC123>
 {today} 10:00:05,456 - app.handlers.start - INFO - ✅ Реферальный код ABC123 применен для пользователя 123456789
@@ -47,7 +47,7 @@ async def test_parse_logs_basic(temp_log_file, sample_log_content):
 
     service = ReferralDiagnosticsService(log_path=str(temp_log_file))
 
-    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    today = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
     tomorrow = today + timedelta(days=1)
 
     events = await service._parse_logs(today, tomorrow)
@@ -70,7 +70,7 @@ async def test_analyze_period_with_issues(temp_log_file, sample_log_content):
 
     service = ReferralDiagnosticsService(log_path=str(temp_log_file))
 
-    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    today = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
     tomorrow = today + timedelta(days=1)
 
     # Используем None вместо db для базового теста парсинга
@@ -100,7 +100,7 @@ async def test_empty_log_file(temp_log_file):
 
     service = ReferralDiagnosticsService(log_path=str(temp_log_file))
 
-    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    today = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
     tomorrow = today + timedelta(days=1)
 
     from unittest.mock import AsyncMock
@@ -121,7 +121,7 @@ async def test_nonexistent_log_file():
     """Тест работы с несуществующим лог-файлом."""
     service = ReferralDiagnosticsService(log_path='/nonexistent/path/to/log.log')
 
-    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    today = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
     tomorrow = today + timedelta(days=1)
 
     from unittest.mock import AsyncMock
@@ -149,5 +149,5 @@ async def test_analyze_today(temp_log_file, sample_log_content):
     report = await service.analyze_today(mock_db)
 
     # Проверяем что период установлен корректно
-    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    today = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
     assert report.analysis_period_start.date() == today.date()

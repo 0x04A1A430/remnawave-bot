@@ -3,7 +3,7 @@ import io
 import math
 import time
 from collections.abc import Iterable
-from datetime import datetime
+from datetime import UTC, datetime
 
 from aiogram import Dispatcher, F, types
 from aiogram.filters import BaseFilter, StateFilter
@@ -742,7 +742,7 @@ async def export_settings(
     keys = sorted(set(keys))
     lines = [
         '# RemnaWave bot configuration export',
-        f'# Generated at {datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")}',
+        f'# Generated at {datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")}',
     ]
 
     for setting_key in keys:
@@ -753,7 +753,7 @@ async def export_settings(
         lines.append(f'{setting_key}={raw_value}')
 
     content = '\n'.join(lines)
-    filename = f'bot-settings-{datetime.utcnow().strftime("%Y%m%d-%H%M%S")}.env'
+    filename = f'bot-settings-{datetime.now(UTC).strftime("%Y%m%d-%H%M%S")}.env'
     file = types.BufferedInputFile(content.encode('utf-8'), filename=filename)
 
     await callback.message.answer_document(

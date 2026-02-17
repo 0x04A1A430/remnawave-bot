@@ -34,7 +34,7 @@ router = APIRouter(prefix='/auth/oauth', tags=['Cabinet OAuth'])
 
 async def _finalize_oauth_login(db: AsyncSession, user: User, provider: str) -> AuthResponse:
     """Update last login, create tokens, store refresh token."""
-    user.cabinet_last_login = datetime.now(UTC).replace(tzinfo=None)
+    user.cabinet_last_login = datetime.now(UTC)
     await db.commit()
     auth_response = _create_auth_response(user)
     await _store_refresh_token(db, user.id, auth_response.refresh_token, device_info=f'oauth:{provider}')

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 import structlog
 from sqlalchemy import and_, select
@@ -76,7 +76,7 @@ async def update_cryptobot_payment_status(
         return None
 
     payment.status = status
-    payment.updated_at = datetime.utcnow()
+    payment.updated_at = datetime.now(UTC)
 
     if status == 'paid' and paid_at:
         payment.paid_at = paid_at
@@ -97,7 +97,7 @@ async def link_cryptobot_payment_to_transaction(
         return None
 
     payment.transaction_id = transaction_id
-    payment.updated_at = datetime.utcnow()
+    payment.updated_at = datetime.now(UTC)
 
     await db.commit()
     await db.refresh(payment)
@@ -120,9 +120,9 @@ async def get_user_cryptobot_payments(
 
 
 async def get_pending_cryptobot_payments(db: AsyncSession, older_than_hours: int = 24) -> list[CryptoBotPayment]:
-    from datetime import timedelta
+    from datetime import UTC, timedelta
 
-    cutoff_time = datetime.utcnow() - timedelta(hours=older_than_hours)
+    cutoff_time = datetime.now(UTC) - timedelta(hours=older_than_hours)
 
     result = await db.execute(
         select(CryptoBotPayment)

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 import structlog
 from aiogram import Bot
@@ -141,14 +141,14 @@ async def maybe_assign_promo_group_by_total_spent(
             await sync_user_primary_promo_group(db, user_id)
             if target_threshold > previous_threshold:
                 user.auto_promo_group_threshold_kopeks = target_threshold
-                user.updated_at = datetime.utcnow()
+                user.updated_at = datetime.now(UTC)
                 await db.commit()
                 await db.refresh(user)
             return target_group
 
         user.auto_promo_group_assigned = True
         user.auto_promo_group_threshold_kopeks = target_threshold
-        user.updated_at = datetime.utcnow()
+        user.updated_at = datetime.now(UTC)
 
         if not already_has_group:
             # Добавляем новую промогруппу к существующим

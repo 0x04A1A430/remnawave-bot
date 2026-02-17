@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -197,7 +197,7 @@ async def test_auto_purchase_saved_cart_after_topup_extension(monkeypatch):
     subscription.id = 99
     subscription.is_trial = False
     subscription.status = 'active'
-    subscription.end_date = datetime.utcnow()
+    subscription.end_date = datetime.now(UTC)
     subscription.device_limit = 1
     subscription.traffic_limit_gb = 100
     subscription.connected_squads = ['squad-a']
@@ -319,7 +319,7 @@ async def test_auto_purchase_trial_preserved_on_insufficient_balance(monkeypatch
     subscription.id = 123
     subscription.is_trial = True  # Триальная подписка!
     subscription.status = 'active'
-    subscription.end_date = datetime.utcnow() + timedelta(days=2)  # Осталось 2 дня
+    subscription.end_date = datetime.now(UTC) + timedelta(days=2)  # Осталось 2 дня
     subscription.device_limit = 1
     subscription.traffic_limit_gb = 10
     subscription.connected_squads = []
@@ -403,7 +403,7 @@ async def test_auto_purchase_trial_converted_after_successful_extension(monkeypa
     subscription.id = 456
     subscription.is_trial = True  # Триальная подписка!
     subscription.status = 'active'
-    subscription.end_date = datetime.utcnow() + timedelta(days=1)
+    subscription.end_date = datetime.now(UTC) + timedelta(days=1)
     subscription.device_limit = 1
     subscription.traffic_limit_gb = 10
     subscription.connected_squads = []
@@ -519,7 +519,7 @@ async def test_auto_purchase_trial_preserved_on_extension_failure(monkeypatch):
     subscription.id = 789
     subscription.is_trial = True  # Триальная подписка!
     subscription.status = 'active'
-    subscription.end_date = datetime.utcnow() + timedelta(days=3)
+    subscription.end_date = datetime.now(UTC) + timedelta(days=3)
     subscription.device_limit = 1
     subscription.traffic_limit_gb = 10
     subscription.connected_squads = []
@@ -610,7 +610,7 @@ async def test_auto_purchase_trial_remaining_days_transferred(monkeypatch):
     monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', True)
     monkeypatch.setattr(settings, 'TRIAL_ADD_REMAINING_DAYS_TO_PAID', True)  # Включено!
 
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     trial_end = now + timedelta(days=2)  # Осталось 2 дня триала
 
     subscription = MagicMock()

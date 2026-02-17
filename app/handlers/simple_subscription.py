@@ -1,7 +1,7 @@
 """Обработчики для простой покупки подписки."""
 
 import html
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -137,7 +137,7 @@ async def start_simple_subscription_purchase(
         elif getattr(current_subscription, 'is_trial', False):
             # Это тестовая подписка
             try:
-                days_left = max(0, (current_subscription.end_date - datetime.utcnow()).days)
+                days_left = max(0, (current_subscription.end_date - datetime.now(UTC)).days)
             except Exception:
                 days_left = 0
             key = (

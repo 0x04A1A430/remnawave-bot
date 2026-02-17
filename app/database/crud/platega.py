@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -115,7 +115,7 @@ async def update_platega_payment(
     if expires_at is not None:
         payment.expires_at = expires_at
 
-    payment.updated_at = datetime.utcnow()
+    payment.updated_at = datetime.now(UTC)
 
     await db.commit()
     await db.refresh(payment)
@@ -129,7 +129,7 @@ async def link_platega_payment_to_transaction(
     transaction_id: int,
 ) -> PlategaPayment:
     payment.transaction_id = transaction_id
-    payment.updated_at = datetime.utcnow()
+    payment.updated_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(payment)
     return payment

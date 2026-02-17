@@ -1,5 +1,5 @@
 from collections.abc import Sequence
-from datetime import date, datetime, time
+from datetime import UTC, date, datetime, time
 
 import structlog
 from sqlalchemy import and_, desc, func, select
@@ -165,7 +165,7 @@ async def add_contest_event(
         referral_id=referral_id,
         amount_kopeks=amount_kopeks,
         event_type=event_type,
-        occurred_at=datetime.utcnow(),
+        occurred_at=datetime.now(UTC),
     )
     db.add(event)
     await db.commit()
@@ -512,7 +512,7 @@ async def upsert_contest_event(
         referral_id=referral_id,
         amount_kopeks=amount_kopeks,
         event_type=event_type,
-        occurred_at=datetime.utcnow(),
+        occurred_at=datetime.now(UTC),
     )
     db.add(event)
     await db.commit()

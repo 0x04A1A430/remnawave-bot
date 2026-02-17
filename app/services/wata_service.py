@@ -153,8 +153,8 @@ class WataService:
             normalized = raw.replace('Z', '+00:00')
             parsed = datetime.fromisoformat(normalized)
             if parsed.tzinfo is None:
-                return parsed
-            return parsed.astimezone(UTC).replace(tzinfo=None)
+                return parsed.replace(tzinfo=UTC)
+            return parsed.astimezone(UTC)
         except (ValueError, TypeError):
             logger.debug('Failed to parse WATA datetime', raw=raw)
             return None
@@ -192,7 +192,7 @@ class WataService:
             expiration_minutes = int(ttl) if ttl is not None else None
 
         if expiration_minutes:
-            expiration_time = datetime.utcnow() + timedelta(minutes=expiration_minutes)
+            expiration_time = datetime.now(UTC) + timedelta(minutes=expiration_minutes)
             payload['expirationDateTime'] = self._format_datetime(expiration_time)
 
         if allow_arbitrary_amount:

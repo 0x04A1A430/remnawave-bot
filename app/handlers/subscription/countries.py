@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 from aiogram import types
 from aiogram.fsm.context import FSMContext
@@ -383,7 +383,7 @@ async def apply_countries_changes(callback: types.CallbackQuery, db_user: User, 
                 )
 
         subscription.connected_squads = selected_countries
-        subscription.updated_at = datetime.utcnow()
+        subscription.updated_at = datetime.now(UTC)
         await db.commit()
 
         subscription_service = SubscriptionService()
@@ -900,7 +900,7 @@ async def confirm_add_countries_to_subscription(
             )
 
         subscription.connected_squads = selected_countries
-        subscription.updated_at = datetime.utcnow()
+        subscription.updated_at = datetime.now(UTC)
         await db.commit()
 
         subscription_service = SubscriptionService()

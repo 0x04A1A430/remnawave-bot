@@ -37,10 +37,10 @@ def _normalize_datetime(value: datetime | None) -> datetime | None:
         return None
 
     if value.tzinfo is not None and value.utcoffset() is not None:
-        return value.astimezone(UTC).replace(tzinfo=None)
+        return value.astimezone(UTC)
 
     if value.tzinfo is not None:
-        return value.replace(tzinfo=None)
+        return value
 
     return value
 

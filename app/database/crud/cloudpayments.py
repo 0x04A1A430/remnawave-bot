@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -127,7 +127,7 @@ async def update_cloudpayments_payment(
         if hasattr(payment, key):
             setattr(payment, key, value)
 
-    payment.updated_at = datetime.utcnow()
+    payment.updated_at = datetime.now(UTC)
     await db.flush()
     await db.refresh(payment)
 
@@ -171,7 +171,7 @@ async def mark_cloudpayments_payment_as_paid(
 
     payment.status = 'completed'
     payment.is_paid = True
-    payment.paid_at = datetime.utcnow()
+    payment.paid_at = datetime.now(UTC)
 
     if transaction_id_cp is not None:
         payment.transaction_id_cp = transaction_id_cp
@@ -190,7 +190,7 @@ async def mark_cloudpayments_payment_as_paid(
     if callback_payload:
         payment.callback_payload = callback_payload
 
-    payment.updated_at = datetime.utcnow()
+    payment.updated_at = datetime.now(UTC)
     await db.flush()
     await db.refresh(payment)
 

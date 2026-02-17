@@ -68,7 +68,7 @@ async def get_main_menu_keyboard_async(
                 subscription_days_left = subscription.days_left
             elif hasattr(subscription, 'end_date') and subscription.end_date:
                 # Fallback: вычисляем вручную, используя UTC
-                now_utc = datetime.now(UTC).replace(tzinfo=None)
+                now_utc = datetime.now(UTC)
                 days_left = (subscription.end_date - now_utc).days
                 subscription_days_left = max(0, days_left)
 
@@ -93,7 +93,7 @@ async def get_main_menu_keyboard_async(
 
             # Дни с регистрации
             if hasattr(user, 'created_at') and user.created_at:
-                now_utc = datetime.now(UTC).replace(tzinfo=None)
+                now_utc = datetime.now(UTC)
                 registration_days = (now_utc - user.created_at).days
 
             # ID промо-группы
@@ -2033,9 +2033,9 @@ def get_change_devices_keyboard(
     # Для суточных тарифов считаем по дням, для обычных - по месяцам
     if is_daily_tariff and subscription_end_date:
         # Суточный тариф: цена за оставшиеся дни (обычно 1 день)
-        from datetime import datetime
+        from datetime import UTC, datetime
 
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         days_left = max(1, (subscription_end_date - now).days)
         # Множитель = days_left / 30 (как в кабинете)
         price_multiplier = days_left / 30

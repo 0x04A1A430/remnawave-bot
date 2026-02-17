@@ -1,6 +1,6 @@
 """Admin routes for managing users in cabinet."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -35,7 +35,7 @@ from app.database.models import (
     User,
     UserStatus,
 )
-from app.utils.timezone import panel_datetime_to_naive_utc
+from app.utils.timezone import panel_datetime_to_utc
 
 from ..dependencies import get_cabinet_db, get_current_admin_user
 from ..schemas.users import (
@@ -144,9 +144,9 @@ def _build_subscription_info(subscription: Subscription, tariff_name: str | None
     is_active = False
 
     if subscription.end_date:
-        delta = subscription.end_date - datetime.utcnow()
+        delta = subscription.end_date - datetime.now(UTC)
         days_remaining = max(0, delta.days)
-        is_active = subscription.status == SubscriptionStatus.ACTIVE.value and subscription.end_date > datetime.utcnow()
+        is_active = subscription.status == SubscriptionStatus.ACTIVE.value and subscription.end_date > datetime.now(UTC)
 
     return UserSubscriptionInfo(
         id=subscription.id,
@@ -174,7 +174,7 @@ async def _build_subscription_info_async(db: AsyncSession, subscription: Subscri
             tariff_name = tariff.name
 
     # Fetch traffic purchases
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     tp_query = (
         select(TrafficPurchase)
         .where(TrafficPurchase.subscription_id == subscription.id)
@@ -225,13 +225,13 @@ async def _sync_subscription_to_panel(db: AsyncSession, user: User, subscription
         is_active = (
             subscription.status in (SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value)
             and subscription.end_date
-            and subscription.end_date > datetime.utcnow()
+            and subscription.end_date > datetime.now(UTC)
         )
         panel_status = PanelUserStatus.ACTIVE if is_active else PanelUserStatus.DISABLED
 
         expire_at = subscription.end_date
-        if expire_at and expire_at <= datetime.utcnow():
-            expire_at = datetime.utcnow() + timedelta(minutes=1)
+        if expire_at and expire_at <= datetime.now(UTC):
+            expire_at = datetime.now(UTC) + timedelta(minutes=1)
 
         username = settings.format_remnawave_username(
             full_name=user.full_name,
@@ -310,7 +310,7 @@ async def _sync_subscription_to_panel(db: AsyncSession, user: User, subscription
                 # Create new user
                 create_kwargs = {
                     'username': username,
-                    'expire_at': expire_at or (datetime.utcnow() + timedelta(days=30)),
+                    'expire_at': expire_at or (datetime.now(UTC) + timedelta(days=30)),
                     'status': panel_status,
                     'traffic_limit_bytes': traffic_limit_bytes,
                     'traffic_limit_strategy': TrafficLimitStrategy.MONTH,
@@ -330,7 +330,7 @@ async def _sync_subscription_to_panel(db: AsyncSession, user: User, subscription
                 changes['panel_uuid'] = new_panel_user.uuid
                 logger.info('Created user in Remnawave panel', user_id=user.id, uuid=new_panel_user.uuid)
 
-            user.last_remnawave_sync = datetime.utcnow()
+            user.last_remnawave_sync = datetime.now(UTC)
             await db.commit()
 
         return changes
@@ -421,7 +421,7 @@ async def get_users_stats(
             func.cast(
                 and_(
                     Subscription.status == SubscriptionStatus.ACTIVE.value,
-                    Subscription.end_date > datetime.utcnow(),
+                    Subscription.end_date > datetime.now(UTC),
                 ),
                 Integer,
             )
@@ -431,7 +431,7 @@ async def get_users_stats(
             func.cast(
                 or_(
                     Subscription.status == SubscriptionStatus.EXPIRED.value,
-                    Subscription.end_date <= datetime.utcnow(),
+                    Subscription.end_date <= datetime.now(UTC),
                 ),
                 Integer,
             )
@@ -456,7 +456,7 @@ async def get_users_stats(
     avg_balance = int(balance_row.avg or 0) if balance_row else 0
 
     # Get activity stats
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     week_ago = now - timedelta(days=7)
     month_ago = now - timedelta(days=30)
@@ -756,7 +756,7 @@ async def get_user_node_usage(
         if not service.is_configured:
             return UserNodeUsageResponse(items=[])
 
-        end_date = datetime.utcnow()
+        end_date = datetime.now(UTC)
         start_date = end_date - timedelta(days=30)
         start_str = start_date.strftime('%Y-%m-%d')
         end_str = end_date.strftime('%Y-%m-%d')
@@ -1011,7 +1011,7 @@ async def update_user_subscription(
             )
 
         subscription.end_date = request.end_date
-        if request.end_date > datetime.utcnow():
+        if request.end_date > datetime.now(UTC):
             subscription.status = SubscriptionStatus.ACTIVE.value
         else:
             subscription.status = SubscriptionStatus.EXPIRED.value
@@ -1107,7 +1107,7 @@ async def update_user_subscription(
 
     if request.action == 'cancel':
         subscription.status = SubscriptionStatus.EXPIRED.value
-        subscription.end_date = datetime.utcnow()
+        subscription.end_date = datetime.now(UTC)
         await db.commit()
         await db.refresh(subscription)
 
@@ -1124,9 +1124,9 @@ async def update_user_subscription(
 
     if request.action == 'activate':
         subscription.status = SubscriptionStatus.ACTIVE.value
-        if subscription.end_date and subscription.end_date <= datetime.utcnow():
+        if subscription.end_date and subscription.end_date <= datetime.now(UTC):
             # Extend by 30 days if expired
-            subscription.end_date = datetime.utcnow() + timedelta(days=30)
+            subscription.end_date = datetime.now(UTC) + timedelta(days=30)
         await db.commit()
         await db.refresh(subscription)
 
@@ -1196,7 +1196,7 @@ async def update_user_subscription(
         await db.delete(traffic_purchase)
 
         # Recalculate traffic_reset_at from remaining active purchases
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         remaining_query = select(TrafficPurchase).where(
             TrafficPurchase.subscription_id == subscription.id,
             TrafficPurchase.expires_at > now,
@@ -1388,7 +1388,7 @@ async def update_user_status(
         )
 
     user.status = new_status
-    user.updated_at = datetime.utcnow()
+    user.updated_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(user)
 
@@ -1456,7 +1456,7 @@ async def update_user_restrictions(
     if request.restriction_reason is not None:
         user.restriction_reason = request.restriction_reason
 
-    user.updated_at = datetime.utcnow()
+    user.updated_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(user)
 
@@ -1511,7 +1511,7 @@ async def update_user_promo_group(
         promo_group_name = promo_group.name
 
     user.promo_group_id = new_promo_group_id
-    user.updated_at = datetime.utcnow()
+    user.updated_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(user)
 
@@ -1552,7 +1552,7 @@ async def update_user_referral_commission(
 
     old_commission = user.referral_commission_percent
     user.referral_commission_percent = request.commission_percent
-    user.updated_at = datetime.utcnow()
+    user.updated_at = datetime.now(UTC)
     await db.commit()
 
     logger.info(
@@ -1837,7 +1837,7 @@ async def reset_user_trial(
 
     # Reset trial flag
     user.has_used_trial = False
-    user.updated_at = datetime.utcnow()
+    user.updated_at = datetime.now(UTC)
 
     await db.commit()
 
@@ -1907,7 +1907,7 @@ async def reset_user_subscription(
     await db.execute(delete(Subscription).where(Subscription.user_id == user_id))
     subscription_deleted = True
 
-    user.updated_at = datetime.utcnow()
+    user.updated_at = datetime.now(UTC)
     await db.commit()
 
     reason_text = f' (reason: {request.reason})' if request.reason else ''
@@ -1971,7 +1971,7 @@ async def disable_user(
 
     # Block user account
     user.status = UserStatus.BLOCKED.value
-    user.updated_at = datetime.utcnow()
+    user.updated_at = datetime.now(UTC)
     await db.commit()
 
     reason_text = f' (reason: {request.reason})' if request.reason else ''
@@ -2179,13 +2179,8 @@ async def get_user_sync_status(
                             differences.append(f'Status: bot={bot_sub_status}, panel={panel_status}')
 
                     if bot_sub_end_date and panel_expire_at:
-                        # Convert both to naive UTC for comparison
-                        # Bot dates are stored as naive UTC
-                        bot_end_utc = (
-                            bot_sub_end_date.replace(tzinfo=None) if bot_sub_end_date.tzinfo else bot_sub_end_date
-                        )
-                        # Panel returns local time with misleading +00:00 offset
-                        panel_end_utc = panel_datetime_to_naive_utc(panel_expire_at)
+                        bot_end_utc = bot_sub_end_date if bot_sub_end_date.tzinfo else bot_sub_end_date
+                        panel_end_utc = panel_datetime_to_utc(panel_expire_at)
 
                         diff_seconds = abs((bot_end_utc - panel_end_utc).total_seconds())
                         # Allow for timezone offset (3 hours = MSK) and small sync delays
@@ -2319,7 +2314,7 @@ async def sync_user_from_panel(
                 short_uuid=panel_user.short_uuid,
                 username=panel_user.username,
                 status=panel_user.status.value if panel_user.status else None,
-                expire_at=panel_datetime_to_naive_utc(panel_user.expire_at) if panel_user.expire_at else None,
+                expire_at=panel_datetime_to_utc(panel_user.expire_at) if panel_user.expire_at else None,
                 traffic_limit_gb=panel_user.traffic_limit_bytes / (1024**3) if panel_user.traffic_limit_bytes else 0,
                 traffic_used_gb=panel_user.used_traffic_bytes / (1024**3) if panel_user.used_traffic_bytes else 0,
                 device_limit=panel_user.hwid_device_limit or 1,
@@ -2338,13 +2333,10 @@ async def sync_user_from_panel(
 
                 # Update end date (normalize timezone)
                 if panel_user.expire_at:
-                    # Panel returns local time with misleading +00:00 offset
-                    panel_expire_utc = panel_datetime_to_naive_utc(panel_user.expire_at)
+                    panel_expire_utc = panel_datetime_to_utc(panel_user.expire_at)
 
-                    sub_end_naive = (
-                        sub.end_date.replace(tzinfo=None) if sub.end_date and sub.end_date.tzinfo else sub.end_date
-                    )
-                    if sub_end_naive != panel_expire_utc:
+                    sub_end_utc = sub.end_date if sub.end_date and sub.end_date.tzinfo else sub.end_date
+                    if sub_end_utc != panel_expire_utc:
                         changes['end_date'] = {
                             'old': sub.end_date.isoformat() if sub.end_date else None,
                             'new': panel_expire_utc.isoformat(),
@@ -2353,7 +2345,7 @@ async def sync_user_from_panel(
 
                 # Update status
                 panel_status_str = panel_user.status.value if panel_user.status else 'DISABLED'
-                now = datetime.utcnow()
+                now = datetime.now(UTC)
                 # Compare with normalized panel expire date
                 panel_expire_for_check = panel_expire_utc if panel_user.expire_at else None
                 if panel_status_str == 'ACTIVE' and panel_expire_for_check and panel_expire_for_check > now:
@@ -2410,9 +2402,8 @@ async def sync_user_from_panel(
                 panel_traffic_limit = (
                     int(panel_user.traffic_limit_bytes / (1024**3)) if panel_user.traffic_limit_bytes else 100
                 )
-                # Panel returns local time with misleading +00:00 offset
-                panel_expire_naive = panel_datetime_to_naive_utc(panel_user.expire_at)
-                days_remaining = max(1, (panel_expire_naive - datetime.utcnow()).days)
+                panel_expire_utc = panel_datetime_to_utc(panel_user.expire_at)
+                days_remaining = max(1, (panel_expire_utc - datetime.now(UTC)).days)
 
                 new_sub = await create_paid_subscription(
                     db=db,
@@ -2427,8 +2418,8 @@ async def sync_user_from_panel(
                 changes['subscription_created'] = True
 
             # Update last sync time
-            user.last_remnawave_sync = datetime.utcnow()
-            user.updated_at = datetime.utcnow()
+            user.last_remnawave_sync = datetime.now(UTC)
+            user.updated_at = datetime.now(UTC)
 
             await db.commit()
 
@@ -2502,14 +2493,14 @@ async def sync_user_to_panel(
         is_active = (
             sub.status in (SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value)
             and sub.end_date
-            and sub.end_date > datetime.utcnow()
+            and sub.end_date > datetime.now(UTC)
         )
         panel_status = PanelUserStatus.ACTIVE if is_active else PanelUserStatus.DISABLED
 
         # Ensure expire_at is in future for panel
         expire_at = sub.end_date
-        if expire_at and expire_at <= datetime.utcnow():
-            expire_at = datetime.utcnow() + timedelta(minutes=1)
+        if expire_at and expire_at <= datetime.now(UTC):
+            expire_at = datetime.now(UTC) + timedelta(minutes=1)
 
         username = settings.format_remnawave_username(
             full_name=user.full_name,
@@ -2595,7 +2586,7 @@ async def sync_user_to_panel(
                 # Create new user in panel
                 create_kwargs = {
                     'username': username,
-                    'expire_at': expire_at or (datetime.utcnow() + timedelta(days=30)),
+                    'expire_at': expire_at or (datetime.now(UTC) + timedelta(days=30)),
                     'status': panel_status,
                     'traffic_limit_bytes': traffic_limit_bytes,
                     'traffic_limit_strategy': TrafficLimitStrategy.MONTH,
@@ -2620,8 +2611,8 @@ async def sync_user_to_panel(
                 action = 'created'
 
             # Update last sync time
-            user.last_remnawave_sync = datetime.utcnow()
-            user.updated_at = datetime.utcnow()
+            user.last_remnawave_sync = datetime.now(UTC)
+            user.updated_at = datetime.now(UTC)
 
             await db.commit()
 

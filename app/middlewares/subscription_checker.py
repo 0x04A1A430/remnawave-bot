@@ -1,5 +1,5 @@
 from collections.abc import Awaitable, Callable
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
@@ -37,7 +37,7 @@ class SubscriptionStatusMiddleware(BaseMiddleware):
 
         if db and user and user.subscription:
             try:
-                current_time = datetime.utcnow()
+                current_time = datetime.now(UTC)
                 subscription = user.subscription
 
                 if (

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 import aiohttp
 import structlog
@@ -17,7 +17,7 @@ class CurrencyConverter:
         """Получает курс USD/RUB с кешированием"""
 
         cache_key = 'USD_RUB'
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
 
         # Проверяем кеш
         if (

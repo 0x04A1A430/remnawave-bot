@@ -1,7 +1,7 @@
 """Admin tickets routes for cabinet."""
 
 import math
-from datetime import datetime
+from datetime import UTC, datetime
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -447,13 +447,13 @@ async def reply_to_ticket(
         user_id=ticket.user_id,
         message_text=request.message,
         is_from_admin=True,
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(UTC),
     )
     db.add(message)
 
     # Update ticket status to answered
     ticket.status = 'answered'
-    ticket.updated_at = datetime.utcnow()
+    ticket.updated_at = datetime.now(UTC)
 
     await db.commit()
     await db.refresh(message)
@@ -522,9 +522,9 @@ async def update_ticket_status(
         )
 
     ticket.status = request.status
-    ticket.updated_at = datetime.utcnow()
+    ticket.updated_at = datetime.now(UTC)
     if request.status == 'closed':
-        ticket.closed_at = datetime.utcnow()
+        ticket.closed_at = datetime.now(UTC)
     else:
         ticket.closed_at = None
 
@@ -581,7 +581,7 @@ async def update_ticket_priority(
         )
 
     ticket.priority = request.priority
-    ticket.updated_at = datetime.utcnow()
+    ticket.updated_at = datetime.now(UTC)
 
     await db.commit()
     await db.refresh(ticket)

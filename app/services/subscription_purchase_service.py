@@ -1,6 +1,6 @@
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
@@ -1064,7 +1064,7 @@ class MiniAppSubscriptionPurchaseService:
                 context.subscription = subscription
 
         was_trial_conversion = False
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
 
         if subscription:
             bonus_period = timedelta()

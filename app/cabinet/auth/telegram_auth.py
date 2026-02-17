@@ -3,7 +3,7 @@
 import hashlib
 import hmac
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import parse_qsl, unquote
 
@@ -34,8 +34,8 @@ def validate_telegram_login_widget(data: dict[str, Any], max_age_seconds: int = 
     if auth_date:
         try:
             # Use UTC timestamp to avoid timezone issues
-            auth_time = datetime.utcfromtimestamp(int(auth_date))
-            age = (datetime.utcnow() - auth_time).total_seconds()
+            auth_time = datetime.fromtimestamp(int(auth_date), tz=UTC)
+            age = (datetime.now(UTC) - auth_time).total_seconds()
             if age > max_age_seconds:
                 return False
         except (ValueError, TypeError, OSError):
@@ -81,8 +81,8 @@ def validate_telegram_init_data(init_data: str, max_age_seconds: int = 86400) ->
         if auth_date:
             try:
                 # Use UTC timestamp to avoid timezone issues
-                auth_time = datetime.utcfromtimestamp(int(auth_date))
-                age = (datetime.utcnow() - auth_time).total_seconds()
+                auth_time = datetime.fromtimestamp(int(auth_date), tz=UTC)
+                age = (datetime.now(UTC) - auth_time).total_seconds()
                 if age > max_age_seconds:
                     return None
             except (ValueError, TypeError, OSError):

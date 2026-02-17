@@ -83,7 +83,7 @@ class HeleketPaymentMixin:
 
         metadata: dict[str, Any] = {
             'language': language or settings.DEFAULT_LANGUAGE,
-            'created_at': datetime.utcnow().isoformat(),
+            'created_at': datetime.now(UTC).isoformat(),
         }
 
         try:
@@ -127,7 +127,7 @@ class HeleketPaymentMixin:
         expires_at: datetime | None = None
         if expires_at_raw:
             try:
-                expires_at = datetime.fromtimestamp(int(expires_at_raw))
+                expires_at = datetime.fromtimestamp(int(expires_at_raw), tz=UTC)
             except (TypeError, ValueError, OSError):
                 expires_at = None
 
@@ -222,14 +222,14 @@ class HeleketPaymentMixin:
         if paid_at_raw:
             try:
                 if isinstance(paid_at_raw, (int, float)):
-                    paid_at = datetime.utcfromtimestamp(float(paid_at_raw))
+                    paid_at = datetime.fromtimestamp(float(paid_at_raw), tz=UTC)
                 else:
                     paid_at = datetime.fromisoformat(str(paid_at_raw).replace('Z', '+00:00'))
             except (ValueError, TypeError):
                 paid_at = None
 
         if paid_at and paid_at.tzinfo is not None:
-            paid_at = paid_at.astimezone(UTC).replace(tzinfo=None)
+            paid_at = paid_at.astimezone(UTC)
 
         updated_payment = await heleket_crud.update_heleket_payment(
             db,
@@ -332,7 +332,7 @@ class HeleketPaymentMixin:
         was_first_topup = not user.has_made_first_topup
 
         user.balance_kopeks += amount_kopeks
-        user.updated_at = datetime.utcnow()
+        user.updated_at = datetime.now(UTC)
 
         await db.commit()
         await db.refresh(user)

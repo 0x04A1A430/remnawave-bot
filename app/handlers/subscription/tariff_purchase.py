@@ -1251,7 +1251,7 @@ async def confirm_daily_tariff_purchase(
     state: FSMContext,
 ):
     """Подтверждает покупку суточного тарифа."""
-    from datetime import datetime
+    from datetime import UTC, datetime
 
     tariff_id = int(callback.data.split(':')[1])
     tariff = await get_tariff_by_id(db, tariff_id)
@@ -1314,9 +1314,9 @@ async def confirm_daily_tariff_purchase(
             existing_subscription.status = 'active'
             existing_subscription.is_trial = False  # Сбрасываем триальный статус
             existing_subscription.is_daily_paused = False
-            existing_subscription.last_daily_charge_at = datetime.utcnow()
+            existing_subscription.last_daily_charge_at = datetime.now(UTC)
             # Для суточного тарифа ставим срок на 1 день
-            existing_subscription.end_date = datetime.utcnow() + timedelta(days=1)
+            existing_subscription.end_date = datetime.now(UTC) + timedelta(days=1)
 
             # Сбрасываем докупленный трафик при смене тарифа
             from sqlalchemy import delete as sql_delete
@@ -1344,7 +1344,7 @@ async def confirm_daily_tariff_purchase(
                 tariff_id=tariff.id,
             )
             # Устанавливаем время последнего списания
-            subscription.last_daily_charge_at = datetime.utcnow()
+            subscription.last_daily_charge_at = datetime.now(UTC)
             subscription.is_daily_paused = False
             await db.commit()
             await db.refresh(subscription)
@@ -2022,9 +2022,9 @@ async def select_tariff_switch(
         current_subscription = await get_subscription_by_user_id(db, db_user.id)
         days_warning = ''
         if current_subscription and current_subscription.end_date:
-            from datetime import datetime
+            from datetime import UTC, datetime
 
-            remaining = current_subscription.end_date - datetime.utcnow()
+            remaining = current_subscription.end_date - datetime.now(UTC)
             remaining_days = max(0, remaining.days)
             if remaining_days > 1:
                 days_warning = f'\n\n⚠️ <b>Внимание!</b> У вас осталось {remaining_days} дн. подписки.\nПри смене на суточный тариф они будут утеряны!'
@@ -2103,7 +2103,7 @@ async def select_tariff_switch_period(
     state: FSMContext,
 ):
     """Обрабатывает выбор периода для переключения тарифа."""
-    from datetime import datetime
+    from datetime import UTC, datetime
 
     parts = callback.data.split(':')
     tariff_id = int(parts[1])
@@ -2140,7 +2140,7 @@ async def select_tariff_switch_period(
     # Получаем текущую подписку для расчёта оставшегося времени
     subscription = await get_subscription_by_user_id(db, db_user.id)
     if subscription and subscription.end_date:
-        max(0, (subscription.end_date - datetime.utcnow()).days)
+        max(0, (subscription.end_date - datetime.now(UTC)).days)
 
     # При смене тарифа устанавливается ровно оплаченный период
     time_info = f'⏰ Будет установлено: {period} дней'
@@ -2361,7 +2361,7 @@ async def confirm_daily_tariff_switch(
     state: FSMContext,
 ):
     """Подтверждает смену на суточный тариф."""
-    from datetime import datetime
+    from datetime import UTC, datetime
 
     tariff_id = int(callback.data.split(':')[1])
     tariff = await get_tariff_by_id(db, tariff_id)
@@ -2426,9 +2426,9 @@ async def confirm_daily_tariff_switch(
         subscription.status = 'active'
         subscription.is_trial = False  # Сбрасываем триальный статус
         subscription.is_daily_paused = False
-        subscription.last_daily_charge_at = datetime.utcnow()
+        subscription.last_daily_charge_at = datetime.now(UTC)
         # Для суточного тарифа ставим срок на 1 день
-        subscription.end_date = datetime.utcnow() + timedelta(days=1)
+        subscription.end_date = datetime.now(UTC) + timedelta(days=1)
 
         # Сбрасываем докупленный трафик при смене тарифа
         from sqlalchemy import delete as sql_delete
@@ -2686,7 +2686,7 @@ async def show_instant_switch_list(
     state: FSMContext,
 ):
     """Показывает список тарифов для мгновенного переключения."""
-    from datetime import datetime
+    from datetime import UTC, datetime
 
     texts = get_texts(db_user.language)
     await state.clear()
@@ -2710,7 +2710,7 @@ async def show_instant_switch_list(
     # Рассчитываем оставшиеся дни
     remaining_days = 0
     if subscription.end_date:
-        remaining_days = max(0, (subscription.end_date - datetime.utcnow()).days)
+        remaining_days = max(0, (subscription.end_date - datetime.now(UTC)).days)
 
     if remaining_days == 0:
         await callback.message.edit_text(
@@ -2767,7 +2767,7 @@ async def preview_instant_switch(
     state: FSMContext,
 ):
     """Показывает превью мгновенного переключения тарифа."""
-    from datetime import datetime
+    from datetime import UTC, datetime
 
     tariff_id = int(callback.data.split(':')[1])
     new_tariff = await get_tariff_by_id(db, tariff_id)
@@ -2794,7 +2794,7 @@ async def preview_instant_switch(
         return
 
     if not remaining_days and subscription.end_date:
-        remaining_days = max(0, (subscription.end_date - datetime.utcnow()).days)
+        remaining_days = max(0, (subscription.end_date - datetime.now(UTC)).days)
 
     # Рассчитываем стоимость переключения
     upgrade_cost, is_upgrade = _calculate_instant_switch_cost(current_tariff, new_tariff, remaining_days, db_user)
@@ -2925,7 +2925,7 @@ async def confirm_instant_switch(
     state: FSMContext,
 ):
     """Подтверждает мгновенное переключение тарифа."""
-    from datetime import datetime, timedelta
+    from datetime import UTC, datetime, timedelta
 
     tariff_id = int(callback.data.split(':')[1])
     new_tariff = await get_tariff_by_id(db, tariff_id)
@@ -3013,10 +3013,10 @@ async def confirm_instant_switch(
                         description=f'Переключение на суточный тариф {new_tariff.name} (первый день)',
                     )
 
-            subscription.end_date = datetime.utcnow() + timedelta(days=1)
+            subscription.end_date = datetime.now(UTC) + timedelta(days=1)
             subscription.is_trial = False
             subscription.is_daily_paused = False
-            subscription.last_daily_charge_at = datetime.utcnow()
+            subscription.last_daily_charge_at = datetime.now(UTC)
 
         await db.commit()
         await db.refresh(subscription)

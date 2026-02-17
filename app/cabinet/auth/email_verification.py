@@ -1,7 +1,7 @@
 """Email verification token generation and validation."""
 
 import secrets
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from app.config import settings
 
@@ -24,7 +24,7 @@ def get_email_change_expires_at() -> datetime:
         Datetime when the email change code expires
     """
     minutes = settings.get_cabinet_email_change_code_expire_minutes()
-    return datetime.utcnow() + timedelta(minutes=minutes)
+    return datetime.now(UTC) + timedelta(minutes=minutes)
 
 
 def generate_verification_token() -> str:
@@ -55,7 +55,7 @@ def get_verification_expires_at() -> datetime:
         Datetime when the verification token expires
     """
     hours = settings.get_cabinet_email_verification_expire_hours()
-    return datetime.utcnow() + timedelta(hours=hours)
+    return datetime.now(UTC) + timedelta(hours=hours)
 
 
 def get_password_reset_expires_at() -> datetime:
@@ -66,7 +66,7 @@ def get_password_reset_expires_at() -> datetime:
         Datetime when the password reset token expires
     """
     hours = settings.get_cabinet_password_reset_expire_hours()
-    return datetime.utcnow() + timedelta(hours=hours)
+    return datetime.now(UTC) + timedelta(hours=hours)
 
 
 def is_token_expired(expires_at: datetime | None) -> bool:
@@ -81,4 +81,4 @@ def is_token_expired(expires_at: datetime | None) -> bool:
     """
     if expires_at is None:
         return True
-    return datetime.utcnow() > expires_at
+    return datetime.now(UTC) > expires_at

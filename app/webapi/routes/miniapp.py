@@ -427,7 +427,7 @@ def _compute_cryptobot_limits(rate: float) -> tuple[int, int]:
 
 
 def _current_request_timestamp() -> str:
-    return datetime.utcnow().replace(microsecond=0).isoformat()
+    return datetime.now(UTC).replace(microsecond=0).isoformat()
 
 
 def _compute_stars_min_amount() -> int | None:
@@ -517,7 +517,7 @@ def _parse_client_timestamp(value: str | float | None) -> datetime | None:
         if timestamp > 1e12:
             timestamp /= 1000.0
         try:
-            return datetime.fromtimestamp(timestamp, tz=UTC).replace(tzinfo=None)
+            return datetime.fromtimestamp(timestamp, tz=UTC)
         except (OverflowError, OSError, ValueError):
             return None
     if isinstance(value, str):
@@ -535,8 +535,8 @@ def _parse_client_timestamp(value: str | float | None) -> datetime | None:
         except ValueError:
             return None
         if parsed.tzinfo:
-            return parsed.astimezone(UTC).replace(tzinfo=None)
-        return parsed
+            return parsed.astimezone(UTC)
+        return parsed.replace(tzinfo=UTC)
     return None
 
 
@@ -559,7 +559,7 @@ async def _find_recent_deposit(
         if not timestamp:
             return False
         if timestamp.tzinfo:
-            timestamp = timestamp.astimezone(UTC).replace(tzinfo=None)
+            timestamp = timestamp.astimezone(UTC)
         return timestamp >= reference
 
     query = (
@@ -2493,7 +2493,7 @@ async def _find_active_test_access_offers(
     if not subscription or not getattr(subscription, 'id', None):
         return []
 
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     result = await db.execute(
         select(SubscriptionTemporaryAccess)
         .options(selectinload(SubscriptionTemporaryAccess.offer))
@@ -3204,7 +3204,7 @@ async def get_subscription_details(
         active_discount_percent = 0
 
     active_discount_expires_at = getattr(user, 'promo_offer_discount_expires_at', None)
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     if active_discount_expires_at and active_discount_expires_at <= now:
         active_discount_expires_at = None
         active_discount_percent = 0
@@ -3478,7 +3478,7 @@ async def get_subscription_details(
 
         from app.database.models import TrafficPurchase
 
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         purchases_query = (
             sql_select(TrafficPurchase)
             .where(TrafficPurchase.subscription_id == subscription.id)
@@ -4221,7 +4221,7 @@ async def claim_promo_offer(
             detail={'code': 'offer_not_found', 'message': 'Offer not found'},
         )
 
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     if offer.claimed_at is not None:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
@@ -5923,7 +5923,7 @@ async def update_subscription_servers_endpoint(
         ordered_selection.append(uuid)
 
     subscription.connected_squads = ordered_selection
-    subscription.updated_at = datetime.utcnow()
+    subscription.updated_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(subscription)
     try:
@@ -6082,7 +6082,7 @@ async def update_subscription_traffic_endpoint(
         )
 
     subscription.traffic_limit_gb = new_traffic
-    subscription.updated_at = datetime.utcnow()
+    subscription.updated_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(subscription)
     try:
@@ -6227,7 +6227,7 @@ async def update_subscription_devices_endpoint(
         )
 
     subscription.device_limit = new_devices
-    subscription.updated_at = datetime.utcnow()
+    subscription.updated_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(subscription)
     try:
@@ -6469,7 +6469,7 @@ async def get_tariffs_endpoint(
     # Вычисляем оставшиеся дни подписки
     remaining_days = 0
     if subscription and subscription.end_date:
-        delta = subscription.end_date - datetime.utcnow()
+        delta = subscription.end_date - datetime.now(UTC)
         remaining_days = max(0, delta.days)
 
     if current_tariff_id:
@@ -6675,9 +6675,9 @@ async def purchase_tariff_endpoint(
     is_daily_tariff = getattr(tariff, 'is_daily', False)
     if is_daily_tariff:
         subscription.is_daily_paused = False
-        subscription.last_daily_charge_at = datetime.utcnow()
+        subscription.last_daily_charge_at = datetime.now(UTC)
         # Для суточного тарифа end_date = сейчас + 1 день (первый день уже оплачен)
-        subscription.end_date = datetime.utcnow() + timedelta(days=1)
+        subscription.end_date = datetime.now(UTC) + timedelta(days=1)
         await db.commit()
         await db.refresh(subscription)
 
@@ -6850,8 +6850,8 @@ async def preview_tariff_switch_endpoint(
 
     # Рассчитываем оставшиеся дни
     remaining_days = 0
-    if subscription.end_date and subscription.end_date > datetime.utcnow():
-        delta = subscription.end_date - datetime.utcnow()
+    if subscription.end_date and subscription.end_date > datetime.now(UTC):
+        delta = subscription.end_date - datetime.now(UTC)
         remaining_days = max(0, delta.days)
 
     # Рассчитываем стоимость переключения
@@ -6951,8 +6951,8 @@ async def switch_tariff_endpoint(
 
     # Рассчитываем оставшиеся дни
     remaining_days = 0
-    if subscription.end_date and subscription.end_date > datetime.utcnow():
-        delta = subscription.end_date - datetime.utcnow()
+    if subscription.end_date and subscription.end_date > datetime.now(UTC):
+        delta = subscription.end_date - datetime.now(UTC)
         remaining_days = max(0, delta.days)
 
     # Рассчитываем стоимость
@@ -7037,9 +7037,9 @@ async def switch_tariff_endpoint(
     if new_is_daily:
         # Переход на суточный тариф
         subscription.is_daily_paused = False
-        subscription.last_daily_charge_at = datetime.utcnow()
+        subscription.last_daily_charge_at = datetime.now(UTC)
         # Для суточного тарифа end_date = сейчас + 1 день
-        subscription.end_date = datetime.utcnow() + timedelta(days=1)
+        subscription.end_date = datetime.now(UTC) + timedelta(days=1)
         logger.info('🔄 Смена на суточный тариф: установлены daily поля, end_date', end_date=subscription.end_date)
     elif old_is_daily and not new_is_daily:
         # Переход с суточного на обычный тариф - очищаем daily поля
@@ -7047,7 +7047,7 @@ async def switch_tariff_endpoint(
         subscription.last_daily_charge_at = None
         # Устанавливаем дату окончания для периодного тарифа
         if new_period_days > 0:
-            subscription.end_date = datetime.utcnow() + timedelta(days=new_period_days)
+            subscription.end_date = datetime.now(UTC) + timedelta(days=new_period_days)
             logger.info(
                 '🔄 Смена с суточного на периодный тариф: end_date= ( дней)',
                 end_date=subscription.end_date,
@@ -7325,8 +7325,8 @@ async def toggle_daily_subscription_pause_endpoint(
         if subscription.status == SubscriptionStatus.DISABLED.value:
             subscription.status = SubscriptionStatus.ACTIVE.value
             # Обновляем время последнего списания для корректного расчёта следующего
-            subscription.last_daily_charge_at = datetime.utcnow()
-            subscription.end_date = datetime.utcnow() + timedelta(days=1)
+            subscription.last_daily_charge_at = datetime.now(UTC)
+            subscription.end_date = datetime.now(UTC) + timedelta(days=1)
             logger.info('✅ Суточная подписка восстановлена из DISABLED в ACTIVE', subscription_id=subscription.id)
 
     await db.commit()

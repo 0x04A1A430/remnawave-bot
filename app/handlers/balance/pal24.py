@@ -1,5 +1,5 @@
 import html
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -220,7 +220,7 @@ async def _send_pal24_payment_message(
                 await db.execute(
                     update(payment.__class__)
                     .where(payment.__class__.id == payment.id)
-                    .values(metadata_json=metadata, updated_at=datetime.utcnow())
+                    .values(metadata_json=metadata, updated_at=datetime.now(UTC))
                 )
                 await db.commit()
         except Exception as error:  # pragma: no cover - diagnostics

@@ -1,5 +1,5 @@
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import UTC, datetime
 
 import structlog
 from sqlalchemy import and_, delete, desc, select
@@ -107,7 +107,7 @@ async def create_round(
 
 
 async def get_active_rounds(db: AsyncSession) -> list[ContestRound]:
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     result = await db.execute(
         select(ContestRound)
         .options(selectinload(ContestRound.template))
@@ -124,7 +124,7 @@ async def get_active_rounds(db: AsyncSession) -> list[ContestRound]:
 
 
 async def get_active_round_by_template(db: AsyncSession, template_id: int) -> ContestRound | None:
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     result = await db.execute(
         select(ContestRound)
         .options(selectinload(ContestRound.template))

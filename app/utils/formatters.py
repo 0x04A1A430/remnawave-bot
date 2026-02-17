@@ -1,15 +1,15 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 
 def format_datetime(dt: datetime | str, format_str: str = '%d.%m.%Y %H:%M') -> str:
     if isinstance(dt, str):
         if dt == 'now' or dt == '':
-            dt = datetime.now()
+            dt = datetime.now(UTC)
         else:
             try:
                 dt = datetime.fromisoformat(dt.replace('Z', '+00:00'))
             except (ValueError, AttributeError):
-                dt = datetime.now()
+                dt = datetime.now(UTC)
 
     return dt.strftime(format_str)
 
@@ -17,12 +17,12 @@ def format_datetime(dt: datetime | str, format_str: str = '%d.%m.%Y %H:%M') -> s
 def format_date(dt: datetime | str, format_str: str = '%d.%m.%Y') -> str:
     if isinstance(dt, str):
         if dt == 'now' or dt == '':
-            dt = datetime.now()
+            dt = datetime.now(UTC)
         else:
             try:
                 dt = datetime.fromisoformat(dt.replace('Z', '+00:00'))
             except (ValueError, AttributeError):
-                dt = datetime.now()
+                dt = datetime.now(UTC)
 
     return dt.strftime(format_str)
 
@@ -30,14 +30,14 @@ def format_date(dt: datetime | str, format_str: str = '%d.%m.%Y') -> str:
 def format_time_ago(dt: datetime | str, language: str = 'ru') -> str:
     if isinstance(dt, str):
         if dt == 'now' or dt == '':
-            dt = datetime.now()
+            dt = datetime.now(UTC)
         else:
             try:
                 dt = datetime.fromisoformat(dt.replace('Z', '+00:00'))
             except (ValueError, AttributeError):
-                dt = datetime.now()
+                dt = datetime.now(UTC)
 
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     diff = now - dt
 
     language_code = (language or 'ru').split('-')[0].lower()
@@ -179,7 +179,7 @@ def format_subscription_status(is_active: bool, is_trial: bool, end_date: dateti
         try:
             end_date = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
         except (ValueError, AttributeError):
-            end_date = datetime.now()
+            end_date = datetime.now(UTC)
 
     language_code = (language or 'ru').split('-')[0].lower()
     use_russian_fallback = language_code in {'ru', 'fa'}
@@ -192,7 +192,7 @@ def format_subscription_status(is_active: bool, is_trial: bool, end_date: dateti
     else:
         status = '✅ Активна' if use_russian_fallback else '✅ Active'
 
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     if end_date > now:
         days_left = (end_date - now).days
         if days_left > 0:

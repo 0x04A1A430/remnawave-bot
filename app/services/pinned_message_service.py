@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime
+from datetime import UTC, datetime
 
 import structlog
 from aiogram import Bot
@@ -86,7 +86,7 @@ async def deactivate_active_pinned_message(db: AsyncSession) -> PinnedMessage | 
         return None
 
     pinned_message.is_active = False
-    pinned_message.updated_at = datetime.utcnow()
+    pinned_message.updated_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(pinned_message)
     logger.info('Деактивировано закрепленное сообщение #', pinned_message_id=pinned_message.id)
@@ -276,7 +276,7 @@ async def _mark_pinned_delivery(
             .where(User.id == user_id)
             .values(
                 last_pinned_message_id=pinned_message_id,
-                updated_at=datetime.utcnow(),
+                updated_at=datetime.now(UTC),
             )
         )
         await session.commit()

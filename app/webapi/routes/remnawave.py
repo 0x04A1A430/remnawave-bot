@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Security, status
@@ -225,7 +225,7 @@ async def get_node_usage_range(
     service = _get_service()
     _ensure_service_configured(service)
 
-    end_dt = end or datetime.utcnow()
+    end_dt = end or datetime.now(UTC)
     start_dt = start or (end_dt - timedelta(days=7))
 
     if start_dt >= end_dt:

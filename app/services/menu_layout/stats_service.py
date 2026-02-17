@@ -12,14 +12,6 @@ from app.config import settings
 from app.database.models import ButtonClickLog
 
 
-def _utcnow() -> datetime:
-    """Возвращает текущее UTC время как naive datetime (без timezone).
-
-    Замена deprecated datetime.utcnow().
-    """
-    return datetime.now(UTC).replace(tzinfo=None)
-
-
 class MenuLayoutStatsService:
     """Сервис для сбора и анализа статистики кликов по кнопкам."""
 
@@ -104,7 +96,7 @@ class MenuLayoutStatsService:
         days: int = 30,
     ) -> dict[str, Any]:
         """Получить статистику кликов по конкретной кнопке."""
-        now = _utcnow()
+        now = datetime.now(UTC)
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         week_ago = now - timedelta(days=7)
         month_ago = now - timedelta(days=days)
@@ -172,7 +164,7 @@ class MenuLayoutStatsService:
         days: int = 30,
     ) -> list[dict[str, Any]]:
         """Получить статистику кликов по дням."""
-        start_date = _utcnow() - timedelta(days=days)
+        start_date = datetime.now(UTC) - timedelta(days=days)
 
         # Группировка по дате
         result = await db.execute(
@@ -191,7 +183,7 @@ class MenuLayoutStatsService:
         days: int = 30,
     ) -> list[dict[str, Any]]:
         """Получить статистику по всем кнопкам."""
-        now = _utcnow()
+        now = datetime.now(UTC)
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         week_ago = now - timedelta(days=7)
         month_ago = now - timedelta(days=days)
@@ -237,7 +229,7 @@ class MenuLayoutStatsService:
         days: int = 30,
     ) -> int:
         """Получить общее количество кликов за период."""
-        start_date = _utcnow() - timedelta(days=days)
+        start_date = datetime.now(UTC) - timedelta(days=days)
 
         result = await db.execute(select(func.count(ButtonClickLog.id)).where(ButtonClickLog.clicked_at >= start_date))
         return result.scalar() or 0
@@ -249,7 +241,7 @@ class MenuLayoutStatsService:
         days: int = 30,
     ) -> list[dict[str, Any]]:
         """Получить статистику кликов по типам кнопок."""
-        start_date = _utcnow() - timedelta(days=days)
+        start_date = datetime.now(UTC) - timedelta(days=days)
 
         result = await db.execute(
             select(
@@ -279,7 +271,7 @@ class MenuLayoutStatsService:
         days: int = 30,
     ) -> list[dict[str, Any]]:
         """Получить статистику кликов по часам дня."""
-        start_date = _utcnow() - timedelta(days=days)
+        start_date = datetime.now(UTC) - timedelta(days=days)
 
         # Используем helper-метод для совместимости с SQLite и PostgreSQL
         hour_expr = cls._get_hour_expr(ButtonClickLog.clicked_at).label('hour')
@@ -311,7 +303,7 @@ class MenuLayoutStatsService:
         Возвращает 0=понедельник, 6=воскресенье.
         Поддерживает как PostgreSQL, так и SQLite.
         """
-        start_date = _utcnow() - timedelta(days=days)
+        start_date = datetime.now(UTC) - timedelta(days=days)
 
         # Используем helper-метод для совместимости с SQLite и PostgreSQL
         weekday_expr = cls._get_weekday_expr(ButtonClickLog.clicked_at).label('weekday')
@@ -345,7 +337,7 @@ class MenuLayoutStatsService:
         days: int = 30,
     ) -> list[dict[str, Any]]:
         """Получить топ пользователей по количеству кликов."""
-        start_date = _utcnow() - timedelta(days=days)
+        start_date = datetime.now(UTC) - timedelta(days=days)
 
         query = select(
             ButtonClickLog.user_id,
@@ -378,7 +370,7 @@ class MenuLayoutStatsService:
         previous_days: int = 7,
     ) -> dict[str, Any]:
         """Сравнить статистику текущего и предыдущего периода."""
-        now = _utcnow()
+        now = datetime.now(UTC)
         current_start = now - timedelta(days=current_days)
         previous_start = current_start - timedelta(days=previous_days)
         previous_end = current_start

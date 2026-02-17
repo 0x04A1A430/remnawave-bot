@@ -2,7 +2,7 @@
 CRUD операции для колеса удачи (Fortune Wheel).
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -65,7 +65,7 @@ async def update_wheel_config(db: AsyncSession, **kwargs) -> WheelConfig:
         if hasattr(config, key) and value is not None:
             setattr(config, key, value)
 
-    config.updated_at = datetime.utcnow()
+    config.updated_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(config)
     logger.info('🎡 Обновлена конфигурация колеса', kwargs=kwargs)
@@ -143,7 +143,7 @@ async def update_wheel_prize(db: AsyncSession, prize_id: int, **kwargs) -> Wheel
         if hasattr(prize, key) and value is not None:
             setattr(prize, key, value)
 
-    prize.updated_at = datetime.utcnow()
+    prize.updated_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(prize)
     logger.info('🎁 Обновлен приз колеса ID', prize_id=prize_id, kwargs=kwargs)
@@ -204,7 +204,7 @@ async def create_wheel_spin(
         prize_value_kopeks=prize_value_kopeks,
         generated_promocode_id=generated_promocode_id,
         is_applied=is_applied,
-        applied_at=datetime.utcnow() if is_applied else None,
+        applied_at=datetime.now(UTC) if is_applied else None,
     )
     db.add(spin)
     await db.commit()
@@ -219,7 +219,7 @@ async def mark_spin_applied(db: AsyncSession, spin_id: int) -> WheelSpin | None:
     spin = result.scalar_one_or_none()
     if spin:
         spin.is_applied = True
-        spin.applied_at = datetime.utcnow()
+        spin.applied_at = datetime.now(UTC)
         await db.commit()
         await db.refresh(spin)
     return spin
@@ -227,7 +227,7 @@ async def mark_spin_applied(db: AsyncSession, spin_id: int) -> WheelSpin | None:
 
 async def get_user_spins_today(db: AsyncSession, user_id: int) -> int:
     """Получить количество спинов пользователя за сегодня."""
-    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
 
     result = await db.execute(
         select(func.count(WheelSpin.id)).where(

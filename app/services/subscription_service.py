@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import UTC, datetime
 
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -357,7 +357,7 @@ class SubscriptionService:
             except Exception:
                 pass  # tariff может быть None или уже загружен
 
-            current_time = datetime.utcnow()
+            current_time = datetime.now(UTC)
             # Определяем актуальный статус для отправки в RemnaWave
             # НЕ меняем статус подписки здесь - это задача scheduled job
             is_actually_active = (

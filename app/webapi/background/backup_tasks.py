@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 
 from app.services.backup_service import backup_service
 
@@ -15,8 +15,8 @@ class BackupTaskState:
     message: str | None = None
     file_path: str | None = None
     created_by: int | None = None
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 class BackupTaskManager:
@@ -36,7 +36,7 @@ class BackupTaskManager:
 
     async def _run_task(self, state: BackupTaskState) -> None:
         state.status = 'running'
-        state.updated_at = datetime.utcnow()
+        state.updated_at = datetime.now(UTC)
 
         try:
             success, message, file_path = await backup_service.create_backup(created_by=state.created_by)
@@ -47,7 +47,7 @@ class BackupTaskManager:
             state.status = 'failed'
             state.message = f'Unexpected error: {exc}'
         finally:
-            state.updated_at = datetime.utcnow()
+            state.updated_at = datetime.now(UTC)
 
     async def get(self, task_id: str) -> BackupTaskState | None:
         async with self._lock:

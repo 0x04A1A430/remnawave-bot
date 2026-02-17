@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from importlib import import_module
 from typing import Any
 
@@ -79,7 +79,7 @@ class KassaAiPaymentMixin:
         currency = settings.KASSA_AI_CURRENCY
 
         # Срок действия платежа (1 час по умолчанию)
-        expires_at = datetime.utcnow() + timedelta(hours=1)
+        expires_at = datetime.now(UTC) + timedelta(hours=1)
 
         # Метаданные
         metadata = {
@@ -283,7 +283,7 @@ class KassaAiPaymentMixin:
 
         # Начисляем баланс
         user.balance_kopeks += payment.amount_kopeks
-        user.updated_at = datetime.utcnow()
+        user.updated_at = datetime.now(UTC)
 
         promo_group = user.get_primary_promo_group()
         subscription = getattr(user, 'subscription', None)

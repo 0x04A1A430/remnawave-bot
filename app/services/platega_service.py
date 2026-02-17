@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import aiohttp
@@ -200,7 +200,7 @@ class PlategaService:
         try:
             hours, minutes, seconds = [int(part) for part in expires_in.split(':', 2)]
             delta = timedelta(hours=hours, minutes=minutes, seconds=seconds)
-            return datetime.utcnow() + delta
+            return datetime.now(UTC) + delta
         except Exception:
             logger.warning('Failed to parse Platega expiresIn value', expires_in=expires_in)
             return None

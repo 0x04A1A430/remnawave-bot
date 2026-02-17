@@ -1,6 +1,6 @@
 """Тесты для базовых форматтеров из app.utils.formatters."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from app.utils import formatters
 
@@ -19,7 +19,7 @@ def test_format_date_uses_custom_format(fixed_datetime: datetime) -> None:
 
 def test_format_time_ago_returns_human_readable_text() -> None:
     """Разница во времени должна переводиться в человеко-понятную строку."""
-    point_in_time = datetime.utcnow() - timedelta(minutes=5)
+    point_in_time = datetime.now(UTC) - timedelta(minutes=5)
     assert formatters.format_time_ago(point_in_time, language='ru') == '5 мин. назад'
     assert formatters.format_time_ago(point_in_time, language='en') == '5 minutes ago'
 
@@ -78,7 +78,7 @@ def test_format_username_prefers_full_name() -> None:
 
 def test_format_subscription_status_handles_active_and_expired() -> None:
     """Статус подписки различается для активных/просроченных случаев."""
-    future = datetime.utcnow() + timedelta(days=2)
+    future = datetime.now(UTC) + timedelta(days=2)
     active = formatters.format_subscription_status(
         is_active=True,
         is_trial=False,
@@ -88,7 +88,7 @@ def test_format_subscription_status_handles_active_and_expired() -> None:
     assert active.startswith('✅ Активна')
     assert '(' in active and ')' in active
 
-    past = datetime.utcnow() - timedelta(days=1)
+    past = datetime.now(UTC) - timedelta(days=1)
     expired = formatters.format_subscription_status(
         is_active=True,
         is_trial=False,

@@ -861,7 +861,7 @@ async def _auto_purchase_daily_tariff(
     bot: Bot | None = None,
 ) -> bool:
     """Автоматическая покупка суточного тарифа из сохранённой корзины."""
-    from datetime import datetime, timedelta
+    from datetime import UTC, datetime, timedelta
 
     # Lazy imports to avoid circular dependency
     from app.cabinet.routes.websocket import (
@@ -957,9 +957,9 @@ async def _auto_purchase_daily_tariff(
             existing_subscription.connected_squads = squads
             existing_subscription.status = 'active'
             existing_subscription.is_trial = False
-            existing_subscription.last_daily_charge_at = datetime.utcnow()
+            existing_subscription.last_daily_charge_at = datetime.now(UTC)
             existing_subscription.is_daily_paused = False
-            existing_subscription.end_date = datetime.utcnow() + timedelta(days=1)
+            existing_subscription.end_date = datetime.now(UTC) + timedelta(days=1)
             if was_trial_conversion:
                 user.has_had_paid_subscription = True
             await db.commit()
@@ -978,7 +978,7 @@ async def _auto_purchase_daily_tariff(
                 tariff_id=tariff.id,
             )
             # Устанавливаем параметры для суточного списания
-            subscription.last_daily_charge_at = datetime.utcnow()
+            subscription.last_daily_charge_at = datetime.now(UTC)
             subscription.is_daily_paused = False
             await db.commit()
             was_trial_conversion = False
@@ -1526,7 +1526,7 @@ async def auto_purchase_saved_cart_after_topup(
     bot: Bot | None = None,
 ) -> bool:
     """Attempts to automatically purchase a subscription from a saved cart."""
-    from datetime import datetime, timedelta
+    from datetime import UTC, datetime, timedelta
 
     # Lazy imports to avoid circular dependency
     from app.cabinet.routes.websocket import (
@@ -1559,12 +1559,12 @@ async def auto_purchase_saved_cart_after_topup(
                 if (
                     last_tx.type == TransactionType.SUBSCRIPTION_PAYMENT
                     and last_tx.created_at
-                    and (datetime.utcnow() - last_tx.created_at) < timedelta(seconds=60)
+                    and (datetime.now(UTC) - last_tx.created_at) < timedelta(seconds=60)
                 ):
                     logger.info(
                         '🔁 Автопокупка: пропускаем для пользователя - подписка уже куплена секунд назад',
                         format_user_id=_format_user_id(user),
-                        total_seconds=(datetime.utcnow() - last_tx.created_at).total_seconds(),
+                        total_seconds=(datetime.now(UTC) - last_tx.created_at).total_seconds(),
                     )
                     # Очищаем корзину чтобы не срабатывало повторно
                     await user_cart_service.delete_user_cart(user.id)

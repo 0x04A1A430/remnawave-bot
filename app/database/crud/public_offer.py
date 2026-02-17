@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 import structlog
 from sqlalchemy import select
@@ -26,7 +26,7 @@ async def upsert_public_offer(
 
     if offer:
         offer.content = content or ''
-        offer.updated_at = datetime.utcnow()
+        offer.updated_at = datetime.now(UTC)
     else:
         offer = PublicOffer(
             language=language,
@@ -52,7 +52,7 @@ async def set_public_offer_enabled(
 
     if offer:
         offer.is_enabled = bool(enabled)
-        offer.updated_at = datetime.utcnow()
+        offer.updated_at = datetime.now(UTC)
     else:
         offer = PublicOffer(
             language=language,

@@ -5,7 +5,7 @@
 
 import asyncio
 import time
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import aiohttp
 import structlog
@@ -122,7 +122,7 @@ class BlacklistService:
                         )
 
                 self.blacklist_data = blacklist_data
-                self.last_update = datetime.utcnow()
+                self.last_update = datetime.now(UTC)
                 self._check_cache.clear()
                 logger.info('Черный список успешно обновлен. Найдено записей', blacklist_data_count=len(blacklist_data))
                 return True
@@ -164,7 +164,7 @@ class BlacklistService:
         # Если черный список пуст или устарел, обновляем его
         interval_hours = self.get_blacklist_update_interval_hours()
         required_interval = timedelta(hours=interval_hours)
-        if not self.blacklist_data or (self.last_update and datetime.utcnow() - self.last_update > required_interval):
+        if not self.blacklist_data or (self.last_update and datetime.now(UTC) - self.last_update > required_interval):
             await self.update_blacklist()
 
         # Проверяем по Telegram ID
@@ -197,7 +197,7 @@ class BlacklistService:
         """
         interval_hours = self.get_blacklist_update_interval_hours()
         required_interval = timedelta(hours=interval_hours)
-        if not self.blacklist_data or (self.last_update and datetime.utcnow() - self.last_update > required_interval):
+        if not self.blacklist_data or (self.last_update and datetime.now(UTC) - self.last_update > required_interval):
             await self.update_blacklist()
 
         return self.blacklist_data.copy()

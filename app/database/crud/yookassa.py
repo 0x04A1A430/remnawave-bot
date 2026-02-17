@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 import structlog
 from sqlalchemy import and_, select, update
@@ -88,7 +88,7 @@ async def update_yookassa_payment_status(
     captured_at: datetime | None = None,
     payment_method_type: str | None = None,
 ) -> YooKassaPayment | None:
-    update_data = {'status': status, 'is_paid': is_paid, 'is_captured': is_captured, 'updated_at': datetime.utcnow()}
+    update_data = {'status': status, 'is_paid': is_paid, 'is_captured': is_captured, 'updated_at': datetime.now(UTC)}
 
     if captured_at:
         update_data['captured_at'] = captured_at
@@ -125,7 +125,7 @@ async def link_yookassa_payment_to_transaction(
     await db.execute(
         update(YooKassaPayment)
         .where(YooKassaPayment.yookassa_payment_id == yookassa_payment_id)
-        .values(transaction_id=transaction_id, updated_at=datetime.utcnow())
+        .values(transaction_id=transaction_id, updated_at=datetime.now(UTC))
     )
     await db.commit()
 

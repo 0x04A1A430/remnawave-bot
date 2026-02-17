@@ -4,7 +4,7 @@ Service for managing email template overrides stored in the database.
 Custom templates override the hardcoded defaults from email_templates.py.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -124,7 +124,7 @@ async def save_template_override(
     )
     row = existing.fetchone()
 
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
 
     if row:
         # Update

@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from aiogram import types
@@ -126,7 +126,7 @@ async def claim_discount_offer(
         )
         return
 
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     if offer.claimed_at is not None:
         await callback.answer(
             texts.get('DISCOUNT_CLAIM_ALREADY', 'ℹ️ Скидка уже была активирована'),

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -129,7 +129,7 @@ async def update_heleket_payment(
     if paid_at is not None:
         payment.paid_at = paid_at
 
-    payment.updated_at = datetime.utcnow()
+    payment.updated_at = datetime.now(UTC)
 
     await db.commit()
     await db.refresh(payment)
@@ -157,7 +157,7 @@ async def link_heleket_payment_to_transaction(
         return None
 
     payment.transaction_id = transaction_id
-    payment.updated_at = datetime.utcnow()
+    payment.updated_at = datetime.now(UTC)
 
     await db.commit()
     await db.refresh(payment)

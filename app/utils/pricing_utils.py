@@ -1,5 +1,5 @@
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Optional
 
 import structlog
@@ -19,7 +19,7 @@ def calculate_months_from_days(days: int) -> int:
 
 
 def get_remaining_months(end_date: datetime) -> int:
-    current_time = datetime.utcnow()
+    current_time = datetime.now(UTC)
     if end_date <= current_time:
         return 1
 

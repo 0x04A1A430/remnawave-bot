@@ -84,7 +84,7 @@ class ReferralContestService:
 
         async with AsyncSessionLocal() as db:
             contests = await get_contests_for_summaries(db)
-            now_utc = datetime.utcnow()
+            now_utc = datetime.now(UTC)
 
             for contest in contests:
                 try:
@@ -112,7 +112,7 @@ class ReferralContestService:
         summary_times = self._get_summary_times(contest)
         for summary_time in summary_times:
             summary_dt = datetime.combine(now_local.date(), summary_time, tzinfo=tz)
-            summary_dt_utc = summary_dt.astimezone(UTC).replace(tzinfo=None)
+            summary_dt_utc = summary_dt.astimezone(UTC)
 
             if now_utc < summary_dt_utc:
                 continue
@@ -143,7 +143,7 @@ class ReferralContestService:
         summary_times = self._get_summary_times(contest)
         summary_time = summary_times[-1] if summary_times else time(hour=12, minute=0)
         summary_dt = datetime.combine(end_local.date(), summary_time, tzinfo=tz)
-        summary_dt_utc = summary_dt.astimezone(UTC).replace(tzinfo=None)
+        summary_dt_utc = summary_dt.astimezone(UTC)
 
         if now_utc < contest.end_at:
             return
@@ -166,8 +166,8 @@ class ReferralContestService:
         tz = self._get_timezone(contest)
         day_start_local = datetime.combine(target_date, time.min, tzinfo=tz)
         day_end_local = day_start_local + timedelta(days=1)
-        day_start_utc = day_start_local.astimezone(UTC).replace(tzinfo=None)
-        day_end_utc = day_end_local.astimezone(UTC).replace(tzinfo=None)
+        day_start_utc = day_start_local.astimezone(UTC)
+        day_end_utc = day_end_local.astimezone(UTC)
 
         leaderboard = await get_contest_leaderboard_with_virtual(db, contest.id)
         virtual_participants = await list_virtual_participants(db, contest.id)
@@ -521,7 +521,7 @@ class ReferralContestService:
         if not user or not user.referred_by_id:
             return
 
-        now_utc = datetime.utcnow()
+        now_utc = datetime.now(UTC)
         contests = await get_contests_for_events(
             db,
             now_utc,
@@ -533,13 +533,9 @@ class ReferralContestService:
         for contest in contests:
             try:
                 # Проверяем что реферал зарегистрировался В ПЕРИОД конкурса
-                user_created_at = (
-                    user.created_at if user.created_at.tzinfo is None else user.created_at.replace(tzinfo=None)
-                )
-                contest_start = (
-                    contest.start_at if contest.start_at.tzinfo is None else contest.start_at.replace(tzinfo=None)
-                )
-                contest_end = contest.end_at if contest.end_at.tzinfo is None else contest.end_at.replace(tzinfo=None)
+                user_created_at = user.created_at
+                contest_start = contest.start_at
+                contest_end = contest.end_at
 
                 if user_created_at < contest_start or user_created_at > contest_end:
                     logger.debug(
@@ -582,7 +578,7 @@ class ReferralContestService:
         if not user or not user.referred_by_id:
             return
 
-        now_utc = datetime.utcnow()
+        now_utc = datetime.now(UTC)
         contests = await get_contests_for_events(
             db,
             now_utc,
@@ -594,13 +590,9 @@ class ReferralContestService:
         for contest in contests:
             try:
                 # Проверяем что реферал зарегистрировался В ПЕРИОД конкурса
-                user_created_at = (
-                    user.created_at if user.created_at.tzinfo is None else user.created_at.replace(tzinfo=None)
-                )
-                contest_start = (
-                    contest.start_at if contest.start_at.tzinfo is None else contest.start_at.replace(tzinfo=None)
-                )
-                contest_end = contest.end_at if contest.end_at.tzinfo is None else contest.end_at.replace(tzinfo=None)
+                user_created_at = user.created_at
+                contest_start = contest.start_at
+                contest_end = contest.end_at
 
                 if user_created_at < contest_start or user_created_at > contest_end:
                     logger.debug(

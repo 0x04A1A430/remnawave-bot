@@ -221,8 +221,8 @@ class ContestRotationService:
                         continue
 
                     # Convert to UTC for storage
-                    starts_at_utc = starts_at_local.astimezone(UTC).replace(tzinfo=None)
-                    ends_at_utc = ends_at_local.astimezone(UTC).replace(tzinfo=None)
+                    starts_at_utc = starts_at_local.astimezone(UTC)
+                    ends_at_utc = ends_at_local.astimezone(UTC)
 
                     # Анонс перед созданием раунда
                     await self._announce_round_start(tpl, starts_at_local, ends_at_local)

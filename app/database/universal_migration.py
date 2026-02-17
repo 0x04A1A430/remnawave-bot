@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 import structlog
 from sqlalchemy import select, text
@@ -4720,7 +4720,7 @@ async def ensure_default_web_api_token() -> bool:
                     updated = True
 
                 if updated:
-                    existing.updated_at = datetime.utcnow()
+                    existing.updated_at = datetime.now(UTC)
                     await session.commit()
                 return True
 
@@ -6454,6 +6454,63 @@ async def migrate_cloudpayments_transaction_id_to_bigint() -> bool:
         return False
 
 
+async def migrate_datetime_to_timestamptz() -> bool:
+    """Migrate all TIMESTAMP WITHOUT TIME ZONE columns to TIMESTAMP WITH TIME ZONE.
+
+    PostgreSQL treats existing naive values as UTC (session timezone) during conversion,
+    so existing data is preserved correctly.
+    SQLite does not have a separate timestamptz type, so this is a no-op.
+    """
+    db_type = await get_database_type()
+
+    if db_type == 'sqlite':
+        logger.info('ℹ️ SQLite не требует миграции TIMESTAMPTZ')
+        return True
+
+    if db_type != 'postgresql':
+        logger.info('ℹ️ Миграция TIMESTAMPTZ поддерживается только для PostgreSQL', db_type=db_type)
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            result = await conn.execute(
+                text("""
+                    SELECT table_name, column_name
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                      AND data_type = 'timestamp without time zone'
+                    ORDER BY table_name, column_name
+                """)
+            )
+            columns = result.fetchall()
+
+            if not columns:
+                logger.info('ℹ️ Все DateTime колонки уже TIMESTAMPTZ')
+                return True
+
+            logger.info(
+                '🔄 Найдено колонок для миграции на TIMESTAMPTZ',
+                count=len(columns),
+            )
+
+            await conn.execute(text("SET LOCAL timezone = 'UTC'"))
+
+            for table_name, column_name in columns:
+                await conn.execute(
+                    text(f'ALTER TABLE "{table_name}" ALTER COLUMN "{column_name}" TYPE TIMESTAMP WITH TIME ZONE')
+                )
+
+            logger.info(
+                '✅ Мигрировано колонок на TIMESTAMPTZ',
+                count=len(columns),
+            )
+            return True
+
+    except Exception as error:
+        logger.error('❌ Ошибка миграции DateTime колонок на TIMESTAMPTZ', error=error)
+        return False
+
+
 async def run_universal_migration():
     logger.info('=== НАЧАЛО УНИВЕРСАЛЬНОЙ МИГРАЦИИ ===')
 
@@ -7129,6 +7186,13 @@ async def run_universal_migration():
             logger.info('✅ Колонка last_webhook_update_at готова')
         else:
             logger.warning('⚠️ Проблемы с колонкой last_webhook_update_at')
+
+        logger.info('=== МИГРАЦИЯ DATETIME КОЛОНОК НА TIMESTAMPTZ ===')
+        timestamptz_ready = await migrate_datetime_to_timestamptz()
+        if timestamptz_ready:
+            logger.info('✅ Все DateTime колонки мигрированы на TIMESTAMPTZ')
+        else:
+            logger.warning('⚠️ Проблемы с миграцией DateTime колонок')
 
         async with engine.begin() as conn:
             total_subs = await conn.execute(text('SELECT COUNT(*) FROM subscriptions'))

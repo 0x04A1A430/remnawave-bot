@@ -1,5 +1,5 @@
 import html
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 
 import structlog
@@ -165,7 +165,7 @@ async def show_main_menu(
 
     texts = get_texts(db_user.language)
 
-    db_user.last_activity = datetime.utcnow()
+    db_user.last_activity = datetime.now(UTC)
     await db.commit()
 
     has_active_subscription = bool(db_user.subscription and db_user.subscription.is_active)
@@ -1074,7 +1074,7 @@ def _get_subscription_status(user: User, texts, is_daily_tariff: bool = False) -
     if not subscription:
         return texts.t('SUB_STATUS_NONE', '❌ Отсутствует')
 
-    current_time = datetime.utcnow()
+    current_time = datetime.now(UTC)
     actual_status = (subscription.actual_status or '').lower()
     end_date = getattr(subscription, 'end_date', None)
     end_date_text = format_local_datetime(end_date, '%d.%m.%Y') if end_date else None
@@ -1257,7 +1257,7 @@ async def handle_activate_button(callback: types.CallbackQuery, db_user: User, d
     subscription = await get_subscription_by_user_id(db, db_user.id)
 
     # Если подписка активна — ничего не делаем
-    if subscription and subscription.status == 'ACTIVE' and subscription.end_date > datetime.utcnow():
+    if subscription and subscription.status == 'ACTIVE' and subscription.end_date > datetime.now(UTC):
         await callback.answer(
             texts.t('SUBSCRIPTION_ALREADY_ACTIVE', '✅ Подписка уже активна!'),
             show_alert=True,
