@@ -352,7 +352,6 @@ class PartnerStatsService:
         week_ago = now - timedelta(days=7)
         month_ago = now - timedelta(days=30)
         year_ago = now - timedelta(days=365)
-        now - timedelta(days=days)
 
         # Всего рефереров (у кого есть рефералы)
         total_referrers = await db.execute(

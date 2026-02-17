@@ -1,5 +1,7 @@
 """Admin routes for managing partners in cabinet."""
 
+from typing import Literal
+
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import desc, func, select
@@ -39,7 +41,7 @@ router = APIRouter(prefix='/admin/partners', tags=['Cabinet Admin Partners'])
 
 @router.get('/applications', response_model=AdminPartnerApplicationsResponse)
 async def list_applications(
-    application_status: str | None = Query(None, alias='status'),
+    application_status: Literal['pending', 'approved', 'rejected', 'none'] | None = Query(None, alias='status'),
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     admin: User = Depends(get_current_admin_user),

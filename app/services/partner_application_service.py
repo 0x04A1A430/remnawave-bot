@@ -1,7 +1,5 @@
 """Сервис для обработки заявок на партнёрский статус."""
 
-import secrets
-import string
 from datetime import UTC, datetime
 
 import structlog
@@ -9,6 +7,7 @@ from sqlalchemy import desc, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import AdvertisingCampaign, PartnerApplication, PartnerStatus, User
+from app.utils.user_utils import generate_unique_referral_code
 
 
 logger = structlog.get_logger(__name__)
@@ -93,7 +92,7 @@ class PartnerApplicationService:
 
         # Генерируем реферальный код, если его нет
         if not user.referral_code:
-            user.referral_code = self._generate_referral_code()
+            user.referral_code = await generate_unique_referral_code(db, user.telegram_id or 0)
 
         user.partner_status = PartnerStatus.APPROVED.value
         user.referral_commission_percent = commission_percent
@@ -230,12 +229,6 @@ class PartnerApplicationService:
             .limit(1)
         )
         return result.scalar_one_or_none()
-
-    @staticmethod
-    def _generate_referral_code() -> str:
-        """Генерирует уникальный реферальный код."""
-        chars = string.ascii_lowercase + string.digits
-        return ''.join(secrets.choice(chars) for _ in range(8))
 
 
 # Синглтон сервиса

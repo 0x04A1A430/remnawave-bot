@@ -1,6 +1,7 @@
 """Admin routes for managing withdrawal requests in cabinet."""
 
 import json
+from typing import Literal
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -43,7 +44,9 @@ def _get_risk_level(risk_score: int) -> str:
 
 @router.get('', response_model=AdminWithdrawalListResponse)
 async def list_withdrawals(
-    withdrawal_status: str | None = Query(None, alias='status'),
+    withdrawal_status: Literal['pending', 'approved', 'rejected', 'completed', 'cancelled'] | None = Query(
+        None, alias='status'
+    ),
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     admin: User = Depends(get_current_admin_user),
