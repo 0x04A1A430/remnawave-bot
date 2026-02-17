@@ -549,6 +549,7 @@ class Settings(BaseSettings):
 
     LOG_LEVEL: str = 'INFO'
     LOG_FILE: str = 'logs/bot.log'
+    LOG_COLORS: bool = True  # ANSI-цвета в консоли (false для plain-text вывода)
 
     # === Log Rotation Settings ===
     LOG_ROTATION_ENABLED: bool = False  # По умолчанию старое поведение

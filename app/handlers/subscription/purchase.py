@@ -348,8 +348,6 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
                         tariff_info_lines.append('⏸️ <b>Подписка приостановлена</b>')
                         # Показываем оставшееся время даже при паузе
                         if last_charge:
-                            from datetime import UTC, timedelta
-
                             next_charge = last_charge + timedelta(hours=24)
                             now = datetime.now(UTC)
                             if next_charge > now:
@@ -359,8 +357,6 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
                                 tariff_info_lines.append(f'⏳ Осталось: {hours_left}ч {minutes_left}мин')
                                 tariff_info_lines.append('💤 Списание приостановлено')
                     elif last_charge:
-                        from datetime import UTC, timedelta
-
                         next_charge = last_charge + timedelta(hours=24)
                         now = datetime.now(UTC)
 
