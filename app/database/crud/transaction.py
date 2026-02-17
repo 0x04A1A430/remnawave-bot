@@ -150,7 +150,7 @@ async def get_user_transactions_count(
 
 async def get_user_total_spent_kopeks(db: AsyncSession, user_id: int) -> int:
     result = await db.execute(
-        select(func.coalesce(func.sum(Transaction.amount_kopeks), 0)).where(
+        select(func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0)).where(
             and_(
                 Transaction.user_id == user_id,
                 Transaction.is_completed.is_(True),
@@ -158,7 +158,7 @@ async def get_user_total_spent_kopeks(db: AsyncSession, user_id: int) -> int:
             )
         )
     )
-    return abs(int(result.scalar_one()))
+    return int(result.scalar_one())
 
 
 async def complete_transaction(db: AsyncSession, transaction: Transaction) -> Transaction:
@@ -244,7 +244,7 @@ async def get_transactions_statistics(
         select(
             Transaction.type,
             func.count(Transaction.id).label('count'),
-            func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0).label('total_amount'),
+            func.coalesce(func.sum(Transaction.amount_kopeks), 0).label('total_amount'),
         )
         .where(
             and_(

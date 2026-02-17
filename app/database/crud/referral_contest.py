@@ -624,7 +624,7 @@ async def debug_contest_transactions(
         abs(tx.amount_kopeks) for tx in txs_in if tx.type == TransactionType.SUBSCRIPTION_PAYMENT.value
     )
     total_in_period = deposit_in_period + subscription_in_period
-    total_outside = sum(tx.amount_kopeks for tx in txs_out)
+    total_outside = sum(abs(tx.amount_kopeks) for tx in txs_out)
 
     # Подсчёт ПОЛНЫХ сумм (не только sample, БЕЗ бонусов)
     full_deposit_result = await db.execute(
