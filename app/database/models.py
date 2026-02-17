@@ -1031,6 +1031,14 @@ class User(Base):
     restriction_subscription = Column(Boolean, default=False, nullable=False)  # Запрет продления/покупки
     restriction_reason = Column(String(500), nullable=True)  # Причина ограничения
 
+    # Партнёрская система
+    partner_status = Column(String(20), default=PartnerStatus.NONE.value, nullable=False)
+
+    @property
+    def is_partner(self) -> bool:
+        """Проверить, является ли пользователь одобренным партнёром."""
+        return self.partner_status == PartnerStatus.APPROVED.value
+
     @property
     def has_restrictions(self) -> bool:
         """Проверить, есть ли у пользователя активные ограничения."""
@@ -1471,6 +1479,15 @@ class ReferralEarning(Base):
         return self.amount_kopeks / 100
 
 
+class PartnerStatus(Enum):
+    """Статусы партнёрского аккаунта."""
+
+    NONE = 'none'  # Не подавал заявку
+    PENDING = 'pending'  # Заявка на рассмотрении
+    APPROVED = 'approved'  # Партнёр одобрен
+    REJECTED = 'rejected'  # Заявка отклонена
+
+
 class WithdrawalRequestStatus(Enum):
     """Статусы заявки на вывод реферального баланса."""
 
@@ -1513,6 +1530,35 @@ class WithdrawalRequest(Base):
     @property
     def amount_rubles(self) -> float:
         return self.amount_kopeks / 100
+
+
+class PartnerApplication(Base):
+    """Заявка на получение статуса партнёра."""
+
+    __tablename__ = 'partner_applications'
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+
+    company_name = Column(String(255), nullable=True)
+    website_url = Column(String(500), nullable=True)
+    telegram_channel = Column(String(255), nullable=True)
+    description = Column(Text, nullable=True)
+    expected_monthly_referrals = Column(Integer, nullable=True)
+
+    status = Column(String(20), default=PartnerStatus.PENDING.value, nullable=False)
+
+    # Обработка админом
+    admin_comment = Column(Text, nullable=True)
+    approved_commission_percent = Column(Integer, nullable=True)
+    processed_by = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    processed_at = Column(DateTime(timezone=True), nullable=True)
+
+    created_at = Column(DateTime(timezone=True), default=func.now())
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+
+    user = relationship('User', foreign_keys=[user_id], backref='partner_applications')
+    admin = relationship('User', foreign_keys=[processed_by])
 
 
 class ReferralContest(Base):
@@ -2160,12 +2206,16 @@ class AdvertisingCampaign(Base):
 
     is_active = Column(Boolean, default=True)
 
+    # Привязка к партнёру
+    partner_user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+
     created_by = Column(Integer, ForeignKey('users.id'), nullable=True)
     created_at = Column(DateTime(timezone=True), default=func.now())
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
 
     registrations = relationship('AdvertisingCampaignRegistration', back_populates='campaign')
     tariff = relationship('Tariff', foreign_keys=[tariff_id])
+    partner = relationship('User', foreign_keys=[partner_user_id])
 
     @property
     def is_balance_bonus(self) -> bool:

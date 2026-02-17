@@ -8,6 +8,7 @@ from .admin_broadcasts import router as admin_broadcasts_router
 from .admin_button_styles import router as admin_button_styles_router
 from .admin_campaigns import router as admin_campaigns_router
 from .admin_email_templates import router as admin_email_templates_router
+from .admin_partners import router as admin_partners_router
 from .admin_payment_methods import router as admin_payment_methods_router
 from .admin_payments import router as admin_payments_router
 from .admin_pinned_messages import router as admin_pinned_messages_router
@@ -23,6 +24,7 @@ from .admin_traffic import router as admin_traffic_router
 from .admin_updates import router as admin_updates_router
 from .admin_users import router as admin_users_router
 from .admin_wheel import router as admin_wheel_router
+from .admin_withdrawals import router as admin_withdrawals_router
 from .auth import router as auth_router
 from .balance import router as balance_router
 from .branding import router as branding_router
@@ -31,6 +33,7 @@ from .info import router as info_router
 from .media import router as media_router
 from .notifications import router as notifications_router
 from .oauth import router as oauth_router
+from .partner_application import router as partner_application_router
 from .polls import router as polls_router
 from .promo import router as promo_router
 from .promocode import router as promocode_router
@@ -43,6 +46,7 @@ from .ticket_notifications import (
 from .tickets import router as tickets_router
 from .websocket import router as websocket_router
 from .wheel import router as wheel_router
+from .withdrawal import router as withdrawal_router
 
 
 # Main cabinet router
@@ -54,6 +58,8 @@ router.include_router(oauth_router)
 router.include_router(subscription_router)
 router.include_router(balance_router)
 router.include_router(referral_router)
+router.include_router(partner_application_router)
+router.include_router(withdrawal_router)
 # Notifications router MUST be before tickets router to avoid route conflict
 router.include_router(ticket_notifications_router)
 router.include_router(tickets_router)
@@ -83,6 +89,8 @@ router.include_router(admin_broadcasts_router)
 router.include_router(admin_promocodes_router)
 router.include_router(admin_promo_groups_router)
 router.include_router(admin_campaigns_router)
+router.include_router(admin_partners_router)
+router.include_router(admin_withdrawals_router)
 router.include_router(admin_users_router)
 router.include_router(admin_payment_methods_router)
 router.include_router(admin_payments_router)

@@ -7194,6 +7194,27 @@ async def run_universal_migration():
         else:
             logger.warning('⚠️ Проблемы с миграцией DateTime колонок')
 
+        logger.info('=== СОЗДАНИЕ ТАБЛИЦЫ PARTNER_APPLICATIONS ===')
+        partner_apps_ready = await create_partner_applications_table()
+        if partner_apps_ready:
+            logger.info('✅ Таблица partner_applications готова')
+        else:
+            logger.warning('⚠️ Проблемы с таблицей partner_applications')
+
+        logger.info('=== ДОБАВЛЕНИЕ КОЛОНКИ PARTNER_STATUS В USERS ===')
+        partner_status_ready = await add_user_partner_status_column()
+        if partner_status_ready:
+            logger.info('✅ Колонка partner_status в users готова')
+        else:
+            logger.warning('⚠️ Проблемы с колонкой partner_status')
+
+        logger.info('=== ДОБАВЛЕНИЕ КОЛОНКИ PARTNER_USER_ID В ADVERTISING_CAMPAIGNS ===')
+        campaign_partner_ready = await add_campaign_partner_user_id_column()
+        if campaign_partner_ready:
+            logger.info('✅ Колонка partner_user_id в advertising_campaigns готова')
+        else:
+            logger.warning('⚠️ Проблемы с колонкой partner_user_id')
+
         async with engine.begin() as conn:
             total_subs = await conn.execute(text('SELECT COUNT(*) FROM subscriptions'))
             unique_users = await conn.execute(text('SELECT COUNT(DISTINCT user_id) FROM subscriptions'))
@@ -7241,6 +7262,166 @@ async def run_universal_migration():
 
     except Exception as e:
         logger.error('ОШИБКА ВЫПОЛНЕНИЯ МИГРАЦИИ', error=e)
+        return False
+
+
+async def create_partner_applications_table() -> bool:
+    """Создаёт таблицу для заявок на партнёрский статус."""
+    try:
+        if await check_table_exists('partner_applications'):
+            logger.debug('Таблица partner_applications уже существует')
+            return True
+
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'sqlite':
+                create_sql = """
+                CREATE TABLE partner_applications (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    company_name VARCHAR(255),
+                    website_url VARCHAR(500),
+                    telegram_channel VARCHAR(255),
+                    description TEXT,
+                    expected_monthly_referrals INTEGER,
+                    status VARCHAR(20) NOT NULL DEFAULT 'pending',
+                    admin_comment TEXT,
+                    approved_commission_percent INTEGER,
+                    processed_by INTEGER,
+                    processed_at DATETIME,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                    FOREIGN KEY (processed_by) REFERENCES users(id) ON DELETE SET NULL
+                )
+                """
+            elif db_type == 'postgresql':
+                create_sql = """
+                CREATE TABLE partner_applications (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    company_name VARCHAR(255),
+                    website_url VARCHAR(500),
+                    telegram_channel VARCHAR(255),
+                    description TEXT,
+                    expected_monthly_referrals INTEGER,
+                    status VARCHAR(20) NOT NULL DEFAULT 'pending',
+                    admin_comment TEXT,
+                    approved_commission_percent INTEGER,
+                    processed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                    processed_at TIMESTAMPTZ,
+                    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            else:  # mysql
+                create_sql = """
+                CREATE TABLE partner_applications (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    user_id INT NOT NULL,
+                    company_name VARCHAR(255),
+                    website_url VARCHAR(500),
+                    telegram_channel VARCHAR(255),
+                    description TEXT,
+                    expected_monthly_referrals INT,
+                    status VARCHAR(20) NOT NULL DEFAULT 'pending',
+                    admin_comment TEXT,
+                    approved_commission_percent INT,
+                    processed_by INT,
+                    processed_at DATETIME,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                    FOREIGN KEY (processed_by) REFERENCES users(id) ON DELETE SET NULL
+                )
+                """
+
+            await conn.execute(text(create_sql))
+            logger.info('✅ Таблица partner_applications создана')
+
+            try:
+                await conn.execute(
+                    text('CREATE INDEX idx_partner_applications_user_id ON partner_applications(user_id)')
+                )
+                await conn.execute(text('CREATE INDEX idx_partner_applications_status ON partner_applications(status)'))
+            except Exception:
+                pass
+
+        return True
+    except Exception as error:
+        logger.error('❌ Ошибка создания таблицы partner_applications', error=error)
+        return False
+
+
+async def add_user_partner_status_column() -> bool:
+    """Добавляет колонку partner_status в таблицу users."""
+    try:
+        if await check_column_exists('users', 'partner_status'):
+            logger.info('ℹ️ Колонка partner_status в users уже существует')
+            return True
+
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type in ('sqlite', 'postgresql'):
+                await conn.execute(
+                    text("ALTER TABLE users ADD COLUMN partner_status VARCHAR(20) NOT NULL DEFAULT 'none'")
+                )
+            else:  # MySQL
+                await conn.execute(
+                    text("ALTER TABLE users ADD COLUMN partner_status VARCHAR(20) NOT NULL DEFAULT 'none'")
+                )
+
+            logger.info('✅ Колонка partner_status добавлена в users')
+            return True
+
+    except Exception as error:
+        logger.error('❌ Ошибка добавления колонки partner_status', error=error)
+        return False
+
+
+async def add_campaign_partner_user_id_column() -> bool:
+    """Добавляет колонку partner_user_id в таблицу advertising_campaigns."""
+    try:
+        if await check_column_exists('advertising_campaigns', 'partner_user_id'):
+            logger.info('ℹ️ Колонка partner_user_id в advertising_campaigns уже существует')
+            return True
+
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'sqlite':
+                await conn.execute(
+                    text('ALTER TABLE advertising_campaigns ADD COLUMN partner_user_id INTEGER REFERENCES users(id)')
+                )
+            elif db_type == 'postgresql':
+                await conn.execute(
+                    text(
+                        'ALTER TABLE advertising_campaigns ADD COLUMN partner_user_id INTEGER '
+                        'REFERENCES users(id) ON DELETE SET NULL'
+                    )
+                )
+                await conn.execute(
+                    text(
+                        'CREATE INDEX IF NOT EXISTS idx_advertising_campaigns_partner_user_id '
+                        'ON advertising_campaigns(partner_user_id)'
+                    )
+                )
+            else:  # MySQL
+                await conn.execute(text('ALTER TABLE advertising_campaigns ADD COLUMN partner_user_id INT NULL'))
+                await conn.execute(
+                    text(
+                        'ALTER TABLE advertising_campaigns ADD CONSTRAINT fk_campaigns_partner '
+                        'FOREIGN KEY (partner_user_id) REFERENCES users(id) ON DELETE SET NULL'
+                    )
+                )
+
+            logger.info('✅ Колонка partner_user_id добавлена в advertising_campaigns')
+            return True
+
+    except Exception as error:
+        logger.error('❌ Ошибка добавления колонки partner_user_id', error=error)
         return False
 
 
@@ -7312,6 +7493,9 @@ async def check_migration_status():
             'users_yandex_id_column': False,
             'users_discord_id_column': False,
             'users_vk_id_column': False,
+            'partner_applications_table': False,
+            'users_partner_status_column': False,
+            'campaigns_partner_user_id_column': False,
         }
 
         status['has_made_first_topup_column'] = await check_column_exists('users', 'has_made_first_topup')
@@ -7449,6 +7633,12 @@ async def check_migration_status():
         status['users_discord_id_column'] = await check_column_exists('users', 'discord_id')
         status['users_vk_id_column'] = await check_column_exists('users', 'vk_id')
 
+        status['partner_applications_table'] = await check_table_exists('partner_applications')
+        status['users_partner_status_column'] = await check_column_exists('users', 'partner_status')
+        status['campaigns_partner_user_id_column'] = await check_column_exists(
+            'advertising_campaigns', 'partner_user_id'
+        )
+
         async with engine.begin() as conn:
             duplicates_check = await conn.execute(
                 text("""
@@ -7523,6 +7713,9 @@ async def check_migration_status():
             'users_yandex_id_column': 'Колонка yandex_id в users',
             'users_discord_id_column': 'Колонка discord_id в users',
             'users_vk_id_column': 'Колонка vk_id в users',
+            'partner_applications_table': 'Таблица partner_applications',
+            'users_partner_status_column': 'Колонка partner_status в users',
+            'campaigns_partner_user_id_column': 'Колонка partner_user_id в advertising_campaigns',
         }
 
         for check_key, check_status in status.items():
