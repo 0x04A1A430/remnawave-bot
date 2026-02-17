@@ -68,6 +68,26 @@ async def create_withdrawal(
             detail=error,
         )
 
+    # Уведомляем админов о запросе на вывод
+    try:
+        from aiogram import Bot
+
+        from app.services.admin_notification_service import AdminNotificationService
+
+        if getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False) and settings.BOT_TOKEN:
+            bot = Bot(token=settings.BOT_TOKEN)
+            try:
+                notification_service = AdminNotificationService(bot)
+                await notification_service.send_withdrawal_request_notification(
+                    user=user,
+                    amount_kopeks=request.amount_kopeks,
+                    payment_details=request.payment_details,
+                )
+            finally:
+                await bot.session.close()
+    except Exception as e:
+        logger.error('Failed to send admin notification for withdrawal request', error=e)
+
     return WithdrawalCreateResponse(
         id=withdrawal.id,
         amount_kopeks=withdrawal.amount_kopeks,

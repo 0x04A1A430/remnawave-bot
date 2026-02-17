@@ -122,6 +122,31 @@ async def apply_for_partner(
             detail=error,
         )
 
+    # Уведомляем админов о новой заявке
+    try:
+        from aiogram import Bot
+
+        from app.services.admin_notification_service import AdminNotificationService
+
+        if getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False) and settings.BOT_TOKEN:
+            bot = Bot(token=settings.BOT_TOKEN)
+            try:
+                notification_service = AdminNotificationService(bot)
+                await notification_service.send_partner_application_notification(
+                    user=user,
+                    application_data={
+                        'company_name': request.company_name,
+                        'telegram_channel': request.telegram_channel,
+                        'website_url': request.website_url,
+                        'description': request.description,
+                        'expected_monthly_referrals': request.expected_monthly_referrals,
+                    },
+                )
+            finally:
+                await bot.session.close()
+    except Exception as e:
+        logger.error('Failed to send admin notification for partner application', error=e)
+
     return PartnerApplicationInfo(
         id=application.id,
         status=application.status,
