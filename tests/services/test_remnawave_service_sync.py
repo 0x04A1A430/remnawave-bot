@@ -1,5 +1,5 @@
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock
 from zoneinfo import ZoneInfo
@@ -33,8 +33,8 @@ def test_deduplicate_prefers_latest_expire_date():
     service = _create_service()
 
     telegram_id = 100
-    older = _make_panel_user(telegram_id, datetime(2025, 1, 1, 0, 0, 0).isoformat())
-    newer = _make_panel_user(telegram_id, datetime(2025, 2, 1, 0, 0, 0).isoformat())
+    older = _make_panel_user(telegram_id, datetime(2025, 1, 1, 0, 0, 0, tzinfo=UTC).isoformat())
+    newer = _make_panel_user(telegram_id, datetime(2025, 2, 1, 0, 0, 0, tzinfo=UTC).isoformat())
 
     deduplicated = service._deduplicate_panel_users_by_telegram_id([older, newer])
 
@@ -45,7 +45,7 @@ def test_deduplicate_prefers_active_status_on_same_expire():
     service = _create_service()
 
     telegram_id = 200
-    expire = datetime(2025, 1, 1, 0, 0, 0).isoformat()
+    expire = datetime(2025, 1, 1, 0, 0, 0, tzinfo=UTC).isoformat()
     disabled = _make_panel_user(telegram_id, expire, status='DISABLED')
     active = _make_panel_user(telegram_id, expire, status='ACTIVE')
 
@@ -59,7 +59,7 @@ def test_deduplicate_ignores_records_without_expire_date():
 
     telegram_id = 300
     missing_expire = _make_panel_user(telegram_id, '')
-    valid = _make_panel_user(telegram_id, datetime(2025, 3, 1, 0, 0, 0).isoformat())
+    valid = _make_panel_user(telegram_id, datetime(2025, 3, 1, 0, 0, 0, tzinfo=UTC).isoformat())
 
     deduplicated = service._deduplicate_panel_users_by_telegram_id([missing_expire, valid])
 

@@ -1128,7 +1128,7 @@ async def test_get_payment_methods_marks_mulenpay_iframe(monkeypatch):
 
 @pytest.mark.anyio('asyncio')
 async def test_find_recent_deposit_ignores_transactions_before_attempt():
-    started_at = datetime(2024, 5, 1, 12, 0, 0)
+    started_at = datetime(2024, 5, 1, 12, 0, 0, tzinfo=UTC)
 
     transaction = types.SimpleNamespace(
         id=10,
@@ -1164,7 +1164,7 @@ async def test_find_recent_deposit_ignores_transactions_before_attempt():
 
 @pytest.mark.anyio('asyncio')
 async def test_find_recent_deposit_accepts_recent_transactions():
-    started_at = datetime(2024, 5, 1, 12, 0, 0)
+    started_at = datetime(2024, 5, 1, 12, 0, 0, tzinfo=UTC)
 
     transaction = types.SimpleNamespace(
         id=11,

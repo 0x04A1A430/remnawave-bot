@@ -79,8 +79,8 @@ def _make_service(stub: StubWataService | None) -> PaymentService:
     return service
 
 
-def test_wata_service_format_datetime_accepts_naive_utc() -> None:
-    value = datetime(2024, 5, 20, 12, 30, 0)
+def test_wata_service_format_datetime_accepts_utc() -> None:
+    value = datetime(2024, 5, 20, 12, 30, 0, tzinfo=UTC)
     formatted = WataService._format_datetime(value)
     assert formatted == '2024-05-20T12:30:00Z'
 
