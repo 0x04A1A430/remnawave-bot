@@ -57,6 +57,14 @@ def _get_deep_link(start_parameter: str) -> str:
     return f'?start={start_parameter}'
 
 
+def _get_web_link(start_parameter: str) -> str | None:
+    """Generate web link for campaign."""
+    base_url = (settings.MINIAPP_CUSTOM_URL or '').rstrip('/')
+    if base_url:
+        return f'{base_url}/?campaign={start_parameter}'
+    return None
+
+
 @router.get('/overview', response_model=CampaignsOverviewResponse)
 async def get_overview(
     admin: User = Depends(get_current_admin_user),
@@ -205,6 +213,7 @@ async def get_campaign(
         created_at=campaign.created_at,
         updated_at=campaign.updated_at,
         deep_link=_get_deep_link(campaign.start_parameter),
+        web_link=_get_web_link(campaign.start_parameter),
     )
 
 
@@ -248,6 +257,7 @@ async def get_campaign_stats(
         conversion_rate=stats['conversion_rate'],
         trial_conversion_rate=stats['trial_conversion_rate'],
         deep_link=_get_deep_link(campaign.start_parameter),
+        web_link=_get_web_link(campaign.start_parameter),
     )
 
 
@@ -288,19 +298,22 @@ async def get_campaign_registrations(
     )
     total = count_result.scalar() or 0
 
-    items = []
-    for reg, user in rows:
-        # Check if user has subscription
+    # Batch query: find which users have active subscriptions (avoids N+1)
+    user_ids = [user.id for _reg, user in rows]
+    active_sub_user_ids: set[int] = set()
+    if user_ids:
         sub_result = await db.execute(
-            select(Subscription)
+            select(Subscription.user_id)
             .where(
-                Subscription.user_id == user.id,
+                Subscription.user_id.in_(user_ids),
                 Subscription.status == 'active',
             )
-            .limit(1)
+            .distinct()
         )
-        has_sub = sub_result.scalar_one_or_none() is not None
+        active_sub_user_ids = set(sub_result.scalars().all())
 
+    items = []
+    for reg, user in rows:
         items.append(
             CampaignRegistrationItem(
                 id=reg.id,
@@ -315,7 +328,7 @@ async def get_campaign_registrations(
                 tariff_duration_days=reg.tariff_duration_days,
                 created_at=reg.created_at,
                 user_balance_kopeks=user.balance_kopeks or 0,
-                has_subscription=has_sub,
+                has_subscription=user.id in active_sub_user_ids,
                 has_paid=user.has_had_paid_subscription or False,
             )
         )

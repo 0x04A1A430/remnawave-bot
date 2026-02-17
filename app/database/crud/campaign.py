@@ -371,66 +371,6 @@ async def get_campaign_statistics(
     if count:
         avg_revenue_per_user = int(total_revenue / count)
 
-    deposits_result = await db.execute(
-        select(func.coalesce(func.sum(Transaction.amount_kopeks), 0)).where(
-            Transaction.user_id.in_(select(registrations_subquery.c.user_id)),
-            Transaction.type == TransactionType.DEPOSIT.value,
-            Transaction.is_completed.is_(True),
-        )
-    )
-    total_revenue = deposits_result.scalar() or 0
-
-    trials_result = await db.execute(
-        select(func.count(func.distinct(Subscription.user_id))).where(
-            Subscription.user_id.in_(select(registrations_subquery.c.user_id)),
-            Subscription.is_trial.is_(True),
-        )
-    )
-    trial_users_count = trials_result.scalar() or 0
-
-    active_trials_result = await db.execute(
-        select(func.count(func.distinct(Subscription.user_id))).where(
-            Subscription.user_id.in_(select(registrations_subquery.c.user_id)),
-            Subscription.is_trial.is_(True),
-            Subscription.status == SubscriptionStatus.ACTIVE.value,
-        )
-    )
-    active_trials_count = active_trials_result.scalar() or 0
-
-    conversions_result = await db.execute(
-        select(func.count(func.distinct(SubscriptionConversion.user_id))).where(
-            SubscriptionConversion.user_id.in_(select(registrations_subquery.c.user_id))
-        )
-    )
-    conversion_count = conversions_result.scalar() or 0
-
-    paid_users_result = await db.execute(
-        select(func.count(User.id)).where(
-            User.id.in_(select(registrations_subquery.c.user_id)),
-            User.has_had_paid_subscription.is_(True),
-        )
-    )
-    paid_users_count = paid_users_result.scalar() or 0
-
-    avg_first_payment_result = await db.execute(
-        select(func.coalesce(func.avg(SubscriptionConversion.first_payment_amount_kopeks), 0)).where(
-            SubscriptionConversion.user_id.in_(select(registrations_subquery.c.user_id))
-        )
-    )
-    avg_first_payment = int(avg_first_payment_result.scalar() or 0)
-
-    conversion_rate = 0.0
-    if count:
-        conversion_rate = round((paid_users_count / count) * 100, 1)
-
-    trial_conversion_rate = 0.0
-    if trial_users_count:
-        trial_conversion_rate = round((conversion_count / trial_users_count) * 100, 1)
-
-    avg_revenue_per_user = 0
-    if count:
-        avg_revenue_per_user = int(total_revenue / count)
-
     return {
         'registrations': count,
         'balance_issued': total_balance,

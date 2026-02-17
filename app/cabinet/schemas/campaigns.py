@@ -66,6 +66,7 @@ class CampaignDetailResponse(BaseModel):
     updated_at: datetime | None = None
     # Deep link
     deep_link: str | None = None
+    web_link: str | None = None
 
     class Config:
         from_attributes = True
@@ -75,7 +76,7 @@ class CampaignCreateRequest(BaseModel):
     """Request to create a campaign."""
 
     name: str = Field(..., min_length=1, max_length=255)
-    start_parameter: str = Field(..., min_length=1, max_length=100, pattern=r'^[a-zA-Z0-9_-]+$')
+    start_parameter: str = Field(..., min_length=1, max_length=64, pattern=r'^[a-zA-Z0-9_-]+$')
     bonus_type: CampaignBonusType
     is_active: bool = True
     # Balance bonus
@@ -94,7 +95,7 @@ class CampaignUpdateRequest(BaseModel):
     """Request to update a campaign."""
 
     name: str | None = Field(None, min_length=1, max_length=255)
-    start_parameter: str | None = Field(None, min_length=1, max_length=100, pattern=r'^[a-zA-Z0-9_-]+$')
+    start_parameter: str | None = Field(None, min_length=1, max_length=64, pattern=r'^[a-zA-Z0-9_-]+$')
     bonus_type: CampaignBonusType | None = None
     is_active: bool | None = None
     # Balance bonus
@@ -147,6 +148,7 @@ class CampaignStatisticsResponse(BaseModel):
     trial_conversion_rate: float = 0.0
     # Deep link
     deep_link: str | None = None
+    web_link: str | None = None
 
 
 class CampaignRegistrationItem(BaseModel):

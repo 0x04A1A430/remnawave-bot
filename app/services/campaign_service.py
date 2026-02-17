@@ -150,8 +150,6 @@ class AdvertisingCampaignService:
             except Exception as error:
                 logger.error('Не удалось подобрать сквад для кампании', campaign_id=campaign.id, error=error)
 
-        squads[0] if squads else None
-
         new_subscription = await create_paid_subscription(
             db=db,
             user_id=user.id,
