@@ -832,8 +832,6 @@ async def purchase_traffic(
     # Устанавливаем дату сброса трафика (только при первой докупке)
     # При повторной докупке дата НЕ продлевается
     if not subscription.traffic_reset_at:
-        from datetime import UTC, timedelta
-
         subscription.traffic_reset_at = datetime.now(UTC) + timedelta(days=30)
         logger.info(
             'Set traffic_reset_at for subscription',
@@ -2211,8 +2209,6 @@ async def purchase_devices(
             )
 
         # Calculate prorated price based on remaining days
-        from datetime import UTC, datetime
-
         now = datetime.now(UTC)
         end_date = subscription.end_date
         if end_date.tzinfo is None:
@@ -2627,8 +2623,6 @@ async def get_device_price(
         }
 
     # Calculate prorated price
-    from datetime import UTC, datetime
-
     now = datetime.now(UTC)
     end_date = subscription.end_date
     if end_date.tzinfo is None:
@@ -3079,8 +3073,6 @@ async def get_available_countries(
         connected_squads = user.subscription.connected_squads or []
         # Calculate days left for prorated pricing
         if user.subscription.end_date:
-            from datetime import UTC, datetime
-
             delta = user.subscription.end_date - datetime.now(UTC)
             days_left = max(0, delta.days)
 
@@ -4128,8 +4120,6 @@ async def switch_tariff(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> dict[str, Any]:
     """Switch to a different tariff without changing end date."""
-    from datetime import UTC, timedelta
-
     if not settings.is_tariffs_mode():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -4425,8 +4415,6 @@ async def toggle_subscription_pause(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> dict[str, Any]:
     """Toggle pause/resume for daily subscription."""
-    from datetime import UTC, timedelta
-
     await db.refresh(user, ['subscription'])
 
     if not user.subscription:

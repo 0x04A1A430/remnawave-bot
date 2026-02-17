@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 
 import structlog
 from aiogram import Bot
@@ -861,7 +862,6 @@ async def _auto_purchase_daily_tariff(
     bot: Bot | None = None,
 ) -> bool:
     """Автоматическая покупка суточного тарифа из сохранённой корзины."""
-    from datetime import UTC, datetime, timedelta
 
     # Lazy imports to avoid circular dependency
     from app.cabinet.routes.websocket import (
@@ -1526,7 +1526,6 @@ async def auto_purchase_saved_cart_after_topup(
     bot: Bot | None = None,
 ) -> bool:
     """Attempts to automatically purchase a subscription from a saved cart."""
-    from datetime import UTC, datetime, timedelta
 
     # Lazy imports to avoid circular dependency
     from app.cabinet.routes.websocket import (

@@ -118,9 +118,10 @@ EMAIL_FILTER_GROUPS = {
 
 def _serialize_broadcast(broadcast: BroadcastHistory) -> BroadcastResponse:
     """Serialize broadcast to response model."""
+    blocked = broadcast.blocked_count or 0
     progress = 0.0
     if broadcast.total_count > 0:
-        progress = round((broadcast.sent_count + broadcast.failed_count) / broadcast.total_count * 100, 1)
+        progress = round((broadcast.sent_count + broadcast.failed_count + blocked) / broadcast.total_count * 100, 1)
 
     return BroadcastResponse(
         id=broadcast.id,
@@ -133,6 +134,7 @@ def _serialize_broadcast(broadcast: BroadcastHistory) -> BroadcastResponse:
         total_count=broadcast.total_count,
         sent_count=broadcast.sent_count,
         failed_count=broadcast.failed_count,
+        blocked_count=blocked,
         status=broadcast.status,
         admin_id=broadcast.admin_id,
         admin_name=broadcast.admin_name,

@@ -1944,6 +1944,7 @@ class BroadcastHistory(Base):
     total_count = Column(Integer, default=0)
     sent_count = Column(Integer, default=0)
     failed_count = Column(Integer, default=0)
+    blocked_count = Column(Integer, default=0)
     status = Column(String(50), default='in_progress')
     admin_id = Column(Integer, ForeignKey('users.id'))
     admin_name = Column(String(255))
@@ -2315,8 +2316,6 @@ class Ticket(Base):
             return True
         if self.user_reply_block_until:
             try:
-                from datetime import UTC, datetime
-
                 return self.user_reply_block_until > datetime.now(UTC)
             except Exception:
                 return True

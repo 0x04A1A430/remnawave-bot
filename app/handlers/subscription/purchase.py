@@ -4307,8 +4307,6 @@ async def _extend_existing_subscription(
     squad_uuid: str,
 ):
     """Продлевает существующую подписку."""
-    from datetime import UTC, datetime, timedelta
-
     from app.database.crud.transaction import create_transaction
     from app.database.crud.user import subtract_user_balance
     from app.database.models import TransactionType

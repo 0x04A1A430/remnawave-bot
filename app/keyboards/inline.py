@@ -2033,8 +2033,6 @@ def get_change_devices_keyboard(
     # Для суточных тарифов считаем по дням, для обычных - по месяцам
     if is_daily_tariff and subscription_end_date:
         # Суточный тариф: цена за оставшиеся дни (обычно 1 день)
-        from datetime import UTC, datetime
-
         now = datetime.now(UTC)
         days_left = max(1, (subscription_end_date - now).days)
         # Множитель = days_left / 30 (как в кабинете)

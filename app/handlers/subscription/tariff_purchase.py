@@ -1,6 +1,6 @@
 """Покупка подписки по тарифам."""
 
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
 import structlog
 from aiogram import Dispatcher, F, types
@@ -1251,7 +1251,6 @@ async def confirm_daily_tariff_purchase(
     state: FSMContext,
 ):
     """Подтверждает покупку суточного тарифа."""
-    from datetime import UTC, datetime
 
     tariff_id = int(callback.data.split(':')[1])
     tariff = await get_tariff_by_id(db, tariff_id)
@@ -2022,8 +2021,6 @@ async def select_tariff_switch(
         current_subscription = await get_subscription_by_user_id(db, db_user.id)
         days_warning = ''
         if current_subscription and current_subscription.end_date:
-            from datetime import UTC, datetime
-
             remaining = current_subscription.end_date - datetime.now(UTC)
             remaining_days = max(0, remaining.days)
             if remaining_days > 1:
@@ -2103,7 +2100,6 @@ async def select_tariff_switch_period(
     state: FSMContext,
 ):
     """Обрабатывает выбор периода для переключения тарифа."""
-    from datetime import UTC, datetime
 
     parts = callback.data.split(':')
     tariff_id = int(parts[1])
@@ -2243,8 +2239,8 @@ async def confirm_tariff_switch(
             all_servers, _ = await get_all_server_squads(db, available_only=True)
             squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
 
-        # При смене тарифа пользователь получает ровно тот период, за который заплатил
-        # Старые дни не сохраняются - это смена тарифа, а не продление
+        # При смене тарифа пользователь получает оплаченный период + оставшиеся дни
+        # (остаток добавляется в extend_subscription автоматически)
         days_for_new_tariff = period
 
         # Обновляем подписку с новыми параметрами тарифа
@@ -2361,7 +2357,6 @@ async def confirm_daily_tariff_switch(
     state: FSMContext,
 ):
     """Подтверждает смену на суточный тариф."""
-    from datetime import UTC, datetime
 
     tariff_id = int(callback.data.split(':')[1])
     tariff = await get_tariff_by_id(db, tariff_id)
@@ -2686,7 +2681,6 @@ async def show_instant_switch_list(
     state: FSMContext,
 ):
     """Показывает список тарифов для мгновенного переключения."""
-    from datetime import UTC, datetime
 
     texts = get_texts(db_user.language)
     await state.clear()
@@ -2767,7 +2761,6 @@ async def preview_instant_switch(
     state: FSMContext,
 ):
     """Показывает превью мгновенного переключения тарифа."""
-    from datetime import UTC, datetime
 
     tariff_id = int(callback.data.split(':')[1])
     new_tariff = await get_tariff_by_id(db, tariff_id)
@@ -2925,7 +2918,6 @@ async def confirm_instant_switch(
     state: FSMContext,
 ):
     """Подтверждает мгновенное переключение тарифа."""
-    from datetime import UTC, datetime, timedelta
 
     tariff_id = int(callback.data.split(':')[1])
     new_tariff = await get_tariff_by_id(db, tariff_id)

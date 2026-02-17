@@ -4038,8 +4038,6 @@ async def _deactivate_user_subscription(db: AsyncSession, user_id: int, admin_id
 
 async def _activate_user_subscription(db: AsyncSession, user_id: int, admin_id: int) -> bool:
     try:
-        from datetime import UTC, datetime
-
         from app.database.crud.subscription import get_subscription_by_user_id
         from app.database.models import SubscriptionStatus
         from app.services.subscription_service import SubscriptionService

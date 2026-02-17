@@ -1,6 +1,5 @@
-import datetime
 import json
-from datetime import UTC
+from datetime import UTC, datetime, timedelta
 
 import structlog
 from aiogram import Dispatcher, F, types
@@ -34,7 +33,7 @@ async def show_referral_statistics(callback: types.CallbackQuery, db_user: User,
         if stats.get('active_referrers', 0) > 0:
             avg_per_referrer = stats.get('total_paid_kopeks', 0) / stats['active_referrers']
 
-        current_time = datetime.datetime.now(UTC).strftime('%H:%M:%S')
+        current_time = datetime.now(UTC).strftime('%H:%M:%S')
 
         text = f"""
 🤝 <b>Реферальная статистика</b>
@@ -115,7 +114,7 @@ async def show_referral_statistics(callback: types.CallbackQuery, db_user: User,
     except Exception as e:
         logger.error('Ошибка в show_referral_statistics', error=e, exc_info=True)
 
-        current_time = datetime.datetime.now(UTC).strftime('%H:%M:%S')
+        current_time = datetime.now(UTC).strftime('%H:%M:%S')
         text = f"""
 🤝 <b>Реферальная статистика</b>
 
@@ -657,27 +656,27 @@ async def process_test_referral_earning(message: types.Message, db_user: User, d
     )
 
 
-def _get_period_dates(period: str) -> tuple[datetime.datetime, datetime.datetime]:
+def _get_period_dates(period: str) -> tuple[datetime, datetime]:
     """Возвращает начальную и конечную даты для заданного периода."""
-    now = datetime.datetime.now(UTC)
+    now = datetime.now(UTC)
     today = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
     if period == 'today':
         start_date = today
-        end_date = today + datetime.timedelta(days=1)
+        end_date = today + timedelta(days=1)
     elif period == 'yesterday':
-        start_date = today - datetime.timedelta(days=1)
+        start_date = today - timedelta(days=1)
         end_date = today
     elif period == 'week':
-        start_date = today - datetime.timedelta(days=7)
-        end_date = today + datetime.timedelta(days=1)
+        start_date = today - timedelta(days=7)
+        end_date = today + timedelta(days=1)
     elif period == 'month':
-        start_date = today - datetime.timedelta(days=30)
-        end_date = today + datetime.timedelta(days=1)
+        start_date = today - timedelta(days=30)
+        end_date = today + timedelta(days=1)
     else:
         # По умолчанию — сегодня
         start_date = today
-        end_date = today + datetime.timedelta(days=1)
+        end_date = today + timedelta(days=1)
 
     return start_date, end_date
 
@@ -1156,8 +1155,6 @@ async def sync_referrals_with_contest(
     await callback.answer('🏆 Синхронизирую с конкурсами...')
 
     try:
-        from datetime import UTC, datetime
-
         now_utc = datetime.now(UTC)
 
         # Получаем активные конкурсы

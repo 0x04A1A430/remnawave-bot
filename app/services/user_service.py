@@ -699,8 +699,6 @@ class UserService:
             await update_user(db, user, status=UserStatus.ACTIVE.value)
 
             if user.subscription:
-                from datetime import UTC, datetime
-
                 from app.database.models import SubscriptionStatus
 
                 if user.subscription.end_date > datetime.now(UTC):

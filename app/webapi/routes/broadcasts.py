@@ -37,6 +37,7 @@ def _serialize_broadcast(broadcast: BroadcastHistory) -> BroadcastResponse:
         total_count=broadcast.total_count,
         sent_count=broadcast.sent_count,
         failed_count=broadcast.failed_count,
+        blocked_count=broadcast.blocked_count or 0,
         status=broadcast.status,
         admin_id=broadcast.admin_id,
         admin_name=broadcast.admin_name,

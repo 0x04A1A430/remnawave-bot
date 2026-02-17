@@ -14,7 +14,7 @@ import structlog
 from aiogram import Bot
 
 from app.config import settings
-from app.database.models import User
+from app.database.models import User, UserStatus
 
 
 logger = structlog.get_logger(__name__)
@@ -148,6 +148,10 @@ class NotificationDeliveryService:
         Returns:
             True if notification was sent successfully through at least one channel
         """
+        if user.status in (UserStatus.BLOCKED.value, UserStatus.DELETED.value):
+            logger.debug('Пропускаем уведомление для неактивного пользователя', user_id=user.id, status=user.status)
+            return False
+
         if user.telegram_id:
             # User has Telegram - send via bot
             return await self._send_telegram_notification(

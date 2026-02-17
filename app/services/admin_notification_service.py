@@ -1332,8 +1332,6 @@ class AdminNotificationService:
                 if details.get('enabled_at'):
                     enabled_at = details['enabled_at']
                     if isinstance(enabled_at, str):
-                        from datetime import UTC, datetime
-
                         enabled_at = datetime.fromisoformat(enabled_at)
                     message_parts.append(
                         f'🕐 <b>Время включения:</b> {format_local_datetime(enabled_at, "%d.%m.%Y %H:%M:%S")}'
@@ -1349,8 +1347,6 @@ class AdminNotificationService:
                 if details.get('disabled_at'):
                     disabled_at = details['disabled_at']
                     if isinstance(disabled_at, str):
-                        from datetime import UTC, datetime
-
                         disabled_at = datetime.fromisoformat(disabled_at)
                     message_parts.append(
                         f'🕐 <b>Время отключения:</b> {format_local_datetime(disabled_at, "%d.%m.%Y %H:%M:%S")}'
@@ -1453,8 +1449,6 @@ class AdminNotificationService:
             if details.get('last_check'):
                 last_check = details['last_check']
                 if isinstance(last_check, str):
-                    from datetime import UTC, datetime
-
                     last_check = datetime.fromisoformat(last_check)
                 message_parts.append(f'🕐 <b>Последняя проверка:</b> {format_local_datetime(last_check, "%H:%M:%S")}')
 

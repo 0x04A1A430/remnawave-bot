@@ -1,3 +1,4 @@
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
@@ -189,8 +190,6 @@ class PromoCodeService:
 
         # Обработка DISCOUNT типа (одноразовая скидка)
         if promocode.type == PromoCodeType.DISCOUNT.value:
-            from datetime import UTC, datetime, timedelta
-
             # Проверка на наличие активной скидки
             current_discount = getattr(user, 'promo_offer_discount_percent', 0) or 0
             expires_at = getattr(user, 'promo_offer_discount_expires_at', None)
@@ -372,8 +371,6 @@ class PromoCodeService:
 
             if current_discount <= 0 or not source or not source.startswith('promocode:'):
                 return {'success': False, 'error': 'no_active_discount_promocode'}
-
-            from datetime import UTC, datetime
 
             expires_at = getattr(user, 'promo_offer_discount_expires_at', None)
             # Если скидка уже истекла по времени -- тоже нечего деактивировать

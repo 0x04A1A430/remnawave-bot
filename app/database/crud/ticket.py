@@ -154,7 +154,6 @@ class TicketCRUD:
         tickets = result.scalars().all()
         if not tickets:
             return None
-        from datetime import UTC, datetime
 
         # Если есть вечная блокировка в любом тикете — блок активен без срока
         for t in tickets:

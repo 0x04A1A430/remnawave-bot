@@ -1183,8 +1183,6 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
         existing_user.balance_kopeks = 0
         existing_user.has_had_paid_subscription = False
 
-        from datetime import UTC, datetime
-
         existing_user.updated_at = datetime.now(UTC)
         existing_user.last_activity = datetime.now(UTC)
 
@@ -1216,8 +1214,6 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
         existing_user.language = language
         if referrer_id and not existing_user.referred_by_id:
             existing_user.referred_by_id = referrer_id
-
-        from datetime import UTC, datetime
 
         existing_user.updated_at = datetime.now(UTC)
         existing_user.last_activity = datetime.now(UTC)
@@ -1449,8 +1445,6 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
         existing_user.balance_kopeks = 0
         existing_user.has_had_paid_subscription = False
 
-        from datetime import UTC, datetime
-
         existing_user.updated_at = datetime.now(UTC)
         existing_user.last_activity = datetime.now(UTC)
 
@@ -1482,8 +1476,6 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
         existing_user.language = language
         if referrer_id and not existing_user.referred_by_id:
             existing_user.referred_by_id = referrer_id
-
-        from datetime import UTC, datetime
 
         existing_user.updated_at = datetime.now(UTC)
         existing_user.last_activity = datetime.now(UTC)
@@ -1666,8 +1658,6 @@ def _get_subscription_status(user, texts):
 
     subscription = user.subscription
     actual_status = getattr(subscription, 'actual_status', None)
-
-    from datetime import UTC, datetime
 
     end_date = getattr(subscription, 'end_date', None)
     end_date_display = format_local_datetime(end_date, '%d.%m.%Y') if end_date else None
