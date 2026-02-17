@@ -5,10 +5,10 @@ import string
 from datetime import UTC, datetime
 
 import structlog
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.models import PartnerApplication, PartnerStatus, User
+from app.database.models import AdvertisingCampaign, PartnerApplication, PartnerStatus, User
 
 
 logger = structlog.get_logger(__name__)
@@ -163,6 +163,13 @@ class PartnerApplicationService:
 
         user.partner_status = PartnerStatus.NONE.value
         user.referral_commission_percent = None
+
+        # Отвязываем все кампании от бывшего партнёра
+        await db.execute(
+            update(AdvertisingCampaign)
+            .where(AdvertisingCampaign.partner_user_id == user_id)
+            .values(partner_user_id=None)
+        )
 
         await db.commit()
 
