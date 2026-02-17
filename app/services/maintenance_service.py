@@ -415,10 +415,16 @@ API снова отвечает на запросы.""",
             self._status.consecutive_failures = status_data.get('consecutive_failures', 0)
 
             if status_data.get('enabled_at'):
-                self._status.enabled_at = datetime.fromisoformat(status_data['enabled_at'])
+                dt = datetime.fromisoformat(status_data['enabled_at'])
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=UTC)
+                self._status.enabled_at = dt
 
             if status_data.get('last_check'):
-                self._status.last_check = datetime.fromisoformat(status_data['last_check'])
+                dt = datetime.fromisoformat(status_data['last_check'])
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=UTC)
+                self._status.last_check = dt
 
             logger.info('🔥 Состояние техработ загружено из кеша: активен', is_active=self._status.is_active)
 
