@@ -793,7 +793,7 @@ async def confirm_withdrawal_request(callback: types.CallbackQuery, db_user: Use
 
     try:
         notification_service = AdminNotificationService(callback.bot)
-        await notification_service.send_to_admins(admin_text, keyboard=admin_keyboard)
+        await notification_service.send_admin_notification(admin_text, reply_markup=admin_keyboard)
     except Exception as e:
         logger.error('Ошибка отправки уведомления админам о заявке на вывод', error=e)
 
