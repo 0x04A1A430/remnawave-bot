@@ -428,7 +428,9 @@ class BroadcastService:
             sent_count,
             failed_count,
             blocked_count,
-            status='cancelled' if cancelled else ('completed' if failed_count == 0 and blocked_count == 0 else 'partial'),
+            status='cancelled'
+            if cancelled
+            else ('completed' if failed_count == 0 and blocked_count == 0 else 'partial'),
         )
 
     async def _mark_cancelled(

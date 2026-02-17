@@ -745,4 +745,6 @@ async def test_auto_purchase_trial_remaining_days_transferred(monkeypatch):
     # Проверяем, что подписка продлена на 30 дней + 2 оставшихся дня триала = 32 от now
     # end_date = trial_end + 30 = (now + 2) + 30 = now + 32
     actual_total_days = (subscription.end_date - now).days
-    assert actual_total_days == 32, f'Expected 32 days from now (30 purchased + 2 remaining trial), got {actual_total_days}'
+    assert actual_total_days == 32, (
+        f'Expected 32 days from now (30 purchased + 2 remaining trial), got {actual_total_days}'
+    )
