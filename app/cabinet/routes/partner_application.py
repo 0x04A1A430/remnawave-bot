@@ -35,7 +35,7 @@ def _get_campaign_web_link(start_parameter: str) -> str | None:
     """Generate web link for campaign."""
     base_url = (settings.MINIAPP_CUSTOM_URL or '').rstrip('/')
     if base_url:
-        return f'{base_url}/login?start={start_parameter}'
+        return f'{base_url}/?campaign={start_parameter}'
     return None
 
 
