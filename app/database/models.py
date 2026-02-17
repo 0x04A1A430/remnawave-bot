@@ -960,6 +960,15 @@ class Tariff(Base):
         return f"<Tariff(id={self.id}, name='{self.name}', tier={self.tier_level}, active={self.is_active})>"
 
 
+class PartnerStatus(Enum):
+    """Статусы партнёрского аккаунта."""
+
+    NONE = 'none'  # Не подавал заявку
+    PENDING = 'pending'  # Заявка на рассмотрении
+    APPROVED = 'approved'  # Партнёр одобрен
+    REJECTED = 'rejected'  # Заявка отклонена
+
+
 class User(Base):
     __tablename__ = 'users'
 
@@ -1477,15 +1486,6 @@ class ReferralEarning(Base):
     @property
     def amount_rubles(self) -> float:
         return self.amount_kopeks / 100
-
-
-class PartnerStatus(Enum):
-    """Статусы партнёрского аккаунта."""
-
-    NONE = 'none'  # Не подавал заявку
-    PENDING = 'pending'  # Заявка на рассмотрении
-    APPROVED = 'approved'  # Партнёр одобрен
-    REJECTED = 'rejected'  # Заявка отклонена
 
 
 class WithdrawalRequestStatus(Enum):
