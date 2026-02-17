@@ -106,6 +106,35 @@ async def approve_application(
             detail=error,
         )
 
+    # Notify user about approval
+    try:
+        from aiogram import Bot
+
+        from app.config import settings
+        from app.services.notification_delivery_service import notification_delivery_service
+
+        if settings.BOT_TOKEN:
+            application = await db.get(PartnerApplication, application_id)
+            user = await db.get(User, application.user_id) if application else None
+            if user:
+                comment_text = f'\n{request.comment}' if request.comment else ''
+                tg_message = (
+                    f'✅ Ваша заявка на партнёрство одобрена!\nКомиссия: {request.commission_percent}%{comment_text}'
+                )
+                bot = Bot(token=settings.BOT_TOKEN)
+                try:
+                    await notification_delivery_service.notify_partner_approved(
+                        user=user,
+                        commission_percent=request.commission_percent,
+                        comment=request.comment,
+                        bot=bot,
+                        telegram_message=tg_message,
+                    )
+                finally:
+                    await bot.session.close()
+    except Exception as e:
+        logger.error('Failed to send partner approval notification', error=e)
+
     return {'success': True}
 
 
@@ -129,6 +158,32 @@ async def reject_application(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=error,
         )
+
+    # Notify user about rejection
+    try:
+        from aiogram import Bot
+
+        from app.config import settings
+        from app.services.notification_delivery_service import notification_delivery_service
+
+        if settings.BOT_TOKEN:
+            application = await db.get(PartnerApplication, application_id)
+            user = await db.get(User, application.user_id) if application else None
+            if user:
+                comment_text = f'\nПричина: {request.comment}' if request.comment else ''
+                tg_message = f'❌ Ваша заявка на партнёрство отклонена.{comment_text}'
+                bot = Bot(token=settings.BOT_TOKEN)
+                try:
+                    await notification_delivery_service.notify_partner_rejected(
+                        user=user,
+                        comment=request.comment,
+                        bot=bot,
+                        telegram_message=tg_message,
+                    )
+                finally:
+                    await bot.session.close()
+    except Exception as e:
+        logger.error('Failed to send partner rejection notification', error=e)
 
     return {'success': True}
 

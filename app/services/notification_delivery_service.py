@@ -53,6 +53,14 @@ class NotificationType(Enum):
     REFERRAL_BONUS = 'referral_bonus'
     REFERRAL_REGISTERED = 'referral_registered'
 
+    # Partner notifications
+    PARTNER_APPLICATION_APPROVED = 'partner_application_approved'
+    PARTNER_APPLICATION_REJECTED = 'partner_application_rejected'
+
+    # Withdrawal notifications
+    WITHDRAWAL_APPROVED = 'withdrawal_approved'
+    WITHDRAWAL_REJECTED = 'withdrawal_rejected'
+
     # Auth emails
     EMAIL_VERIFICATION = 'email_verification'
     PASSWORD_RESET = 'password_reset'
@@ -499,6 +507,96 @@ class NotificationDeliveryService:
             bot=bot,
             telegram_message=telegram_message,
             telegram_markup=telegram_markup,
+        )
+
+    async def notify_partner_approved(
+        self,
+        user: User,
+        commission_percent: int,
+        comment: str | None = None,
+        bot: Bot | None = None,
+        telegram_message: str | None = None,
+    ) -> bool:
+        """Notify user about partner application approval."""
+        context = {
+            'commission_percent': commission_percent,
+            'comment': comment or '',
+        }
+
+        return await self.send_notification(
+            user=user,
+            notification_type=NotificationType.PARTNER_APPLICATION_APPROVED,
+            context=context,
+            bot=bot,
+            telegram_message=telegram_message,
+        )
+
+    async def notify_partner_rejected(
+        self,
+        user: User,
+        comment: str | None = None,
+        bot: Bot | None = None,
+        telegram_message: str | None = None,
+    ) -> bool:
+        """Notify user about partner application rejection."""
+        context = {
+            'comment': comment or '',
+        }
+
+        return await self.send_notification(
+            user=user,
+            notification_type=NotificationType.PARTNER_APPLICATION_REJECTED,
+            context=context,
+            bot=bot,
+            telegram_message=telegram_message,
+        )
+
+    async def notify_withdrawal_approved(
+        self,
+        user: User,
+        amount_kopeks: int,
+        comment: str | None = None,
+        bot: Bot | None = None,
+        telegram_message: str | None = None,
+    ) -> bool:
+        """Notify user about withdrawal request approval."""
+        context = {
+            'amount_kopeks': amount_kopeks,
+            'amount_rubles': amount_kopeks / 100,
+            'formatted_amount': settings.format_price(amount_kopeks),
+            'comment': comment or '',
+        }
+
+        return await self.send_notification(
+            user=user,
+            notification_type=NotificationType.WITHDRAWAL_APPROVED,
+            context=context,
+            bot=bot,
+            telegram_message=telegram_message,
+        )
+
+    async def notify_withdrawal_rejected(
+        self,
+        user: User,
+        amount_kopeks: int,
+        comment: str | None = None,
+        bot: Bot | None = None,
+        telegram_message: str | None = None,
+    ) -> bool:
+        """Notify user about withdrawal request rejection."""
+        context = {
+            'amount_kopeks': amount_kopeks,
+            'amount_rubles': amount_kopeks / 100,
+            'formatted_amount': settings.format_price(amount_kopeks),
+            'comment': comment or '',
+        }
+
+        return await self.send_notification(
+            user=user,
+            notification_type=NotificationType.WITHDRAWAL_REJECTED,
+            context=context,
+            bot=bot,
+            telegram_message=telegram_message,
         )
 
     async def notify_daily_debit(

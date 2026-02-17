@@ -194,6 +194,34 @@ async def approve_withdrawal(
             detail=error,
         )
 
+    # Notify user about approval
+    try:
+        from aiogram import Bot
+
+        from app.config import settings
+        from app.services.notification_delivery_service import notification_delivery_service
+
+        if settings.BOT_TOKEN:
+            withdrawal = await db.get(WithdrawalRequest, withdrawal_id)
+            user = await db.get(User, withdrawal.user_id) if withdrawal else None
+            if user and withdrawal:
+                formatted_amount = settings.format_price(withdrawal.amount_kopeks)
+                comment_text = f'\n{request.comment}' if request.comment else ''
+                tg_message = f'✅ Ваш запрос на вывод {formatted_amount} одобрен.{comment_text}'
+                bot = Bot(token=settings.BOT_TOKEN)
+                try:
+                    await notification_delivery_service.notify_withdrawal_approved(
+                        user=user,
+                        amount_kopeks=withdrawal.amount_kopeks,
+                        comment=request.comment,
+                        bot=bot,
+                        telegram_message=tg_message,
+                    )
+                finally:
+                    await bot.session.close()
+    except Exception as e:
+        logger.error('Failed to send withdrawal approval notification', error=e)
+
     return {'success': True}
 
 
@@ -217,6 +245,34 @@ async def reject_withdrawal(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Не удалось отклонить заявку',
         )
+
+    # Notify user about rejection
+    try:
+        from aiogram import Bot
+
+        from app.config import settings
+        from app.services.notification_delivery_service import notification_delivery_service
+
+        if settings.BOT_TOKEN:
+            withdrawal = await db.get(WithdrawalRequest, withdrawal_id)
+            user = await db.get(User, withdrawal.user_id) if withdrawal else None
+            if user and withdrawal:
+                formatted_amount = settings.format_price(withdrawal.amount_kopeks)
+                comment_text = f'\nПричина: {request.comment}' if request.comment else ''
+                tg_message = f'❌ Ваш запрос на вывод {formatted_amount} отклонён.{comment_text}'
+                bot = Bot(token=settings.BOT_TOKEN)
+                try:
+                    await notification_delivery_service.notify_withdrawal_rejected(
+                        user=user,
+                        amount_kopeks=withdrawal.amount_kopeks,
+                        comment=request.comment,
+                        bot=bot,
+                        telegram_message=tg_message,
+                    )
+                finally:
+                    await bot.session.close()
+    except Exception as e:
+        logger.error('Failed to send withdrawal rejection notification', error=e)
 
     return {'success': True}
 
