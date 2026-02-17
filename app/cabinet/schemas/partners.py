@@ -37,12 +37,27 @@ class PartnerApplicationInfo(BaseModel):
         from_attributes = True
 
 
+class PartnerCampaignInfo(BaseModel):
+    """Campaign info visible to the partner."""
+
+    id: int
+    name: str
+    start_parameter: str
+    bonus_type: str
+    balance_bonus_kopeks: int = 0
+    subscription_duration_days: int | None = None
+    subscription_traffic_gb: int | None = None
+    deep_link: str | None = None
+    web_link: str | None = None
+
+
 class PartnerStatusResponse(BaseModel):
     """Partner status for current user."""
 
     partner_status: str
     commission_percent: int | None = None
     latest_application: PartnerApplicationInfo | None = None
+    campaigns: list[PartnerCampaignInfo] = []
 
 
 # ==================== Admin-facing ====================

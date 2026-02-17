@@ -2,16 +2,18 @@
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database.models import User
+from app.database.models import AdvertisingCampaign, User
 from app.services.partner_application_service import partner_application_service
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 from ..schemas.partners import (
     PartnerApplicationInfo,
     PartnerApplicationRequest,
+    PartnerCampaignInfo,
     PartnerStatusResponse,
 )
 
@@ -19,6 +21,22 @@ from ..schemas.partners import (
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/referral/partner', tags=['Cabinet Partner'])
+
+
+def _get_campaign_deep_link(start_parameter: str) -> str | None:
+    """Generate Telegram deep link for campaign."""
+    bot_username = settings.get_bot_username()
+    if bot_username:
+        return f'https://t.me/{bot_username}?start={start_parameter}'
+    return None
+
+
+def _get_campaign_web_link(start_parameter: str) -> str | None:
+    """Generate web link for campaign."""
+    base_url = (settings.MINIAPP_CUSTOM_URL or '').rstrip('/')
+    if base_url:
+        return f'{base_url}/login?start={start_parameter}'
+    return None
 
 
 @router.get('/status', response_model=PartnerStatusResponse)
@@ -49,10 +67,35 @@ async def get_partner_status(
     if commission is None and user.is_partner:
         commission = settings.REFERRAL_COMMISSION_PERCENT
 
+    # Fetch campaigns assigned to this partner
+    campaigns: list[PartnerCampaignInfo] = []
+    if user.is_partner:
+        result = await db.execute(
+            select(AdvertisingCampaign).where(
+                AdvertisingCampaign.partner_user_id == user.id,
+                AdvertisingCampaign.is_active.is_(True),
+            )
+        )
+        for c in result.scalars().all():
+            campaigns.append(
+                PartnerCampaignInfo(
+                    id=c.id,
+                    name=c.name,
+                    start_parameter=c.start_parameter,
+                    bonus_type=c.bonus_type,
+                    balance_bonus_kopeks=c.balance_bonus_kopeks or 0,
+                    subscription_duration_days=c.subscription_duration_days,
+                    subscription_traffic_gb=c.subscription_traffic_gb,
+                    deep_link=_get_campaign_deep_link(c.start_parameter),
+                    web_link=_get_campaign_web_link(c.start_parameter),
+                )
+            )
+
     return PartnerStatusResponse(
         partner_status=user.partner_status,
         commission_percent=commission,
         latest_application=app_info,
+        campaigns=campaigns,
     )
 
 
