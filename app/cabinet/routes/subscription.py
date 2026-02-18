@@ -190,11 +190,13 @@ def _subscription_to_response(
     elif tariff_id and hasattr(subscription, 'tariff') and subscription.tariff:
         is_daily = getattr(subscription.tariff, 'is_daily', False)
 
-    # Get daily_price_kopeks and tariff_name from tariff (separate from is_daily check)
+    # Get daily_price_kopeks, tariff_name, traffic_reset_mode from tariff
+    traffic_reset_mode = None
     if tariff_id and hasattr(subscription, 'tariff') and subscription.tariff:
         daily_price_kopeks = getattr(subscription.tariff, 'daily_price_kopeks', None)
         if not tariff_name:  # Only set if not passed as parameter
             tariff_name = getattr(subscription.tariff, 'name', None)
+        traffic_reset_mode = getattr(subscription.tariff, 'traffic_reset_mode', None) or settings.DEFAULT_TRAFFIC_RESET_STRATEGY
 
     # Calculate next daily charge time (24 hours after last charge)
     next_daily_charge_at = None
@@ -235,6 +237,7 @@ def _subscription_to_response(
         next_daily_charge_at=next_daily_charge_at,
         tariff_id=tariff_id,
         tariff_name=tariff_name,
+        traffic_reset_mode=traffic_reset_mode,
     )
 
 

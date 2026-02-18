@@ -56,6 +56,7 @@ class SubscriptionData(BaseModel):
     next_daily_charge_at: datetime | None = None  # When next daily charge will happen
     tariff_id: int | None = None
     tariff_name: str | None = None
+    traffic_reset_mode: str | None = None
 
     class Config:
         from_attributes = True
