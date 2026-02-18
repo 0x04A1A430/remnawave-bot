@@ -1482,6 +1482,8 @@ async def _build_tariff_response(
         # Дневной тариф
         'is_daily': getattr(tariff, 'is_daily', False),
         'daily_price_kopeks': daily_price,
+        # Сброс трафика
+        'traffic_reset_mode': tariff.traffic_reset_mode or settings.DEFAULT_TRAFFIC_RESET_STRATEGY,
     }
 
     # Add promo group info if user has discounts
