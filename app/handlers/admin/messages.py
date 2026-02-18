@@ -1402,17 +1402,6 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
         # Задержка между батчами для соблюдения rate limits
         await asyncio.sleep(_BATCH_DELAY)
 
-    # Фоновая очистка заблокировавших бота пользователей
-    if blocked_telegram_ids:
-        from app.services.broadcast_service import _background_tasks, cleanup_blocked_broadcast_users
-
-        task = asyncio.create_task(
-            cleanup_blocked_broadcast_users(blocked_telegram_ids),
-            name=f'broadcast-{broadcast_id}-blocked-cleanup',
-        )
-        _background_tasks.add(task)
-        task.add_done_callback(_background_tasks.discard)
-
     # Учитываем пропущенных email-only пользователей
     skipped_email_users = total_users_count - total_recipients
     if skipped_email_users > 0:

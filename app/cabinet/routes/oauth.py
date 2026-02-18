@@ -12,6 +12,7 @@ from app.database.crud.user import (
     create_user_by_oauth,
     get_user_by_email,
     get_user_by_oauth_provider,
+    get_user_by_referral_code,
     set_user_oauth_provider_id,
 )
 from app.database.models import User
@@ -37,16 +38,21 @@ async def _finalize_oauth_login(
     user: User,
     provider: str,
     campaign_slug: str | None = None,
+    referral_code: str | None = None,
 ) -> AuthResponse:
     """Update last login, create tokens, store refresh token."""
     user.cabinet_last_login = datetime.now(UTC)
     await db.commit()
     auth_response = _create_auth_response(user)
     await _store_refresh_token(db, user.id, auth_response.refresh_token, device_info=f'oauth:{provider}')
+
+    # Process referral code (before campaign bonus, which may also set referrer)
+    from .auth import _process_referral_code, _user_to_response
+
+    await _process_referral_code(db, user, referral_code)
+
     auth_response.campaign_bonus = await _process_campaign_bonus(db, user, campaign_slug)
     if auth_response.campaign_bonus:
-        from .auth import _user_to_response
-
         auth_response.user = _user_to_response(user)
     return auth_response
 
@@ -74,6 +80,7 @@ class OAuthCallbackRequest(BaseModel):
     campaign_slug: str | None = Field(
         None, min_length=1, max_length=64, pattern=r'^[a-zA-Z0-9_-]+$', description='Campaign slug from web link'
     )
+    referral_code: str | None = Field(None, max_length=32, description='Referral code of inviter')
 
 
 # --- Endpoints ---
@@ -153,7 +160,7 @@ async def oauth_callback(
     user = await get_user_by_oauth_provider(db, provider, user_info.provider_id)
     if user:
         logger.info('OAuth login via for existing user', provider=provider, user_id=user.id)
-        return await _finalize_oauth_login(db, user, provider, request.campaign_slug)
+        return await _finalize_oauth_login(db, user, provider, request.campaign_slug, request.referral_code)
 
     # 6. Find user by email (if verified) and link provider
     if user_info.email and user_info.email_verified:
@@ -161,9 +168,32 @@ async def oauth_callback(
         if user:
             await set_user_oauth_provider_id(db, user, provider, user_info.provider_id)
             logger.info('OAuth login via linked to existing email user', provider=provider, user_id=user.id)
-            return await _finalize_oauth_login(db, user, provider, request.campaign_slug)
+            return await _finalize_oauth_login(db, user, provider, request.campaign_slug, request.referral_code)
 
-    # 7. Create new user
+    # 7. Resolve referral code for new user
+    referrer_id = None
+    if request.referral_code:
+        try:
+            referrer = await get_user_by_referral_code(db, request.referral_code)
+            if referrer:
+                # Self-referral protection by email
+                if (
+                    user_info.email
+                    and user_info.email_verified
+                    and referrer.email
+                    and referrer.email.lower() == user_info.email.lower()
+                ):
+                    logger.warning(
+                        'Self-referral attempt blocked via OAuth',
+                        referral_code=request.referral_code,
+                        email=user_info.email,
+                    )
+                else:
+                    referrer_id = referrer.id
+        except Exception as e:
+            logger.warning('Failed to resolve referral code during OAuth', referral_code=request.referral_code, error=e)
+
+    # 8. Create new user
     user = await create_user_by_oauth(
         db=db,
         provider=provider,
@@ -173,6 +203,7 @@ async def oauth_callback(
         first_name=user_info.first_name,
         last_name=user_info.last_name,
         username=user_info.username,
+        referred_by_id=referrer_id,
     )
     logger.info('OAuth new user created via with id', provider=provider, user_id=user.id)
-    return await _finalize_oauth_login(db, user, provider, request.campaign_slug)
+    return await _finalize_oauth_login(db, user, provider, request.campaign_slug, request.referral_code)

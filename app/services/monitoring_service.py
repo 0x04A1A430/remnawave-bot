@@ -45,12 +45,13 @@ from app.database.models import (
     TicketStatus,
     User,
     UserPromoGroup,
+    UserStatus,
 )
 from app.external.remnawave_api import (
     RemnaWaveAPIError,
     RemnaWaveUser,
     TrafficLimitStrategy,
-    UserStatus,
+    UserStatus as RemnaWaveUserStatus,
 )
 from app.localization.texts import get_texts
 from app.services.notification_delivery_service import (
@@ -93,6 +94,7 @@ class MonitoringService:
         text: str,
         reply_markup=None,
         parse_mode: str | None = 'HTML',
+        user: User | None = None,
     ):
         """Отправляет сообщение, добавляя логотип при необходимости."""
         if not self.bot:
@@ -101,6 +103,11 @@ class MonitoringService:
         # Skip email-only users (no telegram_id)
         if not chat_id:
             logger.debug('Пропуск уведомления: chat_id не указан (email-пользователь)')
+            return None
+
+        # Skip blocked/deleted users to save Telegram rate limits
+        if user and user.status in (UserStatus.BLOCKED.value, UserStatus.DELETED.value):
+            logger.debug('Пропуск уведомления: пользователь недоступен', user_id=user.id, status=user.status)
             return None
 
         if settings.ENABLE_LOGO_MODE and LOGO_PATH.exists() and (text is None or len(text) <= 1000):
@@ -144,11 +151,9 @@ class MonitoringService:
         )
         return any(marker in message for marker in unreachable_markers)
 
-    def _handle_unreachable_user(self, user: User, error: Exception, context: str) -> bool:
+    async def _handle_unreachable_user(self, user: User, error: Exception, context: str) -> bool:
         if isinstance(error, TelegramForbiddenError):
-            logger.warning(
-                '⚠️ Пользователь недоступен : бот заблокирован', telegram_id=user.telegram_id, context=context
-            )
+            logger.warning('⚠️ Пользователь недоступен: бот заблокирован', telegram_id=user.telegram_id, context=context)
             return True
 
         if isinstance(error, TelegramBadRequest) and self._is_unreachable_error(error):
@@ -338,7 +343,7 @@ class MonitoringService:
 
                 update_kwargs = dict(
                     uuid=user.remnawave_uuid,
-                    status=UserStatus.ACTIVE if is_active else UserStatus.EXPIRED,
+                    status=RemnaWaveUserStatus.ACTIVE if is_active else RemnaWaveUserStatus.EXPIRED,
                     expire_at=subscription.end_date,
                     traffic_limit_bytes=self._gb_to_bytes(subscription.traffic_limit_gb),
                     traffic_limit_strategy=TrafficLimitStrategy.MONTH,
@@ -469,6 +474,7 @@ class MonitoringService:
 
             result = await db.execute(
                 select(Subscription)
+                .join(Subscription.user)
                 .options(
                     selectinload(Subscription.user).selectinload(User.promo_group),
                     selectinload(Subscription.user)
@@ -481,6 +487,7 @@ class MonitoringService:
                         Subscription.is_trial == True,
                         Subscription.end_date <= threshold_time,
                         Subscription.end_date > datetime.now(UTC),
+                        User.status == UserStatus.ACTIVE.value,
                     )
                 )
             )
@@ -540,6 +547,7 @@ class MonitoringService:
             )
             result = await db.execute(
                 select(Subscription)
+                .join(Subscription.user)
                 .options(
                     selectinload(Subscription.user),
                     selectinload(Subscription.tariff),
@@ -554,6 +562,7 @@ class MonitoringService:
                                 SubscriptionStatus.DISABLED.value,
                             ]
                         ),
+                        User.status == UserStatus.ACTIVE.value,
                     )
                 )
             )
@@ -1142,7 +1151,7 @@ class MonitoringService:
             return True
 
         except (TelegramForbiddenError, TelegramBadRequest) as exc:
-            if self._handle_unreachable_user(user, exc, 'уведомление об истечении подписки'):
+            if await self._handle_unreachable_user(user, exc, 'уведомление об истечении подписки'):
                 return True
             logger.error(
                 'Ошибка Telegram API при отправке уведомления об истечении подписки пользователю',
@@ -1209,7 +1218,7 @@ class MonitoringService:
             return True
 
         except (TelegramForbiddenError, TelegramBadRequest) as exc:
-            if self._handle_unreachable_user(user, exc, 'уведомление об истекающей подписке'):
+            if await self._handle_unreachable_user(user, exc, 'уведомление об истекающей подписке'):
                 return True
             logger.error(
                 'Ошибка Telegram API при отправке уведомления об истечении подписки пользователю',
@@ -1257,11 +1266,12 @@ class MonitoringService:
                 text=message,
                 parse_mode='HTML',
                 reply_markup=keyboard,
+                user=user,
             )
             return True
 
         except (TelegramForbiddenError, TelegramBadRequest) as exc:
-            if self._handle_unreachable_user(user, exc, 'уведомление о завершении тестовой подписки'):
+            if await self._handle_unreachable_user(user, exc, 'уведомление о завершении тестовой подписки'):
                 return True
             logger.error(
                 'Ошибка Telegram API при отправке уведомления о завершении тестовой подписки пользователю',
@@ -1327,11 +1337,12 @@ class MonitoringService:
                 text=message,
                 parse_mode='HTML',
                 reply_markup=keyboard,
+                user=user,
             )
             return True
 
         except (TelegramForbiddenError, TelegramBadRequest) as exc:
-            if self._handle_unreachable_user(user, exc, 'уведомление об отписке от канала'):
+            if await self._handle_unreachable_user(user, exc, 'уведомление об отписке от канала'):
                 return True
             logger.error(
                 'Ошибка Telegram API при отправке уведомления об отписке от канала пользователю',
@@ -1402,7 +1413,7 @@ class MonitoringService:
             return True
 
         except (TelegramForbiddenError, TelegramBadRequest) as exc:
-            if self._handle_unreachable_user(user, exc, 'напоминание об истекшей подписке'):
+            if await self._handle_unreachable_user(user, exc, 'напоминание об истекшей подписке'):
                 return True
             logger.error(
                 'Ошибка Telegram API при отправке напоминания об истекшей подписке пользователю',
@@ -1497,7 +1508,7 @@ class MonitoringService:
             return True
 
         except (TelegramForbiddenError, TelegramBadRequest) as exc:
-            if self._handle_unreachable_user(user, exc, 'скидочное уведомление'):
+            if await self._handle_unreachable_user(user, exc, 'скидочное уведомление'):
                 return True
             logger.error(
                 'Ошибка Telegram API при отправке скидочного уведомления пользователю',
@@ -1522,7 +1533,7 @@ class MonitoringService:
                 parse_mode='HTML',
             )
         except (TelegramForbiddenError, TelegramBadRequest) as exc:
-            if not self._handle_unreachable_user(user, exc, 'уведомление об успешном автоплатеже'):
+            if not await self._handle_unreachable_user(user, exc, 'уведомление об успешном автоплатеже'):
                 logger.error(
                     'Ошибка Telegram API при отправке уведомления об автоплатеже пользователю',
                     telegram_id=user.telegram_id,
@@ -1559,7 +1570,7 @@ class MonitoringService:
             )
 
         except (TelegramForbiddenError, TelegramBadRequest) as exc:
-            if not self._handle_unreachable_user(user, exc, 'уведомление о неудачном автоплатеже'):
+            if not await self._handle_unreachable_user(user, exc, 'уведомление о неудачном автоплатеже'):
                 logger.error(
                     'Ошибка Telegram API при отправке уведомления о неудачном автоплатеже пользователю',
                     telegram_id=user.telegram_id,

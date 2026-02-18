@@ -27,9 +27,6 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger(__name__)
 
-# Хранение ссылок на фоновые задачи, чтобы GC не удалил их
-_background_tasks: set[asyncio.Task] = set()
-
 
 VALID_MEDIA_TYPES = {'photo', 'video', 'document'}
 
@@ -358,15 +355,6 @@ class BroadcastService:
 
             # Задержка между батчами для rate limiting
             await asyncio.sleep(_TG_BATCH_DELAY)
-
-        # Фоновая очистка заблокировавших бота пользователей
-        if blocked_telegram_ids:
-            task = asyncio.create_task(
-                cleanup_blocked_broadcast_users(blocked_telegram_ids),
-                name=f'broadcast-{broadcast_id}-blocked-cleanup',
-            )
-            _background_tasks.add(task)
-            task.add_done_callback(_background_tasks.discard)
 
         return sent_count, failed_count, blocked_count, False
 
