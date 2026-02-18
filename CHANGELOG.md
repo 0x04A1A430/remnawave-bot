@@ -1,5 +1,16 @@
 # Changelog
 
+## [3.16.2](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.16.1...v3.16.2) (2026-02-18)
+
+
+### Bug Fixes
+
+* auto-convert naive datetimes to UTC-aware on model load ([f7d33a7](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/f7d33a7d2b31145a839ee54676816aa657ac90da))
+* extend naive datetime guard to all model properties ([bd11801](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/bd11801467e917d76005d1a782c71f5ae4ffee6e))
+* handle naive datetime in raw SQL row comparison (payment/common) ([38f3a9a](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/38f3a9a16a24e85adf473f2150aad31574a87060))
+* handle naive datetimes in Subscription properties ([e512e5f](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/e512e5fe6e9009992b5bc8b9be7f53e0612f234a))
+* use AwareDateTime TypeDecorator for all datetime columns ([a7f3d65](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/a7f3d652c51ecd653900a530b7d38feaf603ecf1))
+
 ## [3.16.1](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.16.0...v3.16.1) (2026-02-18)
 
 
