@@ -1177,32 +1177,35 @@ class Subscription(Base):
         'TrafficPurchase', back_populates='subscription', passive_deletes=True, cascade='all, delete-orphan'
     )
 
+    @staticmethod
+    def _aware(dt: datetime | None) -> datetime | None:
+        """Ensure datetime is timezone-aware (handles pre-TIMESTAMPTZ DBs)."""
+        if dt is not None and dt.tzinfo is None:
+            return dt.replace(tzinfo=UTC)
+        return dt
+
     @property
     def is_active(self) -> bool:
         current_time = datetime.now(UTC)
-        return (
-            self.status == SubscriptionStatus.ACTIVE.value
-            and self.end_date is not None
-            and self.end_date > current_time
-        )
+        end = self._aware(self.end_date)
+        return self.status == SubscriptionStatus.ACTIVE.value and end is not None and end > current_time
 
     @property
     def is_expired(self) -> bool:
         """Проверяет, истёк ли срок подписки"""
-        return self.end_date is not None and self.end_date <= datetime.now(UTC)
+        end = self._aware(self.end_date)
+        return end is not None and end <= datetime.now(UTC)
 
     @property
     def should_be_expired(self) -> bool:
         current_time = datetime.now(UTC)
-        return (
-            self.status == SubscriptionStatus.ACTIVE.value
-            and self.end_date is not None
-            and self.end_date <= current_time
-        )
+        end = self._aware(self.end_date)
+        return self.status == SubscriptionStatus.ACTIVE.value and end is not None and end <= current_time
 
     @property
     def actual_status(self) -> str:
         current_time = datetime.now(UTC)
+        end = self._aware(self.end_date)
 
         if self.status == SubscriptionStatus.EXPIRED.value:
             return 'expired'
@@ -1211,12 +1214,12 @@ class Subscription(Base):
             return 'disabled'
 
         if self.status == SubscriptionStatus.ACTIVE.value:
-            if self.end_date is None or self.end_date <= current_time:
+            if end is None or end <= current_time:
                 return 'expired'
             return 'active'
 
         if self.status == SubscriptionStatus.TRIAL.value:
-            if self.end_date is None or self.end_date <= current_time:
+            if end is None or end <= current_time:
                 return 'expired'
             return 'trial'
 
@@ -1258,21 +1261,23 @@ class Subscription(Base):
 
     @property
     def days_left(self) -> int:
-        if self.end_date is None:
+        end = self._aware(self.end_date)
+        if end is None:
             return 0
         current_time = datetime.now(UTC)
-        if self.end_date <= current_time:
+        if end <= current_time:
             return 0
-        delta = self.end_date - current_time
+        delta = end - current_time
         return max(0, delta.days)
 
     @property
     def time_left_display(self) -> str:
+        end = self._aware(self.end_date)
         current_time = datetime.now(UTC)
-        if self.end_date <= current_time:
+        if end is None or end <= current_time:
             return 'истёк'
 
-        delta = self.end_date - current_time
+        delta = end - current_time
         days = delta.days
         hours = delta.seconds // 3600
         minutes = (delta.seconds % 3600) // 60
@@ -1291,8 +1296,9 @@ class Subscription(Base):
         return min((used / self.traffic_limit_gb) * 100, 100.0)
 
     def extend_subscription(self, days: int):
-        if self.end_date > datetime.now(UTC):
-            self.end_date = self.end_date + timedelta(days=days)
+        end = self._aware(self.end_date)
+        if end and end > datetime.now(UTC):
+            self.end_date = end + timedelta(days=days)
         else:
             self.end_date = datetime.now(UTC) + timedelta(days=days)
 
