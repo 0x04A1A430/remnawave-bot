@@ -3398,6 +3398,28 @@ async def add_email_fields_to_broadcast_history():
         return False
 
 
+async def add_blocked_count_to_broadcast_history():
+    """Добавление поля blocked_count в broadcast_history."""
+    logger.info('=== ДОБАВЛЕНИЕ ПОЛЯ BLOCKED_COUNT В BROADCAST_HISTORY ===')
+
+    try:
+        field_exists = await check_column_exists('broadcast_history', 'blocked_count')
+        if field_exists:
+            logger.info('Поле blocked_count уже существует в broadcast_history')
+            return True
+
+        async with engine.begin() as conn:
+            await conn.execute(
+                text('ALTER TABLE broadcast_history ADD COLUMN blocked_count INTEGER DEFAULT 0')
+            )
+            logger.info('✅ Поле blocked_count добавлено в broadcast_history')
+            return True
+
+    except Exception as e:
+        logger.error('Ошибка при добавлении blocked_count в broadcast_history', error=e)
+        return False
+
+
 async def add_ticket_reply_block_columns():
     try:
         col_perm_exists = await check_column_exists('tickets', 'user_reply_block_permanent')
@@ -6884,6 +6906,12 @@ async def run_universal_migration():
             logger.info('✅ Email поля в broadcast_history готовы')
         else:
             logger.warning('⚠️ Проблемы с добавлением email полей')
+
+        blocked_count_added = await add_blocked_count_to_broadcast_history()
+        if blocked_count_added:
+            logger.info('✅ Поле blocked_count в broadcast_history готово')
+        else:
+            logger.warning('⚠️ Проблемы с добавлением blocked_count')
 
         logger.info('=== ДОБАВЛЕНИЕ ПОЛЕЙ БЛОКИРОВКИ В TICKETS ===')
         tickets_block_cols_added = await add_ticket_reply_block_columns()
