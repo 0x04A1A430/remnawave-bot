@@ -40,6 +40,22 @@ fix: ## Исправить код (ruff check --fix + format)
 	uv run ruff check . --fix
 	uv run ruff format .
 
+.PHONY: migrate
+migrate: ## Применить миграции (alembic upgrade head)
+	uv run alembic upgrade head
+
+.PHONY: migration
+migration: ## Создать миграцию (usage: make migration m="description")
+	uv run alembic revision --autogenerate -m "$(m)"
+
+.PHONY: migrate-stamp
+migrate-stamp: ## Пометить БД как актуальную (для существующих БД)
+	uv run alembic stamp head
+
+.PHONY: migrate-history
+migrate-history: ## Показать историю миграций
+	uv run alembic history --verbose
+
 .PHONY: help
 help: ## Показать список доступных команд
 	@echo ""

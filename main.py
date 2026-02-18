@@ -12,9 +12,9 @@ sys.path.append(str(Path(__file__).parent))
 
 from app.bot import setup_bot
 from app.config import settings
-from app.database.database import init_db
+from app.database.database import sync_postgres_sequences
+from app.database.migrations import run_alembic_upgrade
 from app.database.models import PaymentMethod
-from app.database.universal_migration import run_universal_migration
 from app.localization.loader import ensure_locale_templates
 from app.logging_config import setup_logging
 from app.services.backup_service import backup_service
@@ -41,6 +41,7 @@ from app.services.reporting_service import reporting_service
 from app.services.system_settings_service import bot_configuration_service
 from app.services.traffic_monitoring_service import traffic_monitoring_scheduler
 from app.services.version_service import version_service
+from app.services.web_api_token_service import ensure_default_web_api_token
 from app.utils.log_handlers import ExcludePaymentFilter, LevelFilterHandler
 from app.utils.payment_logger import configure_payment_logger
 from app.utils.startup_timeline import StartupTimeline
@@ -179,41 +180,42 @@ async def main():
     summary_logged = False
 
     try:
-        async with timeline.stage('Инициализация базы данных', '🗄️', success_message='База данных готова'):
-            await init_db()
-
         skip_migration = os.getenv('SKIP_MIGRATION', 'false').lower() == 'true'
 
         if not skip_migration:
             async with timeline.stage(
-                'Проверка и миграция базы данных',
+                'Миграция базы данных (Alembic)',
                 '🧬',
                 success_message='Миграция завершена успешно',
             ) as stage:
                 try:
-                    migration_log = logging.getLogger('app.database.universal_migration')
-                    original_level = migration_log.level
-                    migration_log.setLevel(logging.WARNING)
-                    try:
-                        migration_success = await run_universal_migration()
-                    finally:
-                        migration_log.setLevel(original_level)
-                    if migration_success:
-                        stage.success('Миграция завершена успешно')
-                    else:
-                        stage.warning('Миграция завершилась с предупреждениями, запуск продолжится')
-                        logger.warning('⚠️ Миграция завершилась с предупреждениями, но продолжаем запуск')
+                    await run_alembic_upgrade()
+                    stage.success('Миграция завершена успешно')
                 except Exception as migration_error:
-                    stage.warning(f'Ошибка выполнения миграции: {migration_error}')
-                    logger.error('❌ Ошибка выполнения миграции', migration_error=migration_error)
-                    logger.warning('⚠️ Продолжаем запуск без миграции')
+                    allow_failure = os.getenv('ALLOW_MIGRATION_FAILURE', 'false').lower() == 'true'
+                    logger.error('Ошибка выполнения миграции', migration_error=migration_error)
+                    if not allow_failure:
+                        raise
+                    stage.warning(f'Ошибка миграции: {migration_error} (ALLOW_MIGRATION_FAILURE=true)')
         else:
             timeline.add_manual_step(
-                'Проверка и миграция базы данных',
+                'Миграция базы данных (Alembic)',
                 '⏭️',
                 'Пропущено',
                 'SKIP_MIGRATION=true',
             )
+
+        async with timeline.stage(
+            'Инициализация базы данных',
+            '🗄️',
+            success_message='База данных готова',
+        ) as stage:
+            seq_ok = await sync_postgres_sequences()
+            token_ok = await ensure_default_web_api_token()
+            if not seq_ok:
+                stage.warning('Не удалось синхронизировать последовательности PostgreSQL')
+            if not token_ok:
+                stage.warning('Не удалось создать/проверить дефолтный веб-API токен')
 
         async with timeline.stage(
             'Синхронизация тарифов из конфига',

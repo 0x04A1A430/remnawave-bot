@@ -116,7 +116,9 @@ async def update_partner_settings(
                 updates['REFERRAL_WITHDRAWAL_COOLDOWN_DAYS'] = str(request.withdrawal_cooldown_days)
             if request.withdrawal_requisites_text is not None:
                 # Sanitize: replace newlines to prevent .env injection
-                sanitized = request.withdrawal_requisites_text.replace('\r\n', ' ').replace('\n', ' ').replace('\r', ' ')
+                sanitized = (
+                    request.withdrawal_requisites_text.replace('\r\n', ' ').replace('\n', ' ').replace('\r', ' ')
+                )
                 updates['REFERRAL_WITHDRAWAL_REQUISITES_TEXT'] = sanitized
             if request.partner_section_visible is not None:
                 updates['REFERRAL_PARTNER_SECTION_VISIBLE'] = str(request.partner_section_visible).lower()

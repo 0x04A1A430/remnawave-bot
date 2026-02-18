@@ -160,9 +160,7 @@ async def get_available_partners(
 ):
     """Get list of approved partners for campaign partner selector."""
     result = await db.execute(
-        select(User)
-        .where(User.partner_status == PartnerStatus.APPROVED.value)
-        .order_by(User.first_name, User.username)
+        select(User).where(User.partner_status == PartnerStatus.APPROVED.value).order_by(User.first_name, User.username)
     )
     partners = result.scalars().all()
     return [
