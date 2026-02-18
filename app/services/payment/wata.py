@@ -561,7 +561,7 @@ class WataPaymentMixin:
                 cart_message = texts.t(
                     'BALANCE_TOPUP_CART_REMINDER_DETAILED',
                     '🛒 У вас есть неоформленный заказ.\n\nВы можете продолжить оформление с теми же параметрами.',
-                )
+                ).format(total_amount=settings.format_price(payment.amount_kopeks))
 
                 keyboard = types.InlineKeyboardMarkup(
                     inline_keyboard=[

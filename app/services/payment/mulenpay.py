@@ -380,7 +380,7 @@ class MulenPayPaymentMixin:
                             'BALANCE_TOPUP_CART_REMINDER_DETAILED',
                             '🛒 У вас есть неоформленный заказ.\n\n'
                             'Вы можете продолжить оформление с теми же параметрами.',
-                        )
+                        ).format(total_amount=settings.format_price(payment.amount_kopeks))
 
                         # Создаем клавиатуру с кнопками
                         keyboard = types.InlineKeyboardMarkup(
