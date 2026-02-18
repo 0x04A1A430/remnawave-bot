@@ -1,11 +1,12 @@
 """Admin routes for managing partners in cabinet."""
 
+from datetime import UTC, datetime
 from typing import Literal
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -529,7 +530,23 @@ async def assign_campaign(
             detail='Пользователь не является партнёром',
         )
 
-    campaign.partner_user_id = user_id
+    # Atomic check-and-set to prevent race conditions
+    result = await db.execute(
+        update(AdvertisingCampaign)
+        .where(
+            AdvertisingCampaign.id == campaign_id,
+            or_(
+                AdvertisingCampaign.partner_user_id.is_(None),
+                AdvertisingCampaign.partner_user_id == user_id,
+            ),
+        )
+        .values(partner_user_id=user_id, updated_at=datetime.now(UTC))
+    )
+    if result.rowcount == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Кампания уже привязана к другому партнёру',
+        )
     await db.commit()
 
     return {'success': True}
@@ -557,6 +574,7 @@ async def unassign_campaign(
         )
 
     campaign.partner_user_id = None
+    campaign.updated_at = datetime.now(UTC)
     await db.commit()
 
     return {'success': True}

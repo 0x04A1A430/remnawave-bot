@@ -27,6 +27,8 @@ class CampaignListItem(BaseModel):
     registrations_count: int
     total_revenue_kopeks: int = 0
     conversion_rate: float = 0.0
+    partner_user_id: int | None = None
+    partner_name: str | None = None
     created_at: datetime
 
     class Config:
@@ -60,6 +62,9 @@ class CampaignDetailResponse(BaseModel):
     tariff_id: int | None = None
     tariff_duration_days: int | None = None
     tariff: TariffInfo | None = None
+    # Partner
+    partner_user_id: int | None = None
+    partner_name: str | None = None
     # Meta
     created_by: int | None = None
     created_at: datetime
@@ -89,6 +94,8 @@ class CampaignCreateRequest(BaseModel):
     # Tariff bonus
     tariff_id: int | None = None
     tariff_duration_days: int | None = Field(None, ge=1)
+    # Partner
+    partner_user_id: int | None = None
 
 
 class CampaignUpdateRequest(BaseModel):
@@ -108,6 +115,8 @@ class CampaignUpdateRequest(BaseModel):
     # Tariff bonus
     tariff_id: int | None = None
     tariff_duration_days: int | None = Field(None, ge=1)
+    # Partner
+    partner_user_id: int | None = None
 
 
 class CampaignToggleResponse(BaseModel):
@@ -194,6 +203,14 @@ class CampaignsOverviewResponse(BaseModel):
     total_balance_issued_rubles: float
     total_subscription_issued: int
     total_tariff_issued: int = 0
+
+
+class AvailablePartnerItem(BaseModel):
+    """Partner item for campaign partner selector."""
+
+    user_id: int
+    username: str | None = None
+    first_name: str | None = None
 
 
 class ServerSquadInfo(BaseModel):
