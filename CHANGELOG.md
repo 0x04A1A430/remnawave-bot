@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.16.1](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.16.0...v3.16.1) (2026-02-18)
+
+
+### Bug Fixes
+
+* add migration for partner system tables and columns ([4645be5](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/4645be53cbb3799aa6b2b6a623af30460357a554))
+* add migration for partner system tables and columns ([79ea398](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/79ea398d1db436a7812a799bf01b2c1c3b1b73be))
+
 ## [3.16.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.15.1...v3.16.0) (2026-02-18)
 
 
