@@ -1300,6 +1300,7 @@ async def create_user_by_oauth(
     last_name: str | None = None,
     username: str | None = None,
     language: str = 'ru',
+    referred_by_id: int | None = None,
 ) -> User:
     """Create a new user via OAuth provider."""
     referral_code = await create_unique_referral_code(db)
@@ -1319,6 +1320,7 @@ async def create_user_by_oauth(
         first_name=sanitize_telegram_name(first_name) if first_name else None,
         last_name=sanitize_telegram_name(last_name) if last_name else None,
         language=normalized_language,
+        referred_by_id=referred_by_id,
         referral_code=referral_code,
         balance_kopeks=0,
         has_had_paid_subscription=False,
