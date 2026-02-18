@@ -159,6 +159,21 @@ async def _process_campaign_bonus(
             logger.debug('User already has campaign registration', user_id=user.id)
             return None
 
+        # Привязать реферала к партнёру кампании (если партнёр назначен и юзер ещё не привязан)
+        if campaign.partner_user_id and not user.referred_by_id:
+            user.referred_by_id = campaign.partner_user_id
+            await db.flush()
+            try:
+                await process_referral_registration(db, user.id, campaign.partner_user_id, bot=None)
+                logger.info(
+                    'Referral set from campaign partner',
+                    user_id=user.id,
+                    partner_user_id=campaign.partner_user_id,
+                    campaign_id=campaign.id,
+                )
+            except Exception as e:
+                logger.error('Failed to process referral from campaign partner', error=e)
+
         service = AdvertisingCampaignService()
         result = await service.apply_campaign_bonus(db, user, campaign)
         if not result.success:

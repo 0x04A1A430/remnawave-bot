@@ -228,7 +228,7 @@ async def test_auto_purchase_saved_cart_after_topup_extension(monkeypatch):
         subtract_mock,
     )
 
-    async def extend_stub(db, current_subscription, days):
+    async def extend_stub(db, current_subscription, days, **kwargs):
         current_subscription.end_date = current_subscription.end_date + timedelta(days=days)
         return current_subscription
 
@@ -436,7 +436,7 @@ async def test_auto_purchase_trial_converted_after_successful_extension(monkeypa
     )
 
     # Mock: продление успешно
-    async def extend_stub(db, current_subscription, days):
+    async def extend_stub(db, current_subscription, days, **kwargs):
         current_subscription.end_date = current_subscription.end_date + timedelta(days=days)
         return current_subscription
 
@@ -552,7 +552,7 @@ async def test_auto_purchase_trial_preserved_on_extension_failure(monkeypatch):
     )
 
     # Mock: extend_subscription выбрасывает ошибку!
-    async def extend_error(db, current_subscription, days):
+    async def extend_error(db, current_subscription, days, **kwargs):
         raise Exception('Database connection error')
 
     monkeypatch.setattr(
@@ -622,6 +622,7 @@ async def test_auto_purchase_trial_remaining_days_transferred(monkeypatch):
     subscription.device_limit = 1
     subscription.traffic_limit_gb = 10
     subscription.connected_squads = []
+    subscription.tariff_id = None  # Триал без тарифа
 
     user = MagicMock(spec=User)
     user.id = 66
@@ -649,19 +650,29 @@ async def test_auto_purchase_trial_remaining_days_transferred(monkeypatch):
         subtract_mock,
     )
 
-    # Mock: extend_subscription с логикой переноса бонусных дней
-    # Имитируем нашу новую логику из extend_subscription()
-    async def extend_with_bonus(db, current_subscription, days):
-        # Вычисляем бонусные дни (как в нашем коде)
-        bonus_days = 0
-        if current_subscription.is_trial and settings.TRIAL_ADD_REMAINING_DAYS_TO_PAID:
-            if current_subscription.end_date and current_subscription.end_date > now:
-                remaining = current_subscription.end_date - now
-                if remaining.total_seconds() > 0:
-                    bonus_days = max(0, remaining.days)
+    # Mock: extend_subscription с логикой сохранения остатка подписки
+    # Имитируем логику из extend_subscription() — ветка is_tariff_change
+    async def extend_with_bonus(db, current_subscription, days, **kwargs):
+        tariff_id = kwargs.get('tariff_id')
+        is_tariff_change = tariff_id is not None and (
+            current_subscription.tariff_id is None or tariff_id != current_subscription.tariff_id
+        )
 
-        total_days = days + bonus_days
-        current_subscription.end_date = current_subscription.end_date + timedelta(days=total_days)
+        if is_tariff_change:
+            remaining_seconds = 0
+            if current_subscription.end_date and current_subscription.end_date > now:
+                if not current_subscription.is_trial or settings.TRIAL_ADD_REMAINING_DAYS_TO_PAID:
+                    remaining = current_subscription.end_date - now
+                    remaining_seconds = max(0, remaining.total_seconds())
+            current_subscription.end_date = now + timedelta(days=days, seconds=remaining_seconds)
+            current_subscription.start_date = now
+        elif current_subscription.end_date and current_subscription.end_date > now:
+            current_subscription.end_date = current_subscription.end_date + timedelta(days=days)
+        else:
+            current_subscription.end_date = now + timedelta(days=days)
+
+        if tariff_id is not None:
+            current_subscription.tariff_id = tariff_id
         return current_subscription
 
     monkeypatch.setattr(
@@ -731,8 +742,9 @@ async def test_auto_purchase_trial_remaining_days_transferred(monkeypatch):
     assert result is True
     assert subscription.is_trial is False  # Триал конвертирован
 
-    # Проверяем, что подписка продлена на 32 дня (30 + 2 бонусных)
-    # end_date должна быть примерно на 32 дня от оригинального trial_end
-    trial_end + timedelta(days=32)  # trial_end + (30 + 2)
-    actual_delta = (subscription.end_date - trial_end).days
-    assert actual_delta == 32, f'Expected 32 days extension (30 + 2 bonus), got {actual_delta}'
+    # Проверяем, что подписка продлена на 30 дней + 2 оставшихся дня триала = 32 от now
+    # end_date = trial_end + 30 = (now + 2) + 30 = now + 32
+    actual_total_days = (subscription.end_date - now).days
+    assert actual_total_days == 32, (
+        f'Expected 32 days from now (30 purchased + 2 remaining trial), got {actual_total_days}'
+    )

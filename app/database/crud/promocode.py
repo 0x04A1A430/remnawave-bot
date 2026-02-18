@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import structlog
 from sqlalchemy import and_, func, select
@@ -133,8 +133,6 @@ async def get_promocode_use_by_user_and_code(db: AsyncSession, user_id: int, pro
 
 async def count_user_recent_activations(db: AsyncSession, user_id: int, hours: int = 24) -> int:
     """Подсчитывает количество активаций промокодов пользователем за последние N часов."""
-    from datetime import UTC, timedelta
-
     cutoff = datetime.now(UTC) - timedelta(hours=hours)
     result = await db.execute(
         select(func.count(PromoCodeUse.id)).where(and_(PromoCodeUse.user_id == user_id, PromoCodeUse.used_at >= cutoff))

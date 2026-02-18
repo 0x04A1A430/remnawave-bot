@@ -17,6 +17,7 @@ from app.database.models import (
     SubscriptionStatus,
     User,
     UserPromoGroup,
+    UserStatus,
 )
 from app.utils.pricing_utils import calculate_months_from_days, get_remaining_months
 from app.utils.timezone import format_local_datetime
@@ -358,45 +359,41 @@ async def extend_subscription(
     if is_tariff_change:
         logger.info('🔄 Обнаружена СМЕНА тарифа: →', tariff_id=subscription.tariff_id, tariff_id_2=tariff_id)
 
-    # Бонусные дни от триала - добавляются ТОЛЬКО когда подписка истекла
-    # и мы начинаем отсчёт с текущей даты. НЕ начисляются при смене тарифа.
-    # Если подписка ещё активна - просто добавляем дни к существующей дате окончания.
-    bonus_days = 0
-
     if days < 0:
         subscription.end_date = subscription.end_date + timedelta(days=days)
         logger.info(
             '📅 Срок подписки уменьшен на дней, новая дата окончания', abs=abs(days), end_date=subscription.end_date
         )
     elif is_tariff_change:
-        # При СМЕНЕ тарифа срок начинается с текущей даты + бонус от триала
-        if subscription.is_trial and settings.TRIAL_ADD_REMAINING_DAYS_TO_PAID:
-            if subscription.end_date and subscription.end_date > current_time:
+        # При СМЕНЕ тарифа сохраняем оставшееся время активной подписки
+        # Для триалов — только если включена настройка TRIAL_ADD_REMAINING_DAYS_TO_PAID
+        remaining_seconds = 0
+        if subscription.end_date and subscription.end_date > current_time:
+            if not subscription.is_trial or settings.TRIAL_ADD_REMAINING_DAYS_TO_PAID:
                 remaining = subscription.end_date - current_time
-                if remaining.total_seconds() > 0:
-                    bonus_days = max(0, remaining.days)
-                    logger.info(
-                        '🎁 Обнаружен остаток триала: дней для подписки',
-                        bonus_days=bonus_days,
-                        subscription_id=subscription.id,
-                    )
-        total_days = days + bonus_days
-        subscription.end_date = current_time + timedelta(days=total_days)
+                remaining_seconds = max(0, remaining.total_seconds())
+                logger.info(
+                    '🎁 Обнаружен остаток подписки, будет добавлен к новому сроку',
+                    remaining_seconds=int(remaining_seconds),
+                    subscription_id=subscription.id,
+                    is_trial=subscription.is_trial,
+                )
+        subscription.end_date = current_time + timedelta(days=days, seconds=remaining_seconds)
         subscription.start_date = current_time
-        logger.info('📅 СМЕНА тарифа: срок начинается с текущей даты + дней', total_days=total_days)
+        logger.info(
+            '📅 СМЕНА тарифа: срок начинается с текущей даты + дней + остаток',
+            days=days,
+            remaining_seconds=int(remaining_seconds),
+        )
     elif subscription.end_date > current_time:
         # Подписка активна - просто добавляем дни к текущей дате окончания
         # БЕЗ бонусных дней (они уже учтены в end_date)
         subscription.end_date = subscription.end_date + timedelta(days=days)
         logger.info('📅 Подписка активна, добавляем дней к текущей дате окончания', days=days)
     else:
-        # Подписка истекла - начинаем с текущей даты + бонус от триала
-        if subscription.is_trial and settings.TRIAL_ADD_REMAINING_DAYS_TO_PAID:
-            # Триал истёк, но бонус всё равно не добавляем (триал уже истёк)
-            pass
-        total_days = days + bonus_days
-        subscription.end_date = current_time + timedelta(days=total_days)
-        logger.info('📅 Подписка истекла, устанавливаем новую дату окончания на дней', total_days=total_days)
+        # Подписка истекла - начинаем с текущей даты
+        subscription.end_date = current_time + timedelta(days=days)
+        logger.info('📅 Подписка истекла, устанавливаем новую дату окончания на дней', days=days)
 
     # УДАЛЕНО: Автоматическая конвертация триала по длительности
     # Теперь триал конвертируется ТОЛЬКО после успешного коммита продления
@@ -538,10 +535,6 @@ async def add_subscription_traffic(db: AsyncSession, subscription: Subscription,
     subscription.updated_at = datetime.now(UTC)
 
     # Создаём новую запись докупки с индивидуальной датой истечения (30 дней)
-    from datetime import UTC, timedelta
-
-    from sqlalchemy import select as sql_select
-
     from app.database.models import TrafficPurchase
 
     new_expires_at = datetime.now(UTC) + timedelta(days=30)
@@ -555,7 +548,7 @@ async def add_subscription_traffic(db: AsyncSession, subscription: Subscription,
     # Устанавливаем traffic_reset_at на ближайшую дату истечения из всех активных докупок
     now = datetime.now(UTC)
     active_purchases_query = (
-        sql_select(TrafficPurchase)
+        select(TrafficPurchase)
         .where(TrafficPurchase.subscription_id == subscription.id)
         .where(TrafficPurchase.expires_at > now)
     )
@@ -738,10 +731,12 @@ async def get_expiring_subscriptions(db: AsyncSession, days_before: int = 3) -> 
 
     result = await db.execute(
         select(Subscription)
+        .join(User, Subscription.user_id == User.id)
         .options(selectinload(Subscription.user))
         .where(
             and_(
                 Subscription.status == SubscriptionStatus.ACTIVE.value,
+                User.status == UserStatus.ACTIVE.value,
                 Subscription.end_date <= threshold_date,
                 Subscription.end_date > datetime.now(UTC),
             )
@@ -753,8 +748,15 @@ async def get_expiring_subscriptions(db: AsyncSession, days_before: int = 3) -> 
 async def get_expired_subscriptions(db: AsyncSession) -> list[Subscription]:
     result = await db.execute(
         select(Subscription)
+        .join(User, Subscription.user_id == User.id)
         .options(selectinload(Subscription.user))
-        .where(and_(Subscription.status == SubscriptionStatus.ACTIVE.value, Subscription.end_date <= datetime.now(UTC)))
+        .where(
+            and_(
+                Subscription.status == SubscriptionStatus.ACTIVE.value,
+                User.status == UserStatus.ACTIVE.value,
+                Subscription.end_date <= datetime.now(UTC),
+            )
+        )
     )
     return result.scalars().all()
 
@@ -764,6 +766,7 @@ async def get_subscriptions_for_autopay(db: AsyncSession) -> list[Subscription]:
 
     result = await db.execute(
         select(Subscription)
+        .join(User, Subscription.user_id == User.id)
         .options(
             selectinload(Subscription.user),
             selectinload(Subscription.tariff),
@@ -771,6 +774,7 @@ async def get_subscriptions_for_autopay(db: AsyncSession) -> list[Subscription]:
         .where(
             and_(
                 Subscription.status == SubscriptionStatus.ACTIVE.value,
+                User.status == UserStatus.ACTIVE.value,
                 Subscription.autopay_enabled == True,
                 Subscription.is_trial == False,
             )
@@ -1920,6 +1924,7 @@ async def get_daily_subscriptions_for_charge(db: AsyncSession) -> list[Subscript
     query = (
         select(Subscription)
         .join(Tariff, Subscription.tariff_id == Tariff.id)
+        .join(User, Subscription.user_id == User.id)
         .options(
             selectinload(Subscription.user),
             selectinload(Subscription.tariff),
@@ -1929,6 +1934,7 @@ async def get_daily_subscriptions_for_charge(db: AsyncSession) -> list[Subscript
                 Tariff.is_daily.is_(True),
                 Tariff.is_active.is_(True),
                 Subscription.status == SubscriptionStatus.ACTIVE.value,
+                User.status == UserStatus.ACTIVE.value,
                 Subscription.is_daily_paused.is_(False),
                 Subscription.is_trial.is_(False),  # Не списываем с триальных подписок
                 # Списания ещё не было ИЛИ прошло более 24 часов
@@ -1967,6 +1973,7 @@ async def get_disabled_daily_subscriptions_for_resume(
                 Tariff.is_daily.is_(True),
                 Tariff.is_active.is_(True),
                 Subscription.status == SubscriptionStatus.DISABLED.value,
+                User.status == UserStatus.ACTIVE.value,
                 Subscription.is_trial.is_(False),
                 # Баланс пользователя >= суточной цены тарифа
                 User.balance_kopeks >= Tariff.daily_price_kopeks,

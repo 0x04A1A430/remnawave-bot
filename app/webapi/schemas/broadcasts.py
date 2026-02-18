@@ -93,6 +93,7 @@ class BroadcastResponse(BaseModel):
     total_count: int
     sent_count: int
     failed_count: int
+    blocked_count: int = 0
     status: str
     admin_id: int | None = None
     admin_name: str | None = None

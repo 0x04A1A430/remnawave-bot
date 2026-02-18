@@ -47,6 +47,7 @@ class ReferralEarningResponse(BaseModel):
     reason: str
     referral_username: str | None = None
     referral_first_name: str | None = None
+    campaign_name: str | None = None
     created_at: datetime
 
     class Config:
@@ -76,3 +77,4 @@ class ReferralTermsResponse(BaseModel):
     first_topup_bonus_rubles: float
     inviter_bonus_kopeks: int
     inviter_bonus_rubles: float
+    partner_section_visible: bool = True

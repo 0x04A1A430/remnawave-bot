@@ -1,3 +1,4 @@
+import html
 from datetime import UTC, datetime
 from typing import Any
 
@@ -1331,8 +1332,6 @@ class AdminNotificationService:
                 if details.get('enabled_at'):
                     enabled_at = details['enabled_at']
                     if isinstance(enabled_at, str):
-                        from datetime import UTC, datetime
-
                         enabled_at = datetime.fromisoformat(enabled_at)
                     message_parts.append(
                         f'🕐 <b>Время включения:</b> {format_local_datetime(enabled_at, "%d.%m.%Y %H:%M:%S")}'
@@ -1348,8 +1347,6 @@ class AdminNotificationService:
                 if details.get('disabled_at'):
                     disabled_at = details['disabled_at']
                     if isinstance(disabled_at, str):
-                        from datetime import UTC, datetime
-
                         disabled_at = datetime.fromisoformat(disabled_at)
                     message_parts.append(
                         f'🕐 <b>Время отключения:</b> {format_local_datetime(disabled_at, "%d.%m.%Y %H:%M:%S")}'
@@ -1452,8 +1449,6 @@ class AdminNotificationService:
             if details.get('last_check'):
                 last_check = details['last_check']
                 if isinstance(last_check, str):
-                    from datetime import UTC, datetime
-
                     last_check = datetime.fromisoformat(last_check)
                 message_parts.append(f'🕐 <b>Последняя проверка:</b> {format_local_datetime(last_check, "%H:%M:%S")}')
 
@@ -1634,6 +1629,109 @@ class AdminNotificationService:
                 return f'{len(value)} серверов'
             return str(value)
         return str(value)
+
+    async def send_partner_application_notification(
+        self,
+        user: User,
+        application_data: dict[str, Any],
+    ) -> bool:
+        """Уведомление о новой заявке на партнёрку."""
+        if not self._is_enabled():
+            return False
+
+        try:
+            user_display = self._get_user_display(user)
+            user_id_display = self._get_user_identifier_display(user)
+
+            message_lines = [
+                '🤝 <b>ЗАЯВКА НА ПАРТНЁРКУ</b>',
+                '',
+                f'👤 {user_display} ({user_id_display})',
+            ]
+
+            username = getattr(user, 'username', None)
+            if username:
+                message_lines.append(f'📱 @{username}')
+
+            message_lines.append('')
+
+            if application_data.get('company_name'):
+                message_lines.append(f'🏢 Компания: {html.escape(str(application_data["company_name"]))}')
+            if application_data.get('telegram_channel'):
+                message_lines.append(f'📢 Канал: {html.escape(str(application_data["telegram_channel"]))}')
+            if application_data.get('website_url'):
+                message_lines.append(f'🌐 Сайт: {html.escape(str(application_data["website_url"]))}')
+            if application_data.get('description'):
+                desc = str(application_data['description'])
+                if len(desc) > 200:
+                    desc = desc[:197] + '...'
+                message_lines.append(f'📝 {html.escape(desc)}')
+            if application_data.get('expected_monthly_referrals'):
+                message_lines.append(f'👥 Ожидаемых рефералов: {application_data["expected_monthly_referrals"]}/мес')
+
+            message_lines.extend(
+                [
+                    '',
+                    f'⏰ <i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>',
+                ]
+            )
+
+            return await self._send_message('\n'.join(message_lines))
+
+        except Exception as e:
+            logger.error('Ошибка отправки уведомления о заявке на партнёрку', error=e)
+            return False
+
+    async def send_withdrawal_request_notification(
+        self,
+        user: User,
+        amount_kopeks: int,
+        payment_details: str | None = None,
+    ) -> bool:
+        """Уведомление о запросе на вывод средств."""
+        if not self._is_enabled():
+            return False
+
+        try:
+            user_display = self._get_user_display(user)
+            user_id_display = self._get_user_identifier_display(user)
+
+            message_lines = [
+                '💸 <b>ЗАПРОС НА ВЫВОД СРЕДСТВ</b>',
+                '',
+                f'👤 {user_display} ({user_id_display})',
+            ]
+
+            username = getattr(user, 'username', None)
+            if username:
+                message_lines.append(f'📱 @{username}')
+
+            message_lines.extend(
+                [
+                    '',
+                    f'💵 <b>Сумма: {settings.format_price(amount_kopeks)}</b>',
+                    f'💰 Баланс: {settings.format_price(user.balance_kopeks)}',
+                ]
+            )
+
+            if payment_details:
+                details = str(payment_details)
+                if len(details) > 200:
+                    details = details[:197] + '...'
+                message_lines.extend(['', f'💳 Реквизиты: {html.escape(details)}'])
+
+            message_lines.extend(
+                [
+                    '',
+                    f'⏰ <i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>',
+                ]
+            )
+
+            return await self._send_message('\n'.join(message_lines))
+
+        except Exception as e:
+            logger.error('Ошибка отправки уведомления о запросе на вывод', error=e)
+            return False
 
     async def send_bulk_ban_notification(
         self,

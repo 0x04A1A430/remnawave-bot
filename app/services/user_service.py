@@ -457,6 +457,7 @@ class UserService:
                     AdvertisingCampaign,
                     AdvertisingCampaign.id == latest_campaign.c.campaign_id,
                 )
+                .options(selectinload(User.subscription))
                 .order_by(
                     AdvertisingCampaign.name.asc(),
                     latest_campaign.c.created_at.desc(),
@@ -699,8 +700,6 @@ class UserService:
             await update_user(db, user, status=UserStatus.ACTIVE.value)
 
             if user.subscription:
-                from datetime import UTC, datetime
-
                 from app.database.models import SubscriptionStatus
 
                 if user.subscription.end_date > datetime.now(UTC):

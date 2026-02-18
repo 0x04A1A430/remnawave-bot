@@ -4,6 +4,7 @@ Email notification templates for different notification types.
 Supports multiple languages: ru, en, zh, ua, fa
 """
 
+import html
 from typing import Any
 
 from app.config import settings
@@ -53,6 +54,10 @@ class EmailNotificationTemplates:
             NotificationType.WARNING_NOTIFICATION: self._warning_template,
             NotificationType.REFERRAL_BONUS: self._referral_bonus_template,
             NotificationType.REFERRAL_REGISTERED: self._referral_registered_template,
+            NotificationType.PARTNER_APPLICATION_APPROVED: self._partner_approved_template,
+            NotificationType.PARTNER_APPLICATION_REJECTED: self._partner_rejected_template,
+            NotificationType.WITHDRAWAL_APPROVED: self._withdrawal_approved_template,
+            NotificationType.WITHDRAWAL_REJECTED: self._withdrawal_rejected_template,
             NotificationType.TRAFFIC_RESET: self._traffic_reset_template,
             NotificationType.PAYMENT_RECEIVED: self._payment_received_template,
             NotificationType.EMAIL_VERIFICATION: self._email_verification_template,
@@ -528,7 +533,7 @@ class EmailNotificationTemplates:
 
     def _autopay_failed_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
         """Template for failed autopay notification."""
-        reason = context.get('reason', '')
+        reason = html.escape(context.get('reason', ''))
 
         subjects = {
             'ru': 'Ошибка автопродления',
@@ -715,7 +720,7 @@ class EmailNotificationTemplates:
 
     def _ban_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
         """Template for ban notification."""
-        reason = context.get('reason', '')
+        reason = html.escape(context.get('reason', ''))
 
         subjects = {
             'ru': 'Аккаунт заблокирован',
@@ -783,7 +788,7 @@ class EmailNotificationTemplates:
 
     def _warning_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
         """Template for warning notification."""
-        message = context.get('message', '')
+        message = html.escape(context.get('message', ''))
 
         subjects = {
             'ru': 'Предупреждение',
@@ -819,7 +824,7 @@ class EmailNotificationTemplates:
     def _referral_bonus_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
         """Template for referral bonus notification."""
         bonus = context.get('formatted_bonus', f'{context.get("bonus_rubles", 0):.2f} ₽')
-        referral_name = context.get('referral_name', '')
+        referral_name = html.escape(context.get('referral_name', ''))
 
         subjects = {
             'ru': f'Реферальный бонус: +{bonus}',
@@ -856,7 +861,7 @@ class EmailNotificationTemplates:
 
     def _referral_registered_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
         """Template for new referral registered notification."""
-        referral_name = context.get('referral_name', '')
+        referral_name = html.escape(context.get('referral_name', ''))
 
         subjects = {
             'ru': 'Новый реферал зарегистрирован',
@@ -880,6 +885,249 @@ class EmailNotificationTemplates:
                     <p>A new user registered using your link{f': <strong>{referral_name}</strong>' if referral_name else ''}.</p>
                 </div>
                 <p>You will receive bonuses from their top-ups!</p>
+                {self._get_cabinet_button(language)}
+            """,
+        }
+
+        return {
+            'subject': subjects.get(language, subjects['ru']),
+            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+        }
+
+    # ============================================================================
+    # Partner Templates
+    # ============================================================================
+
+    def _partner_approved_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+        """Template for partner application approved notification."""
+        commission = context.get('commission_percent', 0)
+        comment = html.escape(context.get('comment', ''))
+
+        subjects = {
+            'ru': 'Заявка на партнёрство одобрена',
+            'en': 'Partner Application Approved',
+            'zh': '合作伙伴申请已批准',
+            'ua': 'Заявка на партнерство схвалена',
+        }
+
+        bodies = {
+            'ru': f"""
+                <h2>Заявка на партнёрство одобрена!</h2>
+                <div class="highlight success">
+                    <p>Ваша заявка на партнёрство была одобрена.</p>
+                    <p>Ваша комиссия: <strong>{commission}%</strong></p>
+                    {f'<p>Комментарий: {comment}</p>' if comment else ''}
+                </div>
+                <p>Теперь вы можете приглашать пользователей и получать вознаграждение!</p>
+                {self._get_cabinet_button(language)}
+            """,
+            'en': f"""
+                <h2>Partner Application Approved!</h2>
+                <div class="highlight success">
+                    <p>Your partner application has been approved.</p>
+                    <p>Your commission rate: <strong>{commission}%</strong></p>
+                    {f'<p>Comment: {comment}</p>' if comment else ''}
+                </div>
+                <p>You can now invite users and earn rewards!</p>
+                {self._get_cabinet_button(language)}
+            """,
+            'zh': f"""
+                <h2>合作伙伴申请已批准！</h2>
+                <div class="highlight success">
+                    <p>您的合作伙伴申请已获批准。</p>
+                    <p>您的佣金比例: <strong>{commission}%</strong></p>
+                    {f'<p>备注: {comment}</p>' if comment else ''}
+                </div>
+                <p>您现在可以邀请用户并获得奖励！</p>
+                {self._get_cabinet_button(language)}
+            """,
+            'ua': f"""
+                <h2>Заявка на партнерство схвалена!</h2>
+                <div class="highlight success">
+                    <p>Вашу заявку на партнерство було схвалено.</p>
+                    <p>Ваша комісія: <strong>{commission}%</strong></p>
+                    {f'<p>Коментар: {comment}</p>' if comment else ''}
+                </div>
+                <p>Тепер ви можете запрошувати користувачів та отримувати винагороду!</p>
+                {self._get_cabinet_button(language)}
+            """,
+        }
+
+        return {
+            'subject': subjects.get(language, subjects['ru']),
+            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+        }
+
+    def _partner_rejected_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+        """Template for partner application rejected notification."""
+        comment = html.escape(context.get('comment', ''))
+
+        subjects = {
+            'ru': 'Заявка на партнёрство отклонена',
+            'en': 'Partner Application Rejected',
+            'zh': '合作伙伴申请被拒绝',
+            'ua': 'Заявка на партнерство відхилена',
+        }
+
+        bodies = {
+            'ru': f"""
+                <h2>Заявка на партнёрство отклонена</h2>
+                <div class="highlight danger">
+                    <p>К сожалению, ваша заявка на партнёрство была отклонена.</p>
+                    {f'<p>Причина: {comment}</p>' if comment else ''}
+                </div>
+                <p>Вы можете подать новую заявку позже.</p>
+                {self._get_cabinet_button(language)}
+            """,
+            'en': f"""
+                <h2>Partner Application Rejected</h2>
+                <div class="highlight danger">
+                    <p>Unfortunately, your partner application has been rejected.</p>
+                    {f'<p>Reason: {comment}</p>' if comment else ''}
+                </div>
+                <p>You can submit a new application later.</p>
+                {self._get_cabinet_button(language)}
+            """,
+            'zh': f"""
+                <h2>合作伙伴申请被拒绝</h2>
+                <div class="highlight danger">
+                    <p>很抱歉，您的合作伙伴申请已被拒绝。</p>
+                    {f'<p>原因: {comment}</p>' if comment else ''}
+                </div>
+                <p>您可以稍后提交新的申请。</p>
+                {self._get_cabinet_button(language)}
+            """,
+            'ua': f"""
+                <h2>Заявка на партнерство відхилена</h2>
+                <div class="highlight danger">
+                    <p>На жаль, вашу заявку на партнерство було відхилено.</p>
+                    {f'<p>Причина: {comment}</p>' if comment else ''}
+                </div>
+                <p>Ви можете подати нову заявку пізніше.</p>
+                {self._get_cabinet_button(language)}
+            """,
+        }
+
+        return {
+            'subject': subjects.get(language, subjects['ru']),
+            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+        }
+
+    # ============================================================================
+    # Withdrawal Templates
+    # ============================================================================
+
+    def _withdrawal_approved_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+        """Template for withdrawal approved notification."""
+        amount = context.get('formatted_amount', f'{context.get("amount_rubles", 0):.2f} ₽')
+        comment = html.escape(context.get('comment', ''))
+
+        subjects = {
+            'ru': f'Запрос на вывод {amount} одобрен',
+            'en': f'Withdrawal request for {amount} approved',
+            'zh': f'提现请求 {amount} 已批准',
+            'ua': f'Запит на виведення {amount} схвалено',
+        }
+
+        bodies = {
+            'ru': f"""
+                <h2>Запрос на вывод одобрен!</h2>
+                <div class="highlight success">
+                    <p>Ваш запрос на вывод средств одобрен.</p>
+                    <p>Сумма: <span class="amount">{amount}</span></p>
+                    {f'<p>Комментарий: {comment}</p>' if comment else ''}
+                </div>
+                <p>Средства будут переведены в ближайшее время.</p>
+                {self._get_cabinet_button(language)}
+            """,
+            'en': f"""
+                <h2>Withdrawal Request Approved!</h2>
+                <div class="highlight success">
+                    <p>Your withdrawal request has been approved.</p>
+                    <p>Amount: <span class="amount">{amount}</span></p>
+                    {f'<p>Comment: {comment}</p>' if comment else ''}
+                </div>
+                <p>Funds will be transferred shortly.</p>
+                {self._get_cabinet_button(language)}
+            """,
+            'zh': f"""
+                <h2>提现请求已批准！</h2>
+                <div class="highlight success">
+                    <p>您的提现请求已获批准。</p>
+                    <p>金额: <span class="amount">{amount}</span></p>
+                    {f'<p>备注: {comment}</p>' if comment else ''}
+                </div>
+                <p>资金将很快转入。</p>
+                {self._get_cabinet_button(language)}
+            """,
+            'ua': f"""
+                <h2>Запит на виведення схвалено!</h2>
+                <div class="highlight success">
+                    <p>Ваш запит на виведення коштів було схвалено.</p>
+                    <p>Сума: <span class="amount">{amount}</span></p>
+                    {f'<p>Коментар: {comment}</p>' if comment else ''}
+                </div>
+                <p>Кошти будуть переведені найближчим часом.</p>
+                {self._get_cabinet_button(language)}
+            """,
+        }
+
+        return {
+            'subject': subjects.get(language, subjects['ru']),
+            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+        }
+
+    def _withdrawal_rejected_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+        """Template for withdrawal rejected notification."""
+        amount = context.get('formatted_amount', f'{context.get("amount_rubles", 0):.2f} ₽')
+        comment = html.escape(context.get('comment', ''))
+
+        subjects = {
+            'ru': f'Запрос на вывод {amount} отклонён',
+            'en': f'Withdrawal request for {amount} rejected',
+            'zh': f'提现请求 {amount} 被拒绝',
+            'ua': f'Запит на виведення {amount} відхилено',
+        }
+
+        bodies = {
+            'ru': f"""
+                <h2>Запрос на вывод отклонён</h2>
+                <div class="highlight danger">
+                    <p>Ваш запрос на вывод средств был отклонён.</p>
+                    <p>Сумма: <strong>{amount}</strong></p>
+                    {f'<p>Причина: {comment}</p>' if comment else ''}
+                </div>
+                <p>Средства возвращены на ваш баланс.</p>
+                {self._get_cabinet_button(language)}
+            """,
+            'en': f"""
+                <h2>Withdrawal Request Rejected</h2>
+                <div class="highlight danger">
+                    <p>Your withdrawal request has been rejected.</p>
+                    <p>Amount: <strong>{amount}</strong></p>
+                    {f'<p>Reason: {comment}</p>' if comment else ''}
+                </div>
+                <p>Funds have been returned to your balance.</p>
+                {self._get_cabinet_button(language)}
+            """,
+            'zh': f"""
+                <h2>提现请求被拒绝</h2>
+                <div class="highlight danger">
+                    <p>您的提现请求已被拒绝。</p>
+                    <p>金额: <strong>{amount}</strong></p>
+                    {f'<p>原因: {comment}</p>' if comment else ''}
+                </div>
+                <p>资金已退回您的余额。</p>
+                {self._get_cabinet_button(language)}
+            """,
+            'ua': f"""
+                <h2>Запит на виведення відхилено</h2>
+                <div class="highlight danger">
+                    <p>Ваш запит на виведення коштів було відхилено.</p>
+                    <p>Сума: <strong>{amount}</strong></p>
+                    {f'<p>Причина: {comment}</p>' if comment else ''}
+                </div>
+                <p>Кошти повернуто на ваш баланс.</p>
                 {self._get_cabinet_button(language)}
             """,
         }

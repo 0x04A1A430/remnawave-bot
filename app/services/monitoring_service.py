@@ -1645,8 +1645,6 @@ class MonitoringService:
             if not settings.is_admin_notifications_enabled():
                 return
 
-            from datetime import UTC, datetime, timedelta
-
             try:
                 from app.services.support_settings_service import SupportSettingsService
 

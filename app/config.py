@@ -230,7 +230,9 @@ class Settings(BaseSettings):
     REFERRAL_WITHDRAWAL_MIN_AMOUNT_KOPEKS: int = 100000  # Мин. сумма вывода (1000₽)
     REFERRAL_WITHDRAWAL_COOLDOWN_DAYS: int = 30  # Частота запросов на вывод
     REFERRAL_WITHDRAWAL_ONLY_REFERRAL_BALANCE: bool = True  # Только реф. баланс (False = реф + свой)
+    REFERRAL_WITHDRAWAL_REQUISITES_TEXT: str = ''  # Текст-подсказка для реквизитов при выводе
     REFERRAL_WITHDRAWAL_NOTIFICATIONS_TOPIC_ID: int | None = None  # Топик для уведомлений
+    REFERRAL_PARTNER_SECTION_VISIBLE: bool = True  # Показывать раздел партнёрки в кабинете
 
     # Настройки анализа на подозрительность
     REFERRAL_WITHDRAWAL_SUSPICIOUS_MIN_DEPOSIT_KOPEKS: int = 50000  # Мин. сумма от 1 реферала (500₽)
@@ -671,6 +673,7 @@ class Settings(BaseSettings):
     WEB_API_DEFAULT_TOKEN: str | None = None
     WEB_API_DEFAULT_TOKEN_NAME: str = 'Bootstrap Token'
     WEB_API_TOKEN_HASH_ALGORITHM: str = 'sha256'
+    WEB_API_TOKEN_HMAC_SECRET: str | None = None
     WEB_API_REQUEST_LOGGING: bool = True
 
     APP_CONFIG_PATH: str = 'app-config.json'

@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import structlog
 from sqlalchemy import and_, select
@@ -120,8 +120,6 @@ async def get_user_cryptobot_payments(
 
 
 async def get_pending_cryptobot_payments(db: AsyncSession, older_than_hours: int = 24) -> list[CryptoBotPayment]:
-    from datetime import UTC, timedelta
-
     cutoff_time = datetime.now(UTC) - timedelta(hours=older_than_hours)
 
     result = await db.execute(

@@ -36,6 +36,7 @@ async def create_campaign(
     tariff_id: int | None = None,
     tariff_duration_days: int | None = None,
     is_active: bool = True,
+    partner_user_id: int | None = None,
 ) -> AdvertisingCampaign:
     campaign = AdvertisingCampaign(
         name=name,
@@ -50,6 +51,7 @@ async def create_campaign(
         tariff_duration_days=tariff_duration_days,
         created_by=created_by,
         is_active=is_active,
+        partner_user_id=partner_user_id,
     )
 
     db.add(campaign)
@@ -71,6 +73,7 @@ async def get_campaign_by_id(db: AsyncSession, campaign_id: int) -> AdvertisingC
         .options(
             selectinload(AdvertisingCampaign.registrations),
             selectinload(AdvertisingCampaign.tariff),
+            selectinload(AdvertisingCampaign.partner),
         )
         .where(AdvertisingCampaign.id == campaign_id)
     )
@@ -103,6 +106,7 @@ async def get_campaigns_list(
         .options(
             selectinload(AdvertisingCampaign.registrations),
             selectinload(AdvertisingCampaign.tariff),
+            selectinload(AdvertisingCampaign.partner),
         )
         .order_by(AdvertisingCampaign.created_at.desc())
         .offset(offset)
@@ -141,6 +145,7 @@ async def update_campaign(
         'tariff_id',
         'tariff_duration_days',
         'is_active',
+        'partner_user_id',
     }
 
     update_data = {}

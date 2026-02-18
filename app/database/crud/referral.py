@@ -5,10 +5,21 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.database.models import ReferralEarning, User
+from app.database.models import AdvertisingCampaignRegistration, ReferralEarning, User
 
 
 logger = structlog.get_logger(__name__)
+
+
+async def get_user_campaign_id(db: AsyncSession, user_id: int) -> int | None:
+    """Получить campaign_id первой регистрации пользователя."""
+    result = await db.execute(
+        select(AdvertisingCampaignRegistration.campaign_id)
+        .where(AdvertisingCampaignRegistration.user_id == user_id)
+        .order_by(AdvertisingCampaignRegistration.created_at.asc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
 
 
 async def create_referral_earning(
@@ -18,6 +29,7 @@ async def create_referral_earning(
     amount_kopeks: int,
     reason: str,
     referral_transaction_id: int | None = None,
+    campaign_id: int | None = None,
 ) -> ReferralEarning:
     earning = ReferralEarning(
         user_id=user_id,
@@ -25,6 +37,7 @@ async def create_referral_earning(
         amount_kopeks=amount_kopeks,
         reason=reason,
         referral_transaction_id=referral_transaction_id,
+        campaign_id=campaign_id,
     )
 
     db.add(earning)
@@ -42,7 +55,11 @@ async def get_referral_earnings_by_user(
 ) -> list[ReferralEarning]:
     result = await db.execute(
         select(ReferralEarning)
-        .options(selectinload(ReferralEarning.referral), selectinload(ReferralEarning.referral_transaction))
+        .options(
+            selectinload(ReferralEarning.referral),
+            selectinload(ReferralEarning.referral_transaction),
+            selectinload(ReferralEarning.campaign),
+        )
         .where(ReferralEarning.user_id == user_id)
         .order_by(ReferralEarning.created_at.desc())
         .offset(offset)

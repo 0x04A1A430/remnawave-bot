@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import structlog
 from aiogram import F, Router
@@ -1235,8 +1235,6 @@ async def receipts_missing_callback(callback: CallbackQuery):
 async def receipts_link_old_callback(callback: CallbackQuery):
     """Привязать старые чеки из NaloGO к транзакциям по сумме и дате."""
     try:
-        from datetime import UTC, date, timedelta
-
         from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
         from sqlalchemy import and_, select
 

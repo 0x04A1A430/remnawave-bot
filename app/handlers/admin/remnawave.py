@@ -1,5 +1,5 @@
 import math
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
@@ -1315,8 +1315,6 @@ async def show_node_statistics(callback: types.CallbackQuery, db_user: User, db:
         return
 
     try:
-        from datetime import datetime, timedelta
-
         end_date = datetime.now(UTC)
         start_date = end_date - timedelta(days=7)
 

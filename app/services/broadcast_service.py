@@ -9,10 +9,11 @@ import structlog
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError, TelegramRetryAfter
 from aiogram.types import InlineKeyboardMarkup
+from sqlalchemy import select
 from sqlalchemy.exc import InterfaceError, SQLAlchemyError
 
 from app.database.database import AsyncSessionLocal
-from app.database.models import BroadcastHistory
+from app.database.models import BroadcastHistory, Subscription, SubscriptionStatus, User, UserStatus
 from app.handlers.admin.messages import (
     create_broadcast_keyboard,
     get_custom_users,
@@ -25,6 +26,9 @@ if TYPE_CHECKING:
 
 
 logger = structlog.get_logger(__name__)
+
+# Хранение ссылок на фоновые задачи, чтобы GC не удалил их
+_background_tasks: set[asyncio.Task] = set()
 
 
 VALID_MEDIA_TYPES = {'photo', 'video', 'document'}
@@ -138,10 +142,11 @@ class BroadcastService:
     ) -> None:
         sent_count = 0
         failed_count = 0
+        blocked_count = 0
 
         try:
             if cancel_event.is_set():
-                await self._mark_cancelled(broadcast_id, sent_count, failed_count)
+                await self._mark_cancelled(broadcast_id, sent_count, failed_count, blocked_count)
                 return
 
             async with AsyncSessionLocal() as session:
@@ -153,6 +158,7 @@ class BroadcastService:
                 broadcast.status = 'in_progress'
                 broadcast.sent_count = 0
                 broadcast.failed_count = 0
+                broadcast.blocked_count = 0
                 await session.commit()
 
             # _fetch_recipients теперь возвращает list[int] (telegram_id), а не ORM-объекты
@@ -168,12 +174,12 @@ class BroadcastService:
                 await session.commit()
 
             if cancel_event.is_set():
-                await self._mark_cancelled(broadcast_id, sent_count, failed_count)
+                await self._mark_cancelled(broadcast_id, sent_count, failed_count, blocked_count)
                 return
 
             if not recipient_ids:
                 logger.info('Рассылка : получатели не найдены', broadcast_id=broadcast_id)
-                await self._mark_finished(broadcast_id, sent_count, failed_count, cancelled=False)
+                await self._mark_finished(broadcast_id, sent_count, failed_count, blocked_count, cancelled=False)
                 return
 
             keyboard = self._build_keyboard(config.selected_buttons)
@@ -186,7 +192,7 @@ class BroadcastService:
                 TG_BATCH_DELAY=_TG_BATCH_DELAY,
             )
 
-            sent_count, failed_count, cancelled_during_run = await self._send_batched(
+            sent_count, failed_count, blocked_count, cancelled_during_run = await self._send_batched(
                 broadcast_id,
                 recipient_ids,
                 config,
@@ -211,15 +217,16 @@ class BroadcastService:
                 broadcast_id,
                 sent_count,
                 failed_count,
+                blocked_count,
                 cancelled=False,
             )
 
         except asyncio.CancelledError:
-            await self._mark_cancelled(broadcast_id, sent_count, failed_count)
+            await self._mark_cancelled(broadcast_id, sent_count, failed_count, blocked_count)
             raise
         except Exception as exc:
             logger.exception('Критическая ошибка при выполнении рассылки', broadcast_id=broadcast_id, exc=exc)
-            await self._mark_failed(broadcast_id, sent_count, failed_count)
+            await self._mark_failed(broadcast_id, sent_count, failed_count, blocked_count)
 
     async def _fetch_recipients(self, target: str) -> list[int]:
         """Загружает получателей и возвращает список telegram_id (скаляры, не ORM-объекты)."""
@@ -241,23 +248,28 @@ class BroadcastService:
         config: BroadcastConfig,
         keyboard: InlineKeyboardMarkup | None,
         cancel_event: asyncio.Event,
-    ) -> tuple[int, int, bool]:
+    ) -> tuple[int, int, int, bool]:
         """
         Единый метод рассылки для любого количества получателей.
 
         Батчинг по _TG_BATCH_SIZE сообщений с _TG_BATCH_DELAY задержкой.
         Прогресс обновляется каждые _PROGRESS_UPDATE_MESSAGES сообщений.
         Глобальная пауза при FloodWait.
+
+        Returns (sent_count, failed_count, blocked_count, was_cancelled).
         """
         sent_count = 0
         failed_count = 0
+        blocked_count = 0
+        blocked_telegram_ids: list[int] = []
 
         # Глобальная пауза при FloodWait — все корутины ждут
         flood_wait_until: float = 0.0
         last_progress_update: float = 0.0
         last_progress_count: int = 0
 
-        async def send_single(telegram_id: int) -> bool:
+        async def send_single(telegram_id: int) -> str:
+            """Returns 'sent', 'blocked', or 'failed'."""
             nonlocal flood_wait_until
 
             for attempt in range(_TG_MAX_RETRIES):
@@ -267,11 +279,11 @@ class BroadcastService:
                     await asyncio.sleep(flood_wait_until - now)
 
                 if cancel_event.is_set():
-                    return False
+                    return 'failed'
 
                 try:
                     await self._deliver_message(telegram_id, config, keyboard)
-                    return True
+                    return 'sent'
 
                 except TelegramRetryAfter as e:
                     wait_seconds = e.retry_after + 1
@@ -287,10 +299,13 @@ class BroadcastService:
                     await asyncio.sleep(wait_seconds)
 
                 except TelegramForbiddenError:
-                    return False
+                    return 'blocked'
 
-                except TelegramBadRequest:
-                    return False
+                except TelegramBadRequest as e:
+                    err = str(e).lower()
+                    if 'bot was blocked' in err or 'user is deactivated' in err or 'chat not found' in err:
+                        return 'blocked'
+                    return 'failed'
 
                 except Exception as exc:
                     logger.error(
@@ -304,12 +319,12 @@ class BroadcastService:
                     if attempt < _TG_MAX_RETRIES - 1:
                         await asyncio.sleep(0.5 * (attempt + 1))
 
-            return False
+            return 'failed'
 
         for i in range(0, len(recipient_ids), _TG_BATCH_SIZE):
             if cancel_event.is_set():
-                await self._mark_cancelled(broadcast_id, sent_count, failed_count)
-                return sent_count, failed_count, True
+                await self._mark_cancelled(broadcast_id, sent_count, failed_count, blocked_count)
+                return sent_count, failed_count, blocked_count, True
 
             batch = recipient_ids[i : i + _TG_BATCH_SIZE]
             results = await asyncio.gather(
@@ -317,10 +332,13 @@ class BroadcastService:
                 return_exceptions=True,
             )
 
-            for result in results:
-                if isinstance(result, bool):
-                    if result:
+            for idx, result in enumerate(results):
+                if isinstance(result, str):
+                    if result == 'sent':
                         sent_count += 1
+                    elif result == 'blocked':
+                        blocked_count += 1
+                        blocked_telegram_ids.append(batch[idx])
                     else:
                         failed_count += 1
                 elif isinstance(result, Exception):
@@ -328,20 +346,29 @@ class BroadcastService:
                     logger.error('Необработанное исключение в рассылке', broadcast_id=broadcast_id, result=result)
 
             # Обновляем прогресс в БД периодически
-            processed = sent_count + failed_count
+            processed = sent_count + failed_count + blocked_count
             now = asyncio.get_event_loop().time()
             if (
                 processed - last_progress_count >= _PROGRESS_UPDATE_MESSAGES
                 or now - last_progress_update >= _PROGRESS_MIN_INTERVAL_SEC
             ):
-                await self._update_progress(broadcast_id, sent_count, failed_count)
+                await self._update_progress(broadcast_id, sent_count, failed_count, blocked_count)
                 last_progress_count = processed
                 last_progress_update = now
 
             # Задержка между батчами для rate limiting
             await asyncio.sleep(_TG_BATCH_DELAY)
 
-        return sent_count, failed_count, False
+        # Фоновая очистка заблокировавших бота пользователей
+        if blocked_telegram_ids:
+            task = asyncio.create_task(
+                cleanup_blocked_broadcast_users(blocked_telegram_ids),
+                name=f'broadcast-{broadcast_id}-blocked-cleanup',
+            )
+            _background_tasks.add(task)
+            task.add_done_callback(_background_tasks.discard)
+
+        return sent_count, failed_count, blocked_count, False
 
     def _build_keyboard(self, selected_buttons: list[str] | None) -> InlineKeyboardMarkup | None:
         if selected_buttons is None:
@@ -392,6 +419,7 @@ class BroadcastService:
         broadcast_id: int,
         sent_count: int,
         failed_count: int,
+        blocked_count: int = 0,
         *,
         cancelled: bool,
     ) -> None:
@@ -399,7 +427,10 @@ class BroadcastService:
             broadcast_id,
             sent_count,
             failed_count,
-            status='cancelled' if cancelled else ('completed' if failed_count == 0 else 'partial'),
+            blocked_count,
+            status='cancelled'
+            if cancelled
+            else ('completed' if failed_count == 0 and blocked_count == 0 else 'partial'),
         )
 
     async def _mark_cancelled(
@@ -407,11 +438,13 @@ class BroadcastService:
         broadcast_id: int,
         sent_count: int,
         failed_count: int,
+        blocked_count: int = 0,
     ) -> None:
         await self._mark_finished(
             broadcast_id,
             sent_count,
             failed_count,
+            blocked_count,
             cancelled=True,
         )
 
@@ -420,11 +453,13 @@ class BroadcastService:
         broadcast_id: int,
         sent_count: int = 0,
         failed_count: int = 0,
+        blocked_count: int = 0,
     ) -> None:
         await self._safe_status_update(
             broadcast_id,
             sent_count,
             failed_count,
+            blocked_count,
             status='failed',
         )
 
@@ -433,6 +468,7 @@ class BroadcastService:
         broadcast_id: int,
         sent_count: int,
         failed_count: int,
+        blocked_count: int = 0,
     ) -> None:
         """Периодически обновляет прогресс рассылки, чтобы держать соединение активным."""
 
@@ -440,6 +476,7 @@ class BroadcastService:
             broadcast_id,
             sent_count,
             failed_count,
+            blocked_count,
             status='in_progress',
             update_completed_at=False,
         )
@@ -449,6 +486,7 @@ class BroadcastService:
         broadcast_id: int,
         sent_count: int,
         failed_count: int,
+        blocked_count: int = 0,
         *,
         status: str,
         update_completed_at: bool = True,
@@ -464,6 +502,7 @@ class BroadcastService:
 
                     broadcast.sent_count = sent_count
                     broadcast.failed_count = failed_count
+                    broadcast.blocked_count = blocked_count
                     broadcast.status = status
 
                     if update_completed_at:
@@ -483,6 +522,66 @@ class BroadcastService:
             except SQLAlchemyError:
                 logger.exception('Не удалось обновить статус рассылки', broadcast_id=broadcast_id)
                 return
+
+
+async def cleanup_blocked_broadcast_users(blocked_telegram_ids: list[int]) -> None:
+    """
+    Фоновая очистка пользователей, заблокировавших бота (обнаруженных при рассылке).
+
+    Для каждого telegram_id:
+    - Помечает пользователя как BLOCKED
+    - Отключает активные подписки (ACTIVE/TRIAL → DISABLED)
+    - Отключает пользователя в Remnawave панели
+    """
+    from app.services.subscription_service import SubscriptionService
+
+    subscription_service = SubscriptionService()
+
+    for telegram_id in blocked_telegram_ids:
+        try:
+            async with AsyncSessionLocal() as session:
+                result = await session.execute(select(User).where(User.telegram_id == telegram_id))
+                user = result.scalar_one_or_none()
+                if not user or user.status == UserStatus.BLOCKED.value:
+                    continue
+
+                user.status = UserStatus.BLOCKED.value
+
+                # Отключаем активные подписки
+                sub_result = await session.execute(
+                    select(Subscription).where(
+                        Subscription.user_id == user.id,
+                        Subscription.status.in_(
+                            [
+                                SubscriptionStatus.ACTIVE.value,
+                                SubscriptionStatus.TRIAL.value,
+                            ]
+                        ),
+                    )
+                )
+                subscriptions = sub_result.scalars().all()
+                for sub in subscriptions:
+                    sub.status = SubscriptionStatus.DISABLED.value
+
+                await session.commit()
+
+                # Отключаем в Remnawave панели (вне транзакции)
+                if user.remnawave_uuid:
+                    await subscription_service.disable_remnawave_user(user.remnawave_uuid)
+
+                logger.info(
+                    'Заблокированный пользователь очищен при рассылке',
+                    telegram_id=telegram_id,
+                    user_id=user.id,
+                    disabled_subs=len(subscriptions),
+                )
+
+        except Exception as exc:
+            logger.error(
+                'Ошибка очистки заблокированного пользователя',
+                telegram_id=telegram_id,
+                exc=exc,
+            )
 
 
 broadcast_service = BroadcastService()

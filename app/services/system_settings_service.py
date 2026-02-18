@@ -20,7 +20,7 @@ from app.database.crud.system_setting import (
 )
 from app.database.database import AsyncSessionLocal
 from app.database.models import SystemSetting
-from app.database.universal_migration import ensure_default_web_api_token
+from app.services.web_api_token_service import ensure_default_web_api_token
 
 
 logger = structlog.get_logger(__name__)

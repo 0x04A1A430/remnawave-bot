@@ -1,5 +1,7 @@
 """Admin routes for managing advertising campaigns in cabinet."""
 
+from datetime import UTC, datetime
+
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
@@ -20,7 +22,9 @@ from app.database.crud.campaign import (
 from app.database.crud.server_squad import get_all_server_squads
 from app.database.crud.tariff import get_all_tariffs
 from app.database.models import (
+    AdvertisingCampaign,
     AdvertisingCampaignRegistration,
+    PartnerStatus,
     Subscription,
     Tariff,
     User,
@@ -28,6 +32,7 @@ from app.database.models import (
 
 from ..dependencies import get_cabinet_db, get_current_admin_user
 from ..schemas.campaigns import (
+    AvailablePartnerItem,
     CampaignCreateRequest,
     CampaignDetailResponse,
     CampaignListItem,
@@ -63,6 +68,14 @@ def _get_web_link(start_parameter: str) -> str | None:
     if base_url:
         return f'{base_url}/?campaign={start_parameter}'
     return None
+
+
+def _get_partner_name(campaign: AdvertisingCampaign) -> str | None:
+    """Get partner display name from campaign."""
+    if not campaign.partner_user_id or not campaign.partner:
+        return None
+    partner = campaign.partner
+    return partner.first_name or partner.username or f'#{partner.id}'
 
 
 @router.get('/overview', response_model=CampaignsOverviewResponse)
@@ -140,6 +153,26 @@ async def get_available_tariffs(
     ]
 
 
+@router.get('/available-partners', response_model=list[AvailablePartnerItem])
+async def get_available_partners(
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Get list of approved partners for campaign partner selector."""
+    result = await db.execute(
+        select(User).where(User.partner_status == PartnerStatus.APPROVED.value).order_by(User.first_name, User.username)
+    )
+    partners = result.scalars().all()
+    return [
+        AvailablePartnerItem(
+            user_id=p.id,
+            username=p.username,
+            first_name=p.first_name,
+        )
+        for p in partners
+    ]
+
+
 @router.get('', response_model=CampaignListResponse)
 async def list_campaigns(
     include_inactive: bool = True,
@@ -166,6 +199,8 @@ async def list_campaigns(
                 registrations_count=stats['registrations'],
                 total_revenue_kopeks=stats['total_revenue_kopeks'],
                 conversion_rate=stats['conversion_rate'],
+                partner_user_id=campaign.partner_user_id,
+                partner_name=_get_partner_name(campaign),
                 created_at=campaign.created_at,
             )
         )
@@ -209,6 +244,8 @@ async def get_campaign(
         tariff_id=campaign.tariff_id,
         tariff_duration_days=campaign.tariff_duration_days,
         tariff=tariff_info,
+        partner_user_id=campaign.partner_user_id,
+        partner_name=_get_partner_name(campaign),
         created_by=campaign.created_by,
         created_at=campaign.created_at,
         updated_at=campaign.updated_at,
@@ -371,6 +408,15 @@ async def create_new_campaign(
                 detail='Tariff not found',
             )
 
+    # Validate partner exists and is approved
+    if request.partner_user_id is not None:
+        partner_user = await db.get(User, request.partner_user_id)
+        if not partner_user or partner_user.partner_status != 'approved':
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='Partner not found or not approved',
+            )
+
     campaign = await create_campaign(
         db,
         name=request.name,
@@ -385,6 +431,7 @@ async def create_new_campaign(
         tariff_id=request.tariff_id,
         tariff_duration_days=request.tariff_duration_days,
         is_active=request.is_active,
+        partner_user_id=request.partner_user_id,
     )
 
     # Reload to get tariff relationship
@@ -456,8 +503,26 @@ async def update_existing_campaign(
     if request.tariff_duration_days is not None:
         updates['tariff_duration_days'] = request.tariff_duration_days
 
+    # Handle partner_user_id separately (allows explicit None to unassign)
+    partner_changed = False
+    if 'partner_user_id' in request.model_fields_set:
+        new_partner_id = request.partner_user_id
+        if new_partner_id is not None:
+            partner_user = await db.get(User, new_partner_id)
+            if not partner_user or partner_user.partner_status != 'approved':
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail='Partner not found or not approved',
+                )
+        campaign.partner_user_id = new_partner_id
+        campaign.updated_at = datetime.now(UTC)
+        partner_changed = True
+
     if updates:
         await update_campaign(db, campaign, **updates)
+    elif partner_changed:
+        await db.commit()
+        await db.refresh(campaign)
 
     logger.info('Admin updated campaign', admin_id=admin.id, campaign_id=campaign_id)
 

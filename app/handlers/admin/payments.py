@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 import math
+from datetime import UTC, datetime
 
 import structlog
 from aiogram import Dispatcher, F, types
@@ -822,8 +823,6 @@ async def export_payments(
     file_bytes = json_content.encode('utf-8')
 
     # Отправляем файл
-    from datetime import UTC, datetime
-
     filename = f'payments_export_{datetime.now(UTC).strftime("%Y%m%d_%H%M%S")}.json'
 
     await callback.message.answer_document(
