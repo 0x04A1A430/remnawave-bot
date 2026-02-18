@@ -1137,6 +1137,19 @@ class UserService:
             try:
                 if user.subscription:
                     logger.info('🔄 Удаляем подписку', subscription_id=user.subscription.id)
+
+                    # Decrement server_squads.current_users BEFORE deleting subscription
+                    # to match lock ordering with webhook (server_squads → subscriptions)
+                    # and avoid deadlocks
+                    squad_ids = user.subscription.connected_squads
+                    if squad_ids:
+                        try:
+                            from app.database.crud.server_squad import remove_user_from_servers
+
+                            await remove_user_from_servers(db, squad_ids)
+                        except Exception as sq_err:
+                            logger.warning('⚠️ Не удалось уменьшить счётчик серверов', error=sq_err)
+
                     await db.execute(
                         delete(SubscriptionServer).where(SubscriptionServer.subscription_id == user.subscription.id)
                     )
