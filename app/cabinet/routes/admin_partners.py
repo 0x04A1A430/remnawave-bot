@@ -4,9 +4,11 @@ from typing import Literal
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database.models import (
     AdvertisingCampaign,
     PartnerApplication,
@@ -34,6 +36,116 @@ from ..schemas.partners import (
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/admin/partners', tags=['Cabinet Admin Partners'])
+
+
+# ==================== Settings ====================
+
+
+class PartnerSettingsResponse(BaseModel):
+    withdrawal_enabled: bool
+    withdrawal_min_amount_kopeks: int
+    withdrawal_cooldown_days: int
+    withdrawal_requisites_text: str
+    partner_section_visible: bool
+    referral_program_enabled: bool
+
+
+class PartnerSettingsUpdateRequest(BaseModel):
+    withdrawal_enabled: bool | None = None
+    withdrawal_min_amount_kopeks: int | None = Field(None, ge=0, le=100_000_000)
+    withdrawal_cooldown_days: int | None = Field(None, ge=0, le=365)
+    withdrawal_requisites_text: str | None = Field(None, max_length=2000)
+    partner_section_visible: bool | None = None
+    referral_program_enabled: bool | None = None
+
+
+def _build_partner_settings_response() -> PartnerSettingsResponse:
+    return PartnerSettingsResponse(
+        withdrawal_enabled=settings.REFERRAL_WITHDRAWAL_ENABLED,
+        withdrawal_min_amount_kopeks=settings.REFERRAL_WITHDRAWAL_MIN_AMOUNT_KOPEKS,
+        withdrawal_cooldown_days=settings.REFERRAL_WITHDRAWAL_COOLDOWN_DAYS,
+        withdrawal_requisites_text=settings.REFERRAL_WITHDRAWAL_REQUISITES_TEXT,
+        partner_section_visible=settings.REFERRAL_PARTNER_SECTION_VISIBLE,
+        referral_program_enabled=settings.REFERRAL_PROGRAM_ENABLED,
+    )
+
+
+@router.get('/settings', response_model=PartnerSettingsResponse)
+async def get_partner_settings(
+    admin: User = Depends(get_current_admin_user),
+):
+    """Get partner system settings."""
+    return _build_partner_settings_response()
+
+
+@router.patch('/settings', response_model=PartnerSettingsResponse)
+async def update_partner_settings(
+    request: PartnerSettingsUpdateRequest,
+    admin: User = Depends(get_current_admin_user),
+):
+    """Update partner system settings."""
+    from pathlib import Path
+
+    # Update in-memory settings
+    if request.withdrawal_enabled is not None:
+        settings.REFERRAL_WITHDRAWAL_ENABLED = request.withdrawal_enabled
+    if request.withdrawal_min_amount_kopeks is not None:
+        settings.REFERRAL_WITHDRAWAL_MIN_AMOUNT_KOPEKS = request.withdrawal_min_amount_kopeks
+    if request.withdrawal_cooldown_days is not None:
+        settings.REFERRAL_WITHDRAWAL_COOLDOWN_DAYS = request.withdrawal_cooldown_days
+    if request.withdrawal_requisites_text is not None:
+        settings.REFERRAL_WITHDRAWAL_REQUISITES_TEXT = request.withdrawal_requisites_text
+    if request.partner_section_visible is not None:
+        settings.REFERRAL_PARTNER_SECTION_VISIBLE = request.partner_section_visible
+    if request.referral_program_enabled is not None:
+        settings.REFERRAL_PROGRAM_ENABLED = request.referral_program_enabled
+
+    # Persist to .env file
+    try:
+        env_file = Path('.env')
+        if env_file.exists():
+            lines = env_file.read_text().splitlines()
+            updates: dict[str, str] = {}
+
+            if request.withdrawal_enabled is not None:
+                updates['REFERRAL_WITHDRAWAL_ENABLED'] = str(request.withdrawal_enabled).lower()
+            if request.withdrawal_min_amount_kopeks is not None:
+                updates['REFERRAL_WITHDRAWAL_MIN_AMOUNT_KOPEKS'] = str(request.withdrawal_min_amount_kopeks)
+            if request.withdrawal_cooldown_days is not None:
+                updates['REFERRAL_WITHDRAWAL_COOLDOWN_DAYS'] = str(request.withdrawal_cooldown_days)
+            if request.withdrawal_requisites_text is not None:
+                # Sanitize: replace newlines to prevent .env injection
+                sanitized = request.withdrawal_requisites_text.replace('\r\n', ' ').replace('\n', ' ').replace('\r', ' ')
+                updates['REFERRAL_WITHDRAWAL_REQUISITES_TEXT'] = sanitized
+            if request.partner_section_visible is not None:
+                updates['REFERRAL_PARTNER_SECTION_VISIBLE'] = str(request.partner_section_visible).lower()
+            if request.referral_program_enabled is not None:
+                updates['REFERRAL_PROGRAM_ENABLED'] = str(request.referral_program_enabled).lower()
+
+            new_lines = []
+            updated_keys: set[str] = set()
+
+            for line in lines:
+                updated = False
+                for key, value in updates.items():
+                    if line.startswith(f'{key}='):
+                        new_lines.append(f'{key}={value}')
+                        updated_keys.add(key)
+                        updated = True
+                        break
+                if not updated:
+                    new_lines.append(line)
+
+            for key, value in updates.items():
+                if key not in updated_keys:
+                    new_lines.append(f'{key}={value}')
+
+            env_file.write_text('\n'.join(new_lines) + '\n')
+            logger.info('Updated partner settings in .env file', admin_id=admin.id)
+    except Exception as e:
+        logger.warning('Failed to update .env file', error=e)
+
+    return _build_partner_settings_response()
 
 
 # ==================== Applications (static paths first) ====================

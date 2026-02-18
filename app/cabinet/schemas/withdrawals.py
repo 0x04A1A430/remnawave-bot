@@ -22,6 +22,7 @@ class WithdrawalBalanceResponse(BaseModel):
     is_withdrawal_enabled: bool
     can_request: bool
     cannot_request_reason: str | None = None
+    requisites_text: str = ''
 
 
 class WithdrawalCreateRequest(BaseModel):
