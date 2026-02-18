@@ -457,6 +457,7 @@ class UserService:
                     AdvertisingCampaign,
                     AdvertisingCampaign.id == latest_campaign.c.campaign_id,
                 )
+                .options(selectinload(User.subscription))
                 .order_by(
                     AdvertisingCampaign.name.asc(),
                     latest_campaign.c.created_at.desc(),
