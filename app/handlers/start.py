@@ -1989,7 +1989,7 @@ async def required_sub_channel_check(
                 custom_buttons=custom_buttons,
             )
 
-            if settings.ENABLE_LOGO_MODE:
+            if settings.ENABLE_LOGO_MODE and len(menu_text) <= 900:
                 _result = await bot.send_photo(
                     chat_id=query.from_user.id,
                     photo=get_logo_media(),
@@ -2082,7 +2082,7 @@ async def required_sub_channel_check(
                         custom_buttons=custom_buttons,
                     )
 
-                    if settings.ENABLE_LOGO_MODE:
+                    if settings.ENABLE_LOGO_MODE and len(menu_text) <= 900:
                         _result = await bot.send_photo(
                             chat_id=query.from_user.id,
                             photo=get_logo_media(),
@@ -2112,7 +2112,7 @@ async def required_sub_channel_check(
             else:
                 rules_text = await get_rules(language)
 
-                if settings.ENABLE_LOGO_MODE:
+                if settings.ENABLE_LOGO_MODE and len(rules_text) <= 900:
                     _result = await bot.send_photo(
                         chat_id=query.from_user.id,
                         photo=get_logo_media(),
