@@ -222,6 +222,13 @@ class AuthMiddleware(BaseMiddleware):
                 except (InterfaceError, OperationalError) as conn_err:
                     # Соединение закрылось (таймаут после долгой операции) - просто логируем
                     logger.warning('⚠️ Соединение с БД закрыто после обработки, пропускаем commit', conn_err=conn_err)
+                except Exception as commit_err:
+                    # Transaction aborted (e.g. handler swallowed a ProgrammingError) — rollback
+                    logger.warning('⚠️ Не удалось commit после обработки, rollback', commit_err=commit_err)
+                    try:
+                        await db.rollback()
+                    except Exception:
+                        pass
                 return result
 
             except (InterfaceError, OperationalError) as conn_err:
