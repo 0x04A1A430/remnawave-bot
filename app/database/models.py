@@ -1,4 +1,13 @@
 from datetime import UTC, datetime, time, timedelta
+
+
+def _aware(dt: datetime | None) -> datetime | None:
+    """Ensure datetime is timezone-aware (handles pre-TIMESTAMPTZ databases)."""
+    if dt is not None and dt.tzinfo is None:
+        return dt.replace(tzinfo=UTC)
+    return dt
+
+
 from enum import Enum
 
 from sqlalchemy import (
@@ -1177,35 +1186,28 @@ class Subscription(Base):
         'TrafficPurchase', back_populates='subscription', passive_deletes=True, cascade='all, delete-orphan'
     )
 
-    @staticmethod
-    def _aware(dt: datetime | None) -> datetime | None:
-        """Ensure datetime is timezone-aware (handles pre-TIMESTAMPTZ DBs)."""
-        if dt is not None and dt.tzinfo is None:
-            return dt.replace(tzinfo=UTC)
-        return dt
-
     @property
     def is_active(self) -> bool:
         current_time = datetime.now(UTC)
-        end = self._aware(self.end_date)
+        end = _aware(self.end_date)
         return self.status == SubscriptionStatus.ACTIVE.value and end is not None and end > current_time
 
     @property
     def is_expired(self) -> bool:
         """Проверяет, истёк ли срок подписки"""
-        end = self._aware(self.end_date)
+        end = _aware(self.end_date)
         return end is not None and end <= datetime.now(UTC)
 
     @property
     def should_be_expired(self) -> bool:
         current_time = datetime.now(UTC)
-        end = self._aware(self.end_date)
+        end = _aware(self.end_date)
         return self.status == SubscriptionStatus.ACTIVE.value and end is not None and end <= current_time
 
     @property
     def actual_status(self) -> str:
         current_time = datetime.now(UTC)
-        end = self._aware(self.end_date)
+        end = _aware(self.end_date)
 
         if self.status == SubscriptionStatus.EXPIRED.value:
             return 'expired'
@@ -1261,7 +1263,7 @@ class Subscription(Base):
 
     @property
     def days_left(self) -> int:
-        end = self._aware(self.end_date)
+        end = _aware(self.end_date)
         if end is None:
             return 0
         current_time = datetime.now(UTC)
@@ -1272,7 +1274,7 @@ class Subscription(Base):
 
     @property
     def time_left_display(self) -> str:
-        end = self._aware(self.end_date)
+        end = _aware(self.end_date)
         current_time = datetime.now(UTC)
         if end is None or end <= current_time:
             return 'истёк'
@@ -1296,7 +1298,7 @@ class Subscription(Base):
         return min((used / self.traffic_limit_gb) * 100, 100.0)
 
     def extend_subscription(self, days: int):
-        end = self._aware(self.end_date)
+        end = _aware(self.end_date)
         if end and end > datetime.now(UTC):
             self.end_date = end + timedelta(days=days)
         else:
@@ -1354,7 +1356,7 @@ class TrafficPurchase(Base):
     @property
     def is_expired(self) -> bool:
         """Проверяет, истекла ли докупка."""
-        return datetime.now(UTC) >= self.expires_at
+        return datetime.now(UTC) >= _aware(self.expires_at)
 
 
 class Transaction(Base):
@@ -1449,8 +1451,8 @@ class PromoCode(Base):
         return (
             self.is_active
             and self.current_uses < self.max_uses
-            and self.valid_from <= now
-            and (self.valid_until is None or self.valid_until >= now)
+            and _aware(self.valid_from) <= now
+            and (self.valid_until is None or _aware(self.valid_until) >= now)
         )
 
     @property
@@ -2325,10 +2327,7 @@ class Ticket(Base):
         if self.user_reply_block_permanent:
             return True
         if self.user_reply_block_until:
-            try:
-                return self.user_reply_block_until > datetime.now(UTC)
-            except Exception:
-                return True
+            return _aware(self.user_reply_block_until) > datetime.now(UTC)
         return False
 
     @property
@@ -2561,7 +2560,7 @@ class CabinetRefreshToken(Base):
 
     @property
     def is_expired(self) -> bool:
-        return datetime.now(UTC) > self.expires_at
+        return datetime.now(UTC) > _aware(self.expires_at)
 
     @property
     def is_revoked(self) -> bool:
