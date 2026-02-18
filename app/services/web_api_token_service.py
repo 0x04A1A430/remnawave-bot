@@ -95,9 +95,7 @@ class WebApiTokenService:
         """Hash without HMAC (for legacy fallback)."""
         return hash_api_token(token, self.algorithm)  # type: ignore[arg-type]
 
-    async def _load_token_with_fallback(
-        self, db: AsyncSession, value: str
-    ) -> WebApiToken | None:
+    async def _load_token_with_fallback(self, db: AsyncSession, value: str) -> WebApiToken | None:
         """Load token by hash, falling back to plain hash if HMAC is enabled.
 
         When HMAC is newly enabled, existing tokens are stored with plain

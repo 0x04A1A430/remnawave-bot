@@ -471,9 +471,7 @@ async def sync_postgres_sequences() -> bool:
                 q_schema = _quote_ident(table_schema)
                 q_table = _quote_ident(table_name)
 
-                max_result = await conn.execute(
-                    text(f'SELECT COALESCE(MAX({q_col}), 0) FROM {q_schema}.{q_table}')
-                )
+                max_result = await conn.execute(text(f'SELECT COALESCE(MAX({q_col}), 0) FROM {q_schema}.{q_table}'))
                 max_value = max_result.scalar() or 0
 
                 # pg_get_serial_sequence returns e.g. '"public"."users_id_seq"'.

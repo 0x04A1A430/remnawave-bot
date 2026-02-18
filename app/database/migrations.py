@@ -44,8 +44,7 @@ async def run_alembic_upgrade() -> None:
 
     if await _needs_auto_stamp():
         logger.warning(
-            'Обнаружена существующая БД без alembic_version — '
-            'автоматический stamp 0001 (переход с universal_migration)'
+            'Обнаружена существующая БД без alembic_version — автоматический stamp 0001 (переход с universal_migration)'
         )
         await _stamp_alembic_revision(_INITIAL_REVISION)
 
