@@ -62,9 +62,9 @@
 - `app/database/models.py` — Python-модуль
   Классы: `UserStatus`, `SubscriptionStatus`, `TransactionType`, `PromoCodeType`, `PaymentMethod`, `MainMenuButtonActionType`, `MainMenuButtonVisibility`, `YooKassaPayment` (6 методов), `CryptoBotPayment` (5 методов), `MulenPayPayment` (2 методов), `Pal24Payment` (3 методов), `PromoGroup` (3 методов), `User` (5 методов), `Subscription` (11 методов), `Transaction` (1 методов), `SubscriptionConversion` (2 методов), `PromoCode` (2 методов), `PromoCodeUse`, `ReferralEarning` (1 методов), `Squad` (1 методов), `ServiceRule`, `PrivacyPolicy`, `PublicOffer`, `FaqSetting`, `FaqPage`, `SystemSetting`, `MonitoringLog`, `SentNotification`, `DiscountOffer`, `PromoOfferTemplate`, `SubscriptionTemporaryAccess`, `PromoOfferLog`, `BroadcastHistory`, `ServerSquad` (3 методов), `SubscriptionServer`, `SupportAuditLog`, `UserMessage` (1 методов), `WelcomeText`, `AdvertisingCampaign` (2 методов), `AdvertisingCampaignRegistration` (1 методов), `TicketStatus`, `Ticket` (8 методов), `TicketMessage` (3 методов), `WebApiToken` (1 методов), `MainMenuButton` (3 методов)
   Функции: нет
-- `app/database/universal_migration.py` — Python-модуль
+- `app/database/migrations.py` — Programmatic Alembic migration runner
   Классы: нет
-  Функции: нет
+  Функции: `run_alembic_upgrade`, `stamp_alembic_head`
 
 #### app/database/crud
 

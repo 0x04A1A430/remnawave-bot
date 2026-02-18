@@ -17,11 +17,13 @@ from app.config import settings
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
 
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+# URL also set in app/database/migrations.py for programmatic usage;
+# this line is needed for CLI invocation (make migrate, make migration).
+config.set_main_option("sqlalchemy.url", settings.get_database_url())
 
 
 def run_migrations_offline() -> None:
@@ -58,6 +60,10 @@ async def run_async_migrations() -> None:
 
 
 def run_migrations_online() -> None:
+    # asyncio.run() is safe here: when called programmatically via
+    # run_alembic_upgrade(), this runs inside run_in_executor() which
+    # creates a separate thread with no event loop, so asyncio.run()
+    # can create a fresh loop without conflict.
     asyncio.run(run_async_migrations())
 
 
