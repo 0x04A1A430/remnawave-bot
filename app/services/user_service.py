@@ -9,10 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.database.crud.promo_group import get_promo_group_by_id
-from app.database.crud.subscription import (
-    decrement_subscription_server_counts,
-    get_subscription_by_user_id,
-)
+from app.database.crud.subscription import get_subscription_by_user_id
 from app.database.crud.transaction import get_user_transactions_count
 from app.database.crud.user import (
     add_user_balance,
@@ -811,34 +808,6 @@ class UserService:
 
             try:
                 async with db.begin_nested():
-                    if user.subscription:
-                        subscription_servers_result = await db.execute(
-                            select(SubscriptionServer).where(SubscriptionServer.subscription_id == user.subscription.id)
-                        )
-                        subscription_servers = subscription_servers_result.scalars().all()
-
-                        await decrement_subscription_server_counts(
-                            db,
-                            user.subscription,
-                            subscription_servers=subscription_servers,
-                        )
-
-                        if subscription_servers:
-                            logger.info(
-                                '🔄 Удаляем связей подписка-сервер',
-                                subscription_servers_count=len(subscription_servers),
-                            )
-                            await db.execute(
-                                delete(SubscriptionServer).where(
-                                    SubscriptionServer.subscription_id == user.subscription.id
-                                )
-                            )
-                            await db.flush()
-            except Exception as e:
-                logger.error('❌ Ошибка удаления связей подписка-сервер', error=e)
-
-            try:
-                async with db.begin_nested():
                     user_messages_result = await db.execute(
                         update(UserMessage).where(UserMessage.created_by == user_id).values(created_by=None)
                     )
@@ -1186,10 +1155,19 @@ class UserService:
                     if user.subscription:
                         logger.info('🔄 Удаляем подписку', subscription_id=user.subscription.id)
 
-                        # Decrement server_squads.current_users BEFORE deleting subscription
-                        # to match lock ordering with webhook (server_squads → subscriptions)
-                        # and avoid deadlocks
+                        # Save squad info before deleting subscription
                         squad_ids = user.subscription.connected_squads
+
+                        # Delete subscription_servers and subscription FIRST
+                        # Lock order: subscriptions → server_squads (matches webhook order)
+                        await db.execute(
+                            delete(SubscriptionServer).where(SubscriptionServer.subscription_id == user.subscription.id)
+                        )
+                        await db.execute(delete(Subscription).where(Subscription.user_id == user_id))
+                        await db.flush()
+
+                        # Decrement server_squads.current_users AFTER subscription delete
+                        # to match lock ordering with webhook and avoid deadlocks
                         if squad_ids:
                             try:
                                 from app.database.crud.server_squad import (
@@ -1197,20 +1175,11 @@ class UserService:
                                     remove_user_from_servers,
                                 )
 
-                                # connected_squads stores UUIDs — resolve to integer IDs
                                 int_squad_ids = await get_server_ids_by_uuids(db, list(squad_ids))
                                 if int_squad_ids:
-                                    # Own savepoint so failure doesn't abort subscription deletion
-                                    async with db.begin_nested():
-                                        await remove_user_from_servers(db, int_squad_ids)
+                                    await remove_user_from_servers(db, int_squad_ids)
                             except Exception as sq_err:
                                 logger.warning('⚠️ Не удалось уменьшить счётчик серверов', error=sq_err)
-
-                        await db.execute(
-                            delete(SubscriptionServer).where(SubscriptionServer.subscription_id == user.subscription.id)
-                        )
-                        await db.execute(delete(Subscription).where(Subscription.user_id == user_id))
-                        await db.flush()
             except Exception as e:
                 logger.error('❌ Ошибка удаления подписки', error=e)
 
