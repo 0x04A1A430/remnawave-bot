@@ -1476,7 +1476,9 @@ class ReferralEarning(Base):
     reason = Column(String(100), nullable=False)
 
     referral_transaction_id = Column(Integer, ForeignKey('transactions.id'), nullable=True)
-    campaign_id = Column(Integer, ForeignKey('advertising_campaigns.id', ondelete='SET NULL'), nullable=True, index=True)
+    campaign_id = Column(
+        Integer, ForeignKey('advertising_campaigns.id', ondelete='SET NULL'), nullable=True, index=True
+    )
 
     created_at = Column(DateTime(timezone=True), default=func.now())
 

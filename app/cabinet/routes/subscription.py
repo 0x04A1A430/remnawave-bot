@@ -196,7 +196,9 @@ def _subscription_to_response(
         daily_price_kopeks = getattr(subscription.tariff, 'daily_price_kopeks', None)
         if not tariff_name:  # Only set if not passed as parameter
             tariff_name = getattr(subscription.tariff, 'name', None)
-        traffic_reset_mode = getattr(subscription.tariff, 'traffic_reset_mode', None) or settings.DEFAULT_TRAFFIC_RESET_STRATEGY
+        traffic_reset_mode = (
+            getattr(subscription.tariff, 'traffic_reset_mode', None) or settings.DEFAULT_TRAFFIC_RESET_STRATEGY
+        )
 
     # Calculate next daily charge time (24 hours after last charge)
     next_daily_charge_at = None
