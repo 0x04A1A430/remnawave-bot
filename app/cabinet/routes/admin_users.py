@@ -1771,15 +1771,18 @@ async def full_delete_user(
     panel_error: str | None = None
     deleted_from_panel = False
 
+    # Pre-fetch admin.id to avoid MissingGreenlet after transaction rollback
+    admin_id_val = admin.id
+
     # UserService.delete_user_account handles both bot DB and Remnawave panel
     user_service = UserService()
-    success = await user_service.delete_user_account(db, user_id, admin.id)
+    success = await user_service.delete_user_account(db, user_id, admin_id_val)
 
     if success:
         deleted_from_panel = request.delete_from_panel and user.remnawave_uuid is not None
 
     reason_text = f' (reason: {request.reason})' if request.reason else ''
-    logger.info('Admin fully deleted user', admin_id=admin.id, user_id=user_id, reason_text=reason_text)
+    logger.info('Admin fully deleted user', admin_id=admin_id_val, user_id=user_id, reason_text=reason_text)
 
     return FullDeleteUserResponse(
         success=success,
