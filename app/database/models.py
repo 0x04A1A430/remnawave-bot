@@ -1476,12 +1476,14 @@ class ReferralEarning(Base):
     reason = Column(String(100), nullable=False)
 
     referral_transaction_id = Column(Integer, ForeignKey('transactions.id'), nullable=True)
+    campaign_id = Column(Integer, ForeignKey('advertising_campaigns.id', ondelete='SET NULL'), nullable=True, index=True)
 
     created_at = Column(DateTime(timezone=True), default=func.now())
 
     user = relationship('User', foreign_keys=[user_id], back_populates='referral_earnings')
     referral = relationship('User', foreign_keys=[referral_id])
     referral_transaction = relationship('Transaction')
+    campaign = relationship('AdvertisingCampaign')
 
     @property
     def amount_rubles(self) -> float:

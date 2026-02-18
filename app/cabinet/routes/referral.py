@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import settings
-from app.database.models import ReferralEarning, User
+from app.database.models import AdvertisingCampaign, ReferralEarning, User
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 from ..schemas.referral import (
@@ -158,9 +158,18 @@ async def get_referral_earnings(
     else:
         referral_users_map = {}
 
+    # Batch-fetch campaigns to avoid N+1
+    campaign_ids = list({e.campaign_id for e in earnings if e.campaign_id})
+    if campaign_ids:
+        campaigns_result = await db.execute(select(AdvertisingCampaign).where(AdvertisingCampaign.id.in_(campaign_ids)))
+        campaigns_map = {c.id: c for c in campaigns_result.scalars().all()}
+    else:
+        campaigns_map = {}
+
     items = []
     for e in earnings:
         referral_user = referral_users_map.get(e.referral_id) if e.referral_id else None
+        campaign = campaigns_map.get(e.campaign_id) if e.campaign_id else None
 
         items.append(
             ReferralEarningResponse(
@@ -170,6 +179,7 @@ async def get_referral_earnings(
                 reason=e.reason or 'Referral commission',
                 referral_username=referral_user.username if referral_user else None,
                 referral_first_name=referral_user.first_name if referral_user else None,
+                campaign_name=campaign.name if campaign else None,
                 created_at=e.created_at,
             )
         )

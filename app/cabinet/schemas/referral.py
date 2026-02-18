@@ -47,6 +47,7 @@ class ReferralEarningResponse(BaseModel):
     reason: str
     referral_username: str | None = None
     referral_first_name: str | None = None
+    campaign_name: str | None = None
     created_at: datetime
 
     class Config:

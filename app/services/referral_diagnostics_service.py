@@ -18,7 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database.crud.referral import create_referral_earning
+from app.database.crud.referral import create_referral_earning, get_user_campaign_id
 from app.database.crud.user import add_user_balance
 from app.database.models import ReferralEarning, User
 
@@ -802,12 +802,14 @@ class ReferralDiagnosticsService:
                                 )
 
                                 # Создаём запись ReferralEarning
+                                campaign_id = await get_user_campaign_id(db, user.id)
                                 await create_referral_earning(
                                     db=db,
                                     user_id=referrer.id,
                                     referral_id=user.id,
                                     amount_kopeks=inviter_bonus,
                                     reason='referral_first_topup',
+                                    campaign_id=campaign_id,
                                 )
 
                                 logger.info(
@@ -1039,12 +1041,14 @@ class ReferralDiagnosticsService:
                         )
 
                         # Создаём ReferralEarning чтобы не начислять повторно
+                        campaign_id = await get_user_campaign_id(db, referral.id)
                         await create_referral_earning(
                             db=db,
                             user_id=referrer.id,
                             referral_id=referral.id,
                             amount_kopeks=missing.referrer_bonus_amount,
                             reason='referral_first_topup',
+                            campaign_id=campaign_id,
                         )
                         logger.info(
                             '💰 Начислен бонус рефереру ₽',

@@ -4,7 +4,7 @@ from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database.crud.referral import create_referral_earning
+from app.database.crud.referral import create_referral_earning, get_user_campaign_id
 from app.database.crud.user import add_user_balance, get_user_by_id
 from app.database.models import ReferralEarning, User
 from app.services.notification_delivery_service import (
@@ -74,8 +74,14 @@ async def process_referral_registration(db: AsyncSession, new_user_id: int, refe
             logger.error('Пользователь не привязан к рефереру', new_user_id=new_user_id, referrer_id=referrer_id)
             return False
 
+        campaign_id = await get_user_campaign_id(db, new_user_id)
         await create_referral_earning(
-            db=db, user_id=referrer_id, referral_id=new_user_id, amount_kopeks=0, reason='referral_registration_pending'
+            db=db,
+            user_id=referrer_id,
+            referral_id=new_user_id,
+            amount_kopeks=0,
+            reason='referral_registration_pending',
+            campaign_id=campaign_id,
         )
 
         try:
@@ -132,6 +138,7 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
             logger.error('Реферер не найден', referred_by_id=user.referred_by_id)
             return False
 
+        campaign_id = await get_user_campaign_id(db, user.id)
         commission_percent = get_effective_referral_commission_percent(referrer)
         qualifies_for_first_bonus = topup_amount_kopeks >= settings.REFERRAL_MINIMUM_TOPUP_KOPEKS
         commission_amount = 0
@@ -161,6 +168,7 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
                         referral_id=user.id,
                         amount_kopeks=commission_amount,
                         reason='referral_commission_topup',
+                        campaign_id=campaign_id,
                     )
 
                     logger.info(
@@ -248,6 +256,7 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
                     referral_id=user.id,
                     amount_kopeks=inviter_bonus,
                     reason='referral_first_topup',
+                    campaign_id=campaign_id,
                 )
                 referrer_id = referrer.telegram_id or referrer.email or f'user#{referrer.id}'
                 logger.info('💰 Реферер получил бонус ₽', referrer_id=referrer_id, inviter_bonus=inviter_bonus / 100)
@@ -283,6 +292,7 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
                 referral_id=user.id,
                 amount_kopeks=commission_amount,
                 reason='referral_commission_topup',
+                campaign_id=campaign_id,
             )
 
             referrer_id = referrer.telegram_id or referrer.email or f'user#{referrer.id}'
@@ -339,6 +349,7 @@ async def process_referral_purchase(
                 db, referrer, commission_amount, f'Комиссия {commission_percent}% с покупки {user.full_name}', bot=bot
             )
 
+            campaign_id = await get_user_campaign_id(db, user.id)
             await create_referral_earning(
                 db=db,
                 user_id=referrer.id,
@@ -346,6 +357,7 @@ async def process_referral_purchase(
                 amount_kopeks=commission_amount,
                 reason='referral_commission',
                 referral_transaction_id=transaction_id,
+                campaign_id=campaign_id,
             )
 
             referrer_id = referrer.telegram_id or referrer.email or f'user#{referrer.id}'
