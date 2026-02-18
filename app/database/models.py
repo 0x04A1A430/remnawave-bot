@@ -26,6 +26,8 @@ from sqlalchemy import (
     Text,
     Time,
     UniqueConstraint,
+    event,
+    inspect as sa_inspect,
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Mapped, backref, mapped_column, relationship
@@ -33,6 +35,29 @@ from sqlalchemy.sql import func
 
 
 Base = declarative_base()
+
+# Cache datetime attribute names per class to avoid repeated mapper inspection
+_datetime_attrs_cache: dict[type, list[str]] = {}
+
+
+@event.listens_for(Base, 'load', propagate=True)
+def _ensure_aware_datetimes(target, context):
+    """Auto-convert naive datetimes to UTC-aware on load from DB.
+
+    Handles pre-TIMESTAMPTZ databases that return naive datetimes.
+    Modifies __dict__ directly to avoid triggering SA dirty tracking.
+    """
+    cls = type(target)
+    if cls not in _datetime_attrs_cache:
+        mapper = sa_inspect(cls)
+        _datetime_attrs_cache[cls] = [
+            attr.key for attr in mapper.column_attrs if any(isinstance(col.type, DateTime) for col in attr.columns)
+        ]
+
+    for key in _datetime_attrs_cache[cls]:
+        val = target.__dict__.get(key)
+        if val is not None and isinstance(val, datetime) and val.tzinfo is None:
+            target.__dict__[key] = val.replace(tzinfo=UTC)
 
 
 server_squad_promo_groups = Table(
