@@ -1,4 +1,13 @@
 from datetime import UTC, datetime, time, timedelta
+
+
+def _aware(dt: datetime | None) -> datetime | None:
+    """Ensure datetime is timezone-aware (handles pre-TIMESTAMPTZ databases)."""
+    if dt is not None and dt.tzinfo is None:
+        return dt.replace(tzinfo=UTC)
+    return dt
+
+
 from enum import Enum
 
 from sqlalchemy import (
@@ -16,11 +25,30 @@ from sqlalchemy import (
     Table,
     Text,
     Time,
+    TypeDecorator,
     UniqueConstraint,
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Mapped, backref, mapped_column, relationship
 from sqlalchemy.sql import func
+
+
+class AwareDateTime(TypeDecorator):
+    """DateTime that auto-converts naive values to UTC-aware on load from DB.
+
+    Handles pre-TIMESTAMPTZ databases that return naive datetimes.
+    """
+
+    impl = DateTime
+    cache_ok = True
+
+    def __init__(self):
+        super().__init__(timezone=True)
+
+    def process_result_value(self, value, dialect):
+        if value is not None and isinstance(value, datetime) and value.tzinfo is None:
+            return value.replace(tzinfo=UTC)
+        return value
 
 
 Base = declarative_base()
@@ -176,10 +204,10 @@ class YooKassaPayment(Base):
     payment_method_type = Column(String(50), nullable=True)
     refundable = Column(Boolean, default=False)
     test_mode = Column(Boolean, default=False)
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
-    yookassa_created_at = Column(DateTime(timezone=True), nullable=True)
-    captured_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
+    yookassa_created_at = Column(AwareDateTime(), nullable=True)
+    captured_at = Column(AwareDateTime(), nullable=True)
     user = relationship('User', backref='yookassa_payments')
     transaction = relationship('Transaction', backref='yookassa_payment')
 
@@ -225,11 +253,11 @@ class CryptoBotPayment(Base):
     mini_app_invoice_url = Column(Text, nullable=True)
     web_app_invoice_url = Column(Text, nullable=True)
 
-    paid_at = Column(DateTime(timezone=True), nullable=True)
+    paid_at = Column(AwareDateTime(), nullable=True)
     transaction_id = Column(Integer, ForeignKey('transactions.id'), nullable=True)
 
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 
     user = relationship('User', backref='cryptobot_payments')
     transaction = relationship('Transaction', backref='cryptobot_payment')
@@ -277,12 +305,12 @@ class HeleketPayment(Base):
     payment_url = Column(Text, nullable=True)
     metadata_json = Column(JSON, nullable=True)
 
-    paid_at = Column(DateTime(timezone=True), nullable=True)
-    expires_at = Column(DateTime(timezone=True), nullable=True)
+    paid_at = Column(AwareDateTime(), nullable=True)
+    expires_at = Column(AwareDateTime(), nullable=True)
     transaction_id = Column(Integer, ForeignKey('transactions.id'), nullable=True)
 
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 
     user = relationship('User', backref='heleket_payments')
     transaction = relationship('Transaction', backref='heleket_payment')
@@ -330,7 +358,7 @@ class MulenPayPayment(Base):
 
     status = Column(String(50), nullable=False, default='created')
     is_paid = Column(Boolean, default=False)
-    paid_at = Column(DateTime(timezone=True), nullable=True)
+    paid_at = Column(AwareDateTime(), nullable=True)
 
     payment_url = Column(Text, nullable=True)
     metadata_json = Column(JSON, nullable=True)
@@ -338,8 +366,8 @@ class MulenPayPayment(Base):
 
     transaction_id = Column(Integer, ForeignKey('transactions.id'), nullable=True)
 
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 
     user = relationship('User', backref='mulenpay_payments')
     transaction = relationship('Transaction', backref='mulenpay_payment')
@@ -368,9 +396,9 @@ class Pal24Payment(Base):
     status = Column(String(50), nullable=False, default='NEW')
     is_active = Column(Boolean, default=True)
     is_paid = Column(Boolean, default=False)
-    paid_at = Column(DateTime(timezone=True), nullable=True)
+    paid_at = Column(AwareDateTime(), nullable=True)
     last_status = Column(String(50), nullable=True)
-    last_status_checked_at = Column(DateTime(timezone=True), nullable=True)
+    last_status_checked_at = Column(AwareDateTime(), nullable=True)
 
     link_url = Column(Text, nullable=True)
     link_page_url = Column(Text, nullable=True)
@@ -385,12 +413,12 @@ class Pal24Payment(Base):
     payer_account = Column(String(255), nullable=True)
 
     ttl = Column(Integer, nullable=True)
-    expires_at = Column(DateTime(timezone=True), nullable=True)
+    expires_at = Column(AwareDateTime(), nullable=True)
 
     transaction_id = Column(Integer, ForeignKey('transactions.id'), nullable=True)
 
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 
     user = relationship('User', backref='pal24_payments')
     transaction = relationship('Transaction', backref='pal24_payment')
@@ -424,7 +452,7 @@ class WataPayment(Base):
 
     status = Column(String(50), nullable=False, default='Opened')
     is_paid = Column(Boolean, default=False)
-    paid_at = Column(DateTime(timezone=True), nullable=True)
+    paid_at = Column(AwareDateTime(), nullable=True)
     last_status = Column(String(50), nullable=True)
     terminal_public_id = Column(String(64), nullable=True)
 
@@ -434,12 +462,12 @@ class WataPayment(Base):
     metadata_json = Column(JSON, nullable=True)
     callback_payload = Column(JSON, nullable=True)
 
-    expires_at = Column(DateTime(timezone=True), nullable=True)
+    expires_at = Column(AwareDateTime(), nullable=True)
 
     transaction_id = Column(Integer, ForeignKey('transactions.id'), nullable=True)
 
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 
     user = relationship('User', backref='wata_payments')
     transaction = relationship('Transaction', backref='wata_payment')
@@ -467,7 +495,7 @@ class PlategaPayment(Base):
     payment_method_code = Column(Integer, nullable=False)
     status = Column(String(50), nullable=False, default='PENDING')
     is_paid = Column(Boolean, default=False)
-    paid_at = Column(DateTime(timezone=True), nullable=True)
+    paid_at = Column(AwareDateTime(), nullable=True)
 
     redirect_url = Column(Text, nullable=True)
     return_url = Column(Text, nullable=True)
@@ -476,12 +504,12 @@ class PlategaPayment(Base):
     metadata_json = Column(JSON, nullable=True)
     callback_payload = Column(JSON, nullable=True)
 
-    expires_at = Column(DateTime(timezone=True), nullable=True)
+    expires_at = Column(AwareDateTime(), nullable=True)
 
     transaction_id = Column(Integer, ForeignKey('transactions.id'), nullable=True)
 
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 
     user = relationship('User', backref='platega_payments')
     transaction = relationship('Transaction', backref='platega_payment')
@@ -510,7 +538,7 @@ class CloudPaymentsPayment(Base):
 
     status = Column(String(50), nullable=False, default='pending')  # pending, completed, failed, authorized
     is_paid = Column(Boolean, default=False)
-    paid_at = Column(DateTime(timezone=True), nullable=True)
+    paid_at = Column(AwareDateTime(), nullable=True)
 
     # Данные карты (маскированные)
     card_first_six = Column(String(6), nullable=True)
@@ -537,8 +565,8 @@ class CloudPaymentsPayment(Base):
     # Связь с транзакцией в нашей системе
     transaction_id = Column(Integer, ForeignKey('transactions.id'), nullable=True)
 
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 
     user = relationship('User', backref='cloudpayments_payments')
     transaction = relationship('Transaction', backref='cloudpayments_payment')
@@ -591,10 +619,10 @@ class FreekassaPayment(Base):
     callback_payload = Column(JSON, nullable=True)
 
     # Временные метки
-    paid_at = Column(DateTime(timezone=True), nullable=True)
-    expires_at = Column(DateTime(timezone=True), nullable=True)
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    paid_at = Column(AwareDateTime(), nullable=True)
+    expires_at = Column(AwareDateTime(), nullable=True)
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 
     # Связь с транзакцией
     transaction_id = Column(Integer, ForeignKey('transactions.id'), nullable=True)
@@ -653,10 +681,10 @@ class KassaAiPayment(Base):
     callback_payload = Column(JSON, nullable=True)
 
     # Временные метки
-    paid_at = Column(DateTime(timezone=True), nullable=True)
-    expires_at = Column(DateTime(timezone=True), nullable=True)
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    paid_at = Column(AwareDateTime(), nullable=True)
+    expires_at = Column(AwareDateTime(), nullable=True)
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 
     # Связь с транзакцией
     transaction_id = Column(Integer, ForeignKey('transactions.id'), nullable=True)
@@ -698,8 +726,8 @@ class PromoGroup(Base):
     auto_assign_total_spent_kopeks = Column(Integer, nullable=True, default=None)
     apply_discounts_to_addons = Column(Boolean, nullable=False, default=True)
     is_default = Column(Boolean, nullable=False, default=False)
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 
     users = relationship('User', back_populates='promo_group')
     user_promo_groups = relationship('UserPromoGroup', back_populates='promo_group', cascade='all, delete-orphan')
@@ -777,7 +805,7 @@ class UserPromoGroup(Base):
 
     user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), primary_key=True)
     promo_group_id = Column(Integer, ForeignKey('promo_groups.id', ondelete='CASCADE'), primary_key=True)
-    assigned_at = Column(DateTime(timezone=True), default=func.now())
+    assigned_at = Column(AwareDateTime(), default=func.now())
     assigned_by = Column(String(50), default='system')
 
     user = relationship('User', back_populates='user_promo_groups')
@@ -851,8 +879,8 @@ class Tariff(Base):
     # Режим сброса трафика: DAY, WEEK, MONTH, NO_RESET (по умолчанию берётся из конфига)
     traffic_reset_mode = Column(String(20), nullable=True, default=None)  # None = использовать глобальную настройку
 
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 
     # M2M связь с промогруппами (какие промогруппы имеют доступ к тарифу)
     allowed_promo_groups = relationship(
@@ -985,25 +1013,25 @@ class User(Base):
     has_had_paid_subscription = Column(Boolean, default=False, nullable=False)
     referred_by_id = Column(Integer, ForeignKey('users.id'), nullable=True, index=True)
     referral_code = Column(String(20), unique=True, nullable=True)
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
-    last_activity = Column(DateTime(timezone=True), default=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
+    last_activity = Column(AwareDateTime(), default=func.now())
     remnawave_uuid = Column(String(255), nullable=True, unique=True)
 
     # Cabinet authentication fields
     email = Column(String(255), unique=True, nullable=True, index=True)
     email_verified = Column(Boolean, default=False, nullable=False)
-    email_verified_at = Column(DateTime(timezone=True), nullable=True)
+    email_verified_at = Column(AwareDateTime(), nullable=True)
     password_hash = Column(String(255), nullable=True)
     email_verification_token = Column(String(255), nullable=True)
-    email_verification_expires = Column(DateTime(timezone=True), nullable=True)
+    email_verification_expires = Column(AwareDateTime(), nullable=True)
     password_reset_token = Column(String(255), nullable=True)
-    password_reset_expires = Column(DateTime(timezone=True), nullable=True)
-    cabinet_last_login = Column(DateTime(timezone=True), nullable=True)
+    password_reset_expires = Column(AwareDateTime(), nullable=True)
+    cabinet_last_login = Column(AwareDateTime(), nullable=True)
     # Email change fields
     email_change_new = Column(String(255), nullable=True)  # New email pending verification
     email_change_code = Column(String(6), nullable=True)  # 6-digit verification code
-    email_change_expires = Column(DateTime(timezone=True), nullable=True)  # Code expiration
+    email_change_expires = Column(AwareDateTime(), nullable=True)  # Code expiration
     # OAuth provider IDs
     google_id = Column(String(255), unique=True, nullable=True, index=True)
     yandex_id = Column(String(255), unique=True, nullable=True, index=True)
@@ -1022,8 +1050,8 @@ class User(Base):
     referral_commission_percent = Column(Integer, nullable=True)
     promo_offer_discount_percent = Column(Integer, nullable=False, default=0)
     promo_offer_discount_source = Column(String(100), nullable=True)
-    promo_offer_discount_expires_at = Column(DateTime(timezone=True), nullable=True)
-    last_remnawave_sync = Column(DateTime(timezone=True), nullable=True)
+    promo_offer_discount_expires_at = Column(AwareDateTime(), nullable=True)
+    last_remnawave_sync = Column(AwareDateTime(), nullable=True)
     trojan_password = Column(String(255), nullable=True)
     vless_uuid = Column(String(255), nullable=True)
     ss_password = Column(String(255), nullable=True)
@@ -1130,14 +1158,14 @@ class Subscription(Base):
     status = Column(String(20), default=SubscriptionStatus.TRIAL.value)
     is_trial = Column(Boolean, default=True)
 
-    start_date = Column(DateTime(timezone=True), default=func.now())
-    end_date = Column(DateTime(timezone=True), nullable=False)
+    start_date = Column(AwareDateTime(), default=func.now())
+    end_date = Column(AwareDateTime(), nullable=False)
 
     traffic_limit_gb = Column(Integer, default=0)
     traffic_used_gb = Column(Float, default=0.0)
     purchased_traffic_gb = Column(Integer, default=0)  # Докупленный трафик
     traffic_reset_at = Column(
-        DateTime(timezone=True), nullable=True
+        AwareDateTime(), nullable=True
     )  # Дата сброса докупленного трафика (30 дней после первой докупки)
 
     subscription_url = Column(String, nullable=True)
@@ -1151,10 +1179,10 @@ class Subscription(Base):
     autopay_enabled = Column(Boolean, default=False)
     autopay_days_before = Column(Integer, default=3)
 
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 
-    last_webhook_update_at = Column(DateTime(timezone=True), nullable=True)
+    last_webhook_update_at = Column(AwareDateTime(), nullable=True)
 
     remnawave_short_uuid = Column(String(255), nullable=True)
 
@@ -1165,7 +1193,7 @@ class Subscription(Base):
     is_daily_paused = Column(
         Boolean, default=False, nullable=False
     )  # Приостановлена ли суточная подписка пользователем
-    last_daily_charge_at = Column(DateTime(timezone=True), nullable=True)  # Время последнего суточного списания
+    last_daily_charge_at = Column(AwareDateTime(), nullable=True)  # Время последнего суточного списания
 
     user = relationship('User', back_populates='subscription')
     tariff = relationship('Tariff', back_populates='subscriptions')
@@ -1180,29 +1208,25 @@ class Subscription(Base):
     @property
     def is_active(self) -> bool:
         current_time = datetime.now(UTC)
-        return (
-            self.status == SubscriptionStatus.ACTIVE.value
-            and self.end_date is not None
-            and self.end_date > current_time
-        )
+        end = _aware(self.end_date)
+        return self.status == SubscriptionStatus.ACTIVE.value and end is not None and end > current_time
 
     @property
     def is_expired(self) -> bool:
         """Проверяет, истёк ли срок подписки"""
-        return self.end_date is not None and self.end_date <= datetime.now(UTC)
+        end = _aware(self.end_date)
+        return end is not None and end <= datetime.now(UTC)
 
     @property
     def should_be_expired(self) -> bool:
         current_time = datetime.now(UTC)
-        return (
-            self.status == SubscriptionStatus.ACTIVE.value
-            and self.end_date is not None
-            and self.end_date <= current_time
-        )
+        end = _aware(self.end_date)
+        return self.status == SubscriptionStatus.ACTIVE.value and end is not None and end <= current_time
 
     @property
     def actual_status(self) -> str:
         current_time = datetime.now(UTC)
+        end = _aware(self.end_date)
 
         if self.status == SubscriptionStatus.EXPIRED.value:
             return 'expired'
@@ -1211,12 +1235,12 @@ class Subscription(Base):
             return 'disabled'
 
         if self.status == SubscriptionStatus.ACTIVE.value:
-            if self.end_date is None or self.end_date <= current_time:
+            if end is None or end <= current_time:
                 return 'expired'
             return 'active'
 
         if self.status == SubscriptionStatus.TRIAL.value:
-            if self.end_date is None or self.end_date <= current_time:
+            if end is None or end <= current_time:
                 return 'expired'
             return 'trial'
 
@@ -1258,21 +1282,23 @@ class Subscription(Base):
 
     @property
     def days_left(self) -> int:
-        if self.end_date is None:
+        end = _aware(self.end_date)
+        if end is None:
             return 0
         current_time = datetime.now(UTC)
-        if self.end_date <= current_time:
+        if end <= current_time:
             return 0
-        delta = self.end_date - current_time
+        delta = end - current_time
         return max(0, delta.days)
 
     @property
     def time_left_display(self) -> str:
+        end = _aware(self.end_date)
         current_time = datetime.now(UTC)
-        if self.end_date <= current_time:
+        if end is None or end <= current_time:
             return 'истёк'
 
-        delta = self.end_date - current_time
+        delta = end - current_time
         days = delta.days
         hours = delta.seconds // 3600
         minutes = (delta.seconds % 3600) // 60
@@ -1291,8 +1317,9 @@ class Subscription(Base):
         return min((used / self.traffic_limit_gb) * 100, 100.0)
 
     def extend_subscription(self, days: int):
-        if self.end_date > datetime.now(UTC):
-            self.end_date = self.end_date + timedelta(days=days)
+        end = _aware(self.end_date)
+        if end and end > datetime.now(UTC):
+            self.end_date = end + timedelta(days=days)
         else:
             self.end_date = datetime.now(UTC) + timedelta(days=days)
 
@@ -1339,16 +1366,16 @@ class TrafficPurchase(Base):
     subscription_id = Column(Integer, ForeignKey('subscriptions.id', ondelete='CASCADE'), nullable=False, index=True)
 
     traffic_gb = Column(Integer, nullable=False)  # Количество ГБ в покупке
-    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)  # Дата истечения (покупка + 30 дней)
+    expires_at = Column(AwareDateTime(), nullable=False, index=True)  # Дата истечения (покупка + 30 дней)
 
-    created_at = Column(DateTime(timezone=True), default=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
 
     subscription = relationship('Subscription', back_populates='traffic_purchases')
 
     @property
     def is_expired(self) -> bool:
         """Проверяет, истекла ли докупка."""
-        return datetime.now(UTC) >= self.expires_at
+        return datetime.now(UTC) >= _aware(self.expires_at)
 
 
 class Transaction(Base):
@@ -1368,10 +1395,10 @@ class Transaction(Base):
 
     # NaloGO чек
     receipt_uuid = Column(String(255), nullable=True, index=True)
-    receipt_created_at = Column(DateTime(timezone=True), nullable=True)
+    receipt_created_at = Column(AwareDateTime(), nullable=True)
 
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    completed_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(AwareDateTime(), default=func.now())
+    completed_at = Column(AwareDateTime(), nullable=True)
 
     user = relationship('User', back_populates='transactions')
 
@@ -1386,7 +1413,7 @@ class SubscriptionConversion(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
 
-    converted_at = Column(DateTime(timezone=True), default=func.now())
+    converted_at = Column(AwareDateTime(), default=func.now())
 
     trial_duration_days = Column(Integer, nullable=True)
 
@@ -1396,7 +1423,7 @@ class SubscriptionConversion(Base):
 
     first_paid_period_days = Column(Integer, nullable=True)
 
-    created_at = Column(DateTime(timezone=True), default=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
 
     user = relationship('User', backref='subscription_conversions')
 
@@ -1422,8 +1449,8 @@ class PromoCode(Base):
     max_uses = Column(Integer, default=1)
     current_uses = Column(Integer, default=0)
 
-    valid_from = Column(DateTime(timezone=True), default=func.now())
-    valid_until = Column(DateTime(timezone=True), nullable=True)
+    valid_from = Column(AwareDateTime(), default=func.now())
+    valid_until = Column(AwareDateTime(), nullable=True)
 
     is_active = Column(Boolean, default=True)
     first_purchase_only = Column(Boolean, default=False)  # Только для первой покупки
@@ -1431,8 +1458,8 @@ class PromoCode(Base):
     created_by = Column(Integer, ForeignKey('users.id'), nullable=True)
     promo_group_id = Column(Integer, ForeignKey('promo_groups.id', ondelete='SET NULL'), nullable=True, index=True)
 
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 
     uses = relationship('PromoCodeUse', back_populates='promocode')
     promo_group = relationship('PromoGroup')
@@ -1443,8 +1470,8 @@ class PromoCode(Base):
         return (
             self.is_active
             and self.current_uses < self.max_uses
-            and self.valid_from <= now
-            and (self.valid_until is None or self.valid_until >= now)
+            and _aware(self.valid_from) <= now
+            and (self.valid_until is None or _aware(self.valid_until) >= now)
         )
 
     @property
@@ -1459,7 +1486,7 @@ class PromoCodeUse(Base):
     promocode_id = Column(Integer, ForeignKey('promocodes.id'), nullable=False)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
 
-    used_at = Column(DateTime(timezone=True), default=func.now())
+    used_at = Column(AwareDateTime(), default=func.now())
 
     promocode = relationship('PromoCode', back_populates='uses')
     user = relationship('User')
@@ -1480,7 +1507,7 @@ class ReferralEarning(Base):
         Integer, ForeignKey('advertising_campaigns.id', ondelete='SET NULL'), nullable=True, index=True
     )
 
-    created_at = Column(DateTime(timezone=True), default=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
 
     user = relationship('User', foreign_keys=[user_id], back_populates='referral_earnings')
     referral = relationship('User', foreign_keys=[referral_id])
@@ -1522,11 +1549,11 @@ class WithdrawalRequest(Base):
 
     # Обработка админом
     processed_by = Column(Integer, ForeignKey('users.id'), nullable=True)
-    processed_at = Column(DateTime(timezone=True), nullable=True)
+    processed_at = Column(AwareDateTime(), nullable=True)
     admin_comment = Column(Text, nullable=True)
 
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 
     user = relationship('User', foreign_keys=[user_id], backref='withdrawal_requests')
     admin = relationship('User', foreign_keys=[processed_by])
@@ -1556,10 +1583,10 @@ class PartnerApplication(Base):
     admin_comment = Column(Text, nullable=True)
     approved_commission_percent = Column(Integer, nullable=True)
     processed_by = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
-    processed_at = Column(DateTime(timezone=True), nullable=True)
+    processed_at = Column(AwareDateTime(), nullable=True)
 
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 
     user = relationship('User', foreign_keys=[user_id], backref='partner_applications')
     admin = relationship('User', foreign_keys=[processed_by])
@@ -1573,18 +1600,18 @@ class ReferralContest(Base):
     description = Column(Text, nullable=True)
     prize_text = Column(Text, nullable=True)
     contest_type = Column(String(50), nullable=False, default='referral_paid')
-    start_at = Column(DateTime(timezone=True), nullable=False)
-    end_at = Column(DateTime(timezone=True), nullable=False)
+    start_at = Column(AwareDateTime(), nullable=False)
+    end_at = Column(AwareDateTime(), nullable=False)
     daily_summary_time = Column(Time, nullable=False, default=time(hour=12, minute=0))
     daily_summary_times = Column(String(255), nullable=True)  # CSV HH:MM
     timezone = Column(String(64), nullable=False, default='UTC')
     is_active = Column(Boolean, nullable=False, default=True)
     last_daily_summary_date = Column(Date, nullable=True)
-    last_daily_summary_at = Column(DateTime(timezone=True), nullable=True)
+    last_daily_summary_at = Column(AwareDateTime(), nullable=True)
     final_summary_sent = Column(Boolean, nullable=False, default=False)
     created_by = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 
     creator = relationship('User', backref='created_referral_contests')
     events = relationship(
@@ -1614,7 +1641,7 @@ class ReferralContestEvent(Base):
     referral_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
     event_type = Column(String(50), nullable=False)
     amount_kopeks = Column(Integer, nullable=False, default=0)
-    occurred_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
+    occurred_at = Column(AwareDateTime(), nullable=False, default=func.now())
 
     contest = relationship('ReferralContest', back_populates='events')
     referrer = relationship('User', foreign_keys=[referrer_id])
@@ -1634,7 +1661,7 @@ class ReferralContestVirtualParticipant(Base):
     display_name = Column(String(255), nullable=False)
     referral_count = Column(Integer, nullable=False, default=0)
     total_amount_kopeks = Column(Integer, nullable=False, default=0)
-    created_at = Column(DateTime(timezone=True), default=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
 
     contest = relationship('ReferralContest')
 
@@ -1660,8 +1687,8 @@ class ContestTemplate(Base):
     cooldown_hours = Column(Integer, nullable=False, default=24)
     payload = Column(JSON, nullable=True)
     is_enabled = Column(Boolean, nullable=False, default=True)
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 
     rounds = relationship('ContestRound', back_populates='template')
 
@@ -1675,8 +1702,8 @@ class ContestRound(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     template_id = Column(Integer, ForeignKey('contest_templates.id', ondelete='CASCADE'), nullable=False)
-    starts_at = Column(DateTime(timezone=True), nullable=False)
-    ends_at = Column(DateTime(timezone=True), nullable=False)
+    starts_at = Column(AwareDateTime(), nullable=False)
+    ends_at = Column(AwareDateTime(), nullable=False)
     status = Column(String(20), nullable=False, default='active')  # active, finished
     payload = Column(JSON, nullable=True)
     winners_count = Column(Integer, nullable=False, default=0)
@@ -1684,8 +1711,8 @@ class ContestRound(Base):
     attempts_per_user = Column(Integer, nullable=False, default=1)
     message_id = Column(BigInteger, nullable=True)
     chat_id = Column(BigInteger, nullable=True)
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 
     template = relationship('ContestTemplate', back_populates='rounds')
     attempts = relationship('ContestAttempt', back_populates='round', cascade='all, delete-orphan')
@@ -1703,7 +1730,7 @@ class ContestAttempt(Base):
     user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
     answer = Column(Text, nullable=True)
     is_winner = Column(Boolean, nullable=False, default=False)
-    created_at = Column(DateTime(timezone=True), default=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
 
     round = relationship('ContestRound', back_populates='attempts')
     user = relationship('User')
@@ -1723,8 +1750,8 @@ class Squad(Base):
 
     description = Column(Text, nullable=True)
 
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 
     @property
     def price_rubles(self) -> float:
@@ -1745,8 +1772,8 @@ class ServiceRule(Base):
 
     language = Column(String(5), default='ru')
 
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 
 
 class PrivacyPolicy(Base):
@@ -1756,8 +1783,8 @@ class PrivacyPolicy(Base):
     language = Column(String(10), nullable=False, unique=True)
     content = Column(Text, nullable=False)
     is_enabled = Column(Boolean, default=True, nullable=False)
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 
 
 class PublicOffer(Base):
@@ -1767,8 +1794,8 @@ class PublicOffer(Base):
     language = Column(String(10), nullable=False, unique=True)
     content = Column(Text, nullable=False)
     is_enabled = Column(Boolean, default=True, nullable=False)
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 
 
 class FaqSetting(Base):
@@ -1777,8 +1804,8 @@ class FaqSetting(Base):
     id = Column(Integer, primary_key=True, index=True)
     language = Column(String(10), nullable=False, unique=True)
     is_enabled = Column(Boolean, default=True, nullable=False)
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 
 
 class FaqPage(Base):
@@ -1790,8 +1817,8 @@ class FaqPage(Base):
     content = Column(Text, nullable=False)
     display_order = Column(Integer, default=0, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 
 
 class SystemSetting(Base):
@@ -1802,8 +1829,8 @@ class SystemSetting(Base):
     value = Column(Text, nullable=True)
     description = Column(Text, nullable=True)
 
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 
 
 class MonitoringLog(Base):
@@ -1818,7 +1845,7 @@ class MonitoringLog(Base):
 
     is_success = Column(Boolean, default=True)
 
-    created_at = Column(DateTime(timezone=True), default=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
 
 
 class SentNotification(Base):
@@ -1829,7 +1856,7 @@ class SentNotification(Base):
     subscription_id = Column(Integer, ForeignKey('subscriptions.id', ondelete='CASCADE'), nullable=False)
     notification_type = Column(String(50), nullable=False)
     days_before = Column(Integer, nullable=True)
-    created_at = Column(DateTime(timezone=True), default=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
 
     user = relationship('User', backref='sent_notifications')
     subscription = relationship('Subscription', backref=backref('sent_notifications', passive_deletes=True))
@@ -1846,9 +1873,9 @@ class SubscriptionEvent(Base):
     amount_kopeks = Column(Integer, nullable=True)
     currency = Column(String(16), nullable=True)
     message = Column(Text, nullable=True)
-    occurred_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
+    occurred_at = Column(AwareDateTime(), nullable=False, default=func.now())
     extra = Column(JSON, nullable=True)
-    created_at = Column(DateTime(timezone=True), default=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
 
     user = relationship('User', backref='subscription_events')
     subscription = relationship('Subscription', backref='subscription_events')
@@ -1865,13 +1892,13 @@ class DiscountOffer(Base):
     notification_type = Column(String(50), nullable=False)
     discount_percent = Column(Integer, nullable=False, default=0)
     bonus_amount_kopeks = Column(Integer, nullable=False, default=0)
-    expires_at = Column(DateTime(timezone=True), nullable=False)
-    claimed_at = Column(DateTime(timezone=True), nullable=True)
+    expires_at = Column(AwareDateTime(), nullable=False)
+    claimed_at = Column(AwareDateTime(), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
     effect_type = Column(String(50), nullable=False, default='percent_discount')
     extra_data = Column(JSON, nullable=True)
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 
     user = relationship('User', back_populates='discount_offers')
     subscription = relationship('Subscription', back_populates='discount_offers')
@@ -1895,8 +1922,8 @@ class PromoOfferTemplate(Base):
     test_squad_uuids = Column(JSON, default=list)
     is_active = Column(Boolean, default=True, nullable=False)
     created_by = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 
     creator = relationship('User')
 
@@ -1908,9 +1935,9 @@ class SubscriptionTemporaryAccess(Base):
     subscription_id = Column(Integer, ForeignKey('subscriptions.id', ondelete='CASCADE'), nullable=False)
     offer_id = Column(Integer, ForeignKey('discount_offers.id', ondelete='CASCADE'), nullable=False)
     squad_uuid = Column(String(255), nullable=False)
-    expires_at = Column(DateTime(timezone=True), nullable=False)
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    deactivated_at = Column(DateTime(timezone=True), nullable=True)
+    expires_at = Column(AwareDateTime(), nullable=False)
+    created_at = Column(AwareDateTime(), default=func.now())
+    deactivated_at = Column(AwareDateTime(), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
     was_already_connected = Column(Boolean, default=False, nullable=False)
 
@@ -1929,7 +1956,7 @@ class PromoOfferLog(Base):
     percent = Column(Integer, nullable=True)
     effect_type = Column(String(50), nullable=True)
     details = Column(JSON, nullable=True)
-    created_at = Column(DateTime(timezone=True), default=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
 
     user = relationship('User', back_populates='promo_offer_logs')
     offer = relationship('DiscountOffer', back_populates='logs')
@@ -1952,8 +1979,8 @@ class BroadcastHistory(Base):
     status = Column(String(50), default='in_progress')
     admin_id = Column(Integer, ForeignKey('users.id'))
     admin_name = Column(String(255))
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    completed_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(AwareDateTime(), server_default=func.now())
+    completed_at = Column(AwareDateTime(), nullable=True)
 
     # Email broadcast fields
     channel = Column(String(20), default='telegram', nullable=False)  # telegram|email|both
@@ -1972,8 +1999,8 @@ class Poll(Base):
     reward_enabled = Column(Boolean, nullable=False, default=False)
     reward_amount_kopeks = Column(Integer, nullable=False, default=0)
     created_by = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
-    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
+    created_at = Column(AwareDateTime(), default=func.now(), nullable=False)
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now(), nullable=False)
 
     creator = relationship('User', backref='created_polls', foreign_keys=[created_by])
     questions = relationship(
@@ -2025,9 +2052,9 @@ class PollResponse(Base):
     id = Column(Integer, primary_key=True, index=True)
     poll_id = Column(Integer, ForeignKey('polls.id', ondelete='CASCADE'), nullable=False, index=True)
     user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
-    sent_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
-    started_at = Column(DateTime(timezone=True), nullable=True)
-    completed_at = Column(DateTime(timezone=True), nullable=True)
+    sent_at = Column(AwareDateTime(), default=func.now(), nullable=False)
+    started_at = Column(AwareDateTime(), nullable=True)
+    completed_at = Column(AwareDateTime(), nullable=True)
     reward_given = Column(Boolean, nullable=False, default=False)
     reward_amount_kopeks = Column(Integer, nullable=False, default=0)
 
@@ -2049,7 +2076,7 @@ class PollAnswer(Base):
     response_id = Column(Integer, ForeignKey('poll_responses.id', ondelete='CASCADE'), nullable=False, index=True)
     question_id = Column(Integer, ForeignKey('poll_questions.id', ondelete='CASCADE'), nullable=False, index=True)
     option_id = Column(Integer, ForeignKey('poll_options.id', ondelete='CASCADE'), nullable=False, index=True)
-    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+    created_at = Column(AwareDateTime(), default=func.now(), nullable=False)
 
     response = relationship('PollResponse', back_populates='answers')
     question = relationship('PollQuestion', back_populates='answers')
@@ -2083,8 +2110,8 @@ class ServerSquad(Base):
     max_users = Column(Integer, nullable=True)
     current_users = Column(Integer, default=0)
 
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 
     allowed_promo_groups = relationship(
         'PromoGroup',
@@ -2119,7 +2146,7 @@ class SubscriptionServer(Base):
     subscription_id = Column(Integer, ForeignKey('subscriptions.id'), nullable=False)
     server_squad_id = Column(Integer, ForeignKey('server_squads.id'), nullable=False)
 
-    connected_at = Column(DateTime(timezone=True), default=func.now())
+    connected_at = Column(AwareDateTime(), default=func.now())
 
     paid_price_kopeks = Column(Integer, default=0)
 
@@ -2138,7 +2165,7 @@ class SupportAuditLog(Base):
     ticket_id = Column(Integer, ForeignKey('tickets.id', ondelete='SET NULL'), nullable=True)
     target_user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
     details = Column(JSON, nullable=True)
-    created_at = Column(DateTime(timezone=True), default=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
 
     actor = relationship('User', foreign_keys=[actor_user_id])
     ticket = relationship('Ticket', foreign_keys=[ticket_id])
@@ -2151,8 +2178,8 @@ class UserMessage(Base):
     is_active = Column(Boolean, default=True)
     sort_order = Column(Integer, default=0)
     created_by = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
     creator = relationship('User', backref='created_messages')
 
     def __repr__(self):
@@ -2167,8 +2194,8 @@ class WelcomeText(Base):
     is_active = Column(Boolean, default=True)
     is_enabled = Column(Boolean, default=True)
     created_by = Column(Integer, ForeignKey('users.id'), nullable=True)
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 
     creator = relationship('User', backref='created_welcome_texts')
 
@@ -2184,8 +2211,8 @@ class PinnedMessage(Base):
     send_on_every_start = Column(Boolean, nullable=False, server_default='1', default=True)
     is_active = Column(Boolean, default=True)
     created_by = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 
     creator = relationship('User', backref='pinned_messages')
 
@@ -2215,8 +2242,8 @@ class AdvertisingCampaign(Base):
     partner_user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
 
     created_by = Column(Integer, ForeignKey('users.id'), nullable=True)
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 
     registrations = relationship('AdvertisingCampaignRegistration', back_populates='campaign')
     tariff = relationship('Tariff', foreign_keys=[tariff_id])
@@ -2257,7 +2284,7 @@ class AdvertisingCampaignRegistration(Base):
     tariff_id = Column(Integer, ForeignKey('tariffs.id', ondelete='SET NULL'), nullable=True)
     tariff_duration_days = Column(Integer, nullable=True)
 
-    created_at = Column(DateTime(timezone=True), default=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
 
     campaign = relationship('AdvertisingCampaign', back_populates='registrations')
     user = relationship('User')
@@ -2286,13 +2313,13 @@ class Ticket(Base):
     priority = Column(String(20), default='normal', nullable=False)  # low, normal, high, urgent
     # Блокировка ответов пользователя в этом тикете
     user_reply_block_permanent = Column(Boolean, default=False, nullable=False)
-    user_reply_block_until = Column(DateTime(timezone=True), nullable=True)
+    user_reply_block_until = Column(AwareDateTime(), nullable=True)
 
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
-    closed_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
+    closed_at = Column(AwareDateTime(), nullable=True)
     # SLA reminders
-    last_sla_reminder_at = Column(DateTime(timezone=True), nullable=True)
+    last_sla_reminder_at = Column(AwareDateTime(), nullable=True)
 
     # Связи
     user = relationship('User', backref='tickets')
@@ -2319,10 +2346,7 @@ class Ticket(Base):
         if self.user_reply_block_permanent:
             return True
         if self.user_reply_block_until:
-            try:
-                return self.user_reply_block_until > datetime.now(UTC)
-            except Exception:
-                return True
+            return _aware(self.user_reply_block_until) > datetime.now(UTC)
         return False
 
     @property
@@ -2360,7 +2384,7 @@ class TicketMessage(Base):
     media_file_id = Column(String(255), nullable=True)
     media_caption = Column(Text, nullable=True)
 
-    created_at = Column(DateTime(timezone=True), default=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
 
     # Связи
     ticket = relationship('Ticket', back_populates='messages')
@@ -2386,10 +2410,10 @@ class WebApiToken(Base):
     token_hash = Column(String(128), nullable=False, unique=True, index=True)
     token_prefix = Column(String(32), nullable=False, index=True)
     description = Column(Text, nullable=True)
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
-    expires_at = Column(DateTime(timezone=True), nullable=True)
-    last_used_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
+    expires_at = Column(AwareDateTime(), nullable=True)
+    last_used_at = Column(AwareDateTime(), nullable=True)
     last_used_ip = Column(String(64), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
     created_by = Column(String(255), nullable=True)
@@ -2409,8 +2433,8 @@ class MainMenuButton(Base):
     visibility = Column(String(20), nullable=False, default=MainMenuButtonVisibility.ALL.value)
     is_active = Column(Boolean, nullable=False, default=True)
     display_order = Column(Integer, nullable=False, default=0)
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 
     __table_args__ = (Index('ix_main_menu_buttons_order', 'display_order', 'id'),)
 
@@ -2445,7 +2469,7 @@ class MenuLayoutHistory(Base):
     action = Column(String(50), nullable=False)  # update, reset, import
     changes_summary = Column(Text, nullable=True)  # Краткое описание изменений
     user_info = Column(String(255), nullable=True)  # Информация о пользователе/токене
-    created_at = Column(DateTime(timezone=True), default=func.now(), index=True)
+    created_at = Column(AwareDateTime(), default=func.now(), index=True)
 
     __table_args__ = (Index('ix_menu_layout_history_created', 'created_at'),)
 
@@ -2462,7 +2486,7 @@ class ButtonClickLog(Base):
     button_id = Column(String(100), nullable=False, index=True)  # ID кнопки
     user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
     callback_data = Column(String(255), nullable=True)  # callback_data кнопки
-    clicked_at = Column(DateTime(timezone=True), default=func.now(), index=True)
+    clicked_at = Column(AwareDateTime(), default=func.now(), index=True)
 
     # Дополнительная информация
     button_type = Column(String(20), nullable=True, index=True)  # builtin, callback, url, mini_app
@@ -2496,9 +2520,9 @@ class Webhook(Base):
     event_type = Column(String(50), nullable=False)  # user.created, payment.completed, ticket.created, etc.
     is_active = Column(Boolean, default=True, nullable=False)
     description = Column(Text, nullable=True)
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
-    last_triggered_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
+    last_triggered_at = Column(AwareDateTime(), nullable=True)
     failure_count = Column(Integer, default=0, nullable=False)
     success_count = Column(Integer, default=0, nullable=False)
 
@@ -2527,9 +2551,9 @@ class WebhookDelivery(Base):
     status = Column(String(20), nullable=False)  # pending, success, failed
     error_message = Column(Text, nullable=True)
     attempt_number = Column(Integer, default=1, nullable=False)
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    delivered_at = Column(DateTime(timezone=True), nullable=True)
-    next_retry_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(AwareDateTime(), default=func.now())
+    delivered_at = Column(AwareDateTime(), nullable=True)
+    next_retry_at = Column(AwareDateTime(), nullable=True)
 
     webhook = relationship('Webhook', back_populates='deliveries')
 
@@ -2547,15 +2571,15 @@ class CabinetRefreshToken(Base):
     user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
     token_hash = Column(String(255), unique=True, nullable=False, index=True)
     device_info = Column(String(500), nullable=True)
-    expires_at = Column(DateTime(timezone=True), nullable=False)
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    revoked_at = Column(DateTime(timezone=True), nullable=True)
+    expires_at = Column(AwareDateTime(), nullable=False)
+    created_at = Column(AwareDateTime(), default=func.now())
+    revoked_at = Column(AwareDateTime(), nullable=True)
 
     user = relationship('User', backref='cabinet_tokens')
 
     @property
     def is_expired(self) -> bool:
-        return datetime.now(UTC) > self.expires_at
+        return datetime.now(UTC) > _aware(self.expires_at)
 
     @property
     def is_revoked(self) -> bool:
@@ -2601,8 +2625,8 @@ class WheelConfig(Base):
     promo_prefix = Column(String(20), default='WHEEL', nullable=False)
     promo_validity_days = Column(Integer, default=7, nullable=False)
 
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 
     prizes = relationship('WheelPrize', back_populates='config', cascade='all, delete-orphan')
 
@@ -2640,8 +2664,8 @@ class WheelPrize(Base):
     promo_subscription_days = Column(Integer, default=0)
     promo_traffic_gb = Column(Integer, default=0)
 
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 
     config = relationship('WheelConfig', back_populates='prizes')
     spins = relationship('WheelSpin', back_populates='prize')
@@ -2676,9 +2700,9 @@ class WheelSpin(Base):
 
     # Флаг успешного начисления
     is_applied = Column(Boolean, default=False, nullable=False)
-    applied_at = Column(DateTime(timezone=True), nullable=True)
+    applied_at = Column(AwareDateTime(), nullable=True)
 
-    created_at = Column(DateTime(timezone=True), default=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
 
     user = relationship('User', backref='wheel_spins')
     prize = relationship('WheelPrize', back_populates='spins')
@@ -2723,8 +2747,8 @@ class TicketNotification(Base):
     # Прочитано ли уведомление
     is_read = Column(Boolean, default=False, nullable=False)
 
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    read_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(AwareDateTime(), default=func.now())
+    read_at = Column(AwareDateTime(), nullable=True)
 
     ticket = relationship('Ticket', backref='notifications')
     user = relationship('User', backref='ticket_notifications')
@@ -2781,8 +2805,8 @@ class PaymentMethodConfig(Base):
         lazy='selectin',
     )
 
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 
     def __repr__(self) -> str:
         return f"<PaymentMethodConfig method_id='{self.method_id}' order={self.sort_order} enabled={self.is_enabled}>"
