@@ -533,7 +533,9 @@ async def cleanup_blocked_broadcast_users(blocked_telegram_ids: list[int]) -> No
     - Отключает активные подписки (ACTIVE/TRIAL → DISABLED)
     - Отключает пользователя в Remnawave панели
     """
-    from app.services.subscription_service import subscription_service
+    from app.services.subscription_service import SubscriptionService
+
+    subscription_service = SubscriptionService()
 
     for telegram_id in blocked_telegram_ids:
         try:
