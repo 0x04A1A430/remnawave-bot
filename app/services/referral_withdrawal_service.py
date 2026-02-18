@@ -180,7 +180,17 @@ class ReferralWithdrawalService:
         Принимает предвычисленные stats для избежания повторного запроса.
         """
         if not settings.is_referral_withdrawal_enabled():
-            return False, 'Функция вывода реферального баланса отключена', {}
+            return False, 'Функция вывода реферального баланса отключена', {
+                'total_earned': 0,
+                'own_deposits': 0,
+                'spending': 0,
+                'referral_spent': 0,
+                'withdrawn': 0,
+                'pending': 0,
+                'available_referral': 0,
+                'available_total': 0,
+                'only_referral_mode': settings.REFERRAL_WITHDRAWAL_ONLY_REFERRAL_BALANCE,
+            }
 
         # Проверяем доступный баланс
         if stats is None:
