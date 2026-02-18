@@ -1192,10 +1192,13 @@ class UserService:
                         squad_ids = user.subscription.connected_squads
                         if squad_ids:
                             try:
-                                from app.database.crud.server_squad import remove_user_from_servers
+                                from app.database.crud.server_squad import (
+                                    get_server_ids_by_uuids,
+                                    remove_user_from_servers,
+                                )
 
-                                # JSON may store IDs as strings — cast to int
-                                int_squad_ids = [int(sid) for sid in squad_ids if sid]
+                                # connected_squads stores UUIDs — resolve to integer IDs
+                                int_squad_ids = await get_server_ids_by_uuids(db, list(squad_ids))
                                 if int_squad_ids:
                                     # Own savepoint so failure doesn't abort subscription deletion
                                     async with db.begin_nested():
