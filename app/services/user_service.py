@@ -1194,7 +1194,12 @@ class UserService:
                             try:
                                 from app.database.crud.server_squad import remove_user_from_servers
 
-                                await remove_user_from_servers(db, squad_ids)
+                                # JSON may store IDs as strings — cast to int
+                                int_squad_ids = [int(sid) for sid in squad_ids if sid]
+                                if int_squad_ids:
+                                    # Own savepoint so failure doesn't abort subscription deletion
+                                    async with db.begin_nested():
+                                        await remove_user_from_servers(db, int_squad_ids)
                             except Exception as sq_err:
                                 logger.warning('⚠️ Не удалось уменьшить счётчик серверов', error=sq_err)
 
