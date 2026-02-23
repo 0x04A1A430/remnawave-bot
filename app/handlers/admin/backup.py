@@ -432,11 +432,11 @@ async def handle_backup_file_upload(message: types.Message, db_user: User, db: A
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
-                        text='✅ Восстановить', callback_data=f'backup_restore_uploaded_{temp_path.name}'
+                        text='✅ Восстановить', callback_data=f'backup_restore_execute_{temp_path.name}'
                     ),
                     InlineKeyboardButton(
                         text='🗑️ Очистить и восстановить',
-                        callback_data=f'backup_restore_uploaded_clear_{temp_path.name}',
+                        callback_data=f'backup_restore_clear_{temp_path.name}',
                     ),
                 ],
                 [InlineKeyboardButton(text='❌ Отмена', callback_data='backup_panel')],
