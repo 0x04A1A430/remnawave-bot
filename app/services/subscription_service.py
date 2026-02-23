@@ -781,7 +781,10 @@ class SubscriptionService:
         try:
             from app.config import PERIOD_PRICES
 
-            base_price_original = PERIOD_PRICES.get(period_days, 0)
+            # Use subscription's tariff price if available, fall back to global PERIOD_PRICES
+            tariff = getattr(subscription, 'tariff', None)
+            tariff_price = tariff.get_price_for_period(period_days) if tariff else None
+            base_price_original = tariff_price if tariff_price is not None else PERIOD_PRICES.get(period_days, 0)
 
             if user is None:
                 user = getattr(subscription, 'user', None)
@@ -1123,7 +1126,10 @@ class SubscriptionService:
 
             months_in_period = calculate_months_from_days(period_days)
 
-            base_price_original = PERIOD_PRICES.get(period_days, 0)
+            # Use subscription's tariff price if available, fall back to global PERIOD_PRICES
+            tariff = getattr(subscription, 'tariff', None)
+            tariff_price = tariff.get_price_for_period(period_days) if tariff else None
+            base_price_original = tariff_price if tariff_price is not None else PERIOD_PRICES.get(period_days, 0)
 
             if user is None:
                 user = getattr(subscription, 'user', None)

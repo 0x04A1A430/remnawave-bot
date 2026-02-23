@@ -652,12 +652,37 @@ class MonitoringService:
                                     'trial_channel_unsubscribed',
                                 )
                 elif subscription.status == SubscriptionStatus.DISABLED.value and subscription.is_trial and is_member:
-                    if is_recently_updated_by_webhook(subscription):
+                    # Don't reactivate if traffic limit is exhausted (RemnaWave will just disable again)
+                    if (
+                        subscription.traffic_limit_gb
+                        and subscription.traffic_used_gb is not None
+                        and subscription.traffic_used_gb >= subscription.traffic_limit_gb
+                    ):
                         logger.debug(
-                            'Пропуск реактивации trial подписки : обновлена вебхуком недавно',
+                            'Пропуск реактивации trial подписки: трафик исчерпан',
                             subscription_id=subscription.id,
+                            traffic_used=subscription.traffic_used_gb,
+                            traffic_limit=subscription.traffic_limit_gb,
                         )
                         continue
+
+                    # Don't reactivate if subscription was disabled by RemnaWave (webhook)
+                    # rather than by monitoring (channel unsubscribe).
+                    # When webhook disables: last_webhook_update_at ≈ updated_at (both set to now())
+                    # When monitoring disables: updated_at is set, last_webhook_update_at stays old
+                    if (
+                        subscription.last_webhook_update_at
+                        and subscription.updated_at
+                        and subscription.last_webhook_update_at >= subscription.updated_at - timedelta(seconds=10)
+                    ):
+                        logger.debug(
+                            'Пропуск реактивации trial подписки: отключена RemnaWave панелью',
+                            subscription_id=subscription.id,
+                            last_webhook_at=subscription.last_webhook_update_at,
+                            updated_at=subscription.updated_at,
+                        )
+                        continue
+
                     subscription.status = SubscriptionStatus.ACTIVE.value
                     subscription.updated_at = datetime.now(UTC)
                     await db.commit()
