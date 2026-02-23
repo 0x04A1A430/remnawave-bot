@@ -332,9 +332,18 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                 if subscription.status != SubscriptionStatus.ACTIVE.value:
                     return
 
+                from app.database.crud.subscription import is_active_paid_subscription
+
                 if settings.CHANNEL_REQUIRED_FOR_ALL:
                     pass
                 elif not subscription.is_trial:
+                    return
+
+                if is_active_paid_subscription(subscription):
+                    logger.info(
+                        '⏭️ Пропуск отключения: у пользователя активная оплаченная подписка',
+                        telegram_id=telegram_id,
+                    )
                     return
 
                 await deactivate_subscription(db, subscription)

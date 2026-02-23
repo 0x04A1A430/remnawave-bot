@@ -312,6 +312,16 @@ async def delete_subscription(
     """
     subscription = await _get_subscription(db, subscription_id)
 
+    from app.database.crud.subscription import is_active_paid_subscription
+
+    if is_active_paid_subscription(subscription):
+        logger.info(
+            '⏭️ Пропуск деактивации: у пользователя активная оплаченная подписка',
+            subscription_id=subscription_id,
+        )
+        subscription = await _get_subscription(db, subscription.id)
+        return _serialize_subscription(subscription)
+
     await deactivate_subscription(db, subscription)
 
     # Деактивируем пользователя в RemnaWave, если есть UUID
