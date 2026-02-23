@@ -99,7 +99,13 @@ async def _aggregate_traffic(
         user_uuids_set = set(user_uuids)
 
         async with service.get_api_client() as api:
-            nodes = await api.get_all_nodes()
+            try:
+                nodes = await api.get_all_nodes()
+            except Exception:
+                logger.warning('Failed to fetch nodes for traffic aggregation', exc_info=True)
+                # Cache empty result to avoid hammering the failing API
+                _traffic_cache[cache_key] = (now, {}, [])
+                return {}, []
 
             # Fetch per-node user stats — O(nodes) calls instead of O(users)
             semaphore = asyncio.Semaphore(_CONCURRENCY_LIMIT)

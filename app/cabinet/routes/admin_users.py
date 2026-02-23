@@ -575,12 +575,14 @@ async def get_user_detail(
     transactions_result = await db.execute(transactions_q)
     transactions = transactions_result.scalars().all()
 
+    _EXPENSE_TYPES = {TransactionType.WITHDRAWAL.value, TransactionType.SUBSCRIPTION_PAYMENT.value}
+
     recent_transactions = [
         UserTransactionItem(
             id=t.id,
             type=t.type,
-            amount_kopeks=t.amount_kopeks,
-            amount_rubles=t.amount_kopeks / 100,
+            amount_kopeks=-t.amount_kopeks if t.type in _EXPENSE_TYPES else t.amount_kopeks,
+            amount_rubles=-t.amount_kopeks / 100 if t.type in _EXPENSE_TYPES else t.amount_kopeks / 100,
             description=t.description,
             payment_method=t.payment_method,
             is_completed=t.is_completed,
@@ -1819,24 +1821,33 @@ async def reset_user_trial(
 
     # Delete subscription if exists
     if user.subscription:
-        # Deactivate in Remnawave panel first
-        if user.remnawave_uuid:
-            try:
-                from app.services.subscription_service import SubscriptionService
+        from app.database.crud.subscription import is_active_paid_subscription
 
-                subscription_service = SubscriptionService()
-                await subscription_service.disable_remnawave_user(user.remnawave_uuid)
-                logger.info('Disabled Remnawave user for trial reset', remnawave_uuid=user.remnawave_uuid)
-            except Exception as e:
-                logger.warning('Failed to disable Remnawave user during trial reset', error=e)
+        if is_active_paid_subscription(user.subscription):
+            logger.info(
+                '⏭️ Пропуск удаления подписки и RemnaWave: у пользователя активная оплаченная подписка',
+                user_id=user_id,
+                remnawave_uuid=user.remnawave_uuid,
+            )
+        else:
+            # Deactivate in Remnawave panel first
+            if user.remnawave_uuid:
+                try:
+                    from app.services.subscription_service import SubscriptionService
 
-        # Delete subscription from database
-        from sqlalchemy import delete
+                    subscription_service = SubscriptionService()
+                    await subscription_service.disable_remnawave_user(user.remnawave_uuid)
+                    logger.info('Disabled Remnawave user for trial reset', remnawave_uuid=user.remnawave_uuid)
+                except Exception as e:
+                    logger.warning('Failed to disable Remnawave user during trial reset', error=e)
 
-        subscription_id = user.subscription.id
-        await db.execute(delete(SubscriptionServer).where(SubscriptionServer.subscription_id == subscription_id))
-        await db.execute(delete(Subscription).where(Subscription.user_id == user_id))
-        subscription_deleted = True
+            # Delete subscription from database
+            from sqlalchemy import delete
+
+            subscription_id = user.subscription.id
+            await db.execute(delete(SubscriptionServer).where(SubscriptionServer.subscription_id == subscription_id))
+            await db.execute(delete(Subscription).where(Subscription.user_id == user_id))
+            subscription_deleted = True
 
     # Reset trial flag
     user.has_used_trial = False
@@ -1885,6 +1896,21 @@ async def reset_user_subscription(
         return ResetSubscriptionResponse(
             success=True,
             message='User has no subscription to reset',
+            subscription_deleted=False,
+            panel_deactivated=False,
+        )
+
+    from app.database.crud.subscription import is_active_paid_subscription
+
+    if is_active_paid_subscription(user.subscription):
+        logger.info(
+            '⏭️ Пропуск сброса подписки: у пользователя активная оплаченная подписка',
+            user_id=user_id,
+            remnawave_uuid=user.remnawave_uuid,
+        )
+        return ResetSubscriptionResponse(
+            success=False,
+            message='Cannot reset active paid subscription. Subscription is still active and paid.',
             subscription_deleted=False,
             panel_deactivated=False,
         )
@@ -1951,8 +1977,16 @@ async def disable_user(
     panel_deactivated = False
     panel_error: str | None = None
 
-    # Deactivate subscription in panel
-    if user.remnawave_uuid:
+    # Deactivate subscription in panel (skip if active paid subscription)
+    from app.database.crud.subscription import is_active_paid_subscription
+
+    if is_active_paid_subscription(user.subscription):
+        logger.info(
+            '⏭️ Пропуск отключения RemnaWave: у пользователя активная оплаченная подписка',
+            user_id=user_id,
+            remnawave_uuid=user.remnawave_uuid,
+        )
+    elif user.remnawave_uuid:
         try:
             from app.services.subscription_service import SubscriptionService
 
@@ -1964,8 +1998,8 @@ async def disable_user(
             panel_error = str(e)
             logger.warning('Failed to disable Remnawave user', error=e)
 
-    # Deactivate subscription in bot database
-    if user.subscription:
+    # Deactivate subscription in bot database (skip if active paid subscription)
+    if user.subscription and not is_active_paid_subscription(user.subscription):
         from app.database.crud.subscription import deactivate_subscription
 
         await deactivate_subscription(db, user.subscription)
@@ -2065,12 +2099,14 @@ async def get_user_transactions(
     result = await db.execute(query)
     transactions = result.scalars().all()
 
+    _EXPENSE_TYPES = {TransactionType.WITHDRAWAL.value, TransactionType.SUBSCRIPTION_PAYMENT.value}
+
     items = [
         UserTransactionItem(
             id=t.id,
             type=t.type,
-            amount_kopeks=t.amount_kopeks,
-            amount_rubles=t.amount_kopeks / 100,
+            amount_kopeks=-t.amount_kopeks if t.type in _EXPENSE_TYPES else t.amount_kopeks,
+            amount_rubles=-t.amount_kopeks / 100 if t.type in _EXPENSE_TYPES else t.amount_kopeks / 100,
             description=t.description,
             payment_method=t.payment_method,
             is_completed=t.is_completed,

@@ -1,5 +1,6 @@
 import asyncio
 import gzip
+import html as html_lib
 import json as json_lib
 import math
 import os
@@ -575,17 +576,27 @@ class BackupService:
                     table_name = model.__tablename__
                     logger.info('📊 Экспортируем таблицу', table_name=table_name)
 
-                    query = select(model)
+                    try:
+                        query = select(model)
 
-                    if model == User:
-                        query = query.options(selectinload(User.subscription))
-                    elif model == Subscription:
-                        query = query.options(selectinload(Subscription.user))
-                    elif model == Transaction:
-                        query = query.options(selectinload(Transaction.user))
+                        if model == User:
+                            query = query.options(selectinload(User.subscription))
+                        elif model == Subscription:
+                            query = query.options(selectinload(Subscription.user))
+                        elif model == Transaction:
+                            query = query.options(selectinload(Transaction.user))
 
-                    result = await db.execute(query)
-                    records = result.scalars().all()
+                        result = await db.execute(query)
+                        records = result.scalars().all()
+                    except Exception as table_exc:
+                        logger.warning(
+                            '⚠️ Ошибка экспорта таблицы, пропускаем',
+                            table_name=table_name,
+                            error=str(table_exc),
+                        )
+                        await db.rollback()
+                        backup_data[table_name] = []
+                        continue
 
                     table_data: list[dict[str, Any]] = []
                     for record in records:
@@ -1725,7 +1736,8 @@ class BackupService:
             icons = {'success': '✅', 'error': '❌', 'restore_success': '🔥', 'restore_error': '❌'}
 
             icon = icons.get(event_type, 'ℹ️')
-            notification_text = f'{icon} <b>СИСТЕМА БЕКАПОВ</b>\n\n{message}'
+            safe_message = html_lib.escape(message) if 'error' in event_type else message
+            notification_text = f'{icon} <b>СИСТЕМА БЕКАПОВ</b>\n\n{safe_message}'
 
             if file_path:
                 notification_text += f'\n📁 <code>{Path(file_path).name}</code>'

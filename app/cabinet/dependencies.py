@@ -4,7 +4,7 @@ import asyncio
 
 import structlog
 from aiogram import Bot
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,6 +16,7 @@ from app.services.blacklist_service import blacklist_service
 from app.services.maintenance_service import maintenance_service
 
 from .auth.jwt_handler import get_token_payload
+from .auth.telegram_auth import validate_telegram_init_data
 
 
 logger = structlog.get_logger(__name__)
@@ -44,6 +45,7 @@ async def get_cabinet_db() -> AsyncSession:
 
 
 async def get_current_cabinet_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> User:
@@ -51,6 +53,7 @@ async def get_current_cabinet_user(
     Get current authenticated cabinet user from JWT token.
 
     Args:
+        request: FastAPI request object (for reading X-Telegram-Init-Data header)
         credentials: HTTP Bearer credentials
         db: Database session
 
@@ -104,6 +107,34 @@ async def get_current_cabinet_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail='User account is not active',
         )
+
+    # Defense in depth: cross-validate Telegram identity.
+    # The frontend sends X-Telegram-Init-Data on every request.
+    # If the header is present and cryptographically valid, verify that
+    # the Telegram user ID matches the JWT user's telegram_id.
+    # This prevents cross-account token reuse when Telegram WebView
+    # shares localStorage across accounts on the same device.
+    init_data_raw = request.headers.get('X-Telegram-Init-Data')
+    if init_data_raw and user.telegram_id is not None:
+        # Use generous max_age: Telegram Desktop caches initData
+        tg_user = validate_telegram_init_data(init_data_raw, max_age_seconds=86400 * 30)
+        if tg_user is None:
+            logger.warning(
+                'Telegram initData validation failed but header was present',
+                jwt_user_id=user.id,
+            )
+        elif tg_user.get('id') != user.telegram_id:
+            logger.warning(
+                'Telegram identity mismatch: JWT belongs to different user than current Telegram account',
+                jwt_user_id=user.id,
+                jwt_telegram_id=user.telegram_id,
+                init_data_telegram_id=tg_user.get('id'),
+            )
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail='Session belongs to a different Telegram account. Please restart the app.',
+                headers={'WWW-Authenticate': 'Bearer'},
+            )
 
     # Check blacklist
     if user.telegram_id is not None:
@@ -173,6 +204,7 @@ async def get_current_cabinet_user(
 
 
 async def get_optional_cabinet_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> User | None:
@@ -199,6 +231,19 @@ async def get_optional_cabinet_user(
 
     if not user or user.status != 'active':
         return None
+
+    # Cross-validate Telegram identity (same as get_current_cabinet_user)
+    init_data_raw = request.headers.get('X-Telegram-Init-Data')
+    if init_data_raw and user.telegram_id is not None:
+        tg_user = validate_telegram_init_data(init_data_raw, max_age_seconds=86400 * 30)
+        if tg_user and tg_user.get('id') != user.telegram_id:
+            logger.warning(
+                'Telegram identity mismatch in optional auth',
+                jwt_user_id=user.id,
+                jwt_telegram_id=user.telegram_id,
+                init_data_telegram_id=tg_user.get('id'),
+            )
+            return None
 
     return user
 

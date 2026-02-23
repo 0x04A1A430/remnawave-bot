@@ -61,6 +61,10 @@ async def send_referral_notification(
 
 async def process_referral_registration(db: AsyncSession, new_user_id: int, referrer_id: int, bot: Bot = None):
     try:
+        if new_user_id == referrer_id:
+            logger.warning('Self-referral blocked in process_referral_registration', user_id=new_user_id)
+            return False
+
         new_user = await get_user_by_id(db, new_user_id)
         referrer = await get_user_by_id(db, referrer_id)
 

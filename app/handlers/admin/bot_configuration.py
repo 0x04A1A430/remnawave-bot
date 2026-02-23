@@ -807,7 +807,7 @@ async def handle_import_message(
     content = ''
     if message.document:
         buffer = io.BytesIO()
-        await message.document.download(destination=buffer)
+        await message.bot.download(message.document, destination=buffer)
         buffer.seek(0)
         content = buffer.read().decode('utf-8', errors='ignore')
     else:

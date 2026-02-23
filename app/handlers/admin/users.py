@@ -4013,12 +4013,23 @@ async def _add_subscription_traffic(db: AsyncSession, user_id: int, gb: int, adm
 
 async def _deactivate_user_subscription(db: AsyncSession, user_id: int, admin_id: int) -> bool:
     try:
-        from app.database.crud.subscription import deactivate_subscription, get_subscription_by_user_id
+        from app.database.crud.subscription import (
+            deactivate_subscription,
+            get_subscription_by_user_id,
+            is_active_paid_subscription,
+        )
         from app.services.subscription_service import SubscriptionService
 
         subscription = await get_subscription_by_user_id(db, user_id)
         if not subscription:
             logger.error('Подписка не найдена для пользователя', user_id=user_id)
+            return False
+
+        if is_active_paid_subscription(subscription):
+            logger.info(
+                '⏭️ Пропуск деактивации: у пользователя активная оплаченная подписка',
+                user_id=user_id,
+            )
             return False
 
         await deactivate_subscription(db, subscription)

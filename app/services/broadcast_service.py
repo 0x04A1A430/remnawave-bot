@@ -535,8 +535,23 @@ async def cleanup_blocked_broadcast_users(blocked_telegram_ids: list[int]) -> No
 
                 user.status = UserStatus.BLOCKED.value
 
-                # Отключаем активные подписки
-                sub_result = await session.execute(
+                # Проверяем, есть ли активная оплаченная подписка
+                from app.database.crud.subscription import is_active_paid_subscription
+
+                sub_result = await session.execute(select(Subscription).where(Subscription.user_id == user.id))
+                user_subscription = sub_result.scalar_one_or_none()
+
+                if is_active_paid_subscription(user_subscription):
+                    logger.info(
+                        '⏭️ Пропуск отключения подписки: у пользователя активная оплаченная подписка',
+                        telegram_id=telegram_id,
+                        user_id=user.id,
+                    )
+                    await session.commit()
+                    continue
+
+                # Отключаем активные подписки (только триальные или истёкшие)
+                active_sub_result = await session.execute(
                     select(Subscription).where(
                         Subscription.user_id == user.id,
                         Subscription.status.in_(
@@ -547,7 +562,7 @@ async def cleanup_blocked_broadcast_users(blocked_telegram_ids: list[int]) -> No
                         ),
                     )
                 )
-                subscriptions = sub_result.scalars().all()
+                subscriptions = active_sub_result.scalars().all()
                 for sub in subscriptions:
                     sub.status = SubscriptionStatus.DISABLED.value
 

@@ -1,3 +1,4 @@
+import html
 from datetime import datetime
 
 import structlog
@@ -154,7 +155,7 @@ async def create_backup_handler(callback: types.CallbackQuery, db_user: User, db
         )
     else:
         await progress_msg.edit_text(
-            f'❌ <b>Ошибка создания бекапа</b>\n\n{message}',
+            f'❌ <b>Ошибка создания бекапа</b>\n\n{html.escape(message)}',
             parse_mode='HTML',
             reply_markup=get_backup_main_keyboard(db_user.language),
         )
@@ -431,11 +432,11 @@ async def handle_backup_file_upload(message: types.Message, db_user: User, db: A
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
-                        text='✅ Восстановить', callback_data=f'backup_restore_uploaded_{temp_path.name}'
+                        text='✅ Восстановить', callback_data=f'backup_restore_execute_{temp_path.name}'
                     ),
                     InlineKeyboardButton(
                         text='🗑️ Очистить и восстановить',
-                        callback_data=f'backup_restore_uploaded_clear_{temp_path.name}',
+                        callback_data=f'backup_restore_clear_{temp_path.name}',
                     ),
                 ],
                 [InlineKeyboardButton(text='❌ Отмена', callback_data='backup_panel')],

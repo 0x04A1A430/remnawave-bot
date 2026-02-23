@@ -1174,11 +1174,14 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
     if existing_user and existing_user.status == UserStatus.DELETED.value:
         logger.info('🔄 Восстанавливаем удаленного пользователя', from_user_id=callback.from_user.id)
 
+        # Prevent self-referral when partner re-registers via own campaign link
+        safe_referrer_id = referrer_id if referrer_id != existing_user.id else None
+
         existing_user.username = callback.from_user.username
         existing_user.first_name = callback.from_user.first_name
         existing_user.last_name = callback.from_user.last_name
         existing_user.language = language
-        existing_user.referred_by_id = referrer_id
+        existing_user.referred_by_id = safe_referrer_id
         existing_user.status = UserStatus.ACTIVE.value
         existing_user.balance_kopeks = 0
         existing_user.has_had_paid_subscription = False
@@ -1212,7 +1215,7 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
         logger.info('🔄 Обновляем существующего пользователя', from_user_id=callback.from_user.id)
         existing_user.status = UserStatus.ACTIVE.value
         existing_user.language = language
-        if referrer_id and not existing_user.referred_by_id:
+        if referrer_id and referrer_id != existing_user.id and not existing_user.referred_by_id:
             existing_user.referred_by_id = referrer_id
 
         existing_user.updated_at = datetime.now(UTC)
@@ -1222,7 +1225,7 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
         await db.refresh(existing_user, ['subscription'])
         user = existing_user
 
-    if referrer_id:
+    if referrer_id and referrer_id != user.id:
         try:
             await process_referral_registration(db, user.id, referrer_id, callback.bot)
             logger.info('✅ Реферальная регистрация обработана для', user_id=user.id)
@@ -1436,11 +1439,14 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
     if existing_user and existing_user.status == UserStatus.DELETED.value:
         logger.info('🔄 Восстанавливаем удаленного пользователя', from_user_id=message.from_user.id)
 
+        # Prevent self-referral when partner re-registers via own campaign link
+        safe_referrer_id = referrer_id if referrer_id != existing_user.id else None
+
         existing_user.username = message.from_user.username
         existing_user.first_name = message.from_user.first_name
         existing_user.last_name = message.from_user.last_name
         existing_user.language = language
-        existing_user.referred_by_id = referrer_id
+        existing_user.referred_by_id = safe_referrer_id
         existing_user.status = UserStatus.ACTIVE.value
         existing_user.balance_kopeks = 0
         existing_user.has_had_paid_subscription = False
@@ -1474,7 +1480,7 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
         logger.info('🔄 Обновляем существующего пользователя', from_user_id=message.from_user.id)
         existing_user.status = UserStatus.ACTIVE.value
         existing_user.language = language
-        if referrer_id and not existing_user.referred_by_id:
+        if referrer_id and referrer_id != existing_user.id and not existing_user.referred_by_id:
             existing_user.referred_by_id = referrer_id
 
         existing_user.updated_at = datetime.now(UTC)
@@ -1484,7 +1490,7 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
         await db.refresh(existing_user, ['subscription'])
         user = existing_user
 
-    if referrer_id:
+    if referrer_id and referrer_id != user.id:
         try:
             await process_referral_registration(db, user.id, referrer_id, message.bot)
             logger.info('✅ Реферальная регистрация обработана для', user_id=user.id)
@@ -2046,7 +2052,7 @@ async def required_sub_channel_check(
                     logger.info('✅ CHANNEL CHECK: pending_start_payload удален из state после создания пользователя')
 
                     # Обрабатываем реферальную регистрацию
-                    if referrer_id:
+                    if referrer_id and referrer_id != user.id:
                         try:
                             await process_referral_registration(db, user.id, referrer_id, bot)
                             logger.info('✅ CHANNEL CHECK: Реферальная регистрация обработана для', user_id=user.id)

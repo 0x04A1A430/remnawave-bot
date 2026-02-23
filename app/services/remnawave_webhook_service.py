@@ -564,15 +564,24 @@ class RemnaWaveWebhookService:
             except (ValueError, TypeError):
                 pass
 
-        # Sync expire date
+        # Sync expire date (only if panel date is LATER than local to prevent race condition
+        # where webhook with stale expireAt overwrites a freshly extended subscription)
         expire_at = data.get('expireAt')
         if expire_at:
             try:
                 parsed_dt = datetime.fromisoformat(expire_at.replace('Z', '+00:00'))
                 new_end_date = parsed_dt.astimezone(UTC)
                 if subscription.end_date != new_end_date:
-                    subscription.end_date = new_end_date
-                    changed = True
+                    if not subscription.end_date or new_end_date > subscription.end_date:
+                        subscription.end_date = new_end_date
+                        changed = True
+                    else:
+                        logger.warning(
+                            'Webhook: пропуск перезаписи end_date — локальная дата позже',
+                            subscription_id=subscription.id,
+                            local_end_date=subscription.end_date,
+                            webhook_end_date=new_end_date,
+                        )
             except (ValueError, TypeError):
                 pass
 

@@ -261,7 +261,9 @@ class UserNodeUsageResponse(BaseModel):
 class UpdateBalanceRequest(BaseModel):
     """Request to update user balance."""
 
-    amount_kopeks: int = Field(..., description='Amount in kopeks (positive to add, negative to subtract)')
+    amount_kopeks: int = Field(
+        ..., ge=-2_000_000_000, le=2_000_000_000, description='Amount in kopeks (positive to add, negative to subtract)'
+    )
     description: str = Field(default='Admin balance adjustment', max_length=500)
     create_transaction: bool = Field(default=True, description='Create transaction record')
 

@@ -2702,11 +2702,12 @@ async def show_instant_switch_list(
         return
 
     # Рассчитываем оставшиеся дни
+    now = datetime.now(UTC)
     remaining_days = 0
     if subscription.end_date:
-        remaining_days = max(0, (subscription.end_date - datetime.now(UTC)).days)
+        remaining_days = max(0, (subscription.end_date - now).days)
 
-    if remaining_days == 0:
+    if not subscription.end_date or subscription.end_date <= now:
         await callback.message.edit_text(
             '❌ <b>Переключение недоступно</b>\n\n'
             'У вашей подписки не осталось активных дней.\n'

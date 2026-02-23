@@ -86,7 +86,7 @@ class RenewalOptionResponse(BaseModel):
 class RenewalRequest(BaseModel):
     """Request to renew subscription."""
 
-    period_days: int = Field(..., description='Renewal period in days')
+    period_days: int = Field(..., ge=1, le=3650, description='Renewal period in days')
 
 
 class TrafficPackageResponse(BaseModel):
@@ -101,13 +101,13 @@ class TrafficPackageResponse(BaseModel):
 class TrafficPurchaseRequest(BaseModel):
     """Request to purchase additional traffic."""
 
-    gb: int = Field(..., ge=0, description='GB to purchase (0 = unlimited)')
+    gb: int = Field(..., ge=0, le=100_000, description='GB to purchase (0 = unlimited)')
 
 
 class DevicePurchaseRequest(BaseModel):
     """Request to purchase additional device slots."""
 
-    devices: int = Field(..., ge=1, description='Number of additional devices')
+    devices: int = Field(..., ge=1, le=100, description='Number of additional devices')
 
 
 class AutopayUpdateRequest(BaseModel):
@@ -137,10 +137,10 @@ class PurchaseSelectionRequest(BaseModel):
     """User's selection for subscription purchase."""
 
     period_id: str | None = Field(None, description="Period ID like 'days:30'")
-    period_days: int | None = Field(None, description='Period in days')
-    traffic_value: int | None = Field(None, description='Traffic in GB (0 = unlimited)')
+    period_days: int | None = Field(None, ge=1, le=3650, description='Period in days')
+    traffic_value: int | None = Field(None, ge=0, le=100_000, description='Traffic in GB (0 = unlimited)')
     servers: list[str] | None = Field(default_factory=list, description='Server UUIDs')
-    devices: int | None = Field(None, description='Device limit')
+    devices: int | None = Field(None, ge=1, le=100, description='Device limit')
 
 
 class PurchasePreviewRequest(BaseModel):
@@ -156,5 +156,7 @@ class TariffPurchaseRequest(BaseModel):
     """Request to purchase a tariff."""
 
     tariff_id: int = Field(..., description='Tariff ID to purchase')
-    period_days: int = Field(..., description='Period in days')
-    traffic_gb: int | None = Field(None, ge=0, description='Custom traffic in GB (for custom_traffic_enabled tariffs)')
+    period_days: int = Field(..., ge=1, le=3650, description='Period in days')
+    traffic_gb: int | None = Field(
+        None, ge=0, le=100_000, description='Custom traffic in GB (for custom_traffic_enabled tariffs)'
+    )

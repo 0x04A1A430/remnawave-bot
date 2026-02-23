@@ -15,7 +15,7 @@ class PartnerApplicationRequest(BaseModel):
     website_url: str | None = Field(None, max_length=500)
     telegram_channel: str | None = Field(None, max_length=255)
     description: str | None = Field(None, max_length=2000)
-    expected_monthly_referrals: int | None = Field(None, ge=0)
+    expected_monthly_referrals: int | None = Field(None, ge=0, le=2_000_000_000)
 
 
 class PartnerApplicationInfo(BaseModel):
