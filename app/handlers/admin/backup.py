@@ -1,3 +1,4 @@
+import html
 from datetime import datetime
 
 import structlog
@@ -154,7 +155,7 @@ async def create_backup_handler(callback: types.CallbackQuery, db_user: User, db
         )
     else:
         await progress_msg.edit_text(
-            f'❌ <b>Ошибка создания бекапа</b>\n\n{message}',
+            f'❌ <b>Ошибка создания бекапа</b>\n\n{html.escape(message)}',
             parse_mode='HTML',
             reply_markup=get_backup_main_keyboard(db_user.language),
         )
