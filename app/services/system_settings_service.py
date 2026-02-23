@@ -205,8 +205,6 @@ class BotConfigurationService:
         'DATABASE_URL': 'DATABASE',
         'DATABASE_MODE': 'DATABASE',
         'LOCALES_PATH': 'LOCALIZATION',
-        'CHANNEL_SUB_ID': 'CHANNEL',
-        'CHANNEL_LINK': 'CHANNEL',
         'CHANNEL_IS_REQUIRED_SUB': 'CHANNEL',
         'BOT_USERNAME': 'CORE',
         'DEFAULT_LANGUAGE': 'LOCALIZATION',

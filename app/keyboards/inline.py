@@ -275,22 +275,37 @@ def get_privacy_policy_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeybo
 
 
 def get_channel_sub_keyboard(
-    channel_link: str | None,
+    channels: list[dict] | str | None = None,
     language: str = DEFAULT_LANGUAGE,
 ) -> InlineKeyboardMarkup:
-    texts = get_texts(language)
+    """Subscription keyboard for required channels.
 
+    Args:
+        channels: List of dicts with 'channel_link' and 'title' keys,
+                  OR a string (legacy single channel_link for backwards compat).
+        language: Locale code for button text.
+    """
+    texts = get_texts(language)
     buttons: list[list[InlineKeyboardButton]] = []
 
-    if channel_link:
-        buttons.append(
-            [
-                InlineKeyboardButton(
-                    text=texts.t('CHANNEL_SUBSCRIBE_BUTTON', '🔗 Подписаться'),
-                    url=channel_link,
-                )
-            ]
-        )
+    if isinstance(channels, str):
+        # Legacy: single channel link string
+        if channels:
+            buttons.append(
+                [
+                    InlineKeyboardButton(
+                        text=texts.t('CHANNEL_SUBSCRIBE_BUTTON', '🔗 Подписаться'),
+                        url=channels,
+                    )
+                ]
+            )
+    elif isinstance(channels, list):
+        for ch in channels:
+            link = ch.get('channel_link')
+            title = ch.get('title')
+            if link:
+                label = title or texts.t('CHANNEL_SUBSCRIBE_BUTTON', '🔗 Подписаться')
+                buttons.append([InlineKeyboardButton(text=label, url=link)])
 
     buttons.append(
         [

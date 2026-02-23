@@ -318,10 +318,11 @@ def _get_group_status(group_key: str) -> tuple[str, str]:
 
     if key == 'core':
         token_ok = bool(getattr(settings, 'BOT_TOKEN', ''))
-        channel_ok = bool(settings.CHANNEL_LINK or not settings.CHANNEL_IS_REQUIRED_SUB)
-        if token_ok and channel_ok:
+        # Channel subscription channels are now managed via DB (admin panel),
+        # not a single CHANNEL_LINK setting. Dashboard cannot async-query DB here.
+        if token_ok:
             return '🟢', 'Бот готов к работе'
-        return '🟡', 'Проверьте токен и обязательную подписку'
+        return '🟡', 'Проверьте токен бота'
 
     if key == 'subscriptions':
         price_ready = settings.PRICE_30_DAYS > 0 and settings.AVAILABLE_SUBSCRIPTION_PERIODS

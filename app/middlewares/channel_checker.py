@@ -2,11 +2,9 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any
 
-import redis.asyncio as aioredis
 import structlog
 from aiogram import BaseMiddleware, Bot, types
-from aiogram.enums import ChatMemberStatus
-from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError, TelegramNetworkError
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message, TelegramObject, Update
 
@@ -20,69 +18,62 @@ from app.keyboards.inline import get_channel_sub_keyboard
 from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
 from app.services.admin_notification_service import AdminNotificationService
+from app.services.channel_subscription_service import channel_subscription_service
 from app.services.subscription_service import SubscriptionService
+from app.utils.cache import cache
 from app.utils.check_reg_process import is_registration_process
 
 
 logger = structlog.get_logger(__name__)
 
-# Ключ для хранения pending_start_payload в Redis (резервный механизм)
+# Redis key prefix and TTL for pending /start payload backup
 REDIS_PAYLOAD_KEY_PREFIX = 'pending_start_payload:'
-REDIS_PAYLOAD_TTL = 3600  # 1 час
+REDIS_PAYLOAD_TTL = 3600  # 1 hour
 
 
 async def save_pending_payload_to_redis(telegram_id: int, payload: str) -> bool:
-    """Сохраняет pending_start_payload в Redis напрямую (резервный механизм)."""
+    """Save pending_start_payload to Redis via the shared cache singleton."""
     try:
-        redis_client = aioredis.from_url(settings.REDIS_URL)
         key = f'{REDIS_PAYLOAD_KEY_PREFIX}{telegram_id}'
-        await redis_client.set(key, payload, ex=REDIS_PAYLOAD_TTL)
-        await redis_client.aclose()
-        logger.info(
-            "💾 [Redis fallback] Сохранен payload '' для пользователя", payload=payload, telegram_id=telegram_id
-        )
-        return True
+        result = await cache.set(key, payload, expire=REDIS_PAYLOAD_TTL)
+        if result:
+            logger.info('Saved pending payload to Redis', payload=payload, telegram_id=telegram_id)
+        return result
     except Exception as e:
-        logger.error('❌ [Redis fallback] Ошибка сохранения payload для', telegram_id=telegram_id, e=e)
+        logger.error('Failed to save payload to Redis', telegram_id=telegram_id, error=e)
         return False
 
 
 async def get_pending_payload_from_redis(telegram_id: int) -> str | None:
-    """Получает pending_start_payload из Redis (резервный механизм)."""
+    """Get pending_start_payload from Redis via the shared cache singleton."""
     try:
-        redis_client = aioredis.from_url(settings.REDIS_URL)
         key = f'{REDIS_PAYLOAD_KEY_PREFIX}{telegram_id}'
-        payload = await redis_client.get(key)
-        await redis_client.aclose()
-        if payload:
-            return payload.decode('utf-8') if isinstance(payload, bytes) else payload
-        return None
+        return await cache.get(key)
     except Exception as e:
-        logger.debug('❌ [Redis fallback] Ошибка получения payload для', telegram_id=telegram_id, e=e)
+        logger.debug('Failed to get payload from Redis', telegram_id=telegram_id, error=e)
         return None
 
 
 async def delete_pending_payload_from_redis(telegram_id: int) -> None:
-    """Удаляет pending_start_payload из Redis."""
+    """Delete pending_start_payload from Redis via the shared cache singleton."""
     try:
-        redis_client = aioredis.from_url(settings.REDIS_URL)
         key = f'{REDIS_PAYLOAD_KEY_PREFIX}{telegram_id}'
-        await redis_client.delete(key)
-        await redis_client.aclose()
+        await cache.delete(key)
     except Exception:
         pass
 
 
 class ChannelCheckerMiddleware(BaseMiddleware):
-    """
-    Middleware для проверки подписки на канал.
-    ОПТИМИЗИРОВАНО: создаёт максимум одну сессию БД на запрос.
+    """Middleware for checking required channel subscriptions.
+
+    OPTIMIZED FOR 100k+ USERS:
+    - Does NOT call Telegram API directly in the hot path
+    - Reads from Redis cache (TTL 600s) -> PostgreSQL -> rate-limited API fallback
+    - Updated in real-time via ChatMemberUpdated events
     """
 
     def __init__(self):
-        self.BAD_MEMBER_STATUS = (ChatMemberStatus.LEFT, ChatMemberStatus.KICKED, ChatMemberStatus.RESTRICTED)
-        self.GOOD_MEMBER_STATUS = (ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.CREATOR)
-        logger.info('🔧 ChannelCheckerMiddleware инициализирован')
+        logger.info('ChannelCheckerMiddleware initialized (multi-channel mode)')
 
     async def __call__(
         self,
@@ -90,6 +81,11 @@ class ChannelCheckerMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: dict[str, Any],
     ) -> Any:
+        # Runtime check (supports toggling without restart)
+        if not settings.CHANNEL_IS_REQUIRED_SUB:
+            return await handler(event, data)
+
+        # Fast-path bypasses
         telegram_id = None
         if isinstance(event, (Message, CallbackQuery)):
             telegram_id = event.from_user.id
@@ -100,7 +96,6 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                 telegram_id = event.callback_query.from_user.id
 
         if telegram_id is None:
-            logger.debug('❌ telegram_id не найден, пропускаем')
             return await handler(event, data)
 
         # Skip channel check for lightweight UI callbacks (close/delete notifications)
@@ -112,110 +107,123 @@ class ChannelCheckerMiddleware(BaseMiddleware):
         ):
             return await handler(event, data)
 
-        # Админам разрешаем пропускать проверку подписки
         if settings.is_admin(telegram_id):
-            logger.debug(
-                '✅ Пользователь является администратором — пропускаем проверку подписки', telegram_id=telegram_id
-            )
             return await handler(event, data)
 
         state: FSMContext = data.get('state')
-        current_state = None
-
-        if state:
-            current_state = await state.get_state()
-
-        is_reg_process = is_registration_process(event, current_state)
-
-        if is_reg_process:
-            logger.debug('✅ Событие разрешено (процесс регистрации), пропускаем проверку')
+        current_state = await state.get_state() if state else None
+        if is_registration_process(event, current_state):
             return await handler(event, data)
 
+        # Ensure service has bot reference for API fallback
         bot: Bot = data['bot']
+        if not channel_subscription_service.bot:
+            channel_subscription_service.bot = bot
 
-        channel_id = settings.CHANNEL_SUB_ID
+        # Multi-channel check (Redis -> DB -> API)
+        unsubscribed = await channel_subscription_service.get_unsubscribed_channels(telegram_id)
 
-        if not channel_id:
-            logger.warning('⚠️ CHANNEL_SUB_ID не установлен, пропускаем проверку')
+        if not unsubscribed:
+            # All subscribed -- reactivate if needed
+            if settings.CHANNEL_DISABLE_TRIAL_ON_UNSUBSCRIBE or settings.CHANNEL_REQUIRED_FOR_ALL:
+                await self._reactivate_subscription_on_subscribe(telegram_id, bot)
             return await handler(event, data)
 
-        is_required = settings.CHANNEL_IS_REQUIRED_SUB
+        # User is NOT subscribed to all channels
+        if settings.CHANNEL_DISABLE_TRIAL_ON_UNSUBSCRIBE or settings.CHANNEL_REQUIRED_FOR_ALL:
+            await self._deactivate_subscription_on_unsubscribe(telegram_id, bot, unsubscribed)
 
-        if not is_required:
-            logger.debug('⚠️ Обязательная подписка отключена, пропускаем проверку')
-            return await handler(event, data)
+        await self._capture_start_payload(state, event, bot)
 
-        channel_link = self._normalize_channel_link(settings.CHANNEL_LINK, channel_id)
+        if isinstance(event, CallbackQuery) and event.data == 'sub_channel_check':
+            # Rate limit: max 1 check per 5 seconds per user
+            rate_key = f'sub_check_rate:{telegram_id}'
+            if await cache.exists(rate_key):
+                await event.answer()
+                return None
+            await cache.set(rate_key, 1, expire=5)
 
-        if not channel_link:
-            logger.warning('⚠️ CHANNEL_LINK не задан или невалиден, кнопка подписки будет скрыта')
+            # Re-check via API for immediate feedback (invalidate cache first)
+            await channel_subscription_service.invalidate_user_cache(telegram_id)
 
-        try:
-            member = await bot.get_chat_member(chat_id=channel_id, user_id=telegram_id)
-
-            if member.status in self.GOOD_MEMBER_STATUS:
-                # Реактивируем подписку если была отключена из-за отписки от канала
-                if telegram_id and (settings.CHANNEL_DISABLE_TRIAL_ON_UNSUBSCRIBE or settings.CHANNEL_REQUIRED_FOR_ALL):
+            unsubscribed_fresh = await channel_subscription_service.get_unsubscribed_channels(telegram_id)
+            if not unsubscribed_fresh:
+                # Now subscribed to all channels
+                if settings.CHANNEL_DISABLE_TRIAL_ON_UNSUBSCRIBE or settings.CHANNEL_REQUIRED_FOR_ALL:
                     await self._reactivate_subscription_on_subscribe(telegram_id, bot)
                 return await handler(event, data)
-            if member.status in self.BAD_MEMBER_STATUS:
-                logger.info(
-                    '❌ Пользователь не подписан на канал (статус: )', telegram_id=telegram_id, status=member.status
-                )
 
-                if telegram_id and (settings.CHANNEL_DISABLE_TRIAL_ON_UNSUBSCRIBE or settings.CHANNEL_REQUIRED_FOR_ALL):
-                    await self._deactivate_subscription_on_unsubscribe(telegram_id, bot, channel_link)
+            user_lang = (
+                event.from_user.language_code.split('-')[0]
+                if event.from_user and event.from_user.language_code
+                else DEFAULT_LANGUAGE
+            )
+            texts = get_texts(user_lang)
+            await event.answer(
+                texts.t(
+                    'CHANNEL_CHECK_NOT_SUBSCRIBED',
+                    'You are not subscribed to all required channels. Please subscribe and try again.',
+                ),
+                show_alert=True,
+            )
+            return None
 
-                await self._capture_start_payload(state, event, bot)
+        return await self._deny_message(event, bot, unsubscribed)
 
-                if isinstance(event, CallbackQuery) and event.data == 'sub_channel_check':
-                    await event.answer(
-                        '❌ Вы еще не подписались на канал! Подпишитесь и попробуйте снова.', show_alert=True
-                    )
-                    return None
-
-                return await self._deny_message(event, bot, channel_link, channel_id)
-            logger.warning('⚠️ Неожиданный статус пользователя', telegram_id=telegram_id, status=member.status)
-            await self._capture_start_payload(state, event, bot)
-            return await self._deny_message(event, bot, channel_link, channel_id)
-
-        except TelegramForbiddenError as e:
-            logger.error('❌ Бот заблокирован в канале', channel_id=channel_id, error=e)
-            await self._capture_start_payload(state, event, bot)
-            return await self._deny_message(event, bot, channel_link, channel_id)
-        except TelegramBadRequest as e:
-            if 'chat not found' in str(e).lower():
-                logger.error('❌ Канал не найден', channel_id=channel_id, error=e)
-            elif 'user not found' in str(e).lower():
-                logger.error('❌ Пользователь не найден', telegram_id=telegram_id, error=e)
-            else:
-                logger.error('❌ Ошибка запроса к каналу', channel_id=channel_id, error=e)
-            await self._capture_start_payload(state, event, bot)
-            return await self._deny_message(event, bot, channel_link, channel_id)
-        except TelegramNetworkError as e:
-            logger.warning('⚠️ Таймаут при проверке подписки на канал', error=e)
-            return await handler(event, data)
-        except Exception as e:
-            logger.error('❌ Неожиданная ошибка при проверке подписки', error=e)
-            return await handler(event, data)
+    # -- _deny_message (multi-channel) -----------------------------------------
 
     @staticmethod
-    def _normalize_channel_link(channel_link: str | None, channel_id: str | None) -> str | None:
-        link = (channel_link or '').strip()
+    async def _deny_message(
+        event: TelegramObject,
+        bot: Bot,
+        unsubscribed_channels: list[dict],
+    ):
+        user = None
+        if isinstance(event, (Message, CallbackQuery)):
+            user = getattr(event, 'from_user', None)
+        elif isinstance(event, Update):
+            if event.message and event.message.from_user:
+                user = event.message.from_user
+            elif event.callback_query and event.callback_query.from_user:
+                user = event.callback_query.from_user
 
-        if link.startswith('@'):  # raw username
-            return f'https://t.me/{link.lstrip("@")}'
+        language = DEFAULT_LANGUAGE
+        if user and user.language_code:
+            language = user.language_code.split('-')[0]
 
-        if link and not link.lower().startswith(('http://', 'https://', 'tg://')):
-            return f'https://{link}'
+        # Normalize channel links (convert @username -> https://t.me/username)
+        normalized = []
+        for ch in unsubscribed_channels:
+            ch_copy = dict(ch)
+            link = ch_copy.get('channel_link')
+            if link:
+                ch_copy['channel_link'] = _normalize_channel_link(link)
+            normalized.append(ch_copy)
 
-        if link:
-            return link
+        texts = get_texts(language)
+        channel_sub_kb = get_channel_sub_keyboard(normalized, language=language)
+        text = texts.t(
+            'CHANNEL_REQUIRED_TEXT',
+            '🔒 Для использования бота подпишитесь на новостной канал, '
+            'чтобы получать уведомления о новых возможностях и обновлениях бота. Спасибо!',
+        )
 
-        if channel_id and str(channel_id).startswith('@'):
-            return f'https://t.me/{str(channel_id).lstrip("@")}'
+        try:
+            if isinstance(event, Message):
+                return await event.answer(text, reply_markup=channel_sub_kb)
+            if isinstance(event, CallbackQuery):
+                try:
+                    return await event.message.edit_text(text, reply_markup=channel_sub_kb)
+                except TelegramBadRequest as e:
+                    if 'message is not modified' in str(e).lower():
+                        return await event.answer(text, show_alert=True)
+                    raise
+            elif isinstance(event, Update) and event.message:
+                return await bot.send_message(event.message.chat.id, text, reply_markup=channel_sub_kb)
+        except Exception as e:
+            logger.error('Error sending subscription prompt', error=e)
 
-        return None
+    # -- _capture_start_payload ------------------------------------------------
 
     async def _capture_start_payload(
         self,
@@ -223,6 +231,11 @@ class ChannelCheckerMiddleware(BaseMiddleware):
         event: TelegramObject,
         bot: Bot | None = None,
     ) -> None:
+        """Save /start payload to FSM + Redis so it can be restored after subscription.
+
+        This preserves referral codes, deep links, and other start parameters
+        when a user is blocked by the channel subscription requirement.
+        """
         telegram_id = None
         if isinstance(event, (Message, CallbackQuery)):
             telegram_id = event.from_user.id if event.from_user else None
@@ -246,23 +259,21 @@ class ChannelCheckerMiddleware(BaseMiddleware):
 
         payload = parts[1]
 
-        # Сохраняем в FSM state
+        # Save to FSM state
         if state:
             state_data = await state.get_data() or {}
             if state_data.get('pending_start_payload') != payload:
                 state_data['pending_start_payload'] = payload
                 await state.set_data(state_data)
-                logger.info(
-                    "💾 Сохранен start payload '' для пользователя (FSM)", payload=payload, telegram_id=telegram_id
-                )
+                logger.info('Saved start payload for user (FSM)', payload=payload, telegram_id=telegram_id)
         else:
-            logger.warning('⚠️ _capture_start_payload: state=None для пользователя', telegram_id=telegram_id)
+            logger.warning('_capture_start_payload: state=None for user', telegram_id=telegram_id)
 
-        # Также сохраняем в Redis как резерв (на случай потери FSM state)
+        # Also save to Redis as backup (in case FSM state is lost)
         if telegram_id:
             await save_pending_payload_to_redis(telegram_id, payload)
 
-        if bot and message.from_user:
+        if bot and message.from_user and state:
             await self._try_send_campaign_visit_notification(
                 bot,
                 message.from_user,
@@ -280,9 +291,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
         try:
             state_data = await state.get_data() or {}
         except Exception as error:
-            logger.error(
-                '❌ Не удалось получить данные состояния для уведомления по кампании', payload=payload, error=error
-            )
+            logger.error('Failed to get state data for campaign notification', payload=payload, error=error)
             return
 
         if state_data.get('campaign_notification_sent'):
@@ -311,13 +320,18 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                     await state.update_data(campaign_notification_sent=True)
                 await db.commit()
             except Exception as error:
-                logger.error('❌ Ошибка отправки уведомления о переходе по кампании', payload=payload, error=error)
+                logger.error('Error sending campaign visit notification', payload=payload, error=error)
                 await db.rollback()
 
+    # -- _deactivate (multi-channel) -------------------------------------------
+
     async def _deactivate_subscription_on_unsubscribe(
-        self, telegram_id: int, bot: Bot, channel_link: str | None
+        self,
+        telegram_id: int,
+        bot: Bot,
+        unsubscribed_channels: list[dict],
     ) -> None:
-        """Деактивация подписки при отписке от канала."""
+        """Deactivate subscription when user unsubscribes from required channels."""
         if not settings.CHANNEL_DISABLE_TRIAL_ON_UNSUBSCRIBE and not settings.CHANNEL_REQUIRED_FOR_ALL:
             return
 
@@ -341,15 +355,15 @@ class ChannelCheckerMiddleware(BaseMiddleware):
 
                 if is_active_paid_subscription(subscription):
                     logger.info(
-                        '⏭️ Пропуск отключения: у пользователя активная оплаченная подписка',
+                        'Skipping deactivation: user has active paid subscription',
                         telegram_id=telegram_id,
                     )
                     return
 
                 await deactivate_subscription(db, subscription)
-                sub_type = 'Триальная' if subscription.is_trial else 'Платная'
+                sub_type = 'trial' if subscription.is_trial else 'paid'
                 logger.info(
-                    '🚫 подписка пользователя отключена после отписки от канала',
+                    'Subscription deactivated after channel unsubscribe',
                     sub_type=sub_type,
                     telegram_id=telegram_id,
                 )
@@ -360,38 +374,49 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                         await service.disable_remnawave_user(user.remnawave_uuid)
                     except Exception as api_error:
                         logger.error(
-                            '❌ Не удалось отключить пользователя RemnaWave',
+                            'Failed to disable RemnaWave user',
                             remnawave_uuid=user.remnawave_uuid,
                             api_error=api_error,
                         )
 
-                # Уведомляем пользователя о деактивации
+                # Notify user about deactivation
                 try:
+                    # Normalize links for keyboard
+                    normalized = []
+                    for ch in unsubscribed_channels:
+                        ch_copy = dict(ch)
+                        link = ch_copy.get('channel_link')
+                        if link:
+                            ch_copy['channel_link'] = _normalize_channel_link(link)
+                        normalized.append(ch_copy)
+
                     texts = get_texts(user.language if user.language else DEFAULT_LANGUAGE)
                     notification_text = texts.t(
                         'SUBSCRIPTION_DEACTIVATED_CHANNEL_UNSUBSCRIBE',
                         '🚫 Ваша подписка приостановлена, так как вы отписались от канала.\n\n'
                         'Подпишитесь на канал снова, чтобы восстановить доступ к VPN.',
                     )
-                    channel_kb = get_channel_sub_keyboard(channel_link, language=user.language)
+                    channel_kb = get_channel_sub_keyboard(normalized, language=user.language)
                     await bot.send_message(telegram_id, notification_text, reply_markup=channel_kb)
                 except Exception as notify_error:
                     logger.error(
-                        '❌ Не удалось отправить уведомление о деактивации пользователю',
+                        'Failed to send deactivation notification to user',
                         telegram_id=telegram_id,
                         notify_error=notify_error,
                     )
                 await db.commit()
             except Exception as db_error:
                 logger.error(
-                    '❌ Ошибка деактивации подписки пользователя после отписки',
+                    'Error deactivating subscription after channel unsubscribe',
                     telegram_id=telegram_id,
                     db_error=db_error,
                 )
                 await db.rollback()
 
+    # -- _reactivate -----------------------------------------------------------
+
     async def _reactivate_subscription_on_subscribe(self, telegram_id: int, bot: Bot) -> None:
-        """Реактивация подписки после повторной подписки на канал."""
+        """Reactivate subscription after user subscribes to all required channels."""
         if not settings.CHANNEL_DISABLE_TRIAL_ON_UNSUBSCRIBE and not settings.CHANNEL_REQUIRED_FOR_ALL:
             return
 
@@ -401,43 +426,42 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                 if not user or not user.subscription:
                     return
 
-                # НЕ реактивируем подписку заблокированным пользователям
+                # Do NOT reactivate for blocked users
                 if user.status == UserStatus.BLOCKED.value:
-                    logger.info('🚫 Пропуск реактивации для заблокированного пользователя', telegram_id=telegram_id)
+                    logger.info('Skipping reactivation for blocked user', telegram_id=telegram_id)
                     return
 
                 subscription = user.subscription
 
-                # Реактивируем только DISABLED подписки
+                # Only reactivate DISABLED subscriptions
                 if subscription.status != SubscriptionStatus.DISABLED.value:
                     return
 
-                # Проверяем что подписка ещё не истекла
+                # Check subscription has not expired
                 if subscription.end_date and subscription.end_date <= datetime.now(UTC):
                     return
 
-                # Реактивируем в БД
                 await reactivate_subscription(db, subscription)
-                sub_type = 'Триальная' if subscription.is_trial else 'Платная'
+                sub_type = 'trial' if subscription.is_trial else 'paid'
                 logger.info(
-                    '✅ подписка пользователя реактивирована после подписки на канал',
+                    'Subscription reactivated after channel subscribe',
                     sub_type=sub_type,
                     telegram_id=telegram_id,
                 )
 
-                # Включаем в RemnaWave
+                # Enable in RemnaWave
                 if user.remnawave_uuid:
                     service = SubscriptionService()
                     try:
                         await service.enable_remnawave_user(user.remnawave_uuid)
                     except Exception as api_error:
                         logger.error(
-                            '❌ Не удалось включить пользователя RemnaWave',
+                            'Failed to enable RemnaWave user',
                             remnawave_uuid=user.remnawave_uuid,
                             api_error=api_error,
                         )
 
-                # Уведомляем пользователя о реактивации
+                # Notify user about reactivation
                 try:
                     texts = get_texts(user.language if user.language else DEFAULT_LANGUAGE)
                     notification_text = texts.t(
@@ -447,65 +471,21 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                     await bot.send_message(telegram_id, notification_text)
                 except Exception as notify_error:
                     logger.warning(
-                        'Не удалось отправить уведомление о реактивации пользователю',
+                        'Failed to send reactivation notification to user',
                         telegram_id=telegram_id,
                         notify_error=notify_error,
                     )
                 await db.commit()
             except Exception as db_error:
-                logger.error('❌ Ошибка реактивации подписки пользователя', telegram_id=telegram_id, db_error=db_error)
+                logger.error('Error reactivating subscription', telegram_id=telegram_id, db_error=db_error)
                 await db.rollback()
 
-    @staticmethod
-    async def _deny_message(
-        event: TelegramObject,
-        bot: Bot,
-        channel_link: str | None,
-        channel_id: str | None,
-    ):
-        logger.debug('🚫 Отправляем сообщение о необходимости подписки')
 
-        user = None
-        if isinstance(event, (Message, CallbackQuery)):
-            user = getattr(event, 'from_user', None)
-        elif isinstance(event, Update):
-            if event.message and event.message.from_user:
-                user = event.message.from_user
-            elif event.callback_query and event.callback_query.from_user:
-                user = event.callback_query.from_user
-
-        language = DEFAULT_LANGUAGE
-        if user and user.language_code:
-            language = user.language_code.split('-')[0]
-
-        texts = get_texts(language)
-        channel_sub_kb = get_channel_sub_keyboard(channel_link, language=language)
-        text = texts.t(
-            'CHANNEL_REQUIRED_TEXT',
-            '🔒 Для использования бота подпишитесь на новостной канал, чтобы получать уведомления о новых возможностях и обновлениях бота. Спасибо!',
-        )
-
-        if not channel_link and channel_id:
-            channel_hint = None
-
-            if str(channel_id).startswith('@'):  # username-based channel id
-                channel_hint = f'@{str(channel_id).lstrip("@")}'
-
-            if channel_hint:
-                text = f'{text}\n\n{channel_hint}'
-
-        try:
-            if isinstance(event, Message):
-                return await event.answer(text, reply_markup=channel_sub_kb)
-            if isinstance(event, CallbackQuery):
-                try:
-                    return await event.message.edit_text(text, reply_markup=channel_sub_kb)
-                except TelegramBadRequest as e:
-                    if 'message is not modified' in str(e).lower():
-                        logger.debug('ℹ️ Сообщение уже содержит текст проверки подписки, пропускаем редактирование')
-                        return await event.answer(text, show_alert=True)
-                    raise
-            elif isinstance(event, Update) and event.message:
-                return await bot.send_message(event.message.chat.id, text, reply_markup=channel_sub_kb)
-        except Exception as e:
-            logger.error('❌ Ошибка при отправке сообщения о подписке', error=e)
+def _normalize_channel_link(link: str) -> str:
+    """Normalize channel link: convert @username to https://t.me/username."""
+    if not link:
+        return link
+    link = link.strip()
+    if link.startswith('@'):
+        return f'https://t.me/{link[1:]}'
+    return link

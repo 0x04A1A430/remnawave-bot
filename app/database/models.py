@@ -2810,3 +2810,48 @@ class PaymentMethodConfig(Base):
 
     def __repr__(self) -> str:
         return f"<PaymentMethodConfig method_id='{self.method_id}' order={self.sort_order} enabled={self.is_enabled}>"
+
+
+class RequiredChannel(Base):
+    """Channels that users must subscribe to in order to use the bot."""
+
+    __tablename__ = 'required_channels'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    channel_id = Column(String(100), unique=True, nullable=False)  # @username or -100xxx (always string)
+    channel_link = Column(String(500), nullable=True)  # https://t.me/xxx
+    title = Column(String(255), nullable=True)  # Display name
+    is_active = Column(Boolean, nullable=False, server_default='true')
+    sort_order = Column(Integer, nullable=False, server_default='0')
+    created_at = Column(AwareDateTime(), nullable=False, server_default=func.now())
+    updated_at = Column(AwareDateTime(), nullable=True, onupdate=func.now())
+
+    def __repr__(self) -> str:
+        return f'<RequiredChannel id={self.id} channel_id={self.channel_id!r} active={self.is_active}>'
+
+
+class UserChannelSubscription(Base):
+    """Cache of user subscription status per required channel."""
+
+    __tablename__ = 'user_channel_subscriptions'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    telegram_id = Column(BigInteger, nullable=False)
+    channel_id = Column(String(100), nullable=False)  # matches RequiredChannel.channel_id
+    is_member = Column(Boolean, nullable=False, server_default='false')
+    checked_at = Column(AwareDateTime(), nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint('telegram_id', 'channel_id', name='uq_user_channel_sub'),
+        # UniqueConstraint creates its own index; only add telegram_id index for
+        # "get all subs for user" queries
+        Index('ix_user_channel_sub_telegram_id', 'telegram_id'),
+        # Standalone channel_id index for delete_channel() bulk DELETE
+        Index('ix_user_channel_sub_channel_id', 'channel_id'),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f'<UserChannelSubscription telegram_id={self.telegram_id}'
+            f' channel={self.channel_id!r} member={self.is_member}>'
+        )

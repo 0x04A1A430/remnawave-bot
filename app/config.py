@@ -66,8 +66,6 @@ class Settings(BaseSettings):
     ADMIN_REPORTS_TOPIC_ID: int | None = None
     ADMIN_REPORTS_SEND_TIME: str | None = None
 
-    CHANNEL_SUB_ID: str | None = None
-    CHANNEL_LINK: str | None = None
     CHANNEL_IS_REQUIRED_SUB: bool = False
     CHANNEL_DISABLE_TRIAL_ON_UNSUBSCRIBE: bool = True
     CHANNEL_REQUIRED_FOR_ALL: bool = False
