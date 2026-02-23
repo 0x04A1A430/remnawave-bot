@@ -151,6 +151,15 @@ async def _process_campaign_bonus(
         if not campaign:
             return None
 
+        # Skip if user IS the campaign partner — prevent self-referral
+        if campaign.partner_user_id and campaign.partner_user_id == user.id:
+            logger.debug(
+                'Skipping campaign attribution: user is the campaign partner',
+                user_id=user.id,
+                campaign_id=campaign.id,
+            )
+            return None
+
         # Lock user row to prevent concurrent bonus application (race condition)
         await db.execute(select(User).where(User.id == user.id).with_for_update())
 

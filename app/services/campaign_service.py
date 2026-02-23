@@ -56,6 +56,15 @@ class AdvertisingCampaignService:
             logger.warning('⚠️ Попытка выдать бонус по неактивной кампании', campaign_id=campaign.id)
             return CampaignBonusResult(success=False)
 
+        # Prevent partner from being attributed to their own campaign
+        if campaign.partner_user_id and campaign.partner_user_id == user.id:
+            logger.info(
+                'Skipping campaign bonus: user is the campaign partner',
+                user_id=user.id,
+                campaign_id=campaign.id,
+            )
+            return CampaignBonusResult(success=False)
+
         if campaign.is_balance_bonus:
             return await self._apply_balance_bonus(db, user, campaign)
 
