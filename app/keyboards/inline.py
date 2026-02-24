@@ -2437,6 +2437,17 @@ def get_connection_guide_keyboard(
                                 )
                             ]
                         )
+                    else:
+                        # Fallback: use raw subscription URL
+                        keyboard.append(
+                            [
+                                InlineKeyboardButton(
+                                    text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
+                                    url=subscription_url,
+                                    style='success',
+                                )
+                            ]
+                        )
                 elif btn_type == 'copyButton':
                     url = resolved_url or resolve_button_url(btn_url, subscription_url)
                     if url:

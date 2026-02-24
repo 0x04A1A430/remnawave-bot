@@ -40,9 +40,9 @@ from .common import (
     get_apps_for_device,
     get_apps_for_platform_async,
     get_device_name,
-    get_localized_value,
     get_step_description,
     logger,
+    render_guide_blocks,
 )
 from .countries import _get_available_countries
 
@@ -1345,24 +1345,9 @@ async def handle_device_guide(callback: types.CallbackQuery, db_user: User, db: 
         )
 
     if is_blocks_format:
-        # Build guide text from blocks
-        step_num = 1
-        for block in featured_app.get('blocks', []):
-            if not isinstance(block, dict):
-                continue
-            title = block.get('title', {})
-            desc = block.get('description', {})
-            title_text = get_localized_value(title, db_user.language) if isinstance(title, dict) else str(title or '')
-            desc_text = get_localized_value(desc, db_user.language) if isinstance(desc, dict) else str(desc or '')
-
-            if title_text or desc_text:
-                guide_text += f'\n\n<b>Шаг {step_num}'
-                if title_text:
-                    guide_text += f' - {title_text}'
-                guide_text += ':</b>'
-                if desc_text:
-                    guide_text += f'\n{desc_text}'
-                step_num += 1
+        blocks_text = render_guide_blocks(featured_app.get('blocks', []), db_user.language)
+        if blocks_text:
+            guide_text += '\n\n' + blocks_text
     else:
         # Legacy steps
         installation_description = get_step_description(
@@ -1546,25 +1531,9 @@ async def handle_specific_app_guide(callback: types.CallbackQuery, db_user: User
     )
 
     if is_blocks_format:
-        # Build guide from blocks
-        step_num = 1
-        for block in app.get('blocks', []):
-            if not isinstance(block, dict):
-                continue
-            title = block.get('title', {})
-            desc = block.get('description', {})
-            title_text = get_localized_value(title, db_user.language) if isinstance(title, dict) else str(title or '')
-            desc_text = get_localized_value(desc, db_user.language) if isinstance(desc, dict) else str(desc or '')
-
-            if title_text or desc_text:
-                guide_text += f'<b>Шаг {step_num}'
-                if title_text:
-                    guide_text += f' - {title_text}'
-                guide_text += ':</b>'
-                if desc_text:
-                    guide_text += f'\n{desc_text}'
-                guide_text += '\n\n'
-                step_num += 1
+        blocks_text = render_guide_blocks(app.get('blocks', []), db_user.language)
+        if blocks_text:
+            guide_text += blocks_text + '\n\n'
     else:
         raw_app = app.get('_raw', app)
         installation_description = get_step_description(raw_app, 'installationStep', db_user.language)

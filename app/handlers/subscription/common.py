@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import html as html_mod
 import json
 import time
 from datetime import datetime
@@ -239,6 +240,31 @@ def format_additional_section(additional: Any, texts, language: str) -> str:
         parts.append(description)
 
     return '\n'.join(parts)
+
+
+def render_guide_blocks(blocks: list[dict], language: str) -> str:
+    """Render block-format guide steps to HTML text."""
+    parts: list[str] = []
+    step_num = 1
+    for block in blocks:
+        if not isinstance(block, dict):
+            continue
+        title = block.get('title', {})
+        desc = block.get('description', {})
+        title_text = html_mod.escape(
+            get_localized_value(title, language) if isinstance(title, dict) else str(title or '')
+        )
+        desc_text = html_mod.escape(get_localized_value(desc, language) if isinstance(desc, dict) else str(desc or ''))
+        if title_text or desc_text:
+            step = f'<b>Шаг {step_num}'
+            if title_text:
+                step += f' - {title_text}'
+            step += ':</b>'
+            if desc_text:
+                step += f'\n{desc_text}'
+            parts.append(step)
+            step_num += 1
+    return '\n\n'.join(parts)
 
 
 def build_redirect_link(target_link: str | None, template: str | None) -> str | None:
