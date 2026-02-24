@@ -1,3 +1,4 @@
+import html as html_mod
 from datetime import UTC, datetime
 
 from aiogram import types
@@ -807,6 +808,7 @@ async def handle_devices_page(callback: types.CallbackQuery, db_user: User, db: 
 
 
 async def handle_single_device_reset(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    texts = get_texts(db_user.language)
     try:
         callback_parts = callback.data.split('_')
         if len(callback_parts) < 4:
@@ -829,8 +831,6 @@ async def handle_single_device_reset(callback: types.CallbackQuery, db_user: Use
             show_alert=True,
         )
         return
-
-    texts = get_texts(db_user.language)
 
     try:
         from app.services.remnawave_service import RemnaWaveService
@@ -1318,7 +1318,7 @@ async def handle_device_guide(callback: types.CallbackQuery, db_user: User, db: 
     else:
         link_section = (
             texts.t('SUBSCRIPTION_DEVICE_LINK_TITLE', '🔗 <b>Ссылка подписки:</b>')
-            + f'\n<code>{subscription_link}</code>\n\n'
+            + f'\n<code>{html_mod.escape(subscription_link)}</code>\n\n'
         )
 
     guide_text = (
@@ -1518,7 +1518,7 @@ async def handle_specific_app_guide(callback: types.CallbackQuery, db_user: User
     else:
         link_section = (
             texts.t('SUBSCRIPTION_DEVICE_LINK_TITLE', '🔗 <b>Ссылка подписки:</b>')
-            + f'\n<code>{subscription_link}</code>\n\n'
+            + f'\n<code>{html_mod.escape(subscription_link)}</code>\n\n'
         )
 
     guide_text = (
@@ -1610,7 +1610,7 @@ async def show_device_connection_help(callback: types.CallbackQuery, db_user: Us
 • Нажмите "Подключить"
 
 <b>🔗 Ваша ссылка подписки:</b>
-<code>{subscription_link}</code>
+<code>{html_mod.escape(subscription_link)}</code>
 
 💡 <b>Совет:</b> Сохраните эту ссылку - она понадобится для подключения новых устройств
 """
