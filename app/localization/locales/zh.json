@@ -869,6 +869,7 @@
 "CHANGE_DEVICES_SUCCESS_INCREASE":"\n  ✅设备数量已增加！\n\n  📱之前：{old_count}→现在：{new_count}\n  💰已扣除：{amount}\n  ",
 "CHANGE_DEVICES_TITLE":"📱更改设备数量",
 "CHANNEL_CHECK_BUTTON":"✅我已订阅",
+"CHANNEL_CHECK_NOT_SUBSCRIBED":"您尚未订阅所有必需频道！请订阅后重试。",
 "CHANNEL_REQUIRED_TEXT":"请订阅所有必需频道，然后点击下方按钮。",
 "CHANNEL_SUBSCRIBE_BUTTON":"🔗订阅",
 "CHANNEL_SUBSCRIBE_REQUIRED_ALERT":"请先订阅所有必需频道！",

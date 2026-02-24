@@ -930,6 +930,7 @@
   "CHANGE_DEVICES_SUCCESS_INCREASE": "\n✅ Device limit increased!\n\n📱 Was: {old_count} → Now: {new_count}\n💰 Charged: {amount}\n",
   "CHANGE_DEVICES_TITLE": "📱 Change device limit",
   "CHANNEL_CHECK_BUTTON": "✅ I have joined",
+  "CHANNEL_CHECK_NOT_SUBSCRIBED": "You are not subscribed to all required channels. Please subscribe and try again.",
   "CHANNEL_REQUIRED_TEXT": "Please subscribe to the required channels and then press the button below.",
   "CHANNEL_SUBSCRIBE_BUTTON": "🔗 Subscribe",
   "CHANNEL_SUBSCRIBE_REQUIRED_ALERT": "Please subscribe to all required channels first!",
