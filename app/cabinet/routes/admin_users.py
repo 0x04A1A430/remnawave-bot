@@ -297,7 +297,10 @@ async def _sync_subscription_to_panel(db: AsyncSession, user: User, subscription
                     update_kwargs['hwid_device_limit'] = hwid_limit
 
                 try:
-                    await api.update_user(**update_kwargs)
+                    updated_panel_user = await api.update_user(**update_kwargs)
+                    subscription.subscription_url = updated_panel_user.subscription_url
+                    subscription.subscription_crypto_link = updated_panel_user.happ_crypto_link
+                    subscription.remnawave_short_uuid = updated_panel_user.short_uuid
                     changes['action'] = 'updated'
                     logger.info('Updated user in Remnawave panel', user_id=user.id)
                 except Exception as update_error:
@@ -326,6 +329,7 @@ async def _sync_subscription_to_panel(db: AsyncSession, user: User, subscription
                 user.remnawave_uuid = new_panel_user.uuid
                 subscription.remnawave_short_uuid = new_panel_user.short_uuid
                 subscription.subscription_url = new_panel_user.subscription_url
+                subscription.subscription_crypto_link = new_panel_user.happ_crypto_link
                 changes['action'] = 'created'
                 changes['panel_uuid'] = new_panel_user.uuid
                 logger.info('Created user in Remnawave panel', user_id=user.id, uuid=new_panel_user.uuid)
