@@ -64,6 +64,7 @@ from app.handlers.stars_payments import register_stars_handlers
 from app.middlewares.auth import AuthMiddleware
 from app.middlewares.blacklist import BlacklistMiddleware
 from app.middlewares.button_stats import ButtonStatsMiddleware
+from app.middlewares.chat_type_filter import ChatTypeFilterMiddleware
 from app.middlewares.context_binding import ContextVarsMiddleware
 from app.middlewares.global_error import GlobalErrorMiddleware
 from app.middlewares.logging import LoggingMiddleware
@@ -117,6 +118,9 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     dp.message.middleware(ContextVarsMiddleware())
     dp.callback_query.middleware(ContextVarsMiddleware())
     dp.pre_checkout_query.middleware(ContextVarsMiddleware())
+    chat_type_filter = ChatTypeFilterMiddleware()
+    dp.message.middleware(chat_type_filter)
+    dp.callback_query.middleware(chat_type_filter)
     dp.message.middleware(GlobalErrorMiddleware())
     dp.callback_query.middleware(GlobalErrorMiddleware())
     dp.pre_checkout_query.middleware(GlobalErrorMiddleware())
