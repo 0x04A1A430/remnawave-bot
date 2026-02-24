@@ -145,7 +145,7 @@ def _load_config() -> dict:
 
 
 def _save_config(config: dict) -> None:
-    """Save app config to file."""
+    """Save app config to file and invalidate bot's cached config."""
     config_path = _get_config_path()
 
     try:
@@ -156,6 +156,13 @@ def _save_config(config: dict) -> None:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f'Failed to save app config: {e}',
         )
+
+    try:
+        from app.handlers.subscription.common import invalidate_app_config_cache
+
+        invalidate_app_config_cache()
+    except Exception:
+        pass
 
 
 VALID_PLATFORMS = ['ios', 'android', 'macos', 'windows', 'linux', 'androidTV', 'appleTV']
