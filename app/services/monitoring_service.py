@@ -573,9 +573,7 @@ class MonitoringService:
             # Build the trial/all filter based on CHANNEL_REQUIRED_FOR_ALL setting
             from sqlalchemy import true as sa_true
 
-            is_trial_filter = (
-                sa_true() if settings.CHANNEL_REQUIRED_FOR_ALL else Subscription.is_trial.is_(True)
-            )
+            is_trial_filter = sa_true() if settings.CHANNEL_REQUIRED_FOR_ALL else Subscription.is_trial.is_(True)
 
             while True:
                 # Fresh session per batch to avoid long-running connections
@@ -633,12 +631,8 @@ class MonitoringService:
                                 user.telegram_id, ch['channel_id']
                             )
                             # Update DB + cache
-                            await upsert_user_channel_sub(
-                                batch_db, user.telegram_id, ch['channel_id'], is_member
-                            )
-                            await ChannelSubCache.set_sub_status(
-                                user.telegram_id, ch['channel_id'], is_member
-                            )
+                            await upsert_user_channel_sub(batch_db, user.telegram_id, ch['channel_id'], is_member)
+                            await ChannelSubCache.set_sub_status(user.telegram_id, ch['channel_id'], is_member)
 
                             if not is_member:
                                 all_subscribed = False
@@ -660,9 +654,7 @@ class MonitoringService:
 
                             if user.remnawave_uuid:
                                 try:
-                                    await self.subscription_service.disable_remnawave_user(
-                                        user.remnawave_uuid
-                                    )
+                                    await self.subscription_service.disable_remnawave_user(user.remnawave_uuid)
                                 except Exception as api_error:
                                     logger.error(
                                         'Failed to disable RemnaWave user',
@@ -730,13 +722,9 @@ class MonitoringService:
 
                             try:
                                 if user.remnawave_uuid:
-                                    await self.subscription_service.update_remnawave_user(
-                                        batch_db, subscription
-                                    )
+                                    await self.subscription_service.update_remnawave_user(batch_db, subscription)
                                 else:
-                                    await self.subscription_service.create_remnawave_user(
-                                        batch_db, subscription
-                                    )
+                                    await self.subscription_service.create_remnawave_user(batch_db, subscription)
                             except Exception as api_error:
                                 logger.error(
                                     'Failed to update RemnaWave user',
