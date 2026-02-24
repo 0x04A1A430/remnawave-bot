@@ -2823,6 +2823,8 @@ class RequiredChannel(Base):
     title = Column(String(255), nullable=True)  # Display name
     is_active = Column(Boolean, nullable=False, server_default='true')
     sort_order = Column(Integer, nullable=False, server_default='0')
+    disable_trial_on_leave = Column(Boolean, nullable=False, server_default='true')
+    disable_paid_on_leave = Column(Boolean, nullable=False, server_default='false')
     created_at = Column(AwareDateTime(), nullable=False, server_default=func.now())
     updated_at = Column(AwareDateTime(), nullable=True, onupdate=func.now())
 

@@ -16,7 +16,7 @@ from aiogram.filters import IS_MEMBER, IS_NOT_MEMBER, ChatMemberUpdatedFilter
 from aiogram.types import ChatMemberUpdated
 
 from app.config import settings
-from app.database.crud.subscription import deactivate_subscription, is_active_paid_subscription, reactivate_subscription
+from app.database.crud.subscription import deactivate_subscription, reactivate_subscription
 from app.database.crud.user import get_user_by_telegram_id
 from app.database.database import AsyncSessionLocal
 from app.database.models import SubscriptionStatus, UserStatus
@@ -59,9 +59,6 @@ async def on_user_joined_channel(event: ChatMemberUpdated, bot: Bot) -> None:
         return  # Still missing some channels
 
     # Reactivate subscription if it was disabled due to channel unsubscribe
-    if not settings.CHANNEL_DISABLE_TRIAL_ON_UNSUBSCRIBE and not settings.CHANNEL_REQUIRED_FOR_ALL:
-        return
-
     async with AsyncSessionLocal() as db:
         try:
             db_user = await get_user_by_telegram_id(db, user.id)
@@ -125,7 +122,9 @@ async def on_user_left_channel(event: ChatMemberUpdated, bot: Bot) -> None:
     if settings.is_admin(user.id):
         return
 
-    if not settings.CHANNEL_DISABLE_TRIAL_ON_UNSUBSCRIBE and not settings.CHANNEL_REQUIRED_FOR_ALL:
+    # Fetch per-channel settings to decide whether to disable
+    channel_settings = await channel_subscription_service.get_channel_settings(channel_id)
+    if not channel_settings:
         return
 
     async with AsyncSessionLocal() as db:
@@ -138,15 +137,8 @@ async def on_user_left_channel(event: ChatMemberUpdated, bot: Bot) -> None:
             if subscription.status != SubscriptionStatus.ACTIVE.value:
                 return
 
-            # CHANNEL_REQUIRED_FOR_ALL: deactivate regardless of trial status
-            # CHANNEL_DISABLE_TRIAL_ON_UNSUBSCRIBE: only deactivate trial subscriptions
-            if settings.CHANNEL_REQUIRED_FOR_ALL:
-                pass  # Deactivate any active subscription
-            elif not subscription.is_trial:
-                return  # Not a trial -- skip
-
-            # Guard against paid subscriptions (user paid money, don't punish)
-            if is_active_paid_subscription(subscription):
+            # Per-channel settings: check if this channel requires deactivation
+            if not channel_subscription_service.should_disable_subscription(channel_settings, subscription.is_trial):
                 return
 
             await deactivate_subscription(db, subscription)

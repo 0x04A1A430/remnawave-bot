@@ -75,6 +75,14 @@ class ChannelCheckerMiddleware(BaseMiddleware):
     def __init__(self):
         logger.info('ChannelCheckerMiddleware initialized (multi-channel mode)')
 
+    @staticmethod
+    def _any_channel_has_disable_flag(channels: list[dict]) -> bool:
+        """Check if any channel in the list has disable-on-leave flags set."""
+        return any(
+            ch.get('disable_trial_on_leave', True) or ch.get('disable_paid_on_leave', False)
+            for ch in channels
+        )
+
     async def __call__(
         self,
         handler: Callable[[TelegramObject, dict[str, Any]], Awaitable[Any]],
@@ -126,12 +134,12 @@ class ChannelCheckerMiddleware(BaseMiddleware):
 
         if not unsubscribed:
             # All subscribed -- reactivate if needed
-            if settings.CHANNEL_DISABLE_TRIAL_ON_UNSUBSCRIBE or settings.CHANNEL_REQUIRED_FOR_ALL:
+            if self._any_channel_has_disable_flag(all_channels):
                 await self._reactivate_subscription_on_subscribe(telegram_id, bot)
             return await handler(event, data)
 
         # User is NOT subscribed to all channels
-        if settings.CHANNEL_DISABLE_TRIAL_ON_UNSUBSCRIBE or settings.CHANNEL_REQUIRED_FOR_ALL:
+        if self._any_channel_has_disable_flag(unsubscribed):
             await self._deactivate_subscription_on_unsubscribe(telegram_id, bot, all_channels)
 
         await self._capture_start_payload(state, event, bot)
@@ -152,7 +160,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
 
             if not unsubscribed_fresh:
                 # Now subscribed to all channels
-                if settings.CHANNEL_DISABLE_TRIAL_ON_UNSUBSCRIBE or settings.CHANNEL_REQUIRED_FOR_ALL:
+                if self._any_channel_has_disable_flag(all_channels_fresh):
                     await self._reactivate_subscription_on_subscribe(telegram_id, bot)
                 return await handler(event, data)
 
@@ -345,9 +353,6 @@ class ChannelCheckerMiddleware(BaseMiddleware):
         channels: list[dict],
     ) -> None:
         """Deactivate subscription when user unsubscribes from required channels."""
-        if not settings.CHANNEL_DISABLE_TRIAL_ON_UNSUBSCRIBE and not settings.CHANNEL_REQUIRED_FOR_ALL:
-            return
-
         async with AsyncSessionLocal() as db:
             try:
                 user = await get_user_by_telegram_id(db, telegram_id)
@@ -359,18 +364,13 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                 if subscription.status != SubscriptionStatus.ACTIVE.value:
                     return
 
-                from app.database.crud.subscription import is_active_paid_subscription
-
-                if settings.CHANNEL_REQUIRED_FOR_ALL:
-                    pass
-                elif not subscription.is_trial:
-                    return
-
-                if is_active_paid_subscription(subscription):
-                    logger.info(
-                        'Skipping deactivation: user has active paid subscription',
-                        telegram_id=telegram_id,
-                    )
+                # Per-channel settings: check if any unsubscribed channel requires deactivation
+                unsubscribed = [ch for ch in channels if not ch.get('is_subscribed', False)]
+                should_disable = any(
+                    channel_subscription_service.should_disable_subscription(ch, subscription.is_trial)
+                    for ch in unsubscribed
+                )
+                if not should_disable:
                     return
 
                 await deactivate_subscription(db, subscription)
@@ -422,9 +422,6 @@ class ChannelCheckerMiddleware(BaseMiddleware):
 
     async def _reactivate_subscription_on_subscribe(self, telegram_id: int, bot: Bot) -> None:
         """Reactivate subscription after user subscribes to all required channels."""
-        if not settings.CHANNEL_DISABLE_TRIAL_ON_UNSUBSCRIBE and not settings.CHANNEL_REQUIRED_FOR_ALL:
-            return
-
         async with AsyncSessionLocal() as db:
             try:
                 user = await get_user_by_telegram_id(db, telegram_id)

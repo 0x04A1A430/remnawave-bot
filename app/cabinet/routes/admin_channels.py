@@ -46,7 +46,14 @@ async def create_channel(
     db: AsyncSession = Depends(get_cabinet_db),
     _admin: User = Depends(get_current_admin_user),
 ) -> ChannelResponse:
-    ch = await add_channel(db, channel_id=data.channel_id, channel_link=data.channel_link, title=data.title)
+    ch = await add_channel(
+        db,
+        channel_id=data.channel_id,
+        channel_link=data.channel_link,
+        title=data.title,
+        disable_trial_on_leave=data.disable_trial_on_leave,
+        disable_paid_on_leave=data.disable_paid_on_leave,
+    )
     await channel_subscription_service.invalidate_channels_cache()
     return ChannelResponse.model_validate(ch)
 
