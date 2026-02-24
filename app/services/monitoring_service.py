@@ -402,7 +402,7 @@ class MonitoringService:
                         or user_key in all_processed_users
                     ):
                         logger.debug(
-                            '🔄 Пропускаем дублирование для пользователя на дней',
+                            'Уведомление уже отправлено, пропускаем',
                             user_identifier=user_identifier,
                             days=days,
                         )
