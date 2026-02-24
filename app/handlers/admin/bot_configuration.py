@@ -2704,7 +2704,8 @@ async def show_remna_config_menu(callback: types.CallbackQuery, db_user: User, d
         async with service.get_api_client() as api:
             configs = await api.get_subscription_page_configs()
     except Exception as e:
-        await callback.answer(f'Ошибка загрузки конфигов: {e}', show_alert=True)
+        logger.error('Failed to load Remnawave configs', error=e)
+        await callback.answer('Ошибка загрузки конфигов', show_alert=True)
         return
 
     keyboard: list[list[types.InlineKeyboardButton]] = []
@@ -2722,7 +2723,7 @@ async def show_remna_config_menu(callback: types.CallbackQuery, db_user: User, d
             if current_name:
                 text += f'✅ Текущий: <b>{html.escape(current_name)}</b>\n\n'
             else:
-                text += f'⚠️ Текущий UUID не найден: <code>{current_uuid}</code>\n\n'
+                text += f'⚠️ Текущий UUID не найден: <code>{html.escape(str(current_uuid))}</code>\n\n'
         else:
             text += 'ℹ️ Конфиг не выбран (используется app-config.json)\n\n'
 
@@ -2765,11 +2766,19 @@ async def select_remna_config(callback: types.CallbackQuery, db_user: User, db: 
     """Select a Remnawave subscription page config."""
     uuid = callback.data.replace('admin_remna_select_', '')
 
+    # Validate UUID format
+    import re as _re
+
+    if not _re.match(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$', uuid):
+        await callback.answer('Некорректный UUID конфигурации', show_alert=True)
+        return
+
     try:
         await bot_configuration_service.set_value(db, 'CABINET_REMNA_SUB_CONFIG', uuid)
         await db.commit()
     except Exception as e:
-        await callback.answer(f'Ошибка сохранения: {e}', show_alert=True)
+        logger.error('Failed to save Remnawave config UUID', error=e)
+        await callback.answer('Ошибка сохранения', show_alert=True)
         return
 
     # Invalidate app config cache
@@ -2791,7 +2800,8 @@ async def clear_remna_config(callback: types.CallbackQuery, db_user: User, db: A
         await bot_configuration_service.set_value(db, 'CABINET_REMNA_SUB_CONFIG', '')
         await db.commit()
     except Exception as e:
-        await callback.answer(f'Ошибка сброса: {e}', show_alert=True)
+        logger.error('Failed to clear Remnawave config', error=e)
+        await callback.answer('Ошибка сброса', show_alert=True)
         return
 
     from app.handlers.subscription.common import invalidate_app_config_cache

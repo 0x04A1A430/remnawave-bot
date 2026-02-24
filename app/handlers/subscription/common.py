@@ -2,6 +2,7 @@ import asyncio
 import base64
 import html as html_mod
 import json
+import re
 import time
 from datetime import datetime
 from typing import Any
@@ -32,22 +33,28 @@ _app_config_cache_ts: float = 0.0
 _app_config_lock = asyncio.Lock()
 
 
-class _SafeFormatDict(dict):
-    def __missing__(self, key: str) -> str:  # pragma: no cover - defensive fallback
-        return '{' + key + '}'
+_PLACEHOLDER_RE = re.compile(r'\{(\w+)\}')
 
 
 def _format_text_with_placeholders(template: str, values: dict[str, Any]) -> str:
+    """Safe placeholder substitution — only replaces simple {key} patterns.
+
+    Unlike str.format_map, this does NOT allow attribute access ({key.attr})
+    or indexing ({key[0]}), preventing format string injection attacks.
+    """
     if not isinstance(template, str):
         return template
 
-    safe_values = _SafeFormatDict()
-    safe_values.update(values)
+    def _replace(match: re.Match) -> str:
+        key = match.group(1)
+        if key in values:
+            return str(values[key])
+        return match.group(0)
 
     try:
-        return template.format_map(safe_values)
+        return _PLACEHOLDER_RE.sub(_replace, template)
     except Exception:  # pragma: no cover - defensive logging
-        logger.warning("Failed to format template '' with values", template=template, values=values)
+        logger.warning('Failed to format template with values', template=template, values=values)
         return template
 
 
@@ -233,11 +240,11 @@ def format_additional_section(additional: Any, texts, language: str) -> str:
             texts.t(
                 'SUBSCRIPTION_ADDITIONAL_STEP_TITLE',
                 '<b>{title}:</b>',
-            ).format(title=title)
+            ).format(title=html_mod.escape(title))
         )
 
     if description:
-        parts.append(description)
+        parts.append(html_mod.escape(description))
 
     return '\n'.join(parts)
 
