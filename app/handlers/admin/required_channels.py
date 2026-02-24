@@ -1,7 +1,7 @@
 """Admin handler for managing required channel subscriptions."""
 
 import structlog
-from aiogram import Bot, F, Router
+from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
@@ -11,7 +11,6 @@ from app.database.crud.required_channel import (
     delete_channel,
     get_all_channels,
     get_channel_by_id,
-    resolve_channel_id,
     toggle_channel,
     validate_channel_id,
 )
@@ -172,7 +171,9 @@ async def delete_channel_handler(callback: CallbackQuery, **kwargs) -> None:
 async def start_add_channel(callback: CallbackQuery, state: FSMContext, **kwargs) -> None:
     await state.set_state(AddChannelStates.waiting_channel_id)
     await callback.message.edit_text(
-        '<b>Add Channel</b>\n\nSend channel ID (e.g. <code>@mychannel</code> or <code>-1001234567890</code>):'
+        '<b>Add Channel</b>\n\n'
+        'Send numeric channel ID (e.g. <code>1234567890</code>).\n'
+        'Prefix <code>-100</code> is added automatically.'
     )
     await callback.answer()
 
@@ -185,23 +186,14 @@ async def process_channel_id(message: Message, state: FSMContext, **kwargs) -> N
         return
     channel_id = message.text.strip()
 
-    # Validate channel_id format
+    # Validate and normalize channel_id (auto-prefixes -100 for bare digits)
     try:
         channel_id = validate_channel_id(channel_id)
     except ValueError as e:
         await message.answer(f'Invalid format. {e}\n\nTry again:')
         return
 
-    # Resolve @username to numeric ID (ChatMemberUpdated events use numeric IDs)
-    original_channel_id = channel_id
-    bot: Bot = message.bot
-    try:
-        channel_id = await resolve_channel_id(bot, channel_id)
-    except ValueError as e:
-        await message.answer(f'Cannot verify channel: {e}\n\nMake sure the bot is admin in this channel. Try again:')
-        return
-
-    await state.update_data(channel_id=channel_id, original_channel_id=original_channel_id)
+    await state.update_data(channel_id=channel_id)
     await state.set_state(AddChannelStates.waiting_channel_link)
     await message.answer(
         f'Channel: <code>{channel_id}</code>\n\n'
@@ -249,11 +241,6 @@ async def process_channel_title(message: Message, state: FSMContext, **kwargs) -
 
     data = await state.get_data()
     await state.clear()
-
-    # Use original @username as title fallback when channel was resolved to numeric
-    original_id = data.get('original_channel_id')
-    if not title and original_id and original_id != data['channel_id']:
-        title = original_id
 
     async with AsyncSessionLocal() as db:
         try:

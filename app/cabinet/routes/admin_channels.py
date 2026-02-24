@@ -46,10 +46,6 @@ async def create_channel(
     db: AsyncSession = Depends(get_cabinet_db),
     _admin: User = Depends(get_current_admin_user),
 ) -> ChannelResponse:
-    # NOTE: REST API does not resolve @username to numeric channel ID (no Bot instance available).
-    # The bot FSM handler is the primary creation path and resolves automatically.
-    # When using REST API, callers should provide numeric channel IDs (e.g. -1001234567890)
-    # to ensure ChatMemberUpdated event matching works correctly.
     ch = await add_channel(db, channel_id=data.channel_id, channel_link=data.channel_link, title=data.title)
     await channel_subscription_service.invalidate_channels_cache()
     return ChannelResponse.model_validate(ch)

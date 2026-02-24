@@ -2818,7 +2818,7 @@ class RequiredChannel(Base):
     __tablename__ = 'required_channels'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    channel_id = Column(String(100), unique=True, nullable=False)  # @username or -100xxx (always string)
+    channel_id = Column(String(100), unique=True, nullable=False)  # -100xxx numeric format (always string)
     channel_link = Column(String(500), nullable=True)  # https://t.me/xxx
     title = Column(String(255), nullable=True)  # Display name
     is_active = Column(Boolean, nullable=False, server_default='true')

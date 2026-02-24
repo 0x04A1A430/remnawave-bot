@@ -2,7 +2,6 @@ import re
 from datetime import UTC, datetime
 
 import structlog
-from aiogram import Bot
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,36 +15,24 @@ logger = structlog.get_logger(__name__)
 _UPDATABLE_FIELDS = frozenset({'channel_id', 'channel_link', 'title', 'is_active', 'sort_order'})
 
 # Validation patterns for channel_id
-_CHANNEL_ID_USERNAME = re.compile(r'^@[a-zA-Z][a-zA-Z0-9_]{3,30}$')
 _CHANNEL_ID_NUMERIC = re.compile(r'^-100\d{10,13}$')
+_BARE_DIGITS = re.compile(r'^\d{10,13}$')
 
 
 def validate_channel_id(channel_id: str) -> str:
-    """Validate and normalize channel_id. Raises ValueError on invalid input."""
-    channel_id = channel_id.strip()
-    if _CHANNEL_ID_USERNAME.match(channel_id) or _CHANNEL_ID_NUMERIC.match(channel_id):
-        return channel_id
-    raise ValueError(
-        f'Invalid channel_id format: {channel_id!r}. Must be @username (4-31 chars) or numeric ID like -100XXXXXXXXXX'
-    )
+    """Validate and normalize channel_id. Auto-prefixes -100 for bare digits.
 
-
-async def resolve_channel_id(bot: Bot, channel_id: str) -> str:
-    """Resolve @username to numeric channel ID via Telegram API.
-
-    Required because ChatMemberUpdated events use numeric IDs.
-    If channel_id is already numeric, returns as-is.
+    Raises ValueError on invalid input.
     """
+    channel_id = channel_id.strip()
     if _CHANNEL_ID_NUMERIC.match(channel_id):
         return channel_id
-    try:
-        chat = await bot.get_chat(channel_id)
-        resolved = str(chat.id)
-        logger.info('Resolved channel username to numeric ID', username=channel_id, numeric_id=resolved)
-        return resolved
-    except Exception as e:
-        logger.error('Failed to resolve channel ID', channel_id=channel_id, error=e)
-        raise ValueError(f'Cannot resolve channel {channel_id}: {e}') from e
+    if _BARE_DIGITS.match(channel_id):
+        return f'-100{channel_id}'
+    raise ValueError(
+        f'Invalid channel_id format: {channel_id!r}. '
+        'Enter numeric channel ID (e.g. 1234567890) — prefix -100 is added automatically'
+    )
 
 
 # -- RequiredChannel CRUD --------------------------------------------------------
