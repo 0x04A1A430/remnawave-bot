@@ -150,9 +150,28 @@ async def handle_connect_subscription(callback: types.CallbackQuery, db_user: Us
         platforms = None
         try:
             config = await load_app_config_async()
-            platforms = get_platforms_list(config) or None
+            if config:
+                platforms = get_platforms_list(config) or None
         except Exception as e:
-            logger.warning('Failed to load platforms for guide mode, using fallback', error=e)
+            logger.warning('Failed to load platforms for guide mode', error=e)
+
+        if not platforms:
+            await callback.message.edit_text(
+                texts.t(
+                    'GUIDE_CONFIG_NOT_SET',
+                    '⚠️ <b>Конфигурация не настроена</b>\n\n'
+                    'Администратор ещё не настроил конфигурацию приложений.\n'
+                    'Обратитесь к администратору.',
+                ),
+                reply_markup=InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [InlineKeyboardButton(text=texts.BACK, callback_data='menu_subscription')],
+                    ]
+                ),
+                parse_mode='HTML',
+            )
+            await callback.answer()
+            return
 
         if hide_subscription_link:
             device_text = texts.t(

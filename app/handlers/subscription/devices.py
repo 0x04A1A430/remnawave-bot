@@ -37,11 +37,8 @@ from app.utils.subscription_utils import (
 from .common import (
     _get_addon_discount_percent_for_user,
     _get_period_hint_from_subscription,
-    format_additional_section,
-    get_apps_for_device,
     get_apps_for_platform_async,
     get_device_name,
-    get_step_description,
     logger,
     render_guide_blocks,
 )
@@ -1273,18 +1270,7 @@ async def handle_device_guide(callback: types.CallbackQuery, db_user: User, db: 
         )
         return
 
-    # Try async Remnawave config first, fall back to legacy sync
     apps = await get_apps_for_platform_async(device_type, db_user.language)
-    is_blocks_format = bool(apps and apps[0].get('blocks'))
-
-    # If async returned empty, try legacy
-    if not apps:
-        apps_raw = get_apps_for_device(device_type, db_user.language)
-        if apps_raw:
-            from .common import normalize_app
-
-            apps = [normalize_app(a, is_remnawave=False) for a in apps_raw]
-            is_blocks_format = True
 
     hide_subscription_link = settings.should_hide_subscription_link()
 
@@ -1344,49 +1330,9 @@ async def handle_device_guide(callback: types.CallbackQuery, db_user: User, db: 
             'Нажмите кнопку "Другие приложения" ниже, чтобы выбрать приложение.',
         )
 
-    if is_blocks_format:
-        blocks_text = render_guide_blocks(featured_app.get('blocks', []), db_user.language)
-        if blocks_text:
-            guide_text += '\n\n' + blocks_text
-    else:
-        # Legacy steps
-        installation_description = get_step_description(
-            featured_app.get('_raw', featured_app), 'installationStep', db_user.language
-        )
-        add_description = get_step_description(
-            featured_app.get('_raw', featured_app), 'addSubscriptionStep', db_user.language
-        )
-        connect_description = get_step_description(
-            featured_app.get('_raw', featured_app), 'connectAndUseStep', db_user.language
-        )
-        additional_before_text = format_additional_section(
-            featured_app.get('_raw', featured_app).get('additionalBeforeAddSubscriptionStep'),
-            texts,
-            db_user.language,
-        )
-        additional_after_text = format_additional_section(
-            featured_app.get('_raw', featured_app).get('additionalAfterAddSubscriptionStep'),
-            texts,
-            db_user.language,
-        )
-
-        guide_text += '\n\n' + texts.t('SUBSCRIPTION_DEVICE_STEP_INSTALL_TITLE', '<b>Шаг 1 - Установка:</b>')
-        if installation_description:
-            guide_text += f'\n{installation_description}'
-
-        if additional_before_text:
-            guide_text += f'\n\n{additional_before_text}'
-
-        guide_text += '\n\n' + texts.t('SUBSCRIPTION_DEVICE_STEP_ADD_TITLE', '<b>Шаг 2 - Добавление подписки:</b>')
-        if add_description:
-            guide_text += f'\n{add_description}'
-
-        guide_text += '\n\n' + texts.t('SUBSCRIPTION_DEVICE_STEP_CONNECT_TITLE', '<b>Шаг 3 - Подключение:</b>')
-        if connect_description:
-            guide_text += f'\n{connect_description}'
-
-        if additional_after_text:
-            guide_text += f'\n\n{additional_after_text}'
+    blocks_text = render_guide_blocks(featured_app.get('blocks', []), db_user.language)
+    if blocks_text:
+        guide_text += '\n\n' + blocks_text
 
     guide_text += '\n\n' + texts.t('SUBSCRIPTION_DEVICE_HOW_TO_TITLE', '💡 <b>Как подключить:</b>')
     guide_text += '\n' + '\n'.join(
@@ -1410,18 +1356,14 @@ async def handle_device_guide(callback: types.CallbackQuery, db_user: User, db: 
         ]
     )
 
-    # For keyboard: pass raw app if legacy, or normalized app with blocks
-    keyboard_app = featured_app.get('_raw', featured_app) if not is_blocks_format else featured_app
-
     await callback.message.edit_text(
         guide_text,
         reply_markup=get_connection_guide_keyboard(
             subscription_link,
-            keyboard_app,
+            featured_app,
             device_type,
             db_user.language,
             has_other_apps=bool(other_apps),
-            is_blocks_format=is_blocks_format,
         ),
         parse_mode='HTML',
     )
@@ -1433,13 +1375,6 @@ async def handle_app_selection(callback: types.CallbackQuery, db_user: User, db:
     texts = get_texts(db_user.language)
 
     apps = await get_apps_for_platform_async(device_type, db_user.language)
-    if not apps:
-        # Fallback to legacy
-        apps_raw = get_apps_for_device(device_type, db_user.language)
-        if apps_raw:
-            from .common import normalize_app
-
-            apps = [normalize_app(a, is_remnawave=False) for a in apps_raw]
 
     if not apps:
         await callback.answer(
@@ -1481,20 +1416,8 @@ async def handle_specific_app_guide(callback: types.CallbackQuery, db_user: User
         )
         return
 
-    # Try async config first
     apps = await get_apps_for_platform_async(device_type, db_user.language)
-    is_blocks_format = bool(apps and apps[0].get('blocks'))
     app = next((a for a in apps if a.get('id') == app_id), None) if apps else None
-
-    # Fallback to legacy
-    if not app:
-        apps_raw = get_apps_for_device(device_type, db_user.language)
-        app_raw = next((a for a in apps_raw if a.get('id') == app_id), None) if apps_raw else None
-        if app_raw:
-            from .common import normalize_app
-
-            app = normalize_app(app_raw, is_remnawave=False)
-            is_blocks_format = True
 
     if not app:
         await callback.answer(
@@ -1533,54 +1456,17 @@ async def handle_specific_app_guide(callback: types.CallbackQuery, db_user: User
         + link_section
     )
 
-    if is_blocks_format:
-        blocks_text = render_guide_blocks(app.get('blocks', []), db_user.language)
-        if blocks_text:
-            guide_text += blocks_text + '\n\n'
-    else:
-        raw_app = app.get('_raw', app)
-        installation_description = get_step_description(raw_app, 'installationStep', db_user.language)
-        add_description = get_step_description(raw_app, 'addSubscriptionStep', db_user.language)
-        connect_description = get_step_description(raw_app, 'connectAndUseStep', db_user.language)
-        additional_before_text = format_additional_section(
-            raw_app.get('additionalBeforeAddSubscriptionStep'),
-            texts,
-            db_user.language,
-        )
-        additional_after_text = format_additional_section(
-            raw_app.get('additionalAfterAddSubscriptionStep'),
-            texts,
-            db_user.language,
-        )
-
-        guide_text += texts.t('SUBSCRIPTION_DEVICE_STEP_INSTALL_TITLE', '<b>Шаг 1 - Установка:</b>')
-        if installation_description:
-            guide_text += f'\n{installation_description}'
-
-        if additional_before_text:
-            guide_text += f'\n\n{additional_before_text}'
-
-        guide_text += '\n\n' + texts.t('SUBSCRIPTION_DEVICE_STEP_ADD_TITLE', '<b>Шаг 2 - Добавление подписки:</b>')
-        if add_description:
-            guide_text += f'\n{add_description}'
-
-        guide_text += '\n\n' + texts.t('SUBSCRIPTION_DEVICE_STEP_CONNECT_TITLE', '<b>Шаг 3 - Подключение:</b>')
-        if connect_description:
-            guide_text += f'\n{connect_description}'
-
-        if additional_after_text:
-            guide_text += f'\n\n{additional_after_text}'
-
-    keyboard_app = app.get('_raw', app) if not is_blocks_format else app
+    blocks_text = render_guide_blocks(app.get('blocks', []), db_user.language)
+    if blocks_text:
+        guide_text += blocks_text + '\n\n'
 
     await callback.message.edit_text(
         guide_text,
         reply_markup=get_specific_app_keyboard(
             subscription_link,
-            keyboard_app,
+            app,
             device_type,
             db_user.language,
-            is_blocks_format=is_blocks_format,
         ),
         parse_mode='HTML',
     )

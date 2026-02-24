@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import json
 import math
 import re
 from collections.abc import Collection
 from datetime import UTC, datetime, timedelta
 from decimal import ROUND_FLOOR, ROUND_HALF_UP, ROUND_UP, Decimal, InvalidOperation
-from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
@@ -227,56 +225,6 @@ def _get_tariff_monthly_price(tariff) -> int:
 
     return 0
 
-
-@router.get('/app-config.json')
-async def get_app_config() -> dict[str, Any]:
-    data = _load_app_config_data()
-    if data is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='App config not found')
-
-    return data
-
-
-def _get_app_config_candidate_files() -> list[Path]:
-    seen: set[Path] = set()
-    candidates: list[Path] = []
-
-    def _add_candidate(path: Path) -> None:
-        resolved = path.resolve()
-        if resolved not in seen:
-            seen.add(resolved)
-            candidates.append(resolved)
-
-    cwd = Path.cwd()
-    _add_candidate(cwd / 'miniapp' / 'app-config.json')
-    _add_candidate(cwd / 'app-config.json')
-
-    current = Path(__file__).resolve()
-    for parent in current.parents:
-        _add_candidate(parent / 'miniapp' / 'app-config.json')
-        _add_candidate(parent / 'app-config.json')
-
-    _add_candidate(Path('/var/www/remnawave-miniapp/app-config.json'))
-
-    return candidates
-
-
-def _load_app_config_data() -> dict[str, Any] | None:
-    for path in _get_app_config_candidate_files():
-        if not path.is_file():
-            continue
-
-        try:
-            with path.open('r', encoding='utf-8') as file:
-                data = json.load(file)
-        except (OSError, json.JSONDecodeError) as error:
-            logger.warning('Failed to load app-config from', path=path, error=error)
-            continue
-
-        if isinstance(data, dict):
-            return data
-
-    return None
 
 
 _DECIMAL_ONE_HUNDRED = Decimal(100)

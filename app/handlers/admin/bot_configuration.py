@@ -2725,7 +2725,7 @@ async def show_remna_config_menu(callback: types.CallbackQuery, db_user: User, d
             else:
                 text += f'⚠️ Текущий UUID не найден: <code>{html.escape(str(current_uuid))}</code>\n\n'
         else:
-            text += 'ℹ️ Конфиг не выбран (используется app-config.json)\n\n'
+            text += 'ℹ️ Конфиг не выбран (гайд-режим отключён)\n\n'
 
         text += 'Выберите конфигурацию для гайд-режима:'
 
@@ -2744,7 +2744,7 @@ async def show_remna_config_menu(callback: types.CallbackQuery, db_user: User, d
         keyboard.append(
             [
                 types.InlineKeyboardButton(
-                    text='🗑 Сбросить (использовать app-config.json)',
+                    text='🗑 Сбросить (отключить гайд-режим)',
                     callback_data='admin_remna_clear',
                 )
             ]
@@ -2795,7 +2795,7 @@ async def select_remna_config(callback: types.CallbackQuery, db_user: User, db: 
 @admin_required
 @error_handler
 async def clear_remna_config(callback: types.CallbackQuery, db_user: User, db: AsyncSession, **kwargs):
-    """Clear the Remnawave config, reverting to local app-config.json."""
+    """Clear the Remnawave config, disabling guide mode until new config is selected."""
     try:
         await bot_configuration_service.set_value(db, 'CABINET_REMNA_SUB_CONFIG', '')
         await db.commit()

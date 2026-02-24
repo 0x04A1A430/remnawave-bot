@@ -674,7 +674,6 @@ class Settings(BaseSettings):
     WEB_API_TOKEN_HMAC_SECRET: str | None = None
     WEB_API_REQUEST_LOGGING: bool = True
 
-    APP_CONFIG_PATH: str = 'app-config.json'
     ENABLE_DEEP_LINKS: bool = True
     APP_CONFIG_CACHE_TTL: int = 3600
 
@@ -1380,13 +1379,6 @@ class Settings(BaseSettings):
             if value:
                 return value
         return None
-
-    def get_app_config_path(self) -> str:
-        if os.path.isabs(self.APP_CONFIG_PATH):
-            return self.APP_CONFIG_PATH
-
-        project_root = Path(__file__).parent.parent
-        return str(project_root / self.APP_CONFIG_PATH)
 
     def is_deep_links_enabled(self) -> bool:
         return self.ENABLE_DEEP_LINKS
