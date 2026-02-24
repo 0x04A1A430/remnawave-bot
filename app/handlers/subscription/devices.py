@@ -1300,7 +1300,7 @@ async def handle_device_guide(callback: types.CallbackQuery, db_user: User, db: 
     other_apps = [app for app in apps if isinstance(app, dict) and app.get('id') and app.get('id') != featured_app_id]
 
     other_app_names = ', '.join(
-        str(app.get('name')).strip()
+        html_mod.escape(str(app.get('name')).strip())
         for app in other_apps
         if isinstance(app.get('name'), str) and app.get('name').strip()
     )
@@ -1325,13 +1325,13 @@ async def handle_device_guide(callback: types.CallbackQuery, db_user: User, db: 
         texts.t(
             'SUBSCRIPTION_DEVICE_GUIDE_TITLE',
             '📱 <b>Настройка для {device_name}</b>',
-        ).format(device_name=get_device_name(device_type, db_user.language))
+        ).format(device_name=html_mod.escape(get_device_name(device_type, db_user.language)))
         + '\n\n'
         + link_section
         + texts.t(
             'SUBSCRIPTION_DEVICE_FEATURED_APP',
             '📋 <b>Рекомендуемое приложение:</b> {app_name}',
-        ).format(app_name=featured_app.get('name', ''))
+        ).format(app_name=html_mod.escape(featured_app.get('name', '')))
     )
 
     if other_app_names:
@@ -1452,7 +1452,7 @@ async def handle_app_selection(callback: types.CallbackQuery, db_user: User, db:
         texts.t(
             'SUBSCRIPTION_APPS_TITLE',
             '📱 <b>Приложения для {device_name}</b>',
-        ).format(device_name=get_device_name(device_type, db_user.language))
+        ).format(device_name=html_mod.escape(get_device_name(device_type, db_user.language)))
         + '\n\n'
         + texts.t('SUBSCRIPTION_APPS_PROMPT', 'Выберите приложение для подключения:')
     )
@@ -1525,7 +1525,10 @@ async def handle_specific_app_guide(callback: types.CallbackQuery, db_user: User
         texts.t(
             'SUBSCRIPTION_SPECIFIC_APP_TITLE',
             '📱 <b>{app_name} - {device_name}</b>',
-        ).format(app_name=app.get('name', ''), device_name=get_device_name(device_type, db_user.language))
+        ).format(
+            app_name=html_mod.escape(app.get('name', '')),
+            device_name=html_mod.escape(get_device_name(device_type, db_user.language)),
+        )
         + '\n\n'
         + link_section
     )
