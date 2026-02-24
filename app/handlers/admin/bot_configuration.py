@@ -2690,6 +2690,118 @@ async def apply_setting_choice(
     await callback.answer('Значение обновлено')
 
 
+# ── Remnawave App Config Selector ──
+
+
+@admin_required
+@error_handler
+async def show_remna_config_menu(callback: types.CallbackQuery, db_user: User, db: AsyncSession, **kwargs):
+    """Show available Remnawave subscription page configs for selection."""
+    current_uuid = bot_configuration_service.get_current_value('CABINET_REMNA_SUB_CONFIG')
+
+    try:
+        service = RemnaWaveService()
+        async with service.get_api_client() as api:
+            configs = await api.get_subscription_page_configs()
+    except Exception as e:
+        await callback.answer(f'Ошибка загрузки конфигов: {e}', show_alert=True)
+        return
+
+    keyboard: list[list[types.InlineKeyboardButton]] = []
+
+    if not configs:
+        text = (
+            '📱 <b>Конфиг приложений (Remnawave)</b>\n\n'
+            'В Remnawave не найдено конфигураций страниц подписки.\n\n'
+            'Создайте конфигурацию в панели Remnawave, затем вернитесь сюда для выбора.'
+        )
+    else:
+        text = '📱 <b>Конфиг приложений (Remnawave)</b>\n\n'
+        if current_uuid:
+            current_name = next((c.name for c in configs if c.uuid == current_uuid), None)
+            if current_name:
+                text += f'✅ Текущий: <b>{html.escape(current_name)}</b>\n\n'
+            else:
+                text += f'⚠️ Текущий UUID не найден: <code>{current_uuid}</code>\n\n'
+        else:
+            text += 'ℹ️ Конфиг не выбран (используется app-config.json)\n\n'
+
+        text += 'Выберите конфигурацию для гайд-режима:'
+
+        for config in configs:
+            prefix = '✅ ' if config.uuid == current_uuid else ''
+            keyboard.append(
+                [
+                    types.InlineKeyboardButton(
+                        text=f'{prefix}{config.name}',
+                        callback_data=f'admin_remna_select_{config.uuid}',
+                    )
+                ]
+            )
+
+    if current_uuid:
+        keyboard.append(
+            [
+                types.InlineKeyboardButton(
+                    text='🗑 Сбросить (использовать app-config.json)',
+                    callback_data='admin_remna_clear',
+                )
+            ]
+        )
+
+    keyboard.append([types.InlineKeyboardButton(text='⬅️ Назад', callback_data='admin_submenu_settings')])
+
+    await callback.message.edit_text(
+        text,
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode='HTML',
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def select_remna_config(callback: types.CallbackQuery, db_user: User, db: AsyncSession, **kwargs):
+    """Select a Remnawave subscription page config."""
+    uuid = callback.data.replace('admin_remna_select_', '')
+
+    try:
+        await bot_configuration_service.set_value(db, 'CABINET_REMNA_SUB_CONFIG', uuid)
+        await db.commit()
+    except Exception as e:
+        await callback.answer(f'Ошибка сохранения: {e}', show_alert=True)
+        return
+
+    # Invalidate app config cache
+    from app.handlers.subscription.common import invalidate_app_config_cache
+
+    invalidate_app_config_cache()
+
+    await callback.answer('✅ Конфиг выбран', show_alert=True)
+
+    # Re-render the menu
+    await show_remna_config_menu(callback, db_user=db_user, db=db)
+
+
+@admin_required
+@error_handler
+async def clear_remna_config(callback: types.CallbackQuery, db_user: User, db: AsyncSession, **kwargs):
+    """Clear the Remnawave config, reverting to local app-config.json."""
+    try:
+        await bot_configuration_service.set_value(db, 'CABINET_REMNA_SUB_CONFIG', '')
+        await db.commit()
+    except Exception as e:
+        await callback.answer(f'Ошибка сброса: {e}', show_alert=True)
+        return
+
+    from app.handlers.subscription.common import invalidate_app_config_cache
+
+    invalidate_app_config_cache()
+
+    await callback.answer('✅ Конфиг сброшен', show_alert=True)
+    await show_remna_config_menu(callback, db_user=db_user, db=db)
+
+
 def register_handlers(dp: Dispatcher) -> None:
     dp.callback_query.register(
         show_bot_config_menu,
@@ -2788,4 +2900,17 @@ def register_handlers(dp: Dispatcher) -> None:
     dp.message.register(
         handle_import_message,
         BotConfigStates.waiting_for_import_file,
+    )
+    # Remnawave app config selector
+    dp.callback_query.register(
+        show_remna_config_menu,
+        F.data == 'admin_remna_config',
+    )
+    dp.callback_query.register(
+        select_remna_config,
+        F.data.startswith('admin_remna_select_'),
+    )
+    dp.callback_query.register(
+        clear_remna_config,
+        F.data == 'admin_remna_clear',
     )

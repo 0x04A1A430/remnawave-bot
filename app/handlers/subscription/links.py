@@ -16,6 +16,8 @@ from app.utils.subscription_utils import (
     get_happ_cryptolink_redirect_link,
 )
 
+from .common import get_platforms_list, load_app_config_async, logger
+
 
 async def handle_connect_subscription(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     # Проверяем, доступно ли сообщение для редактирования
@@ -144,6 +146,14 @@ async def handle_connect_subscription(callback: types.CallbackQuery, db_user: Us
             parse_mode='HTML',
         )
     else:
+        # Guide mode: load config and build dynamic platform keyboard
+        platforms = None
+        try:
+            config = await load_app_config_async()
+            platforms = get_platforms_list(config) or None
+        except Exception as e:
+            logger.warning('Failed to load platforms for guide mode, using fallback', error=e)
+
         if hide_subscription_link:
             device_text = texts.t(
                 'SUBSCRIPTION_CONNECT_DEVICE_MESSAGE_HIDDEN',
@@ -165,7 +175,9 @@ async def handle_connect_subscription(callback: types.CallbackQuery, db_user: Us
             ).format(subscription_url=subscription_link)
 
         await callback.message.edit_text(
-            device_text, reply_markup=get_device_selection_keyboard(db_user.language), parse_mode='HTML'
+            device_text,
+            reply_markup=get_device_selection_keyboard(db_user.language, platforms=platforms),
+            parse_mode='HTML',
         )
 
     await callback.answer()

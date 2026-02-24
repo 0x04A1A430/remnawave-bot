@@ -505,6 +505,10 @@ async def set_remnawave_config_uuid(
     try:
         await bot_configuration_service.set_value(db, 'CABINET_REMNA_SUB_CONFIG', uuid_value)
         await db.commit()
+
+        from app.handlers.subscription.common import invalidate_app_config_cache
+
+        invalidate_app_config_cache()
         logger.info('Admin updated CABINET_REMNA_SUB_CONFIG to', admin_id=admin.id, uuid_value=uuid_value)
     except Exception as e:
         logger.error('Error saving RemnaWave config UUID', error=e)
