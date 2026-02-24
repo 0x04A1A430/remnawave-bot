@@ -4119,7 +4119,7 @@ def register_handlers(dp: Dispatcher):
 
     dp.callback_query.register(handle_app_selection, F.data.startswith('app_list_'))
 
-    dp.callback_query.register(handle_specific_app_guide, F.data.startswith('app_'))
+    dp.callback_query.register(handle_specific_app_guide, F.data.startswith('app_') & ~F.data.startswith('app_list_'))
 
     dp.callback_query.register(handle_open_subscription_link, F.data == 'open_subscription_link')
 

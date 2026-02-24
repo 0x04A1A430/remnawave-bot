@@ -1,9 +1,6 @@
 """FastAPI dependencies for cabinet module."""
 
-import asyncio
-
 import structlog
-from aiogram import Bot
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,17 +19,6 @@ from .auth.telegram_auth import validate_telegram_init_data
 logger = structlog.get_logger(__name__)
 
 security = HTTPBearer(auto_error=False)
-
-# Кешированный Bot для проверки подписки на канал
-_channel_check_bot: Bot | None = None
-
-
-def _get_channel_check_bot() -> Bot:
-    """Получить или создать Bot для проверки подписки на канал."""
-    global _channel_check_bot
-    if _channel_check_bot is None:
-        _channel_check_bot = Bot(token=settings.BOT_TOKEN)
-    return _channel_check_bot
 
 
 async def get_cabinet_db() -> AsyncSession:
@@ -163,42 +149,31 @@ async def get_current_cabinet_user(
                 },
             )
 
-    # Check required channel subscription - ТОЛЬКО для Telegram юзеров
-    if settings.CHANNEL_IS_REQUIRED_SUB and settings.CHANNEL_SUB_ID:
-        # Пропускаем проверку для email-only юзеров (нет telegram_id)
+    # Check required channel subscription - Telegram users only
+    if settings.CHANNEL_IS_REQUIRED_SUB:
+        # Skip for email-only users (no telegram_id)
         if user.telegram_id is not None:
-            # Проверяем админа по telegram_id ИЛИ email
+            # Skip admin check
             is_admin = settings.is_admin(
                 telegram_id=user.telegram_id, email=user.email if user.email_verified else None
             )
             if not is_admin:
-                try:
-                    bot = _get_channel_check_bot()
-                    chat_member = await asyncio.wait_for(
-                        bot.get_chat_member(chat_id=settings.CHANNEL_SUB_ID, user_id=user.telegram_id),
-                        timeout=10.0,
-                    )
-                    # Не закрываем сессию - бот переиспользуется
+                from app.services.channel_subscription_service import channel_subscription_service
 
-                    if chat_member.status not in ['member', 'administrator', 'creator']:
-                        raise HTTPException(
-                            status_code=status.HTTP_403_FORBIDDEN,
-                            detail={
-                                'code': 'channel_subscription_required',
-                                'message': 'Please subscribe to our channel to continue',
-                                'channel_link': settings.CHANNEL_LINK,
-                            },
-                        )
-                except HTTPException:
-                    raise
-                except TimeoutError:
-                    logger.warning('Timeout checking channel subscription for user', telegram_id=user.telegram_id)
-                    # Don't block user if check times out
-                except Exception as e:
-                    logger.warning(
-                        'Failed to check channel subscription for user', telegram_id=user.telegram_id, error=e
+                channels_with_status = await channel_subscription_service.get_channels_with_status(user.telegram_id)
+                is_subscribed = (
+                    all(ch['is_subscribed'] for ch in channels_with_status) if channels_with_status else True
+                )
+
+                if not is_subscribed:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail={
+                            'code': 'channel_subscription_required',
+                            'message': 'Please subscribe to the required channels to continue',
+                            'channels': channels_with_status,
+                        },
                     )
-                    # Don't block user if check fails
 
     return user
 

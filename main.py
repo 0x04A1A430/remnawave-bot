@@ -287,6 +287,10 @@ async def main():
         daily_subscription_service.set_bot(bot)
         telegram_notifier.set_bot(bot)
 
+        from app.services.channel_subscription_service import channel_subscription_service
+
+        channel_subscription_service.bot = bot
+
         # Initialize email broadcast service
         from app.cabinet.services.email_service import email_service
         from app.services.broadcast_service import email_broadcast_service
