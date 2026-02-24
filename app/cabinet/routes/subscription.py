@@ -2680,14 +2680,12 @@ async def get_device_price(
 # ============ App Config for Connection ============
 
 
-
 def _get_remnawave_config_uuid() -> str | None:
     """Get RemnaWave config UUID from system settings or env."""
     try:
         return bot_configuration_service.get_current_value('CABINET_REMNA_SUB_CONFIG')
     except Exception:
         return settings.CABINET_REMNA_SUB_CONFIG
-
 
 
 def _extract_scheme_from_buttons(buttons: list[dict[str, Any]]) -> tuple[str, bool]:
@@ -2767,7 +2765,6 @@ def _get_url_scheme_for_app(app: dict[str, Any]) -> tuple[str, bool]:
         get_4=bool(app.get('urlScheme')),
     )
     return '', False
-
 
 
 async def _load_app_config_async() -> dict[str, Any] | None:

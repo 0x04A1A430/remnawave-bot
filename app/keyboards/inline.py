@@ -154,7 +154,6 @@ async def get_main_menu_keyboard_async(
     )
 
 
-
 _LANGUAGE_DISPLAY_NAMES = {
     'ru': '🇷🇺 Русский',
     'ru-ru': '🇷🇺 Русский',

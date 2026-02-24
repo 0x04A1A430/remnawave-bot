@@ -226,7 +226,6 @@ def _get_tariff_monthly_price(tariff) -> int:
     return 0
 
 
-
 _DECIMAL_ONE_HUNDRED = Decimal(100)
 _DECIMAL_CENT = Decimal('0.01')
 

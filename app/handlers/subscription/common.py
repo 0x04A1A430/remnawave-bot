@@ -166,7 +166,6 @@ def validate_traffic_price(gb: int) -> bool:
     return price > 0
 
 
-
 def get_localized_value(values: Any, language: str, default_language: str = 'en') -> str:
     if not isinstance(values, dict):
         return ''
@@ -195,7 +194,6 @@ def get_localized_value(values: Any, language: str, default_language: str = 'en'
             return value
 
     return ''
-
 
 
 def render_guide_blocks(blocks: list[dict], language: str) -> str:
@@ -253,7 +251,6 @@ def build_redirect_link(target_link: str | None, template: str | None) -> str | 
         result = f'{result}{encoded_target}'
 
     return result
-
 
 
 def get_device_name(device_type: str, language: str = 'ru') -> str:
