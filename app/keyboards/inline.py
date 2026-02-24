@@ -280,9 +280,13 @@ def get_channel_sub_keyboard(
 ) -> InlineKeyboardMarkup:
     """Subscription keyboard for required channels.
 
+    Supports Bot API 9.4 colored buttons via ``style`` parameter:
+    - subscribed channels → green (``style='success'``)
+    - unsubscribed channels → blue (``style='primary'``)
+
     Args:
-        channels: List of dicts with 'channel_link' and 'title' keys,
-                  OR a string (legacy single channel_link for backwards compat).
+        channels: List of dicts with 'channel_link', 'title', and optional
+                  'is_subscribed' keys, OR a string (legacy single channel_link).
         language: Locale code for button text.
     """
     texts = get_texts(language)
@@ -296,6 +300,7 @@ def get_channel_sub_keyboard(
                     InlineKeyboardButton(
                         text=texts.t('CHANNEL_SUBSCRIBE_BUTTON', '🔗 Подписаться'),
                         url=channels,
+                        style='primary',
                     )
                 ]
             )
@@ -303,9 +308,14 @@ def get_channel_sub_keyboard(
         for ch in channels:
             link = ch.get('channel_link')
             title = ch.get('title')
+            is_subscribed = ch.get('is_subscribed', False)
             if link:
-                label = title or texts.t('CHANNEL_SUBSCRIBE_BUTTON', '🔗 Подписаться')
-                buttons.append([InlineKeyboardButton(text=label, url=link)])
+                if is_subscribed:
+                    label = f'✅ {title}' if title else '✅'
+                    buttons.append([InlineKeyboardButton(text=label, url=link, style='success')])
+                else:
+                    label = title or texts.t('CHANNEL_SUBSCRIBE_BUTTON', '🔗 Подписаться')
+                    buttons.append([InlineKeyboardButton(text=label, url=link, style='primary')])
 
     buttons.append(
         [

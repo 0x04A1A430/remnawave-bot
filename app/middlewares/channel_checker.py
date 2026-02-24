@@ -121,7 +121,8 @@ class ChannelCheckerMiddleware(BaseMiddleware):
             channel_subscription_service.bot = bot
 
         # Multi-channel check (Redis -> DB -> API)
-        unsubscribed = await channel_subscription_service.get_unsubscribed_channels(telegram_id)
+        all_channels = await channel_subscription_service.get_channels_with_status(telegram_id)
+        unsubscribed = [ch for ch in all_channels if not ch.get('is_subscribed', False)]
 
         if not unsubscribed:
             # All subscribed -- reactivate if needed
@@ -131,7 +132,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
 
         # User is NOT subscribed to all channels
         if settings.CHANNEL_DISABLE_TRIAL_ON_UNSUBSCRIBE or settings.CHANNEL_REQUIRED_FOR_ALL:
-            await self._deactivate_subscription_on_unsubscribe(telegram_id, bot, unsubscribed)
+            await self._deactivate_subscription_on_unsubscribe(telegram_id, bot, all_channels)
 
         await self._capture_start_payload(state, event, bot)
 
@@ -146,19 +147,38 @@ class ChannelCheckerMiddleware(BaseMiddleware):
             # Re-check via API for immediate feedback (invalidate cache first)
             await channel_subscription_service.invalidate_user_cache(telegram_id)
 
-            unsubscribed_fresh = await channel_subscription_service.get_unsubscribed_channels(telegram_id)
+            all_channels_fresh = await channel_subscription_service.get_channels_with_status(telegram_id)
+            unsubscribed_fresh = [ch for ch in all_channels_fresh if not ch.get('is_subscribed', False)]
+
             if not unsubscribed_fresh:
                 # Now subscribed to all channels
                 if settings.CHANNEL_DISABLE_TRIAL_ON_UNSUBSCRIBE or settings.CHANNEL_REQUIRED_FOR_ALL:
                     await self._reactivate_subscription_on_subscribe(telegram_id, bot)
                 return await handler(event, data)
 
+            # Still not all subscribed — update keyboard with colored buttons
+            # (subscribed = green, unsubscribed = blue) via Bot API 9.4 style
             user_lang = (
                 event.from_user.language_code.split('-')[0]
                 if event.from_user and event.from_user.language_code
                 else DEFAULT_LANGUAGE
             )
+
+            normalized = _normalize_channels(all_channels_fresh)
             texts = get_texts(user_lang)
+            channel_sub_kb = get_channel_sub_keyboard(normalized, language=user_lang)
+            text = texts.t(
+                'CHANNEL_REQUIRED_TEXT',
+                '🔒 Для использования бота подпишитесь на новостной канал, '
+                'чтобы получать уведомления о новых возможностях и обновлениях бота. Спасибо!',
+            )
+
+            try:
+                await event.message.edit_text(text, reply_markup=channel_sub_kb)
+            except TelegramBadRequest as e:
+                if 'message is not modified' not in str(e).lower():
+                    raise
+
             await event.answer(
                 texts.t(
                     'CHANNEL_CHECK_NOT_SUBSCRIBED',
@@ -168,7 +188,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
             )
             return None
 
-        return await self._deny_message(event, bot, unsubscribed)
+        return await self._deny_message(event, bot, all_channels)
 
     # -- _deny_message (multi-channel) -----------------------------------------
 
@@ -176,7 +196,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
     async def _deny_message(
         event: TelegramObject,
         bot: Bot,
-        unsubscribed_channels: list[dict],
+        channels: list[dict],
     ):
         user = None
         if isinstance(event, (Message, CallbackQuery)):
@@ -191,14 +211,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
         if user and user.language_code:
             language = user.language_code.split('-')[0]
 
-        # Normalize channel links (convert @username -> https://t.me/username)
-        normalized = []
-        for ch in unsubscribed_channels:
-            ch_copy = dict(ch)
-            link = ch_copy.get('channel_link')
-            if link:
-                ch_copy['channel_link'] = _normalize_channel_link(link)
-            normalized.append(ch_copy)
+        normalized = _normalize_channels(channels)
 
         texts = get_texts(language)
         channel_sub_kb = get_channel_sub_keyboard(normalized, language=language)
@@ -329,7 +342,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
         self,
         telegram_id: int,
         bot: Bot,
-        unsubscribed_channels: list[dict],
+        channels: list[dict],
     ) -> None:
         """Deactivate subscription when user unsubscribes from required channels."""
         if not settings.CHANNEL_DISABLE_TRIAL_ON_UNSUBSCRIBE and not settings.CHANNEL_REQUIRED_FOR_ALL:
@@ -381,15 +394,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
 
                 # Notify user about deactivation
                 try:
-                    # Normalize links for keyboard
-                    normalized = []
-                    for ch in unsubscribed_channels:
-                        ch_copy = dict(ch)
-                        link = ch_copy.get('channel_link')
-                        if link:
-                            ch_copy['channel_link'] = _normalize_channel_link(link)
-                        normalized.append(ch_copy)
-
+                    normalized = _normalize_channels(channels)
                     texts = get_texts(user.language if user.language else DEFAULT_LANGUAGE)
                     notification_text = texts.t(
                         'SUBSCRIPTION_DEACTIVATED_CHANNEL_UNSUBSCRIBE',
@@ -489,3 +494,15 @@ def _normalize_channel_link(link: str) -> str:
     if link.startswith('@'):
         return f'https://t.me/{link[1:]}'
     return link
+
+
+def _normalize_channels(channels: list[dict]) -> list[dict]:
+    """Normalize channel links in a list of channel dicts (preserves is_subscribed)."""
+    normalized = []
+    for ch in channels:
+        ch_copy = dict(ch)
+        link = ch_copy.get('channel_link')
+        if link:
+            ch_copy['channel_link'] = _normalize_channel_link(link)
+        normalized.append(ch_copy)
+    return normalized

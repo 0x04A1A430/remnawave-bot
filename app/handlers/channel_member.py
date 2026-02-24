@@ -163,7 +163,7 @@ async def on_user_left_channel(event: ChatMemberUpdated, bot: Bot) -> None:
             # Notify the user with channel subscription keyboard
             try:
                 texts = get_texts(db_user.language or DEFAULT_LANGUAGE)
-                unsub_channels = await channel_subscription_service.get_unsubscribed_channels(user.id)
+                unsub_channels = await channel_subscription_service.get_channels_with_status(user.id)
                 notification_text = texts.t(
                     'SUBSCRIPTION_DEACTIVATED_CHANNEL_UNSUBSCRIBE',
                     'Your subscription has been paused because you left a required channel.',
