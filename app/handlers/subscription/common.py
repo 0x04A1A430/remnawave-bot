@@ -384,7 +384,8 @@ def _get_remnawave_config_uuid() -> str | None:
         from app.services.system_settings_service import bot_configuration_service
 
         return bot_configuration_service.get_current_value('CABINET_REMNA_SUB_CONFIG')
-    except Exception:
+    except Exception as e:
+        logger.debug('Could not read CABINET_REMNA_SUB_CONFIG from service, using settings fallback', error=e)
         return getattr(settings, 'CABINET_REMNA_SUB_CONFIG', None)
 
 
@@ -427,10 +428,15 @@ async def load_app_config_async() -> dict[str, Any]:
 
 
 def invalidate_app_config_cache() -> None:
-    """Clear the cached app config so next call re-fetches from Remnawave."""
+    """Clear the cached app config so next call re-fetches from Remnawave.
+
+    Note: This is intentionally sync (called from sync contexts in cabinet API).
+    Setting timestamp to 0 first ensures the fast-path check in load_app_config_async
+    fails immediately, even without acquiring _app_config_lock.
+    """
     global _app_config_cache, _app_config_cache_ts
-    _app_config_cache = {}
     _app_config_cache_ts = 0.0
+    _app_config_cache = {}
 
 
 async def get_apps_for_platform_async(device_type: str, language: str = 'ru') -> list[dict[str, Any]]:
