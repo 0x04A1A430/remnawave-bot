@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.20.1](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.20.0...v3.20.1) (2026-02-25)
+
+
+### Bug Fixes
+
+* make migrations 0010/0011 idempotent, escape HTML in crash notification ([a696896](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/a696896d2c4a3d0d6026398fcdc76ded9575375d))
+* prevent race condition expiring active daily subscriptions ([bfef7cc](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/bfef7cc6296e296f17068e519469c3deaddc1b3b))
+
 ## [3.20.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.19.0...v3.20.0) (2026-02-25)
 
 
