@@ -58,6 +58,8 @@ class ChannelSubscriptionService:
                     'channel_link': ch.channel_link,
                     'title': ch.title,
                     'sort_order': ch.sort_order,
+                    'disable_trial_on_leave': ch.disable_trial_on_leave,
+                    'disable_paid_on_leave': ch.disable_paid_on_leave,
                 }
                 for ch in channels
             ]
@@ -68,6 +70,20 @@ class ChannelSubscriptionService:
         """Get the set of active required channel_ids (for event filtering)."""
         channels = await self.get_required_channels()
         return {ch['channel_id'] for ch in channels}
+
+    async def get_channel_settings(self, channel_id: str) -> dict | None:
+        """Get per-channel settings for a specific channel (from cache)."""
+        channels = await self.get_required_channels()
+        for ch in channels:
+            if ch['channel_id'] == channel_id:
+                return ch
+        return None
+
+    def should_disable_subscription(self, channel: dict, is_trial: bool) -> bool:
+        """Check if a channel's settings require subscription deactivation."""
+        if is_trial:
+            return channel.get('disable_trial_on_leave', True)
+        return channel.get('disable_paid_on_leave', False)
 
     async def check_user_subscriptions(self, telegram_id: int) -> dict[str, bool]:
         """Check user subscriptions to all required channels.
@@ -179,6 +195,8 @@ class ChannelSubscriptionService:
                     'channel_link': ch.get('channel_link'),
                     'title': ch.get('title'),
                     'is_subscribed': subs.get(ch['channel_id'], False),
+                    'disable_trial_on_leave': ch.get('disable_trial_on_leave', True),
+                    'disable_paid_on_leave': ch.get('disable_paid_on_leave', False),
                 }
             )
         return result

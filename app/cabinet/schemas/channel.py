@@ -28,6 +28,8 @@ class ChannelResponse(BaseModel):
     title: str | None
     is_active: bool
     sort_order: int
+    disable_trial_on_leave: bool
+    disable_paid_on_leave: bool
 
 
 class ChannelListResponse(BaseModel):
@@ -39,6 +41,8 @@ class ChannelCreateRequest(BaseModel):
     channel_id: str
     channel_link: str | None = None
     title: str | None = Field(None, max_length=255)
+    disable_trial_on_leave: bool = True
+    disable_paid_on_leave: bool = False
 
     @field_validator('channel_id')
     @classmethod
@@ -57,6 +61,8 @@ class ChannelUpdateRequest(BaseModel):
     title: str | None = Field(None, max_length=255)
     is_active: bool | None = None
     sort_order: int | None = None
+    disable_trial_on_leave: bool | None = None
+    disable_paid_on_leave: bool | None = None
 
     @field_validator('channel_id')
     @classmethod

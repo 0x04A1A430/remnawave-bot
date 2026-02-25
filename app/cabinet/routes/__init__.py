@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from .admin_apps import router as admin_apps_router
+from .admin_audit_log import router as admin_audit_log_router
 from .admin_ban_system import router as admin_ban_system_router
 from .admin_broadcasts import router as admin_broadcasts_router
 from .admin_button_styles import router as admin_button_styles_router
@@ -13,9 +14,11 @@ from .admin_partners import router as admin_partners_router
 from .admin_payment_methods import router as admin_payment_methods_router
 from .admin_payments import router as admin_payments_router
 from .admin_pinned_messages import router as admin_pinned_messages_router
+from .admin_policies import router as admin_policies_router
 from .admin_promo_offers import router as admin_promo_offers_router
 from .admin_promocodes import promo_groups_router as admin_promo_groups_router, router as admin_promocodes_router
 from .admin_remnawave import router as admin_remnawave_router
+from .admin_roles import router as admin_roles_router
 from .admin_servers import router as admin_servers_router
 from .admin_settings import router as admin_settings_router
 from .admin_stats import router as admin_stats_router
@@ -103,6 +106,9 @@ router.include_router(admin_pinned_messages_router)
 router.include_router(admin_button_styles_router)
 router.include_router(admin_channels_router)
 router.include_router(admin_apps_router)
+router.include_router(admin_roles_router)
+router.include_router(admin_policies_router)
+router.include_router(admin_audit_log_router)
 
 # WebSocket route
 router.include_router(websocket_router)
