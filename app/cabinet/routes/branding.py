@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.models import SystemSetting, User
 
-from ..dependencies import get_cabinet_db, get_current_admin_user
+from ..dependencies import get_cabinet_db, require_permission
 
 
 logger = structlog.get_logger(__name__)
@@ -296,7 +296,7 @@ async def get_logo():
 @router.put('/name', response_model=BrandingResponse)
 async def update_branding_name(
     payload: BrandingNameUpdate,
-    admin: User = Depends(get_current_admin_user),
+    admin: User = Depends(require_permission('settings:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Update the project name. Admin only. Empty name allowed (logo only mode)."""
@@ -324,7 +324,7 @@ async def update_branding_name(
 @router.post('/logo', response_model=BrandingResponse)
 async def upload_logo(
     file: UploadFile = File(...),
-    admin: User = Depends(get_current_admin_user),
+    admin: User = Depends(require_permission('settings:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Upload a custom logo. Admin only."""
@@ -387,7 +387,7 @@ async def upload_logo(
 
 @router.delete('/logo', response_model=BrandingResponse)
 async def delete_logo(
-    admin: User = Depends(get_current_admin_user),
+    admin: User = Depends(require_permission('settings:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Delete custom logo and revert to letter. Admin only."""
@@ -459,7 +459,7 @@ async def get_theme_colors(
 @router.patch('/colors', response_model=ThemeColorsResponse)
 async def update_theme_colors(
     payload: ThemeColorsUpdate,
-    admin: User = Depends(get_current_admin_user),
+    admin: User = Depends(require_permission('settings:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Update theme colors. Admin only. Partial update supported."""
@@ -493,7 +493,7 @@ async def update_theme_colors(
 
 @router.post('/colors/reset', response_model=ThemeColorsResponse)
 async def reset_theme_colors(
-    admin: User = Depends(get_current_admin_user),
+    admin: User = Depends(require_permission('settings:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Reset theme colors to defaults. Admin only."""
@@ -533,7 +533,7 @@ async def get_enabled_themes(
 @router.patch('/themes', response_model=EnabledThemesResponse)
 async def update_enabled_themes(
     payload: EnabledThemesUpdate,
-    admin: User = Depends(get_current_admin_user),
+    admin: User = Depends(require_permission('settings:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Update which themes are enabled. Admin only. At least one theme must be enabled."""
@@ -587,7 +587,7 @@ async def get_animation_enabled(
 @router.patch('/animation', response_model=AnimationEnabledResponse)
 async def update_animation_enabled(
     payload: AnimationEnabledUpdate,
-    admin: User = Depends(get_current_admin_user),
+    admin: User = Depends(require_permission('settings:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Update animation enabled setting. Admin only."""
@@ -622,7 +622,7 @@ async def get_fullscreen_enabled(
 @router.patch('/fullscreen', response_model=FullscreenEnabledResponse)
 async def update_fullscreen_enabled(
     payload: FullscreenEnabledUpdate,
-    admin: User = Depends(get_current_admin_user),
+    admin: User = Depends(require_permission('settings:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Update fullscreen enabled setting. Admin only."""
@@ -658,7 +658,7 @@ async def get_email_auth_enabled(
 @router.patch('/email-auth', response_model=EmailAuthEnabledResponse)
 async def update_email_auth_enabled(
     payload: EmailAuthEnabledUpdate,
-    admin: User = Depends(get_current_admin_user),
+    admin: User = Depends(require_permission('settings:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Update email auth enabled setting. Admin only."""
@@ -694,7 +694,7 @@ async def get_analytics_counters(
 @router.patch('/analytics', response_model=AnalyticsCountersResponse)
 async def update_analytics_counters(
     payload: AnalyticsCountersUpdate,
-    admin: User = Depends(get_current_admin_user),
+    admin: User = Depends(require_permission('settings:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Update analytics counter settings. Admin only. Partial update supported."""
@@ -758,7 +758,7 @@ async def get_lite_mode_enabled(
 @router.patch('/lite-mode', response_model=LiteModeEnabledResponse)
 async def update_lite_mode_enabled(
     payload: LiteModeEnabledUpdate,
-    admin: User = Depends(get_current_admin_user),
+    admin: User = Depends(require_permission('settings:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Update lite mode enabled setting. Admin only."""

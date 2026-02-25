@@ -12,7 +12,7 @@ from app.database.models import User
 from app.services.remnawave_service import RemnaWaveService
 from app.services.system_settings_service import bot_configuration_service
 
-from ..dependencies import get_cabinet_db, get_current_admin_user
+from ..dependencies import get_cabinet_db, require_permission
 
 
 logger = structlog.get_logger(__name__)
@@ -54,7 +54,7 @@ def _get_remnawave_config_uuid() -> str | None:
 
 @router.get('/remnawave/status', response_model=RemnaWaveConfigStatus)
 async def get_remnawave_config_status(
-    admin: User = Depends(get_current_admin_user),
+    admin: User = Depends(require_permission('apps:read')),
 ):
     """Get RemnaWave config integration status."""
     config_uuid = _get_remnawave_config_uuid()
@@ -67,7 +67,7 @@ async def get_remnawave_config_status(
 @router.put('/remnawave/uuid', response_model=RemnaWaveConfigStatus)
 async def set_remnawave_config_uuid(
     request: UpdateRemnaWaveUuidRequest,
-    admin: User = Depends(get_current_admin_user),
+    admin: User = Depends(require_permission('apps:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Set RemnaWave subscription config UUID."""
@@ -102,7 +102,7 @@ async def set_remnawave_config_uuid(
 
 @router.get('/remnawave/config')
 async def get_remnawave_subscription_config(
-    admin: User = Depends(get_current_admin_user),
+    admin: User = Depends(require_permission('apps:read')),
 ):
     """Fetch subscription page config from RemnaWave panel."""
     config_uuid = _get_remnawave_config_uuid()
@@ -140,7 +140,7 @@ async def get_remnawave_subscription_config(
 
 @router.get('/remnawave/configs')
 async def list_remnawave_subscription_configs(
-    admin: User = Depends(get_current_admin_user),
+    admin: User = Depends(require_permission('apps:read')),
 ):
     """List available subscription page configs from RemnaWave panel."""
     try:

@@ -14,7 +14,7 @@ from app.database.crud.required_channel import (
 from app.database.models import User
 from app.services.channel_subscription_service import channel_subscription_service
 
-from ..dependencies import get_cabinet_db, get_current_admin_user
+from ..dependencies import get_cabinet_db, require_permission
 from ..schemas.channel import (
     ChannelCreateRequest,
     ChannelListResponse,
@@ -31,7 +31,7 @@ router = APIRouter(prefix='/admin/channel-subscriptions', tags=['Cabinet Admin C
 @router.get('', response_model=ChannelListResponse)
 async def list_channels(
     db: AsyncSession = Depends(get_cabinet_db),
-    _admin: User = Depends(get_current_admin_user),
+    _admin: User = Depends(require_permission('channels:read')),
 ) -> ChannelListResponse:
     channels = await get_all_channels(db)
     return ChannelListResponse(
@@ -44,7 +44,7 @@ async def list_channels(
 async def create_channel(
     data: ChannelCreateRequest,
     db: AsyncSession = Depends(get_cabinet_db),
-    _admin: User = Depends(get_current_admin_user),
+    _admin: User = Depends(require_permission('channels:edit')),
 ) -> ChannelResponse:
     ch = await add_channel(
         db,
@@ -63,7 +63,7 @@ async def update_channel_endpoint(
     channel_db_id: int,
     data: ChannelUpdateRequest,
     db: AsyncSession = Depends(get_cabinet_db),
-    _admin: User = Depends(get_current_admin_user),
+    _admin: User = Depends(require_permission('channels:edit')),
 ) -> ChannelResponse:
     update_data = data.model_dump(exclude_unset=True)
     ch = await update_channel(db, channel_db_id, **update_data)
@@ -77,7 +77,7 @@ async def update_channel_endpoint(
 async def toggle_channel_endpoint(
     channel_db_id: int,
     db: AsyncSession = Depends(get_cabinet_db),
-    _admin: User = Depends(get_current_admin_user),
+    _admin: User = Depends(require_permission('channels:edit')),
 ) -> ChannelResponse:
     ch = await toggle_channel(db, channel_db_id)
     if not ch:
@@ -90,7 +90,7 @@ async def toggle_channel_endpoint(
 async def delete_channel_endpoint(
     channel_db_id: int,
     db: AsyncSession = Depends(get_cabinet_db),
-    _admin: User = Depends(get_current_admin_user),
+    _admin: User = Depends(require_permission('channels:edit')),
 ) -> None:
     ok = await delete_channel(db, channel_db_id)
     if not ok:

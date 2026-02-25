@@ -224,27 +224,108 @@ async def get_optional_cabinet_user(
 
 
 async def get_current_admin_user(
+    request: Request,
     user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
 ) -> User:
     """
     Get current authenticated admin user.
 
-    Checks if the user is admin by telegram_id or email.
+    Checks if the user is admin by legacy config (ADMIN_IDS / ADMIN_EMAILS)
+    **or** by RBAC role assignment (any role with level > 0).
 
     Args:
+        request: FastAPI request object
         user: Authenticated User object
+        db: Database session
 
     Returns:
         Authenticated admin User object
 
     Raises:
-        HTTPException: If user is not an admin
+        HTTPException: If user is not an admin by either mechanism
     """
-    is_admin = settings.is_admin(telegram_id=user.telegram_id, email=user.email if user.email_verified else None)
-    if not is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail='Admin access required',
-        )
+    # Legacy check: config-based admin list
+    is_legacy_admin = settings.is_admin(
+        telegram_id=user.telegram_id,
+        email=user.email if user.email_verified else None,
+    )
+    if is_legacy_admin:
+        return user
 
-    return user
+    # RBAC check: user has any active role with level > 0
+    from app.database.crud.rbac import UserRoleCRUD
+
+    _permissions, _role_names, max_level = await UserRoleCRUD.get_user_permissions(db, user.id)
+    if max_level > 0:
+        return user
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail='Admin access required',
+    )
+
+
+def require_permission(*permissions: str):
+    """
+    FastAPI dependency factory for RBAC permission checks.
+
+    Usage::
+
+        @router.get("/users", dependencies=[Depends(require_permission("users:read"))])
+        async def list_users(...): ...
+
+        # Or inject the user:
+        @router.get("/users")
+        async def list_users(user: User = Depends(require_permission("users:read"))): ...
+    """
+    if not permissions:
+        raise ValueError('require_permission() requires at least one permission argument')
+
+    async def dependency(
+        request: Request,
+        user: User = Depends(get_current_cabinet_user),
+        db: AsyncSession = Depends(get_cabinet_db),
+    ) -> User:
+        from app.services.permission_service import PermissionService
+
+        ip_address = request.client.host if request.client else None
+        user_agent = request.headers.get('user-agent', '')
+
+        for perm in permissions:
+            allowed, reason = await PermissionService.check_permission(
+                db, user, perm, ip_address=ip_address,
+            )
+            if not allowed:
+                await PermissionService.log_action(
+                    db,
+                    user_id=user.id,
+                    action=perm,
+                    status='denied',
+                    ip_address=ip_address,
+                    user_agent=user_agent,
+                    request_method=request.method,
+                    request_path=str(request.url.path),
+                    details={'reason': reason},
+                )
+                await db.commit()
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f'Permission denied: {reason}',
+                )
+
+        # Log successful access with all requested permissions
+        await PermissionService.log_action(
+            db,
+            user_id=user.id,
+            action=','.join(permissions),
+            status='success',
+            ip_address=ip_address,
+            user_agent=user_agent,
+            request_method=request.method,
+            request_path=str(request.url.path),
+        )
+        await db.commit()
+        return user
+
+    return dependency
