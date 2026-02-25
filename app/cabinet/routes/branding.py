@@ -136,7 +136,7 @@ class AnimationEnabledUpdate(BaseModel):
 ALLOWED_BG_TYPES = (
     'aurora', 'sparkles', 'vortex', 'shooting-stars', 'background-beams',
     'background-beams-collision', 'gradient-animation', 'wavy', 'background-lines',
-    'boxes', 'meteors', 'grid', 'dots', 'spotlight', 'noise', 'ripple', 'gemini-effect', 'none',
+    'boxes', 'meteors', 'grid', 'dots', 'spotlight', 'ripple', 'none',
 )
 
 MAX_SETTINGS_KEYS = 20
@@ -175,7 +175,7 @@ class AnimationConfigUpdate(BaseModel):
     type: Literal[
         'aurora', 'sparkles', 'vortex', 'shooting-stars', 'background-beams',
         'background-beams-collision', 'gradient-animation', 'wavy', 'background-lines',
-        'boxes', 'meteors', 'grid', 'dots', 'spotlight', 'noise', 'ripple', 'gemini-effect', 'none',
+        'boxes', 'meteors', 'grid', 'dots', 'spotlight', 'ripple', 'none',
     ] | None = None
     settings: dict | None = None
     opacity: float | None = Field(default=None, ge=0.0, le=1.0)
