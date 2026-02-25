@@ -42,6 +42,8 @@ class AuditLogEntry(BaseModel):
     request_method: str | None = None
     request_path: str | None = None
     created_at: datetime | None = None
+    user_first_name: str | None = None
+    user_email: str | None = None
 
 
 class AuditLogListResponse(BaseModel):
@@ -132,6 +134,7 @@ async def list_audit_logs(
         date_to=date_to,
         limit=limit,
         offset=offset,
+        load_user=True,
     )
 
     items = [
@@ -148,6 +151,8 @@ async def list_audit_logs(
             request_method=log.request_method,
             request_path=log.request_path,
             created_at=log.created_at,
+            user_first_name=log.user.first_name if log.user else None,
+            user_email=log.user.email if log.user else None,
         )
         for log in logs
     ]

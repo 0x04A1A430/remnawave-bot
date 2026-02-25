@@ -456,6 +456,7 @@ class AuditLogCRUD:
         date_to: datetime | None = None,
         limit: int = 50,
         offset: int = 0,
+        load_user: bool = False,
     ) -> tuple[list[AdminAuditLog], int]:
         """Get filtered audit logs with total count.
 
@@ -490,6 +491,10 @@ class AuditLogCRUD:
             .offset(offset)
             .limit(limit)
         )
+        if load_user:
+            from sqlalchemy.orm import selectinload
+
+            stmt = stmt.options(selectinload(AdminAuditLog.user))
         result = await db.execute(stmt)
         logs = list(result.scalars().all())
 

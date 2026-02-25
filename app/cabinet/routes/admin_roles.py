@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -71,25 +71,11 @@ class RoleAssignRequest(BaseModel):
     expires_at: datetime | None = None
 
 
-class PermissionAction(BaseModel):
-    """Single permission action within a section."""
-
-    action: str
-    permission: str  # e.g. "users:read"
-
-
 class PermissionSection(BaseModel):
     """Permission section with available actions."""
 
     section: str
-    actions: list[PermissionAction]
-
-
-class PermissionRegistryResponse(BaseModel):
-    """All available permissions grouped by section."""
-
-    sections: list[PermissionSection]
-    all_permissions: list[str]
+    actions: list[str]
 
 
 class UserRoleResponse(BaseModel):
@@ -167,22 +153,15 @@ def _validate_permissions(permissions: list[str]) -> None:
 # ============ Routes ============
 
 
-@router.get('/permissions', response_model=PermissionRegistryResponse)
+@router.get('/permissions', response_model=list[PermissionSection])
 async def get_permission_registry(
     admin: User = Depends(require_permission('roles:read')),
 ):
     """Get all available permissions grouped by section."""
-    sections = [
-        PermissionSection(
-            section=section,
-            actions=[PermissionAction(action=action, permission=f'{section}:{action}') for action in actions],
-        )
+    return [
+        PermissionSection(section=section, actions=list(actions))
         for section, actions in PERMISSION_REGISTRY.items()
     ]
-    return PermissionRegistryResponse(
-        sections=sections,
-        all_permissions=get_all_permissions(),
-    )
 
 
 @router.get('/roles/{role_id}/users', response_model=list[UserRoleResponse])
@@ -200,13 +179,13 @@ async def list_role_users(
 
     from sqlalchemy import select as _sa_select
 
-    from app.database.models import UserRole as _UR
+    from app.database.models import UserRole as _UserRole
 
     result = await db.execute(
-        _sa_select(_UR)
-        .options(_sel(_UR.user), _sel(_UR.role))
-        .where(_UR.role_id == role_id, _UR.is_active.is_(True))
-        .order_by(_UR.assigned_at.desc())
+        _sa_select(_UserRole)
+        .options(_sel(_UserRole.user), _sel(_UserRole.role))
+        .where(_UserRole.role_id == role_id, _UserRole.is_active.is_(True))
+        .order_by(_UserRole.assigned_at.desc())
     )
     assignments = result.scalars().all()
 
