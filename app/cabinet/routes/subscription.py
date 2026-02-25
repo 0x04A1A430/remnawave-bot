@@ -204,7 +204,10 @@ def _subscription_to_response(
     if is_daily and not is_daily_paused:
         last_charge = getattr(subscription, 'last_daily_charge_at', None)
         if last_charge:
-            next_daily_charge_at = last_charge + timedelta(days=1)
+            next_charge = last_charge + timedelta(days=1)
+            # Если время списания уже прошло — не показываем (DailySubscriptionService обработает)
+            if next_charge > datetime.now(UTC):
+                next_daily_charge_at = next_charge
 
     # Проверяем настройку скрытия ссылки (скрывается только текст, кнопки работают)
     hide_link = settings.should_hide_subscription_link()
