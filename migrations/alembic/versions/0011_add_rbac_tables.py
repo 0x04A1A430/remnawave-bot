@@ -17,7 +17,22 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def _has_table(table_name: str) -> bool:
+    conn = op.get_bind()
+    result = conn.execute(
+        sa.text(
+            'SELECT EXISTS (SELECT 1 FROM information_schema.tables '
+            "WHERE table_schema = 'public' AND table_name = :name)"
+        ),
+        {'name': table_name},
+    )
+    return result.scalar()
+
+
 def upgrade() -> None:
+    if _has_table('admin_roles'):
+        return
+
     op.create_table(
         'admin_roles',
         sa.Column('id', sa.Integer, primary_key=True, autoincrement=True),
