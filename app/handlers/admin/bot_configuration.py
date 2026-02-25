@@ -5,6 +5,7 @@ import time
 from collections.abc import Iterable
 from datetime import UTC, datetime
 
+import structlog
 from aiogram import Dispatcher, F, types
 from aiogram.filters import BaseFilter, StateFilter
 from aiogram.fsm.context import FSMContext
@@ -31,6 +32,7 @@ from app.states import BotConfigStates
 from app.utils.currency_converter import currency_converter
 from app.utils.decorators import admin_required, error_handler
 
+logger = structlog.get_logger(__name__)
 
 CATEGORY_PAGE_SIZE = 10
 SETTINGS_PAGE_SIZE = 8
