@@ -296,6 +296,13 @@ def require_permission(*permissions: str):
         )
         user_agent = request.headers.get('user-agent', '')
 
+        # Extract resource_type from the first permission (section before ':')
+        resource_type = None
+        if permissions:
+            first_perm = permissions[0]
+            if ':' in first_perm:
+                resource_type = first_perm.split(':', maxsplit=1)[0]
+
         for perm in permissions:
             allowed, reason = await PermissionService.check_permission(
                 db, user, perm, ip_address=ip_address,
@@ -305,6 +312,7 @@ def require_permission(*permissions: str):
                     db,
                     user_id=user.id,
                     action=perm,
+                    resource_type=resource_type,
                     status='denied',
                     ip_address=ip_address,
                     user_agent=user_agent,
@@ -318,16 +326,30 @@ def require_permission(*permissions: str):
                     detail=f'Permission denied: {reason}',
                 )
 
+        # Capture request body for mutating methods
+        details: dict | None = None
+        if request.method in ('POST', 'PUT', 'PATCH', 'DELETE'):
+            try:
+                body = await request.body()
+                if body:
+                    import json
+
+                    details = {'request_body': json.loads(body)}
+            except Exception:
+                pass
+
         # Log successful access with all requested permissions
         await PermissionService.log_action(
             db,
             user_id=user.id,
             action=','.join(permissions),
+            resource_type=resource_type,
             status='success',
             ip_address=ip_address,
             user_agent=user_agent,
             request_method=request.method,
             request_path=str(request.url.path),
+            details=details,
         )
         await db.commit()
         return user
