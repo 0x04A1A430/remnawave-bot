@@ -1593,7 +1593,11 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         )
         has_direct_payment_methods = True
 
-    if settings.is_freekassa_enabled() and not settings.is_freekassa_sbp_enabled() and not settings.is_freekassa_card_enabled():
+    if (
+        settings.is_freekassa_enabled()
+        and not settings.is_freekassa_sbp_enabled()
+        and not settings.is_freekassa_card_enabled()
+    ):
         freekassa_name = settings.get_freekassa_display_name()
         keyboard.append(
             [

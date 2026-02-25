@@ -117,7 +117,9 @@ async def route_payment_by_method(
         from .freekassa import process_freekassa_payment_amount
 
         async with AsyncSessionLocal() as db:
-            await process_freekassa_payment_amount(message, db_user, db, amount_kopeks, state, payment_method=payment_method)
+            await process_freekassa_payment_amount(
+                message, db_user, db, amount_kopeks, state, payment_method=payment_method
+            )
         return True
 
     if payment_method == 'kassa_ai':
