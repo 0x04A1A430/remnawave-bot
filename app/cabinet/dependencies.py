@@ -326,17 +326,21 @@ def require_permission(*permissions: str):
                     detail=f'Permission denied: {reason}',
                 )
 
-        # Capture request body for mutating methods
-        details: dict | None = None
+        # Capture request details
+        details: dict = {}
         if request.method in ('POST', 'PUT', 'PATCH', 'DELETE'):
             try:
                 body = await request.body()
                 if body:
                     import json
 
-                    details = {'request_body': json.loads(body)}
+                    details['request_body'] = json.loads(body)
             except Exception:
                 pass
+        # Capture query params for all methods
+        query_params = dict(request.query_params)
+        if query_params:
+            details['query_params'] = query_params
 
         # Log successful access with all requested permissions
         await PermissionService.log_action(
@@ -349,7 +353,7 @@ def require_permission(*permissions: str):
             user_agent=user_agent,
             request_method=request.method,
             request_path=str(request.url.path),
-            details=details,
+            details=details or None,
         )
         await db.commit()
         return user
