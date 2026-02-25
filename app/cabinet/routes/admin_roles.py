@@ -290,12 +290,6 @@ async def update_role(
             detail='Role not found',
         )
 
-    if role.is_system:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail='Cannot edit a system role',
-        )
-
     admin_level = await _get_admin_level(db, admin)
 
     # Cannot edit a role at or above own level
