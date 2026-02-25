@@ -18,7 +18,7 @@ from ..dependencies import get_cabinet_db, require_permission
 
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(prefix='/admin/roles', tags=['Admin Roles'])
+router = APIRouter(prefix='/admin/rbac', tags=['Admin RBAC'])
 
 
 # ============ Schemas ============
@@ -185,30 +185,51 @@ async def get_permission_registry(
     )
 
 
-@router.get('/users', response_model=list[AdminWithRolesResponse])
-async def list_users_with_roles(
+@router.get('/roles/{role_id}/users', response_model=list[UserRoleResponse])
+async def list_role_users(
+    role_id: int,
     admin: User = Depends(require_permission('roles:read')),
     db: AsyncSession = Depends(get_cabinet_db),
-    limit: int = Query(default=100, ge=1, le=500),
-    offset: int = Query(default=0, ge=0),
 ):
-    """List users that have at least one admin role."""
-    admins = await UserRoleCRUD.get_all_admins(db, limit=limit, offset=offset)
+    """List user-role assignments for a specific role."""
+    from sqlalchemy.orm import selectinload as _sel
+
+    role = await AdminRoleCRUD.get_by_id(db, role_id)
+    if not role:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Role not found')
+
+    from sqlalchemy import select as _sa_select
+
+    from app.database.models import UserRole as _UR
+
+    result = await db.execute(
+        _sa_select(_UR)
+        .options(_sel(_UR.user), _sel(_UR.role))
+        .where(_UR.role_id == role_id, _UR.is_active.is_(True))
+        .order_by(_UR.assigned_at.desc())
+    )
+    assignments = result.scalars().all()
+
     return [
-        AdminWithRolesResponse(
-            user_id=item['user'].id,
-            telegram_id=item['user'].telegram_id,
-            username=item['user'].username,
-            first_name=item['user'].first_name,
-            last_name=item['user'].last_name,
-            email=item['user'].email,
-            role_names=item['role_names'],
+        UserRoleResponse(
+            id=a.id,
+            user_id=a.user_id,
+            role_id=a.role_id,
+            role_name=a.role.name if a.role else None,
+            user_telegram_id=a.user.telegram_id if a.user else None,
+            user_username=a.user.username if a.user else None,
+            user_first_name=a.user.first_name if a.user else None,
+            user_email=a.user.email if a.user else None,
+            assigned_by=a.assigned_by,
+            assigned_at=a.assigned_at,
+            expires_at=a.expires_at,
+            is_active=a.is_active,
         )
-        for item in admins
+        for a in assignments
     ]
 
 
-@router.get('', response_model=list[RoleResponse])
+@router.get('/roles', response_model=list[RoleResponse])
 async def list_roles(
     admin: User = Depends(require_permission('roles:read')),
     db: AsyncSession = Depends(get_cabinet_db),
@@ -219,7 +240,7 @@ async def list_roles(
     return [await _role_to_response(db, role) for role in roles]
 
 
-@router.post('', response_model=RoleResponse, status_code=status.HTTP_201_CREATED)
+@router.post('/roles', response_model=RoleResponse, status_code=status.HTTP_201_CREATED)
 async def create_role(
     payload: RoleCreateRequest,
     admin: User = Depends(require_permission('roles:create')),
@@ -261,7 +282,7 @@ async def create_role(
     return await _role_to_response(db, role)
 
 
-@router.put('/{role_id}', response_model=RoleResponse)
+@router.put('/roles/{role_id}', response_model=RoleResponse)
 async def update_role(
     role_id: int,
     payload: RoleUpdateRequest,
@@ -326,7 +347,7 @@ async def update_role(
     return await _role_to_response(db, updated)
 
 
-@router.delete('/{role_id}')
+@router.delete('/roles/{role_id}')
 async def delete_role(
     role_id: int,
     admin: User = Depends(require_permission('roles:delete')),
@@ -366,7 +387,7 @@ async def delete_role(
     return {'message': 'Role deleted', 'role_id': role_id}
 
 
-@router.post('/assign', response_model=UserRoleResponse, status_code=status.HTTP_201_CREATED)
+@router.post('/assignments', response_model=UserRoleResponse, status_code=status.HTTP_201_CREATED)
 async def assign_role(
     payload: RoleAssignRequest,
     admin: User = Depends(require_permission('roles:assign')),
@@ -431,7 +452,7 @@ async def assign_role(
     )
 
 
-@router.delete('/assign/{assignment_id}')
+@router.delete('/assignments/{assignment_id}')
 async def revoke_role(
     assignment_id: int,
     admin: User = Depends(require_permission('roles:assign')),

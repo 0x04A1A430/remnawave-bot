@@ -21,7 +21,7 @@ from ..dependencies import get_cabinet_db, require_permission
 
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(prefix='/admin/audit-log', tags=['Admin Audit Log'])
+router = APIRouter(prefix='/admin/rbac/audit-log', tags=['Admin RBAC Audit Log'])
 
 
 # ============ Schemas ============
