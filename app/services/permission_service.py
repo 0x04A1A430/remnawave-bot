@@ -300,10 +300,11 @@ class PermissionService:
         permissions, role_names, max_level = await UserRoleCRUD.get_user_permissions(db, user_id)
 
         # Legacy config-based admins get full superadmin permissions
+        # Level is SUPERADMIN_LEVEL + 1 so they can manage all roles including level-999
         if user is not None and not permissions and _is_legacy_admin(user):
             permissions = ['*:*']
             role_names = ['superadmin']
-            max_level = SUPERADMIN_LEVEL
+            max_level = SUPERADMIN_LEVEL + 1
 
         return {
             'permissions': permissions,

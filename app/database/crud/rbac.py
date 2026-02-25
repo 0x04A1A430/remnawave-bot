@@ -467,7 +467,7 @@ class AuditLogCRUD:
         if user_id is not None:
             filters.append(AdminAuditLog.user_id == user_id)
         if action is not None:
-            filters.append(AdminAuditLog.action == action)
+            filters.append(AdminAuditLog.action.ilike(f'%{action}%'))
         if resource_type is not None:
             filters.append(AdminAuditLog.resource_type == resource_type)
         if status is not None:
