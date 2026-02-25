@@ -1,5 +1,32 @@
 # Changelog
 
+## [3.19.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.18.0...v3.19.0) (2026-02-25)
+
+
+### New Features
+
+* add granular user permissions (balance, subscription, promo_group, referral, send_offer) ([60c4fe2](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/60c4fe2e239d8fef7726cac769711c8fcce789eb))
+* add per-channel disable settings and fix CHANNEL_REQUIRED_FOR_ALL bug ([3642462](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/3642462670c876052aa668c1515af8c04234cb34))
+* add RBAC + ABAC permission system for admin cabinet ([3fee54f](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/3fee54f657dc6e0db1ec36697850ada2235e6968))
+* add resource_type and request body to audit log entries ([388fc7e](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/388fc7ee67f5fc0edf6b7b64b977e12a2d8f0566))
+* allow editing system roles ([f6b6e22](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/f6b6e22a9528dc05b7fbfa80b63051a75c8e73cd))
+* capture query params in audit log details for all requests ([bea9da9](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/bea9da96d44965fcee5e2eba448960443152d4ea))
+
+
+### Bug Fixes
+
+* address RBAC review findings (CRITICAL + HIGH) ([1646f04](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/1646f04bde47a08f3fd782b7831d40760bd1ba60))
+* align RBAC route prefixes with frontend API paths ([5a7dd3f](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/5a7dd3f16408f3497a9765e79a540ccdabc50e69))
+* always include details in successful audit log entries ([3dc0b93](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/3dc0b93bdfc85fb97f371dc34e024272766afc65))
+* extract real client IP from X-Forwarded-For/X-Real-IP headers ([af6686c](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/af6686ccfae12876e867cdabe729d0c893bd85a1))
+* grant legacy config-based admins full RBAC access ([8893fc1](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/8893fc128e3d8927054f1df1647e896e780c69e7))
+* improve campaign notifications and ticket media in admin topics ([a594a0f](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/a594a0f79f48227f75d6102b4586179102c4d344))
+* RBAC API response format fixes and audit log user info ([4598c27](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/4598c2785a42773ee8be04ada1c00d14824e07e0))
+* RBAC audit log action filter and legacy admin level ([c1da8a4](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/c1da8a4dba5d0c993d3e15b2866bdcfa09de1752))
+* restore subscription_url and crypto_link after panel sync ([26efb15](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/26efb157e476a18b036d09167628a295d7e4c10b))
+* specify foreign_keys on User.admin_roles_rel to resolve ambiguous join ([bc7d061](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/bc7d0612f1476f2fdb498cd76a9374b41fd9440a))
+* stack promo group + promo offer discounts in bot (matching cabinet) ([628997f](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/628997fb48413cc4fae9ac491d1c7f6185877200))
+
 ## [3.18.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.17.1...v3.18.0) (2026-02-24)
 
 
