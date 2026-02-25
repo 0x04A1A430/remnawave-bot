@@ -829,7 +829,7 @@ async def get_user_node_usage(
 async def update_user_balance(
     user_id: int,
     request: UpdateBalanceRequest,
-    admin: User = Depends(require_permission('users:edit')),
+    admin: User = Depends(require_permission('users:balance')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """
@@ -906,7 +906,7 @@ async def update_user_balance(
 async def update_user_subscription(
     user_id: int,
     request: UpdateSubscriptionRequest,
-    admin: User = Depends(require_permission('users:edit')),
+    admin: User = Depends(require_permission('users:subscription')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """
@@ -1490,7 +1490,7 @@ async def update_user_restrictions(
 async def update_user_promo_group(
     user_id: int,
     request: UpdatePromoGroupRequest,
-    admin: User = Depends(require_permission('users:edit')),
+    admin: User = Depends(require_permission('users:promo_group')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Update user promo group."""
@@ -1545,7 +1545,7 @@ async def update_user_promo_group(
 async def update_user_referral_commission(
     user_id: int,
     request: UpdateReferralCommissionRequest,
-    admin: User = Depends(require_permission('users:edit')),
+    admin: User = Depends(require_permission('users:referral')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Update user's individual referral commission percentage."""
@@ -1803,7 +1803,7 @@ async def full_delete_user(
 async def reset_user_trial(
     user_id: int,
     request: ResetTrialRequest = ResetTrialRequest(),
-    admin: User = Depends(require_permission('users:edit')),
+    admin: User = Depends(require_permission('users:subscription')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """
@@ -1874,7 +1874,7 @@ async def reset_user_trial(
 async def reset_user_subscription(
     user_id: int,
     request: ResetSubscriptionRequest = ResetSubscriptionRequest(),
-    admin: User = Depends(require_permission('users:edit')),
+    admin: User = Depends(require_permission('users:subscription')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """

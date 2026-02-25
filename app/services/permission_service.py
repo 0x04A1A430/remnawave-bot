@@ -41,7 +41,7 @@ def _is_legacy_admin(user: User) -> bool:
 # ---------------------------------------------------------------------------
 
 PERMISSION_REGISTRY: dict[str, list[str]] = {
-    'users': ['read', 'edit', 'block', 'delete', 'sync'],
+    'users': ['read', 'edit', 'block', 'delete', 'sync', 'promo_group', 'balance', 'subscription', 'send_offer', 'referral'],
     'tickets': ['read', 'reply', 'close', 'settings'],
     'stats': ['read', 'export'],
     'broadcasts': ['read', 'create', 'edit', 'delete', 'send'],
