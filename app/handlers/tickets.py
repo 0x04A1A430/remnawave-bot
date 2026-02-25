@@ -1034,9 +1034,7 @@ async def notify_admins_about_new_ticket(ticket: Ticket, db: AsyncSession):
         if message_preview:
             notification_text += f'\n📩 <b>Сообщение:</b>\n{message_preview}\n'
 
-        notification_text += (
-            f'\n📅 <b>Создан:</b> {format_local_datetime(ticket.created_at, "%d.%m.%Y %H:%M")}\n'
-        )
+        notification_text += f'\n📅 <b>Создан:</b> {format_local_datetime(ticket.created_at, "%d.%m.%Y %H:%M")}\n'
 
         from app.services.maintenance_service import maintenance_service
 

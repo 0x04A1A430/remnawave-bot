@@ -78,10 +78,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
     @staticmethod
     def _any_channel_has_disable_flag(channels: list[dict]) -> bool:
         """Check if any channel in the list has disable-on-leave flags set."""
-        return any(
-            ch.get('disable_trial_on_leave', True) or ch.get('disable_paid_on_leave', False)
-            for ch in channels
-        )
+        return any(ch.get('disable_trial_on_leave', True) or ch.get('disable_paid_on_leave', False) for ch in channels)
 
     async def __call__(
         self,

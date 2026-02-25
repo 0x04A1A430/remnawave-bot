@@ -305,7 +305,10 @@ def require_permission(*permissions: str):
 
         for perm in permissions:
             allowed, reason = await PermissionService.check_permission(
-                db, user, perm, ip_address=ip_address,
+                db,
+                user,
+                perm,
+                ip_address=ip_address,
             )
             if not allowed:
                 await PermissionService.log_action(

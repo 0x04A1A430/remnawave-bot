@@ -173,8 +173,7 @@ async def get_permission_registry(
 ):
     """Get all available permissions grouped by section."""
     return [
-        PermissionSection(section=section, actions=list(actions))
-        for section, actions in PERMISSION_REGISTRY.items()
+        PermissionSection(section=section, actions=list(actions)) for section, actions in PERMISSION_REGISTRY.items()
     ]
 
 

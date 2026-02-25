@@ -2902,9 +2902,7 @@ class UserRole(Base):
     expires_at = Column(AwareDateTime(), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
 
-    __table_args__ = (
-        UniqueConstraint('user_id', 'role_id', name='uq_user_role'),
-    )
+    __table_args__ = (UniqueConstraint('user_id', 'role_id', name='uq_user_role'),)
 
     user = relationship('User', foreign_keys=[user_id], back_populates='admin_roles_rel')
     role = relationship('AdminRole', back_populates='user_roles')

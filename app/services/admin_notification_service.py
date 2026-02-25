@@ -240,9 +240,7 @@ class AdminNotificationService:
 
         return mapping.get(promo_type, f'ℹ️ {promo_type}')
 
-    def _format_campaign_bonus(
-        self, campaign: AdvertisingCampaign, *, tariff_name: str | None = None
-    ) -> list[str]:
+    def _format_campaign_bonus(self, campaign: AdvertisingCampaign, *, tariff_name: str | None = None) -> list[str]:
         if campaign.is_balance_bonus:
             return [
                 f'💰 Баланс: {settings.format_price(campaign.balance_bonus_kopeks or 0)}',

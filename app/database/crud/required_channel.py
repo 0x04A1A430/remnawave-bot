@@ -12,10 +12,17 @@ from app.database.models import RequiredChannel, UserChannelSubscription
 logger = structlog.get_logger(__name__)
 
 # Explicit allowlist of fields that can be updated via update_channel()
-_UPDATABLE_FIELDS = frozenset({
-    'channel_id', 'channel_link', 'title', 'is_active', 'sort_order',
-    'disable_trial_on_leave', 'disable_paid_on_leave',
-})
+_UPDATABLE_FIELDS = frozenset(
+    {
+        'channel_id',
+        'channel_link',
+        'title',
+        'is_active',
+        'sort_order',
+        'disable_trial_on_leave',
+        'disable_paid_on_leave',
+    }
+)
 
 # Validation patterns for channel_id
 _CHANNEL_ID_NUMERIC = re.compile(r'^-100\d{10,13}$')
