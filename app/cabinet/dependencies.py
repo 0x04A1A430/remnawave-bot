@@ -327,7 +327,13 @@ def require_permission(*permissions: str):
                 )
 
         # Capture request details
-        details: dict = {}
+        details: dict = {
+            'method': request.method,
+            'path': str(request.url.path),
+        }
+        query_params = dict(request.query_params)
+        if query_params:
+            details['query_params'] = query_params
         if request.method in ('POST', 'PUT', 'PATCH', 'DELETE'):
             try:
                 body = await request.body()
@@ -337,10 +343,6 @@ def require_permission(*permissions: str):
                     details['request_body'] = json.loads(body)
             except Exception:
                 pass
-        # Capture query params for all methods
-        query_params = dict(request.query_params)
-        if query_params:
-            details['query_params'] = query_params
 
         # Log successful access with all requested permissions
         await PermissionService.log_action(
@@ -353,7 +355,7 @@ def require_permission(*permissions: str):
             user_agent=user_agent,
             request_method=request.method,
             request_path=str(request.url.path),
-            details=details or None,
+            details=details,
         )
         await db.commit()
         return user
