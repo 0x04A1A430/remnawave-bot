@@ -71,6 +71,13 @@ _CSV_COLUMNS = [
 ]
 
 
+def _sanitize_csv_cell(value: str) -> str:
+    """Prevent CSV formula injection by prefixing dangerous leading characters."""
+    if value and value[0] in ('=', '+', '-', '@', '\t', '\r'):
+        return f"'{value}"
+    return value
+
+
 def _logs_to_csv(logs) -> str:
     """Serialize audit log entries to CSV string."""
     output = io.StringIO()
@@ -88,10 +95,10 @@ def _logs_to_csv(logs) -> str:
                 log.status,
                 log.ip_address or '',
                 log.request_method or '',
-                log.request_path or '',
+                _sanitize_csv_cell(log.request_path or ''),
                 log.created_at.isoformat() if log.created_at else '',
-                (log.user_agent or '')[:200],
-                str(log.details) if log.details else '',
+                _sanitize_csv_cell((log.user_agent or '')[:200]),
+                _sanitize_csv_cell(str(log.details) if log.details else ''),
             ]
         )
 

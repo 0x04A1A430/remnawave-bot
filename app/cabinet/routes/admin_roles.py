@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -189,8 +189,8 @@ async def get_permission_registry(
 async def list_users_with_roles(
     admin: User = Depends(require_permission('roles:read')),
     db: AsyncSession = Depends(get_cabinet_db),
-    limit: int = 100,
-    offset: int = 0,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
 ):
     """List users that have at least one admin role."""
     admins = await UserRoleCRUD.get_all_admins(db, limit=limit, offset=offset)
@@ -276,9 +276,15 @@ async def update_role(
             detail='Role not found',
         )
 
+    if role.is_system:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='Cannot edit a system role',
+        )
+
     admin_level = await _get_admin_level(db, admin)
 
-    # Cannot edit a role at or above own level (unless it's the same role)
+    # Cannot edit a role at or above own level
     if role.level >= admin_level:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

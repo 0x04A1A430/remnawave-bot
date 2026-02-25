@@ -374,7 +374,7 @@ async def get_nodes_status(
 @router.post('/nodes/{node_uuid}/restart')
 async def restart_node(
     node_uuid: str,
-    admin: User = Depends(require_permission('stats:read')),
+    admin: User = Depends(require_permission('remnawave:manage')),
 ):
     """Restart a node."""
     try:
@@ -401,7 +401,7 @@ async def restart_node(
 @router.post('/nodes/{node_uuid}/toggle')
 async def toggle_node(
     node_uuid: str,
-    admin: User = Depends(require_permission('stats:read')),
+    admin: User = Depends(require_permission('remnawave:manage')),
 ):
     """Enable or disable a node."""
     try:

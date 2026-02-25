@@ -192,6 +192,7 @@ async def bootstrap_superadmins(db: AsyncSession) -> None:
             logger.debug('Superadmin bootstrap: no new assignments needed')
 
     except Exception:
+        await db.rollback()
         logger.exception('Failed to bootstrap superadmins, continuing startup')
 
 
