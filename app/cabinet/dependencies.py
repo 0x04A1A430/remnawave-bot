@@ -289,7 +289,11 @@ def require_permission(*permissions: str):
     ) -> User:
         from app.services.permission_service import PermissionService
 
-        ip_address = request.client.host if request.client else None
+        ip_address = (
+            request.headers.get('X-Forwarded-For', '').split(',')[0].strip()
+            or request.headers.get('X-Real-IP', '').strip()
+            or (request.client.host if request.client else None)
+        )
         user_agent = request.headers.get('user-agent', '')
 
         for perm in permissions:
