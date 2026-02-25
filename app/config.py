@@ -1525,8 +1525,8 @@ class Settings(BaseSettings):
             logger.warning('Некорректное значение DEVICES_SELECTION_DISABLED_AMOUNT', raw_value=raw_value)
             return None
 
-        if value < 0:
-            return 0
+        if value <= 0:
+            return None
 
         return value
 
