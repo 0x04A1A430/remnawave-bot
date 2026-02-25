@@ -3,12 +3,12 @@
 import json
 import os
 from pathlib import Path
+from typing import Literal
 
 import structlog
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, field_validator
-from typing import Literal
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 

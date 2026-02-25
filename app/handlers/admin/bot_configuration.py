@@ -32,6 +32,7 @@ from app.states import BotConfigStates
 from app.utils.currency_converter import currency_converter
 from app.utils.decorators import admin_required, error_handler
 
+
 logger = structlog.get_logger(__name__)
 
 CATEGORY_PAGE_SIZE = 10

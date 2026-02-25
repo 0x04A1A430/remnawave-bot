@@ -1471,14 +1471,12 @@ class RemnaWaveService:
                     )
 
                 # Используем один API клиент для всех операций сброса HWID
-                hwid_api_client = None
                 hwid_api_cm = None
                 try:
                     hwid_api_cm = self.get_api_client()
-                    hwid_api_client = await hwid_api_cm.__aenter__()
+                    await hwid_api_cm.__aenter__()
                 except Exception as api_init_error:
                     logger.warning('⚠️ Не удалось создать API клиент для сброса HWID', api_init_error=api_init_error)
-                    hwid_api_client = None
                     hwid_api_cm = None
 
                 try:
