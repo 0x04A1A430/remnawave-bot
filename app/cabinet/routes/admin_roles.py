@@ -129,8 +129,22 @@ async def _role_to_response(db: AsyncSession, role) -> RoleResponse:
 
 
 async def _get_admin_level(db: AsyncSession, admin: User) -> int:
-    """Get the maximum role level of the current admin."""
+    """Get the maximum role level of the current admin.
+
+    Legacy config-based admins (ADMIN_IDS) get superadmin level (999+1=1000)
+    so they can manage all roles including level 999.
+    """
+    from app.config import settings
+
     _perms, _names, max_level = await UserRoleCRUD.get_user_permissions(db, admin.id)
+
+    # Legacy config-based admins always get the highest level
+    if settings.is_admin(
+        telegram_id=admin.telegram_id,
+        email=admin.email if admin.email_verified else None,
+    ):
+        max_level = max(max_level, 1000)
+
     return max_level
 
 

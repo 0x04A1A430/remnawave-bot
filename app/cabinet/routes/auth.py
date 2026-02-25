@@ -1135,7 +1135,7 @@ async def get_my_permissions(
     """Get current user's RBAC permissions, roles, and level."""
     from app.services.permission_service import PermissionService
 
-    return await PermissionService.get_user_permissions(db, user.id)
+    return await PermissionService.get_user_permissions(db, user.id, user=user)
 
 
 @router.get('/me/is-admin')

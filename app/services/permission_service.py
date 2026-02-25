@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database.crud.rbac import AccessPolicyCRUD, AuditLogCRUD, UserRoleCRUD
 
 
@@ -21,7 +22,19 @@ if TYPE_CHECKING:
     from app.database.models import AccessPolicy, User
 
 
+SUPERADMIN_LEVEL = 999
+
+
 logger = structlog.get_logger(__name__)
+
+
+def _is_legacy_admin(user: User) -> bool:
+    """Check if user is a legacy config-based admin (ADMIN_IDS / ADMIN_EMAILS)."""
+    return settings.is_admin(
+        telegram_id=user.telegram_id,
+        email=user.email if user.email_verified else None,
+    )
+
 
 # ---------------------------------------------------------------------------
 # Permission Registry — section -> available actions
@@ -198,6 +211,10 @@ class PermissionService:
         5. Evaluate matching policies in priority order; **deny wins over allow**
            at the same priority level.
         """
+        # Step 0 -- legacy config-based admins get full access
+        if _is_legacy_admin(user):
+            return True, 'Granted by legacy admin config'
+
         # Step 1 -- aggregate RBAC permissions
         permissions, role_names, max_level = await UserRoleCRUD.get_user_permissions(db, user.id)
 
@@ -269,7 +286,7 @@ class PermissionService:
         return True, 'Granted by RBAC + ABAC'
 
     @staticmethod
-    async def get_user_permissions(db: AsyncSession, user_id: int) -> dict:
+    async def get_user_permissions(db: AsyncSession, user_id: int, user: User | None = None) -> dict:
         """Return aggregated permission info for a user.
 
         Returns::
@@ -281,6 +298,13 @@ class PermissionService:
             }
         """
         permissions, role_names, max_level = await UserRoleCRUD.get_user_permissions(db, user_id)
+
+        # Legacy config-based admins get full superadmin permissions
+        if user is not None and not permissions and _is_legacy_admin(user):
+            permissions = ['*:*']
+            role_names = ['superadmin']
+            max_level = SUPERADMIN_LEVEL
+
         return {
             'permissions': permissions,
             'roles': role_names,
