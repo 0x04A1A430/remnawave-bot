@@ -845,7 +845,6 @@
 "BALANCE_INFO":"\n💰<b>余额：{balance}</b>\n\n请选择操作：\n",
 "BALANCE_SUPPORT_REQUEST":"🛠️通过支持请求",
 "BALANCE_TOPUP":"💳充值余额",
-"BALANCE_TOPUP_CART_REMINDER_DETAILED":"\n💡<b>需要充值余额</b>\n\n您的购物车中有总价值{total_amount}的商品，但余额不足。\n\n💳<b>请充值余额</b>以完成购买。\n\n请选择充值方式：",
 "AUTO_PURCHASE_SUBSCRIPTION_SUCCESS":"✅充值余额后，已自动购买{period}的订阅。",
 "AUTO_PURCHASE_SUBSCRIPTION_EXTENDED":"✅订阅已自动延长{period}。",
 "AUTO_PURCHASE_SUBSCRIPTION_EXTENDED_DETAILS":"⏰新到期日期：{date}。",

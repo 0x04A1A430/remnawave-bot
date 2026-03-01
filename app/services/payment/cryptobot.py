@@ -49,14 +49,6 @@ class _UserNotificationPayload:
     asset: str
 
 
-@dataclass(slots=True)
-class _SavedCartNotificationPayload:
-    telegram_id: int
-    text: str
-    reply_markup: Any
-    user_id: int
-
-
 class CryptoBotPaymentMixin:
     """Mixin, отвечающий за генерацию инвойсов CryptoBot и обработку webhook."""
 
@@ -569,33 +561,6 @@ class CryptoBotPaymentMixin:
             )
         except Exception as error:
             logger.error('Ошибка отправки уведомления о пополнении CryptoBot', error=error)
-
-    async def _deliver_saved_cart_reminder(self, payload: _SavedCartNotificationPayload) -> None:
-        bot_instance = getattr(self, 'bot', None)
-        if not bot_instance:
-            return
-
-        # Skip email-only users (no telegram_id)
-        if not payload.telegram_id:
-            logger.debug('Пропуск напоминания о корзине для email-пользователя')
-            return
-
-        try:
-            await bot_instance.send_message(
-                chat_id=payload.telegram_id,
-                text=payload.text,
-                reply_markup=payload.reply_markup,
-            )
-            logger.info(
-                'Отправлено уведомление с кнопкой возврата к оформлению подписки пользователю', user_id=payload.user_id
-            )
-        except Exception as error:
-            logger.error(
-                'Ошибка отправки уведомления о сохраненной корзине для пользователя',
-                user_id=payload.user_id,
-                error=error,
-                exc_info=True,
-            )
 
     async def get_cryptobot_payment_status(
         self,

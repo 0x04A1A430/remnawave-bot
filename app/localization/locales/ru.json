@@ -926,7 +926,6 @@
   "BALANCE_INFO": "\n💰 <b>Баланс: {balance}</b>\n\nВыберите действие:\n",
   "BALANCE_SUPPORT_REQUEST": "🛠️ Запрос через поддержку",
   "BALANCE_TOPUP": "💳 Пополнить баланс",
-  "BALANCE_TOPUP_CART_REMINDER_DETAILED": "\n💡 <b>Требуется пополнение баланса</b>\n\nВ вашей корзине находятся товары на общую сумму {total_amount}, но на балансе недостаточно средств.\n\n💳 <b>Пополните баланс</b>, чтобы завершить покупку.\n\nВыберите способ пополнения:",
   "AUTO_PURCHASE_SUBSCRIPTION_SUCCESS": "✅ Подписка на {period} автоматически оформлена после пополнения баланса.",
   "AUTO_PURCHASE_SUBSCRIPTION_EXTENDED": "✅ Подписка автоматически продлена на {period}.",
   "AUTO_PURCHASE_SUBSCRIPTION_EXTENDED_DETAILS": "⏰ Новая дата окончания: {date}.",

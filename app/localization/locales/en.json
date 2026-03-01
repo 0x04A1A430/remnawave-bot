@@ -906,7 +906,6 @@
   "BALANCE_INFO": "\n💰 <b>Balance: {balance}</b>\n\nChoose an action:\n",
   "BALANCE_SUPPORT_REQUEST": "🛠️ Request via support",
   "BALANCE_TOPUP": "💳 Top up balance",
-  "BALANCE_TOPUP_CART_REMINDER_DETAILED": "\\n💡 <b>Balance top-up required</b>\\n\\nYour cart contains items totaling {total_amount}, but your current balance is insufficient.\\n\\n💳 <b>Top up your balance</b> to complete the purchase.\\n\\nChoose a top-up method:",
   "AUTO_PURCHASE_SUBSCRIPTION_SUCCESS": "✅ Your {period} subscription was purchased automatically after topping up your balance.",
   "AUTO_PURCHASE_SUBSCRIPTION_EXTENDED": "✅ Subscription automatically extended for {period}.",
   "AUTO_PURCHASE_SUBSCRIPTION_EXTENDED_DETAILS": "⏰ New expiration date: {date}.",
