@@ -4085,6 +4085,8 @@ async def activate_promo_code(
         'expired': status.HTTP_410_GONE,
         'used': status.HTTP_409_CONFLICT,
         'already_used_by_user': status.HTTP_409_CONFLICT,
+        'no_subscription_for_days': status.HTTP_400_BAD_REQUEST,
+        'trial_subscription_not_eligible': status.HTTP_400_BAD_REQUEST,
         'server_error': status.HTTP_500_INTERNAL_SERVER_ERROR,
     }
     message_map = {
@@ -4093,6 +4095,8 @@ async def activate_promo_code(
         'expired': 'Promo code expired',
         'used': 'Promo code already used',
         'already_used_by_user': 'Promo code already used by this user',
+        'no_subscription_for_days': 'This promo code requires an active or expired subscription',
+        'trial_subscription_not_eligible': 'This promo code is not available for trial subscriptions',
         'user_not_found': 'User not found',
         'server_error': 'Failed to activate promo code',
     }
