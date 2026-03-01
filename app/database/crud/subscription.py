@@ -15,6 +15,8 @@ from app.database.models import (
     Subscription,
     SubscriptionServer,
     SubscriptionStatus,
+    Transaction,
+    TransactionType,
     User,
     UserPromoGroup,
     UserStatus,
@@ -840,26 +842,40 @@ async def get_subscriptions_statistics(db: AsyncSession) -> dict:
 
     paid_subscriptions = active_subscriptions - trial_subscriptions
 
-    today = datetime.now(UTC).date()
+    now = datetime.now(UTC)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_ago = today_start - timedelta(days=7)
+    month_ago = today_start - timedelta(days=30)
+
     today_result = await db.execute(
-        select(func.count(Subscription.id)).where(
-            and_(Subscription.created_at >= today, Subscription.is_trial == False)
+        select(func.count(Transaction.id)).where(
+            and_(
+                Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
+                Transaction.is_completed == True,
+                Transaction.created_at >= today_start,
+            )
         )
     )
     purchased_today = today_result.scalar()
 
-    week_ago = datetime.now(UTC) - timedelta(days=7)
     week_result = await db.execute(
-        select(func.count(Subscription.id)).where(
-            and_(Subscription.created_at >= week_ago, Subscription.is_trial == False)
+        select(func.count(Transaction.id)).where(
+            and_(
+                Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
+                Transaction.is_completed == True,
+                Transaction.created_at >= week_ago,
+            )
         )
     )
     purchased_week = week_result.scalar()
 
-    month_ago = datetime.now(UTC) - timedelta(days=30)
     month_result = await db.execute(
-        select(func.count(Subscription.id)).where(
-            and_(Subscription.created_at >= month_ago, Subscription.is_trial == False)
+        select(func.count(Transaction.id)).where(
+            and_(
+                Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
+                Transaction.is_completed == True,
+                Transaction.created_at >= month_ago,
+            )
         )
     )
     purchased_month = month_result.scalar()
