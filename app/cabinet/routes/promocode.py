@@ -74,6 +74,7 @@ async def activate_promocode(
         'no_subscription_for_days': 'This promo code requires an active or expired subscription',
         'trial_subscription_not_eligible': 'This promo code is not available for trial subscriptions',
         'not_first_purchase': 'This promo code is only available for first purchase',
+        'daily_limit': 'Too many promo code activations today',
         'user_not_found': 'User not found',
         'server_error': 'Server error occurred',
     }

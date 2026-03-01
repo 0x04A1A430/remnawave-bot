@@ -4087,6 +4087,9 @@ async def activate_promo_code(
         'already_used_by_user': status.HTTP_409_CONFLICT,
         'no_subscription_for_days': status.HTTP_400_BAD_REQUEST,
         'trial_subscription_not_eligible': status.HTTP_400_BAD_REQUEST,
+        'active_discount_exists': status.HTTP_409_CONFLICT,
+        'not_first_purchase': status.HTTP_400_BAD_REQUEST,
+        'daily_limit': status.HTTP_429_TOO_MANY_REQUESTS,
         'server_error': status.HTTP_500_INTERNAL_SERVER_ERROR,
     }
     message_map = {
@@ -4097,6 +4100,9 @@ async def activate_promo_code(
         'already_used_by_user': 'Promo code already used by this user',
         'no_subscription_for_days': 'This promo code requires an active or expired subscription',
         'trial_subscription_not_eligible': 'This promo code is not available for trial subscriptions',
+        'active_discount_exists': 'You already have an active discount',
+        'not_first_purchase': 'This promo code is only available for first purchase',
+        'daily_limit': 'Too many promo code activations today',
         'user_not_found': 'User not found',
         'server_error': 'Failed to activate promo code',
     }

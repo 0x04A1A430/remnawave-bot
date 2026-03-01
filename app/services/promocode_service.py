@@ -62,7 +62,7 @@ class PromoCodeService:
             if recent_count >= 5:
                 logger.warning(
                     'Promo stacking limit: user has activations in 24h',
-                    format_user_log=self._format_user_log(user),
+                    _format_user_log=self._format_user_log(user),
                     recent_count=recent_count,
                 )
                 return {'success': False, 'error': 'daily_limit'}
@@ -253,7 +253,7 @@ class PromoCodeService:
             if not subscription:
                 raise ValueError('no_subscription_for_days')
 
-            if getattr(subscription, 'is_trial', False):
+            if subscription.is_trial:
                 raise ValueError('trial_subscription_not_eligible')
 
             await extend_subscription(db, subscription, promocode.subscription_days)
