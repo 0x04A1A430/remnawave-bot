@@ -76,7 +76,9 @@ async def get_referral_info(
     pending_result = await db.execute(pending_query)
     pending = pending_result.scalar() or 0
 
-    available_balance = max(0, total_earnings - withdrawn - pending)
+    # Доступный баланс: мин(кошелёк, заработано - выведено - в ожидании)
+    referral_entitlement = max(0, total_earnings - withdrawn - pending)
+    available_balance = min(user.balance_kopeks, referral_entitlement)
 
     # Build referral link
     bot_username = settings.get_bot_username() or 'bot'
