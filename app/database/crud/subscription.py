@@ -851,34 +851,34 @@ async def get_subscriptions_statistics(db: AsyncSession) -> dict:
         select(func.count(Transaction.id)).where(
             and_(
                 Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
-                Transaction.is_completed == True,
+                Transaction.is_completed.is_(True),
                 Transaction.created_at >= today_start,
             )
         )
     )
-    purchased_today = today_result.scalar()
+    purchased_today = today_result.scalar() or 0
 
     week_result = await db.execute(
         select(func.count(Transaction.id)).where(
             and_(
                 Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
-                Transaction.is_completed == True,
+                Transaction.is_completed.is_(True),
                 Transaction.created_at >= week_ago,
             )
         )
     )
-    purchased_week = week_result.scalar()
+    purchased_week = week_result.scalar() or 0
 
     month_result = await db.execute(
         select(func.count(Transaction.id)).where(
             and_(
                 Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
-                Transaction.is_completed == True,
+                Transaction.is_completed.is_(True),
                 Transaction.created_at >= month_ago,
             )
         )
     )
-    purchased_month = month_result.scalar()
+    purchased_month = month_result.scalar() or 0
 
     try:
         from app.database.crud.subscription_conversion import get_conversion_statistics
