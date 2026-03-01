@@ -14,6 +14,7 @@ from app.config import settings
 from app.database.models import (
     ReferralEarning,
     Transaction,
+    TransactionType,
     User,
     WithdrawalRequest,
     WithdrawalRequestStatus,
@@ -41,10 +42,14 @@ class ReferralWithdrawalService:
     async def get_user_own_deposits(self, db: AsyncSession, user_id: int) -> int:
         """
         Получает сумму собственных пополнений пользователя (НЕ реферальные).
+        Фильтрует по payment_method IS NOT NULL — реальные платежи всегда имеют payment_method.
         """
         result = await db.execute(
             select(func.coalesce(func.sum(Transaction.amount_kopeks), 0)).where(
-                Transaction.user_id == user_id, Transaction.type == 'deposit', Transaction.is_completed == True
+                Transaction.user_id == user_id,
+                Transaction.type == TransactionType.DEPOSIT.value,
+                Transaction.is_completed == True,
+                Transaction.payment_method.isnot(None),
             )
         )
         return result.scalar() or 0
@@ -65,7 +70,7 @@ class ReferralWithdrawalService:
         result = await db.execute(
             select(func.coalesce(func.sum(Transaction.amount_kopeks), 0)).where(
                 Transaction.user_id == user_id,
-                Transaction.type.in_(['subscription_payment', 'withdrawal']),
+                Transaction.type.in_([TransactionType.SUBSCRIPTION_PAYMENT.value, TransactionType.WITHDRAWAL.value]),
                 Transaction.is_completed == True,
             )
         )
@@ -83,7 +88,7 @@ class ReferralWithdrawalService:
         result = await db.execute(
             select(func.coalesce(func.sum(Transaction.amount_kopeks), 0)).where(
                 Transaction.user_id == user_id,
-                Transaction.type.in_(['subscription_payment', 'withdrawal']),
+                Transaction.type.in_([TransactionType.SUBSCRIPTION_PAYMENT.value, TransactionType.WITHDRAWAL.value]),
                 Transaction.is_completed == True,
                 Transaction.created_at >= first_earning_date,
             )
@@ -282,7 +287,7 @@ class ReferralWithdrawalService:
                 )
                 .where(
                     Transaction.user_id.in_(referral_ids),
-                    Transaction.type == 'deposit',
+                    Transaction.type == TransactionType.DEPOSIT.value,
                     Transaction.is_completed == True,
                     Transaction.created_at >= month_ago,
                 )
@@ -331,7 +336,7 @@ class ReferralWithdrawalService:
                     func.coalesce(func.sum(Transaction.amount_kopeks), 0).label('total_amount'),
                 ).where(
                     Transaction.user_id.in_(referral_ids),
-                    Transaction.type == 'deposit',
+                    Transaction.type == TransactionType.DEPOSIT.value,
                     Transaction.is_completed == True,
                 )
             )
@@ -499,7 +504,7 @@ class ReferralWithdrawalService:
         # Создаём транзакцию списания
         withdrawal_tx = Transaction(
             user_id=request.user_id,
-            type='withdrawal',
+            type=TransactionType.WITHDRAWAL.value,
             amount_kopeks=-request.amount_kopeks,
             description=f'Вывод реферального баланса (заявка #{request.id})',
             is_completed=True,

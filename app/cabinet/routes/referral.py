@@ -9,7 +9,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import settings
-from app.database.models import AdvertisingCampaign, ReferralEarning, User, WithdrawalRequest, WithdrawalRequestStatus
+from app.database.models import (
+    AdvertisingCampaign,
+    ReferralEarning,
+    Subscription,
+    SubscriptionStatus,
+    User,
+    WithdrawalRequest,
+    WithdrawalRequestStatus,
+)
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 from ..schemas.referral import (
@@ -38,12 +46,15 @@ async def get_referral_info(
     total_result = await db.execute(total_query)
     total_referrals = total_result.scalar() or 0
 
-    # Get active referrals (with subscription)
+    # Get active referrals (with active subscription right now)
     active_query = (
-        select(func.count())
-        .select_from(User)
-        .where(User.referred_by_id == user.id)
-        .where(User.has_had_paid_subscription == True)
+        select(func.count(func.distinct(User.id)))
+        .join(Subscription, User.id == Subscription.user_id)
+        .where(
+            User.referred_by_id == user.id,
+            Subscription.status == SubscriptionStatus.ACTIVE.value,
+            Subscription.end_date > func.now(),
+        )
     )
     active_result = await db.execute(active_query)
     active_referrals = active_result.scalar() or 0

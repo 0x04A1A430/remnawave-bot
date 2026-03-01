@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import settings
-from app.database.models import ReferralEarning, Transaction, TransactionType, User
+from app.database.models import ReferralEarning, Subscription, SubscriptionStatus, Transaction, TransactionType, User
 
 
 logger = structlog.get_logger(__name__)
@@ -166,10 +166,16 @@ async def get_user_referral_summary(db: AsyncSession, user_id: int) -> dict:
         for row in earnings_by_type_result:
             earnings_by_type[row.reason] = {'count': row.count, 'total_amount_kopeks': row.total_amount}
 
-        active_referrals_count = 0
-        for referral in referrals:
-            if referral.last_activity and referral.last_activity >= month_ago:
-                active_referrals_count += 1
+        active_result = await db.execute(
+            select(func.count(func.distinct(User.id)))
+            .join(Subscription, User.id == Subscription.user_id)
+            .where(
+                User.referred_by_id == user_id,
+                Subscription.status == SubscriptionStatus.ACTIVE.value,
+                Subscription.end_date > func.now(),
+            )
+        )
+        active_referrals_count = active_result.scalar() or 0
 
         return {
             'invited_count': invited_count,

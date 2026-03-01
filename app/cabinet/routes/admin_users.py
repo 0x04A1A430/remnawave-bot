@@ -26,6 +26,7 @@ from app.database.crud.user import (
 )
 from app.database.models import (
     PromoGroup,
+    ReferralEarning,
     Subscription,
     SubscriptionServer,
     SubscriptionStatus,
@@ -546,11 +547,9 @@ async def get_user_detail(
     referrals = await get_referrals(db, user.id)
     referrals_count = len(referrals)
 
-    # Calculate total referral earnings
-    referral_earnings_q = select(func.sum(Transaction.amount_kopeks)).where(
-        Transaction.user_id == user.id,
-        Transaction.type == TransactionType.REFERRAL_REWARD.value,
-        Transaction.is_completed == True,
+    # Calculate total referral earnings (canonical source: ReferralEarning)
+    referral_earnings_q = select(func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0)).where(
+        ReferralEarning.user_id == user.id
     )
     referral_earnings = (await db.execute(referral_earnings_q)).scalar() or 0
 

@@ -24,6 +24,15 @@ logger = structlog.get_logger(__name__)
 
 TRANSACTIONS_PER_PAGE = 10
 
+CREDIT_TRANSACTION_TYPES: frozenset[str] = frozenset(
+    {
+        TransactionType.DEPOSIT.value,
+        TransactionType.REFERRAL_REWARD.value,
+        TransactionType.REFUND.value,
+        TransactionType.POLL_REWARD.value,
+    }
+)
+
 
 async def route_payment_by_method(
     message: types.Message, db_user: User, amount_kopeks: int, state: FSMContext, payment_method: str
@@ -277,10 +286,11 @@ async def show_balance_history(callback: types.CallbackQuery, db_user: User, db:
     text = '📊 <b>История операций</b>\n\n'
 
     for transaction in unique_transactions:
-        emoji = '💰' if transaction.type == TransactionType.DEPOSIT.value else '💸'
+        is_credit = transaction.type in CREDIT_TRANSACTION_TYPES
+        emoji = '💰' if is_credit else '💸'
         amount_text = (
             f'+{texts.format_price(transaction.amount_kopeks)}'
-            if transaction.type == TransactionType.DEPOSIT.value
+            if is_credit
             else f'-{texts.format_price(abs(transaction.amount_kopeks))}'
         )
 
