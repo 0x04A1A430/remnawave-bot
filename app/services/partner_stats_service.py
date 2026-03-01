@@ -10,6 +10,7 @@ from sqlalchemy import and_, case, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import (
+    AdvertisingCampaignRegistration,
     ReferralEarning,
     Subscription,
     SubscriptionStatus,
@@ -577,6 +578,69 @@ class PartnerStatsService:
                         'total_earnings_kopeks': data['total_earnings'],
                     }
                 )
+
+        return result
+
+    @classmethod
+    async def get_per_campaign_stats(
+        cls,
+        db: AsyncSession,
+        user_id: int,
+        campaign_ids: list[int],
+    ) -> dict[int, dict[str, int]]:
+        """Получить статистику по каждой кампании партнёра.
+
+        Returns:
+            dict keyed by campaign_id with registrations_count, referrals_count, earnings_kopeks.
+        """
+        if not campaign_ids:
+            return {}
+
+        # Registrations per campaign (only users referred by this partner)
+        reg_result = await db.execute(
+            select(
+                AdvertisingCampaignRegistration.campaign_id,
+                func.count(AdvertisingCampaignRegistration.id).label('count'),
+            )
+            .join(User, User.id == AdvertisingCampaignRegistration.user_id)
+            .where(
+                and_(
+                    AdvertisingCampaignRegistration.campaign_id.in_(campaign_ids),
+                    User.referred_by_id == user_id,
+                )
+            )
+            .group_by(AdvertisingCampaignRegistration.campaign_id)
+        )
+        registrations_map = {row.campaign_id: int(row.count) for row in reg_result.all()}
+
+        # Referral earnings per campaign (only for this partner)
+        earnings_result = await db.execute(
+            select(
+                ReferralEarning.campaign_id,
+                func.count(func.distinct(ReferralEarning.referral_id)).label('referrals'),
+                func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0).label('earnings'),
+            )
+            .where(
+                and_(
+                    ReferralEarning.user_id == user_id,
+                    ReferralEarning.campaign_id.in_(campaign_ids),
+                )
+            )
+            .group_by(ReferralEarning.campaign_id)
+        )
+        earnings_map = {
+            row.campaign_id: {'referrals': int(row.referrals), 'earnings': int(row.earnings)}
+            for row in earnings_result.all()
+        }
+
+        result: dict[int, dict[str, int]] = {}
+        for cid in campaign_ids:
+            earning_data = earnings_map.get(cid, {'referrals': 0, 'earnings': 0})
+            result[cid] = {
+                'registrations_count': registrations_map.get(cid, 0),
+                'referrals_count': earning_data['referrals'],
+                'earnings_kopeks': earning_data['earnings'],
+            }
 
         return result
 

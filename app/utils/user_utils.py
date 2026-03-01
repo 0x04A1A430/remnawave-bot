@@ -62,6 +62,7 @@ def get_effective_referral_commission_percent(user: User) -> int:
     """Возвращает индивидуальный процент комиссии пользователя или дефолтное значение."""
 
     percent = getattr(user, 'referral_commission_percent', None)
+    source = 'user' if percent is not None else 'default'
 
     if percent is None:
         percent = settings.REFERRAL_COMMISSION_PERCENT
@@ -75,6 +76,12 @@ def get_effective_referral_commission_percent(user: User) -> int:
         )
         return max(0, min(100, settings.REFERRAL_COMMISSION_PERCENT))
 
+    logger.debug(
+        'Определён процент комиссии',
+        user_id=getattr(user, 'id', None),
+        commission_percent=percent,
+        source=source,
+    )
     return percent
 
 

@@ -134,16 +134,26 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
     try:
         user = await get_user_by_id(db, user_id)
         if not user or not user.referred_by_id:
-            logger.info('Пользователь не является рефералом', user_id=user_id)
+            logger.debug('Пользователь не является рефералом, пропуск комиссии', user_id=user_id)
             return True
 
         referrer = await get_user_by_id(db, user.referred_by_id)
         if not referrer:
-            logger.error('Реферер не найден', referred_by_id=user.referred_by_id)
+            logger.error('Реферер не найден, комиссия не начислена', referred_by_id=user.referred_by_id, user_id=user_id)
             return False
 
         campaign_id = await get_user_campaign_id(db, user.id)
         commission_percent = get_effective_referral_commission_percent(referrer)
+
+        logger.info(
+            'Обработка реферального пополнения',
+            user_id=user_id,
+            referrer_id=referrer.id,
+            topup_amount_kopeks=topup_amount_kopeks,
+            campaign_id=campaign_id,
+            commission_percent=commission_percent,
+            has_made_first_topup=user.has_made_first_topup,
+        )
         qualifies_for_first_bonus = topup_amount_kopeks >= settings.REFERRAL_MINIMUM_TOPUP_KOPEKS
         commission_amount = 0
         if commission_percent > 0:
@@ -334,6 +344,18 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
 async def process_referral_purchase(
     db: AsyncSession, user_id: int, purchase_amount_kopeks: int, transaction_id: int = None, bot: Bot = None
 ):
+    """Process referral commission for balance-based subscription purchases.
+
+    INTENTIONALLY UNUSED. This function is NOT called from subscription purchase flows.
+    Commission is only earned when referred users make actual payments through payment
+    providers (via process_referral_topup). Balance-based subscription purchases
+    (from admin credits, campaign bonuses, or promo codes) do NOT trigger commission,
+    because the partner already received commission at the time the user topped up
+    their balance. Calling this would cause double-commission.
+
+    Kept for potential future use cases where balance-independent purchase tracking
+    is needed (e.g. audit trail records with zero commission).
+    """
     try:
         user = await get_user_by_id(db, user_id)
         if not user or not user.referred_by_id:
