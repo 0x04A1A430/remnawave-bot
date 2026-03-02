@@ -51,6 +51,10 @@ class PartnerCampaignInfo(BaseModel):
     subscription_traffic_gb: int | None = None
     deep_link: str | None = None
     web_link: str | None = None
+    # Per-campaign statistics
+    registrations_count: int = 0
+    referrals_count: int = 0
+    earnings_kopeks: int = 0
 
 
 class PartnerStatusResponse(BaseModel):
@@ -60,6 +64,75 @@ class PartnerStatusResponse(BaseModel):
     commission_percent: int | None = None
     latest_application: PartnerApplicationInfo | None = None
     campaigns: list[PartnerCampaignInfo] = []
+
+
+# ==================== Campaign detailed stats ====================
+
+
+class DailyStatItem(BaseModel):
+    """Single day of campaign stats."""
+
+    date: str
+    referrals_count: int = 0
+    earnings_kopeks: int = 0
+
+
+class PeriodStats(BaseModel):
+    """Stats for a single period."""
+
+    days: int
+    referrals_count: int = 0
+    earnings_kopeks: int = 0
+
+
+class PeriodChange(BaseModel):
+    """Change metrics between periods."""
+
+    absolute: int = 0
+    percent: float = 0.0
+    trend: str = 'stable'
+
+
+class PeriodComparison(BaseModel):
+    """Comparison between current and previous period."""
+
+    current: PeriodStats
+    previous: PeriodStats
+    referrals_change: PeriodChange
+    earnings_change: PeriodChange
+
+
+class CampaignReferralItem(BaseModel):
+    """Referral user in campaign stats."""
+
+    id: int
+    full_name: str
+    created_at: datetime
+    has_paid: bool = False
+    is_active: bool = False
+    total_earnings_kopeks: int = 0
+
+
+class PartnerCampaignDetailedStats(BaseModel):
+    """Detailed stats for a single campaign."""
+
+    campaign_id: int
+    campaign_name: str
+    # Summary
+    registrations_count: int = 0
+    referrals_count: int = 0
+    earnings_kopeks: int = 0
+    conversion_rate: float = 0.0
+    # Period earnings
+    earnings_today: int = 0
+    earnings_week: int = 0
+    earnings_month: int = 0
+    # Daily chart (30 days)
+    daily_stats: list[DailyStatItem] = []
+    # Period comparison (this week vs last week)
+    period_comparison: PeriodComparison
+    # Top referrals
+    top_referrals: list[CampaignReferralItem] = []
 
 
 # ==================== Admin-facing ====================

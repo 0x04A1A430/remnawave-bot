@@ -8,13 +8,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.models import AdvertisingCampaign, User
 from app.services.partner_application_service import partner_application_service
+from app.services.partner_stats_service import PartnerStatsService
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 from ..schemas.partners import (
+    CampaignReferralItem,
+    DailyStatItem,
     PartnerApplicationInfo,
     PartnerApplicationRequest,
+    PartnerCampaignDetailedStats,
     PartnerCampaignInfo,
     PartnerStatusResponse,
+    PeriodChange,
+    PeriodComparison,
+    PeriodStats,
 )
 
 
@@ -77,7 +84,14 @@ async def get_partner_status(
                 AdvertisingCampaign.is_active.is_(True),
             )
         )
-        for c in result.scalars().all():
+        campaign_models = result.scalars().all()
+
+        # Fetch per-campaign stats in one batch
+        campaign_ids = [c.id for c in campaign_models]
+        campaign_stats = await PartnerStatsService.get_per_campaign_stats(db, user.id, campaign_ids)
+
+        for c in campaign_models:
+            stats = campaign_stats.get(c.id, {})
             campaigns.append(
                 PartnerCampaignInfo(
                     id=c.id,
@@ -89,6 +103,9 @@ async def get_partner_status(
                     subscription_traffic_gb=c.subscription_traffic_gb,
                     deep_link=_get_campaign_deep_link(c.start_parameter),
                     web_link=_get_campaign_web_link(c.start_parameter),
+                    registrations_count=stats.get('registrations_count', 0),
+                    referrals_count=stats.get('referrals_count', 0),
+                    earnings_kopeks=stats.get('earnings_kopeks', 0),
                 )
             )
 
@@ -97,6 +114,56 @@ async def get_partner_status(
         commission_percent=commission,
         latest_application=app_info,
         campaigns=campaigns,
+    )
+
+
+@router.get('/campaigns/{campaign_id}/stats', response_model=PartnerCampaignDetailedStats)
+async def get_campaign_stats(
+    campaign_id: int,
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Get detailed stats for a single campaign belonging to the current partner."""
+    if not user.is_partner:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='Partner status required',
+        )
+
+    # Verify campaign belongs to this partner
+    campaign_result = await db.execute(
+        select(AdvertisingCampaign).where(
+            AdvertisingCampaign.id == campaign_id,
+            AdvertisingCampaign.partner_user_id == user.id,
+        )
+    )
+    campaign = campaign_result.scalar_one_or_none()
+    if not campaign:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='Campaign not found or not assigned to you',
+        )
+
+    raw = await PartnerStatsService.get_campaign_detailed_stats(db, user.id, campaign_id)
+
+    return PartnerCampaignDetailedStats(
+        campaign_id=raw['campaign_id'],
+        campaign_name=campaign.name,
+        registrations_count=raw['registrations_count'],
+        referrals_count=raw['referrals_count'],
+        earnings_kopeks=raw['earnings_kopeks'],
+        conversion_rate=raw['conversion_rate'],
+        earnings_today=raw['earnings_today'],
+        earnings_week=raw['earnings_week'],
+        earnings_month=raw['earnings_month'],
+        daily_stats=[DailyStatItem(**d) for d in raw['daily_stats']],
+        period_comparison=PeriodComparison(
+            current=PeriodStats(**raw['period_comparison']['current']),
+            previous=PeriodStats(**raw['period_comparison']['previous']),
+            referrals_change=PeriodChange(**raw['period_comparison']['referrals_change']),
+            earnings_change=PeriodChange(**raw['period_comparison']['earnings_change']),
+        ),
+        top_referrals=[CampaignReferralItem(**r) for r in raw['top_referrals']],
     )
 
 

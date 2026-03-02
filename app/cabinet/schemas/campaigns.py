@@ -220,3 +220,61 @@ class ServerSquadInfo(BaseModel):
     squad_uuid: str
     display_name: str
     country_code: str | None = None
+
+
+# --- Admin campaign chart data schemas ---
+
+
+class AdminDailyStatItem(BaseModel):
+    """Daily stat item for admin campaign charts."""
+
+    date: str
+    referrals_count: int = 0  # actually registrations, named for frontend compat
+    earnings_kopeks: int = 0  # actually revenue, named for frontend compat
+
+
+class AdminPeriodStats(BaseModel):
+    """Period stats for admin campaign comparison."""
+
+    days: int
+    referrals_count: int = 0
+    earnings_kopeks: int = 0
+
+
+class AdminPeriodChange(BaseModel):
+    """Change metrics between periods."""
+
+    absolute: int = 0
+    percent: float = 0.0
+    trend: str = 'stable'
+
+
+class AdminPeriodComparison(BaseModel):
+    """Comparison of current vs previous period."""
+
+    current: AdminPeriodStats
+    previous: AdminPeriodStats
+    referrals_change: AdminPeriodChange
+    earnings_change: AdminPeriodChange
+
+
+class AdminTopRegistrationItem(BaseModel):
+    """Top user by spending in a campaign."""
+
+    id: int
+    full_name: str
+    created_at: datetime
+    has_paid: bool = False
+    is_active: bool = False
+    total_earnings_kopeks: int = 0  # actually total spending, named for frontend compat
+
+
+class AdminCampaignChartDataResponse(BaseModel):
+    """Chart data for admin campaign stats page."""
+
+    campaign_id: int
+    total_deposits_kopeks: int = 0
+    total_spending_kopeks: int = 0
+    daily_stats: list[AdminDailyStatItem] = []
+    period_comparison: AdminPeriodComparison
+    top_registrations: list[AdminTopRegistrationItem] = []
