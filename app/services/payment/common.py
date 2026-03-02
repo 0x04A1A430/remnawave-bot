@@ -341,20 +341,15 @@ async def send_cart_notification_after_topup(
     texts = get_texts(getattr(user, 'language', 'ru'))
 
     # Build message based on whether balance is sufficient
+    fmt = settings.format_price
     if balance >= cart_total:
-        message_text = (
-            f'✅ Баланс пополнен на {settings.format_price(amount_kopeks)}!\n\n'
-            f'💰 Текущий баланс: {settings.format_price(balance)}\n\n'
-            f'🛒 У вас есть сохранённая корзина на {settings.format_price(cart_total)}\n'
-            f'Средств на балансе достаточно для оформления.'
-        )
+        template = texts.get('BALANCE_TOPPED_UP_CART_SUFFICIENT', '')
+        message_text = template.format(amount=fmt(amount_kopeks), balance=fmt(balance), cart_total=fmt(cart_total))
     else:
         missing = cart_total - balance
-        message_text = (
-            f'✅ Баланс пополнен на {settings.format_price(amount_kopeks)}!\n\n'
-            f'💰 Текущий баланс: {settings.format_price(balance)}\n\n'
-            f'🛒 У вас есть сохранённая корзина на {settings.format_price(cart_total)}\n'
-            f'Не хватает: {settings.format_price(missing)}'
+        template = texts.get('BALANCE_TOPPED_UP_CART_INSUFFICIENT', '')
+        message_text = template.format(
+            amount=fmt(amount_kopeks), balance=fmt(balance), cart_total=fmt(cart_total), missing=fmt(missing),
         )
 
     keyboard = types.InlineKeyboardMarkup(
@@ -365,8 +360,8 @@ async def send_cart_notification_after_topup(
                     callback_data='return_to_saved_cart',
                 )
             ],
-            [types.InlineKeyboardButton(text='💰 Мой баланс', callback_data='menu_balance')],
-            [types.InlineKeyboardButton(text='🏠 Главное меню', callback_data='back_to_menu')],
+            [types.InlineKeyboardButton(text=texts.MY_BALANCE_BUTTON, callback_data='menu_balance')],
+            [types.InlineKeyboardButton(text=texts.MAIN_MENU_BUTTON, callback_data='back_to_menu')],
         ]
     )
 

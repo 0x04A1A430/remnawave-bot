@@ -1349,6 +1349,8 @@
   "RESET_TRAFFIC_BUTTON": "🔄 Сбросить трафик",
   "NO_SAVED_SUBSCRIPTION_ORDER": "❗️ Сохраненный заказ не найден.",
   "RETURN_TO_SUBSCRIPTION_CHECKOUT": "⬅️ Вернуться к оформлению подписки",
+  "BALANCE_TOPPED_UP_CART_SUFFICIENT": "✅ Баланс пополнен на {amount}!\n\n💰 Текущий баланс: {balance}\n\n🛒 У вас есть сохранённая корзина на {cart_total}\nСредств на балансе достаточно для оформления.",
+  "BALANCE_TOPPED_UP_CART_INSUFFICIENT": "✅ Баланс пополнен на {amount}!\n\n💰 Текущий баланс: {balance}\n\n🛒 У вас есть сохранённая корзина на {cart_total}\nНе хватает: {missing}",
   "RULES_ACCEPT": "✅ Принимаю правила",
   "RULES_ACCEPTED_PROCESSING": "✅ Правила приняты! Завершаем регистрацию...",
   "RULES_DECLINE": "❌ Не принимаю",

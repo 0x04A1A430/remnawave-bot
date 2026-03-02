@@ -1328,6 +1328,8 @@
   "RESET_TRAFFIC_BUTTON": "🔄 Reset traffic",
   "NO_SAVED_SUBSCRIPTION_ORDER": "No pending subscription order was found.",
   "RETURN_TO_SUBSCRIPTION_CHECKOUT": "⬅️ Return to subscription checkout",
+  "BALANCE_TOPPED_UP_CART_SUFFICIENT": "✅ Balance topped up by {amount}!\n\n💰 Current balance: {balance}\n\n🛒 You have a saved cart for {cart_total}\nYour balance is sufficient to proceed.",
+  "BALANCE_TOPPED_UP_CART_INSUFFICIENT": "✅ Balance topped up by {amount}!\n\n💰 Current balance: {balance}\n\n🛒 You have a saved cart for {cart_total}\nStill needed: {missing}",
   "RULES_ACCEPT": "✅ I accept the rules",
   "RULES_ACCEPTED_PROCESSING": "✅ Rules accepted! Completing registration...",
   "RULES_DECLINE": "❌ I do not accept",

@@ -1073,17 +1073,19 @@ async def update_user_subscription(
         await db.commit()
         await db.refresh(subscription)
 
-        # Синхронизируем с RemnaWave (сброс трафика по админ-настройке)
+        # Синхронизируем с RemnaWave (discovery/create + сброс трафика по админ-настройке)
         try:
-            from app.services.subscription_service import SubscriptionService
+            result = await _sync_subscription_to_panel(db, user, subscription)
+            if settings.RESET_TRAFFIC_ON_TARIFF_SWITCH and result.get('action') in ('updated', 'created'):
+                from app.services.subscription_service import SubscriptionService
 
-            subscription_service = SubscriptionService()
-            await subscription_service.update_remnawave_user(
-                db,
-                subscription,
-                reset_traffic=settings.RESET_TRAFFIC_ON_TARIFF_SWITCH,
-                reset_reason='смена тарифа (cabinet admin)',
-            )
+                subscription_service = SubscriptionService()
+                await subscription_service.update_remnawave_user(
+                    db,
+                    subscription,
+                    reset_traffic=True,
+                    reset_reason='смена тарифа (cabinet admin)',
+                )
         except Exception as e:
             logger.error('Failed to sync tariff switch with RemnaWave', error=e)
 
