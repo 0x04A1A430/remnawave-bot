@@ -558,66 +558,102 @@ async def get_renewals_stats(
     """Get renewal statistics with period comparison."""
     try:
         period_start, period_end = _parse_period(days, start_date, end_date)
-        period_length = period_end - period_start
-        prev_start = period_start - period_length
-        prev_end = period_start
+        is_all_time = days is not None and days == 0
 
-        existing_users_subquery = (
-            select(Transaction.user_id)
-            .where(
-                and_(
-                    Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
-                    Transaction.is_completed == True,
-                    Transaction.created_at < period_start,
+        if is_all_time:
+            # For "all time": renewals = users with more than 1 subscription payment
+            repeat_users_subquery = (
+                select(Transaction.user_id)
+                .where(
+                    and_(
+                        Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
+                        Transaction.is_completed == True,
+                    )
                 )
+                .group_by(Transaction.user_id)
+                .having(func.count(Transaction.id) > 1)
             )
-            .distinct()
-        )
+            existing_users_subquery = repeat_users_subquery
 
-        current_result = await db.execute(
-            select(
-                func.count(Transaction.id).label('count'),
-                func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0).label('revenue'),
-            ).where(
-                and_(
-                    Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
-                    Transaction.is_completed == True,
-                    Transaction.created_at >= period_start,
-                    Transaction.created_at <= period_end,
-                    Transaction.user_id.in_(existing_users_subquery),
+            current_result = await db.execute(
+                select(
+                    func.count(Transaction.id).label('count'),
+                    func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0).label('revenue'),
+                ).where(
+                    and_(
+                        Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
+                        Transaction.is_completed == True,
+                        Transaction.user_id.in_(repeat_users_subquery),
+                    )
                 )
             )
-        )
-        current = current_result.one()
-        current_count = current.count
-        current_revenue = current.revenue
+            current = current_result.one()
+            current_count = current.count
+            current_revenue = current.revenue
 
-        prev_existing_subquery = (
-            select(Transaction.user_id)
-            .where(
-                and_(
-                    Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
-                    Transaction.is_completed == True,
-                    Transaction.created_at < prev_start,
+            # No meaningful previous period for "all time"
+            prev = type('Row', (), {'count': 0, 'revenue': 0})()
+        else:
+            period_length = period_end - period_start
+            prev_start = period_start - period_length
+            prev_end = period_start
+
+            existing_users_subquery = (
+                select(Transaction.user_id)
+                .where(
+                    and_(
+                        Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
+                        Transaction.is_completed == True,
+                        Transaction.created_at < period_start,
+                    )
+                )
+                .distinct()
+            )
+
+            current_result = await db.execute(
+                select(
+                    func.count(Transaction.id).label('count'),
+                    func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0).label('revenue'),
+                ).where(
+                    and_(
+                        Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
+                        Transaction.is_completed == True,
+                        Transaction.created_at >= period_start,
+                        Transaction.created_at <= period_end,
+                        Transaction.user_id.in_(existing_users_subquery),
+                    )
                 )
             )
-            .distinct()
-        )
-        prev_result = await db.execute(
-            select(
-                func.count(Transaction.id).label('count'),
-                func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0).label('revenue'),
-            ).where(
-                and_(
-                    Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
-                    Transaction.is_completed == True,
-                    Transaction.created_at >= prev_start,
-                    Transaction.created_at <= prev_end,
-                    Transaction.user_id.in_(prev_existing_subquery),
+            current = current_result.one()
+            current_count = current.count
+            current_revenue = current.revenue
+
+            prev_existing_subquery = (
+                select(Transaction.user_id)
+                .where(
+                    and_(
+                        Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
+                        Transaction.is_completed == True,
+                        Transaction.created_at < prev_start,
+                    )
+                )
+                .distinct()
+            )
+            prev_result = await db.execute(
+                select(
+                    func.count(Transaction.id).label('count'),
+                    func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0).label('revenue'),
+                ).where(
+                    and_(
+                        Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
+                        Transaction.is_completed == True,
+                        Transaction.created_at >= prev_start,
+                        Transaction.created_at <= prev_end,
+                        Transaction.user_id.in_(prev_existing_subquery),
+                    )
                 )
             )
-        )
-        prev = prev_result.one()
+            prev = prev_result.one()
 
         if prev.count > 0:
             change_percent = round(((current_count - prev.count) / prev.count) * 100, 1)
