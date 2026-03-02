@@ -232,11 +232,13 @@ class ProviderBreakdownItem(BaseModel):
 
 class DailyTrialItem(BaseModel):
     date: str
-    count: int
+    registrations: int
+    trials: int
 
 
 class TrialsStatsResponse(BaseModel):
     total_trials: int
+    total_registrations: int
     conversion_rate: float
     avg_trial_duration_days: float
     by_provider: list[ProviderBreakdownItem]
@@ -317,7 +319,39 @@ async def get_trials_stats(
         )
         by_provider = [ProviderBreakdownItem(provider=row.provider, count=row.count) for row in provider_query]
 
-        daily_query = await db.execute(
+        # Total registrations (all user signups in period)
+        reg_total_result = await db.execute(
+            select(func.count(User.id)).where(
+                and_(
+                    User.created_at >= period_start,
+                    User.created_at <= period_end,
+                )
+            )
+        )
+        total_registrations = reg_total_result.scalar() or 0
+
+        # Daily registrations (user signups per day)
+        daily_reg_query = await db.execute(
+            select(
+                func.date(User.created_at).label('date'),
+                func.count(User.id).label('count'),
+            )
+            .where(
+                and_(
+                    User.created_at >= period_start,
+                    User.created_at <= period_end,
+                )
+            )
+            .group_by(func.date(User.created_at))
+            .order_by(func.date(User.created_at))
+        )
+        reg_by_date: dict[str, int] = {}
+        for row in daily_reg_query:
+            date_str = row.date.isoformat() if hasattr(row.date, 'isoformat') else str(row.date)
+            reg_by_date[date_str] = row.count
+
+        # Daily trials (trial subscriptions per day)
+        daily_trial_query = await db.execute(
             select(
                 func.date(Subscription.created_at).label('date'),
                 func.count(Subscription.id).label('count'),
@@ -332,16 +366,25 @@ async def get_trials_stats(
             .group_by(func.date(Subscription.created_at))
             .order_by(func.date(Subscription.created_at))
         )
+        trial_by_date: dict[str, int] = {}
+        for row in daily_trial_query:
+            date_str = row.date.isoformat() if hasattr(row.date, 'isoformat') else str(row.date)
+            trial_by_date[date_str] = row.count
+
+        # Merge both series by date union
+        all_dates = sorted(set(reg_by_date.keys()) | set(trial_by_date.keys()))
         daily = [
             DailyTrialItem(
-                date=row.date.isoformat() if hasattr(row.date, 'isoformat') else str(row.date),
-                count=row.count,
+                date=d,
+                registrations=reg_by_date.get(d, 0),
+                trials=trial_by_date.get(d, 0),
             )
-            for row in daily_query
+            for d in all_dates
         ]
 
         return TrialsStatsResponse(
             total_trials=total_trials,
+            total_registrations=total_registrations,
             conversion_rate=conversion_rate,
             avg_trial_duration_days=round(avg_duration, 1),
             by_provider=by_provider,
@@ -378,6 +421,12 @@ class DailySalesItem(BaseModel):
     revenue_kopeks: int
 
 
+class DailyTariffSalesItem(BaseModel):
+    date: str
+    tariff_name: str
+    count: int
+
+
 class SalesStatsResponse(BaseModel):
     total_sales: int
     total_revenue_kopeks: int
@@ -386,6 +435,7 @@ class SalesStatsResponse(BaseModel):
     by_tariff: list[SalesByTariffItem]
     by_period: list[SalesByPeriodItem]
     daily: list[DailySalesItem]
+    daily_by_tariff: list[DailyTariffSalesItem]
 
 
 # ============ Sales Endpoint ============
@@ -495,6 +545,27 @@ async def get_sales_stats(
             for row in daily_query
         ]
 
+        # Daily sales grouped by tariff
+        daily_by_tariff_query = await db.execute(
+            select(
+                func.date(Subscription.created_at).label('date'),
+                func.coalesce(Tariff.name, 'Unknown').label('tariff_name'),
+                func.count(Subscription.id).label('count'),
+            )
+            .join(Tariff, Subscription.tariff_id == Tariff.id, isouter=True)
+            .where(base_filter)
+            .group_by(func.date(Subscription.created_at), func.coalesce(Tariff.name, 'Unknown'))
+            .order_by(func.date(Subscription.created_at), func.coalesce(Tariff.name, 'Unknown'))
+        )
+        daily_by_tariff = [
+            DailyTariffSalesItem(
+                date=row.date.isoformat() if hasattr(row.date, 'isoformat') else str(row.date),
+                tariff_name=row.tariff_name,
+                count=row.count,
+            )
+            for row in daily_by_tariff_query
+        ]
+
         return SalesStatsResponse(
             total_sales=total_sales,
             total_revenue_kopeks=total_revenue,
@@ -503,6 +574,7 @@ async def get_sales_stats(
             by_tariff=by_tariff,
             by_period=by_period,
             daily=daily,
+            daily_by_tariff=daily_by_tariff,
         )
 
     except HTTPException:
@@ -747,6 +819,8 @@ class AddonsStatsResponse(BaseModel):
     total_purchases: int
     total_gb_purchased: int
     addon_revenue_kopeks: int
+    device_purchases: int
+    device_revenue_kopeks: int
     by_package: list[AddonByPackageItem]
     daily: list[DailyAddonItem]
 
@@ -822,10 +896,28 @@ async def get_addons_stats(
             for row in daily_query
         ]
 
+        # Device purchases (transactions with 'устройств' in description)
+        device_filter = and_(
+            Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
+            Transaction.is_completed == True,
+            Transaction.description.ilike('%устройств%'),
+            Transaction.created_at >= period_start,
+            Transaction.created_at <= period_end,
+        )
+        device_result = await db.execute(
+            select(
+                func.count(Transaction.id).label('count'),
+                func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0).label('revenue'),
+            ).where(device_filter)
+        )
+        device_row = device_result.one()
+
         return AddonsStatsResponse(
             total_purchases=totals.count,
             total_gb_purchased=totals.total_gb,
             addon_revenue_kopeks=addon_revenue,
+            device_purchases=device_row.count,
+            device_revenue_kopeks=device_row.revenue,
             by_package=by_package,
             daily=daily,
         )
