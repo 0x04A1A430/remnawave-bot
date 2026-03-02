@@ -352,21 +352,30 @@ async def send_cart_notification_after_topup(
             amount=fmt(amount_kopeks), balance=fmt(balance), cart_total=fmt(cart_total), missing=fmt(missing),
         )
 
-    keyboard = types.InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                types.InlineKeyboardButton(
-                    text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
-                    callback_data='return_to_saved_cart',
-                )
-            ],
-            [types.InlineKeyboardButton(text=texts.MY_BALANCE_BUTTON, callback_data='menu_balance')],
-            [types.InlineKeyboardButton(text=texts.MAIN_MENU_BUTTON, callback_data='back_to_menu')],
-        ]
-    )
+    if not message_text:
+        logger.warning('Missing cart notification template', language=getattr(user, 'language', 'ru'))
+        return False
 
     sent = False
     try:
+        keyboard = types.InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    types.InlineKeyboardButton(
+                        text=texts.get('RETURN_TO_SUBSCRIPTION_CHECKOUT', '⬅️ Checkout'),
+                        callback_data='return_to_saved_cart',
+                    )
+                ],
+                [types.InlineKeyboardButton(
+                    text=texts.get('MY_BALANCE_BUTTON', '💰 Balance'),
+                    callback_data='menu_balance',
+                )],
+                [types.InlineKeyboardButton(
+                    text=texts.get('MAIN_MENU_BUTTON', '🏠 Menu'),
+                    callback_data='back_to_menu',
+                )],
+            ]
+        )
         await bot.send_message(
             chat_id=user.telegram_id,
             text=message_text,
@@ -374,10 +383,10 @@ async def send_cart_notification_after_topup(
             parse_mode='HTML',
         )
         sent = True
-        logger.info('Отправлено уведомление с кнопкой возврата к оформлению подписки пользователю', user_id=user.id)
+        logger.info('Sent cart notification to user', user_id=user.id)
     except Exception as send_error:
         logger.error(
-            'Ошибка отправки уведомления о корзине пользователю',
+            'Failed to send cart notification to user',
             user_id=user.id,
             error=send_error,
         )
