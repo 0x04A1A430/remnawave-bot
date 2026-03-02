@@ -816,6 +816,11 @@ class DailyAddonItem(BaseModel):
     total_gb: int
 
 
+class DailyDeviceItem(BaseModel):
+    date: str
+    count: int
+
+
 class AddonsStatsResponse(BaseModel):
     total_purchases: int
     total_gb_purchased: int
@@ -824,6 +829,7 @@ class AddonsStatsResponse(BaseModel):
     device_revenue_kopeks: int
     by_package: list[AddonByPackageItem]
     daily: list[DailyAddonItem]
+    daily_devices: list[DailyDeviceItem]
 
 
 # ============ Add-ons Endpoint ============
@@ -913,6 +919,24 @@ async def get_addons_stats(
         )
         device_row = device_result.one()
 
+        # Daily device purchases
+        daily_device_query = await db.execute(
+            select(
+                func.date(Transaction.created_at).label('date'),
+                func.count(Transaction.id).label('count'),
+            )
+            .where(device_filter)
+            .group_by(func.date(Transaction.created_at))
+            .order_by(func.date(Transaction.created_at))
+        )
+        daily_devices = [
+            DailyDeviceItem(
+                date=row.date.isoformat() if hasattr(row.date, 'isoformat') else str(row.date),
+                count=row.count,
+            )
+            for row in daily_device_query
+        ]
+
         return AddonsStatsResponse(
             total_purchases=totals.count,
             total_gb_purchased=totals.total_gb,
@@ -921,6 +945,7 @@ async def get_addons_stats(
             device_revenue_kopeks=device_row.revenue,
             by_package=by_package,
             daily=daily,
+            daily_devices=daily_devices,
         )
 
     except HTTPException:
