@@ -973,12 +973,19 @@ class DailyDepositItem(BaseModel):
     amount_kopeks: int
 
 
+class DailyDepositByMethodItem(BaseModel):
+    date: str
+    method: str
+    amount_kopeks: int
+
+
 class DepositsStatsResponse(BaseModel):
     total_deposits: int
     total_amount_kopeks: int
     avg_deposit_kopeks: int
     by_method: list[DepositByMethodItem]
     daily: list[DailyDepositItem]
+    daily_by_method: list[DailyDepositByMethodItem]
 
 
 # ============ Deposits Endpoint ============
@@ -1049,12 +1056,34 @@ async def get_deposits_stats(
             for row in daily_query
         ]
 
+        # Daily deposits grouped by payment method
+        # base_filter already excludes NULLs via .in_(REAL_PAYMENT_METHODS), no coalesce needed
+        daily_by_method_query = await db.execute(
+            select(
+                func.date(Transaction.created_at).label('date'),
+                Transaction.payment_method.label('method'),
+                func.coalesce(func.sum(Transaction.amount_kopeks), 0).label('amount'),
+            )
+            .where(base_filter)
+            .group_by(func.date(Transaction.created_at), Transaction.payment_method)
+            .order_by(func.date(Transaction.created_at), Transaction.payment_method)
+        )
+        daily_by_method = [
+            DailyDepositByMethodItem(
+                date=row.date.isoformat() if hasattr(row.date, 'isoformat') else str(row.date),
+                method=row.method or 'unknown',
+                amount_kopeks=row.amount,
+            )
+            for row in daily_by_method_query
+        ]
+
         return DepositsStatsResponse(
             total_deposits=total_deposits,
             total_amount_kopeks=total_amount,
             avg_deposit_kopeks=avg_deposit,
             by_method=by_method,
             daily=daily,
+            daily_by_method=daily_by_method,
         )
 
     except HTTPException:
