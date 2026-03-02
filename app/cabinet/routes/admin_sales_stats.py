@@ -546,16 +546,17 @@ async def get_sales_stats(
         ]
 
         # Daily sales grouped by tariff
+        tariff_name_col = func.coalesce(Tariff.name, 'Unknown')
         daily_by_tariff_query = await db.execute(
             select(
                 func.date(Subscription.created_at).label('date'),
-                func.coalesce(Tariff.name, 'Unknown').label('tariff_name'),
+                tariff_name_col.label('tariff_name'),
                 func.count(Subscription.id).label('count'),
             )
             .join(Tariff, Subscription.tariff_id == Tariff.id, isouter=True)
             .where(base_filter)
-            .group_by(func.date(Subscription.created_at), func.coalesce(Tariff.name, 'Unknown'))
-            .order_by(func.date(Subscription.created_at), func.coalesce(Tariff.name, 'Unknown'))
+            .group_by(func.date(Subscription.created_at), tariff_name_col)
+            .order_by(func.date(Subscription.created_at), tariff_name_col)
         )
         daily_by_tariff = [
             DailyTariffSalesItem(
