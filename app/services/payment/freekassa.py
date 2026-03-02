@@ -380,9 +380,7 @@ class FreekassaPaymentMixin:
         try:
             from app.services.payment.common import send_cart_notification_after_topup
 
-            await send_cart_notification_after_topup(
-                user, payment.amount_kopeks, db, getattr(self, 'bot', None)
-            )
+            await send_cart_notification_after_topup(user, payment.amount_kopeks, db, getattr(self, 'bot', None))
         except Exception as error:
             logger.error(
                 'Ошибка при работе с сохраненной корзиной для пользователя', user_id=user.id, error=error, exc_info=True

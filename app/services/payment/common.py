@@ -379,9 +379,7 @@ async def send_cart_notification_after_topup(
             parse_mode='HTML',
         )
         sent = True
-        logger.info(
-            'Отправлено уведомление с кнопкой возврата к оформлению подписки пользователю', user_id=user.id
-        )
+        logger.info('Отправлено уведомление с кнопкой возврата к оформлению подписки пользователю', user_id=user.id)
     except Exception as send_error:
         logger.error(
             'Ошибка отправки уведомления о корзине пользователю',

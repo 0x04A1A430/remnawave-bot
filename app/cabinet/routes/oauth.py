@@ -202,7 +202,9 @@ async def oauth_callback(
                 else:
                     referrer_id = referrer.id
         except Exception as e:
-            logger.warning('Failed to resolve referral code during OAuth', referral_code=request.referral_code, exc_info=e)
+            logger.warning(
+                'Failed to resolve referral code during OAuth', referral_code=request.referral_code, exc_info=e
+            )
 
     # 8. Create new user
     user = await create_user_by_oauth(

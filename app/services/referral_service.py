@@ -139,7 +139,9 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
 
         referrer = await get_user_by_id(db, user.referred_by_id)
         if not referrer:
-            logger.error('Реферер не найден, комиссия не начислена', referred_by_id=user.referred_by_id, user_id=user_id)
+            logger.error(
+                'Реферер не найден, комиссия не начислена', referred_by_id=user.referred_by_id, user_id=user_id
+            )
             return False
 
         campaign_id = await get_user_campaign_id(db, user.id)
@@ -296,7 +298,9 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
                     )
 
                     referrer_id = referrer.telegram_id or referrer.email or f'user#{referrer.id}'
-                    logger.info('💰 Реферер получил бонус ₽', referrer_id=referrer_id, inviter_bonus=inviter_bonus / 100)
+                    logger.info(
+                        '💰 Реферер получил бонус ₽', referrer_id=referrer_id, inviter_bonus=inviter_bonus / 100
+                    )
 
                     if bot:
                         inviter_bonus_notification = (
