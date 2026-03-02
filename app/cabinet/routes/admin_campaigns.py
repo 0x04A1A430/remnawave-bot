@@ -56,7 +56,7 @@ logger = structlog.get_logger(__name__)
 router = APIRouter(prefix='/admin/campaigns', tags=['Cabinet Admin Campaigns'])
 
 
-def _safe_div(value: int | float | None, divisor: int = 100) -> float:
+def _safe_div(value: float | None, divisor: int = 100) -> float:
     """Safely divide kopeks to rubles, handling None values."""
     return (value or 0) / divisor
 
