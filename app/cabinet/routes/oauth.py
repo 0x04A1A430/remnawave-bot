@@ -76,7 +76,7 @@ class OAuthAuthorizeResponse(BaseModel):
 
 class OAuthCallbackRequest(BaseModel):
     code: str = Field(..., min_length=1, max_length=2048, description='Authorization code from provider')
-    state: str = Field(..., max_length=128, description='CSRF state token')
+    state: str = Field(..., min_length=1, max_length=128, description='CSRF state token')
     device_id: str | None = Field(None, max_length=256, description='Device ID from VK ID callback')
     campaign_slug: str | None = Field(
         None, min_length=1, max_length=64, pattern=r'^[a-zA-Z0-9_-]+$', description='Campaign slug from web link'
@@ -202,7 +202,7 @@ async def oauth_callback(
                 else:
                     referrer_id = referrer.id
         except Exception as e:
-            logger.warning('Failed to resolve referral code during OAuth', referral_code=request.referral_code, error=e)
+            logger.warning('Failed to resolve referral code during OAuth', referral_code=request.referral_code, exc_info=e)
 
     # 8. Create new user
     user = await create_user_by_oauth(
