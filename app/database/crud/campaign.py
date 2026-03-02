@@ -104,7 +104,6 @@ async def get_campaigns_list(
     stmt = (
         select(AdvertisingCampaign)
         .options(
-            selectinload(AdvertisingCampaign.registrations),
             selectinload(AdvertisingCampaign.tariff),
             selectinload(AdvertisingCampaign.partner),
         )

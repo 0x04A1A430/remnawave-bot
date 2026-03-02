@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 CampaignBonusType = Literal['balance', 'subscription', 'none', 'tariff']
@@ -31,8 +31,7 @@ class CampaignListItem(BaseModel):
     partner_name: str | None = None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CampaignListResponse(BaseModel):
@@ -73,8 +72,7 @@ class CampaignDetailResponse(BaseModel):
     deep_link: str | None = None
     web_link: str | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CampaignCreateRequest(BaseModel):
@@ -179,8 +177,7 @@ class CampaignRegistrationItem(BaseModel):
     has_subscription: bool = False
     has_paid: bool = False
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CampaignRegistrationsResponse(BaseModel):

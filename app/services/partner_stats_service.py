@@ -28,6 +28,14 @@ TOP_REFERRALS_LIMIT = 5
 PERIOD_COMPARISON_DAYS = 7
 
 
+def _calc_change(current_val: int, previous_val: int) -> dict[str, Any]:
+    """Calculate period-over-period change metrics."""
+    diff = current_val - previous_val
+    pct = round((diff / previous_val * 100), 2) if previous_val > 0 else (100.0 if current_val > 0 else 0.0)
+    trend = 'up' if diff > 0 else 'down' if diff < 0 else 'stable'
+    return {'absolute': diff, 'percent': pct, 'trend': trend}
+
+
 class PartnerStatsService:
     """Сервис для детальной статистики партнёров."""
 
@@ -793,12 +801,6 @@ class PartnerStatsService:
         )
         previous_earnings = int(previous_earn.scalar() or 0)
 
-        def _calc_change(current_val: int, previous_val: int) -> dict[str, Any]:
-            diff = current_val - previous_val
-            pct = round((diff / previous_val * 100), 2) if previous_val > 0 else (100.0 if current_val > 0 else 0.0)
-            trend = 'up' if diff > 0 else 'down' if diff < 0 else 'stable'
-            return {'absolute': diff, 'percent': pct, 'trend': trend}
-
         period_comparison = {
             'current': {
                 'days': PERIOD_COMPARISON_DAYS,
@@ -1046,12 +1048,6 @@ class PartnerStatsService:
             )
         )
         previous_revenue = int(previous_rev_result.scalar() or 0)
-
-        def _calc_change(current_val: int, previous_val: int) -> dict[str, Any]:
-            diff = current_val - previous_val
-            pct = round((diff / previous_val * 100), 2) if previous_val > 0 else (100.0 if current_val > 0 else 0.0)
-            trend = 'up' if diff > 0 else 'down' if diff < 0 else 'stable'
-            return {'absolute': diff, 'percent': pct, 'trend': trend}
 
         period_comparison = {
             'current': {

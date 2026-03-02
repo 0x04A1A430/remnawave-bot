@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cabinet.utils.links import get_campaign_deep_link, get_campaign_web_link
 from app.config import settings
 from app.database.models import AdvertisingCampaign, User
 from app.services.partner_application_service import partner_application_service
@@ -28,22 +29,6 @@ from ..schemas.partners import (
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/referral/partner', tags=['Cabinet Partner'])
-
-
-def _get_campaign_deep_link(start_parameter: str) -> str | None:
-    """Generate Telegram deep link for campaign."""
-    bot_username = settings.get_bot_username()
-    if bot_username:
-        return f'https://t.me/{bot_username}?start={start_parameter}'
-    return None
-
-
-def _get_campaign_web_link(start_parameter: str) -> str | None:
-    """Generate web link for campaign."""
-    base_url = (settings.MINIAPP_CUSTOM_URL or '').rstrip('/')
-    if base_url:
-        return f'{base_url}/?campaign={start_parameter}'
-    return None
 
 
 @router.get('/status', response_model=PartnerStatusResponse)
@@ -101,8 +86,8 @@ async def get_partner_status(
                     balance_bonus_kopeks=c.balance_bonus_kopeks or 0,
                     subscription_duration_days=c.subscription_duration_days,
                     subscription_traffic_gb=c.subscription_traffic_gb,
-                    deep_link=_get_campaign_deep_link(c.start_parameter),
-                    web_link=_get_campaign_web_link(c.start_parameter),
+                    deep_link=get_campaign_deep_link(c.start_parameter),
+                    web_link=get_campaign_web_link(c.start_parameter),
                     registrations_count=stats.get('registrations_count', 0),
                     referrals_count=stats.get('referrals_count', 0),
                     earnings_kopeks=stats.get('earnings_kopeks', 0),
