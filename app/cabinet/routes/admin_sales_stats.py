@@ -127,22 +127,41 @@ async def get_sales_summary(
         # Consolidated subscription counts: active paid, active trial, new trials in period
         sub_counts_result = await db.execute(
             select(
-                func.sum(case(
-                    (and_(Subscription.status == SubscriptionStatus.ACTIVE.value, Subscription.is_trial.is_(False)), 1),
-                    else_=0,
-                )).label('active_paid'),
-                func.sum(case(
-                    (and_(Subscription.status == SubscriptionStatus.ACTIVE.value, Subscription.is_trial.is_(True)), 1),
-                    else_=0,
-                )).label('active_trial'),
-                func.sum(case(
-                    (and_(
-                        Subscription.is_trial.is_(True),
-                        Subscription.created_at >= period_start,
-                        Subscription.created_at <= period_end,
-                    ), 1),
-                    else_=0,
-                )).label('new_trials'),
+                func.sum(
+                    case(
+                        (
+                            and_(
+                                Subscription.status == SubscriptionStatus.ACTIVE.value, Subscription.is_trial.is_(False)
+                            ),
+                            1,
+                        ),
+                        else_=0,
+                    )
+                ).label('active_paid'),
+                func.sum(
+                    case(
+                        (
+                            and_(
+                                Subscription.status == SubscriptionStatus.ACTIVE.value, Subscription.is_trial.is_(True)
+                            ),
+                            1,
+                        ),
+                        else_=0,
+                    )
+                ).label('active_trial'),
+                func.sum(
+                    case(
+                        (
+                            and_(
+                                Subscription.is_trial.is_(True),
+                                Subscription.created_at >= period_start,
+                                Subscription.created_at <= period_end,
+                            ),
+                            1,
+                        ),
+                        else_=0,
+                    )
+                ).label('new_trials'),
             )
         )
         row = sub_counts_result.one()

@@ -349,7 +349,10 @@ async def send_cart_notification_after_topup(
         missing = cart_total - balance
         template = texts.get('BALANCE_TOPPED_UP_CART_INSUFFICIENT', '')
         message_text = template.format(
-            amount=fmt(amount_kopeks), balance=fmt(balance), cart_total=fmt(cart_total), missing=fmt(missing),
+            amount=fmt(amount_kopeks),
+            balance=fmt(balance),
+            cart_total=fmt(cart_total),
+            missing=fmt(missing),
         )
 
     if not message_text:
@@ -366,14 +369,18 @@ async def send_cart_notification_after_topup(
                         callback_data='return_to_saved_cart',
                     )
                 ],
-                [types.InlineKeyboardButton(
-                    text=texts.get('MY_BALANCE_BUTTON', '💰 Balance'),
-                    callback_data='menu_balance',
-                )],
-                [types.InlineKeyboardButton(
-                    text=texts.get('MAIN_MENU_BUTTON', '🏠 Menu'),
-                    callback_data='back_to_menu',
-                )],
+                [
+                    types.InlineKeyboardButton(
+                        text=texts.get('MY_BALANCE_BUTTON', '💰 Balance'),
+                        callback_data='menu_balance',
+                    )
+                ],
+                [
+                    types.InlineKeyboardButton(
+                        text=texts.get('MAIN_MENU_BUTTON', '🏠 Menu'),
+                        callback_data='back_to_menu',
+                    )
+                ],
             ]
         )
         await bot.send_message(

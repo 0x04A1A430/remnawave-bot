@@ -1093,7 +1093,9 @@ async def update_user_subscription(
         # Синхронизируем с RemnaWave (discovery/create + сброс трафика по админ-настройке)
         try:
             await _sync_subscription_to_panel(
-                db, user, subscription,
+                db,
+                user,
+                subscription,
                 reset_traffic=settings.RESET_TRAFFIC_ON_TARIFF_SWITCH,
                 reset_traffic_reason='смена тарифа (cabinet admin)',
             )
