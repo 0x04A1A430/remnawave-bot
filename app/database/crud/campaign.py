@@ -106,6 +106,7 @@ async def get_campaigns_list(
         .options(
             selectinload(AdvertisingCampaign.tariff),
             selectinload(AdvertisingCampaign.partner),
+            selectinload(AdvertisingCampaign.registrations),
         )
         .order_by(AdvertisingCampaign.created_at.desc())
         .offset(offset)
