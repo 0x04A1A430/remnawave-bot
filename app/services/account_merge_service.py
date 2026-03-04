@@ -510,6 +510,13 @@ async def execute_merge(
     secondary.referred_by_id = None
     if secondary.email:
         secondary.email = None
+    secondary.email_verified = False
+    secondary.email_verified_at = None
+    secondary.email_verification_token = None
+    secondary.email_verification_expires = None
+    secondary.email_change_new = None
+    secondary.email_change_code = None
+    secondary.password_hash = None
     if secondary.telegram_id:
         secondary.telegram_id = None
     for field in _OAUTH_FIELDS:
