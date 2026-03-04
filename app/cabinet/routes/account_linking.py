@@ -431,32 +431,25 @@ async def execute_merge_endpoint(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> MergeResponse:
     """Execute account merge. Consumes the merge token (one-time use)."""
-    # 1. Read token data first (non-destructive) to validate request
-    token_data = await get_merge_token_data(merge_token)
-    if not token_data:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='Merge token is invalid, expired, or already consumed',
-        )
-
-    primary_user_id: int = token_data['primary_user_id']
-    secondary_user_id: int = token_data['secondary_user_id']
-    provider: str = token_data.get('provider', '')
-    provider_id: str = token_data.get('provider_id', '')
-
-    # 2. Validate keep_subscription_from BEFORE consuming token
-    if request.keep_subscription_from not in (primary_user_id, secondary_user_id):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='keep_subscription_from must be one of the two user IDs being merged',
-        )
-
-    # 3. Consume token atomically (one-time use)
+    # 1. Consume token atomically first (GETDEL — one-time use, no TOCTOU)
     consumed = await consume_merge_token(merge_token)
     if not consumed:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail='Merge token is invalid, expired, or already consumed',
+        )
+
+    primary_user_id: int = consumed['primary_user_id']
+    secondary_user_id: int = consumed['secondary_user_id']
+    provider: str = consumed.get('provider', '')
+    provider_id: str = consumed.get('provider_id', '')
+
+    # 2. Validate keep_subscription_from — restore token if invalid
+    if request.keep_subscription_from not in (primary_user_id, secondary_user_id):
+        await restore_merge_token(merge_token, consumed)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='keep_subscription_from must be one of the two user IDs being merged',
         )
 
     # Convert user_id to 'primary'/'secondary' string for execute_merge()

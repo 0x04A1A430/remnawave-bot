@@ -13,6 +13,7 @@ from app.database.models import (
     CabinetRefreshToken,
     CloudPaymentsPayment,
     CryptoBotPayment,
+    DiscountOffer,
     FreekassaPayment,
     HeleketPayment,
     KassaAiPayment,
@@ -22,6 +23,8 @@ from app.database.models import (
     PlategaPayment,
     ReferralEarning,
     Subscription,
+    SubscriptionConversion,
+    SubscriptionEvent,
     Transaction,
     User,
     UserStatus,
@@ -454,6 +457,17 @@ async def execute_merge(
     # 10. Переназначение withdrawal_requests
     await db.execute(
         update(WithdrawalRequest).where(WithdrawalRequest.user_id == secondary.id).values(user_id=primary.id)
+    )
+
+    # 10a. Переназначение subscription_conversions, subscription_events, discount_offers
+    await db.execute(
+        update(SubscriptionConversion).where(SubscriptionConversion.user_id == secondary.id).values(user_id=primary.id)
+    )
+    await db.execute(
+        update(SubscriptionEvent).where(SubscriptionEvent.user_id == secondary.id).values(user_id=primary.id)
+    )
+    await db.execute(
+        update(DiscountOffer).where(DiscountOffer.user_id == secondary.id).values(user_id=primary.id)
     )
 
     # 11. Инвалидация refresh-токенов обоих пользователей (после мержа будет создан новый)
