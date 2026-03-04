@@ -9,12 +9,14 @@ from typing import Literal
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Path, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.crud.user import (
     get_user_by_id,
     get_user_by_oauth_provider,
+    get_user_by_telegram_id,
     set_user_oauth_provider_id,
 )
 from app.database.models import User
@@ -32,6 +34,7 @@ from ..auth.oauth_providers import (
     get_provider,
     validate_oauth_state,
 )
+from ..auth.telegram_auth import validate_telegram_init_data, validate_telegram_login_widget
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 from ..schemas.auth import UserResponse
 from .auth import _create_auth_response, _store_refresh_token, _user_to_response
@@ -86,6 +89,31 @@ class LinkCallbackResponse(BaseModel):
 
 class UnlinkResponse(BaseModel):
     success: bool
+
+
+class LinkTelegramRequest(BaseModel):
+    """Request for linking Telegram account. Supply EITHER init_data OR widget fields."""
+
+    # Mini App: Telegram WebApp initData
+    init_data: str | None = Field(None, max_length=4096, description='Telegram WebApp initData string')
+    # Login Widget fields
+    id: int | None = Field(None, description='Telegram user ID from Login Widget')
+    first_name: str | None = Field(None, max_length=256, description="User's first name")
+    last_name: str | None = Field(None, max_length=256, description="User's last name")
+    username: str | None = Field(None, max_length=256, description="User's username")
+    photo_url: str | None = Field(None, max_length=2048, description="User's photo URL")
+    auth_date: int | None = Field(None, description='Unix timestamp of authentication')
+    hash: str | None = Field(None, min_length=64, max_length=64, description='Authentication hash (SHA-256 hex)')
+
+    @model_validator(mode='after')
+    def check_exclusive(self) -> 'LinkTelegramRequest':
+        has_init = self.init_data is not None
+        has_widget = self.id is not None or self.hash is not None or self.auth_date is not None
+        if has_init and has_widget:
+            raise ValueError('Provide either init_data or Login Widget fields, not both')
+        if not has_init and not has_widget:
+            raise ValueError('Provide either init_data or Login Widget fields (id, auth_date, hash)')
+        return self
 
 
 class MergePreviewSubscription(BaseModel):
@@ -372,6 +400,117 @@ async def unlink_provider(
 
     logger.info('OAuth provider unlinked from account', provider=provider, user_id=user.id)
     return UnlinkResponse(success=True)
+
+
+@router.post('/link/telegram', response_model=LinkCallbackResponse)
+async def link_telegram(
+    request: LinkTelegramRequest,
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> LinkCallbackResponse:
+    """Link Telegram account via WebApp initData or Login Widget."""
+    # 1. Already has Telegram linked?
+    if user.telegram_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Telegram is already linked to your account',
+        )
+
+    # 2. Validate and extract telegram_id
+    telegram_id: int | None = None
+    telegram_username: str | None = None
+    telegram_first_name: str | None = None
+    telegram_last_name: str | None = None
+
+    if request.init_data:
+        # Mini App flow: validate initData
+        user_data = validate_telegram_init_data(request.init_data)
+        if not user_data or not user_data.get('id'):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='Invalid or expired Telegram initData',
+            )
+        telegram_id = int(user_data['id'])
+        telegram_username = user_data.get('username')
+        telegram_first_name = user_data.get('first_name')
+        telegram_last_name = user_data.get('last_name')
+    elif request.id is not None and request.hash is not None and request.auth_date is not None:
+        # Login Widget flow: validate widget hash
+        widget_data = {
+            'id': request.id,
+            'auth_date': request.auth_date,
+            'hash': request.hash,
+        }
+        if request.first_name is not None:
+            widget_data['first_name'] = request.first_name
+        if request.last_name is not None:
+            widget_data['last_name'] = request.last_name
+        if request.username is not None:
+            widget_data['username'] = request.username
+        if request.photo_url is not None:
+            widget_data['photo_url'] = request.photo_url
+
+        if not validate_telegram_login_widget(widget_data):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='Invalid or expired Telegram Login Widget data',
+            )
+        telegram_id = request.id
+        telegram_username = request.username
+        telegram_first_name = request.first_name
+        telegram_last_name = request.last_name
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Provide either init_data (Mini App) or Login Widget fields (id, auth_date, hash)',
+        )
+
+    # 3. Check if telegram_id is linked to ANOTHER user
+    existing_user = await get_user_by_telegram_id(db, telegram_id)
+    if existing_user and existing_user.id != user.id:
+        logger.info(
+            'Telegram linking conflict: telegram_id already linked to another user',
+            telegram_id=telegram_id,
+            current_user_id=user.id,
+            existing_user_id=existing_user.id,
+        )
+        merge_token = await create_merge_token(
+            primary_user_id=user.id,
+            secondary_user_id=existing_user.id,
+            provider='telegram',
+            provider_id=str(telegram_id),
+        )
+        return LinkCallbackResponse(
+            success=False,
+            merge_required=True,
+            merge_token=merge_token,
+        )
+
+    # 4. Link Telegram to current user
+    user.telegram_id = telegram_id
+    if telegram_username and not user.username:
+        user.username = telegram_username
+    if telegram_first_name and not user.first_name:
+        user.first_name = telegram_first_name
+    if telegram_last_name and not user.last_name:
+        user.last_name = telegram_last_name
+    user.updated_at = datetime.now(UTC)
+
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail='This Telegram account was just linked to another user',
+        )
+
+    logger.info(
+        'Telegram linked to account',
+        telegram_id=telegram_id,
+        user_id=user.id,
+    )
+    return LinkCallbackResponse(success=True, message='linked')
 
 
 # ---------------------------------------------------------------------------

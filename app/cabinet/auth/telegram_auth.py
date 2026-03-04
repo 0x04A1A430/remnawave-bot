@@ -29,17 +29,17 @@ def validate_telegram_login_widget(data: dict[str, Any], max_age_seconds: int = 
     if not check_hash:
         return False
 
-    # Check auth_date is not too old
+    # Check auth_date is present and within valid range
     auth_date = auth_data.get('auth_date')
-    if auth_date:
-        try:
-            # Use UTC timestamp to avoid timezone issues
-            auth_time = datetime.fromtimestamp(int(auth_date), tz=UTC)
-            age = (datetime.now(UTC) - auth_time).total_seconds()
-            if age > max_age_seconds:
-                return False
-        except (ValueError, TypeError, OSError):
+    if not auth_date:
+        return False
+    try:
+        auth_time = datetime.fromtimestamp(int(auth_date), tz=UTC)
+        age = (datetime.now(UTC) - auth_time).total_seconds()
+        if age > max_age_seconds or age < -300:
             return False
+    except (ValueError, TypeError, OSError):
+        return False
 
     # Build data-check-string (sorted key=value pairs, newline-separated)
     data_check_arr = [f'{k}={v}' for k, v in sorted(auth_data.items()) if v is not None]
@@ -76,17 +76,17 @@ def validate_telegram_init_data(init_data: str, max_age_seconds: int = 86400) ->
         if not received_hash:
             return None
 
-        # Check auth_date is not too old
+        # Check auth_date is present and within valid range
         auth_date = parsed.get('auth_date')
-        if auth_date:
-            try:
-                # Use UTC timestamp to avoid timezone issues
-                auth_time = datetime.fromtimestamp(int(auth_date), tz=UTC)
-                age = (datetime.now(UTC) - auth_time).total_seconds()
-                if age > max_age_seconds:
-                    return None
-            except (ValueError, TypeError, OSError):
+        if not auth_date:
+            return None
+        try:
+            auth_time = datetime.fromtimestamp(int(auth_date), tz=UTC)
+            age = (datetime.now(UTC) - auth_time).total_seconds()
+            if age > max_age_seconds or age < -300:
                 return None
+        except (ValueError, TypeError, OSError):
+            return None
 
         # Build data-check-string
         data_check_arr = [f'{k}={v}' for k, v in sorted(parsed.items())]
