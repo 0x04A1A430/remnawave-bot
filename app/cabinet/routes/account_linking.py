@@ -5,7 +5,7 @@ Router 2 (`merge_router`): Public endpoints for merge preview and execution.
 """
 
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Literal
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Path, status
@@ -88,6 +88,17 @@ class UnlinkResponse(BaseModel):
     success: bool
 
 
+class MergePreviewSubscription(BaseModel):
+    status: str
+    is_trial: bool
+    end_date: datetime | None = None
+    traffic_limit_gb: float
+    traffic_used_gb: float
+    device_limit: int
+    tariff_name: str | None = None
+    autopay_enabled: bool
+
+
 class MergePreviewUser(BaseModel):
     id: int
     username: str | None = None
@@ -95,7 +106,7 @@ class MergePreviewUser(BaseModel):
     email: str | None = None
     auth_methods: list[str]
     balance_kopeks: int = 0
-    subscription: dict[str, Any] | None = None
+    subscription: MergePreviewSubscription | None = None
     created_at: datetime | None = None
 
 
@@ -230,9 +241,16 @@ async def link_provider_callback(
             detail='Invalid or expired OAuth state',
         )
 
-    # 1b. Validate that the user who initiated the link flow is the same user completing it
-    state_user_id = state_data.get('user_id')
-    if state_user_id and str(user.id) != state_user_id:
+    # 1b. Validate that this state was created for account linking (not login)
+    if state_data.get('linking') != 'true' or not state_data.get('user_id'):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='OAuth state was not initiated for account linking',
+        )
+
+    # 1c. Validate that the user who initiated the link flow is the same user completing it
+    state_user_id = state_data['user_id']
+    if str(user.id) != state_user_id:
         logger.warning(
             'OAuth state user_id mismatch in link callback',
             state_user_id=state_user_id,

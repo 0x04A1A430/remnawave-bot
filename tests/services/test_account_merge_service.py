@@ -438,6 +438,22 @@ class TestExecuteMergeBalance:
         assert result.balance_kopeks == 8000
         assert secondary.balance_kopeks == 0
 
+    async def test_negative_balance_transferred(self, monkeypatch):
+        """Negative balance (debt) must be transferred, not silently discarded."""
+        db = _make_db()
+        primary = _make_user(id=1, balance_kopeks=5000)
+        secondary = _make_user(id=2, balance_kopeks=-2000)
+        monkeypatch.setattr(
+            account_merge_service,
+            'get_user_by_id',
+            AsyncMock(side_effect=[primary, secondary]),
+        )
+        with _patch_remnawave_delete():
+            result = await execute_merge(db, 1, 2)
+
+        assert result.balance_kopeks == 3000
+        assert secondary.balance_kopeks == 0
+
     async def test_zero_secondary_balance_unchanged(self, monkeypatch):
         db = _make_db()
         primary = _make_user(id=1, balance_kopeks=5000)
@@ -780,3 +796,48 @@ class TestExecuteMergeSelfReferralPrevention:
             await execute_merge(db, 1, 2)
 
         assert secondary.referred_by_id is None
+
+    async def test_secondary_referrer_transferred_to_primary(self, monkeypatch):
+        """If primary has no referrer but secondary does, transfer it."""
+        db = _make_db()
+        primary = _make_user(id=1, referred_by_id=None)
+        secondary = _make_user(id=2, referred_by_id=99)
+        monkeypatch.setattr(
+            account_merge_service,
+            'get_user_by_id',
+            AsyncMock(side_effect=[primary, secondary]),
+        )
+        with _patch_remnawave_delete():
+            result = await execute_merge(db, 1, 2)
+
+        assert result.referred_by_id == 99
+
+    async def test_secondary_referrer_not_transferred_if_primary_has_one(self, monkeypatch):
+        """If primary already has a referrer, secondary's is not transferred."""
+        db = _make_db()
+        primary = _make_user(id=1, referred_by_id=50)
+        secondary = _make_user(id=2, referred_by_id=99)
+        monkeypatch.setattr(
+            account_merge_service,
+            'get_user_by_id',
+            AsyncMock(side_effect=[primary, secondary]),
+        )
+        with _patch_remnawave_delete():
+            result = await execute_merge(db, 1, 2)
+
+        assert result.referred_by_id == 50
+
+    async def test_secondary_referrer_pointing_to_primary_not_transferred(self, monkeypatch):
+        """If secondary was referred by primary, don't create self-referral."""
+        db = _make_db()
+        primary = _make_user(id=1, referred_by_id=None)
+        secondary = _make_user(id=2, referred_by_id=1)
+        monkeypatch.setattr(
+            account_merge_service,
+            'get_user_by_id',
+            AsyncMock(side_effect=[primary, secondary]),
+        )
+        with _patch_remnawave_delete():
+            result = await execute_merge(db, 1, 2)
+
+        assert result.referred_by_id is None

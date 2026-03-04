@@ -398,9 +398,9 @@ async def execute_merge(
             secondary_id=secondary.id,
         )
 
-    # 4. Суммируем баланс
+    # 4. Суммируем баланс (включая отрицательный — долг не должен исчезать)
     transferred_kopeks = secondary.balance_kopeks
-    if transferred_kopeks > 0:
+    if transferred_kopeks != 0:
         primary.balance_kopeks += transferred_kopeks
         secondary.balance_kopeks = 0
         logger.info(
@@ -445,6 +445,11 @@ async def execute_merge(
     # Если primary был приглашён secondary — очищаем (нельзя ссылаться на самого себя)
     if primary.referred_by_id == secondary.id:
         primary.referred_by_id = None
+
+    # Переносим реферальную связь secondary → primary (если primary не имеет своей)
+    if primary.referred_by_id is None and secondary.referred_by_id is not None:
+        if secondary.referred_by_id != primary.id:
+            primary.referred_by_id = secondary.referred_by_id
 
     # 10. Переназначение withdrawal_requests
     await db.execute(
