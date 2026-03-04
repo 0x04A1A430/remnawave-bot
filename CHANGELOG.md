@@ -1,5 +1,25 @@
 # Changelog
 
+## [3.22.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.21.0...v3.22.0) (2026-03-04)
+
+
+### New Features
+
+* replace pip with uv in Dockerfile ([e23d69f](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/e23d69fcec7ab65a14b054fd46f6ecf87ae6fd13))
+
+
+### Bug Fixes
+
+* add selectinload for campaign registrations in list query ([4d74afd](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/4d74afd7118524623371f904a93ae1fcbba8d64e))
+* backup restore fails on FK constraints and transaction poisoning ([ff1c872](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/ff1c8722c9188fdbaf765d6b7e9192686df64850))
+* classic mode prices overridden by active tariff prices ([628a99e](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/628a99e7aa0812842dabc430857190c0cd5c2680))
+* close remaining daily subscription expire paths ([618c936](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/618c936ac9ce4904cd784bf2278d3da188895f2d))
+* empty JSONB values exported as None in backup ([57aaca8](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/57aaca82f5bf9d7bdd9d4b924aa3412d85eccbb5))
+* handle duplicate remnawave_uuid on email sync ([eaeee7a](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/eaeee7a765c03ff33e2928cdb41be91948eca95c))
+* MissingGreenlet on campaign registrations access ([018f18f](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/018f18fa0c9bba1a1dbca8b2398b9611d0c94c36))
+* prevent daily subscriptions from being expired by middleware/CRUD/webhook ([0ed6397](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/0ed6397fa9e5810fcffc9152ab2241fcf37cf85a))
+* reset traffic purchases on expired subscription renewal + pricing fixes ([dce9eaa](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/dce9eaa5971cb1dc0945747e02397a250e8e411b))
+
 ## [3.21.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.20.1...v3.21.0) (2026-03-02)
 
 
