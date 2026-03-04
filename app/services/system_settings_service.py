@@ -1458,6 +1458,11 @@ class BotConfigurationService:
 
         await cls._sync_default_web_api_token()
 
+        # После загрузки всех overrides (включая SALES_MODE) — пересчитать цены,
+        # т.к. ensure_tariffs_synced мог загрузить тарифные цены до того как
+        # SALES_MODE=classic был применён из system_settings
+        refresh_period_prices()
+
     @classmethod
     async def reload(cls) -> None:
         cls._overrides_raw.clear()
@@ -1599,7 +1604,13 @@ class BotConfigurationService:
             return
         try:
             setattr(settings, key, value)
-            if key in {
+            if key == 'SALES_MODE':
+                if settings.is_classic_mode():
+                    from app.config import clear_db_period_prices
+
+                    clear_db_period_prices()
+                refresh_period_prices()
+            elif key in {
                 'PRICE_14_DAYS',
                 'PRICE_30_DAYS',
                 'PRICE_60_DAYS',
