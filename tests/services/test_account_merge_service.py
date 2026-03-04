@@ -693,6 +693,58 @@ class TestExecuteMergeBulkUpdates:
         with _patch_remnawave_delete():
             await execute_merge(db, 1, 2)
 
-        # Transaction + 10 payment models + 2 referral_earnings + 1 referral chain
-        # + 1 withdrawal_requests + 1 refresh tokens = 16 total execute calls
-        assert db.execute.await_count == 16
+        # Transaction + 10 payment models + 1 cross-referral DELETE + 2 referral_earnings
+        # + 1 referral chain + 1 withdrawal_requests + 1 refresh tokens = 17 total execute calls
+        assert db.execute.await_count == 17
+
+
+# ---------------------------------------------------------------------------
+# execute_merge — self-referral prevention
+# ---------------------------------------------------------------------------
+
+
+class TestExecuteMergeSelfReferralPrevention:
+    async def test_primary_referred_by_secondary_cleared(self, monkeypatch):
+        """If primary was referred by secondary, referred_by_id must be cleared."""
+        db = _make_db()
+        primary = _make_user(id=1, referred_by_id=2)
+        secondary = _make_user(id=2)
+        monkeypatch.setattr(
+            account_merge_service,
+            'get_user_by_id',
+            AsyncMock(side_effect=[primary, secondary]),
+        )
+        with _patch_remnawave_delete():
+            result = await execute_merge(db, 1, 2)
+
+        assert result.referred_by_id is None
+
+    async def test_primary_referred_by_other_preserved(self, monkeypatch):
+        """If primary was referred by a third user, referred_by_id stays."""
+        db = _make_db()
+        primary = _make_user(id=1, referred_by_id=99)
+        secondary = _make_user(id=2)
+        monkeypatch.setattr(
+            account_merge_service,
+            'get_user_by_id',
+            AsyncMock(side_effect=[primary, secondary]),
+        )
+        with _patch_remnawave_delete():
+            result = await execute_merge(db, 1, 2)
+
+        assert result.referred_by_id == 99
+
+    async def test_secondary_referred_by_id_cleared(self, monkeypatch):
+        """Secondary's referred_by_id must be cleared during cleanup."""
+        db = _make_db()
+        primary = _make_user(id=1)
+        secondary = _make_user(id=2, referred_by_id=99)
+        monkeypatch.setattr(
+            account_merge_service,
+            'get_user_by_id',
+            AsyncMock(side_effect=[primary, secondary]),
+        )
+        with _patch_remnawave_delete():
+            await execute_merge(db, 1, 2)
+
+        assert secondary.referred_by_id is None

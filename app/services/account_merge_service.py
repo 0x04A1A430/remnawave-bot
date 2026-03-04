@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 
 import structlog
-from sqlalchemy import update
+from sqlalchemy import and_, delete, or_, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -420,12 +420,20 @@ async def execute_merge(
     for payment_model in _PAYMENT_MODELS:
         await db.execute(update(payment_model).where(payment_model.user_id == secondary.id).values(user_id=primary.id))
 
-    # 8. Переназначение referral_earnings (обе колонки, исключая self-referral)
+    # 8. Переназначение referral_earnings
+    # 8a. Удаляем cross-referral записи между участниками мержа (иначе станут self-referral)
+    await db.execute(
+        delete(ReferralEarning).where(
+            or_(
+                and_(ReferralEarning.user_id == secondary.id, ReferralEarning.referral_id == primary.id),
+                and_(ReferralEarning.user_id == primary.id, ReferralEarning.referral_id == secondary.id),
+            )
+        )
+    )
+    # 8b. Переназначение оставшихся записей
     await db.execute(update(ReferralEarning).where(ReferralEarning.user_id == secondary.id).values(user_id=primary.id))
     await db.execute(
-        update(ReferralEarning)
-        .where(ReferralEarning.referral_id == secondary.id, ReferralEarning.user_id != primary.id)
-        .values(referral_id=primary.id)
+        update(ReferralEarning).where(ReferralEarning.referral_id == secondary.id).values(referral_id=primary.id)
     )
 
     # 9. Переназначение реферальной цепочки (исключая self-referral)
@@ -476,10 +484,11 @@ async def execute_merge(
             value=primary.referral_commission_percent,
         )
 
-    # 14. Помечаем secondary как удалённый и очищаем ВСЕ unique constraint поля
+    # 14. Помечаем secondary как удалённый и очищаем ВСЕ unique constraint и FK поля
     secondary.status = UserStatus.DELETED.value
     secondary.referral_code = None
     secondary.remnawave_uuid = None
+    secondary.referred_by_id = None
     if secondary.email:
         secondary.email = None
     if secondary.telegram_id:
