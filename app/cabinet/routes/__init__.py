@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter
 
+from .account_linking import merge_router as merge_router, router as account_linking_router
 from .admin_apps import router as admin_apps_router
 from .admin_audit_log import router as admin_audit_log_router
 from .admin_ban_system import router as admin_ban_system_router
@@ -60,6 +61,8 @@ router = APIRouter(prefix='/cabinet', tags=['Cabinet'])
 # Include all sub-routers
 router.include_router(auth_router)
 router.include_router(oauth_router)
+router.include_router(account_linking_router)
+router.include_router(merge_router)
 router.include_router(subscription_router)
 router.include_router(balance_router)
 router.include_router(referral_router)
