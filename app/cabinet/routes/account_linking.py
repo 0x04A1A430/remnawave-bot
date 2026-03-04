@@ -412,8 +412,8 @@ async def execute_merge_endpoint(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> MergeResponse:
     """Execute account merge. Consumes the merge token (one-time use)."""
-    # 1. Consume token atomically
-    token_data = await consume_merge_token(merge_token)
+    # 1. Read token data first (non-destructive) to validate request
+    token_data = await get_merge_token_data(merge_token)
     if not token_data:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -425,17 +425,25 @@ async def execute_merge_endpoint(
     provider: str = token_data.get('provider', '')
     provider_id: str = token_data.get('provider_id', '')
 
-    # 2. Validate keep_subscription_from is one of the two user IDs
+    # 2. Validate keep_subscription_from BEFORE consuming token
     if request.keep_subscription_from not in (primary_user_id, secondary_user_id):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='keep_subscription_from must be one of the two user IDs being merged',
         )
 
+    # 3. Consume token atomically (one-time use)
+    consumed = await consume_merge_token(merge_token)
+    if not consumed:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='Merge token is invalid, expired, or already consumed',
+        )
+
     # Convert user_id to 'primary'/'secondary' string for execute_merge()
     keep_from: Literal['primary', 'secondary'] = 'primary' if request.keep_subscription_from == primary_user_id else 'secondary'
 
-    # 3. Execute merge
+    # 4. Execute merge
     try:
         merged_user = await execute_merge(
             db=db,

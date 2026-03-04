@@ -296,6 +296,7 @@ async def _handle_subscription_merge(
             secondary.remnawave_uuid = None
         # Удаляем запись подписки secondary
         await db.delete(secondary_sub)
+        await db.flush()
         logger.info(
             'Мерж подписок: оставлена подписка primary, подписка secondary удалена',
             primary_id=primary.id,
@@ -398,15 +399,16 @@ async def execute_merge(
         )
 
     # 4. Суммируем баланс
-    if secondary.balance_kopeks > 0:
-        primary.balance_kopeks += secondary.balance_kopeks
+    transferred_kopeks = secondary.balance_kopeks
+    if transferred_kopeks > 0:
+        primary.balance_kopeks += transferred_kopeks
+        secondary.balance_kopeks = 0
         logger.info(
             'Перенесён баланс',
             primary_id=primary.id,
             secondary_id=secondary.id,
-            transferred_kopeks=secondary.balance_kopeks,
+            transferred_kopeks=transferred_kopeks,
         )
-        secondary.balance_kopeks = 0
 
     # 5. Мерж подписок
     await _handle_subscription_merge(db, primary, secondary, keep_subscription_from)
