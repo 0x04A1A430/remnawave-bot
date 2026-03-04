@@ -5,10 +5,10 @@ Router 2 (`merge_router`): Public endpoints for merge preview and execution.
 """
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Path, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,7 +18,7 @@ from app.database.crud.user import (
     set_user_oauth_provider_id,
 )
 from app.database.models import User
-from app.services.account_merge_service import _compute_auth_methods, execute_merge, get_merge_preview
+from app.services.account_merge_service import compute_auth_methods, execute_merge, get_merge_preview
 
 from ..auth.merge_service import (
     MERGE_TOKEN_TTL_SECONDS,
@@ -137,7 +137,7 @@ def _get_provider_identifier(user: User, provider: str) -> str | None:
 
 def _count_auth_methods(user: User) -> int:
     """Count how many auth methods the user has linked."""
-    return len(_compute_auth_methods(user))
+    return len(compute_auth_methods(user))
 
 
 # ---------------------------------------------------------------------------
@@ -364,7 +364,7 @@ merge_router = APIRouter(prefix='/auth/merge', tags=['Cabinet Account Merge'])
 
 @merge_router.get('/{merge_token}', response_model=MergePreviewResponse)
 async def get_merge_preview_endpoint(
-    merge_token: str,
+    merge_token: str = Path(..., min_length=32, max_length=64),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> MergePreviewResponse:
     """Preview the result of merging two accounts before confirming."""
@@ -407,8 +407,8 @@ async def get_merge_preview_endpoint(
 
 @merge_router.post('/{merge_token}', response_model=MergeResponse)
 async def execute_merge_endpoint(
-    merge_token: str,
     request: MergeRequest,
+    merge_token: str = Path(..., min_length=32, max_length=64),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> MergeResponse:
     """Execute account merge. Consumes the merge token (one-time use)."""
@@ -433,7 +433,7 @@ async def execute_merge_endpoint(
         )
 
     # Convert user_id to 'primary'/'secondary' string for execute_merge()
-    keep_from: str = 'primary' if request.keep_subscription_from == primary_user_id else 'secondary'
+    keep_from: Literal['primary', 'secondary'] = 'primary' if request.keep_subscription_from == primary_user_id else 'secondary'
 
     # 3. Execute merge
     try:

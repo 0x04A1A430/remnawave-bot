@@ -10,7 +10,7 @@ from app.services import account_merge_service
 from app.services.account_merge_service import (
     _build_subscription_preview,
     _build_user_preview,
-    _compute_auth_methods,
+    compute_auth_methods,
     execute_merge,
     get_merge_preview,
 )
@@ -105,26 +105,26 @@ def _make_db() -> SimpleNamespace:
 
 
 # ---------------------------------------------------------------------------
-# _compute_auth_methods
+# compute_auth_methods
 # ---------------------------------------------------------------------------
 
 
 class TestComputeAuthMethods:
     def test_no_methods(self):
         user = _make_user()
-        assert _compute_auth_methods(user) == []
+        assert compute_auth_methods(user) == []
 
     def test_telegram_only(self):
         user = _make_user(telegram_id=12345)
-        assert _compute_auth_methods(user) == ['telegram']
+        assert compute_auth_methods(user) == ['telegram']
 
     def test_email_only(self):
         user = _make_user(email='test@example.com', password_hash='hash123')
-        assert _compute_auth_methods(user) == ['email']
+        assert compute_auth_methods(user) == ['email']
 
     def test_email_without_password_not_counted(self):
         user = _make_user(email='test@example.com')
-        assert _compute_auth_methods(user) == []
+        assert compute_auth_methods(user) == []
 
     def test_all_methods(self):
         user = _make_user(
@@ -136,11 +136,11 @@ class TestComputeAuthMethods:
             discord_id='d123',
             vk_id=99999,
         )
-        assert _compute_auth_methods(user) == ['telegram', 'email', 'google', 'yandex', 'discord', 'vk']
+        assert compute_auth_methods(user) == ['telegram', 'email', 'google', 'yandex', 'discord', 'vk']
 
     def test_oauth_only(self):
         user = _make_user(google_id='g123', discord_id='d123')
-        assert _compute_auth_methods(user) == ['google', 'discord']
+        assert compute_auth_methods(user) == ['google', 'discord']
 
 
 # ---------------------------------------------------------------------------

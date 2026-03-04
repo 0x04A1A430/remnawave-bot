@@ -60,7 +60,7 @@ _PARTNER_STATUS_PRIORITY: dict[str, int] = {
 }
 
 
-def _compute_auth_methods(user: User) -> list[str]:
+def compute_auth_methods(user: User) -> list[str]:
     """Вычисляет список методов авторизации пользователя."""
     methods: list[str] = []
     if user.telegram_id:
@@ -104,7 +104,7 @@ def _build_user_preview(user: User) -> dict[str, Any]:
         'username': user.username,
         'first_name': user.first_name,
         'email': user.email,
-        'auth_methods': _compute_auth_methods(user),
+        'auth_methods': compute_auth_methods(user),
         'balance_kopeks': user.balance_kopeks,
         'subscription': _build_subscription_preview(user.subscription),
         'created_at': user.created_at,
@@ -214,7 +214,7 @@ async def _handle_subscription_merge(
     db: AsyncSession,
     primary: User,
     secondary: User,
-    keep_subscription_from: str,
+    keep_subscription_from: Literal['primary', 'secondary'],
 ) -> None:
     """Обрабатывает мерж подписок между двумя аккаунтами.
 
