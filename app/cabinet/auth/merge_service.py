@@ -99,3 +99,37 @@ async def consume_merge_token(token: str) -> dict[str, Any] | None:
         provider=data.get('provider'),
     )
     return data
+
+
+async def restore_merge_token(token: str, data: dict[str, Any]) -> bool:
+    """Re-store a consumed merge token so the user can retry after a DB failure.
+
+    Uses the remaining TTL based on the original ``created_at``.
+    Returns ``True`` if restored, ``False`` if Redis write failed.
+    """
+    created_at_str: str = data.get('created_at', '')
+    try:
+        created_at = datetime.fromisoformat(created_at_str)
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=UTC)
+        elapsed = (datetime.now(UTC) - created_at).total_seconds()
+        remaining_ttl = max(1, int(MERGE_TOKEN_TTL_SECONDS - elapsed))
+    except (ValueError, TypeError):
+        remaining_ttl = MERGE_TOKEN_TTL_SECONDS
+
+    key = cache_key(MERGE_TOKEN_PREFIX, token)
+    stored = await cache.set(key, data, expire=remaining_ttl)
+    if stored:
+        logger.info(
+            'Merge token restored after failed merge',
+            primary_user_id=data.get('primary_user_id'),
+            secondary_user_id=data.get('secondary_user_id'),
+            remaining_ttl=remaining_ttl,
+        )
+    else:
+        logger.error(
+            'Failed to restore merge token to Redis',
+            primary_user_id=data.get('primary_user_id'),
+            secondary_user_id=data.get('secondary_user_id'),
+        )
+    return bool(stored)

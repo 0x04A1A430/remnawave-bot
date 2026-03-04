@@ -480,6 +480,36 @@ class TestExecuteMergePartnerStatus:
 
         assert result.partner_status == 'approved'
 
+    async def test_pending_beats_rejected(self, monkeypatch):
+        """Pending application should not be overwritten by rejected status."""
+        db = _make_db()
+        primary = _make_user(id=1, partner_status='pending')
+        secondary = _make_user(id=2, partner_status='rejected')
+        monkeypatch.setattr(
+            account_merge_service,
+            'get_user_by_id',
+            AsyncMock(side_effect=[primary, secondary]),
+        )
+        with _patch_remnawave_delete():
+            result = await execute_merge(db, 1, 2)
+
+        assert result.partner_status == 'pending'
+
+    async def test_rejected_does_not_beat_pending(self, monkeypatch):
+        """Rejected on secondary should not overwrite pending on primary."""
+        db = _make_db()
+        primary = _make_user(id=1, partner_status='rejected')
+        secondary = _make_user(id=2, partner_status='pending')
+        monkeypatch.setattr(
+            account_merge_service,
+            'get_user_by_id',
+            AsyncMock(side_effect=[primary, secondary]),
+        )
+        with _patch_remnawave_delete():
+            result = await execute_merge(db, 1, 2)
+
+        assert result.partner_status == 'pending'
+
 
 class TestExecuteMergeReferralCommission:
     async def test_transfers_if_primary_has_none(self, monkeypatch):

@@ -25,6 +25,7 @@ from ..auth.merge_service import (
     consume_merge_token,
     create_merge_token,
     get_merge_token_data,
+    restore_merge_token,
 )
 from ..auth.oauth_providers import (
     generate_oauth_state,
@@ -456,6 +457,7 @@ async def execute_merge_endpoint(
         await db.commit()
     except ValueError as exc:
         await db.rollback()
+        await restore_merge_token(merge_token, consumed)
         logger.error('Merge execution failed (ValueError)', error=str(exc))
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -463,6 +465,7 @@ async def execute_merge_endpoint(
         ) from exc
     except Exception as exc:
         await db.rollback()
+        await restore_merge_token(merge_token, consumed)
         logger.error('Merge execution failed', exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

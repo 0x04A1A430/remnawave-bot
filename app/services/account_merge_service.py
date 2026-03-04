@@ -54,8 +54,8 @@ _PAYMENT_MODELS: tuple[type, ...] = (
 # Приоритет партнёрских статусов (чем выше число — тем приоритетнее)
 _PARTNER_STATUS_PRIORITY: dict[str, int] = {
     PartnerStatus.NONE.value: 0,
-    PartnerStatus.PENDING.value: 1,
-    PartnerStatus.REJECTED.value: 2,
+    PartnerStatus.REJECTED.value: 1,
+    PartnerStatus.PENDING.value: 2,
     PartnerStatus.APPROVED.value: 3,
 }
 
