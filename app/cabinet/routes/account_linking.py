@@ -469,7 +469,7 @@ async def execute_merge_endpoint(
             detail='Account merge failed due to an internal error',
         ) from exc
 
-    # 4. Re-fetch merged user with full relationships for auth response
+    # 5. Re-fetch merged user with full relationships for auth response
     merged_user = await get_user_by_id(db, primary_user_id)
     if not merged_user:
         raise HTTPException(
@@ -477,7 +477,7 @@ async def execute_merge_endpoint(
             detail='Failed to load merged user',
         )
 
-    # 5. Create auth tokens for the merged user
+    # 6. Create auth tokens for the merged user
     try:
         auth_response = await _create_auth_response(merged_user, db)
         await _store_refresh_token(db, merged_user.id, auth_response.refresh_token, device_info='merge')

@@ -420,26 +420,35 @@ async def execute_merge(
     for payment_model in _PAYMENT_MODELS:
         await db.execute(update(payment_model).where(payment_model.user_id == secondary.id).values(user_id=primary.id))
 
-    # 8. Переназначение referral_earnings (обе колонки)
+    # 8. Переназначение referral_earnings (обе колонки, исключая self-referral)
     await db.execute(update(ReferralEarning).where(ReferralEarning.user_id == secondary.id).values(user_id=primary.id))
     await db.execute(
-        update(ReferralEarning).where(ReferralEarning.referral_id == secondary.id).values(referral_id=primary.id)
+        update(ReferralEarning)
+        .where(ReferralEarning.referral_id == secondary.id, ReferralEarning.user_id != primary.id)
+        .values(referral_id=primary.id)
     )
 
-    # 9. Переназначение реферальной цепочки
-    await db.execute(update(User).where(User.referred_by_id == secondary.id).values(referred_by_id=primary.id))
+    # 9. Переназначение реферальной цепочки (исключая self-referral)
+    await db.execute(
+        update(User)
+        .where(User.referred_by_id == secondary.id, User.id != primary.id)
+        .values(referred_by_id=primary.id)
+    )
+    # Если primary был приглашён secondary — очищаем (нельзя ссылаться на самого себя)
+    if primary.referred_by_id == secondary.id:
+        primary.referred_by_id = None
 
     # 10. Переназначение withdrawal_requests
     await db.execute(
         update(WithdrawalRequest).where(WithdrawalRequest.user_id == secondary.id).values(user_id=primary.id)
     )
 
-    # 11. Инвалидация refresh-токенов secondary
+    # 11. Инвалидация refresh-токенов обоих пользователей (после мержа будет создан новый)
     now = datetime.now(UTC)
     await db.execute(
         update(CabinetRefreshToken)
         .where(
-            CabinetRefreshToken.user_id == secondary.id,
+            CabinetRefreshToken.user_id.in_([primary.id, secondary.id]),
             CabinetRefreshToken.revoked_at.is_(None),
         )
         .values(revoked_at=now)
