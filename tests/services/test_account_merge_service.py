@@ -273,6 +273,23 @@ class TestExecuteMergeValidation:
         with pytest.raises(ValueError, match='уже удалён'):
             await execute_merge(db, 1, 2)
 
+    async def test_deleted_primary_raises(self, monkeypatch):
+        db = _make_db()
+        primary = _make_user(id=1, status='deleted')
+        secondary = _make_user(id=2)
+        monkeypatch.setattr(
+            account_merge_service,
+            'get_user_by_id',
+            AsyncMock(side_effect=[primary, secondary]),
+        )
+        with pytest.raises(ValueError, match='удалён'):
+            await execute_merge(db, 1, 2)
+
+    async def test_invalid_keep_subscription_from_raises(self):
+        db = _make_db()
+        with pytest.raises(ValueError, match=r'primary.*secondary'):
+            await execute_merge(db, 1, 2, keep_subscription_from='invalid')
+
 
 # ---------------------------------------------------------------------------
 # execute_merge — data transfer
@@ -325,6 +342,8 @@ class TestExecuteMergeOAuthTransfer:
 
         # Primary keeps its own google_id
         assert result.google_id == 'g_primary'
+        # Secondary's conflicting google_id is cleared (unique constraint cleanup)
+        assert secondary.google_id is None
 
 
 class TestExecuteMergeTelegramTransfer:
@@ -512,6 +531,40 @@ class TestExecuteMergeSecondaryDeleted:
         assert secondary.referral_code is None
         assert secondary.remnawave_uuid is None
         assert secondary.email is None
+
+    async def test_all_unique_fields_cleared_on_secondary(self, monkeypatch):
+        """All unique constraint fields must be cleared on secondary after merge."""
+        db = _make_db()
+        # Primary has its own OAuth + telegram, so secondary's won't transfer
+        primary = _make_user(id=1, telegram_id=111, google_id='g1', yandex_id='y1')
+        secondary = _make_user(
+            id=2,
+            telegram_id=222,
+            google_id='g2',
+            yandex_id='y2',
+            discord_id='d2',
+            vk_id=999,
+            email='sec@e.com',
+            referral_code='REF',
+            remnawave_uuid='rw-sec',
+        )
+        monkeypatch.setattr(
+            account_merge_service,
+            'get_user_by_id',
+            AsyncMock(side_effect=[primary, secondary]),
+        )
+        with _patch_remnawave_delete():
+            await execute_merge(db, 1, 2)
+
+        # ALL unique fields cleared on secondary
+        assert secondary.telegram_id is None
+        assert secondary.google_id is None
+        assert secondary.yandex_id is None
+        assert secondary.discord_id is None
+        assert secondary.vk_id is None
+        assert secondary.email is None
+        assert secondary.referral_code is None
+        assert secondary.remnawave_uuid is None
 
     async def test_db_flush_called(self, monkeypatch):
         db = _make_db()

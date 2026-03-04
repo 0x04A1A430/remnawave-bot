@@ -1,8 +1,7 @@
-from __future__ import annotations
-
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 
 import structlog
 from sqlalchemy import update
@@ -148,7 +147,7 @@ async def get_merge_preview(
 
 
 @asynccontextmanager
-async def _get_remnawave_api() -> RemnaWaveAPI:
+async def _get_remnawave_api() -> AsyncIterator[RemnaWaveAPI]:
     """Создаёт экземпляр RemnaWave API клиента (паттерн из RemnaWaveService)."""
     auth_params = settings.get_remnawave_auth_params()
     base_url = (auth_params.get('base_url') or '').strip()
@@ -308,7 +307,7 @@ async def execute_merge(
     db: AsyncSession,
     primary_user_id: int,
     secondary_user_id: int,
-    keep_subscription_from: str = 'primary',
+    keep_subscription_from: Literal['primary', 'secondary'] = 'primary',
     provider: str | None = None,
     provider_id: str | None = None,
 ) -> User:
@@ -330,6 +329,9 @@ async def execute_merge(
     Raises:
         ValueError: Если пользователь не найден, совпадают ID, или secondary уже удалён.
     """
+    if keep_subscription_from not in ('primary', 'secondary'):
+        raise ValueError("keep_subscription_from must be 'primary' or 'secondary'")
+
     if primary_user_id == secondary_user_id:
         raise ValueError('primary_user_id и secondary_user_id не могут совпадать')
 
@@ -338,6 +340,8 @@ async def execute_merge(
 
     if not primary:
         raise ValueError(f'Основной пользователь (id={primary_user_id}) не найден')
+    if primary.status == UserStatus.DELETED.value:
+        raise ValueError(f'Основной пользователь (id={primary_user_id}) удалён')
     if not secondary:
         raise ValueError(f'Вторичный пользователь (id={secondary_user_id}) не найден')
     if secondary.status == UserStatus.DELETED.value:
@@ -461,13 +465,17 @@ async def execute_merge(
             value=primary.referral_commission_percent,
         )
 
-    # 14. Помечаем secondary как удалённый
+    # 14. Помечаем secondary как удалённый и очищаем ВСЕ unique constraint поля
     secondary.status = UserStatus.DELETED.value
     secondary.referral_code = None
     secondary.remnawave_uuid = None
-    # email уже очищен выше если был перенесён, иначе очищаем для unique constraint
     if secondary.email:
         secondary.email = None
+    if secondary.telegram_id:
+        secondary.telegram_id = None
+    for field in _OAUTH_FIELDS:
+        if getattr(secondary, field) is not None:
+            setattr(secondary, field, None)
     secondary.updated_at = now
 
     logger.info(

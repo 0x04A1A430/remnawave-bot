@@ -18,7 +18,7 @@ from app.database.crud.user import (
     set_user_oauth_provider_id,
 )
 from app.database.models import User
-from app.services.account_merge_service import execute_merge, get_merge_preview
+from app.services.account_merge_service import _compute_auth_methods, execute_merge, get_merge_preview
 
 from ..auth.merge_service import (
     MERGE_TOKEN_TTL_SECONDS,
@@ -137,15 +137,7 @@ def _get_provider_identifier(user: User, provider: str) -> str | None:
 
 def _count_auth_methods(user: User) -> int:
     """Count how many auth methods the user has linked."""
-    count = 0
-    if user.telegram_id:
-        count += 1
-    if user.email and user.password_hash:
-        count += 1
-    for column in _OAUTH_PROVIDER_COLUMNS.values():
-        if getattr(user, column, None):
-            count += 1
-    return count
+    return len(_compute_auth_methods(user))
 
 
 # ---------------------------------------------------------------------------
@@ -237,6 +229,20 @@ async def link_provider_callback(
             detail='Invalid or expired OAuth state',
         )
 
+    # 1b. Validate that the user who initiated the link flow is the same user completing it
+    state_user_id = state_data.get('user_id')
+    if state_user_id and str(user.id) != state_user_id:
+        logger.warning(
+            'OAuth state user_id mismatch in link callback',
+            state_user_id=state_user_id,
+            current_user_id=user.id,
+            provider=provider,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='OAuth state was initiated by a different user',
+        )
+
     # 2. Get provider instance
     oauth_provider = get_provider(provider)
     if not oauth_provider:
@@ -256,7 +262,7 @@ async def link_provider_callback(
     try:
         token_data = await oauth_provider.exchange_code(request.code, **exchange_kwargs)
     except Exception as exc:
-        logger.error('OAuth code exchange failed during linking', provider=provider, exc_info=exc)
+        logger.error('OAuth code exchange failed during linking', provider=provider, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Failed to exchange authorization code',
@@ -266,7 +272,7 @@ async def link_provider_callback(
     try:
         user_info = await oauth_provider.get_user_info(token_data)
     except Exception as exc:
-        logger.error('OAuth user info fetch failed during linking', provider=provider, exc_info=exc)
+        logger.error('OAuth user info fetch failed during linking', provider=provider, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Failed to fetch user information from provider',
@@ -445,11 +451,11 @@ async def execute_merge_endpoint(
         logger.error('Merge execution failed (ValueError)', error=str(exc))
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(exc),
+            detail='Account merge cannot be completed. The accounts may have already been merged or deleted.',
         ) from exc
     except Exception as exc:
         await db.rollback()
-        logger.error('Merge execution failed', exc_info=exc)
+        logger.error('Merge execution failed', exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Account merge failed due to an internal error',
@@ -468,7 +474,7 @@ async def execute_merge_endpoint(
         auth_response = await _create_auth_response(merged_user, db)
         await _store_refresh_token(db, merged_user.id, auth_response.refresh_token, device_info='merge')
     except Exception as exc:
-        logger.error('Failed to create auth tokens after merge', exc_info=exc)
+        logger.error('Failed to create auth tokens after merge', exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Merge succeeded but failed to create new session',
