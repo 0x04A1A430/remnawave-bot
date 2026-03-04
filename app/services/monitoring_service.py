@@ -330,10 +330,23 @@ class MonitoringService:
             is_active = subscription.status == SubscriptionStatus.ACTIVE.value and subscription.end_date > current_time
 
             if subscription.status == SubscriptionStatus.ACTIVE.value and subscription.end_date <= current_time:
-                subscription.status = SubscriptionStatus.EXPIRED.value
-                await db.commit()
-                is_active = False
-                logger.info("📝 Статус подписки обновлен на 'expired'", subscription_id=subscription.id)
+                # Суточные подписки управляются DailySubscriptionService — не экспайрим
+                tariff = getattr(subscription, 'tariff', None)
+                is_active_daily = (
+                    tariff is not None
+                    and getattr(tariff, 'is_daily', False)
+                    and not getattr(subscription, 'is_daily_paused', False)
+                )
+                if is_active_daily:
+                    logger.debug(
+                        'update_remnawave_user: пропуск expire для суточной подписки',
+                        subscription_id=subscription.id,
+                    )
+                else:
+                    subscription.status = SubscriptionStatus.EXPIRED.value
+                    await db.commit()
+                    is_active = False
+                    logger.info("📝 Статус подписки обновлен на 'expired'", subscription_id=subscription.id)
 
             if not self.subscription_service.is_configured:
                 logger.warning(

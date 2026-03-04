@@ -763,18 +763,26 @@ async def reactivate_subscription(db: AsyncSession, subscription: Subscription) 
 
 
 async def get_expiring_subscriptions(db: AsyncSession, days_before: int = 3) -> list[Subscription]:
+    from app.database.models import Tariff
+
     threshold_date = datetime.now(UTC) + timedelta(days=days_before)
 
     result = await db.execute(
         select(Subscription)
         .join(User, Subscription.user_id == User.id)
-        .options(selectinload(Subscription.user))
+        .outerjoin(Tariff, Subscription.tariff_id == Tariff.id)
+        .options(selectinload(Subscription.user), selectinload(Subscription.tariff))
         .where(
             and_(
                 Subscription.status == SubscriptionStatus.ACTIVE.value,
                 User.status == UserStatus.ACTIVE.value,
                 Subscription.end_date <= threshold_date,
                 Subscription.end_date > datetime.now(UTC),
+                # Не включаем активные суточные подписки — у них end_date всегда +24ч
+                ~and_(
+                    Tariff.is_daily.is_(True),
+                    Subscription.is_daily_paused.is_(False),
+                ),
             )
         )
     )
@@ -1048,7 +1056,7 @@ async def get_all_subscriptions(db: AsyncSession, page: int = 1, limit: int = 10
 
     result = await db.execute(
         select(Subscription)
-        .options(selectinload(Subscription.user))
+        .options(selectinload(Subscription.user), selectinload(Subscription.tariff))
         .order_by(Subscription.created_at.desc())
         .offset(offset)
         .limit(limit)
@@ -1064,10 +1072,10 @@ async def get_subscriptions_batch(
     offset: int = 0,
     limit: int = 500,
 ) -> list[Subscription]:
-    """Получает подписки пачками для синхронизации. Загружает связанных пользователей."""
+    """Получает подписки пачками для синхронизации. Загружает связанных пользователей и тарифы."""
     result = await db.execute(
         select(Subscription)
-        .options(selectinload(Subscription.user))
+        .options(selectinload(Subscription.user), selectinload(Subscription.tariff))
         .order_by(Subscription.id)
         .offset(offset)
         .limit(limit)
