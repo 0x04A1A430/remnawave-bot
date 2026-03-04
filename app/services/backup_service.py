@@ -632,7 +632,7 @@ class BackupService:
                                 record_dict[column.name] = 0.0
                             elif isinstance(value, (list, dict)):
                                 try:
-                                    record_dict[column.name] = json_lib.dumps(value) if value else None
+                                    record_dict[column.name] = json_lib.dumps(value) if value is not None else None
                                 except TypeError:
                                     record_dict[column.name] = str(value)
                             elif hasattr(value, '__dict__'):
