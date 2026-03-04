@@ -2678,10 +2678,20 @@ class RemnaWaveService:
                         end_date_utc = self._local_to_utc(subscription.end_date)
                         # Добавляем буфер 5 минут для защиты от race condition при продлении
                         expiry_buffer = timedelta(minutes=5)
+
+                        # Суточные подписки управляются DailySubscriptionService — не экспайрим
+                        tariff = getattr(subscription, 'tariff', None)
+                        is_active_daily = (
+                            tariff is not None
+                            and getattr(tariff, 'is_daily', False)
+                            and not getattr(subscription, 'is_daily_paused', False)
+                        )
+
                         if (
                             end_date_utc + expiry_buffer <= current_time
                             and subscription.status == SubscriptionStatus.ACTIVE.value
                             and not is_recently_updated_by_webhook(subscription)
+                            and not is_active_daily
                         ):
                             time_since_expiry = current_time - end_date_utc
                             logger.warning(

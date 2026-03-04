@@ -23,12 +23,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import settings
-from app.database.database import AsyncSessionLocal, engine
+from app.database.database import AsyncSessionLocal, engine, sync_postgres_sequences
 from app.database.models import (
+    AccessPolicy,
+    AdminAuditLog,
+    AdminRole,
     AdvertisingCampaign,
     AdvertisingCampaignRegistration,
     BroadcastHistory,
     ButtonClickLog,
+    CabinetRefreshToken,
     CloudPaymentsPayment,
     ContestAttempt,
     ContestRound,
@@ -45,6 +49,7 @@ from app.database.models import (
     MonitoringLog,
     MulenPayPayment,
     Pal24Payment,
+    PartnerApplication,
     PaymentMethodConfig,
     PinnedMessage,
     PlategaPayment,
@@ -64,6 +69,7 @@ from app.database.models import (
     ReferralContestEvent,
     ReferralContestVirtualParticipant,
     ReferralEarning,
+    RequiredChannel,
     SentNotification,
     ServerSquad,
     ServiceRule,
@@ -82,8 +88,10 @@ from app.database.models import (
     TrafficPurchase,
     Transaction,
     User,
+    UserChannelSubscription,
     UserMessage,
     UserPromoGroup,
+    UserRole,
     WataPayment,
     WebApiToken,
     Webhook,
@@ -214,6 +222,16 @@ class BackupService:
             # --- Support ---
             TicketNotification,
             ButtonClickLog,
+            # --- RBAC / Admin ---
+            AdminRole,
+            UserRole,
+            AccessPolicy,
+            AdminAuditLog,
+            # --- Channels / Partners ---
+            RequiredChannel,
+            UserChannelSubscription,
+            PartnerApplication,
+            CabinetRefreshToken,
         ]
 
         self.backup_models_ordered = self._base_backup_models.copy()
@@ -614,7 +632,7 @@ class BackupService:
                                 record_dict[column.name] = 0.0
                             elif isinstance(value, (list, dict)):
                                 try:
-                                    record_dict[column.name] = json_lib.dumps(value) if value else None
+                                    record_dict[column.name] = json_lib.dumps(value) if value is not None else None
                                 except TypeError:
                                     record_dict[column.name] = str(value)
                             elif hasattr(value, '__dict__'):
@@ -1002,6 +1020,14 @@ class BackupService:
 
                 await db.commit()
 
+                # Синхронизируем PostgreSQL sequences после ORM-восстановления,
+                # чтобы auto-increment ID не конфликтовали с восстановленными данными
+                try:
+                    await sync_postgres_sequences()
+                    logger.info('🔢 Последовательности PostgreSQL синхронизированы')
+                except Exception as seq_err:
+                    logger.warning('⚠️ Не удалось синхронизировать sequences', error=seq_err)
+
             except Exception as exc:
                 await db.rollback()
                 logger.error('Ошибка при восстановлении', exc=exc)
@@ -1107,10 +1133,10 @@ class BackupService:
                 raise
 
         try:
-            await db.flush()
+            async with db.begin_nested():
+                await db.flush()
         except IntegrityError as e:
-            logger.warning('IntegrityError при flush пользователей, откатываем', e=e)
-            await db.rollback()
+            logger.warning('IntegrityError при flush пользователей, savepoint откачен', e=e)
         logger.info('✅ Пользователи без реферальных связей восстановлены')
 
     async def _update_user_referrals(self, db: AsyncSession, backup_data: dict):
@@ -1375,22 +1401,25 @@ class BackupService:
         return restored_count
 
     async def _clear_database_tables(self, db: AsyncSession, backup_data: dict[str, Any] | None = None):
-        tables_order = [
-            # --- Association tables (no FK deps on them, safe to delete first) ---
+        # Все таблицы, которые нужно очистить при восстановлении.
+        # TRUNCATE CASCADE автоматически обработает FK зависимости,
+        # поэтому порядок не критичен, но перечисляем все для полноты.
+        all_tables = [
+            # --- Association tables ---
             'server_squad_promo_groups',
             'tariff_promo_groups',
             'payment_method_promo_groups',
-            # --- Polls (child -> parent order) ---
+            # --- Polls ---
             'poll_answers',
             'poll_responses',
             'poll_options',
             'poll_questions',
             'polls',
-            # --- Wheel (child -> parent) ---
+            # --- Wheel ---
             'wheel_spins',
             'wheel_prizes',
             'wheel_configs',
-            # --- Contests (child -> parent) ---
+            # --- Contests ---
             'contest_attempts',
             'contest_rounds',
             'contest_templates',
@@ -1428,13 +1457,15 @@ class BackupService:
             'privacy_policies',
             'public_offers',
             'payment_method_configs',
-            # --- Original tables (preserved order) ---
+            # --- Support ---
             'support_audit_logs',
             'ticket_messages',
             'tickets',
             'cabinet_refresh_tokens',
+            # --- Campaigns ---
             'advertising_campaign_registrations',
             'advertising_campaigns',
+            # --- Subscriptions ---
             'subscription_servers',
             'sent_notifications',
             'discount_offers',
@@ -1451,9 +1482,19 @@ class BackupService:
             'welcome_texts',
             'subscriptions',
             'promocodes',
+            # --- RBAC / Admin (FK → users, must be before users) ---
+            'access_policies',
+            'user_roles',
+            'admin_audit_log',
+            'admin_roles',
+            # --- Channels / Partners ---
+            'partner_applications',
+            'required_channels',
+            'user_channel_subscriptions',
+            # --- Core ---
             'users',
             'promo_groups',
-            'tariffs',  # tariffs должен очищаться ПОСЛЕ subscriptions (FK зависимость)
+            'tariffs',
             'server_squads',
             'squads',
             'service_rules',
@@ -1466,18 +1507,36 @@ class BackupService:
         # (чтобы сохранить существующие настройки)
         preserve_if_no_backup = {'tariffs', 'promo_groups', 'server_squads', 'squads'}
 
-        for table_name in tables_order:
-            # Проверяем, нужно ли сохранить таблицу
+        # Фильтруем таблицы, которые нужно сохранить
+        tables_to_truncate = []
+        for table_name in all_tables:
             if backup_data and table_name in preserve_if_no_backup:
                 if not backup_data.get(table_name):
                     logger.info('⏭️ Пропускаем очистку (нет данных в бекапе)', table_name=table_name)
                     continue
+            tables_to_truncate.append(table_name)
 
-            try:
-                await db.execute(text(f'DELETE FROM {table_name}'))
-                logger.info('🗑️ Очищена таблица', table_name=table_name)
-            except Exception as e:
-                logger.warning('⚠️ Не удалось очистить таблицу', table_name=table_name, error=e)
+        if not tables_to_truncate:
+            return
+
+        # TRUNCATE CASCADE — одна команда для всех таблиц.
+        # CASCADE автоматически очищает любые таблицы с FK-ссылками,
+        # даже если они не в нашем списке. Это решает проблему с admin_audit_log и др.
+        tables_str = ', '.join(tables_to_truncate)
+        try:
+            await db.execute(text(f'TRUNCATE {tables_str} RESTART IDENTITY CASCADE'))
+            logger.info('🗑️ Очищены все таблицы', tables_count=len(tables_to_truncate))
+        except Exception as e:
+            logger.error('❌ Ошибка TRUNCATE CASCADE, пробуем поштучно с savepoints', error=e)
+            await db.rollback()
+            # Fallback: поштучная очистка с savepoints
+            for table_name in tables_to_truncate:
+                try:
+                    async with db.begin_nested():
+                        await db.execute(text(f'TRUNCATE {table_name} CASCADE'))
+                    logger.info('🗑️ Очищена таблица', table_name=table_name)
+                except Exception as table_err:
+                    logger.warning('⚠️ Не удалось очистить таблицу', table_name=table_name, error=table_err)
 
     async def _collect_file_snapshots(self) -> dict[str, dict[str, Any]]:
         return {}

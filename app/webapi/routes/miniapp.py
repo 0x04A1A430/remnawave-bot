@@ -5233,32 +5233,44 @@ async def submit_subscription_renewal_endpoint(
         # Рассчитываем цену из тарифа
         original_price_kopeks = tariff.period_prices.get(str(period_days), tariff.period_prices.get(period_days, 0))
 
-        # Применяем скидку промогруппы
-        promo_group = (
-            user.get_primary_promo_group()
-            if hasattr(user, 'get_primary_promo_group')
-            else getattr(user, 'promo_group', None)
-        )
-        discount_percent = 0
-        if promo_group:
-            raw_discounts = getattr(promo_group, 'period_discounts', None) or {}
-            for k, v in raw_discounts.items():
-                try:
-                    if int(k) == period_days:
-                        discount_percent = max(0, min(100, int(v)))
-                        break
-                except (TypeError, ValueError):
-                    pass
+        # Добавляем стоимость докупленных устройств сверх тарифа (ДО скидки, как в cabinet)
+        tariff_device_limit = tariff.device_limit if tariff.device_limit is not None else 0
+        sub_device_limit = subscription.device_limit if subscription.device_limit is not None else tariff_device_limit
+        extra_devices = max(0, sub_device_limit - tariff_device_limit)
+        if extra_devices > 0:
+            from app.utils.pricing_utils import calculate_months_from_days
 
+            device_price = (
+                tariff.device_price_kopeks if tariff.device_price_kopeks is not None else settings.PRICE_PER_DEVICE
+            )
+            months = calculate_months_from_days(period_days)
+            original_price_kopeks += extra_devices * device_price * months
+
+        # Применяем скидку промогруппы (к полной сумме: тариф + доп. устройства)
+        discount_percent = 0
+        if hasattr(user, 'get_promo_discount'):
+            discount_percent = user.get_promo_discount('period', period_days)
+
+        final_total = original_price_kopeks
         if discount_percent > 0:
             final_total = int(original_price_kopeks * (100 - discount_percent) / 100)
-        else:
-            final_total = original_price_kopeks
+
+        # Применяем promo_offer скидку (временная скидка, как в cabinet)
+        promo_offer_discount_percent = get_user_active_promo_discount_percent(user)
+        if promo_offer_discount_percent > 0:
+            promo_offer_discount_value = final_total * promo_offer_discount_percent // 100
+            final_total = final_total - promo_offer_discount_value
+
+        # Комбинированный процент скидки для отображения
+        combined_discount_percent = discount_percent
+        if promo_offer_discount_percent > 0 and original_price_kopeks > 0:
+            total_discount = original_price_kopeks - final_total
+            combined_discount_percent = int(total_discount * 100 / original_price_kopeks)
 
         tariff_pricing = {
             'period_days': period_days,
             'original_price_kopeks': original_price_kopeks,
-            'discount_percent': discount_percent,
+            'discount_percent': combined_discount_percent,
             'final_total': final_total,
             'tariff_id': tariff.id,
         }

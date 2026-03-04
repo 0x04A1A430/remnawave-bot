@@ -1076,8 +1076,6 @@ async def update_user_subscription(
         # Сбрасываем докупленный трафик при смене тарифа
         from sqlalchemy import delete as sql_delete
 
-        from app.database.models import TrafficPurchase
-
         await db.execute(sql_delete(TrafficPurchase).where(TrafficPurchase.subscription_id == subscription.id))
         subscription.purchased_traffic_gb = 0
         subscription.traffic_reset_at = None

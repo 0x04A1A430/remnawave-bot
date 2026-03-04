@@ -1968,6 +1968,11 @@ async def confirm_extend_subscription(callback: types.CallbackQuery, db_user: Us
 
         current_time = datetime.now(UTC)
 
+        was_expired = subscription.status in (
+            SubscriptionStatus.EXPIRED.value,
+            SubscriptionStatus.DISABLED.value,
+        ) or (subscription.end_date is not None and subscription.end_date <= current_time)
+
         if subscription.end_date > current_time:
             new_end_date = subscription.end_date + timedelta(days=days)
         else:
@@ -1978,6 +1983,29 @@ async def confirm_extend_subscription(callback: types.CallbackQuery, db_user: Us
         subscription.status = SubscriptionStatus.ACTIVE.value
         subscription.updated_at = current_time
 
+        # При продлении истёкшей подписки — сбрасываем докупки трафика
+        if was_expired:
+            from sqlalchemy import delete as sql_delete_tp
+
+            from app.database.models import TrafficPurchase as TrafficPurchaseModel
+
+            await db.execute(
+                sql_delete_tp(TrafficPurchaseModel).where(TrafficPurchaseModel.subscription_id == subscription.id)
+            )
+            purchased = subscription.purchased_traffic_gb or 0
+            if purchased > 0:
+                old_traffic = subscription.traffic_limit_gb
+                subscription.traffic_limit_gb = max(0, (subscription.traffic_limit_gb or 0) - purchased)
+                logger.info(
+                    'Сброс докупок при продлении истёкшей подписки',
+                    old_traffic=old_traffic,
+                    new_traffic=subscription.traffic_limit_gb,
+                )
+            subscription.purchased_traffic_gb = 0
+            subscription.traffic_reset_at = None
+            if settings.RESET_TRAFFIC_ON_PAYMENT:
+                subscription.traffic_used_gb = 0.0
+
         # В режиме fixed_with_topup при продлении сбрасываем трафик до фиксированного лимита
         traffic_was_reset = False
         old_traffic_limit = subscription.traffic_limit_gb
@@ -1986,8 +2014,13 @@ async def confirm_extend_subscription(callback: types.CallbackQuery, db_user: Us
             if subscription.traffic_limit_gb != fixed_limit or (subscription.purchased_traffic_gb or 0) > 0:
                 traffic_was_reset = True
                 subscription.traffic_limit_gb = fixed_limit
+                from sqlalchemy import delete as sql_delete_fixed
+
+                from app.database.models import TrafficPurchase as TPFixed
+
+                await db.execute(sql_delete_fixed(TPFixed).where(TPFixed.subscription_id == subscription.id))
                 subscription.purchased_traffic_gb = 0
-                subscription.traffic_reset_at = None  # Сбрасываем дату сброса трафика
+                subscription.traffic_reset_at = None
                 logger.info(
                     '🔄 Сброс трафика при продлении: ГБ → ГБ',
                     old_traffic_limit=old_traffic_limit,

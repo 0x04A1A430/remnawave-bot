@@ -340,7 +340,11 @@ async def get_renewal_options(
                 # Учитываем докупленные устройства сверх тарифа
                 extra_devices = max(0, (subscription.device_limit or 0) - (tariff.device_limit or 0))
                 if extra_devices > 0:
-                    tariff_device_price = tariff.device_price_kopeks or settings.PRICE_PER_DEVICE
+                    tariff_device_price = (
+                        tariff.device_price_kopeks
+                        if tariff.device_price_kopeks is not None
+                        else settings.PRICE_PER_DEVICE
+                    )
 
     # Используем периоды тарифа или стандартные
     if tariff_periods:
@@ -366,23 +370,32 @@ async def get_renewal_options(
             price_kopeks += extra_devices * tariff_device_price * months
 
         # Apply user's discount if any
+        original_price = price_kopeks
         discount_percent = 0
         if hasattr(user, 'get_promo_discount'):
             discount_percent = user.get_promo_discount('period', period)
 
         if discount_percent > 0:
-            original_price = price_kopeks
             price_kopeks = int(price_kopeks * (100 - discount_percent) / 100)
-        else:
-            original_price = None
+
+        # Apply promo_offer discount (временная скидка, как в /renew)
+        promo_offer_discount_percent = get_user_active_promo_discount_percent(user)
+        if promo_offer_discount_percent > 0:
+            price_kopeks = price_kopeks - price_kopeks * promo_offer_discount_percent // 100
+
+        # Комбинированный процент скидки для отображения
+        combined_discount = discount_percent
+        if original_price > 0 and original_price != price_kopeks:
+            total_discount = original_price - price_kopeks
+            combined_discount = int(total_discount * 100 / original_price)
 
         options.append(
             RenewalOptionResponse(
                 period_days=period,
                 price_kopeks=price_kopeks,
                 price_rubles=price_kopeks / 100,
-                discount_percent=discount_percent,
-                original_price_kopeks=original_price,
+                discount_percent=combined_discount,
+                original_price_kopeks=original_price if combined_discount > 0 else None,
             )
         )
 
@@ -434,7 +447,9 @@ async def renew_subscription(
         if extra_devices > 0:
             from app.utils.pricing_utils import calculate_months_from_days
 
-            device_price = tariff.device_price_kopeks or settings.PRICE_PER_DEVICE
+            device_price = (
+                tariff.device_price_kopeks if tariff.device_price_kopeks is not None else settings.PRICE_PER_DEVICE
+            )
             months = calculate_months_from_days(request.period_days)
             price_kopeks += extra_devices * device_price * months
 
@@ -529,6 +544,10 @@ async def renew_subscription(
 
     # Extend from end_date or now if expired
     now = datetime.now(UTC)
+    was_expired = user.subscription.status in ('expired', 'disabled') or (
+        user.subscription.end_date is not None and user.subscription.end_date <= now
+    )
+
     if user.subscription.end_date and user.subscription.end_date > now:
         user.subscription.end_date = user.subscription.end_date + timedelta(days=request.period_days)
     else:
@@ -538,7 +557,48 @@ async def renew_subscription(
     user.subscription.status = 'active'
     user.subscription.is_trial = False
 
+    # При продлении истёкшей подписки — сбрасываем докупки трафика (новый период)
+    if was_expired:
+        from sqlalchemy import delete as sql_delete
+
+        from app.database.models import TrafficPurchase
+
+        await db.execute(sql_delete(TrafficPurchase).where(TrafficPurchase.subscription_id == user.subscription.id))
+        purchased = user.subscription.purchased_traffic_gb or 0
+        if purchased > 0:
+            old_traffic = user.subscription.traffic_limit_gb
+            user.subscription.traffic_limit_gb = max(0, (user.subscription.traffic_limit_gb or 0) - purchased)
+            logger.info(
+                'Сброс докупок трафика при продлении истёкшей подписки',
+                old_traffic=old_traffic,
+                new_traffic=user.subscription.traffic_limit_gb,
+            )
+        user.subscription.purchased_traffic_gb = 0
+        user.subscription.traffic_reset_at = None
+        if settings.RESET_TRAFFIC_ON_PAYMENT:
+            user.subscription.traffic_used_gb = 0.0
+
     await db.commit()
+
+    # Синхронизируем с RemnaWave
+    try:
+        subscription_service = SubscriptionService()
+        if getattr(user, 'remnawave_uuid', None):
+            await subscription_service.update_remnawave_user(
+                db,
+                user.subscription,
+                reset_traffic=was_expired and settings.RESET_TRAFFIC_ON_PAYMENT,
+                reset_reason='subscription renewal (cabinet)',
+            )
+        else:
+            await subscription_service.create_remnawave_user(
+                db,
+                user.subscription,
+                reset_traffic=was_expired and settings.RESET_TRAFFIC_ON_PAYMENT,
+                reset_reason='subscription renewal (cabinet)',
+            )
+    except Exception as e:
+        logger.error('Failed to sync subscription renewal with RemnaWave', error=e)
 
     # Отправляем уведомление админам о продлении подписки
     try:
@@ -841,24 +901,8 @@ async def purchase_traffic(
             detail='Failed to charge balance',
         )
 
-    # Добавляем трафик
+    # Добавляем трафик (add_subscription_traffic обновляет purchased_traffic_gb, traffic_reset_at и коммитит)
     await add_subscription_traffic(db, subscription, request.gb)
-
-    # Обновляем purchased_traffic_gb
-    current_purchased = getattr(subscription, 'purchased_traffic_gb', 0) or 0
-    subscription.purchased_traffic_gb = current_purchased + request.gb
-
-    # Устанавливаем дату сброса трафика (только при первой докупке)
-    # При повторной докупке дата НЕ продлевается
-    if not subscription.traffic_reset_at:
-        subscription.traffic_reset_at = datetime.now(UTC) + timedelta(days=30)
-        logger.info(
-            'Set traffic_reset_at for subscription',
-            subscription_id=subscription.id,
-            traffic_reset_at=subscription.traffic_reset_at,
-        )
-
-    await db.commit()
 
     # Синхронизируем с RemnaWave
     try:
@@ -1372,7 +1416,9 @@ async def _build_tariff_response(
     if subscription and subscription.tariff_id == tariff.id:
         extra_devices_count = max(0, (subscription.device_limit or 0) - (tariff.device_limit or 0))
         if extra_devices_count > 0:
-            extra_device_price_per_month = tariff.device_price_kopeks or settings.PRICE_PER_DEVICE
+            extra_device_price_per_month = (
+                tariff.device_price_kopeks if tariff.device_price_kopeks is not None else settings.PRICE_PER_DEVICE
+            )
 
     periods = []
     if tariff.period_prices:
@@ -1457,7 +1503,7 @@ async def _build_tariff_response(
             price_per_day = price_per_day - discount_amount
 
     # Apply discount to device price if applicable
-    device_price = tariff.device_price_kopeks or 0
+    device_price = tariff.device_price_kopeks if tariff.device_price_kopeks is not None else 0
     original_device_price = device_price
     device_discount_percent = 0
     if promo_group and device_price > 0:
@@ -1904,7 +1950,11 @@ async def purchase_tariff(
                 if not is_daily_tariff:
                     from app.utils.pricing_utils import calculate_months_from_days
 
-                    device_price_per_month = tariff.device_price_kopeks or settings.PRICE_PER_DEVICE
+                    device_price_per_month = (
+                        tariff.device_price_kopeks
+                        if tariff.device_price_kopeks is not None
+                        else settings.PRICE_PER_DEVICE
+                    )
                     months = calculate_months_from_days(period_days)
                     extra_devices_cost = extra_devices * device_price_per_month * months
                     # Применяем скидку промогруппы на устройства
@@ -2230,7 +2280,7 @@ async def purchase_devices(
             tariff = await get_tariff_by_id(db, subscription.tariff_id)
 
         # Determine device price and max limit from tariff or settings
-        if tariff and tariff.device_price_kopeks:
+        if tariff and tariff.device_price_kopeks is not None:
             device_price = tariff.device_price_kopeks
             max_device_limit = tariff.max_device_limit
         else:
@@ -2560,7 +2610,7 @@ async def save_devices_cart(
         tariff = await get_tariff_by_id(db, subscription.tariff_id)
 
     # Determine device price and max limit from tariff or settings
-    if tariff and tariff.device_price_kopeks:
+    if tariff and tariff.device_price_kopeks is not None:
         device_price = tariff.device_price_kopeks
         max_device_limit = tariff.max_device_limit
     else:
@@ -2632,7 +2682,7 @@ async def get_device_price(
         tariff = await get_tariff_by_id(db, subscription.tariff_id)
 
     # Determine device price and max limit from tariff or settings
-    if tariff and tariff.device_price_kopeks:
+    if tariff and tariff.device_price_kopeks is not None:
         device_price = tariff.device_price_kopeks
         max_device_limit = tariff.max_device_limit
     else:
@@ -4419,7 +4469,12 @@ async def switch_traffic_package(
         # Downgrade - no charge, no refund
         charged = 0
 
-    # Update subscription
+    # Update subscription — delete TrafficPurchase records before resetting purchased_traffic_gb
+    from sqlalchemy import delete as sql_delete
+
+    from app.database.models import TrafficPurchase
+
+    await db.execute(sql_delete(TrafficPurchase).where(TrafficPurchase.subscription_id == user.subscription.id))
     user.subscription.traffic_limit_gb = new_traffic
     user.subscription.purchased_traffic_gb = 0  # Reset purchased traffic on switch
     user.subscription.traffic_reset_at = None  # Reset traffic reset date

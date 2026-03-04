@@ -250,6 +250,8 @@ async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -
     if not user.email:
         return
 
+    user_email = user.email  # Save before try block — ORM access may fail after rollback
+
     try:
         from app.services.remnawave_service import RemnaWaveService
 
@@ -268,6 +270,19 @@ async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -
             # Take first user if multiple found
             panel_user = panel_users[0]
             logger.info('Found subscription in panel for email', email=user.email, uuid=panel_user.uuid)
+
+            # Check if another user already owns this remnawave_uuid
+            from app.database.crud.user import get_user_by_remnawave_uuid
+
+            existing_owner = await get_user_by_remnawave_uuid(db, panel_user.uuid)
+            if existing_owner and existing_owner.id != user.id:
+                logger.warning(
+                    'Panel UUID already belongs to another user, skipping sync',
+                    email=user.email,
+                    panel_uuid=panel_user.uuid,
+                    existing_owner_id=existing_owner.id,
+                )
+                return
 
             # Link user to panel
             user.remnawave_uuid = panel_user.uuid
@@ -344,9 +359,10 @@ async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -
             await db.commit()
 
     except Exception as e:
-        logger.warning('Failed to sync subscription from panel for', email=user.email, error=e)
-        # Don't rollback - it detaches user object and breaks subsequent operations
-        # The sync is non-critical, main verification already succeeded
+        logger.warning('Failed to sync subscription from panel for', email=user_email, error=e)
+        await db.rollback()
+        # Refresh user after rollback — object is expired and lazy loads fail in async
+        await db.refresh(user)
 
 
 @router.post('/telegram', response_model=AuthResponse)

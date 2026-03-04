@@ -2598,18 +2598,25 @@ def get_db_period_prices() -> dict[int, int] | None:
     return _DB_PERIOD_PRICES
 
 
+def clear_db_period_prices() -> None:
+    """Очищает кеш цен из тарифов (при переключении в classic mode)."""
+    global _DB_PERIOD_PRICES
+    _DB_PERIOD_PRICES = None
+
+
 def refresh_period_prices() -> None:
     """
     Rebuild cached period price mapping.
-    Приоритет: БД > .env
+    В режиме tariffs: приоритет у _DB_PERIOD_PRICES (из таблицы Tariff).
+    В режиме classic: ВСЕГДА используются settings.PRICE_*_DAYS.
     """
     PERIOD_PRICES.clear()
 
-    if _DB_PERIOD_PRICES:
-        # Используем цены из БД
+    if _DB_PERIOD_PRICES and settings.is_tariffs_mode():
+        # Используем цены из БД тарифов (только в режиме tariffs)
         PERIOD_PRICES.update(_DB_PERIOD_PRICES)
     else:
-        # Fallback на .env
+        # Classic mode или нет цен в БД — берём из settings
         PERIOD_PRICES.update(
             {days: getattr(settings, field_name, 0) for days, field_name in _PERIOD_PRICE_FIELDS.items()}
         )

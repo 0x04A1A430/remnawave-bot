@@ -281,6 +281,11 @@ async def replace_subscription(
     subscription.end_date = current_time + timedelta(days=duration_days)
     subscription.traffic_limit_gb = traffic_limit_gb
     subscription.traffic_used_gb = 0.0
+
+    # Удаляем записи TrafficPurchase перед сбросом purchased_traffic_gb
+    from app.database.models import TrafficPurchase
+
+    await db.execute(delete(TrafficPurchase).where(TrafficPurchase.subscription_id == subscription.id))
     subscription.purchased_traffic_gb = 0  # Сбрасываем докупленный трафик при замене подписки
     subscription.traffic_reset_at = None  # Сбрасываем дату сброса трафика
     subscription.device_limit = device_limit
@@ -356,6 +361,8 @@ async def extend_subscription(
         device_limit: Лимит устройств (опционально, для режима тарифов)
         connected_squads: Список UUID сквадов (опционально, для режима тарифов)
     """
+    from app.database.models import TrafficPurchase
+
     current_time = datetime.now(UTC)
 
     logger.info('🔄 Продление подписки на дней', subscription_id=subscription.id, days=days)
@@ -369,6 +376,12 @@ async def extend_subscription(
     # Определяем, происходит ли СМЕНА тарифа (а не продление того же)
     # Включает переход из классического режима (tariff_id=None) в тарифный
     is_tariff_change = tariff_id is not None and (subscription.tariff_id is None or tariff_id != subscription.tariff_id)
+
+    # Определяем, была ли подписка истёкшей ДО продления (статус меняется ниже)
+    was_expired = subscription.status in (
+        SubscriptionStatus.EXPIRED.value,
+        SubscriptionStatus.DISABLED.value,
+    ) or (subscription.end_date is not None and subscription.end_date <= current_time)
 
     if is_tariff_change:
         logger.info('🔄 Обнаружена СМЕНА тарифа: →', tariff_id=subscription.tariff_id, tariff_id_2=tariff_id)
@@ -453,23 +466,21 @@ async def extend_subscription(
         else:
             subscription.traffic_used_gb = 0.0
 
-        if is_tariff_change:
-            # При СМЕНЕ тарифа сбрасываем все докупки трафика
+        if is_tariff_change or was_expired:
+            # При СМЕНЕ тарифа или ИСТЁКШЕЙ подписке — сбрасываем все докупки трафика
             subscription.traffic_limit_gb = traffic_limit_gb
-            from sqlalchemy import delete as sql_delete
-
-            from app.database.models import TrafficPurchase
-
-            await db.execute(sql_delete(TrafficPurchase).where(TrafficPurchase.subscription_id == subscription.id))
+            await db.execute(delete(TrafficPurchase).where(TrafficPurchase.subscription_id == subscription.id))
             subscription.purchased_traffic_gb = 0
             subscription.traffic_reset_at = None
+            reason = 'смена тарифа' if is_tariff_change else 'подписка была истёкшей'
             logger.info(
-                '📊 Обновлен лимит трафика: ГБ → ГБ (смена тарифа, докупки сброшены)',
+                '📊 Обновлен лимит трафика: ГБ → ГБ (докупки сброшены)',
                 old_traffic=old_traffic,
                 traffic_limit_gb=traffic_limit_gb,
+                reason=reason,
             )
         else:
-            # При ПРОДЛЕНИИ того же тарифа — сохраняем докупленный трафик
+            # Подписка активна, тот же тариф — сохраняем докупленный трафик
             purchased = subscription.purchased_traffic_gb or 0
             subscription.traffic_limit_gb = traffic_limit_gb + purchased
             logger.info(
@@ -480,13 +491,18 @@ async def extend_subscription(
             )
     elif settings.RESET_TRAFFIC_ON_PAYMENT:
         subscription.traffic_used_gb = 0.0
-        # В режиме тарифов сохраняем докупленный трафик при продлении
-        if subscription.tariff_id is None:
+        if subscription.tariff_id is None or was_expired:
+            # Классический режим или истёкшая подписка — сбрасываем докупки
+            await db.execute(delete(TrafficPurchase).where(TrafficPurchase.subscription_id == subscription.id))
             subscription.purchased_traffic_gb = 0
-            subscription.traffic_reset_at = None  # Сбрасываем дату сброса трафика
-            logger.info('🔄 Сбрасываем использованный и докупленный трафик согласно настройке RESET_TRAFFIC_ON_PAYMENT')
+            subscription.traffic_reset_at = None
+            logger.info(
+                '🔄 Сбрасываем использованный и докупленный трафик',
+                was_expired=was_expired,
+                tariff_id=subscription.tariff_id,
+            )
         else:
-            # При продлении в режиме тарифов - сохраняем purchased_traffic_gb и traffic_reset_at
+            # Активная подписка в режиме тарифов — сохраняем purchased_traffic_gb и traffic_reset_at
             logger.info('🔄 Сбрасываем использованный трафик, докупленный сохранен (режим тарифов)')
 
     if device_limit is not None:
@@ -529,6 +545,7 @@ async def extend_subscription(
         old_limit = subscription.traffic_limit_gb
         if subscription.traffic_limit_gb != fixed_limit or (subscription.purchased_traffic_gb or 0) > 0:
             subscription.traffic_limit_gb = fixed_limit
+            await db.execute(delete(TrafficPurchase).where(TrafficPurchase.subscription_id == subscription.id))
             subscription.purchased_traffic_gb = 0
             subscription.traffic_reset_at = None  # Сбрасываем дату сброса трафика
             logger.info(
@@ -746,18 +763,26 @@ async def reactivate_subscription(db: AsyncSession, subscription: Subscription) 
 
 
 async def get_expiring_subscriptions(db: AsyncSession, days_before: int = 3) -> list[Subscription]:
+    from app.database.models import Tariff
+
     threshold_date = datetime.now(UTC) + timedelta(days=days_before)
 
     result = await db.execute(
         select(Subscription)
         .join(User, Subscription.user_id == User.id)
-        .options(selectinload(Subscription.user))
+        .outerjoin(Tariff, Subscription.tariff_id == Tariff.id)
+        .options(selectinload(Subscription.user), selectinload(Subscription.tariff))
         .where(
             and_(
                 Subscription.status == SubscriptionStatus.ACTIVE.value,
                 User.status == UserStatus.ACTIVE.value,
                 Subscription.end_date <= threshold_date,
                 Subscription.end_date > datetime.now(UTC),
+                # Не включаем активные суточные подписки — у них end_date всегда +24ч
+                ~and_(
+                    Tariff.is_daily.is_(True),
+                    Subscription.is_daily_paused.is_(False),
+                ),
             )
         )
     )
@@ -1031,7 +1056,7 @@ async def get_all_subscriptions(db: AsyncSession, page: int = 1, limit: int = 10
 
     result = await db.execute(
         select(Subscription)
-        .options(selectinload(Subscription.user))
+        .options(selectinload(Subscription.user), selectinload(Subscription.tariff))
         .order_by(Subscription.created_at.desc())
         .offset(offset)
         .limit(limit)
@@ -1047,10 +1072,10 @@ async def get_subscriptions_batch(
     offset: int = 0,
     limit: int = 500,
 ) -> list[Subscription]:
-    """Получает подписки пачками для синхронизации. Загружает связанных пользователей."""
+    """Получает подписки пачками для синхронизации. Загружает связанных пользователей и тарифы."""
     result = await db.execute(
         select(Subscription)
-        .options(selectinload(Subscription.user))
+        .options(selectinload(Subscription.user), selectinload(Subscription.tariff))
         .order_by(Subscription.id)
         .offset(offset)
         .limit(limit)
@@ -1609,6 +1634,19 @@ async def check_and_update_subscription_status(db: AsyncSession, subscription: S
         logger.info('⏸️ Суточная подписка на паузе, пропускаем проверку истечения', subscription_id=subscription.id)
         return subscription
 
+    # Активные суточные подписки управляются DailySubscriptionService — не экспайрим их тут.
+    # end_date у них всего +24ч, и между проверками (30 мин) она может формально истечь.
+    # Используем getattr(subscription, 'tariff', None) вместо property is_daily_tariff,
+    # т.к. property может вызвать MissingGreenlet при ленивой загрузке в async-контексте.
+    tariff = getattr(subscription, 'tariff', None)
+    is_active_daily = tariff is not None and getattr(tariff, 'is_daily', False) and not is_daily_paused
+    if is_active_daily:
+        logger.debug(
+            '⏩ Активная суточная подписка — пропускаем проверку истечения (управляет DailySubscriptionService)',
+            subscription_id=subscription.id,
+        )
+        return subscription
+
     if subscription.status == SubscriptionStatus.ACTIVE.value and subscription.end_date <= current_time:
         # Детальное логирование для отладки проблемы с деактивацией
         time_diff = current_time - subscription.end_date
@@ -2041,6 +2079,55 @@ async def get_disabled_daily_subscriptions_for_resume(
     subscriptions = result.scalars().all()
 
     logger.info('🔍 Найдено DISABLED суточных подписок для возобновления', subscriptions_count=len(subscriptions))
+
+    return list(subscriptions)
+
+
+async def get_expired_daily_subscriptions_for_recovery(db: AsyncSession) -> list[Subscription]:
+    """
+    Получает EXPIRED суточные подписки, которые были ошибочно экспайрены
+    middleware или check_and_update_subscription_status.
+
+    Суточные подписки не должны экспайриться — ими управляет DailySubscriptionService.
+    Если баланс пользователя достаточен, подписку нужно восстановить и списать.
+    """
+    from app.database.models import Tariff
+
+    # Берём только недавно экспайренные (до 24ч) — старые не трогаем
+    recovery_threshold = datetime.now(UTC) - timedelta(hours=24)
+
+    query = (
+        select(Subscription)
+        .join(Tariff, Subscription.tariff_id == Tariff.id)
+        .join(User, Subscription.user_id == User.id)
+        .options(
+            selectinload(Subscription.user),
+            selectinload(Subscription.tariff),
+        )
+        .where(
+            and_(
+                Tariff.is_daily.is_(True),
+                Tariff.is_active.is_(True),
+                Subscription.status == SubscriptionStatus.EXPIRED.value,
+                User.status == UserStatus.ACTIVE.value,
+                Subscription.is_daily_paused.is_(False),
+                Subscription.is_trial.is_(False),
+                # Только недавно экспайренные
+                Subscription.updated_at >= recovery_threshold,
+                # Баланс достаточен для списания
+                User.balance_kopeks >= Tariff.daily_price_kopeks,
+            )
+        )
+    )
+
+    result = await db.execute(query)
+    subscriptions = result.scalars().all()
+
+    if subscriptions:
+        logger.warning(
+            '⚠️ Найдено EXPIRED суточных подписок для восстановления (ошибочно экспайрены)',
+            subscriptions_count=len(subscriptions),
+        )
 
     return list(subscriptions)
 

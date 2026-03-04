@@ -467,6 +467,25 @@ class RemnaWaveWebhookService:
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
         if subscription:
+            # Суточные подписки управляются DailySubscriptionService.
+            # Remnawave может прислать user.expired если sync не дошёл (старый end_date),
+            # но локально подписка ещё жива — не экспайрим её.
+            tariff = getattr(subscription, 'tariff', None)
+            is_active_daily = (
+                tariff is not None
+                and getattr(tariff, 'is_daily', False)
+                and not getattr(subscription, 'is_daily_paused', False)
+            )
+            if is_active_daily:
+                logger.info(
+                    'Webhook: пропуск expire для суточной подписки (управляет DailySubscriptionService)',
+                    subscription_id=subscription.id,
+                    user_id=user.id,
+                )
+                self._stamp_webhook_update(subscription)
+                await db.commit()
+                return
+
             self._stamp_webhook_update(subscription)
             if subscription.status != SubscriptionStatus.EXPIRED.value:
                 await expire_subscription(db, subscription)
@@ -480,6 +499,23 @@ class RemnaWaveWebhookService:
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
         if subscription:
+            # Суточные подписки управляются DailySubscriptionService — не деактивируем
+            tariff = getattr(subscription, 'tariff', None)
+            is_active_daily = (
+                tariff is not None
+                and getattr(tariff, 'is_daily', False)
+                and not getattr(subscription, 'is_daily_paused', False)
+            )
+            if is_active_daily:
+                logger.info(
+                    'Webhook: пропуск disabled для суточной подписки',
+                    subscription_id=subscription.id,
+                    user_id=user.id,
+                )
+                self._stamp_webhook_update(subscription)
+                await db.commit()
+                return
+
             self._stamp_webhook_update(subscription)
             if subscription.status != SubscriptionStatus.DISABLED.value:
                 await deactivate_subscription(db, subscription)
