@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import (
     ENV_OVERRIDE_KEYS,
     Settings,
+    clear_db_period_prices,
     refresh_period_prices,
     refresh_traffic_prices,
     settings,
@@ -1575,6 +1576,11 @@ class BotConfigurationService:
         if key in {'WEB_API_DEFAULT_TOKEN', 'WEB_API_DEFAULT_TOKEN_NAME'}:
             await cls._sync_default_web_api_token()
 
+        if key == 'SALES_MODE' and settings.is_tariffs_mode():
+            from app.database.crud.tariff import load_period_prices_from_db
+
+            await load_period_prices_from_db(db)
+
     @classmethod
     async def reset_value(
         cls,
@@ -1597,6 +1603,11 @@ class BotConfigurationService:
         if key in {'WEB_API_DEFAULT_TOKEN', 'WEB_API_DEFAULT_TOKEN_NAME'}:
             await cls._sync_default_web_api_token()
 
+        if key == 'SALES_MODE' and settings.is_tariffs_mode():
+            from app.database.crud.tariff import load_period_prices_from_db
+
+            await load_period_prices_from_db(db)
+
     @classmethod
     def _apply_to_settings(cls, key: str, value: Any) -> None:
         if cls._is_env_override(key):
@@ -1606,8 +1617,6 @@ class BotConfigurationService:
             setattr(settings, key, value)
             if key == 'SALES_MODE':
                 if settings.is_classic_mode():
-                    from app.config import clear_db_period_prices
-
                     clear_db_period_prices()
                 refresh_period_prices()
             elif key in {

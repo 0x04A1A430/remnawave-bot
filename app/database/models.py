@@ -908,6 +908,11 @@ class Tariff(Base):
         prices = self.period_prices or {}
         return sorted([int(p) for p in prices.keys()])
 
+    def get_shortest_period(self) -> int | None:
+        """Возвращает минимальный доступный период в днях (для автопродления)."""
+        periods = self.get_available_periods()
+        return periods[0] if periods else None
+
     def get_price_rubles(self, period_days: int) -> float | None:
         """Возвращает цену в рублях для указанного периода."""
         price_kopeks = self.get_price_for_period(period_days)

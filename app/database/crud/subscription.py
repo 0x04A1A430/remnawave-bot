@@ -281,6 +281,11 @@ async def replace_subscription(
     subscription.end_date = current_time + timedelta(days=duration_days)
     subscription.traffic_limit_gb = traffic_limit_gb
     subscription.traffic_used_gb = 0.0
+
+    # Удаляем записи TrafficPurchase перед сбросом purchased_traffic_gb
+    from app.database.models import TrafficPurchase
+
+    await db.execute(delete(TrafficPurchase).where(TrafficPurchase.subscription_id == subscription.id))
     subscription.purchased_traffic_gb = 0  # Сбрасываем докупленный трафик при замене подписки
     subscription.traffic_reset_at = None  # Сбрасываем дату сброса трафика
     subscription.device_limit = device_limit
@@ -356,6 +361,8 @@ async def extend_subscription(
         device_limit: Лимит устройств (опционально, для режима тарифов)
         connected_squads: Список UUID сквадов (опционально, для режима тарифов)
     """
+    from app.database.models import TrafficPurchase
+
     current_time = datetime.now(UTC)
 
     logger.info('🔄 Продление подписки на дней', subscription_id=subscription.id, days=days)
@@ -369,6 +376,12 @@ async def extend_subscription(
     # Определяем, происходит ли СМЕНА тарифа (а не продление того же)
     # Включает переход из классического режима (tariff_id=None) в тарифный
     is_tariff_change = tariff_id is not None and (subscription.tariff_id is None or tariff_id != subscription.tariff_id)
+
+    # Определяем, была ли подписка истёкшей ДО продления (статус меняется ниже)
+    was_expired = subscription.status in (
+        SubscriptionStatus.EXPIRED.value,
+        SubscriptionStatus.DISABLED.value,
+    ) or (subscription.end_date is not None and subscription.end_date <= current_time)
 
     if is_tariff_change:
         logger.info('🔄 Обнаружена СМЕНА тарифа: →', tariff_id=subscription.tariff_id, tariff_id_2=tariff_id)
@@ -453,23 +466,21 @@ async def extend_subscription(
         else:
             subscription.traffic_used_gb = 0.0
 
-        if is_tariff_change:
-            # При СМЕНЕ тарифа сбрасываем все докупки трафика
+        if is_tariff_change or was_expired:
+            # При СМЕНЕ тарифа или ИСТЁКШЕЙ подписке — сбрасываем все докупки трафика
             subscription.traffic_limit_gb = traffic_limit_gb
-            from sqlalchemy import delete as sql_delete
-
-            from app.database.models import TrafficPurchase
-
-            await db.execute(sql_delete(TrafficPurchase).where(TrafficPurchase.subscription_id == subscription.id))
+            await db.execute(delete(TrafficPurchase).where(TrafficPurchase.subscription_id == subscription.id))
             subscription.purchased_traffic_gb = 0
             subscription.traffic_reset_at = None
+            reason = 'смена тарифа' if is_tariff_change else 'подписка была истёкшей'
             logger.info(
-                '📊 Обновлен лимит трафика: ГБ → ГБ (смена тарифа, докупки сброшены)',
+                '📊 Обновлен лимит трафика: ГБ → ГБ (докупки сброшены)',
                 old_traffic=old_traffic,
                 traffic_limit_gb=traffic_limit_gb,
+                reason=reason,
             )
         else:
-            # При ПРОДЛЕНИИ того же тарифа — сохраняем докупленный трафик
+            # Подписка активна, тот же тариф — сохраняем докупленный трафик
             purchased = subscription.purchased_traffic_gb or 0
             subscription.traffic_limit_gb = traffic_limit_gb + purchased
             logger.info(
@@ -480,13 +491,18 @@ async def extend_subscription(
             )
     elif settings.RESET_TRAFFIC_ON_PAYMENT:
         subscription.traffic_used_gb = 0.0
-        # В режиме тарифов сохраняем докупленный трафик при продлении
-        if subscription.tariff_id is None:
+        if subscription.tariff_id is None or was_expired:
+            # Классический режим или истёкшая подписка — сбрасываем докупки
+            await db.execute(delete(TrafficPurchase).where(TrafficPurchase.subscription_id == subscription.id))
             subscription.purchased_traffic_gb = 0
-            subscription.traffic_reset_at = None  # Сбрасываем дату сброса трафика
-            logger.info('🔄 Сбрасываем использованный и докупленный трафик согласно настройке RESET_TRAFFIC_ON_PAYMENT')
+            subscription.traffic_reset_at = None
+            logger.info(
+                '🔄 Сбрасываем использованный и докупленный трафик',
+                was_expired=was_expired,
+                tariff_id=subscription.tariff_id,
+            )
         else:
-            # При продлении в режиме тарифов - сохраняем purchased_traffic_gb и traffic_reset_at
+            # Активная подписка в режиме тарифов — сохраняем purchased_traffic_gb и traffic_reset_at
             logger.info('🔄 Сбрасываем использованный трафик, докупленный сохранен (режим тарифов)')
 
     if device_limit is not None:
@@ -529,6 +545,7 @@ async def extend_subscription(
         old_limit = subscription.traffic_limit_gb
         if subscription.traffic_limit_gb != fixed_limit or (subscription.purchased_traffic_gb or 0) > 0:
             subscription.traffic_limit_gb = fixed_limit
+            await db.execute(delete(TrafficPurchase).where(TrafficPurchase.subscription_id == subscription.id))
             subscription.purchased_traffic_gb = 0
             subscription.traffic_reset_at = None  # Сбрасываем дату сброса трафика
             logger.info(

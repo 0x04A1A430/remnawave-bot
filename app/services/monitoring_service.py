@@ -61,7 +61,6 @@ from app.services.promo_offer_service import promo_offer_service
 from app.services.subscription_service import SubscriptionService
 from app.utils.cache import cache
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button
-from app.utils.pricing_utils import apply_percentage_discount
 from app.utils.subscription_utils import (
     resolve_hwid_device_limit_for_payload,
 )
@@ -1055,17 +1054,44 @@ class MonitoringService:
 
                 user_identifier = user.telegram_id or f'email:{user.id}'
 
-                # Правильный расчет стоимости продления с учетом всех параметров подписки
-                renewal_cost = await self.subscription_service.calculate_renewal_price(subscription, 30, db, user=user)
-                promo_discount_percent = self._get_user_promo_offer_discount_percent(user)
-                charge_amount = renewal_cost
-                promo_discount_value = 0
+                # Определяем период продления: из тарифа (минимальный) или 30 дней по умолчанию
+                tariff = getattr(subscription, 'tariff', None)
+                if tariff:
+                    autopay_period = tariff.get_shortest_period() or 30
+                else:
+                    autopay_period = 30
 
-                if renewal_cost > 0 and promo_discount_percent > 0:
-                    charge_amount, promo_discount_value = apply_percentage_discount(
-                        renewal_cost,
-                        promo_discount_percent,
+                try:
+                    renewal_cost = await self.subscription_service.calculate_renewal_price(
+                        subscription,
+                        autopay_period,
+                        db,
+                        user=user,
                     )
+                except Exception as e:
+                    logger.error(
+                        'Ошибка расчёта стоимости автопродления, пропускаем',
+                        subscription_id=subscription.id,
+                        user_id=user.id,
+                        error=str(e),
+                    )
+                    failed_count += 1
+                    continue
+
+                if renewal_cost <= 0:
+                    logger.warning(
+                        'Нулевая стоимость автопродления, пропускаем',
+                        subscription_id=subscription.id,
+                        user_id=user.id,
+                        renewal_cost=renewal_cost,
+                    )
+                    failed_count += 1
+                    continue
+
+                # calculate_renewal_price уже включает promo_group + promo_offer скидки.
+                # Не применяем promo_offer повторно — только consume-им при успешной оплате.
+                charge_amount = renewal_cost
+                promo_discount_percent = self._get_user_promo_offer_discount_percent(user)
 
                 autopay_key = f'autopay_{user.id}_{subscription.id}'
                 if autopay_key in self._notified_users:
@@ -1075,7 +1101,7 @@ class MonitoringService:
                     success = await subtract_user_balance(db, user, charge_amount, 'Автопродление подписки')
 
                     if success:
-                        await extend_subscription(db, subscription, 30)
+                        await extend_subscription(db, subscription, autopay_period)
                         await self.subscription_service.update_remnawave_user(
                             db,
                             subscription,
@@ -1083,12 +1109,12 @@ class MonitoringService:
                             reset_reason='автопродление подписки',
                         )
 
-                        if promo_discount_value > 0:
+                        if promo_discount_percent > 0:
                             await self._consume_user_promo_offer_discount(db, user)
 
                         # Send notification via appropriate channel
                         if user.telegram_id and self.bot:
-                            await self._send_autopay_success_notification(user, charge_amount, 30)
+                            await self._send_autopay_success_notification(user, charge_amount, autopay_period)
                         elif not user.telegram_id:
                             # Email-only user - use notification delivery service
                             await notification_delivery_service.notify_autopay_success(
