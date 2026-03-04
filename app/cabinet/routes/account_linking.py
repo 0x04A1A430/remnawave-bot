@@ -516,6 +516,150 @@ async def link_telegram(
 
 
 # ---------------------------------------------------------------------------
+# Server-side OAuth linking callback (NO JWT required — auth via state token)
+# Used by Telegram Mini App where OAuth must open in external browser.
+# ---------------------------------------------------------------------------
+
+
+class ServerCompleteRequest(BaseModel):
+    code: str = Field(..., min_length=1, max_length=2048, description='Authorization code from provider')
+    state: str = Field(..., min_length=1, max_length=128, description='CSRF state token')
+    provider: str | None = Field(None, max_length=32, description='OAuth provider name (resolved from state if omitted)')
+    device_id: str | None = Field(None, max_length=256, description='Device ID from VK ID callback')
+
+
+class ServerCompleteResponse(BaseModel):
+    success: bool
+    message: str | None = None
+    merge_required: bool = False
+    merge_token: str | None = None
+    provider: str | None = None
+
+
+@router.post('/link/server-complete', response_model=ServerCompleteResponse)
+async def link_server_complete(
+    request: ServerCompleteRequest,
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> ServerCompleteResponse:
+    """Complete OAuth account linking without JWT.
+
+    Authenticates via the one-time state token stored in Redis during link_provider_init.
+    Used when OAuth opens in an external browser (e.g., from Telegram Mini App).
+    Provider is resolved from the state token if not explicitly provided.
+    """
+    # 1. Validate and consume state from Redis (one-time use).
+    #    Provider may be None — validate_oauth_state will skip provider check,
+    #    and we'll resolve it from state_data['provider'].
+    state_data = await validate_oauth_state(request.state, request.provider)
+    if not state_data:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Invalid or expired OAuth state',
+        )
+
+    # Resolve provider: prefer request, fall back to state data
+    provider_name: str = request.provider or state_data.get('provider', '')
+    if not provider_name or provider_name not in _OAUTH_PROVIDER_COLUMNS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Could not determine OAuth provider',
+        )
+
+    # 2. Must be a linking state (not login)
+    if state_data.get('linking') != 'true' or not state_data.get('user_id'):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='OAuth state was not initiated for account linking',
+        )
+
+    user_id = int(state_data['user_id'])
+
+    # 3. Get provider instance
+    oauth_provider = get_provider(provider_name)
+    if not oauth_provider:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Requested OAuth provider is not available',
+        )
+
+    # 4. Exchange code for tokens
+    exchange_kwargs: dict[str, str] = {'state': request.state}
+    code_verifier = state_data.get('code_verifier')
+    if code_verifier:
+        exchange_kwargs['code_verifier'] = code_verifier
+    if request.device_id:
+        exchange_kwargs['device_id'] = request.device_id
+
+    try:
+        token_data = await oauth_provider.exchange_code(request.code, **exchange_kwargs)
+    except Exception as exc:
+        logger.error('OAuth code exchange failed (server-complete)', provider=provider_name, exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Failed to exchange authorization code',
+        ) from exc
+
+    # 5. Fetch user info
+    try:
+        user_info = await oauth_provider.get_user_info(token_data)
+    except Exception as exc:
+        logger.error('OAuth user info failed (server-complete)', provider=provider_name, exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Failed to fetch user information from provider',
+        ) from exc
+
+    # 6. Load user from DB
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='User not found',
+        )
+
+    # 7. Check already linked to this user
+    column = _OAUTH_PROVIDER_COLUMNS[provider_name]
+    current_value = getattr(user, column, None)
+    if current_value and str(current_value) == user_info.provider_id:
+        return ServerCompleteResponse(success=True, message='already_linked', provider=provider_name)
+
+    # 8. Check conflict with another user
+    existing_user = await get_user_by_oauth_provider(db, provider_name, user_info.provider_id)
+    if existing_user and existing_user.id != user.id:
+        logger.info(
+            'Account linking conflict (server-complete)',
+            provider=provider_name,
+            provider_id=user_info.provider_id,
+            current_user_id=user.id,
+            existing_user_id=existing_user.id,
+        )
+        merge_token = await create_merge_token(
+            primary_user_id=user.id,
+            secondary_user_id=existing_user.id,
+            provider=provider_name,
+            provider_id=user_info.provider_id,
+        )
+        return ServerCompleteResponse(
+            success=False,
+            merge_required=True,
+            merge_token=merge_token,
+            provider=provider_name,
+        )
+
+    # 9. Link the provider
+    await set_user_oauth_provider_id(db, user, provider_name, user_info.provider_id)
+    await db.commit()
+
+    logger.info(
+        'OAuth provider linked (server-complete)',
+        provider=provider_name,
+        provider_id=user_info.provider_id,
+        user_id=user.id,
+    )
+    return ServerCompleteResponse(success=True, message='linked', provider=provider_name)
+
+
+# ---------------------------------------------------------------------------
 # Router 2: Merge (NO JWT required)
 # ---------------------------------------------------------------------------
 
