@@ -15,13 +15,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.crud.subscription import (
     get_daily_subscriptions_for_charge,
+    get_disabled_daily_subscriptions_for_resume,
+    get_expired_daily_subscriptions_for_recovery,
     suspend_daily_subscription_insufficient_balance,
     update_daily_charge_time,
 )
 from app.database.crud.transaction import create_transaction
 from app.database.crud.user import get_user_by_id, subtract_user_balance
 from app.database.database import AsyncSessionLocal
-from app.database.models import PaymentMethod, Subscription, TransactionType, User
+from app.database.models import PaymentMethod, Subscription, SubscriptionStatus, TransactionType, User
 from app.localization.texts import get_texts
 from app.services.notification_delivery_service import (
     NotificationType,
@@ -476,6 +478,89 @@ class DailySubscriptionService:
         except Exception as e:
             logger.warning('Не удалось отправить уведомление о сбросе трафика', error=e)
 
+    async def process_auto_resume(self) -> dict:
+        """
+        Возобновляет DISABLED суточные подписки, у которых появился достаточный баланс.
+        Также восстанавливает EXPIRED подписки, ошибочно экспайренные другими системами.
+        """
+        stats = {'resumed': 0, 'recovered': 0, 'errors': 0}
+
+        try:
+            async with AsyncSessionLocal() as db:
+                # 1. Возобновление DISABLED подписок (недостаточно средств → баланс пополнен)
+                try:
+                    disabled_subs = await get_disabled_daily_subscriptions_for_resume(db)
+                    for subscription in disabled_subs:
+                        try:
+                            # Только активируем — НЕ ставим last_daily_charge_at,
+                            # чтобы _process_single_charge корректно его обновил при списании.
+                            # Если списание упадёт, подписка останется без last_daily_charge_at
+                            # и будет подхвачена на следующем цикле.
+                            subscription.status = SubscriptionStatus.ACTIVE.value
+                            await db.commit()
+                            await db.refresh(subscription)
+
+                            logger.info(
+                                '✅ Суточная подписка возобновлена (DISABLED→ACTIVE, баланс пополнен)',
+                                subscription_id=subscription.id,
+                                user_id=subscription.user_id,
+                            )
+
+                            # Списываем за первые сутки — charge обновит end_date и last_daily_charge_at
+                            charge_result = await self._process_single_charge(db, subscription)
+                            if charge_result == 'charged':
+                                stats['resumed'] += 1
+                            elif charge_result == 'error':
+                                stats['errors'] += 1
+                        except Exception as e:
+                            logger.error(
+                                'Ошибка возобновления DISABLED подписки',
+                                subscription_id=subscription.id,
+                                error=e,
+                                exc_info=True,
+                            )
+                            stats['errors'] += 1
+                except Exception as e:
+                    logger.error('Ошибка при обработке DISABLED подписок', error=e, exc_info=True)
+
+                # 2. Восстановление EXPIRED подписок (ошибочно экспайрены middleware/CRUD)
+                try:
+                    expired_subs = await get_expired_daily_subscriptions_for_recovery(db)
+                    for subscription in expired_subs:
+                        try:
+                            # Восстанавливаем в ACTIVE — charge обновит end_date и last_daily_charge_at
+                            subscription.status = SubscriptionStatus.ACTIVE.value
+                            await db.commit()
+                            await db.refresh(subscription)
+
+                            logger.warning(
+                                '🔄 Суточная подписка восстановлена (EXPIRED→ACTIVE, ошибочный expire)',
+                                subscription_id=subscription.id,
+                                user_id=subscription.user_id,
+                            )
+
+                            # Списываем за сутки
+                            charge_result = await self._process_single_charge(db, subscription)
+                            if charge_result == 'charged':
+                                stats['recovered'] += 1
+                            elif charge_result == 'error':
+                                stats['errors'] += 1
+                        except Exception as e:
+                            logger.error(
+                                'Ошибка восстановления EXPIRED подписки',
+                                subscription_id=subscription.id,
+                                error=e,
+                                exc_info=True,
+                            )
+                            stats['errors'] += 1
+                except Exception as e:
+                    logger.error('Ошибка при обработке EXPIRED подписок', error=e, exc_info=True)
+
+        except Exception as e:
+            logger.error('Ошибка в process_auto_resume', error=e, exc_info=True)
+
+        return stats
+
     async def start_monitoring(self):
         """Запускает периодическую проверку суточных подписок и сброса трафика."""
         self._running = True
@@ -485,6 +570,16 @@ class DailySubscriptionService:
 
         while self._running:
             try:
+                # Восстановление DISABLED/EXPIRED подписок (до основных списаний!)
+                resume_stats = await self.process_auto_resume()
+                if resume_stats['resumed'] > 0 or resume_stats['recovered'] > 0:
+                    logger.info(
+                        '📊 Авто-возобновление: возобновлено=, восстановлено=, ошибок=',
+                        resumed=resume_stats['resumed'],
+                        recovered=resume_stats['recovered'],
+                        errors=resume_stats['errors'],
+                    )
+
                 # Обработка суточных списаний
                 stats = await self.process_daily_charges()
 

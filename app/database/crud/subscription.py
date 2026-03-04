@@ -1626,6 +1626,19 @@ async def check_and_update_subscription_status(db: AsyncSession, subscription: S
         logger.info('⏸️ Суточная подписка на паузе, пропускаем проверку истечения', subscription_id=subscription.id)
         return subscription
 
+    # Активные суточные подписки управляются DailySubscriptionService — не экспайрим их тут.
+    # end_date у них всего +24ч, и между проверками (30 мин) она может формально истечь.
+    # Используем getattr(subscription, 'tariff', None) вместо property is_daily_tariff,
+    # т.к. property может вызвать MissingGreenlet при ленивой загрузке в async-контексте.
+    tariff = getattr(subscription, 'tariff', None)
+    is_active_daily = tariff is not None and getattr(tariff, 'is_daily', False) and not is_daily_paused
+    if is_active_daily:
+        logger.debug(
+            '⏩ Активная суточная подписка — пропускаем проверку истечения (управляет DailySubscriptionService)',
+            subscription_id=subscription.id,
+        )
+        return subscription
+
     if subscription.status == SubscriptionStatus.ACTIVE.value and subscription.end_date <= current_time:
         # Детальное логирование для отладки проблемы с деактивацией
         time_diff = current_time - subscription.end_date
@@ -2058,6 +2071,55 @@ async def get_disabled_daily_subscriptions_for_resume(
     subscriptions = result.scalars().all()
 
     logger.info('🔍 Найдено DISABLED суточных подписок для возобновления', subscriptions_count=len(subscriptions))
+
+    return list(subscriptions)
+
+
+async def get_expired_daily_subscriptions_for_recovery(db: AsyncSession) -> list[Subscription]:
+    """
+    Получает EXPIRED суточные подписки, которые были ошибочно экспайрены
+    middleware или check_and_update_subscription_status.
+
+    Суточные подписки не должны экспайриться — ими управляет DailySubscriptionService.
+    Если баланс пользователя достаточен, подписку нужно восстановить и списать.
+    """
+    from app.database.models import Tariff
+
+    # Берём только недавно экспайренные (до 24ч) — старые не трогаем
+    recovery_threshold = datetime.now(UTC) - timedelta(hours=24)
+
+    query = (
+        select(Subscription)
+        .join(Tariff, Subscription.tariff_id == Tariff.id)
+        .join(User, Subscription.user_id == User.id)
+        .options(
+            selectinload(Subscription.user),
+            selectinload(Subscription.tariff),
+        )
+        .where(
+            and_(
+                Tariff.is_daily.is_(True),
+                Tariff.is_active.is_(True),
+                Subscription.status == SubscriptionStatus.EXPIRED.value,
+                User.status == UserStatus.ACTIVE.value,
+                Subscription.is_daily_paused.is_(False),
+                Subscription.is_trial.is_(False),
+                # Только недавно экспайренные
+                Subscription.updated_at >= recovery_threshold,
+                # Баланс достаточен для списания
+                User.balance_kopeks >= Tariff.daily_price_kopeks,
+            )
+        )
+    )
+
+    result = await db.execute(query)
+    subscriptions = result.scalars().all()
+
+    if subscriptions:
+        logger.warning(
+            '⚠️ Найдено EXPIRED суточных подписок для восстановления (ошибочно экспайрены)',
+            subscriptions_count=len(subscriptions),
+        )
 
     return list(subscriptions)
 

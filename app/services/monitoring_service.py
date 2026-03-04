@@ -217,13 +217,15 @@ class MonitoringService:
                         '🧹 Отозвано истекших тестовых доступов к сквадам', cleaned_test_access=cleaned_test_access
                     )
 
+                # ВАЖНО: autopay ПЕРЕД check_expired — иначе подписки с автоплатой
+                # экспайрятся до того, как autopay успеет их продлить
+                if settings.ENABLE_AUTOPAY:
+                    await self._process_autopayments(db)
                 await self._check_expired_subscriptions(db)
                 await self._check_expiring_subscriptions(db)
                 await self._check_trial_expiring_soon(db)
                 await self._check_trial_channel_subscriptions(db)
                 await self._check_expired_subscription_followups(db)
-                if settings.ENABLE_AUTOPAY:
-                    await self._process_autopayments(db)
                 await self._cleanup_inactive_users(db)
                 await self._sync_with_remnawave(db)
 
@@ -1003,6 +1005,9 @@ class MonitoringService:
         try:
             current_time = datetime.now(UTC)
 
+            # Берём ACTIVE + недавно EXPIRED (middleware или check_and_update могли
+            # экспайрить до того, как monitoring успел запустить autopay)
+            recently_expired_threshold = current_time - timedelta(hours=2)
             result = await db.execute(
                 select(Subscription)
                 .options(
@@ -1014,7 +1019,15 @@ class MonitoringService:
                 )
                 .where(
                     and_(
-                        Subscription.status == SubscriptionStatus.ACTIVE.value,
+                        or_(
+                            Subscription.status == SubscriptionStatus.ACTIVE.value,
+                            # Подписки, которые были экспайрены middleware/CRUD
+                            # недавно (в пределах 2ч) — autopay может их восстановить
+                            and_(
+                                Subscription.status == SubscriptionStatus.EXPIRED.value,
+                                Subscription.end_date >= recently_expired_threshold,
+                            ),
+                        ),
                         Subscription.autopay_enabled == True,
                         Subscription.is_trial == False,
                     )
@@ -1101,6 +1114,14 @@ class MonitoringService:
                     success = await subtract_user_balance(db, user, charge_amount, 'Автопродление подписки')
 
                     if success:
+                        # extend_subscription сам обработает EXPIRED→ACTIVE переход
+                        # (проверяет status + end_date для определения was_expired)
+                        if subscription.status == SubscriptionStatus.EXPIRED.value:
+                            logger.info(
+                                '🔄 Autopay: продление EXPIRED подписки (восстановление)',
+                                subscription_id=subscription.id,
+                                user_id=user.id,
+                            )
                         await extend_subscription(db, subscription, autopay_period)
                         await self.subscription_service.update_remnawave_user(
                             db,
