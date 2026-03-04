@@ -5,9 +5,13 @@ import hmac
 import json
 from datetime import UTC, datetime
 from typing import Any
-from urllib.parse import parse_qsl, unquote
+from urllib.parse import parse_qsl
 
 from app.config import settings
+
+
+# Maximum allowed clock skew (seconds) for auth_date — tolerates minor drift between Telegram servers and ours.
+_MAX_CLOCK_SKEW_SECONDS = 300
 
 
 def validate_telegram_login_widget(data: dict[str, Any], max_age_seconds: int = 86400) -> bool:
@@ -36,7 +40,7 @@ def validate_telegram_login_widget(data: dict[str, Any], max_age_seconds: int = 
     try:
         auth_time = datetime.fromtimestamp(int(auth_date), tz=UTC)
         age = (datetime.now(UTC) - auth_time).total_seconds()
-        if age > max_age_seconds or age < -300:
+        if age > max_age_seconds or age < -_MAX_CLOCK_SKEW_SECONDS:
             return False
     except (ValueError, TypeError, OSError):
         return False
@@ -83,7 +87,7 @@ def validate_telegram_init_data(init_data: str, max_age_seconds: int = 86400) ->
         try:
             auth_time = datetime.fromtimestamp(int(auth_date), tz=UTC)
             age = (datetime.now(UTC) - auth_time).total_seconds()
-            if age > max_age_seconds or age < -300:
+            if age > max_age_seconds or age < -_MAX_CLOCK_SKEW_SECONDS:
                 return None
         except (ValueError, TypeError, OSError):
             return None
@@ -105,7 +109,7 @@ def validate_telegram_init_data(init_data: str, max_age_seconds: int = 86400) ->
         # Parse user data from the validated data
         user_data_str = parsed.get('user')
         if user_data_str:
-            user_data = json.loads(unquote(user_data_str))
+            user_data = json.loads(user_data_str)
             return user_data
 
         return parsed

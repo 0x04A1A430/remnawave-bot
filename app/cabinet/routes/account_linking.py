@@ -113,6 +113,8 @@ class LinkTelegramRequest(BaseModel):
             raise ValueError('Provide either init_data or Login Widget fields, not both')
         if not has_init and not has_widget:
             raise ValueError('Provide either init_data or Login Widget fields (id, auth_date, hash)')
+        if has_widget and not (self.id is not None and self.auth_date is not None and self.hash is not None):
+            raise ValueError('Login Widget mode requires id, auth_date, and hash fields')
         return self
 
 
@@ -498,12 +500,12 @@ async def link_telegram(
 
     try:
         await db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail='This Telegram account was just linked to another user',
-        )
+        ) from exc
 
     logger.info(
         'Telegram linked to account',
@@ -616,7 +618,7 @@ async def execute_merge_endpoint(
     except Exception as exc:
         await db.rollback()
         await restore_merge_token(merge_token, consumed)
-        logger.error('Merge execution failed', exc_info=True)
+        logger.exception('Merge execution failed')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Account merge failed due to an internal error',
@@ -635,7 +637,7 @@ async def execute_merge_endpoint(
         auth_response = await _create_auth_response(merged_user, db)
         await _store_refresh_token(db, merged_user.id, auth_response.refresh_token, device_info='merge')
     except Exception as exc:
-        logger.error('Failed to create auth tokens after merge', exc_info=True)
+        logger.exception('Failed to create auth tokens after merge')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Merge succeeded but failed to create new session',
