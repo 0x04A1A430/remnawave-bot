@@ -358,7 +358,14 @@ async def link_provider_callback(
 
     # 7. Link the provider to current user
     await set_user_oauth_provider_id(db, user, provider, user_info.provider_id)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail='This provider account was just linked to another user',
+        ) from exc
 
     logger.info(
         'OAuth provider linked to account',
@@ -524,7 +531,9 @@ async def link_telegram(
 class ServerCompleteRequest(BaseModel):
     code: str = Field(..., min_length=1, max_length=2048, description='Authorization code from provider')
     state: str = Field(..., min_length=1, max_length=128, description='CSRF state token')
-    provider: str | None = Field(None, max_length=32, description='OAuth provider name (resolved from state if omitted)')
+    provider: str | None = Field(
+        None, max_length=32, description='OAuth provider name (resolved from state if omitted)'
+    )
     device_id: str | None = Field(None, max_length=256, description='Device ID from VK ID callback')
 
 
@@ -648,7 +657,14 @@ async def link_server_complete(
 
     # 9. Link the provider
     await set_user_oauth_provider_id(db, user, provider_name, user_info.provider_id)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail='This provider account was just linked to another user',
+        ) from exc
 
     logger.info(
         'OAuth provider linked (server-complete)',
@@ -738,7 +754,9 @@ async def execute_merge_endpoint(
         )
 
     # Convert user_id to 'primary'/'secondary' string for execute_merge()
-    keep_from: Literal['primary', 'secondary'] = 'primary' if request.keep_subscription_from == primary_user_id else 'secondary'
+    keep_from: Literal['primary', 'secondary'] = (
+        'primary' if request.keep_subscription_from == primary_user_id else 'secondary'
+    )
 
     # 4. Execute merge
     try:
