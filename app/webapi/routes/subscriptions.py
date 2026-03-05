@@ -19,6 +19,7 @@ from app.database.crud.subscription import (
     deactivate_subscription,
     extend_subscription,
     get_subscription_by_user_id,
+    reactivate_subscription,
     remove_subscription_squad,
     replace_subscription,
 )
@@ -253,6 +254,14 @@ async def add_subscription_traffic_endpoint(
 ) -> SubscriptionResponse:
     subscription = await _get_subscription(db, subscription_id)
     subscription = await add_subscription_traffic(db, subscription, payload.gb)
+
+    # Реактивируем подписку если она была DISABLED (например, после LIMITED в RemnaWave)
+    await reactivate_subscription(db, subscription)
+
+    # Синхронизируем с RemnaWave
+    service = SubscriptionService()
+    await service.update_remnawave_user(db, subscription)
+
     subscription = await _get_subscription(db, subscription.id)
     return _serialize_subscription(subscription)
 
@@ -266,6 +275,14 @@ async def add_subscription_devices_endpoint(
 ) -> SubscriptionResponse:
     subscription = await _get_subscription(db, subscription_id)
     subscription = await add_subscription_devices(db, subscription, payload.devices)
+
+    # Реактивируем подписку если она была DISABLED (например, после LIMITED в RemnaWave)
+    await reactivate_subscription(db, subscription)
+
+    # Синхронизируем с RemnaWave
+    service = SubscriptionService()
+    await service.update_remnawave_user(db, subscription)
+
     subscription = await _get_subscription(db, subscription.id)
     return _serialize_subscription(subscription)
 

@@ -604,6 +604,11 @@ async def execute_change_devices(callback: types.CallbackQuery, db_user: User, d
 
         await db.commit()
 
+        # Реактивируем подписку если она была DISABLED (например, после LIMITED в RemnaWave)
+        from app.database.crud.subscription import reactivate_subscription
+
+        await reactivate_subscription(db, subscription)
+
         subscription_service = SubscriptionService()
         await subscription_service.update_remnawave_user(db, subscription)
 
@@ -1271,6 +1276,11 @@ async def confirm_add_devices(callback: types.CallbackQuery, db_user: User, db: 
         subscription.device_limit = actual_new
         subscription.updated_at = datetime.now(UTC)
         await db.commit()
+
+        # Реактивируем подписку если она была DISABLED (например, после LIMITED в RemnaWave)
+        from app.database.crud.subscription import reactivate_subscription
+
+        await reactivate_subscription(db, subscription)
 
         subscription_service = SubscriptionService()
         await subscription_service.update_remnawave_user(db, subscription)
