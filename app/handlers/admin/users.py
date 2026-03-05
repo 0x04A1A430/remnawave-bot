@@ -4747,7 +4747,7 @@ async def admin_buy_tariff(callback: types.CallbackQuery, db_user: User, db: Asy
         traffic = '♾️' if tariff.traffic_limit_gb == 0 else f'{tariff.traffic_limit_gb} ГБ'
         prices = tariff.period_prices or {}
         min_price = min(prices.values()) if prices else 0
-        text += f'<b>{tariff.name}</b> — {traffic}/{tariff.device_limit}📱 от {settings.format_price(min_price)}\n'
+        text += f'<b>{tariff.name}</b> — {traffic} / {tariff.device_limit} 📱 от {settings.format_price(min_price)}\n'
 
     keyboard = []
     for tariff in tariffs:

@@ -102,7 +102,7 @@ def format_tariffs_list_text(
     for tariff in tariffs:
         # Трафик компактно
         traffic_gb = tariff.traffic_limit_gb
-        traffic = '∞' if traffic_gb == 0 else f'{traffic_gb}ГБ'
+        traffic = '∞' if traffic_gb == 0 else f'{traffic_gb} ГБ'
 
         # Цена
         is_daily = getattr(tariff, 'is_daily', False)
@@ -127,8 +127,8 @@ def format_tariffs_list_text(
                     discount_icon = '🔥'
                 price_text = f'от {_format_price_kopeks(min_price, compact=True)}{discount_icon}'
 
-        # Компактный формат: Название — 250ГБ/10📱 от 179₽🔥
-        lines.append(f'<b>{tariff.name}</b> — {traffic}/{tariff.device_limit}📱 {price_text}')
+        # Компактный формат: Название — 250 ГБ / 10 📱 от 179₽🔥
+        lines.append(f'<b>{tariff.name}</b> — {traffic} / {tariff.device_limit} 📱 {price_text}')
 
         # Описание тарифа если есть
         if tariff.description:
@@ -1830,7 +1830,7 @@ def format_tariff_switch_list_text(
             continue
 
         traffic_gb = tariff.traffic_limit_gb
-        traffic = '∞' if traffic_gb == 0 else f'{traffic_gb}ГБ'
+        traffic = '∞' if traffic_gb == 0 else f'{traffic_gb} ГБ'
 
         # Проверяем суточный ли тариф
         is_daily = getattr(tariff, 'is_daily', False)
@@ -1854,7 +1854,7 @@ def format_tariff_switch_list_text(
                     discount_icon = '🔥'
                 price_text = f'от {_format_price_kopeks(min_price, compact=True)}{discount_icon}'
 
-        lines.append(f'<b>{tariff.name}</b> — {traffic}/{tariff.device_limit}📱 {price_text}')
+        lines.append(f'<b>{tariff.name}</b> — {traffic} / {tariff.device_limit} 📱 {price_text}')
 
         if tariff.description:
             lines.append(f'<i>{tariff.description}</i>')
@@ -2635,7 +2635,7 @@ def format_instant_switch_list_text(
             continue
 
         traffic_gb = tariff.traffic_limit_gb
-        traffic = '∞' if traffic_gb == 0 else f'{traffic_gb}ГБ'
+        traffic = '∞' if traffic_gb == 0 else f'{traffic_gb} ГБ'
 
         # Рассчитываем стоимость переключения
         cost, is_upgrade = _calculate_instant_switch_cost(current_tariff, tariff, remaining_days, db_user)
@@ -2645,7 +2645,7 @@ def format_instant_switch_list_text(
         else:
             cost_text = '⬇️ Бесплатно'
 
-        lines.append(f'<b>{tariff.name}</b> — {traffic}/{tariff.device_limit}📱 {cost_text}')
+        lines.append(f'<b>{tariff.name}</b> — {traffic} / {tariff.device_limit} 📱 {cost_text}')
 
         if tariff.description:
             lines.append(f'<i>{tariff.description}</i>')
