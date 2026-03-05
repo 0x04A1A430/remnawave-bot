@@ -515,7 +515,9 @@ async def subtract_user_balance(
     logger.info('📝 Описание', description=description)
 
     # Lock the user row to prevent concurrent balance race conditions
-    locked_result = await db.execute(select(User).where(User.id == user.id).with_for_update())
+    locked_result = await db.execute(
+        select(User).where(User.id == user.id).with_for_update().execution_options(populate_existing=True)
+    )
     user = locked_result.scalar_one()
 
     log_context: dict[str, object] | None = None

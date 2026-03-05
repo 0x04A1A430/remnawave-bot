@@ -1000,7 +1000,10 @@ async def purchase_devices_legacy(
 
     # Lock subscription row to prevent concurrent device purchases exceeding the limit
     result = await db.execute(
-        select(Subscription).where(Subscription.user_id == user.id).with_for_update()
+        select(Subscription)
+        .where(Subscription.user_id == user.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
     )
     subscription = result.scalar_one_or_none()
 
@@ -1092,9 +1095,33 @@ async def purchase_devices_legacy(
             detail='Insufficient funds',
         )
 
-    # Add devices
-    subscription.device_limit = new_devices
+    # Re-lock subscription after subtract_user_balance committed (which released all locks).
+    # Re-validate max device limit to prevent concurrent purchases exceeding the limit.
+    relock_result = await db.execute(
+        select(Subscription)
+        .where(Subscription.id == subscription.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    subscription = relock_result.scalar_one()
 
+    actual_current = subscription.device_limit or 1
+    actual_new = actual_current + request.devices
+    if max_devices > 0 and actual_new > max_devices:
+        # Concurrent purchase already exceeded limit — refund balance
+        user_refund = await db.execute(
+            select(User).where(User.id == user.id).with_for_update().execution_options(populate_existing=True)
+        )
+        refund_user = user_refund.scalar_one()
+        refund_user.balance_kopeks += total_price
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f'Maximum device limit is {max_devices}. Balance refunded.',
+        )
+
+    # Add devices (under lock)
+    subscription.device_limit = actual_new
     await db.commit()
     await db.refresh(user)
 
@@ -1111,10 +1138,10 @@ async def purchase_devices_legacy(
                 await notification_service.send_subscription_update_notification(
                     db=db,
                     user=user,
-                    subscription=user.subscription,
+                    subscription=subscription,
                     update_type='devices',
                     old_value=current_devices,
-                    new_value=new_devices,
+                    new_value=actual_new,
                     price_paid=total_price,
                 )
             finally:
@@ -1125,7 +1152,7 @@ async def purchase_devices_legacy(
     response = {
         'message': 'Devices added successfully',
         'devices_added': request.devices,
-        'new_device_limit': new_devices,
+        'new_device_limit': actual_new,
         'amount_paid_kopeks': total_price,
     }
 
@@ -2298,7 +2325,10 @@ async def purchase_devices(
     try:
         # Lock subscription row to prevent concurrent device purchases exceeding the limit
         result = await db.execute(
-            select(Subscription).where(Subscription.user_id == user.id).with_for_update()
+            select(Subscription)
+            .where(Subscription.user_id == user.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
         subscription = result.scalar_one_or_none()
 
@@ -2430,8 +2460,33 @@ async def purchase_devices(
                 detail='Insufficient funds',
             )
 
-        # Increase device limit
-        subscription.device_limit += request.devices
+        # Re-lock subscription after subtract_user_balance committed (which released all locks).
+        # Re-validate max device limit to prevent concurrent purchases exceeding the limit.
+        relock_result = await db.execute(
+            select(Subscription)
+            .where(Subscription.id == subscription.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        subscription = relock_result.scalar_one()
+
+        actual_current = subscription.device_limit or 1
+        actual_new = actual_current + request.devices
+        if max_device_limit and actual_new > max_device_limit:
+            # Concurrent purchase already exceeded limit — refund balance
+            user_refund = await db.execute(
+                select(User).where(User.id == user.id).with_for_update().execution_options(populate_existing=True)
+            )
+            refund_user = user_refund.scalar_one()
+            refund_user.balance_kopeks += price_kopeks
+            await db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f'Максимальное количество устройств: {max_device_limit}. Баланс возвращён.',
+            )
+
+        # Increase device limit (under lock)
+        subscription.device_limit = actual_new
         await db.commit()
         await db.refresh(subscription)
 
@@ -3720,15 +3775,20 @@ async def reduce_devices(
             detail='Invalid new_device_limit',
         )
 
-    await db.refresh(user, ['subscription'])
+    # Lock subscription to prevent concurrent device modifications
+    result = await db.execute(
+        select(Subscription)
+        .where(Subscription.user_id == user.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    subscription = result.scalar_one_or_none()
 
-    if not user.subscription:
+    if not subscription:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail='No subscription found',
         )
-
-    subscription = user.subscription
 
     if subscription.is_trial:
         raise HTTPException(

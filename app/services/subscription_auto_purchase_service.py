@@ -8,6 +8,7 @@ from datetime import UTC, datetime, timedelta
 import structlog
 from aiogram import Bot
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -1181,7 +1182,6 @@ async def _auto_add_devices(
     """Auto-purchase devices from saved cart after balance topup."""
     from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-    from app.database.crud.subscription import get_subscription_by_user_id
     from app.database.crud.user import subtract_user_balance
     from app.database.models import PaymentMethod
 
@@ -1207,8 +1207,14 @@ async def _auto_add_devices(
         )
         return False
 
-    # Проверяем подписку
-    subscription = await get_subscription_by_user_id(db, user.id)
+    # Проверяем подписку (with lock to prevent concurrent device modifications)
+    locked_result = await db.execute(
+        select(Subscription)
+        .where(Subscription.user_id == user.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    subscription = locked_result.scalar_one_or_none()
     if not subscription:
         logger.warning('🔁 Автопокупка устройств: у пользователя нет подписки', format_user_id=_format_user_id(user))
         await user_cart_service.delete_user_cart(user.id)
@@ -1219,6 +1225,21 @@ async def _auto_add_devices(
             '🔁 Автопокупка устройств: подписка пользователя не активна (status=)',
             format_user_id=_format_user_id(user),
             subscription_status=subscription.status,
+        )
+        await user_cart_service.delete_user_cart(user.id)
+        return False
+
+    # Check max device limit before charging
+    old_device_limit = subscription.device_limit or 1
+    new_device_limit = old_device_limit + devices_to_add
+    max_devices = settings.MAX_DEVICES_LIMIT
+    if max_devices > 0 and new_device_limit > max_devices:
+        logger.warning(
+            '🔁 Автопокупка устройств: превышен лимит устройств',
+            format_user_id=_format_user_id(user),
+            current=old_device_limit,
+            requested=new_device_limit,
+            max_devices=max_devices,
         )
         await user_cart_service.delete_user_cart(user.id)
         return False
@@ -1248,9 +1269,35 @@ async def _auto_add_devices(
         )
         return False
 
-    # Добавляем устройства
+    # Re-lock subscription after subtract_user_balance committed (released locks)
+    relock_result = await db.execute(
+        select(Subscription)
+        .where(Subscription.id == subscription.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    subscription = relock_result.scalar_one()
+
     old_device_limit = subscription.device_limit or 1
-    subscription.device_limit = old_device_limit + devices_to_add
+    new_device_limit = old_device_limit + devices_to_add
+
+    if max_devices > 0 and new_device_limit > max_devices:
+        # Concurrent modification exceeded limit — refund
+        user_refund = await db.execute(
+            select(User).where(User.id == user.id).with_for_update().execution_options(populate_existing=True)
+        )
+        refund_user = user_refund.scalar_one()
+        refund_user.balance_kopeks += price_kopeks
+        await db.commit()
+        logger.warning(
+            '🔁 Автопокупка устройств: лимит превышен после оплаты, баланс возвращён',
+            format_user_id=_format_user_id(user),
+        )
+        await user_cart_service.delete_user_cart(user.id)
+        return False
+
+    # Добавляем устройства (under lock)
+    subscription.device_limit = new_device_limit
 
     try:
         await db.commit()
