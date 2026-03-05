@@ -613,7 +613,29 @@ async def add_subscription_traffic(db: AsyncSession, subscription: Subscription,
 
 
 async def add_subscription_devices(db: AsyncSession, subscription: Subscription, devices: int) -> Subscription:
-    subscription.device_limit += devices
+    # Lock subscription to prevent concurrent modifications
+    locked_result = await db.execute(
+        select(Subscription)
+        .where(Subscription.id == subscription.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    subscription = locked_result.scalar_one()
+
+    # Check max device limit
+    max_devices = settings.MAX_DEVICES_LIMIT
+    new_limit = (subscription.device_limit or 1) + devices
+    if max_devices > 0 and new_limit > max_devices:
+        logger.warning(
+            '📱 Попытка превысить лимит устройств',
+            user_id=subscription.user_id,
+            current=subscription.device_limit,
+            requested=devices,
+            max_devices=max_devices,
+        )
+        new_limit = max_devices
+
+    subscription.device_limit = new_limit
     subscription.updated_at = datetime.now(UTC)
 
     await db.commit()

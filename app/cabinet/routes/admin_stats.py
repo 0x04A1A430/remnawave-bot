@@ -262,6 +262,9 @@ async def get_dashboard_stats(
         month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
         trans_stats = await get_transactions_statistics(db, month_start, now)
+        all_time_stats = await get_transactions_statistics(
+            db, start_date=datetime(2020, 1, 1, tzinfo=UTC), end_date=now
+        )
 
         # Get revenue chart data (last 30 days)
         revenue_data = await get_revenue_by_period(db, days=30)
@@ -291,10 +294,11 @@ async def get_dashboard_stats(
                 income_today_rubles=trans_stats.get('today', {}).get('income_kopeks', 0) / 100,
                 income_month_kopeks=trans_stats.get('totals', {}).get('income_kopeks', 0),
                 income_month_rubles=trans_stats.get('totals', {}).get('income_kopeks', 0) / 100,
-                income_total_kopeks=trans_stats.get('totals', {}).get('income_kopeks', 0),
-                income_total_rubles=trans_stats.get('totals', {}).get('income_kopeks', 0) / 100,
-                subscription_income_kopeks=trans_stats.get('totals', {}).get('subscription_income_kopeks', 0),
-                subscription_income_rubles=trans_stats.get('totals', {}).get('subscription_income_kopeks', 0) / 100,
+                income_total_kopeks=all_time_stats.get('totals', {}).get('income_kopeks', 0),
+                income_total_rubles=all_time_stats.get('totals', {}).get('income_kopeks', 0) / 100,
+                subscription_income_kopeks=abs(all_time_stats.get('totals', {}).get('subscription_income_kopeks', 0)),
+                subscription_income_rubles=abs(all_time_stats.get('totals', {}).get('subscription_income_kopeks', 0))
+                / 100,
             ),
             servers=ServerStats(
                 total_servers=server_stats.get('total_servers', 0),
@@ -897,8 +901,8 @@ async def get_recent_payments(
                     email=user.email,
                     username=user.username,
                     display_name=display_name,
-                    amount_kopeks=trans.amount_kopeks,
-                    amount_rubles=trans.amount_kopeks / 100,
+                    amount_kopeks=abs(trans.amount_kopeks),
+                    amount_rubles=abs(trans.amount_kopeks) / 100,
                     type=trans.type,
                     type_display=type_display.get(trans.type, trans.type),
                     payment_method=trans.payment_method,

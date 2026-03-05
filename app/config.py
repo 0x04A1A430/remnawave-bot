@@ -714,6 +714,9 @@ class Settings(BaseSettings):
     CABINET_EMAIL_CHANGE_CODE_EXPIRE_MINUTES: int = 15  # Email change verification code expiration
     CABINET_EMAIL_AUTH_ENABLED: bool = True  # Enable email registration/login in cabinet
     CABINET_URL: str = 'https://example.com/cabinet'  # Base URL for cabinet (used in verification emails)
+    CABINET_TRUSTED_PROXIES: str = (
+        ''  # Comma-separated IPs/CIDRs of trusted reverse proxies (e.g. '127.0.0.1,10.0.0.0/8')
+    )
 
     # OAuth 2.0 provider settings for cabinet
     OAUTH_GOOGLE_CLIENT_ID: str = ''
@@ -2492,6 +2495,12 @@ class Settings(BaseSettings):
 
     def is_cabinet_email_auth_enabled(self) -> bool:
         return bool(self.CABINET_EMAIL_AUTH_ENABLED)
+
+    def get_cabinet_trusted_proxies(self) -> set[str]:
+        """Parse CABINET_TRUSTED_PROXIES into a set of IP strings/CIDRs."""
+        if not self.CABINET_TRUSTED_PROXIES:
+            return set()
+        return {p.strip() for p in self.CABINET_TRUSTED_PROXIES.split(',') if p.strip()}
 
     def is_smtp_configured(self) -> bool:
         # For servers without AUTH, only host and from_email are required

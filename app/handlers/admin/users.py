@@ -3985,7 +3985,11 @@ async def _extend_subscription_by_days(db: AsyncSession, user_id: int, days: int
 
 async def _add_subscription_traffic(db: AsyncSession, user_id: int, gb: int, admin_id: int) -> bool:
     try:
-        from app.database.crud.subscription import add_subscription_traffic, get_subscription_by_user_id
+        from app.database.crud.subscription import (
+            add_subscription_traffic,
+            get_subscription_by_user_id,
+            reactivate_subscription,
+        )
         from app.services.subscription_service import SubscriptionService
 
         subscription = await get_subscription_by_user_id(db, user_id)
@@ -3998,6 +4002,9 @@ async def _add_subscription_traffic(db: AsyncSession, user_id: int, gb: int, adm
             await db.commit()
         else:
             await add_subscription_traffic(db, subscription, gb)
+
+        # Реактивируем подписку если она была DISABLED (например, после LIMITED в RemnaWave)
+        await reactivate_subscription(db, subscription)
 
         subscription_service = SubscriptionService()
         await subscription_service.update_remnawave_user(db, subscription)
@@ -4507,7 +4514,11 @@ async def admin_buy_subscription_execute(callback: types.CallbackQuery, db_user:
         from app.database.crud.user import subtract_user_balance
 
         success = await subtract_user_balance(
-            db, target_user, price_kopeks, f'Покупка подписки на {period_days} дней (администратор)'
+            db,
+            target_user,
+            price_kopeks,
+            f'Покупка подписки на {period_days} дней (администратор)',
+            mark_as_paid_subscription=True,
         )
 
         if not success:
@@ -4736,7 +4747,7 @@ async def admin_buy_tariff(callback: types.CallbackQuery, db_user: User, db: Asy
         traffic = '♾️' if tariff.traffic_limit_gb == 0 else f'{tariff.traffic_limit_gb} ГБ'
         prices = tariff.period_prices or {}
         min_price = min(prices.values()) if prices else 0
-        text += f'<b>{tariff.name}</b> — {traffic}/{tariff.device_limit}📱 от {settings.format_price(min_price)}\n'
+        text += f'<b>{tariff.name}</b> — {traffic} / {tariff.device_limit} 📱 от {settings.format_price(min_price)}\n'
 
     keyboard = []
     for tariff in tariffs:
@@ -4948,7 +4959,11 @@ async def admin_buy_tariff_execute(callback: types.CallbackQuery, db_user: User,
 
         # Списываем баланс
         success = await subtract_user_balance(
-            db, target_user, price_kopeks, f'Покупка тарифа {tariff.name} на {period} дней (администратор)'
+            db,
+            target_user,
+            price_kopeks,
+            f'Покупка тарифа {tariff.name} на {period} дней (администратор)',
+            mark_as_paid_subscription=True,
         )
 
         if not success:
@@ -5001,7 +5016,7 @@ async def admin_buy_tariff_execute(callback: types.CallbackQuery, db_user: User,
             db,
             user_id=target_user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
-            amount_kopeks=-price_kopeks,
+            amount_kopeks=price_kopeks,
             description=f'Покупка тарифа {tariff.name} на {period} дней (администратор)',
         )
 

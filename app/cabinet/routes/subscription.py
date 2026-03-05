@@ -21,7 +21,7 @@ from app.database.crud.subscription import (
 from app.database.crud.tariff import get_tariff_by_id, get_tariffs_for_user
 from app.database.crud.transaction import create_transaction
 from app.database.crud.user import subtract_user_balance
-from app.database.models import ServerSquad, Subscription, Tariff, TransactionType, User
+from app.database.models import PaymentMethod, ServerSquad, Subscription, Tariff, TransactionType, User
 from app.services.notification_delivery_service import (
     NotificationType,
     notification_delivery_service,
@@ -506,6 +506,7 @@ async def renew_subscription(
             'description': f'Продление подписки на {request.period_days} дней'
             + (f' ({tariff_name})' if tariff_name else ''),
             'discount_percent': discount_percent,
+            'consume_promo_offer': promo_offer_discount_value > 0,
             'source': 'cabinet',
         }
 
@@ -533,14 +534,38 @@ async def renew_subscription(
             },
         )
 
-    # Deduct balance and extend subscription
-    user.balance_kopeks -= price_kopeks
+    # Deduct balance (centralized: row-level lock, promo consumption, paid subscription flag)
+    from app.database.crud.user import subtract_user_balance
 
-    # Consume promo offer discount if it was used
-    if promo_offer_discount_value > 0:
-        user.promo_offer_discount_percent = 0
-        user.promo_offer_discount_source = None
-        user.promo_offer_discount_expires_at = None
+    renewal_description = f'Продление подписки на {request.period_days} дней' + (f' ({tariff.name})' if tariff else '')
+    success = await subtract_user_balance(
+        db,
+        user,
+        price_kopeks,
+        renewal_description,
+        consume_promo_offer=promo_offer_discount_value > 0,
+        mark_as_paid_subscription=True,
+    )
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail={
+                'code': 'insufficient_funds',
+                'message': 'Недостаточно средств (concurrent check)',
+            },
+        )
+
+    # Создаём транзакцию для учёта списания
+    transaction = await create_transaction(
+        db,
+        user_id=user.id,
+        type=TransactionType.SUBSCRIPTION_PAYMENT,
+        amount_kopeks=price_kopeks,
+        description=renewal_description,
+        payment_method=PaymentMethod.BALANCE,
+    )
+
+    await db.refresh(user, ['subscription'])
 
     # Extend from end_date or now if expired
     now = datetime.now(UTC)
@@ -614,7 +639,7 @@ async def renew_subscription(
                     db=db,
                     user=user,
                     subscription=user.subscription,
-                    transaction=None,
+                    transaction=transaction,
                     period_days=request.period_days,
                     was_trial_conversion=False,
                     amount_kopeks=price_kopeks,
@@ -904,6 +929,11 @@ async def purchase_traffic(
     # Добавляем трафик (add_subscription_traffic обновляет purchased_traffic_gb, traffic_reset_at и коммитит)
     await add_subscription_traffic(db, subscription, request.gb)
 
+    # Реактивируем подписку если она была DISABLED (например, после LIMITED в RemnaWave)
+    from app.database.crud.subscription import reactivate_subscription
+
+    await reactivate_subscription(db, subscription)
+
     # Синхронизируем с RemnaWave
     try:
         subscription_service = SubscriptionService()
@@ -984,9 +1014,16 @@ async def purchase_devices_legacy(
             detail='Subscription purchases are restricted for this account',
         )
 
-    await db.refresh(user, ['subscription'])
+    # Lock subscription row to prevent concurrent device purchases exceeding the limit
+    result = await db.execute(
+        select(Subscription)
+        .where(Subscription.user_id == user.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    subscription = result.scalar_one_or_none()
 
-    if not user.subscription:
+    if not subscription:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail='No subscription found',
@@ -1003,6 +1040,17 @@ async def purchase_devices_legacy(
     # Ensure minimum price after discount (except for 100% discount)
     if devices_discount_percent < 100 and total_price > 0:
         total_price = max(100, total_price)
+
+    # Check max devices limit (under row lock — prevents concurrent purchases exceeding limit)
+    current_devices = subscription.device_limit or 1
+    new_devices = current_devices + request.devices
+    max_devices = settings.MAX_DEVICES_LIMIT
+
+    if new_devices > max_devices:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f'Maximum device limit is {max_devices}',
+        )
 
     # Check balance
     if user.balance_kopeks < total_price:
@@ -1039,17 +1087,6 @@ async def purchase_devices_legacy(
             },
         )
 
-    # Check max devices limit
-    current_devices = user.subscription.device_limit or 1
-    new_devices = current_devices + request.devices
-    max_devices = settings.MAX_DEVICES_LIMIT
-
-    if new_devices > max_devices:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'Maximum device limit is {max_devices}',
-        )
-
     # Deduct balance and create transaction
     from app.database.crud.user import subtract_user_balance
     from app.database.models import PaymentMethod
@@ -1060,7 +1097,7 @@ async def purchase_devices_legacy(
     else:
         description = f'Покупка {request.devices} доп. устройств'
 
-    await subtract_user_balance(
+    success = await subtract_user_balance(
         db=db,
         user=user,
         amount_kopeks=total_price,
@@ -1068,10 +1105,39 @@ async def purchase_devices_legacy(
         create_transaction=True,
         payment_method=PaymentMethod.BALANCE,
     )
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail='Insufficient funds',
+        )
 
-    # Add devices
-    user.subscription.device_limit = new_devices
+    # Re-lock subscription after subtract_user_balance committed (which released all locks).
+    # Re-validate max device limit to prevent concurrent purchases exceeding the limit.
+    relock_result = await db.execute(
+        select(Subscription)
+        .where(Subscription.id == subscription.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    subscription = relock_result.scalar_one()
 
+    actual_current = subscription.device_limit or 1
+    actual_new = actual_current + request.devices
+    if max_devices > 0 and actual_new > max_devices:
+        # Concurrent purchase already exceeded limit — refund balance
+        user_refund = await db.execute(
+            select(User).where(User.id == user.id).with_for_update().execution_options(populate_existing=True)
+        )
+        refund_user = user_refund.scalar_one()
+        refund_user.balance_kopeks += total_price
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f'Maximum device limit is {max_devices}. Balance refunded.',
+        )
+
+    # Add devices (under lock)
+    subscription.device_limit = actual_new
     await db.commit()
     await db.refresh(user)
 
@@ -1088,10 +1154,10 @@ async def purchase_devices_legacy(
                 await notification_service.send_subscription_update_notification(
                     db=db,
                     user=user,
-                    subscription=user.subscription,
+                    subscription=subscription,
                     update_type='devices',
                     old_value=current_devices,
-                    new_value=new_devices,
+                    new_value=actual_new,
                     price_paid=total_price,
                 )
             finally:
@@ -1102,7 +1168,7 @@ async def purchase_devices_legacy(
     response = {
         'message': 'Devices added successfully',
         'devices_added': request.devices,
-        'new_device_limit': new_devices,
+        'new_device_limit': actual_new,
         'amount_paid_kopeks': total_price,
     }
 
@@ -1281,13 +1347,38 @@ async def activate_trial(
     # Check if trial requires payment
     requires_payment = bool(settings.TRIAL_PAYMENT_ENABLED)
     if requires_payment:
+        from app.database.crud.user import subtract_user_balance
+
         price_kopeks = settings.TRIAL_ACTIVATION_PRICE
         if user.balance_kopeks < price_kopeks:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f'Insufficient balance. Need {price_kopeks / 100:.2f} RUB',
             )
-        user.balance_kopeks -= price_kopeks
+        trial_description = 'Активация триальной подписки'
+        success = await subtract_user_balance(
+            db,
+            user,
+            price_kopeks,
+            trial_description,
+            mark_as_paid_subscription=True,
+        )
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail='Failed to charge trial activation fee',
+            )
+
+        # Создаём транзакцию для учёта списания за триал
+        await create_transaction(
+            db,
+            user_id=user.id,
+            type=TransactionType.SUBSCRIPTION_PAYMENT,
+            amount_kopeks=price_kopeks,
+            description=trial_description,
+            payment_method=PaymentMethod.BALANCE,
+        )
+
         logger.info('User paid kopeks for trial activation', user_id=user.id, price_kopeks=price_kopeks)
 
     # Get trial parameters from tariff if configured (same logic as bot handler)
@@ -1767,7 +1858,7 @@ async def submit_purchase(
                         db=db,
                         user=user,
                         subscription=subscription,
-                        transaction=None,
+                        transaction=result.get('transaction'),
                         period_days=selection.period.days,
                         was_trial_conversion=result.get('was_trial_conversion', False),
                         amount_kopeks=pricing.final_total,
@@ -1992,6 +2083,7 @@ async def purchase_tariff(
                     'traffic_limit_gb': tariff.traffic_limit_gb,
                     'device_limit': effective_device_limit,
                     'allowed_squads': tariff.allowed_squads or [],
+                    'consume_promo_offer': promo_offer_discount_value > 0,
                     'source': 'cabinet',
                 }
             else:
@@ -2009,6 +2101,7 @@ async def purchase_tariff(
                     'device_limit': effective_device_limit,
                     'allowed_squads': tariff.allowed_squads or [],
                     'discount_percent': discount_percent,
+                    'consume_promo_offer': promo_offer_discount_value > 0,
                     'source': 'cabinet',
                 }
 
@@ -2050,26 +2143,28 @@ async def purchase_tariff(
             description += f' (скидка {discount_percent}%)'
         if promo_offer_discount_value > 0:
             description += f' (промо -{promo_offer_discount_percent}%)'
-        success = await subtract_user_balance(db, user, price_kopeks, description)
+        success = await subtract_user_balance(
+            db,
+            user,
+            price_kopeks,
+            description,
+            consume_promo_offer=promo_offer_discount_value > 0,
+            mark_as_paid_subscription=True,
+        )
         if not success:
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail='Failed to charge balance',
             )
 
-        # Consume promo offer discount if it was used
-        if promo_offer_discount_value > 0:
-            user.promo_offer_discount_percent = 0
-            user.promo_offer_discount_source = None
-            user.promo_offer_discount_expires_at = None
-
         # Create transaction
-        await create_transaction(
+        transaction = await create_transaction(
             db=db,
             user_id=user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
             amount_kopeks=price_kopeks,
             description=description,
+            payment_method=PaymentMethod.BALANCE,
         )
 
         if subscription:
@@ -2217,7 +2312,7 @@ async def purchase_tariff(
                         db=db,
                         user=user,
                         subscription=subscription,
-                        transaction=None,
+                        transaction=transaction,
                         period_days=period_days,
                         was_trial_conversion=False,
                         amount_kopeks=price_kopeks,
@@ -2257,8 +2352,14 @@ async def purchase_devices(
         )
 
     try:
-        await db.refresh(user, ['subscription'])
-        subscription = user.subscription
+        # Lock subscription row to prevent concurrent device purchases exceeding the limit
+        result = await db.execute(
+            select(Subscription)
+            .where(Subscription.user_id == user.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        subscription = result.scalar_one_or_none()
 
         if not subscription:
             raise HTTPException(
@@ -2294,7 +2395,7 @@ async def purchase_devices(
                 detail='Докупка устройств недоступна',
             )
 
-        # Check max device limit
+        # Check max device limit (under row lock — prevents concurrent purchases exceeding limit)
         current_devices = subscription.device_limit or 1
         new_device_count = current_devices + request.devices
         if max_device_limit and new_device_count > max_device_limit:
@@ -2374,7 +2475,7 @@ async def purchase_devices(
         else:
             description = f'Покупка {request.devices} доп. устройств'
 
-        await subtract_user_balance(
+        success = await subtract_user_balance(
             db=db,
             user=user,
             amount_kopeks=price_kopeks,
@@ -2382,9 +2483,39 @@ async def purchase_devices(
             create_transaction=True,
             payment_method=PaymentMethod.BALANCE,
         )
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail='Insufficient funds',
+            )
 
-        # Increase device limit
-        subscription.device_limit += request.devices
+        # Re-lock subscription after subtract_user_balance committed (which released all locks).
+        # Re-validate max device limit to prevent concurrent purchases exceeding the limit.
+        relock_result = await db.execute(
+            select(Subscription)
+            .where(Subscription.id == subscription.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        subscription = relock_result.scalar_one()
+
+        actual_current = subscription.device_limit or 1
+        actual_new = actual_current + request.devices
+        if max_device_limit and actual_new > max_device_limit:
+            # Concurrent purchase already exceeded limit — refund balance
+            user_refund = await db.execute(
+                select(User).where(User.id == user.id).with_for_update().execution_options(populate_existing=True)
+            )
+            refund_user = user_refund.scalar_one()
+            refund_user.balance_kopeks += price_kopeks
+            await db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f'Максимальное количество устройств: {max_device_limit}. Баланс возвращён.',
+            )
+
+        # Increase device limit (under lock)
+        subscription.device_limit = actual_new
         await db.commit()
         await db.refresh(subscription)
 
@@ -3673,15 +3804,20 @@ async def reduce_devices(
             detail='Invalid new_device_limit',
         )
 
-    await db.refresh(user, ['subscription'])
+    # Lock subscription to prevent concurrent device modifications
+    result = await db.execute(
+        select(Subscription)
+        .where(Subscription.user_id == user.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    subscription = result.scalar_one_or_none()
 
-    if not user.subscription:
+    if not subscription:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail='No subscription found',
         )
-
-    subscription = user.subscription
 
     if subscription.is_trial:
         raise HTTPException(
@@ -4147,7 +4283,13 @@ async def switch_tariff(
         if period_discount_percent > 0 and discount_value > 0:
             description += f' (скидка {period_discount_percent}%)'
 
-        success = await subtract_user_balance(db, user, upgrade_cost, description)
+        success = await subtract_user_balance(
+            db,
+            user,
+            upgrade_cost,
+            description,
+            mark_as_paid_subscription=True,
+        )
         if not success:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -4155,12 +4297,13 @@ async def switch_tariff(
             )
 
         # Create transaction
-        await create_transaction(
+        switch_transaction = await create_transaction(
             db=db,
             user_id=user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
             amount_kopeks=upgrade_cost,
             description=description,
+            payment_method=PaymentMethod.BALANCE,
         )
 
     # Update subscription
@@ -4244,7 +4387,7 @@ async def switch_tariff(
                     db=db,
                     user=user,
                     subscription=user.subscription,
-                    transaction=None,
+                    transaction=switch_transaction if upgrade_cost > 0 else None,
                     period_days=remaining_days if remaining_days > 0 else new_period_days,
                     was_trial_conversion=False,
                     amount_kopeks=upgrade_cost,

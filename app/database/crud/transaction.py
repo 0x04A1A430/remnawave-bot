@@ -39,10 +39,16 @@ async def create_transaction(
     is_completed: bool = True,
     created_at: datetime | None = None,
 ) -> Transaction:
+    # SUBSCRIPTION_PAYMENT — always store as negative (debit from user balance)
+    # Keep original for downstream consumers (events, contests)
+    stored_amount = (
+        -amount_kopeks if type == TransactionType.SUBSCRIPTION_PAYMENT and amount_kopeks > 0 else amount_kopeks
+    )
+
     transaction = Transaction(
         user_id=user_id,
         type=type.value,
-        amount_kopeks=amount_kopeks,
+        amount_kopeks=stored_amount,
         description=description,
         payment_method=payment_method.value if payment_method else None,
         external_id=external_id,
@@ -58,7 +64,7 @@ async def create_transaction(
     logger.info(
         '💳 Создана транзакция: на ₽ для пользователя',
         type_value=type.value,
-        amount_kopeks=amount_kopeks / 100,
+        amount_kopeks=stored_amount / 100,
         user_id=user_id,
     )
 
@@ -72,8 +78,8 @@ async def create_transaction(
                 'transaction_id': transaction.id,
                 'user_id': user_id,
                 'type': type.value,
-                'amount_kopeks': amount_kopeks,
-                'amount_rubles': amount_kopeks / 100,
+                'amount_kopeks': abs(amount_kopeks),
+                'amount_rubles': abs(amount_kopeks) / 100,
                 'payment_method': payment_method.value if payment_method else None,
                 'external_id': external_id,
                 'is_completed': is_completed,
@@ -99,7 +105,7 @@ async def create_transaction(
             await referral_contest_service.on_subscription_payment(
                 db,
                 user_id,
-                amount_kopeks,
+                abs(amount_kopeks),
             )
         except Exception as exc:
             logger.debug('Не удалось записать событие конкурса для пользователя', user_id=user_id, exc=exc)
@@ -217,7 +223,7 @@ async def get_transactions_statistics(
     total_income = income_result.scalar()
 
     expenses_result = await db.execute(
-        select(func.coalesce(func.sum(Transaction.amount_kopeks), 0)).where(
+        select(func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0)).where(
             and_(
                 Transaction.type == TransactionType.WITHDRAWAL.value,
                 Transaction.is_completed == True,
@@ -244,7 +250,7 @@ async def get_transactions_statistics(
         select(
             Transaction.type,
             func.count(Transaction.id).label('count'),
-            func.coalesce(func.sum(Transaction.amount_kopeks), 0).label('total_amount'),
+            func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0).label('total_amount'),
         )
         .where(
             and_(

@@ -403,7 +403,7 @@ class AdminNotificationService:
     ) -> bool:
         try:
             total_amount = (
-                amount_kopeks if amount_kopeks is not None else (transaction.amount_kopeks if transaction else 0)
+                amount_kopeks if amount_kopeks is not None else (abs(transaction.amount_kopeks) if transaction else 0)
             )
 
             await self._record_subscription_event(
@@ -846,7 +846,7 @@ class AdminNotificationService:
                 user=user,
                 subscription=subscription,
                 transaction=transaction,
-                amount_kopeks=transaction.amount_kopeks,
+                amount_kopeks=abs(transaction.amount_kopeks),
                 message='Subscription renewed',
                 occurred_at=transaction.completed_at or transaction.created_at,
                 extra={

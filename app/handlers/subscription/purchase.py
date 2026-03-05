@@ -16,7 +16,7 @@ from app.database.crud.subscription import (
 )
 from app.database.crud.transaction import create_transaction
 from app.database.crud.user import subtract_user_balance
-from app.database.models import Subscription, SubscriptionStatus, TransactionType, User
+from app.database.models import PaymentMethod, Subscription, SubscriptionStatus, TransactionType, User
 from app.keyboards.inline import (
     get_back_keyboard,
     get_countries_keyboard,
@@ -1534,7 +1534,22 @@ async def handle_extend_subscription(callback: types.CallbackQuery, db_user: Use
     subscription = db_user.subscription
 
     if not subscription or subscription.is_trial:
-        await callback.answer('⚠ Продление доступно только для платных подписок', show_alert=True)
+        await callback.message.edit_text(
+            '🎯 <b>Пробный период заканчивается</b>\n\nЧтобы продолжить пользоваться VPN, выберите подходящий тариф.',
+            reply_markup=types.InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [types.InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy')],
+                    [
+                        types.InlineKeyboardButton(
+                            text=texts.t('WEBHOOK_CLOSE_BUTTON', '✖️ Закрыть'),
+                            callback_data='webhook:close',
+                        )
+                    ],
+                ]
+            ),
+            parse_mode='HTML',
+        )
+        await callback.answer()
         return
 
     # В режиме тарифов проверяем наличие tariff_id
@@ -1960,6 +1975,7 @@ async def confirm_extend_subscription(callback: types.CallbackQuery, db_user: Us
             price,
             f'Продление подписки на {days} дней',
             consume_promo_offer=promo_component['discount'] > 0,
+            mark_as_paid_subscription=True,
         )
 
         if not success:
@@ -2578,6 +2594,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
             final_price,
             f'Покупка подписки на {data["period_days"]} дней',
             consume_promo_offer=promo_offer_discount_value > 0,
+            mark_as_paid_subscription=True,
         )
 
         if not success:
@@ -2747,10 +2764,6 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                 connected_squads=new_subscription_countries,
                 traffic_gb=final_traffic_gb,
             )
-
-        from app.utils.user_utils import mark_user_as_had_paid_subscription
-
-        await mark_user_as_had_paid_subscription(db, db_user)
 
         from app.database.crud.server_squad import add_user_to_servers, get_server_ids_by_uuids
         from app.database.crud.subscription import add_subscription_servers
@@ -3282,11 +3295,23 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
         db_user,
         trial_price_kopeks,
         texts.t('TRIAL_PAYMENT_DESCRIPTION', 'Оплата пробной подписки'),
+        mark_as_paid_subscription=True,
     )
 
     if not success:
         await callback.answer(texts.t('PAYMENT_FAILED', '❌ Не удалось списать средства'), show_alert=True)
         return
+
+    # Создаём транзакцию для учёта списания за триал
+    trial_description = texts.t('TRIAL_PAYMENT_DESCRIPTION', 'Оплата пробной подписки')
+    await create_transaction(
+        db,
+        user_id=db_user.id,
+        type=TransactionType.SUBSCRIPTION_PAYMENT,
+        amount_kopeks=trial_price_kopeks,
+        description=trial_description,
+        payment_method=PaymentMethod.BALANCE,
+    )
 
     await db.refresh(db_user)
 
@@ -4428,6 +4453,7 @@ async def _extend_existing_subscription(
         price_kopeks,
         f'Продление подписки на {period_days} дней',
         consume_promo_offer=False,  # Простая покупка не использует промо-скидки
+        mark_as_paid_subscription=True,
     )
 
     if not success:

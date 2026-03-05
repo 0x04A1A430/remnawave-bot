@@ -473,6 +473,7 @@ class SubscriptionRenewalService:
                 charge_from_balance,
                 description_text,
                 consume_promo_offer=consume_promo_offer,
+                mark_as_paid_subscription=True,
             )
             if not success:
                 raise SubscriptionRenewalChargeError('Failed to charge balance')

@@ -39,6 +39,7 @@ _PRESET_ROLES: list[dict] = [
             'users:*',
             'tickets:*',
             'stats:*',
+            'sales_stats:*',
             'broadcasts:*',
             'tariffs:*',
             'promocodes:*',
@@ -90,6 +91,7 @@ _PRESET_ROLES: list[dict] = [
             'promo_offers:*',
             'promo_groups:*',
             'stats:read',
+            'sales_stats:read',
             'pinned_messages:*',
             'wheel:*',
         ],
@@ -119,6 +121,11 @@ async def _ensure_preset_roles(db: AsyncSession) -> AdminRole | None:
         if existing is not None:
             if preset['name'] == SUPERADMIN_ROLE_NAME:
                 superadmin_role = existing
+            # Обновить permissions для system-ролей, если они изменились в коде
+            if existing.is_system and sorted(existing.permissions or []) != sorted(preset['permissions']):
+                existing.permissions = preset['permissions']
+                await db.flush()
+                logger.info('Updated preset role permissions', role_name=preset['name'], role_id=existing.id)
             continue
 
         role = AdminRole(

@@ -102,7 +102,7 @@ def format_tariffs_list_text(
     for tariff in tariffs:
         # Трафик компактно
         traffic_gb = tariff.traffic_limit_gb
-        traffic = '∞' if traffic_gb == 0 else f'{traffic_gb}ГБ'
+        traffic = '∞' if traffic_gb == 0 else f'{traffic_gb} ГБ'
 
         # Цена
         is_daily = getattr(tariff, 'is_daily', False)
@@ -127,8 +127,8 @@ def format_tariffs_list_text(
                     discount_icon = '🔥'
                 price_text = f'от {_format_price_kopeks(min_price, compact=True)}{discount_icon}'
 
-        # Компактный формат: Название — 250ГБ/10📱 от 179₽🔥
-        lines.append(f'<b>{tariff.name}</b> — {traffic}/{tariff.device_limit}📱 {price_text}')
+        # Компактный формат: Название — 250 ГБ / 10 📱 от 179₽🔥
+        lines.append(f'<b>{tariff.name}</b> — {traffic} / {tariff.device_limit} 📱 {price_text}')
 
         # Описание тарифа если есть
         if tariff.description:
@@ -821,7 +821,12 @@ async def handle_custom_confirm(
     try:
         # Списываем баланс
         success = await subtract_user_balance(
-            db, db_user, total_price, f'Покупка тарифа {tariff.name} на {custom_days} дней'
+            db,
+            db_user,
+            total_price,
+            f'Покупка тарифа {tariff.name} на {custom_days} дней',
+            consume_promo_offer=get_user_active_promo_discount_percent(db_user) > 0,
+            mark_as_paid_subscription=True,
         )
         if not success:
             await callback.answer('Ошибка списания баланса', show_alert=True)
@@ -889,7 +894,7 @@ async def handle_custom_confirm(
             db,
             user_id=db_user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
-            amount_kopeks=-total_price,
+            amount_kopeks=total_price,
             description=f'Покупка тарифа {tariff.name} на {custom_days} дней',
         )
 
@@ -1131,7 +1136,12 @@ async def confirm_tariff_purchase(
     try:
         # Списываем баланс
         success = await subtract_user_balance(
-            db, db_user, final_price, f'Покупка тарифа {tariff.name} на {period} дней'
+            db,
+            db_user,
+            final_price,
+            f'Покупка тарифа {tariff.name} на {period} дней',
+            consume_promo_offer=get_user_active_promo_discount_percent(db_user) > 0,
+            mark_as_paid_subscription=True,
         )
         if not success:
             await callback.answer('Ошибка списания баланса', show_alert=True)
@@ -1196,7 +1206,7 @@ async def confirm_tariff_purchase(
             db,
             user_id=db_user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
-            amount_kopeks=-final_price,
+            amount_kopeks=final_price,
             description=f'Покупка тарифа {tariff.name} на {period} дней',
         )
 
@@ -1289,7 +1299,11 @@ async def confirm_daily_tariff_purchase(
     try:
         # Списываем первый день сразу
         success = await subtract_user_balance(
-            db, db_user, daily_price, f'Покупка суточного тарифа {tariff.name} (первый день)'
+            db,
+            db_user,
+            daily_price,
+            f'Покупка суточного тарифа {tariff.name} (первый день)',
+            mark_as_paid_subscription=True,
         )
         if not success:
             await callback.answer('Ошибка списания баланса', show_alert=True)
@@ -1375,7 +1389,7 @@ async def confirm_daily_tariff_purchase(
             db,
             user_id=db_user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
-            amount_kopeks=-daily_price,
+            amount_kopeks=daily_price,
             description=f'Покупка суточного тарифа {tariff.name} (первый день)',
         )
 
@@ -1701,7 +1715,12 @@ async def confirm_tariff_extend(
     try:
         # Списываем баланс
         success = await subtract_user_balance(
-            db, db_user, final_price, f'Продление тарифа {tariff.name} на {period} дней'
+            db,
+            db_user,
+            final_price,
+            f'Продление тарифа {tariff.name} на {period} дней',
+            consume_promo_offer=get_user_active_promo_discount_percent(db_user) > 0,
+            mark_as_paid_subscription=True,
         )
         if not success:
             await callback.answer('Ошибка списания баланса', show_alert=True)
@@ -1731,7 +1750,7 @@ async def confirm_tariff_extend(
             db,
             user_id=db_user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
-            amount_kopeks=-final_price,
+            amount_kopeks=final_price,
             description=f'Продление тарифа {tariff.name} на {period} дней',
         )
 
@@ -1811,7 +1830,7 @@ def format_tariff_switch_list_text(
             continue
 
         traffic_gb = tariff.traffic_limit_gb
-        traffic = '∞' if traffic_gb == 0 else f'{traffic_gb}ГБ'
+        traffic = '∞' if traffic_gb == 0 else f'{traffic_gb} ГБ'
 
         # Проверяем суточный ли тариф
         is_daily = getattr(tariff, 'is_daily', False)
@@ -1835,7 +1854,7 @@ def format_tariff_switch_list_text(
                     discount_icon = '🔥'
                 price_text = f'от {_format_price_kopeks(min_price, compact=True)}{discount_icon}'
 
-        lines.append(f'<b>{tariff.name}</b> — {traffic}/{tariff.device_limit}📱 {price_text}')
+        lines.append(f'<b>{tariff.name}</b> — {traffic} / {tariff.device_limit} 📱 {price_text}')
 
         if tariff.description:
             lines.append(f'<i>{tariff.description}</i>')
@@ -2232,7 +2251,12 @@ async def confirm_tariff_switch(
     try:
         # Списываем баланс
         success = await subtract_user_balance(
-            db, db_user, final_price, f'Смена тарифа на {tariff.name} ({period} дней)'
+            db,
+            db_user,
+            final_price,
+            f'Смена тарифа на {tariff.name} ({period} дней)',
+            consume_promo_offer=get_user_active_promo_discount_percent(db_user) > 0,
+            mark_as_paid_subscription=True,
         )
         if not success:
             await callback.answer('Ошибка списания баланса', show_alert=True)
@@ -2298,7 +2322,7 @@ async def confirm_tariff_switch(
             db,
             user_id=db_user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
-            amount_kopeks=-final_price,
+            amount_kopeks=final_price,
             description=f'Смена тарифа на {tariff.name}',
         )
 
@@ -2401,7 +2425,11 @@ async def confirm_daily_tariff_switch(
     try:
         # Списываем первый день сразу
         success = await subtract_user_balance(
-            db, db_user, daily_price, f'Смена на суточный тариф {tariff.name} (первый день)'
+            db,
+            db_user,
+            daily_price,
+            f'Смена на суточный тариф {tariff.name} (первый день)',
+            mark_as_paid_subscription=True,
         )
         if not success:
             await callback.answer('Ошибка списания баланса', show_alert=True)
@@ -2479,7 +2507,7 @@ async def confirm_daily_tariff_switch(
             db,
             user_id=db_user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
-            amount_kopeks=-daily_price,
+            amount_kopeks=daily_price,
             description=f'Смена на суточный тариф {tariff.name} (первый день)',
         )
 
@@ -2607,7 +2635,7 @@ def format_instant_switch_list_text(
             continue
 
         traffic_gb = tariff.traffic_limit_gb
-        traffic = '∞' if traffic_gb == 0 else f'{traffic_gb}ГБ'
+        traffic = '∞' if traffic_gb == 0 else f'{traffic_gb} ГБ'
 
         # Рассчитываем стоимость переключения
         cost, is_upgrade = _calculate_instant_switch_cost(current_tariff, tariff, remaining_days, db_user)
@@ -2617,7 +2645,7 @@ def format_instant_switch_list_text(
         else:
             cost_text = '⬇️ Бесплатно'
 
-        lines.append(f'<b>{tariff.name}</b> — {traffic}/{tariff.device_limit}📱 {cost_text}')
+        lines.append(f'<b>{tariff.name}</b> — {traffic} / {tariff.device_limit} 📱 {cost_text}')
 
         if tariff.description:
             lines.append(f'<i>{tariff.description}</i>')
@@ -2962,7 +2990,14 @@ async def confirm_instant_switch(
     try:
         # Списываем баланс если это upgrade
         if is_upgrade and upgrade_cost > 0:
-            success = await subtract_user_balance(db, db_user, upgrade_cost, f'Переключение на тариф {new_tariff.name}')
+            success = await subtract_user_balance(
+                db,
+                db_user,
+                upgrade_cost,
+                f'Переключение на тариф {new_tariff.name}',
+                consume_promo_offer=get_user_active_promo_discount_percent(db_user) > 0,
+                mark_as_paid_subscription=True,
+            )
             if not success:
                 await callback.answer('Ошибка списания баланса', show_alert=True)
                 return
@@ -3010,14 +3045,21 @@ async def confirm_instant_switch(
             # Списываем первый день если ещё не списано (upgrade_cost был 0)
             if upgrade_cost == 0 and daily_price > 0:
                 if user_balance >= daily_price:
-                    await subtract_user_balance(
-                        db, db_user, daily_price, f'Переключение на суточный тариф {new_tariff.name} (первый день)'
+                    success = await subtract_user_balance(
+                        db,
+                        db_user,
+                        daily_price,
+                        f'Переключение на суточный тариф {new_tariff.name} (первый день)',
+                        mark_as_paid_subscription=True,
                     )
+                    if not success:
+                        await callback.answer('❌ Недостаточно средств', show_alert=True)
+                        return
                     await create_transaction(
                         db,
                         user_id=db_user.id,
                         type=TransactionType.SUBSCRIPTION_PAYMENT,
-                        amount_kopeks=-daily_price,
+                        amount_kopeks=daily_price,
                         description=f'Переключение на суточный тариф {new_tariff.name} (первый день)',
                     )
 
@@ -3062,7 +3104,7 @@ async def confirm_instant_switch(
                 db,
                 user_id=db_user.id,
                 type=TransactionType.SUBSCRIPTION_PAYMENT,
-                amount_kopeks=-upgrade_cost,
+                amount_kopeks=upgrade_cost,
                 description=f'Переключение на тариф {new_tariff.name}',
             )
 

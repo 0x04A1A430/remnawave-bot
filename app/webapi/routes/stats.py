@@ -262,7 +262,9 @@ async def stats_full(
     users_stats = await get_users_statistics(db)
     subscriptions_stats = await get_subscriptions_statistics(db)
     trial_stats = await get_trial_statistics(db)
-    transactions_stats = await get_transactions_statistics(db)
+    transactions_stats = await get_transactions_statistics(
+        db, start_date=datetime(2020, 1, 1, tzinfo=UTC), end_date=datetime.now(UTC)
+    )
     referral_stats = await get_referral_statistics(db)
 
     transactions_totals = transactions_stats.get('totals', {})
@@ -273,7 +275,8 @@ async def stats_full(
         'income_rubles': _kopeks_to_rubles(transactions_totals.get('income_kopeks')),
         'expenses_rubles': _kopeks_to_rubles(transactions_totals.get('expenses_kopeks')),
         'profit_rubles': _kopeks_to_rubles(transactions_totals.get('profit_kopeks')),
-        'subscription_income_rubles': _kopeks_to_rubles(transactions_totals.get('subscription_income_kopeks')),
+        'subscription_income_kopeks': abs(transactions_totals.get('subscription_income_kopeks', 0)),
+        'subscription_income_rubles': _kopeks_to_rubles(abs(transactions_totals.get('subscription_income_kopeks', 0))),
     }
 
     transactions_today = {

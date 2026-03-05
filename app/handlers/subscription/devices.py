@@ -2,13 +2,13 @@ import html as html_mod
 from datetime import UTC, datetime
 
 from aiogram import types
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database.crud.subscription import add_subscription_devices
 from app.database.crud.transaction import create_transaction
 from app.database.crud.user import subtract_user_balance
-from app.database.models import TransactionType, User
+from app.database.models import Subscription, TransactionType, User
 from app.keyboards.inline import (
     get_app_selection_keyboard,
     get_back_keyboard,
@@ -554,10 +554,60 @@ async def execute_change_devices(callback: types.CallbackQuery, db_user: User, d
                 description=f'Изменение устройств с {current_devices} до {new_devices_count} на {charged_months} мес',
             )
 
+        # Re-lock subscription after subtract_user_balance committed (released all locks)
+        relock_result = await db.execute(
+            select(Subscription)
+            .where(Subscription.id == subscription.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        subscription = relock_result.scalar_one()
+
+        # Re-validate: prevent double-charge and max-limit violation
+        if new_devices_count > current_devices:
+            max_devices = settings.MAX_DEVICES_LIMIT
+            if max_devices > 0 and new_devices_count > max_devices:
+                if price > 0:
+                    user_refund = await db.execute(
+                        select(User)
+                        .where(User.id == db_user.id)
+                        .with_for_update()
+                        .execution_options(populate_existing=True)
+                    )
+                    refund_user = user_refund.scalar_one()
+                    refund_user.balance_kopeks += price
+                    await db.commit()
+                await callback.answer(
+                    f'⚠️ Лимит устройств ({max_devices}) превышен. Баланс возвращён.',
+                    show_alert=True,
+                )
+                return
+            # Check if concurrent request already applied the same change
+            if price > 0 and subscription.device_limit >= new_devices_count:
+                user_refund = await db.execute(
+                    select(User)
+                    .where(User.id == db_user.id)
+                    .with_for_update()
+                    .execution_options(populate_existing=True)
+                )
+                refund_user = user_refund.scalar_one()
+                refund_user.balance_kopeks += price
+                await db.commit()
+                await callback.answer(
+                    '⚠️ Изменение уже применено. Баланс возвращён.',
+                    show_alert=True,
+                )
+                return
+
         subscription.device_limit = new_devices_count
         subscription.updated_at = datetime.now(UTC)
 
         await db.commit()
+
+        # Реактивируем подписку если она была DISABLED (например, после LIMITED в RemnaWave)
+        from app.database.crud.subscription import reactivate_subscription
+
+        await reactivate_subscription(db, subscription)
 
         subscription_service = SubscriptionService()
         await subscription_service.update_remnawave_user(db, subscription)
@@ -1196,7 +1246,41 @@ async def confirm_add_devices(callback: types.CallbackQuery, db_user: User, db: 
             await callback.answer('⚠️ Ошибка списания средств', show_alert=True)
             return
 
-        await add_subscription_devices(db, subscription, devices_count)
+        # Re-lock subscription after subtract_user_balance committed (released all locks)
+        relock_result = await db.execute(
+            select(Subscription)
+            .where(Subscription.id == subscription.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        subscription = relock_result.scalar_one()
+
+        # Re-validate max device limit after re-lock
+        actual_current = subscription.device_limit or 1
+        actual_new = actual_current + devices_count
+        max_devices = settings.MAX_DEVICES_LIMIT
+        if max_devices > 0 and actual_new > max_devices:
+            # Concurrent purchase exceeded limit — refund
+            user_refund = await db.execute(
+                select(User).where(User.id == db_user.id).with_for_update().execution_options(populate_existing=True)
+            )
+            refund_user = user_refund.scalar_one()
+            refund_user.balance_kopeks += price
+            await db.commit()
+            await callback.answer(
+                f'⚠️ Лимит устройств ({max_devices}) превышен. Баланс возвращён.',
+                show_alert=True,
+            )
+            return
+
+        subscription.device_limit = actual_new
+        subscription.updated_at = datetime.now(UTC)
+        await db.commit()
+
+        # Реактивируем подписку если она была DISABLED (например, после LIMITED в RemnaWave)
+        from app.database.crud.subscription import reactivate_subscription
+
+        await reactivate_subscription(db, subscription)
 
         subscription_service = SubscriptionService()
         await subscription_service.update_remnawave_user(db, subscription)

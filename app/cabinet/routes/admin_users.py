@@ -601,8 +601,8 @@ async def get_user_detail(
         UserTransactionItem(
             id=t.id,
             type=t.type,
-            amount_kopeks=-t.amount_kopeks if t.type in _EXPENSE_TYPES else t.amount_kopeks,
-            amount_rubles=-t.amount_kopeks / 100 if t.type in _EXPENSE_TYPES else t.amount_kopeks / 100,
+            amount_kopeks=abs(t.amount_kopeks) if t.type in _EXPENSE_TYPES else t.amount_kopeks,
+            amount_rubles=abs(t.amount_kopeks) / 100 if t.type in _EXPENSE_TYPES else t.amount_kopeks / 100,
             description=t.description,
             payment_method=t.payment_method,
             is_completed=t.is_completed,
@@ -1192,10 +1192,13 @@ async def update_user_subscription(
                 detail='traffic_gb parameter is required for add_traffic action',
             )
 
-        from app.database.crud.subscription import add_subscription_traffic
+        from app.database.crud.subscription import add_subscription_traffic, reactivate_subscription
 
         await add_subscription_traffic(db, subscription, request.traffic_gb)
-        await db.commit()
+
+        # Реактивируем подписку если она была DISABLED (например, после LIMITED в RemnaWave)
+        await reactivate_subscription(db, subscription)
+
         await db.refresh(subscription)
 
         # Sync to Remnawave panel
@@ -2147,8 +2150,8 @@ async def get_user_transactions(
         UserTransactionItem(
             id=t.id,
             type=t.type,
-            amount_kopeks=-t.amount_kopeks if t.type in _EXPENSE_TYPES else t.amount_kopeks,
-            amount_rubles=-t.amount_kopeks / 100 if t.type in _EXPENSE_TYPES else t.amount_kopeks / 100,
+            amount_kopeks=abs(t.amount_kopeks) if t.type in _EXPENSE_TYPES else t.amount_kopeks,
+            amount_rubles=abs(t.amount_kopeks) / 100 if t.type in _EXPENSE_TYPES else t.amount_kopeks / 100,
             description=t.description,
             payment_method=t.payment_method,
             is_completed=t.is_completed,

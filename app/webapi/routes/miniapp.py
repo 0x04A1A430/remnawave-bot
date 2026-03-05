@@ -5326,7 +5326,14 @@ async def submit_subscription_renewal_endpoint(
 
             try:
                 # Списываем баланс (subtract_user_balance делает commit и обновляет user.balance_kopeks)
-                success = await subtract_user_balance(db, user, final_total, description)
+                success = await subtract_user_balance(
+                    db,
+                    user,
+                    final_total,
+                    description,
+                    consume_promo_offer=promo_offer_discount_percent > 0,
+                    mark_as_paid_subscription=True,
+                )
                 if not success:
                     raise HTTPException(
                         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -5344,7 +5351,7 @@ async def submit_subscription_renewal_endpoint(
                     db,
                     user_id=user.id,
                     type=TransactionType.SUBSCRIPTION_PAYMENT,
-                    amount_kopeks=-final_total,
+                    amount_kopeks=final_total,
                     description=description,
                 )
 
@@ -6106,6 +6113,15 @@ async def update_subscription_devices_endpoint(
             },
         )
 
+    # Re-read subscription under row lock to prevent concurrent device purchases exceeding limit
+    locked_result = await db.execute(
+        select(Subscription)
+        .where(Subscription.id == subscription.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    subscription = locked_result.scalar_one()
+
     current_devices_value = subscription.device_limit
     if current_devices_value is None:
         fallback_value = settings.DEFAULT_DEVICE_LIMIT or 1
@@ -6178,6 +6194,45 @@ async def update_subscription_devices_endpoint(
             amount_kopeks=price_to_charge,
             description=f'{description} на {charged_months or get_remaining_months(subscription.end_date)} мес',
         )
+
+    if price_to_charge > 0:
+        # Re-lock subscription after subtract_user_balance committed (which released all locks).
+        # Re-validate to prevent concurrent device purchases from exceeding the limit or double-charging.
+        relock_result = await db.execute(
+            select(Subscription)
+            .where(Subscription.id == subscription.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        subscription = relock_result.scalar_one()
+
+        actual_current = subscription.device_limit or 1
+        actual_delta = new_devices - actual_current
+        max_devices_limit = settings.MAX_DEVICES_LIMIT
+
+        if actual_delta <= 0 or (max_devices_limit > 0 and new_devices > max_devices_limit):
+            # Concurrent request already applied the change or pushed limit beyond max — refund
+            user_refund = await db.execute(
+                select(User).where(User.id == user.id).with_for_update().execution_options(populate_existing=True)
+            )
+            refund_user = user_refund.scalar_one()
+            refund_user.balance_kopeks += price_to_charge
+            await db.commit()
+            if actual_delta <= 0:
+                raise HTTPException(
+                    status.HTTP_409_CONFLICT,
+                    detail={
+                        'code': 'already_applied',
+                        'message': 'Изменение уже применено параллельным запросом. Баланс возвращён.',
+                    },
+                )
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                detail={
+                    'code': 'devices_limit_exceeded',
+                    'message': f'Превышен максимальный лимит устройств ({max_devices_limit}). Баланс возвращён.',
+                },
+            )
 
     subscription.device_limit = new_devices
     subscription.updated_at = datetime.now(UTC)
@@ -6570,7 +6625,13 @@ async def purchase_tariff_endpoint(
         description = f"Покупка тарифа '{tariff.name}' на {payload.period_days} дней (скидка {discount_percent}%)"
     else:
         description = f"Покупка тарифа '{tariff.name}' на {payload.period_days} дней"
-    success = await subtract_user_balance(db, user, price_kopeks, description)
+    success = await subtract_user_balance(
+        db,
+        user,
+        price_kopeks,
+        description,
+        mark_as_paid_subscription=True,
+    )
     if not success:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -6948,7 +7009,13 @@ async def switch_tariff_endpoint(
             description = f"Переход с суточного на тариф '{new_tariff.name}' ({new_period_days} дней)"
         else:
             description = f"Переход на тариф '{new_tariff.name}' (доплата за {remaining_days} дней)"
-        success = await subtract_user_balance(db, user, upgrade_cost, description)
+        success = await subtract_user_balance(
+            db,
+            user,
+            upgrade_cost,
+            description,
+            mark_as_paid_subscription=True,
+        )
         if not success:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -7206,6 +7273,11 @@ async def purchase_traffic_topup_endpoint(
     # Добавляем трафик (add_subscription_traffic уже создаёт TrafficPurchase и обновляет все необходимые поля)
     await add_subscription_traffic(db, subscription, payload.gb)
 
+    # Реактивируем подписку если она была DISABLED (например, после LIMITED в RemnaWave)
+    from app.database.crud.subscription import reactivate_subscription
+
+    await reactivate_subscription(db, subscription)
+
     # Синхронизируем с RemnaWave
     try:
         service = SubscriptionService()
@@ -7218,7 +7290,7 @@ async def purchase_traffic_topup_endpoint(
         db,
         user_id=user.id,
         type=TransactionType.SUBSCRIPTION_PAYMENT,
-        amount_kopeks=-final_price,
+        amount_kopeks=final_price,
         description=traffic_description,
     )
 
