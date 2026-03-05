@@ -68,8 +68,15 @@ class OAuthStateData(TypedDict):
     code_verifier: NotRequired[str]  # PKCE code verifier (VK)
 
 
-# All known auth providers (including non-OAuth), derived from single source of truth
-_ALL_PROVIDERS: tuple[str, ...] = ('telegram', 'email', *OAUTH_PROVIDER_COLUMNS.keys())
+def _get_active_providers() -> list[str]:
+    """Вернуть список активных провайдеров аутентификации (только включённые)."""
+    from app.config import settings
+
+    providers: list[str] = ['telegram']
+    if settings.is_cabinet_email_auth_enabled():
+        providers.append('email')
+    providers.extend(settings.get_enabled_oauth_provider_names())
+    return providers
 
 
 # ---------------------------------------------------------------------------
@@ -312,7 +319,7 @@ async def get_linked_providers(
 ) -> LinkedProvidersResponse:
     """Return all auth methods with their link status for the current user."""
     providers: list[LinkedProvider] = []
-    for provider in _ALL_PROVIDERS:
+    for provider in _get_active_providers():
         identifier = _get_provider_identifier(user, provider)
         providers.append(
             LinkedProvider(
