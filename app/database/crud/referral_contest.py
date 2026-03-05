@@ -197,7 +197,7 @@ async def get_contest_leaderboard(
         select(
             User,
             func.count(ReferralContestEvent.id).label('referral_count'),
-            func.coalesce(func.sum(ReferralContestEvent.amount_kopeks), 0).label('total_amount'),
+            func.coalesce(func.sum(func.abs(ReferralContestEvent.amount_kopeks)), 0).label('total_amount'),
         )
         .join(User, User.id == ReferralContestEvent.referrer_id)
         .where(
