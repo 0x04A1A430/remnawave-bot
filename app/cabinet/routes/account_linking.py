@@ -1,19 +1,22 @@
 """Account linking and merge routes for cabinet.
 
 Router 1 (`router`): JWT-protected endpoints for linking/unlinking OAuth providers.
+  Exception: `link/server-complete` uses state-token auth instead of JWT (for Mini App external browser flow).
 Router 2 (`merge_router`): Public endpoints for merge preview and execution.
 """
 
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Literal, NotRequired, TypedDict
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Path, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Request, status
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.crud.user import (
+    OAUTH_PROVIDER_COLUMNS,
+    clear_user_oauth_provider_id,
     get_user_by_id,
     get_user_by_oauth_provider,
     get_user_by_telegram_id,
@@ -21,6 +24,7 @@ from app.database.crud.user import (
 )
 from app.database.models import User
 from app.services.account_merge_service import compute_auth_methods, execute_merge, get_merge_preview
+from app.utils.cache import RateLimitCache
 
 from ..auth.merge_service import (
     MERGE_TOKEN_TTL_SECONDS,
@@ -36,24 +40,36 @@ from ..auth.oauth_providers import (
 )
 from ..auth.telegram_auth import validate_telegram_init_data, validate_telegram_login_widget
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
+from ..ip_utils import get_client_ip
 from ..schemas.auth import UserResponse
 from .auth import _create_auth_response, _store_refresh_token, _user_to_response
 
 
 logger = structlog.get_logger(__name__)
 
-# OAuth provider -> User model column name
-_OAUTH_PROVIDER_COLUMNS: dict[str, str] = {
-    'google': 'google_id',
-    'yandex': 'yandex_id',
-    'discord': 'discord_id',
-    'vk': 'vk_id',
-}
 
 OAuthProviderName = Literal['google', 'yandex', 'discord', 'vk']
 
-# All known auth providers (including non-OAuth)
-_ALL_PROVIDERS: tuple[str, ...] = ('telegram', 'email', 'google', 'yandex', 'discord', 'vk')
+# Ensure OAuthProviderName Literal stays in sync with OAUTH_PROVIDER_COLUMNS
+_EXPECTED_PROVIDERS = {'google', 'yandex', 'discord', 'vk'}
+if set(OAUTH_PROVIDER_COLUMNS.keys()) != _EXPECTED_PROVIDERS:
+    raise RuntimeError(
+        f'OAuthProviderName Literal is out of sync with OAUTH_PROVIDER_COLUMNS: '
+        f'{set(OAUTH_PROVIDER_COLUMNS.keys())} != {_EXPECTED_PROVIDERS}'
+    )
+
+
+class OAuthStateData(TypedDict):
+    """Typed dict for Redis-stored OAuth state data."""
+
+    provider: str  # Always present
+    linking: NotRequired[str]  # 'true' if account linking flow
+    user_id: NotRequired[str]  # ID of user who initiated linking
+    code_verifier: NotRequired[str]  # PKCE code verifier (VK)
+
+
+# All known auth providers (including non-OAuth), derived from single source of truth
+_ALL_PROVIDERS: tuple[str, ...] = ('telegram', 'email', *OAUTH_PROVIDER_COLUMNS.keys())
 
 
 # ---------------------------------------------------------------------------
@@ -172,7 +188,7 @@ def _get_provider_identifier(user: User, provider: str) -> str | None:
         case 'email':
             return user.email if user.email and user.password_hash else None
         case _:
-            column = _OAUTH_PROVIDER_COLUMNS.get(provider)
+            column = OAUTH_PROVIDER_COLUMNS.get(provider)
             if not column:
                 return None
             value = getattr(user, column, None)
@@ -191,7 +207,7 @@ async def _exchange_and_link_oauth(
     provider: str,
     code: str,
     state: str,
-    state_data: dict[str, Any],
+    state_data: OAuthStateData,
     device_id: str | None,
     log_context: str,
 ) -> LinkCallbackResponse:
@@ -234,7 +250,7 @@ async def _exchange_and_link_oauth(
         ) from exc
 
     # Check if provider_id is already linked to THIS user
-    column = _OAUTH_PROVIDER_COLUMNS[provider]
+    column = OAUTH_PROVIDER_COLUMNS[provider]
     current_value = getattr(user, column, None)
     if current_value and str(current_value) == user_info.provider_id:
         return LinkCallbackResponse(success=True, message='already_linked')
@@ -316,7 +332,7 @@ async def link_provider_init(
     """Start OAuth flow for linking a new provider to the current account."""
 
     # Check if already linked
-    column = _OAUTH_PROVIDER_COLUMNS[provider]
+    column = OAUTH_PROVIDER_COLUMNS[provider]
     if getattr(user, column, None):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -340,7 +356,9 @@ async def link_provider_init(
         extra_data.update(auth_extra)
 
     state = await generate_oauth_state(provider, extra_data=extra_data)
-    authorize_url = oauth_provider.get_authorization_url(state, **auth_extra)
+    # Only pass URL-safe params (prefixed with _) to authorize URL; exclude secrets like code_verifier
+    url_params = {k: v for k, v in auth_extra.items() if k.startswith('_')} if auth_extra else {}
+    authorize_url = oauth_provider.get_authorization_url(state, **url_params)
 
     return LinkInitResponse(authorize_url=authorize_url, state=state)
 
@@ -402,7 +420,7 @@ async def unlink_provider(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> UnlinkResponse:
     """Unlink an OAuth provider from the current account."""
-    column = _OAUTH_PROVIDER_COLUMNS[provider]
+    column = OAUTH_PROVIDER_COLUMNS[provider]
     if not getattr(user, column, None):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -416,11 +434,8 @@ async def unlink_provider(
             detail='Cannot unlink last authentication method',
         )
 
-    setattr(user, column, None)
-    user.updated_at = datetime.now(UTC)
+    await clear_user_oauth_provider_id(db, user, provider)
     await db.commit()
-
-    logger.info('OAuth provider unlinked from account', provider=provider, user_id=user.id)
     return UnlinkResponse(success=True)
 
 
@@ -544,23 +559,18 @@ async def link_telegram(
 class ServerCompleteRequest(BaseModel):
     code: str = Field(..., min_length=1, max_length=2048, description='Authorization code from provider')
     state: str = Field(..., min_length=1, max_length=128, description='CSRF state token')
-    provider: str | None = Field(
-        None, max_length=32, description='OAuth provider name (resolved from state if omitted)'
-    )
+    provider: OAuthProviderName | None = Field(None, description='OAuth provider name (resolved from state if omitted)')
     device_id: str | None = Field(None, max_length=256, description='Device ID from VK ID callback')
 
 
-class ServerCompleteResponse(BaseModel):
-    success: bool
-    message: str | None = None
-    merge_required: bool = False
-    merge_token: str | None = None
-    provider: str | None = None
+class ServerCompleteResponse(LinkCallbackResponse):
+    provider: str
 
 
 @router.post('/link/server-complete', response_model=ServerCompleteResponse)
 async def link_server_complete(
     request: ServerCompleteRequest,
+    raw_request: Request,
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> ServerCompleteResponse:
     """Complete OAuth account linking without JWT.
@@ -569,6 +579,11 @@ async def link_server_complete(
     Used when OAuth opens in an external browser (e.g., from Telegram Mini App).
     Provider is resolved from the state token if not explicitly provided.
     """
+    # Rate limit by IP (unauthenticated endpoint)
+    client_ip = get_client_ip(raw_request)
+    if await RateLimitCache.is_ip_rate_limited(client_ip, 'server_complete', limit=10, window=60, fail_closed=True):
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail='Too many requests')
+
     # 1. Validate and consume state from Redis (one-time use).
     #    Provider may be None — validate_oauth_state will skip provider check,
     #    and we'll resolve it from state_data['provider'].
@@ -579,13 +594,27 @@ async def link_server_complete(
             detail='Invalid or expired OAuth state',
         )
 
-    # Resolve provider: prefer request, fall back to state data
-    provider_name: str = request.provider or state_data.get('provider', '')
-    if not provider_name or provider_name not in _OAUTH_PROVIDER_COLUMNS:
+    # Resolve provider from state data (canonical source)
+    state_provider: str = state_data.get('provider', '')
+    if not state_provider or state_provider not in OAUTH_PROVIDER_COLUMNS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Could not determine OAuth provider',
         )
+
+    # If request explicitly provides a provider, ensure it matches the state
+    if request.provider and request.provider != state_provider:
+        logger.warning(
+            'Provider mismatch in server-complete',
+            request_provider=request.provider,
+            state_provider=state_provider,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Provider does not match OAuth state',
+        )
+
+    provider_name: str = state_provider
 
     # 2. Must be a linking state (not login)
     if state_data.get('linking') != 'true' or not state_data.get('user_id'):
@@ -641,10 +670,16 @@ merge_router = APIRouter(prefix='/auth/merge', tags=['Cabinet Account Merge'])
 
 @merge_router.get('/{merge_token}', response_model=MergePreviewResponse)
 async def get_merge_preview_endpoint(
+    raw_request: Request,
     merge_token: str = Path(..., min_length=32, max_length=64),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> MergePreviewResponse:
     """Preview the result of merging two accounts before confirming."""
+    # Rate limit by IP (unauthenticated endpoint)
+    client_ip = get_client_ip(raw_request)
+    if await RateLimitCache.is_ip_rate_limited(client_ip, 'merge_preview', limit=15, window=60, fail_closed=True):
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail='Too many requests')
+
     token_data = await get_merge_token_data(merge_token)
     if not token_data:
         raise HTTPException(
@@ -685,10 +720,16 @@ async def get_merge_preview_endpoint(
 @merge_router.post('/{merge_token}', response_model=MergeResponse)
 async def execute_merge_endpoint(
     request: MergeRequest,
+    raw_request: Request,
     merge_token: str = Path(..., min_length=32, max_length=64),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> MergeResponse:
     """Execute account merge. Consumes the merge token (one-time use)."""
+    # Rate limit by IP (unauthenticated endpoint)
+    client_ip = get_client_ip(raw_request)
+    if await RateLimitCache.is_ip_rate_limited(client_ip, 'merge_execute', limit=5, window=60, fail_closed=True):
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail='Too many requests')
+
     # 1. Consume token atomically first (GETDEL — one-time use, no TOCTOU)
     consumed = await consume_merge_token(merge_token)
     if not consumed:
@@ -715,7 +756,7 @@ async def execute_merge_endpoint(
         'primary' if request.keep_subscription_from == primary_user_id else 'secondary'
     )
 
-    # 4. Execute merge
+    # 3. Execute merge
     try:
         merged_user = await execute_merge(
             db=db,
@@ -743,7 +784,7 @@ async def execute_merge_endpoint(
             detail='Account merge failed due to an internal error',
         ) from exc
 
-    # 5. Re-fetch merged user with full relationships for auth response
+    # 4. Re-fetch merged user with full relationships for auth response
     merged_user = await get_user_by_id(db, primary_user_id)
     if not merged_user:
         raise HTTPException(
@@ -751,7 +792,7 @@ async def execute_merge_endpoint(
             detail='Failed to load merged user',
         )
 
-    # 6. Create auth tokens for the merged user
+    # 5. Create auth tokens for the merged user
     try:
         auth_response = await _create_auth_response(merged_user, db)
         await _store_refresh_token(db, merged_user.id, auth_response.refresh_token, device_info='merge')

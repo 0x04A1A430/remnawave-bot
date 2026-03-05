@@ -101,12 +101,30 @@ async def consume_merge_token(token: str) -> dict[str, Any] | None:
     return data
 
 
+_MAX_MERGE_RESTORE_ATTEMPTS = 3
+
+
 async def restore_merge_token(token: str, data: dict[str, Any]) -> bool:
     """Re-store a consumed merge token so the user can retry after a DB failure.
 
     Uses the remaining TTL based on the original ``created_at``.
-    Returns ``True`` if restored, ``False`` if Redis write failed.
+    Uses SETNX to avoid overwriting a fresh token.
+    Caps restore attempts to prevent infinite retry cycles.
+    Returns ``True`` if restored, ``False`` if exhausted or Redis write failed.
     """
+    restore_count = data.get('_restore_count', 0) + 1
+    if restore_count > _MAX_MERGE_RESTORE_ATTEMPTS:
+        logger.warning(
+            'Merge token exhausted restore attempts',
+            primary_user_id=data.get('primary_user_id'),
+            secondary_user_id=data.get('secondary_user_id'),
+            restore_count=restore_count,
+        )
+        return False
+
+    # Shallow copy to avoid mutating the caller's dict
+    data = {**data, '_restore_count': restore_count}
+
     created_at_str: str = data.get('created_at', '')
     try:
         created_at = datetime.fromisoformat(created_at_str)
@@ -118,17 +136,18 @@ async def restore_merge_token(token: str, data: dict[str, Any]) -> bool:
         remaining_ttl = 60  # brief retry window — fail closed
 
     key = cache_key(MERGE_TOKEN_PREFIX, token)
-    stored = await cache.set(key, data, expire=remaining_ttl)
+    stored = await cache.setnx(key, data, expire=remaining_ttl)
     if stored:
         logger.info(
             'Merge token restored after failed merge',
             primary_user_id=data.get('primary_user_id'),
             secondary_user_id=data.get('secondary_user_id'),
             remaining_ttl=remaining_ttl,
+            restore_count=restore_count,
         )
     else:
         logger.error(
-            'Failed to restore merge token to Redis',
+            'Failed to restore merge token to Redis (key may already exist)',
             primary_user_id=data.get('primary_user_id'),
             secondary_user_id=data.get('secondary_user_id'),
         )

@@ -1259,7 +1259,9 @@ async def clear_email_change_pending(db: AsyncSession, user: User) -> None:
 
 # --- OAuth provider functions ---
 
-_OAUTH_PROVIDER_COLUMNS = {
+# Single source of truth: provider name → User model column name.
+# Imported by account_linking.py and account_merge_service.py.
+OAUTH_PROVIDER_COLUMNS: dict[str, str] = {
     'google': 'google_id',
     'yandex': 'yandex_id',
     'discord': 'discord_id',
@@ -1269,8 +1271,9 @@ _OAUTH_PROVIDER_COLUMNS = {
 
 async def get_user_by_oauth_provider(db: AsyncSession, provider: str, provider_id: str) -> User | None:
     """Find a user by OAuth provider ID."""
-    column_name = _OAUTH_PROVIDER_COLUMNS.get(provider)
+    column_name = OAUTH_PROVIDER_COLUMNS.get(provider)
     if not column_name:
+        logger.warning('Unknown OAuth provider in lookup', provider=provider)
         return None
     column = getattr(User, column_name)
     # VK uses BigInteger, so convert
@@ -1281,13 +1284,25 @@ async def get_user_by_oauth_provider(db: AsyncSession, provider: str, provider_i
 
 async def set_user_oauth_provider_id(db: AsyncSession, user: User, provider: str, provider_id: str) -> None:
     """Link an OAuth provider ID to an existing user."""
-    column_name = _OAUTH_PROVIDER_COLUMNS.get(provider)
+    column_name = OAUTH_PROVIDER_COLUMNS.get(provider)
     if not column_name:
+        logger.warning('Unknown OAuth provider in set', provider=provider, user_id=user.id)
         return
     value: str | int = int(provider_id) if provider == 'vk' else provider_id
     setattr(user, column_name, value)
     user.updated_at = datetime.now(UTC)
-    logger.info('Linked (id=) to user', provider=provider, provider_id=provider_id, user_id=user.id)
+    logger.info('OAuth provider linked to user', provider=provider, provider_id=provider_id, user_id=user.id)
+
+
+async def clear_user_oauth_provider_id(db: AsyncSession, user: User, provider: str) -> None:
+    """Unlink an OAuth provider from an existing user (set column to None)."""
+    column_name = OAUTH_PROVIDER_COLUMNS.get(provider)
+    if not column_name:
+        logger.warning('Unknown OAuth provider in clear', provider=provider, user_id=user.id)
+        return
+    setattr(user, column_name, None)
+    user.updated_at = datetime.now(UTC)
+    logger.info('Unlinked OAuth provider from user', provider=provider, user_id=user.id)
 
 
 async def create_user_by_oauth(
@@ -1307,7 +1322,7 @@ async def create_user_by_oauth(
     normalized_language = _normalize_language_code(language)
     default_group = await _get_or_create_default_promo_group(db)
 
-    column_name = _OAUTH_PROVIDER_COLUMNS.get(provider)
+    column_name = OAUTH_PROVIDER_COLUMNS.get(provider)
     provider_value: str | int = int(provider_id) if provider == 'vk' else provider_id
 
     user = User(
