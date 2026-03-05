@@ -7285,7 +7285,7 @@ async def purchase_traffic_topup_endpoint(
         db,
         user_id=user.id,
         type=TransactionType.SUBSCRIPTION_PAYMENT,
-        amount_kopeks=-final_price,
+        amount_kopeks=final_price,
         description=traffic_description,
     )
 

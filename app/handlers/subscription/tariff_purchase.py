@@ -894,7 +894,7 @@ async def handle_custom_confirm(
             db,
             user_id=db_user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
-            amount_kopeks=-total_price,
+            amount_kopeks=total_price,
             description=f'Покупка тарифа {tariff.name} на {custom_days} дней',
         )
 
@@ -1206,7 +1206,7 @@ async def confirm_tariff_purchase(
             db,
             user_id=db_user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
-            amount_kopeks=-final_price,
+            amount_kopeks=final_price,
             description=f'Покупка тарифа {tariff.name} на {period} дней',
         )
 
@@ -1389,7 +1389,7 @@ async def confirm_daily_tariff_purchase(
             db,
             user_id=db_user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
-            amount_kopeks=-daily_price,
+            amount_kopeks=daily_price,
             description=f'Покупка суточного тарифа {tariff.name} (первый день)',
         )
 
@@ -1750,7 +1750,7 @@ async def confirm_tariff_extend(
             db,
             user_id=db_user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
-            amount_kopeks=-final_price,
+            amount_kopeks=final_price,
             description=f'Продление тарифа {tariff.name} на {period} дней',
         )
 
@@ -2322,7 +2322,7 @@ async def confirm_tariff_switch(
             db,
             user_id=db_user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
-            amount_kopeks=-final_price,
+            amount_kopeks=final_price,
             description=f'Смена тарифа на {tariff.name}',
         )
 
@@ -2507,7 +2507,7 @@ async def confirm_daily_tariff_switch(
             db,
             user_id=db_user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
-            amount_kopeks=-daily_price,
+            amount_kopeks=daily_price,
             description=f'Смена на суточный тариф {tariff.name} (первый день)',
         )
 
@@ -3059,7 +3059,7 @@ async def confirm_instant_switch(
                         db,
                         user_id=db_user.id,
                         type=TransactionType.SUBSCRIPTION_PAYMENT,
-                        amount_kopeks=-daily_price,
+                        amount_kopeks=daily_price,
                         description=f'Переключение на суточный тариф {new_tariff.name} (первый день)',
                     )
 
@@ -3104,7 +3104,7 @@ async def confirm_instant_switch(
                 db,
                 user_id=db_user.id,
                 type=TransactionType.SUBSCRIPTION_PAYMENT,
-                amount_kopeks=-upgrade_cost,
+                amount_kopeks=upgrade_cost,
                 description=f'Переключение на тариф {new_tariff.name}',
             )
 

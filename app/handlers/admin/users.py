@@ -5009,7 +5009,7 @@ async def admin_buy_tariff_execute(callback: types.CallbackQuery, db_user: User,
             db,
             user_id=target_user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
-            amount_kopeks=-price_kopeks,
+            amount_kopeks=price_kopeks,
             description=f'Покупка тарифа {tariff.name} на {period} дней (администратор)',
         )
 
