@@ -19,8 +19,9 @@ import structlog
 from aiogram.types import FSInputFile
 from sqlalchemy import inspect, select, text
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import selectinload
+from sqlalchemy.pool import NullPool
 
 from app.config import settings
 from app.database.database import AsyncSessionLocal, engine, sync_postgres_sequences
@@ -1519,24 +1520,48 @@ class BackupService:
         if not tables_to_truncate:
             return
 
-        # TRUNCATE CASCADE — одна команда для всех таблиц.
-        # CASCADE автоматически очищает любые таблицы с FK-ссылками,
-        # даже если они не в нашем списке. Это решает проблему с admin_audit_log и др.
-        tables_str = ', '.join(tables_to_truncate)
+        # TRUNCATE CASCADE requires ACCESS EXCLUSIVE locks on all affected tables
+        # and can take a long time with 80+ tables. The main engine has command_timeout=30s
+        # which is too short. Use a dedicated connection with extended timeouts.
+        from app.database.database import DATABASE_URL
+
+        truncate_engine = create_async_engine(
+            DATABASE_URL,
+            connect_args={
+                'server_settings': {
+                    'statement_timeout': '300000',  # 5 минут
+                    'lock_timeout': '120000',  # 2 минуты ожидания блокировок
+                },
+                'command_timeout': 300,
+            },
+            poolclass=NullPool,
+        )
         try:
-            await db.execute(text(f'TRUNCATE {tables_str} RESTART IDENTITY CASCADE'))
+            tables_str = ', '.join(tables_to_truncate)
+            async with truncate_engine.begin() as conn:
+                await conn.execute(text(f'TRUNCATE {tables_str} RESTART IDENTITY CASCADE'))
             logger.info('🗑️ Очищены все таблицы', tables_count=len(tables_to_truncate))
         except Exception as e:
-            logger.error('❌ Ошибка TRUNCATE CASCADE, пробуем поштучно с savepoints', error=e)
-            await db.rollback()
-            # Fallback: поштучная очистка с savepoints
+            logger.error('❌ Ошибка TRUNCATE CASCADE, пробуем поштучно', error=e)
+            # Fallback: поштучная очистка, каждая в отдельном соединении
+            # чтобы PendingRollbackError не каскадировал на остальные таблицы
+            failed_tables = []
             for table_name in tables_to_truncate:
                 try:
-                    async with db.begin_nested():
-                        await db.execute(text(f'TRUNCATE {table_name} CASCADE'))
+                    async with truncate_engine.begin() as conn:
+                        await conn.execute(text(f'TRUNCATE {table_name} CASCADE'))
                     logger.info('🗑️ Очищена таблица', table_name=table_name)
                 except Exception as table_err:
                     logger.warning('⚠️ Не удалось очистить таблицу', table_name=table_name, error=table_err)
+                    failed_tables.append(table_name)
+            if failed_tables:
+                logger.warning(
+                    '⚠️ Не удалось очистить таблицы',
+                    failed_tables=failed_tables,
+                    count=len(failed_tables),
+                )
+        finally:
+            await truncate_engine.dispose()
 
     async def _collect_file_snapshots(self) -> dict[str, dict[str, Any]]:
         return {}
