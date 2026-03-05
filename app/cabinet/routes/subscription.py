@@ -998,9 +998,13 @@ async def purchase_devices_legacy(
             detail='Subscription purchases are restricted for this account',
         )
 
-    await db.refresh(user, ['subscription'])
+    # Lock subscription row to prevent concurrent device purchases exceeding the limit
+    result = await db.execute(
+        select(Subscription).where(Subscription.user_id == user.id).with_for_update()
+    )
+    subscription = result.scalar_one_or_none()
 
-    if not user.subscription:
+    if not subscription:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail='No subscription found',
@@ -1017,6 +1021,17 @@ async def purchase_devices_legacy(
     # Ensure minimum price after discount (except for 100% discount)
     if devices_discount_percent < 100 and total_price > 0:
         total_price = max(100, total_price)
+
+    # Check max devices limit (under row lock — prevents concurrent purchases exceeding limit)
+    current_devices = subscription.device_limit or 1
+    new_devices = current_devices + request.devices
+    max_devices = settings.MAX_DEVICES_LIMIT
+
+    if new_devices > max_devices:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f'Maximum device limit is {max_devices}',
+        )
 
     # Check balance
     if user.balance_kopeks < total_price:
@@ -1053,17 +1068,6 @@ async def purchase_devices_legacy(
             },
         )
 
-    # Check max devices limit
-    current_devices = user.subscription.device_limit or 1
-    new_devices = current_devices + request.devices
-    max_devices = settings.MAX_DEVICES_LIMIT
-
-    if new_devices > max_devices:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'Maximum device limit is {max_devices}',
-        )
-
     # Deduct balance and create transaction
     from app.database.crud.user import subtract_user_balance
     from app.database.models import PaymentMethod
@@ -1089,7 +1093,7 @@ async def purchase_devices_legacy(
         )
 
     # Add devices
-    user.subscription.device_limit = new_devices
+    subscription.device_limit = new_devices
 
     await db.commit()
     await db.refresh(user)
@@ -2292,8 +2296,11 @@ async def purchase_devices(
         )
 
     try:
-        await db.refresh(user, ['subscription'])
-        subscription = user.subscription
+        # Lock subscription row to prevent concurrent device purchases exceeding the limit
+        result = await db.execute(
+            select(Subscription).where(Subscription.user_id == user.id).with_for_update()
+        )
+        subscription = result.scalar_one_or_none()
 
         if not subscription:
             raise HTTPException(
@@ -2329,7 +2336,7 @@ async def purchase_devices(
                 detail='Докупка устройств недоступна',
             )
 
-        # Check max device limit
+        # Check max device limit (under row lock — prevents concurrent purchases exceeding limit)
         current_devices = subscription.device_limit or 1
         new_device_count = current_devices + request.devices
         if max_device_limit and new_device_count > max_device_limit:

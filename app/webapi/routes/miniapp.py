@@ -6113,6 +6113,12 @@ async def update_subscription_devices_endpoint(
             },
         )
 
+    # Re-read subscription under row lock to prevent concurrent device purchases exceeding limit
+    locked_result = await db.execute(
+        select(Subscription).where(Subscription.id == subscription.id).with_for_update()
+    )
+    subscription = locked_result.scalar_one()
+
     current_devices_value = subscription.device_limit
     if current_devices_value is None:
         fallback_value = settings.DEFAULT_DEVICE_LIMIT or 1
