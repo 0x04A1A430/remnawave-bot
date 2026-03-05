@@ -617,7 +617,14 @@ async def execute_merge(
         .values(referrer_id=primary.id)
     )
 
-    # 10i. Переназначение promocode_uses (без unique constraint — простое переназначение)
+    # 10i. Переназначение promocode_uses (unique constraint: user_id + promocode_id)
+    primary_promo_ids = select(PromoCodeUse.promocode_id).where(PromoCodeUse.user_id == primary.id)
+    await db.execute(
+        delete(PromoCodeUse).where(
+            PromoCodeUse.user_id == secondary.id,
+            PromoCodeUse.promocode_id.in_(primary_promo_ids),
+        )
+    )
     await db.execute(update(PromoCodeUse).where(PromoCodeUse.user_id == secondary.id).values(user_id=primary.id))
 
     # 10j. Переназначение partner_applications
