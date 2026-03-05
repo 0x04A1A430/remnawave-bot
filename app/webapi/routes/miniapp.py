@@ -5328,6 +5328,7 @@ async def submit_subscription_renewal_endpoint(
                 # Списываем баланс (subtract_user_balance делает commit и обновляет user.balance_kopeks)
                 success = await subtract_user_balance(
                     db, user, final_total, description,
+                    consume_promo_offer=promo_offer_discount_percent > 0,
                     mark_as_paid_subscription=True,
                 )
                 if not success:
