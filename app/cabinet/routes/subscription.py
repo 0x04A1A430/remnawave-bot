@@ -1309,6 +1309,7 @@ async def activate_trial(
             )
         success = await subtract_user_balance(
             db, user, price_kopeks, 'Активация триальной подписки',
+            mark_as_paid_subscription=True,
         )
         if not success:
             raise HTTPException(

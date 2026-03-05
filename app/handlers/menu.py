@@ -1337,6 +1337,15 @@ async def handle_activate_button(callback: types.CallbackQuery, db_user: User, d
                 show_alert=True,
             )
         else:
+            # Списать баланс ДО создания подписки (чтобы не было orphaned subscription при неудаче)
+            success = await subtract_user_balance(
+                db, db_user, best_price, f'Активация подписки на {best_period} дней',
+                mark_as_paid_subscription=True,
+            )
+            if not success:
+                await callback.answer('❌ Недостаточно средств', show_alert=True)
+                return
+
             # Создание новой подписки
             new_subscription = await create_paid_subscription(
                 db,
@@ -1347,15 +1356,6 @@ async def handle_activate_button(callback: types.CallbackQuery, db_user: User, d
                 connected_squads=connected_squads,
                 update_server_counters=True,
             )
-
-            # Списать баланс правильно
-            success = await subtract_user_balance(
-                db, db_user, best_price, f'Активация подписки на {best_period} дней',
-                mark_as_paid_subscription=True,
-            )
-            if not success:
-                await callback.answer('❌ Недостаточно средств', show_alert=True)
-                return
 
             # Создать пользователя в RemnaWave
             await subscription_service.create_remnawave_user(db, new_subscription)

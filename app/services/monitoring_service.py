@@ -12,7 +12,6 @@ from sqlalchemy.orm import selectinload
 from app.config import settings
 from app.database.crud.discount_offer import (
     deactivate_expired_offers,
-    get_latest_claimed_offer_for_user,
     upsert_discount_offer,
 )
 from app.database.crud.notification import (
@@ -20,7 +19,6 @@ from app.database.crud.notification import (
     notification_sent,
     record_notification,
 )
-from app.database.crud.promo_offer_log import log_promo_offer_action
 from app.database.crud.subscription import (
     deactivate_subscription,
     extend_subscription,
@@ -957,62 +955,6 @@ class MonitoringService:
             return 0
 
         return max(0, min(100, percent))
-
-    @staticmethod
-    async def _consume_user_promo_offer_discount(db: AsyncSession, user: User) -> None:
-        percent = MonitoringService._get_user_promo_offer_discount_percent(user)
-        if percent <= 0:
-            return
-
-        source = getattr(user, 'promo_offer_discount_source', None)
-        log_payload = {
-            'offer_id': None,
-            'percent': percent,
-            'source': source,
-            'effect_type': None,
-        }
-
-        try:
-            offer = await get_latest_claimed_offer_for_user(db, user.id, source)
-        except Exception as lookup_error:  # pragma: no cover - defensive logging
-            logger.warning(
-                'Failed to resolve latest claimed promo offer for user', user_id=user.id, lookup_error=lookup_error
-            )
-            offer = None
-
-        if offer:
-            log_payload['offer_id'] = offer.id
-            log_payload['effect_type'] = offer.effect_type
-            if not log_payload['percent'] and offer.discount_percent:
-                log_payload['percent'] = offer.discount_percent
-
-        user.promo_offer_discount_percent = 0
-        user.promo_offer_discount_source = None
-        user.promo_offer_discount_expires_at = None
-        user.updated_at = datetime.now(UTC)
-
-        await db.commit()
-        await db.refresh(user)
-
-        try:
-            await log_promo_offer_action(
-                db,
-                user_id=user.id,
-                offer_id=log_payload.get('offer_id'),
-                action='consumed',
-                source=log_payload.get('source'),
-                percent=log_payload.get('percent'),
-                effect_type=log_payload.get('effect_type'),
-                details={'reason': 'autopay_consumed'},
-            )
-        except Exception as log_error:  # pragma: no cover - defensive logging
-            logger.warning('Failed to record promo offer autopay log for user', user_id=user.id, log_error=log_error)
-            try:
-                await db.rollback()
-            except Exception as rollback_error:  # pragma: no cover - defensive logging
-                logger.warning(
-                    'Failed to rollback session after promo offer autopay log failure', rollback_error=rollback_error
-                )
 
     async def _process_autopayments(self, db: AsyncSession):
         try:

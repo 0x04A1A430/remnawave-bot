@@ -306,9 +306,9 @@ async def _prepare_auto_extend_context(
         traffic_limit_gb = _safe_int(traffic_limit_gb, subscription.traffic_limit_gb or 0)
 
     squad_uuid = cart_data.get('squad_uuid')
-    from app.utils.promo_offer import get_user_active_promo_discount_percent as _get_promo
+    from app.utils.promo_offer import get_user_active_promo_discount_percent
 
-    consume_promo_offer = _get_promo(user) > 0
+    consume_promo_offer = get_user_active_promo_discount_percent(user) > 0
     allowed_squads = cart_data.get('allowed_squads')
 
     return AutoExtendContext(
