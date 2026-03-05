@@ -221,7 +221,7 @@ async def get_transactions_statistics(
     total_income = income_result.scalar()
 
     expenses_result = await db.execute(
-        select(func.coalesce(func.sum(Transaction.amount_kopeks), 0)).where(
+        select(func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0)).where(
             and_(
                 Transaction.type == TransactionType.WITHDRAWAL.value,
                 Transaction.is_completed == True,

@@ -383,7 +383,7 @@ async def get_contest_payment_stats(
 
     # Общая сумма (только за рефералов зарегистрированных в период конкурса)
     total_result = await db.execute(
-        select(func.coalesce(func.sum(ReferralContestEvent.amount_kopeks), 0)).where(
+        select(func.coalesce(func.sum(func.abs(ReferralContestEvent.amount_kopeks)), 0)).where(
             and_(
                 ReferralContestEvent.contest_id == contest_id,
                 ReferralContestEvent.occurred_at >= contest_start,

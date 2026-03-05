@@ -601,8 +601,8 @@ async def get_user_detail(
         UserTransactionItem(
             id=t.id,
             type=t.type,
-            amount_kopeks=-t.amount_kopeks if t.type in _EXPENSE_TYPES else t.amount_kopeks,
-            amount_rubles=-t.amount_kopeks / 100 if t.type in _EXPENSE_TYPES else t.amount_kopeks / 100,
+            amount_kopeks=abs(t.amount_kopeks) if t.type in _EXPENSE_TYPES else t.amount_kopeks,
+            amount_rubles=abs(t.amount_kopeks) / 100 if t.type in _EXPENSE_TYPES else t.amount_kopeks / 100,
             description=t.description,
             payment_method=t.payment_method,
             is_completed=t.is_completed,
@@ -2147,8 +2147,8 @@ async def get_user_transactions(
         UserTransactionItem(
             id=t.id,
             type=t.type,
-            amount_kopeks=-t.amount_kopeks if t.type in _EXPENSE_TYPES else t.amount_kopeks,
-            amount_rubles=-t.amount_kopeks / 100 if t.type in _EXPENSE_TYPES else t.amount_kopeks / 100,
+            amount_kopeks=abs(t.amount_kopeks) if t.type in _EXPENSE_TYPES else t.amount_kopeks,
+            amount_rubles=abs(t.amount_kopeks) / 100 if t.type in _EXPENSE_TYPES else t.amount_kopeks / 100,
             description=t.description,
             payment_method=t.payment_method,
             is_completed=t.is_completed,
