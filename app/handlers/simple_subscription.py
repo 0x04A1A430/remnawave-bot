@@ -433,11 +433,12 @@ async def handle_simple_subscription_pay_with_balance(
         # Списываем средства с баланса пользователя
         from app.database.crud.user import subtract_user_balance
 
+        purchase_description = f'Оплата подписки на {subscription_params["period_days"]} дней'
         success = await subtract_user_balance(
             db,
             db_user,
             price_kopeks,
-            f'Оплата подписки на {subscription_params["period_days"]} дней',
+            purchase_description,
             consume_promo_offer=False,
             mark_as_paid_subscription=True,
         )
@@ -445,6 +446,19 @@ async def handle_simple_subscription_pay_with_balance(
         if not success:
             await callback.answer('❌ Ошибка списания средств с баланса', show_alert=True)
             return
+
+        # Создаём транзакцию для учёта списания
+        from app.database.crud.transaction import create_transaction
+        from app.database.models import PaymentMethod, TransactionType
+
+        transaction = await create_transaction(
+            db,
+            user_id=db_user.id,
+            type=TransactionType.SUBSCRIPTION_PAYMENT,
+            amount_kopeks=price_kopeks,
+            description=purchase_description,
+            payment_method=PaymentMethod.BALANCE,
+        )
 
         # Проверяем, есть ли у пользователя уже подписка
         from app.database.crud.subscription import extend_subscription, get_subscription_by_user_id
@@ -631,7 +645,7 @@ async def handle_simple_subscription_pay_with_balance(
                 db,
                 db_user,
                 subscription,
-                None,  # transaction
+                transaction,
                 subscription_params['period_days'],
                 False,  # was_trial_conversion
                 amount_kopeks=price_kopeks,
@@ -2138,11 +2152,12 @@ async def confirm_simple_subscription_purchase(
         # Списываем средства с баланса пользователя
         from app.database.crud.user import subtract_user_balance
 
+        purchase_description = f'Оплата подписки на {subscription_params["period_days"]} дней'
         success = await subtract_user_balance(
             db,
             db_user,
             price_kopeks,
-            f'Оплата подписки на {subscription_params["period_days"]} дней',
+            purchase_description,
             consume_promo_offer=False,
             mark_as_paid_subscription=True,
         )
@@ -2150,6 +2165,19 @@ async def confirm_simple_subscription_purchase(
         if not success:
             await callback.answer('❌ Ошибка списания средств с баланса', show_alert=True)
             return
+
+        # Создаём транзакцию для учёта списания
+        from app.database.crud.transaction import create_transaction
+        from app.database.models import PaymentMethod, TransactionType
+
+        transaction = await create_transaction(
+            db,
+            user_id=db_user.id,
+            type=TransactionType.SUBSCRIPTION_PAYMENT,
+            amount_kopeks=price_kopeks,
+            description=purchase_description,
+            payment_method=PaymentMethod.BALANCE,
+        )
 
         # Проверяем, есть ли у пользователя уже подписка
         from app.database.crud.subscription import extend_subscription, get_subscription_by_user_id
@@ -2336,7 +2364,7 @@ async def confirm_simple_subscription_purchase(
                 db,
                 db_user,
                 subscription,
-                None,  # transaction
+                transaction,
                 subscription_params['period_days'],
                 False,  # was_trial_conversion
                 amount_kopeks=price_kopeks,

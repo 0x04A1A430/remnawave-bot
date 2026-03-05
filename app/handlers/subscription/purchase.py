@@ -16,7 +16,7 @@ from app.database.crud.subscription import (
 )
 from app.database.crud.transaction import create_transaction
 from app.database.crud.user import subtract_user_balance
-from app.database.models import Subscription, SubscriptionStatus, TransactionType, User
+from app.database.models import PaymentMethod, Subscription, SubscriptionStatus, TransactionType, User
 from app.keyboards.inline import (
     get_back_keyboard,
     get_countries_keyboard,
@@ -3300,6 +3300,17 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
     if not success:
         await callback.answer(texts.t('PAYMENT_FAILED', '❌ Не удалось списать средства'), show_alert=True)
         return
+
+    # Создаём транзакцию для учёта списания за триал
+    trial_description = texts.t('TRIAL_PAYMENT_DESCRIPTION', 'Оплата пробной подписки')
+    await create_transaction(
+        db,
+        user_id=db_user.id,
+        type=TransactionType.SUBSCRIPTION_PAYMENT,
+        amount_kopeks=trial_price_kopeks,
+        description=trial_description,
+        payment_method=PaymentMethod.BALANCE,
+    )
 
     await db.refresh(db_user)
 

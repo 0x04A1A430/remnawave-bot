@@ -21,7 +21,7 @@ from app.database.crud.subscription import (
 from app.database.crud.tariff import get_tariff_by_id, get_tariffs_for_user
 from app.database.crud.transaction import create_transaction
 from app.database.crud.user import subtract_user_balance
-from app.database.models import ServerSquad, Subscription, Tariff, TransactionType, User
+from app.database.models import PaymentMethod, ServerSquad, Subscription, Tariff, TransactionType, User
 from app.services.notification_delivery_service import (
     NotificationType,
     notification_delivery_service,
@@ -537,11 +537,12 @@ async def renew_subscription(
     # Deduct balance (centralized: row-level lock, promo consumption, paid subscription flag)
     from app.database.crud.user import subtract_user_balance
 
+    renewal_description = f'Продление подписки на {request.period_days} дней' + (f' ({tariff.name})' if tariff else '')
     success = await subtract_user_balance(
         db,
         user,
         price_kopeks,
-        f'Продление подписки на {request.period_days} дней' + (f' ({tariff.name})' if tariff else ''),
+        renewal_description,
         consume_promo_offer=promo_offer_discount_value > 0,
         mark_as_paid_subscription=True,
     )
@@ -553,6 +554,16 @@ async def renew_subscription(
                 'message': 'Недостаточно средств (concurrent check)',
             },
         )
+
+    # Создаём транзакцию для учёта списания
+    transaction = await create_transaction(
+        db,
+        user_id=user.id,
+        type=TransactionType.SUBSCRIPTION_PAYMENT,
+        amount_kopeks=price_kopeks,
+        description=renewal_description,
+        payment_method=PaymentMethod.BALANCE,
+    )
 
     await db.refresh(user, ['subscription'])
 
@@ -628,7 +639,7 @@ async def renew_subscription(
                     db=db,
                     user=user,
                     subscription=user.subscription,
-                    transaction=None,
+                    transaction=transaction,
                     period_days=request.period_days,
                     was_trial_conversion=False,
                     amount_kopeks=price_kopeks,
@@ -1339,11 +1350,12 @@ async def activate_trial(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f'Insufficient balance. Need {price_kopeks / 100:.2f} RUB',
             )
+        trial_description = 'Активация триальной подписки'
         success = await subtract_user_balance(
             db,
             user,
             price_kopeks,
-            'Активация триальной подписки',
+            trial_description,
             mark_as_paid_subscription=True,
         )
         if not success:
@@ -1351,6 +1363,17 @@ async def activate_trial(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
                 detail='Failed to charge trial activation fee',
             )
+
+        # Создаём транзакцию для учёта списания за триал
+        await create_transaction(
+            db,
+            user_id=user.id,
+            type=TransactionType.SUBSCRIPTION_PAYMENT,
+            amount_kopeks=price_kopeks,
+            description=trial_description,
+            payment_method=PaymentMethod.BALANCE,
+        )
+
         logger.info('User paid kopeks for trial activation', user_id=user.id, price_kopeks=price_kopeks)
 
     # Get trial parameters from tariff if configured (same logic as bot handler)
@@ -1830,7 +1853,7 @@ async def submit_purchase(
                         db=db,
                         user=user,
                         subscription=subscription,
-                        transaction=None,
+                        transaction=result.get('transaction'),
                         period_days=selection.period.days,
                         was_trial_conversion=result.get('was_trial_conversion', False),
                         amount_kopeks=pricing.final_total,
@@ -2130,12 +2153,13 @@ async def purchase_tariff(
             )
 
         # Create transaction
-        await create_transaction(
+        transaction = await create_transaction(
             db=db,
             user_id=user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
             amount_kopeks=price_kopeks,
             description=description,
+            payment_method=PaymentMethod.BALANCE,
         )
 
         if subscription:
@@ -2283,7 +2307,7 @@ async def purchase_tariff(
                         db=db,
                         user=user,
                         subscription=subscription,
-                        transaction=None,
+                        transaction=transaction,
                         period_days=period_days,
                         was_trial_conversion=False,
                         amount_kopeks=price_kopeks,
@@ -4268,12 +4292,13 @@ async def switch_tariff(
             )
 
         # Create transaction
-        await create_transaction(
+        switch_transaction = await create_transaction(
             db=db,
             user_id=user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
             amount_kopeks=upgrade_cost,
             description=description,
+            payment_method=PaymentMethod.BALANCE,
         )
 
     # Update subscription
@@ -4357,7 +4382,7 @@ async def switch_tariff(
                     db=db,
                     user=user,
                     subscription=user.subscription,
-                    transaction=None,
+                    transaction=switch_transaction if upgrade_cost > 0 else None,
                     period_days=remaining_days if remaining_days > 0 else new_period_days,
                     was_trial_conversion=False,
                     amount_kopeks=upgrade_cost,
