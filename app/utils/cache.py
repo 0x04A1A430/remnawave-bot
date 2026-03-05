@@ -4,8 +4,8 @@ from datetime import timedelta
 from typing import Any
 
 import redis.asyncio as redis
-import redis.exceptions
 import structlog
+from redis.exceptions import NoScriptError
 
 from app.config import settings
 
@@ -383,7 +383,7 @@ return c
                     key,
                     window,
                 )
-            except redis.exceptions.NoScriptError:
+            except NoScriptError:
                 # SHA evicted from Redis script cache — reload and retry
                 RateLimitCache._rate_limit_sha = await cache.redis_client.script_load(
                     RateLimitCache._RATE_LIMIT_SCRIPT,
