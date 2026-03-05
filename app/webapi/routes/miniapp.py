@@ -5327,7 +5327,10 @@ async def submit_subscription_renewal_endpoint(
             try:
                 # Списываем баланс (subtract_user_balance делает commit и обновляет user.balance_kopeks)
                 success = await subtract_user_balance(
-                    db, user, final_total, description,
+                    db,
+                    user,
+                    final_total,
+                    description,
                     consume_promo_offer=promo_offer_discount_percent > 0,
                     mark_as_paid_subscription=True,
                 )
@@ -5348,7 +5351,7 @@ async def submit_subscription_renewal_endpoint(
                     db,
                     user_id=user.id,
                     type=TransactionType.SUBSCRIPTION_PAYMENT,
-                    amount_kopeks=-final_total,
+                    amount_kopeks=final_total,
                     description=description,
                 )
 
@@ -6575,7 +6578,10 @@ async def purchase_tariff_endpoint(
     else:
         description = f"Покупка тарифа '{tariff.name}' на {payload.period_days} дней"
     success = await subtract_user_balance(
-        db, user, price_kopeks, description,
+        db,
+        user,
+        price_kopeks,
+        description,
         mark_as_paid_subscription=True,
     )
     if not success:
@@ -6956,7 +6962,10 @@ async def switch_tariff_endpoint(
         else:
             description = f"Переход на тариф '{new_tariff.name}' (доплата за {remaining_days} дней)"
         success = await subtract_user_balance(
-            db, user, upgrade_cost, description,
+            db,
+            user,
+            upgrade_cost,
+            description,
             mark_as_paid_subscription=True,
         )
         if not success:

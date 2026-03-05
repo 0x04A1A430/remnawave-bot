@@ -1339,7 +1339,10 @@ async def handle_activate_button(callback: types.CallbackQuery, db_user: User, d
         else:
             # Списать баланс ДО создания подписки (чтобы не было orphaned subscription при неудаче)
             success = await subtract_user_balance(
-                db, db_user, best_price, f'Активация подписки на {best_period} дней',
+                db,
+                db_user,
+                best_price,
+                f'Активация подписки на {best_period} дней',
                 mark_as_paid_subscription=True,
             )
             if not success:

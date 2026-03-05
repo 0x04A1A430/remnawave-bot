@@ -538,9 +538,10 @@ async def renew_subscription(
     from app.database.crud.user import subtract_user_balance
 
     success = await subtract_user_balance(
-        db, user, price_kopeks,
-        f'Продление подписки на {request.period_days} дней'
-        + (f' ({tariff.name})' if tariff else ''),
+        db,
+        user,
+        price_kopeks,
+        f'Продление подписки на {request.period_days} дней' + (f' ({tariff.name})' if tariff else ''),
         consume_promo_offer=promo_offer_discount_value > 0,
         mark_as_paid_subscription=True,
     )
@@ -1308,7 +1309,10 @@ async def activate_trial(
                 detail=f'Insufficient balance. Need {price_kopeks / 100:.2f} RUB',
             )
         success = await subtract_user_balance(
-            db, user, price_kopeks, 'Активация триальной подписки',
+            db,
+            user,
+            price_kopeks,
+            'Активация триальной подписки',
             mark_as_paid_subscription=True,
         )
         if not success:
@@ -4184,7 +4188,10 @@ async def switch_tariff(
             description += f' (скидка {period_discount_percent}%)'
 
         success = await subtract_user_balance(
-            db, user, upgrade_cost, description,
+            db,
+            user,
+            upgrade_cost,
+            description,
             mark_as_paid_subscription=True,
         )
         if not success:

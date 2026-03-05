@@ -4507,7 +4507,10 @@ async def admin_buy_subscription_execute(callback: types.CallbackQuery, db_user:
         from app.database.crud.user import subtract_user_balance
 
         success = await subtract_user_balance(
-            db, target_user, price_kopeks, f'Покупка подписки на {period_days} дней (администратор)',
+            db,
+            target_user,
+            price_kopeks,
+            f'Покупка подписки на {period_days} дней (администратор)',
             mark_as_paid_subscription=True,
         )
 
@@ -4949,7 +4952,10 @@ async def admin_buy_tariff_execute(callback: types.CallbackQuery, db_user: User,
 
         # Списываем баланс
         success = await subtract_user_balance(
-            db, target_user, price_kopeks, f'Покупка тарифа {tariff.name} на {period} дней (администратор)',
+            db,
+            target_user,
+            price_kopeks,
+            f'Покупка тарифа {tariff.name} на {period} дней (администратор)',
             mark_as_paid_subscription=True,
         )
 

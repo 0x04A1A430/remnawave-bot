@@ -59,6 +59,7 @@ from app.services.promo_offer_service import promo_offer_service
 from app.services.subscription_service import SubscriptionService
 from app.utils.cache import cache
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button
+from app.utils.promo_offer import get_user_active_promo_discount_percent
 from app.utils.subscription_utils import (
     resolve_hwid_device_limit_for_payload,
 )
@@ -940,22 +941,6 @@ class MonitoringService:
 
         return subscriptions
 
-    @staticmethod
-    def _get_user_promo_offer_discount_percent(user: User | None) -> int:
-        if not user:
-            return 0
-
-        try:
-            percent = int(getattr(user, 'promo_offer_discount_percent', 0) or 0)
-        except (TypeError, ValueError):
-            return 0
-
-        expires_at = getattr(user, 'promo_offer_discount_expires_at', None)
-        if expires_at and expires_at <= datetime.now(UTC):
-            return 0
-
-        return max(0, min(100, percent))
-
     async def _process_autopayments(self, db: AsyncSession):
         try:
             current_time = datetime.now(UTC)
@@ -1059,7 +1044,7 @@ class MonitoringService:
                 # calculate_renewal_price уже включает promo_group + promo_offer скидки.
                 # Не применяем promo_offer повторно — только consume-им при успешной оплате.
                 charge_amount = renewal_cost
-                promo_discount_percent = self._get_user_promo_offer_discount_percent(user)
+                promo_discount_percent = get_user_active_promo_discount_percent(user)
 
                 autopay_key = f'autopay_{user.id}_{subscription.id}'
                 if autopay_key in self._notified_users:
@@ -1067,7 +1052,10 @@ class MonitoringService:
 
                 if user.balance_kopeks >= charge_amount:
                     success = await subtract_user_balance(
-                        db, user, charge_amount, 'Автопродление подписки',
+                        db,
+                        user,
+                        charge_amount,
+                        'Автопродление подписки',
                         consume_promo_offer=promo_discount_percent > 0,
                         mark_as_paid_subscription=True,
                     )
