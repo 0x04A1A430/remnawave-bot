@@ -54,7 +54,7 @@ def _build_spending_stats_select():
                 case(
                     (
                         Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
-                        Transaction.amount_kopeks,
+                        func.abs(Transaction.amount_kopeks),
                     ),
                     else_=0,
                 )

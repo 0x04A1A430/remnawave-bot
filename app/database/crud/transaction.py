@@ -39,8 +39,8 @@ async def create_transaction(
     is_completed: bool = True,
     created_at: datetime | None = None,
 ) -> Transaction:
-    # SUBSCRIPTION_PAYMENT and WITHDRAWAL are debits — always store as negative
-    if type in (TransactionType.SUBSCRIPTION_PAYMENT, TransactionType.WITHDRAWAL) and amount_kopeks > 0:
+    # SUBSCRIPTION_PAYMENT — always store as negative (debit from user balance)
+    if type == TransactionType.SUBSCRIPTION_PAYMENT and amount_kopeks > 0:
         amount_kopeks = -amount_kopeks
 
     transaction = Transaction(
@@ -248,7 +248,7 @@ async def get_transactions_statistics(
         select(
             Transaction.type,
             func.count(Transaction.id).label('count'),
-            func.coalesce(func.sum(Transaction.amount_kopeks), 0).label('total_amount'),
+            func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0).label('total_amount'),
         )
         .where(
             and_(

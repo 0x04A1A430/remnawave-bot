@@ -262,7 +262,9 @@ async def stats_full(
     users_stats = await get_users_statistics(db)
     subscriptions_stats = await get_subscriptions_statistics(db)
     trial_stats = await get_trial_statistics(db)
-    transactions_stats = await get_transactions_statistics(db)
+    transactions_stats = await get_transactions_statistics(
+        db, start_date=datetime(2020, 1, 1, tzinfo=UTC), end_date=datetime.now(UTC)
+    )
     referral_stats = await get_referral_statistics(db)
 
     transactions_totals = transactions_stats.get('totals', {})
