@@ -38,6 +38,7 @@ from app.services.user_cart_service import user_cart_service
 from app.utils.cache import RateLimitCache, cache, cache_key
 from app.utils.pricing_utils import format_period_description
 from app.utils.promo_offer import get_user_active_promo_discount_percent
+from app.utils.user_utils import mark_user_as_had_paid_subscription
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 from ..schemas.subscription import (
@@ -506,6 +507,7 @@ async def renew_subscription(
             'description': f'Продление подписки на {request.period_days} дней'
             + (f' ({tariff_name})' if tariff_name else ''),
             'discount_percent': discount_percent,
+            'consume_promo_offer': promo_offer_discount_value > 0,
             'source': 'cabinet',
         }
 
@@ -579,6 +581,9 @@ async def renew_subscription(
             user.subscription.traffic_used_gb = 0.0
 
     await db.commit()
+
+    # Mark user as having had a paid subscription (prevents first_purchase_only promo reuse)
+    await mark_user_as_had_paid_subscription(db, user)
 
     # Синхронизируем с RemnaWave
     try:
@@ -1992,6 +1997,7 @@ async def purchase_tariff(
                     'traffic_limit_gb': tariff.traffic_limit_gb,
                     'device_limit': effective_device_limit,
                     'allowed_squads': tariff.allowed_squads or [],
+                    'consume_promo_offer': promo_offer_discount_value > 0,
                     'source': 'cabinet',
                 }
             else:
@@ -2009,6 +2015,7 @@ async def purchase_tariff(
                     'device_limit': effective_device_limit,
                     'allowed_squads': tariff.allowed_squads or [],
                     'discount_percent': discount_percent,
+                    'consume_promo_offer': promo_offer_discount_value > 0,
                     'source': 'cabinet',
                 }
 
@@ -2122,6 +2129,9 @@ async def purchase_tariff(
                 )
         except Exception as remnawave_error:
             logger.error('Failed to sync subscription with RemnaWave', remnawave_error=remnawave_error)
+
+        # Mark user as having had a paid subscription (prevents first_purchase_only promo reuse)
+        await mark_user_as_had_paid_subscription(db, user)
 
         # Save cart for auto-renewal (not for daily tariffs - they have their own charging)
         if not is_daily_tariff:
