@@ -509,10 +509,12 @@ async def _auto_extend_subscription(
     new_end_date = updated_subscription.end_date
     end_date_label = format_local_datetime(new_end_date, '%d.%m.%Y %H:%M')
 
-    if bot:
-        try:
-            notification_service = AdminNotificationService(bot)
-            await notification_service.send_subscription_extension_notification(
+    # Уведомление администраторам (не зависит от наличия bot)
+    try:
+        from app.services.subscription_renewal_service import with_admin_notification_service
+
+        await with_admin_notification_service(
+            lambda svc: svc.send_subscription_extension_notification(
                 db,
                 user,
                 updated_subscription,
@@ -522,62 +524,63 @@ async def _auto_extend_subscription(
                 new_end_date=new_end_date,
                 balance_after=user.balance_kopeks,
             )
-        except Exception as error:  # pragma: no cover - defensive logging
-            logger.error(
-                '⚠️ Автопокупка: не удалось уведомить администраторов о продлении пользователя',
-                format_user_id=_format_user_id(user),
-                error=error,
+        )
+    except Exception as error:  # pragma: no cover - defensive logging
+        logger.error(
+            '⚠️ Автопокупка: не удалось уведомить администраторов о продлении пользователя',
+            format_user_id=_format_user_id(user),
+            error=error,
+        )
+
+    # Send user notification only for Telegram users
+    if bot and user.telegram_id:
+        try:
+            auto_message = texts.t(
+                'AUTO_PURCHASE_SUBSCRIPTION_EXTENDED',
+                '✅ Subscription automatically extended for {period}.',
+            ).format(period=period_label)
+            details_message = texts.t(
+                'AUTO_PURCHASE_SUBSCRIPTION_EXTENDED_DETAILS',
+                'New expiration date: {date}.',
+            ).format(date=end_date_label)
+            hint_message = texts.t(
+                'AUTO_PURCHASE_SUBSCRIPTION_HINT',
+                "Open the 'My subscription' section to access your link.",
             )
 
-        # Send user notification only for Telegram users
-        if user.telegram_id:
-            try:
-                auto_message = texts.t(
-                    'AUTO_PURCHASE_SUBSCRIPTION_EXTENDED',
-                    '✅ Subscription automatically extended for {period}.',
-                ).format(period=period_label)
-                details_message = texts.t(
-                    'AUTO_PURCHASE_SUBSCRIPTION_EXTENDED_DETAILS',
-                    'New expiration date: {date}.',
-                ).format(date=end_date_label)
-                hint_message = texts.t(
-                    'AUTO_PURCHASE_SUBSCRIPTION_HINT',
-                    "Open the 'My subscription' section to access your link.",
-                )
+            full_message = '\n\n'.join(
+                part.strip() for part in [auto_message, details_message, hint_message] if part and part.strip()
+            )
 
-                full_message = '\n\n'.join(
-                    part.strip() for part in [auto_message, details_message, hint_message] if part and part.strip()
-                )
+            keyboard = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 My subscription'),
+                            callback_data='menu_subscription',
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '🏠 Main menu'),
+                            callback_data='back_to_menu',
+                        )
+                    ],
+                ]
+            )
 
-                keyboard = InlineKeyboardMarkup(
-                    inline_keyboard=[
-                        [
-                            InlineKeyboardButton(
-                                text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 My subscription'),
-                                callback_data='menu_subscription',
-                            )
-                        ],
-                        [
-                            InlineKeyboardButton(
-                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '🏠 Main menu'),
-                                callback_data='back_to_menu',
-                            )
-                        ],
-                    ]
-                )
-
-                await bot.send_message(
-                    chat_id=user.telegram_id,
-                    text=full_message,
-                    reply_markup=keyboard,
-                    parse_mode='HTML',
-                )
-            except Exception as error:  # pragma: no cover - defensive logging
-                logger.error(
-                    '⚠️ Автопокупка: не удалось уведомить пользователя о продлении',
-                    telegram_id=user.telegram_id or user.id,
-                    error=error,
-                )
+            await bot.send_message(
+                chat_id=user.telegram_id,
+                text=full_message,
+                reply_markup=keyboard,
+                parse_mode='HTML',
+            )
+        except Exception as error:  # pragma: no cover - defensive logging
+            logger.error(
+                '⚠️ Автопокупка: не удалось уведомить пользователя о продлении',
+                telegram_id=user.telegram_id or user.id,
+                error=error,
+            )
 
     logger.info(
         '✅ Автопокупка: подписка продлена на дней для пользователя',
@@ -811,65 +814,67 @@ async def _auto_purchase_tariff(
     await user_cart_service.delete_user_cart(user.id)
     await clear_subscription_checkout_draft(user.id)
 
-    # Уведомления
-    if bot:
-        texts = get_texts(getattr(user, 'language', 'ru'))
-        period_label = format_period_description(period_days, getattr(user, 'language', 'ru'))
+    # Уведомление администраторам (не зависит от наличия bot)
+    try:
+        from app.services.subscription_renewal_service import with_admin_notification_service
 
-        try:
-            notification_service = AdminNotificationService(bot)
-            await notification_service.send_subscription_purchase_notification(
+        await with_admin_notification_service(
+            lambda svc: svc.send_subscription_purchase_notification(
                 db, user, subscription, transaction, period_days, was_trial_conversion
+            )
+        )
+    except Exception as error:
+        logger.warning(
+            '⚠️ Автопокупка тарифа: не удалось уведомить админов о покупке пользователя',
+            format_user_id=_format_user_id(user),
+            error=error,
+        )
+
+    # Send user notification only for Telegram users
+    if bot and user.telegram_id:
+        try:
+            texts = get_texts(getattr(user, 'language', 'ru'))
+            period_label = format_period_description(period_days, getattr(user, 'language', 'ru'))
+
+            message = texts.t(
+                'AUTO_PURCHASE_SUBSCRIPTION_SUCCESS',
+                '✅ Подписка на {period} автоматически оформлена после пополнения баланса.',
+            ).format(period=period_label)
+
+            hint = texts.t(
+                'AUTO_PURCHASE_SUBSCRIPTION_HINT',
+                'Перейдите в раздел «Моя подписка», чтобы получить ссылку.',
+            )
+
+            keyboard = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
+                            callback_data='menu_subscription',
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '🏠 Главное меню'),
+                            callback_data='back_to_menu',
+                        )
+                    ],
+                ]
+            )
+
+            await bot.send_message(
+                chat_id=user.telegram_id,
+                text=f'{message}\n\n{hint}',
+                reply_markup=keyboard,
+                parse_mode='HTML',
             )
         except Exception as error:
             logger.warning(
-                '⚠️ Автопокупка тарифа: не удалось уведомить админов о покупке пользователя',
-                format_user_id=_format_user_id(user),
+                '⚠️ Автопокупка тарифа: не удалось уведомить пользователя',
+                telegram_id=user.telegram_id or user.id,
                 error=error,
             )
-
-        # Send user notification only for Telegram users
-        if user.telegram_id:
-            try:
-                message = texts.t(
-                    'AUTO_PURCHASE_SUBSCRIPTION_SUCCESS',
-                    '✅ Подписка на {period} автоматически оформлена после пополнения баланса.',
-                ).format(period=period_label)
-
-                hint = texts.t(
-                    'AUTO_PURCHASE_SUBSCRIPTION_HINT',
-                    'Перейдите в раздел «Моя подписка», чтобы получить ссылку.',
-                )
-
-                keyboard = InlineKeyboardMarkup(
-                    inline_keyboard=[
-                        [
-                            InlineKeyboardButton(
-                                text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
-                                callback_data='menu_subscription',
-                            )
-                        ],
-                        [
-                            InlineKeyboardButton(
-                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '🏠 Главное меню'),
-                                callback_data='back_to_menu',
-                            )
-                        ],
-                    ]
-                )
-
-                await bot.send_message(
-                    chat_id=user.telegram_id,
-                    text=f'{message}\n\n{hint}',
-                    reply_markup=keyboard,
-                    parse_mode='HTML',
-                )
-            except Exception as error:
-                logger.warning(
-                    '⚠️ Автопокупка тарифа: не удалось уведомить пользователя',
-                    telegram_id=user.telegram_id or user.id,
-                    error=error,
-                )
 
     logger.info(
         '✅ Автопокупка тарифа: подписка на тариф (дней) оформлена для пользователя',
@@ -1084,61 +1089,63 @@ async def _auto_purchase_daily_tariff(
     await user_cart_service.delete_user_cart(user.id)
     await clear_subscription_checkout_draft(user.id)
 
-    # Уведомления
-    if bot:
-        texts = get_texts(getattr(user, 'language', 'ru'))
+    # Уведомление администраторам (не зависит от наличия bot)
+    try:
+        from app.services.subscription_renewal_service import with_admin_notification_service
 
-        try:
-            notification_service = AdminNotificationService(bot)
-            await notification_service.send_subscription_purchase_notification(
+        await with_admin_notification_service(
+            lambda svc: svc.send_subscription_purchase_notification(
                 db, user, subscription, transaction, 1, was_trial_conversion
+            )
+        )
+    except Exception as error:
+        logger.warning(
+            '⚠️ Автопокупка суточного тарифа: не удалось уведомить админов о покупке пользователя',
+            format_user_id=_format_user_id(user),
+            error=error,
+        )
+
+    # Send user notification only for Telegram users
+    if bot and user.telegram_id:
+        try:
+            texts = get_texts(getattr(user, 'language', 'ru'))
+
+            message = (
+                f'✅ <b>Суточный тариф «{tariff.name}» активирован!</b>\n\n'
+                f'💰 Списано: {daily_price / 100:.0f} ₽ за первый день\n'
+                f'🔄 Средства будут списываться автоматически раз в сутки.\n\n'
+                f'ℹ️ Вы можете приостановить подписку в любой момент.'
+            )
+
+            keyboard = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
+                            callback_data='menu_subscription',
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '🏠 Главное меню'),
+                            callback_data='back_to_menu',
+                        )
+                    ],
+                ]
+            )
+
+            await bot.send_message(
+                chat_id=user.telegram_id,
+                text=message,
+                reply_markup=keyboard,
+                parse_mode='HTML',
             )
         except Exception as error:
             logger.warning(
-                '⚠️ Автопокупка суточного тарифа: не удалось уведомить админов о покупке пользователя',
-                format_user_id=_format_user_id(user),
+                '⚠️ Автопокупка суточного тарифа: не удалось уведомить пользователя',
+                telegram_id=user.telegram_id or user.id,
                 error=error,
             )
-
-        # Send user notification only for Telegram users
-        if user.telegram_id:
-            try:
-                message = (
-                    f'✅ <b>Суточный тариф «{tariff.name}» активирован!</b>\n\n'
-                    f'💰 Списано: {daily_price / 100:.0f} ₽ за первый день\n'
-                    f'🔄 Средства будут списываться автоматически раз в сутки.\n\n'
-                    f'ℹ️ Вы можете приостановить подписку в любой момент.'
-                )
-
-                keyboard = InlineKeyboardMarkup(
-                    inline_keyboard=[
-                        [
-                            InlineKeyboardButton(
-                                text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
-                                callback_data='menu_subscription',
-                            )
-                        ],
-                        [
-                            InlineKeyboardButton(
-                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '🏠 Главное меню'),
-                                callback_data='back_to_menu',
-                            )
-                        ],
-                    ]
-                )
-
-                await bot.send_message(
-                    chat_id=user.telegram_id,
-                    text=message,
-                    reply_markup=keyboard,
-                    parse_mode='HTML',
-                )
-            except Exception as error:
-                logger.warning(
-                    '⚠️ Автопокупка суточного тарифа: не удалось уведомить пользователя',
-                    telegram_id=user.telegram_id or user.id,
-                    error=error,
-                )
 
     logger.info(
         '✅ Автопокупка суточного тарифа: тариф активирован для пользователя',

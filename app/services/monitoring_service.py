@@ -1069,6 +1069,7 @@ class MonitoringService:
                                 subscription_id=subscription.id,
                                 user_id=user.id,
                             )
+                        old_end_date = subscription.end_date
                         await extend_subscription(db, subscription, autopay_period)
                         await self.subscription_service.update_remnawave_user(
                             db,
@@ -1076,6 +1077,43 @@ class MonitoringService:
                             reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT,
                             reset_reason='автопродление подписки',
                         )
+
+                        # Создаём транзакцию, чтобы автопродление было видно в статистике и карточке пользователя
+                        try:
+                            from app.database.crud.transaction import create_transaction
+                            from app.database.models import PaymentMethod, TransactionType
+
+                            transaction = await create_transaction(
+                                db=db,
+                                user_id=user.id,
+                                type=TransactionType.SUBSCRIPTION_PAYMENT,
+                                amount_kopeks=charge_amount,
+                                description=f'Автопродление подписки на {autopay_period} дней',
+                                payment_method=PaymentMethod.BALANCE,
+                            )
+                        except Exception as exc:
+                            logger.warning('Не удалось создать транзакцию автопродления', user_id=user.id, exc=exc)
+                            transaction = None
+
+                        # Отправляем уведомление администраторам
+                        try:
+                            from app.services.subscription_renewal_service import with_admin_notification_service
+
+                            if transaction:
+                                await with_admin_notification_service(
+                                    lambda svc: svc.send_subscription_extension_notification(
+                                        db,
+                                        user,
+                                        subscription,
+                                        transaction,
+                                        autopay_period,
+                                        old_end_date,
+                                        new_end_date=subscription.end_date,
+                                        balance_after=user.balance_kopeks,
+                                    )
+                                )
+                        except Exception as exc:
+                            logger.warning('Не удалось отправить админ-уведомление об автопродлении', user_id=user.id, exc=exc)
 
                         # Send notification via appropriate channel
                         if user.telegram_id and self.bot:

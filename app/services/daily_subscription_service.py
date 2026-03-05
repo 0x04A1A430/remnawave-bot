@@ -162,16 +162,17 @@ class DailySubscriptionService:
                 return 'error'
 
             # Создаём транзакцию
-            await create_transaction(
+            transaction = await create_transaction(
                 db=db,
                 user_id=user.id,
                 type=TransactionType.SUBSCRIPTION_PAYMENT,
                 amount_kopeks=daily_price,
                 description=description,
-                payment_method=PaymentMethod.MANUAL,
+                payment_method=PaymentMethod.BALANCE,
             )
 
             # Обновляем время последнего списания и продлеваем подписку
+            old_end_date = subscription.end_date
             subscription = await update_daily_charge_time(db, subscription)
 
             user_id_display = user.telegram_id or user.email or f'#{user.id}'
@@ -195,6 +196,25 @@ class DailySubscriptionService:
                 )
             except Exception as e:
                 logger.warning('Не удалось обновить Remnawave', error=e)
+
+            # Отправляем уведомление администраторам
+            try:
+                from app.services.subscription_renewal_service import with_admin_notification_service
+
+                await with_admin_notification_service(
+                    lambda svc: svc.send_subscription_extension_notification(
+                        db,
+                        user,
+                        subscription,
+                        transaction,
+                        1,  # 1 день для суточного тарифа
+                        old_end_date,
+                        new_end_date=subscription.end_date,
+                        balance_after=user.balance_kopeks,
+                    )
+                )
+            except Exception as exc:
+                logger.warning('Не удалось отправить админ-уведомление о суточном списании', user_id=user.id, exc=exc)
 
             # Уведомляем пользователя
             if self._bot:
