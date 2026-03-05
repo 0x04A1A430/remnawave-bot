@@ -296,12 +296,8 @@ async def get_dashboard_stats(
                 income_month_rubles=trans_stats.get('totals', {}).get('income_kopeks', 0) / 100,
                 income_total_kopeks=all_time_stats.get('totals', {}).get('income_kopeks', 0),
                 income_total_rubles=all_time_stats.get('totals', {}).get('income_kopeks', 0) / 100,
-                subscription_income_kopeks=abs(
-                    all_time_stats.get('totals', {}).get('subscription_income_kopeks', 0)
-                ),
-                subscription_income_rubles=abs(
-                    all_time_stats.get('totals', {}).get('subscription_income_kopeks', 0)
-                )
+                subscription_income_kopeks=abs(all_time_stats.get('totals', {}).get('subscription_income_kopeks', 0)),
+                subscription_income_rubles=abs(all_time_stats.get('totals', {}).get('subscription_income_kopeks', 0))
                 / 100,
             ),
             servers=ServerStats(

@@ -1113,7 +1113,9 @@ class MonitoringService:
                                     )
                                 )
                         except Exception as exc:
-                            logger.warning('Не удалось отправить админ-уведомление об автопродлении', user_id=user.id, exc=exc)
+                            logger.warning(
+                                'Не удалось отправить админ-уведомление об автопродлении', user_id=user.id, exc=exc
+                            )
 
                         # Send notification via appropriate channel
                         if user.telegram_id and self.bot:

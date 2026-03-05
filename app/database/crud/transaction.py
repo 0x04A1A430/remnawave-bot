@@ -41,7 +41,9 @@ async def create_transaction(
 ) -> Transaction:
     # SUBSCRIPTION_PAYMENT — always store as negative (debit from user balance)
     # Keep original for downstream consumers (events, contests)
-    stored_amount = -amount_kopeks if type == TransactionType.SUBSCRIPTION_PAYMENT and amount_kopeks > 0 else amount_kopeks
+    stored_amount = (
+        -amount_kopeks if type == TransactionType.SUBSCRIPTION_PAYMENT and amount_kopeks > 0 else amount_kopeks
+    )
 
     transaction = Transaction(
         user_id=user_id,

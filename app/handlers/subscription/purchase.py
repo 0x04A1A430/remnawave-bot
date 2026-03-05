@@ -1535,15 +1535,16 @@ async def handle_extend_subscription(callback: types.CallbackQuery, db_user: Use
 
     if not subscription or subscription.is_trial:
         await callback.message.edit_text(
-            '🎯 <b>Пробный период заканчивается</b>\n\n'
-            'Чтобы продолжить пользоваться VPN, выберите подходящий тариф.',
+            '🎯 <b>Пробный период заканчивается</b>\n\nЧтобы продолжить пользоваться VPN, выберите подходящий тариф.',
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [types.InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy')],
-                    [types.InlineKeyboardButton(
-                        text=texts.t('WEBHOOK_CLOSE_BUTTON', '✖️ Закрыть'),
-                        callback_data='webhook:close',
-                    )],
+                    [
+                        types.InlineKeyboardButton(
+                            text=texts.t('WEBHOOK_CLOSE_BUTTON', '✖️ Закрыть'),
+                            callback_data='webhook:close',
+                        )
+                    ],
                 ]
             ),
             parse_mode='HTML',

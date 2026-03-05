@@ -137,9 +137,7 @@ async def show_revenue_statistics(callback: types.CallbackQuery, db_user: User, 
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
     month_stats = await get_transactions_statistics(db, month_start, now)
-    all_time_stats = await get_transactions_statistics(
-        db, start_date=datetime(2020, 1, 1, tzinfo=UTC), end_date=now
-    )
+    all_time_stats = await get_transactions_statistics(db, start_date=datetime(2020, 1, 1, tzinfo=UTC), end_date=now)
     current_time = format_datetime(datetime.now(UTC))
 
     text = f"""
