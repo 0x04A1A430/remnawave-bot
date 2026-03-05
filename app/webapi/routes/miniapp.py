@@ -7273,6 +7273,11 @@ async def purchase_traffic_topup_endpoint(
     # Добавляем трафик (add_subscription_traffic уже создаёт TrafficPurchase и обновляет все необходимые поля)
     await add_subscription_traffic(db, subscription, payload.gb)
 
+    # Реактивируем подписку если она была DISABLED (например, после LIMITED в RemnaWave)
+    from app.database.crud.subscription import reactivate_subscription
+
+    await reactivate_subscription(db, subscription)
+
     # Синхронизируем с RemnaWave
     try:
         service = SubscriptionService()

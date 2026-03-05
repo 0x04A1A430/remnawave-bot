@@ -5,7 +5,7 @@ from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import PERIOD_PRICES, settings
-from app.database.crud.subscription import add_subscription_traffic
+from app.database.crud.subscription import add_subscription_traffic, reactivate_subscription
 from app.database.crud.transaction import create_transaction
 from app.database.crud.user import subtract_user_balance
 from app.database.models import TransactionType, User
@@ -578,6 +578,9 @@ async def add_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSes
             # add_subscription_traffic уже создаёт TrafficPurchase и обновляет все необходимые поля
             await add_subscription_traffic(db, subscription, traffic_gb)
 
+        # Реактивируем подписку если она была DISABLED (например, после LIMITED в RemnaWave)
+        await reactivate_subscription(db, subscription)
+
         subscription_service = SubscriptionService()
         await subscription_service.update_remnawave_user(db, subscription)
 
@@ -829,6 +832,9 @@ async def execute_switch_traffic(callback: types.CallbackQuery, db_user: User, d
         subscription.updated_at = datetime.now(UTC)
 
         await db.commit()
+
+        # Реактивируем подписку если она была DISABLED (например, после LIMITED в RemnaWave)
+        await reactivate_subscription(db, subscription)
 
         subscription_service = SubscriptionService()
         await subscription_service.update_remnawave_user(db, subscription)

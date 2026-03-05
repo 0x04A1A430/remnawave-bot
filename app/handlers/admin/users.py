@@ -3985,7 +3985,11 @@ async def _extend_subscription_by_days(db: AsyncSession, user_id: int, days: int
 
 async def _add_subscription_traffic(db: AsyncSession, user_id: int, gb: int, admin_id: int) -> bool:
     try:
-        from app.database.crud.subscription import add_subscription_traffic, get_subscription_by_user_id
+        from app.database.crud.subscription import (
+            add_subscription_traffic,
+            get_subscription_by_user_id,
+            reactivate_subscription,
+        )
         from app.services.subscription_service import SubscriptionService
 
         subscription = await get_subscription_by_user_id(db, user_id)
@@ -3998,6 +4002,9 @@ async def _add_subscription_traffic(db: AsyncSession, user_id: int, gb: int, adm
             await db.commit()
         else:
             await add_subscription_traffic(db, subscription, gb)
+
+        # Реактивируем подписку если она была DISABLED (например, после LIMITED в RemnaWave)
+        await reactivate_subscription(db, subscription)
 
         subscription_service = SubscriptionService()
         await subscription_service.update_remnawave_user(db, subscription)
