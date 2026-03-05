@@ -30,7 +30,6 @@ from app.services.subscription_service import SubscriptionService
 from app.services.user_cart_service import user_cart_service
 from app.utils.pricing_utils import format_period_description
 from app.utils.timezone import format_local_datetime
-from app.utils.user_utils import mark_user_as_had_paid_subscription
 
 
 logger = structlog.get_logger(__name__)
@@ -398,6 +397,7 @@ async def _auto_extend_subscription(
             prepared.price_kopeks,
             prepared.description,
             consume_promo_offer=prepared.consume_promo_offer,
+            mark_as_paid_subscription=True,
         )
     except Exception as error:  # pragma: no cover - defensive logging
         logger.error(
@@ -495,9 +495,6 @@ async def _auto_extend_subscription(
             format_user_id=_format_user_id(user),
             error=error,
         )
-
-    # Mark user as having had a paid subscription (prevents first_purchase_only promo reuse)
-    await mark_user_as_had_paid_subscription(db, user)
 
     await user_cart_service.delete_user_cart(user.id)
     await clear_subscription_checkout_draft(user.id)
@@ -702,7 +699,14 @@ async def _auto_purchase_tariff(
     # Списываем баланс
     try:
         description = f'Покупка тарифа {tariff.name} на {period_days} дней'
-        success = await subtract_user_balance(db, user, final_price, description)
+        success = await subtract_user_balance(
+            db,
+            user,
+            final_price,
+            description,
+            consume_promo_offer=promo_offer_percent > 0,
+            mark_as_paid_subscription=True,
+        )
         if not success:
             logger.warning(
                 '❌ Автопокупка тарифа: не удалось списать баланс пользователя', format_user_id=_format_user_id(user)
@@ -966,7 +970,13 @@ async def _auto_purchase_daily_tariff(
     # Списываем баланс за первый день
     try:
         description = f'Активация суточного тарифа {tariff.name}'
-        success = await subtract_user_balance(db, user, daily_price, description)
+        success = await subtract_user_balance(
+            db,
+            user,
+            daily_price,
+            description,
+            mark_as_paid_subscription=True,
+        )
         if not success:
             logger.warning(
                 '❌ Автопокупка суточного тарифа: не удалось списать баланс пользователя',

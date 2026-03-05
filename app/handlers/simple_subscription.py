@@ -439,6 +439,7 @@ async def handle_simple_subscription_pay_with_balance(
             price_kopeks,
             f'Оплата подписки на {subscription_params["period_days"]} дней',
             consume_promo_offer=False,
+            mark_as_paid_subscription=True,
         )
 
         if not success:
@@ -2143,6 +2144,7 @@ async def confirm_simple_subscription_purchase(
             price_kopeks,
             f'Оплата подписки на {subscription_params["period_days"]} дней',
             consume_promo_offer=False,
+            mark_as_paid_subscription=True,
         )
 
         if not success:

@@ -32,7 +32,6 @@ from app.utils.pricing_utils import (
     validate_pricing_calculation,
 )
 from app.utils.promo_offer import get_user_active_promo_discount_percent
-from app.utils.user_utils import mark_user_as_had_paid_subscription
 
 
 logger = structlog.get_logger(__name__)
@@ -1036,6 +1035,7 @@ class MiniAppSubscriptionPurchaseService:
             pricing.final_total,
             description,
             consume_promo_offer=pricing.promo_discount_value > 0,
+            mark_as_paid_subscription=True,
         )
         if not success:
             raise PurchaseBalanceError(
@@ -1115,8 +1115,6 @@ class MiniAppSubscriptionPurchaseService:
                 connected_squads=pricing.selection.servers,
                 update_server_counters=False,
             )
-
-        await mark_user_as_had_paid_subscription(db, user)
 
         if pricing.server_ids:
             try:

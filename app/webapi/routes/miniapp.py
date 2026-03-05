@@ -5326,7 +5326,10 @@ async def submit_subscription_renewal_endpoint(
 
             try:
                 # Списываем баланс (subtract_user_balance делает commit и обновляет user.balance_kopeks)
-                success = await subtract_user_balance(db, user, final_total, description)
+                success = await subtract_user_balance(
+                    db, user, final_total, description,
+                    mark_as_paid_subscription=True,
+                )
                 if not success:
                     raise HTTPException(
                         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -6570,7 +6573,10 @@ async def purchase_tariff_endpoint(
         description = f"Покупка тарифа '{tariff.name}' на {payload.period_days} дней (скидка {discount_percent}%)"
     else:
         description = f"Покупка тарифа '{tariff.name}' на {payload.period_days} дней"
-    success = await subtract_user_balance(db, user, price_kopeks, description)
+    success = await subtract_user_balance(
+        db, user, price_kopeks, description,
+        mark_as_paid_subscription=True,
+    )
     if not success:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -6948,7 +6954,10 @@ async def switch_tariff_endpoint(
             description = f"Переход с суточного на тариф '{new_tariff.name}' ({new_period_days} дней)"
         else:
             description = f"Переход на тариф '{new_tariff.name}' (доплата за {remaining_days} дней)"
-        success = await subtract_user_balance(db, user, upgrade_cost, description)
+        success = await subtract_user_balance(
+            db, user, upgrade_cost, description,
+            mark_as_paid_subscription=True,
+        )
         if not success:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

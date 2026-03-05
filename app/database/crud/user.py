@@ -505,6 +505,7 @@ async def subtract_user_balance(
     payment_method: PaymentMethod | None = None,
     *,
     consume_promo_offer: bool = False,
+    mark_as_paid_subscription: bool = False,
 ) -> bool:
     user_id_display = user.telegram_id or user.email or f'#{user.id}'
     logger.info('💸 ОТЛАДКА subtract_user_balance:')
@@ -563,6 +564,9 @@ async def subtract_user_balance(
             user.promo_offer_discount_percent = 0
             user.promo_offer_discount_source = None
             user.promo_offer_discount_expires_at = None
+
+        if mark_as_paid_subscription:
+            user.has_had_paid_subscription = True
 
         user.updated_at = datetime.now(UTC)
 

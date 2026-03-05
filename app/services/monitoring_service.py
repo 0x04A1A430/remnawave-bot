@@ -1124,7 +1124,10 @@ class MonitoringService:
                     continue
 
                 if user.balance_kopeks >= charge_amount:
-                    success = await subtract_user_balance(db, user, charge_amount, 'Автопродление подписки')
+                    success = await subtract_user_balance(
+                        db, user, charge_amount, 'Автопродление подписки',
+                        mark_as_paid_subscription=True,
+                    )
 
                     if success:
                         # extend_subscription сам обработает EXPIRED→ACTIVE переход

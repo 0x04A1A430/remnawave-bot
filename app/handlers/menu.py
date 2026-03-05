@@ -1349,7 +1349,10 @@ async def handle_activate_button(callback: types.CallbackQuery, db_user: User, d
             )
 
             # Списать баланс правильно
-            await subtract_user_balance(db, db_user, best_price, f'Активация подписки на {best_period} дней')
+            await subtract_user_balance(
+                db, db_user, best_price, f'Активация подписки на {best_period} дней',
+                mark_as_paid_subscription=True,
+            )
 
             # Создать пользователя в RemnaWave
             await subscription_service.create_remnawave_user(db, new_subscription)

@@ -38,7 +38,6 @@ from app.services.user_cart_service import user_cart_service
 from app.utils.cache import RateLimitCache, cache, cache_key
 from app.utils.pricing_utils import format_period_description
 from app.utils.promo_offer import get_user_active_promo_discount_percent
-from app.utils.user_utils import mark_user_as_had_paid_subscription
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 from ..schemas.subscription import (
@@ -535,14 +534,31 @@ async def renew_subscription(
             },
         )
 
-    # Deduct balance and extend subscription
-    user.balance_kopeks -= price_kopeks
+    # Deduct balance with row-level lock (prevents concurrent race conditions)
+    from sqlalchemy import select as sa_select
+
+    locked_result = await db.execute(sa_select(User).where(User.id == user.id).with_for_update())
+    user_locked = locked_result.scalar_one()
+
+    if user_locked.balance_kopeks < price_kopeks:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail={
+                'code': 'insufficient_funds',
+                'message': 'Недостаточно средств (concurrent check)',
+            },
+        )
+
+    user_locked.balance_kopeks -= price_kopeks
 
     # Consume promo offer discount if it was used
     if promo_offer_discount_value > 0:
-        user.promo_offer_discount_percent = 0
-        user.promo_offer_discount_source = None
-        user.promo_offer_discount_expires_at = None
+        user_locked.promo_offer_discount_percent = 0
+        user_locked.promo_offer_discount_source = None
+        user_locked.promo_offer_discount_expires_at = None
+
+    # Mark user as having had a paid subscription (prevents first_purchase_only promo reuse)
+    user_locked.has_had_paid_subscription = True
 
     # Extend from end_date or now if expired
     now = datetime.now(UTC)
@@ -581,9 +597,6 @@ async def renew_subscription(
             user.subscription.traffic_used_gb = 0.0
 
     await db.commit()
-
-    # Mark user as having had a paid subscription (prevents first_purchase_only promo reuse)
-    await mark_user_as_had_paid_subscription(db, user)
 
     # Синхронизируем с RemnaWave
     try:
@@ -2057,18 +2070,19 @@ async def purchase_tariff(
             description += f' (скидка {discount_percent}%)'
         if promo_offer_discount_value > 0:
             description += f' (промо -{promo_offer_discount_percent}%)'
-        success = await subtract_user_balance(db, user, price_kopeks, description)
+        success = await subtract_user_balance(
+            db,
+            user,
+            price_kopeks,
+            description,
+            consume_promo_offer=promo_offer_discount_value > 0,
+            mark_as_paid_subscription=True,
+        )
         if not success:
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail='Failed to charge balance',
             )
-
-        # Consume promo offer discount if it was used
-        if promo_offer_discount_value > 0:
-            user.promo_offer_discount_percent = 0
-            user.promo_offer_discount_source = None
-            user.promo_offer_discount_expires_at = None
 
         # Create transaction
         await create_transaction(
@@ -2129,9 +2143,6 @@ async def purchase_tariff(
                 )
         except Exception as remnawave_error:
             logger.error('Failed to sync subscription with RemnaWave', remnawave_error=remnawave_error)
-
-        # Mark user as having had a paid subscription (prevents first_purchase_only promo reuse)
-        await mark_user_as_had_paid_subscription(db, user)
 
         # Save cart for auto-renewal (not for daily tariffs - they have their own charging)
         if not is_daily_tariff:
@@ -4157,7 +4168,10 @@ async def switch_tariff(
         if period_discount_percent > 0 and discount_value > 0:
             description += f' (скидка {period_discount_percent}%)'
 
-        success = await subtract_user_balance(db, user, upgrade_cost, description)
+        success = await subtract_user_balance(
+            db, user, upgrade_cost, description,
+            mark_as_paid_subscription=True,
+        )
         if not success:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
