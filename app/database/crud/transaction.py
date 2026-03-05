@@ -39,6 +39,10 @@ async def create_transaction(
     is_completed: bool = True,
     created_at: datetime | None = None,
 ) -> Transaction:
+    # SUBSCRIPTION_PAYMENT and WITHDRAWAL are debits — always store as negative
+    if type in (TransactionType.SUBSCRIPTION_PAYMENT, TransactionType.WITHDRAWAL) and amount_kopeks > 0:
+        amount_kopeks = -amount_kopeks
+
     transaction = Transaction(
         user_id=user_id,
         type=type.value,

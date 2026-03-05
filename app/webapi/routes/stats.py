@@ -273,7 +273,8 @@ async def stats_full(
         'income_rubles': _kopeks_to_rubles(transactions_totals.get('income_kopeks')),
         'expenses_rubles': _kopeks_to_rubles(transactions_totals.get('expenses_kopeks')),
         'profit_rubles': _kopeks_to_rubles(transactions_totals.get('profit_kopeks')),
-        'subscription_income_rubles': _kopeks_to_rubles(transactions_totals.get('subscription_income_kopeks')),
+        'subscription_income_kopeks': abs(transactions_totals.get('subscription_income_kopeks', 0)),
+        'subscription_income_rubles': _kopeks_to_rubles(abs(transactions_totals.get('subscription_income_kopeks', 0))),
     }
 
     transactions_today = {
