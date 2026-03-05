@@ -112,20 +112,43 @@ _PRESET_ROLES: list[dict] = [
 
 
 async def _ensure_preset_roles(db: AsyncSession) -> AdminRole | None:
-    """Seed preset roles if they don't exist. Returns the Superadmin role."""
+    """Seed preset roles if they don't exist. Returns the Superadmin role.
+
+    Системные роли идентифицируются по (is_system=True, level) — это стабильно
+    даже если админ переименовал роль через UI.
+    Fallback на поиск по имени для обратной совместимости.
+    """
     superadmin_role: AdminRole | None = None
 
     for preset in _PRESET_ROLES:
-        result = await db.execute(select(AdminRole).where(AdminRole.name == preset['name']))
+        # Сначала ищем по стабильному ключу (is_system + level)
+        result = await db.execute(
+            select(AdminRole).where(AdminRole.is_system.is_(True), AdminRole.level == preset['level'])
+        )
         existing = result.scalar_one_or_none()
+
+        # Fallback: поиск по имени (для ролей, созданных до этого фикса)
+        if existing is None:
+            result = await db.execute(select(AdminRole).where(AdminRole.name == preset['name']))
+            existing = result.scalar_one_or_none()
+
         if existing is not None:
-            if preset['name'] == SUPERADMIN_ROLE_NAME:
+            if existing.level == 999:  # Superadmin level
                 superadmin_role = existing
-            # Обновить permissions для system-ролей, если они изменились в коде
-            if existing.is_system and sorted(existing.permissions or []) != sorted(preset['permissions']):
-                existing.permissions = preset['permissions']
-                await db.flush()
-                logger.info('Updated preset role permissions', role_name=preset['name'], role_id=existing.id)
+            # Добавить НОВЫЕ permissions из кода, не трогая существующие (админ мог кастомизировать)
+            if existing.is_system:
+                current = set(existing.permissions or [])
+                from_code = set(preset['permissions'])
+                new_perms = from_code - current
+                if new_perms:
+                    existing.permissions = list(current | new_perms)
+                    await db.flush()
+                    logger.info(
+                        'Added new permissions to system role',
+                        role_name=existing.name,
+                        role_id=existing.id,
+                        added=sorted(new_perms),
+                    )
             continue
 
         role = AdminRole(
