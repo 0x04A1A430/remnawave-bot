@@ -1502,6 +1502,9 @@ class PromoCode(Base):
 
 class PromoCodeUse(Base):
     __tablename__ = 'promocode_uses'
+    __table_args__ = (
+        UniqueConstraint('user_id', 'promocode_id', name='uq_promocode_uses_user_promo'),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     promocode_id = Column(Integer, ForeignKey('promocodes.id'), nullable=False)
