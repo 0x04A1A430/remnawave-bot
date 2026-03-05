@@ -89,6 +89,7 @@ async def charge_trial_activation_if_required(
         user,
         price_kopeks,
         charge_description,
+        mark_as_paid_subscription=True,
     )
     if not success:
         raise TrialPaymentChargeFailed

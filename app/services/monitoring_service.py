@@ -1126,6 +1126,7 @@ class MonitoringService:
                 if user.balance_kopeks >= charge_amount:
                     success = await subtract_user_balance(
                         db, user, charge_amount, 'Автопродление подписки',
+                        consume_promo_offer=promo_discount_percent > 0,
                         mark_as_paid_subscription=True,
                     )
 
@@ -1145,9 +1146,6 @@ class MonitoringService:
                             reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT,
                             reset_reason='автопродление подписки',
                         )
-
-                        if promo_discount_percent > 0:
-                            await self._consume_user_promo_offer_discount(db, user)
 
                         # Send notification via appropriate channel
                         if user.telegram_id and self.bot:

@@ -306,7 +306,9 @@ async def _prepare_auto_extend_context(
         traffic_limit_gb = _safe_int(traffic_limit_gb, subscription.traffic_limit_gb or 0)
 
     squad_uuid = cart_data.get('squad_uuid')
-    consume_promo_offer = bool(cart_data.get('consume_promo_offer'))
+    from app.utils.promo_offer import get_user_active_promo_discount_percent as _get_promo
+
+    consume_promo_offer = _get_promo(user) > 0
     allowed_squads = cart_data.get('allowed_squads')
 
     return AutoExtendContext(
@@ -436,11 +438,10 @@ async def _auto_extend_subscription(
             device_limit=prepared.device_limit if is_tariff_change else None,
         )
 
-        # НОВОЕ: Конвертируем триал в платную подписку ТОЛЬКО после успешного продления
+        # Конвертируем триал в платную подписку ТОЛЬКО после успешного продления
         if was_trial and subscription.is_trial:
             subscription.is_trial = False
             subscription.status = 'active'
-            user.has_had_paid_subscription = True
             await db.commit()
             logger.info(
                 '✅ Триал конвертирован в платную подписку для пользователя',
@@ -748,7 +749,6 @@ async def _auto_purchase_tariff(
             if was_trial_conversion:
                 subscription.is_trial = False
                 subscription.status = 'active'
-                user.has_had_paid_subscription = True
                 await db.commit()
         else:
             # Создаём новую подписку
@@ -1015,8 +1015,6 @@ async def _auto_purchase_daily_tariff(
             existing_subscription.last_daily_charge_at = datetime.now(UTC)
             existing_subscription.is_daily_paused = False
             existing_subscription.end_date = datetime.now(UTC) + timedelta(days=1)
-            if was_trial_conversion:
-                user.has_had_paid_subscription = True
             await db.commit()
             await db.refresh(existing_subscription)
             subscription = existing_subscription

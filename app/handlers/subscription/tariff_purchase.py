@@ -3019,10 +3019,13 @@ async def confirm_instant_switch(
             # Списываем первый день если ещё не списано (upgrade_cost был 0)
             if upgrade_cost == 0 and daily_price > 0:
                 if user_balance >= daily_price:
-                    await subtract_user_balance(
+                    success = await subtract_user_balance(
                         db, db_user, daily_price, f'Переключение на суточный тариф {new_tariff.name} (первый день)',
                         mark_as_paid_subscription=True,
                     )
+                    if not success:
+                        await callback.answer('❌ Недостаточно средств', show_alert=True)
+                        return
                     await create_transaction(
                         db,
                         user_id=db_user.id,

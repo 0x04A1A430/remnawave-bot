@@ -534,13 +534,17 @@ async def renew_subscription(
             },
         )
 
-    # Deduct balance with row-level lock (prevents concurrent race conditions)
-    from sqlalchemy import select as sa_select
+    # Deduct balance (centralized: row-level lock, promo consumption, paid subscription flag)
+    from app.database.crud.user import subtract_user_balance
 
-    locked_result = await db.execute(sa_select(User).where(User.id == user.id).with_for_update())
-    user_locked = locked_result.scalar_one()
-
-    if user_locked.balance_kopeks < price_kopeks:
+    success = await subtract_user_balance(
+        db, user, price_kopeks,
+        f'Продление подписки на {request.period_days} дней'
+        + (f' ({tariff.name})' if tariff else ''),
+        consume_promo_offer=promo_offer_discount_value > 0,
+        mark_as_paid_subscription=True,
+    )
+    if not success:
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail={
@@ -549,16 +553,7 @@ async def renew_subscription(
             },
         )
 
-    user_locked.balance_kopeks -= price_kopeks
-
-    # Consume promo offer discount if it was used
-    if promo_offer_discount_value > 0:
-        user_locked.promo_offer_discount_percent = 0
-        user_locked.promo_offer_discount_source = None
-        user_locked.promo_offer_discount_expires_at = None
-
-    # Mark user as having had a paid subscription (prevents first_purchase_only promo reuse)
-    user_locked.has_had_paid_subscription = True
+    await db.refresh(user, ['subscription'])
 
     # Extend from end_date or now if expired
     now = datetime.now(UTC)
@@ -1078,7 +1073,7 @@ async def purchase_devices_legacy(
     else:
         description = f'Покупка {request.devices} доп. устройств'
 
-    await subtract_user_balance(
+    success = await subtract_user_balance(
         db=db,
         user=user,
         amount_kopeks=total_price,
@@ -1086,6 +1081,11 @@ async def purchase_devices_legacy(
         create_transaction=True,
         payment_method=PaymentMethod.BALANCE,
     )
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail='Insufficient funds',
+        )
 
     # Add devices
     user.subscription.device_limit = new_devices
@@ -1299,13 +1299,22 @@ async def activate_trial(
     # Check if trial requires payment
     requires_payment = bool(settings.TRIAL_PAYMENT_ENABLED)
     if requires_payment:
+        from app.database.crud.user import subtract_user_balance
+
         price_kopeks = settings.TRIAL_ACTIVATION_PRICE
         if user.balance_kopeks < price_kopeks:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f'Insufficient balance. Need {price_kopeks / 100:.2f} RUB',
             )
-        user.balance_kopeks -= price_kopeks
+        success = await subtract_user_balance(
+            db, user, price_kopeks, 'Активация триальной подписки',
+        )
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail='Failed to charge trial activation fee',
+            )
         logger.info('User paid kopeks for trial activation', user_id=user.id, price_kopeks=price_kopeks)
 
     # Get trial parameters from tariff if configured (same logic as bot handler)
@@ -2395,7 +2404,7 @@ async def purchase_devices(
         else:
             description = f'Покупка {request.devices} доп. устройств'
 
-        await subtract_user_balance(
+        success = await subtract_user_balance(
             db=db,
             user=user,
             amount_kopeks=price_kopeks,
@@ -2403,6 +2412,11 @@ async def purchase_devices(
             create_transaction=True,
             payment_method=PaymentMethod.BALANCE,
         )
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail='Insufficient funds',
+            )
 
         # Increase device limit
         subscription.device_limit += request.devices

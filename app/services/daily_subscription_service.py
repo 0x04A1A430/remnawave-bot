@@ -154,6 +154,7 @@ class DailySubscriptionService:
                 user,
                 daily_price,
                 description,
+                mark_as_paid_subscription=True,
             )
 
             if not deducted:
