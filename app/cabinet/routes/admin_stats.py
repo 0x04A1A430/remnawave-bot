@@ -262,7 +262,9 @@ async def get_dashboard_stats(
         month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
         trans_stats = await get_transactions_statistics(db, month_start, now)
-        all_time_stats = await get_transactions_statistics(db)
+        all_time_stats = await get_transactions_statistics(
+            db, start_date=datetime(2020, 1, 1, tzinfo=UTC), end_date=now
+        )
 
         # Get revenue chart data (last 30 days)
         revenue_data = await get_revenue_by_period(db, days=30)
