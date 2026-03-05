@@ -5,7 +5,7 @@ Router 2 (`merge_router`): Public endpoints for merge preview and execution.
 """
 
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Any, Literal
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Path, status
@@ -49,6 +49,8 @@ _OAUTH_PROVIDER_COLUMNS: dict[str, str] = {
     'discord': 'discord_id',
     'vk': 'vk_id',
 }
+
+OAuthProviderName = Literal['google', 'yandex', 'discord', 'vk']
 
 # All known auth providers (including non-OAuth)
 _ALL_PROVIDERS: tuple[str, ...] = ('telegram', 'email', 'google', 'yandex', 'discord', 'vk')
@@ -182,6 +184,105 @@ def _count_auth_methods(user: User) -> int:
     return len(compute_auth_methods(user))
 
 
+async def _exchange_and_link_oauth(
+    *,
+    db: AsyncSession,
+    user: User,
+    provider: str,
+    code: str,
+    state: str,
+    state_data: dict[str, Any],
+    device_id: str | None,
+    log_context: str,
+) -> LinkCallbackResponse:
+    """Shared OAuth linking logic: exchange code, fetch user info, link or merge.
+
+    Used by both link_provider_callback (JWT-authed) and link_server_complete (state-authed).
+    """
+    oauth_provider = get_provider(provider)
+    if not oauth_provider:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Requested OAuth provider is not available',
+        )
+
+    # Exchange code for tokens
+    exchange_kwargs: dict[str, str] = {'state': state}
+    code_verifier = state_data.get('code_verifier')
+    if code_verifier:
+        exchange_kwargs['code_verifier'] = code_verifier
+    if device_id:
+        exchange_kwargs['device_id'] = device_id
+
+    try:
+        token_data = await oauth_provider.exchange_code(code, **exchange_kwargs)
+    except Exception as exc:
+        logger.error('OAuth code exchange failed', context=log_context, provider=provider, exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Failed to exchange authorization code',
+        ) from exc
+
+    # Fetch user info from provider
+    try:
+        user_info = await oauth_provider.get_user_info(token_data)
+    except Exception as exc:
+        logger.error('OAuth user info fetch failed', context=log_context, provider=provider, exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Failed to fetch user information from provider',
+        ) from exc
+
+    # Check if provider_id is already linked to THIS user
+    column = _OAUTH_PROVIDER_COLUMNS[provider]
+    current_value = getattr(user, column, None)
+    if current_value and str(current_value) == user_info.provider_id:
+        return LinkCallbackResponse(success=True, message='already_linked')
+
+    # Check if provider_id is linked to ANOTHER user
+    existing_user = await get_user_by_oauth_provider(db, provider, user_info.provider_id)
+    if existing_user and existing_user.id != user.id:
+        logger.info(
+            'Account linking conflict: provider already linked to another user',
+            context=log_context,
+            provider=provider,
+            provider_id=user_info.provider_id,
+            current_user_id=user.id,
+            existing_user_id=existing_user.id,
+        )
+        merge_token = await create_merge_token(
+            primary_user_id=user.id,
+            secondary_user_id=existing_user.id,
+            provider=provider,
+            provider_id=user_info.provider_id,
+        )
+        return LinkCallbackResponse(
+            success=False,
+            merge_required=True,
+            merge_token=merge_token,
+        )
+
+    # Link the provider to current user
+    await set_user_oauth_provider_id(db, user, provider, user_info.provider_id)
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail='This provider account was just linked to another user',
+        ) from exc
+
+    logger.info(
+        'OAuth provider linked to account',
+        context=log_context,
+        provider=provider,
+        provider_id=user_info.provider_id,
+        user_id=user.id,
+    )
+    return LinkCallbackResponse(success=True, message='linked')
+
+
 # ---------------------------------------------------------------------------
 # Router 1: Account linking (JWT required)
 # ---------------------------------------------------------------------------
@@ -209,15 +310,10 @@ async def get_linked_providers(
 
 @router.get('/link/{provider}/init', response_model=LinkInitResponse)
 async def link_provider_init(
-    provider: str,
+    provider: OAuthProviderName,
     user: User = Depends(get_current_cabinet_user),
 ) -> LinkInitResponse:
     """Start OAuth flow for linking a new provider to the current account."""
-    if provider not in _OAUTH_PROVIDER_COLUMNS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Only OAuth providers can be linked via this endpoint',
-        )
 
     # Check if already linked
     column = _OAUTH_PROVIDER_COLUMNS[provider]
@@ -251,18 +347,12 @@ async def link_provider_init(
 
 @router.post('/link/{provider}/callback', response_model=LinkCallbackResponse)
 async def link_provider_callback(
-    provider: str,
+    provider: OAuthProviderName,
     request: LinkCallbackRequest,
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> LinkCallbackResponse:
     """Handle OAuth callback for linking a provider to the current account."""
-    if provider not in _OAUTH_PROVIDER_COLUMNS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Only OAuth providers can be linked via this endpoint',
-        )
-
     # 1. Validate CSRF state
     state_data = await validate_oauth_state(request.state, provider)
     if not state_data:
@@ -292,103 +382,26 @@ async def link_provider_callback(
             detail='OAuth state was initiated by a different user',
         )
 
-    # 2. Get provider instance
-    oauth_provider = get_provider(provider)
-    if not oauth_provider:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Requested OAuth provider is not available',
-        )
-
-    # 3. Exchange code for tokens
-    exchange_kwargs: dict[str, str] = {'state': request.state}
-    code_verifier = state_data.get('code_verifier')
-    if code_verifier:
-        exchange_kwargs['code_verifier'] = code_verifier
-    if request.device_id:
-        exchange_kwargs['device_id'] = request.device_id
-
-    try:
-        token_data = await oauth_provider.exchange_code(request.code, **exchange_kwargs)
-    except Exception as exc:
-        logger.error('OAuth code exchange failed during linking', provider=provider, exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Failed to exchange authorization code',
-        ) from exc
-
-    # 4. Fetch user info from provider
-    try:
-        user_info = await oauth_provider.get_user_info(token_data)
-    except Exception as exc:
-        logger.error('OAuth user info fetch failed during linking', provider=provider, exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Failed to fetch user information from provider',
-        ) from exc
-
-    # 5. Check if provider_id is already linked to THIS user
-    column = _OAUTH_PROVIDER_COLUMNS[provider]
-    current_value = getattr(user, column, None)
-    if current_value and str(current_value) == user_info.provider_id:
-        return LinkCallbackResponse(success=True, message='already_linked')
-
-    # 6. Check if provider_id is linked to ANOTHER user
-    existing_user = await get_user_by_oauth_provider(db, provider, user_info.provider_id)
-    if existing_user and existing_user.id != user.id:
-        # Account conflict -> create merge token
-        logger.info(
-            'Account linking conflict: provider already linked to another user',
-            provider=provider,
-            provider_id=user_info.provider_id,
-            current_user_id=user.id,
-            existing_user_id=existing_user.id,
-        )
-        merge_token = await create_merge_token(
-            primary_user_id=user.id,
-            secondary_user_id=existing_user.id,
-            provider=provider,
-            provider_id=user_info.provider_id,
-        )
-        return LinkCallbackResponse(
-            success=False,
-            merge_required=True,
-            merge_token=merge_token,
-        )
-
-    # 7. Link the provider to current user
-    await set_user_oauth_provider_id(db, user, provider, user_info.provider_id)
-    try:
-        await db.commit()
-    except IntegrityError as exc:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail='This provider account was just linked to another user',
-        ) from exc
-
-    logger.info(
-        'OAuth provider linked to account',
+    # 2-7. Exchange code, fetch user info, link or merge
+    return await _exchange_and_link_oauth(
+        db=db,
+        user=user,
         provider=provider,
-        provider_id=user_info.provider_id,
-        user_id=user.id,
+        code=request.code,
+        state=request.state,
+        state_data=state_data,
+        device_id=request.device_id,
+        log_context='link-callback',
     )
-    return LinkCallbackResponse(success=True, message='linked')
 
 
 @router.post('/unlink/{provider}', response_model=UnlinkResponse)
 async def unlink_provider(
-    provider: str,
+    provider: OAuthProviderName,
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> UnlinkResponse:
     """Unlink an OAuth provider from the current account."""
-    if provider not in _OAUTH_PROVIDER_COLUMNS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Only OAuth providers can be unlinked via this endpoint',
-        )
-
     column = _OAUTH_PROVIDER_COLUMNS[provider]
     if not getattr(user, column, None):
         raise HTTPException(
@@ -581,44 +594,16 @@ async def link_server_complete(
             detail='OAuth state was not initiated for account linking',
         )
 
-    user_id = int(state_data['user_id'])
-
-    # 3. Get provider instance
-    oauth_provider = get_provider(provider_name)
-    if not oauth_provider:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Requested OAuth provider is not available',
-        )
-
-    # 4. Exchange code for tokens
-    exchange_kwargs: dict[str, str] = {'state': request.state}
-    code_verifier = state_data.get('code_verifier')
-    if code_verifier:
-        exchange_kwargs['code_verifier'] = code_verifier
-    if request.device_id:
-        exchange_kwargs['device_id'] = request.device_id
-
+    # 3. Parse and validate user_id from state
     try:
-        token_data = await oauth_provider.exchange_code(request.code, **exchange_kwargs)
-    except Exception as exc:
-        logger.error('OAuth code exchange failed (server-complete)', provider=provider_name, exc_info=True)
+        user_id = int(state_data['user_id'])
+    except (ValueError, TypeError) as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Failed to exchange authorization code',
+            detail='Invalid user_id in OAuth state',
         ) from exc
 
-    # 5. Fetch user info
-    try:
-        user_info = await oauth_provider.get_user_info(token_data)
-    except Exception as exc:
-        logger.error('OAuth user info failed (server-complete)', provider=provider_name, exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Failed to fetch user information from provider',
-        ) from exc
-
-    # 6. Load user from DB
+    # 4. Load user from DB
     user = await get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(
@@ -626,53 +611,25 @@ async def link_server_complete(
             detail='User not found',
         )
 
-    # 7. Check already linked to this user
-    column = _OAUTH_PROVIDER_COLUMNS[provider_name]
-    current_value = getattr(user, column, None)
-    if current_value and str(current_value) == user_info.provider_id:
-        return ServerCompleteResponse(success=True, message='already_linked', provider=provider_name)
-
-    # 8. Check conflict with another user
-    existing_user = await get_user_by_oauth_provider(db, provider_name, user_info.provider_id)
-    if existing_user and existing_user.id != user.id:
-        logger.info(
-            'Account linking conflict (server-complete)',
-            provider=provider_name,
-            provider_id=user_info.provider_id,
-            current_user_id=user.id,
-            existing_user_id=existing_user.id,
-        )
-        merge_token = await create_merge_token(
-            primary_user_id=user.id,
-            secondary_user_id=existing_user.id,
-            provider=provider_name,
-            provider_id=user_info.provider_id,
-        )
-        return ServerCompleteResponse(
-            success=False,
-            merge_required=True,
-            merge_token=merge_token,
-            provider=provider_name,
-        )
-
-    # 9. Link the provider
-    await set_user_oauth_provider_id(db, user, provider_name, user_info.provider_id)
-    try:
-        await db.commit()
-    except IntegrityError as exc:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail='This provider account was just linked to another user',
-        ) from exc
-
-    logger.info(
-        'OAuth provider linked (server-complete)',
+    # 5-9. Exchange code, fetch user info, link or merge
+    result = await _exchange_and_link_oauth(
+        db=db,
+        user=user,
         provider=provider_name,
-        provider_id=user_info.provider_id,
-        user_id=user.id,
+        code=request.code,
+        state=request.state,
+        state_data=state_data,
+        device_id=request.device_id,
+        log_context='server-complete',
     )
-    return ServerCompleteResponse(success=True, message='linked', provider=provider_name)
+
+    return ServerCompleteResponse(
+        success=result.success,
+        message=result.message,
+        merge_required=result.merge_required,
+        merge_token=result.merge_token,
+        provider=provider_name,
+    )
 
 
 # ---------------------------------------------------------------------------
