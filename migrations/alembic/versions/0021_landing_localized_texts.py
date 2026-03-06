@@ -84,14 +84,17 @@ def upgrade() -> None:
     """)
 
     # --- 2. ALTER COLUMN types: String/Text -> JSON ---
+    # Must drop server_default before type change — PG can't auto-cast defaults
+    op.alter_column('landing_pages', 'title', server_default=None)
     op.alter_column(
         'landing_pages',
         'title',
         type_=sa.JSON(),
         postgresql_using='title::jsonb',
-        server_default='{}',
         nullable=False,
     )
+    op.execute("ALTER TABLE landing_pages ALTER COLUMN title SET DEFAULT '{}'::jsonb")
+
     op.alter_column(
         'landing_pages',
         'subtitle',
