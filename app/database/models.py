@@ -191,7 +191,7 @@ class YooKassaPayment(Base):
     __tablename__ = 'yookassa_payments'
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=True)
     yookassa_payment_id = Column(String(255), unique=True, nullable=False, index=True)
     amount_kopeks = Column(Integer, nullable=False)
     currency = Column(String(3), default='RUB', nullable=False)
@@ -2988,3 +2988,77 @@ class AdminAuditLog(Base):
 
     def __repr__(self) -> str:
         return f'<AdminAuditLog id={self.id} action={self.action!r} status={self.status!r}>'
+
+
+class LandingPage(Base):
+    """Public quick-purchase landing page configuration."""
+
+    __tablename__ = 'landing_pages'
+
+    id = Column(Integer, primary_key=True, index=True)
+    slug = Column(String(100), unique=True, nullable=False, index=True)
+    is_active = Column(Boolean, nullable=False, default=True)
+    title = Column(String(500), nullable=False, default='')
+    subtitle = Column(Text, nullable=True)
+    features = Column(JSON, nullable=False, default=list)
+    footer_text = Column(Text, nullable=True)
+    allowed_tariff_ids = Column(JSON, nullable=False, default=list)
+    allowed_periods = Column(JSON, nullable=False, default=dict)
+    payment_methods = Column(JSON, nullable=False, default=list)
+    gift_enabled = Column(Boolean, nullable=False, default=True)
+    custom_css = Column(Text, nullable=True)
+    meta_title = Column(String(200), nullable=True)
+    meta_description = Column(Text, nullable=True)
+    display_order = Column(Integer, nullable=False, default=0)
+    created_at = Column(AwareDateTime(), server_default=func.now())
+    updated_at = Column(AwareDateTime(), server_default=func.now(), onupdate=func.now())
+
+    guest_purchases = relationship('GuestPurchase', back_populates='landing', lazy='noload')
+
+    def __repr__(self) -> str:
+        return f"<LandingPage slug='{self.slug}' active={self.is_active}>"
+
+
+class GuestPurchaseStatus(str, Enum):
+    PENDING = 'pending'
+    PAID = 'paid'
+    DELIVERED = 'delivered'
+    FAILED = 'failed'
+    EXPIRED = 'expired'
+
+
+class GuestPurchase(Base):
+    """Guest (unauthenticated) purchase record."""
+
+    __tablename__ = 'guest_purchases'
+
+    id = Column(Integer, primary_key=True, index=True)
+    token = Column(String(64), unique=True, nullable=False, index=True)
+    landing_id = Column(Integer, ForeignKey('landing_pages.id', ondelete='SET NULL'), nullable=True)
+    contact_type = Column(String(20), nullable=False)  # 'email' or 'telegram'
+    contact_value = Column(String(255), nullable=False)
+    is_gift = Column(Boolean, nullable=False, default=False)
+    gift_recipient_type = Column(String(20), nullable=True)
+    gift_recipient_value = Column(String(255), nullable=True)
+    gift_message = Column(Text, nullable=True)
+    tariff_id = Column(Integer, ForeignKey('tariffs.id', ondelete='SET NULL'), nullable=True)
+    period_days = Column(Integer, nullable=False)
+    amount_kopeks = Column(Integer, nullable=False)
+    currency = Column(String(3), nullable=False, default='RUB')
+    payment_method = Column(String(50), nullable=True)
+    payment_id = Column(String(255), nullable=True)
+    status = Column(String(20), nullable=False, default=GuestPurchaseStatus.PENDING.value)
+    subscription_url = Column(Text, nullable=True)
+    subscription_crypto_link = Column(Text, nullable=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    created_at = Column(AwareDateTime(), server_default=func.now())
+    paid_at = Column(AwareDateTime(), nullable=True)
+    delivered_at = Column(AwareDateTime(), nullable=True)
+
+    landing = relationship('LandingPage', back_populates='guest_purchases', lazy='selectin')
+    tariff = relationship('Tariff', lazy='selectin')
+    user = relationship('User', lazy='selectin')
+
+    def __repr__(self) -> str:
+        token_prefix = self.token[:8] if self.token else '?'
+        return f"<GuestPurchase token='{token_prefix}...' status='{self.status}'>"

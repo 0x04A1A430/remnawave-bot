@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from importlib import import_module
+from typing import Any
 
 import structlog
 from aiogram import Bot
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.external.cryptobot import CryptoBotService
@@ -338,3 +340,99 @@ class PaymentService(
             wata_service=bool(self.wata_service),
             cloudpayments_service=bool(self.cloudpayments_service),
         )
+
+    # ------------------------------------------------------------------
+    # Guest (landing page) payments
+    # ------------------------------------------------------------------
+    # Supported providers for guest payments (to be extended per-provider):
+    #   - yookassa (card, sbp)
+    #   - cryptobot
+    #   - heleket
+    #   - mulenpay
+    #   - pal24
+    #   - platega
+    #   - wata
+    #   - cloudpayments
+    #   - freekassa
+    #   - kassa_ai
+    #   - telegram_stars
+    #   - tribute
+    # Each provider returns a different result dict; the caller must
+    # extract the payment URL from the provider-specific key.
+    # ------------------------------------------------------------------
+
+    async def create_guest_payment(
+        self,
+        db: AsyncSession,
+        *,
+        amount_kopeks: int,
+        payment_method: str,
+        description: str,
+        purchase_token: str,
+        return_url: str,
+    ) -> dict[str, Any] | None:
+        """Create a payment for a guest (unauthenticated) landing-page purchase.
+
+        Stores ``purchase_token`` in payment metadata so that webhook handlers
+        can match the completed payment back to the corresponding
+        :class:`GuestPurchase` record.
+
+        Returns a provider-specific dict with at least ``payment_url`` on
+        success, or ``None`` when the requested provider is unavailable or
+        the creation call fails.
+        """
+        guest_metadata = {
+            'purpose': 'guest_purchase',
+            'purchase_token': purchase_token,
+            'source': 'landing',
+        }
+
+        # --- YooKassa (card / sbp) -------------------------------------------
+        if payment_method in ('yookassa', 'yookassa_sbp'):
+            if self.yookassa_service is None:
+                logger.warning('YooKassa is not enabled, cannot create guest payment')
+                return None
+
+            option = 'sbp' if payment_method == 'yookassa_sbp' else 'card'
+
+            if option == 'sbp':
+                result = await self.create_yookassa_sbp_payment(
+                    db=db,
+                    user_id=None,
+                    amount_kopeks=amount_kopeks,
+                    description=description,
+                    metadata=guest_metadata,
+                    return_url=return_url,
+                )
+            else:
+                result = await self.create_yookassa_payment(
+                    db=db,
+                    user_id=None,
+                    amount_kopeks=amount_kopeks,
+                    description=description,
+                    metadata=guest_metadata,
+                    return_url=return_url,
+                )
+
+            if result:
+                return {
+                    'payment_url': result.get('confirmation_url'),
+                    'payment_id': result.get('yookassa_payment_id'),
+                    'provider': 'yookassa',
+                }
+            return None
+
+        # --- Other providers: placeholder for future integration --------------
+        # TODO: Add per-provider branches following the same pattern as above.
+        # Each branch should:
+        #   1. Check that the corresponding service is initialised (not None).
+        #   2. Call the provider-specific ``create_*_payment`` mixin method,
+        #      passing ``guest_metadata`` so the purchase_token is persisted.
+        #   3. Return a dict with ``payment_url``, ``payment_id``, ``provider``.
+
+        logger.warning(
+            'Guest payment requested for unsupported provider',
+            payment_method=payment_method,
+            purchase_token=purchase_token,
+        )
+        return None

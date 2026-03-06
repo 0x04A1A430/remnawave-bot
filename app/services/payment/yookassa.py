@@ -89,12 +89,13 @@ class YooKassaPaymentMixin:
     async def create_yookassa_payment(
         self,
         db: AsyncSession,
-        user_id: int,
+        user_id: int | None,
         amount_kopeks: int,
         description: str,
         receipt_email: str | None = None,
         receipt_phone: str | None = None,
         metadata: dict[str, Any] | None = None,
+        return_url: str | None = None,
     ) -> dict[str, Any] | None:
         """Создаёт обычный платёж в YooKassa и сохраняет локальную запись."""
         if not getattr(self, 'yookassa_service', None):
@@ -109,7 +110,7 @@ class YooKassaPaymentMixin:
             payment_metadata = metadata.copy() if metadata else {}
 
             # Всегда добавляем telegram_id в метаданные для возможности возврата платежа
-            if 'user_telegram_id' not in payment_metadata:
+            if user_id is not None and 'user_telegram_id' not in payment_metadata:
                 try:
                     from app.database.crud.user import get_user_by_id
 
@@ -124,7 +125,7 @@ class YooKassaPaymentMixin:
             existing_type = payment_metadata.get('type')
             payment_metadata.update(
                 {
-                    'user_id': str(user_id),
+                    'user_id': str(user_id) if user_id is not None else '',
                     'amount_kopeks': str(amount_kopeks),
                     'type': existing_type or 'balance_topup',
                 }
@@ -137,6 +138,7 @@ class YooKassaPaymentMixin:
                 metadata=payment_metadata,
                 receipt_email=receipt_email,
                 receipt_phone=receipt_phone,
+                return_url=return_url,
             )
 
             if not yookassa_response or yookassa_response.get('error'):
@@ -191,12 +193,13 @@ class YooKassaPaymentMixin:
     async def create_yookassa_sbp_payment(
         self,
         db: AsyncSession,
-        user_id: int,
+        user_id: int | None,
         amount_kopeks: int,
         description: str,
         receipt_email: str | None = None,
         receipt_phone: str | None = None,
         metadata: dict[str, Any] | None = None,
+        return_url: str | None = None,
     ) -> dict[str, Any] | None:
         """Создаёт платёж по СБП через YooKassa."""
         if not getattr(self, 'yookassa_service', None):
@@ -211,7 +214,7 @@ class YooKassaPaymentMixin:
             payment_metadata = metadata.copy() if metadata else {}
 
             # Всегда добавляем telegram_id в метаданные для возможности возврата платежа
-            if 'user_telegram_id' not in payment_metadata:
+            if user_id is not None and 'user_telegram_id' not in payment_metadata:
                 try:
                     from app.database.crud.user import get_user_by_id
 
@@ -226,7 +229,7 @@ class YooKassaPaymentMixin:
             existing_type = payment_metadata.get('type')
             payment_metadata.update(
                 {
-                    'user_id': str(user_id),
+                    'user_id': str(user_id) if user_id is not None else '',
                     'amount_kopeks': str(amount_kopeks),
                     'type': existing_type or 'balance_topup_sbp',
                 }
@@ -239,6 +242,7 @@ class YooKassaPaymentMixin:
                 metadata=payment_metadata,
                 receipt_email=receipt_email,
                 receipt_phone=receipt_phone,
+                return_url=return_url,
             )
 
             if not yookassa_response or yookassa_response.get('error'):
@@ -564,6 +568,73 @@ class YooKassaPaymentMixin:
                     await db.commit()
                     return True
 
+            # --- Guest purchase flow (landing page) ---------------------------
+            if payment_metadata.get('purpose') == 'guest_purchase':
+                purchase_token = payment_metadata.get('purchase_token')
+                if purchase_token:
+                    try:
+                        from app.database.crud.landing import get_purchase_by_token, update_purchase_status
+                        from app.database.models import GuestPurchaseStatus
+                        from app.services.guest_purchase_service import fulfill_purchase
+
+                        # Idempotency: check if already in terminal state
+                        existing = await get_purchase_by_token(db, purchase_token)
+                        if existing and existing.status in (
+                            GuestPurchaseStatus.DELIVERED.value,
+                            GuestPurchaseStatus.FAILED.value,
+                        ):
+                            logger.info(
+                                'Guest purchase already in terminal state, skipping',
+                                purchase_token_prefix=purchase_token[:8],
+                                status=existing.status,
+                            )
+                            await db.commit()
+                            return True
+
+                        # Mark as PAID without committing — let fulfill_purchase do atomic commit
+                        await update_purchase_status(
+                            db,
+                            purchase_token,
+                            GuestPurchaseStatus.PAID,
+                            commit=False,
+                            payment_id=payment.yookassa_payment_id,
+                            paid_at=datetime.now(UTC),
+                        )
+
+                        # Fulfill: create user, subscription, deliver (commits on success)
+                        await fulfill_purchase(db, purchase_token)
+
+                        logger.info(
+                            'Guest purchase fulfilled via YooKassa',
+                            yookassa_payment_id=payment.yookassa_payment_id,
+                            purchase_token_prefix=purchase_token[:8],
+                        )
+                    except Exception as guest_error:
+                        await db.rollback()
+                        logger.exception(
+                            'Error fulfilling guest purchase from YooKassa webhook',
+                            yookassa_payment_id=payment.yookassa_payment_id,
+                            error=guest_error,
+                        )
+                        # Mark as FAILED so it doesn't get retried forever
+                        try:
+                            await update_purchase_status(
+                                db,
+                                purchase_token,
+                                GuestPurchaseStatus.FAILED,
+                            )
+                        except Exception:
+                            logger.exception('Failed to mark guest purchase as FAILED')
+                else:
+                    logger.error(
+                        'Guest purchase metadata missing purchase_token',
+                        yookassa_payment_id=payment.yookassa_payment_id,
+                    )
+                    await db.commit()
+
+                return True
+
+            # --- Standard user payment flow ------------------------------------
             payment_description = getattr(payment, 'description', 'YooKassa платеж')
 
             payment_purpose = payment_metadata.get('payment_purpose', '')
