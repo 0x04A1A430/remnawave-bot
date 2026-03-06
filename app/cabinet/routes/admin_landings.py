@@ -248,6 +248,7 @@ class PurchaseStats(BaseModel):
     pending: int = 0
     paid: int = 0
     delivered: int = 0
+    pending_activation: int = 0
     failed: int = 0
     expired: int = 0
 
@@ -322,7 +323,7 @@ async def list_landings(
     """List all landing pages with purchase stats."""
     landings = await get_all_landings(db)
     all_stats = await get_all_landing_purchase_stats(db)
-    empty_stats = {'total': 0, 'pending': 0, 'paid': 0, 'delivered': 0, 'failed': 0, 'expired': 0}
+    empty_stats = {'total': 0, 'pending': 0, 'paid': 0, 'delivered': 0, 'pending_activation': 0, 'failed': 0, 'expired': 0}
 
     items = []
     for landing in landings:
@@ -342,6 +343,7 @@ async def list_landings(
                     pending=stats.get('pending', 0),
                     paid=stats.get('paid', 0),
                     delivered=stats.get('delivered', 0),
+                    pending_activation=stats.get('pending_activation', 0),
                     failed=stats.get('failed', 0),
                     expired=stats.get('expired', 0),
                 ),
