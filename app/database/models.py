@@ -1393,6 +1393,7 @@ class TrafficPurchase(Base):
 class Transaction(Base):
     __tablename__ = 'transactions'
     __table_args__ = (
+        UniqueConstraint('external_id', 'payment_method', name='uq_transaction_external_id_method'),
         Index('ix_transactions_type_created_completed', 'type', 'created_at', 'is_completed'),
         Index('ix_transactions_user_created', 'user_id', 'created_at'),
         Index('ix_transactions_type_method_created', 'type', 'payment_method', 'created_at'),
@@ -1502,9 +1503,7 @@ class PromoCode(Base):
 
 class PromoCodeUse(Base):
     __tablename__ = 'promocode_uses'
-    __table_args__ = (
-        UniqueConstraint('user_id', 'promocode_id', name='uq_promocode_uses_user_promo'),
-    )
+    __table_args__ = (UniqueConstraint('user_id', 'promocode_id', name='uq_promocode_uses_user_promo'),)
 
     id = Column(Integer, primary_key=True, index=True)
     promocode_id = Column(Integer, ForeignKey('promocodes.id'), nullable=False)

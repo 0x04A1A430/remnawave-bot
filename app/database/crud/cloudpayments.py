@@ -92,6 +92,16 @@ async def get_cloudpayments_payment_by_id(
     return result.scalars().first()
 
 
+async def get_cloudpayments_payment_by_id_for_update(
+    db: AsyncSession,
+    payment_id: int,
+) -> CloudPaymentsPayment | None:
+    result = await db.execute(
+        select(CloudPaymentsPayment).where(CloudPaymentsPayment.id == payment_id).with_for_update()
+    )
+    return result.scalar_one_or_none()
+
+
 async def get_cloudpayments_payment_by_transaction_id(
     db: AsyncSession,
     transaction_id_cp: int,

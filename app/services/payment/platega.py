@@ -177,7 +177,10 @@ class PlategaPaymentMixin:
                 payment=payment,
                 **update_kwargs,
             )
-            await self._finalize_platega_payment(db, payment, payload)
+            result = await self._finalize_platega_payment(db, payment, payload)
+            if result is None:
+                logger.error('Platega webhook: финализация не удалась', payment_id=payment.id)
+                return False
             return True
 
         if status_raw in self._FAILED_STATUSES:
@@ -242,7 +245,9 @@ class PlategaPaymentMixin:
                     status=remote_status,
                     callback_payload=remote_payload,
                 )
-                await self._finalize_platega_payment(db, payment, remote_payload)
+                result = await self._finalize_platega_payment(db, payment, remote_payload)
+                if result is not None:
+                    payment = result
 
         return {
             'payment': payment,
@@ -259,10 +264,6 @@ class PlategaPaymentMixin:
     ) -> Any:
         payment_module = import_module('app.services.payment_service')
 
-        metadata = dict(getattr(payment, 'metadata_json', {}) or {})
-        if payload is not None:
-            metadata['webhook'] = payload
-
         paid_at = None
         if isinstance(payload, dict):
             paid_at_raw = payload.get('paidAt') or payload.get('confirmedAt')
@@ -273,21 +274,38 @@ class PlategaPaymentMixin:
                 except ValueError:
                     paid_at = None
 
-        payment = await payment_module.update_platega_payment(
-            db,
-            payment=payment,
-            status='CONFIRMED',
-            is_paid=True,
-            paid_at=paid_at,
-            metadata=metadata,
-            callback_payload=payload,
-        )
+        # Lock FIRST, then read fresh state
+        platega_lock_crud = import_module('app.database.crud.platega')
+        locked = await platega_lock_crud.get_platega_payment_by_id_for_update(db, payment.id)
+        if not locked:
+            logger.error('Platega: не удалось заблокировать платёж', payment_id=payment.id)
+            return None
+        payment = locked
 
-        locked_payment = await payment_module.get_platega_payment_by_id_for_update(db, payment.id)
-        if locked_payment:
-            payment = locked_payment
+        if payment.transaction_id:
+            logger.info(
+                'Platega платеж уже связан с транзакцией',
+                correlation_id=payment.correlation_id,
+                transaction_id=payment.transaction_id,
+            )
+            return payment
 
+        # Read fresh metadata AFTER lock to avoid stale data
         metadata = dict(getattr(payment, 'metadata_json', {}) or {})
+        if payload is not None:
+            metadata['webhook'] = payload
+
+        # Inline field assignments instead of update_platega_payment() which commits
+        # and would release the FOR UPDATE lock prematurely
+        payment.status = 'CONFIRMED'
+        payment.is_paid = True
+        if paid_at is not None:
+            payment.paid_at = paid_at
+        payment.metadata_json = metadata
+        if payload is not None:
+            payment.callback_payload = payload
+        payment.updated_at = datetime.now(UTC)
+
         balance_already_credited = bool(metadata.get('balance_credited'))
 
         invoice_message = metadata.get('invoice_message') or {}
@@ -301,14 +319,6 @@ class PlategaPaymentMixin:
                     logger.warning('Не удалось удалить Platega счёт', message_id=message_id, delete_error=delete_error)
                 else:
                     metadata.pop('invoice_message', None)
-
-        if payment.transaction_id:
-            logger.info(
-                'Platega платеж уже связан с транзакцией',
-                correlation_id=payment.correlation_id,
-                transaction_id=payment.transaction_id,
-            )
-            return payment
 
         user = await payment_module.get_user_by_id(db, payment.user_id)
         if not user:
@@ -361,6 +371,7 @@ class PlategaPaymentMixin:
                 external_id=transaction_external_id or payment.correlation_id,
                 is_completed=True,
                 created_at=getattr(payment, 'created_at', None),
+                commit=False,
             )
             created_transaction = True
 
@@ -379,6 +390,20 @@ class PlategaPaymentMixin:
         user.updated_at = datetime.now(UTC)
         await db.commit()
         await db.refresh(user)
+
+        # Emit deferred side-effects after atomic commit
+        from app.database.crud.transaction import emit_transaction_side_effects
+
+        await emit_transaction_side_effects(
+            db,
+            transaction,
+            amount_kopeks=payment.amount_kopeks,
+            user_id=payment.user_id,
+            type=TransactionType.DEPOSIT,
+            payment_method=PaymentMethod.PLATEGA,
+            external_id=transaction_external_id or payment.correlation_id,
+        )
+
         topup_status = '🆕 Первое пополнение' if was_first_topup else '🔄 Пополнение'
 
         try:

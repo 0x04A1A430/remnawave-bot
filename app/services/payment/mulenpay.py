@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 from importlib import import_module
 from typing import Any
 
@@ -225,6 +226,13 @@ class MulenPayPaymentMixin:
                     metadata=metadata,
                 )
 
+                mulenpay_lock_crud = import_module('app.database.crud.mulenpay')
+                locked = await mulenpay_lock_crud.get_mulenpay_payment_by_id_for_update(db, payment.id)
+                if not locked:
+                    logger.error('MulenPay: не удалось заблокировать платёж', payment_id=payment.id)
+                    return False
+                payment = locked
+
                 if payment.transaction_id:
                     logger.info('Для платежа уже создана транзакция', display_name=display_name, uuid=payment.uuid)
                     return True
@@ -245,6 +253,7 @@ class MulenPayPaymentMixin:
                     external_id=payment.uuid,
                     is_completed=True,
                     created_at=getattr(payment, 'created_at', None),
+                    commit=False,
                 )
 
                 await payment_module.link_mulenpay_payment_to_transaction(
@@ -263,12 +272,23 @@ class MulenPayPaymentMixin:
                 old_balance = user.balance_kopeks
                 was_first_topup = not user.has_made_first_topup
 
-                await payment_module.add_user_balance(
+                # Начисляем баланс напрямую (без add_user_balance, который делает db.commit())
+                user.balance_kopeks += payment.amount_kopeks
+                user.updated_at = datetime.now(UTC)
+
+                await db.commit()
+
+                # Emit deferred side-effects after atomic commit
+                from app.database.crud.transaction import emit_transaction_side_effects
+
+                await emit_transaction_side_effects(
                     db,
-                    user,
-                    payment.amount_kopeks,
-                    f'Пополнение {display_name}: {payment.amount_kopeks // 100}₽',
-                    create_transaction=False,
+                    transaction,
+                    amount_kopeks=payment.amount_kopeks,
+                    user_id=payment.user_id,
+                    type=TransactionType.DEPOSIT,
+                    payment_method=PaymentMethod.MULENPAY,
+                    external_id=payment.uuid,
                 )
 
                 try:

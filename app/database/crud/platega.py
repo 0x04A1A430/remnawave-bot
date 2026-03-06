@@ -130,6 +130,6 @@ async def link_platega_payment_to_transaction(
 ) -> PlategaPayment:
     payment.transaction_id = transaction_id
     payment.updated_at = datetime.now(UTC)
-    await db.commit()
+    await db.flush()
     await db.refresh(payment)
     return payment

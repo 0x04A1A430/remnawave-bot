@@ -236,6 +236,13 @@ class KassaAiPaymentMixin:
         """Создаёт транзакцию, начисляет баланс и отправляет уведомления."""
         payment_module = import_module('app.services.payment_service')
 
+        kassa_ai_lock_crud = import_module('app.database.crud.kassa_ai')
+        locked = await kassa_ai_lock_crud.get_kassa_ai_payment_by_id_for_update(db, payment.id)
+        if not locked:
+            logger.error('KassaAI: не удалось заблокировать платёж', payment_id=payment.id)
+            return False
+        payment = locked
+
         if payment.transaction_id:
             logger.info(
                 'KassaAI платеж уже привязан к транзакции (trigger=)', order_id=payment.order_id, trigger=trigger
@@ -264,16 +271,13 @@ class KassaAiPaymentMixin:
             external_id=str(intid) if intid else payment.order_id,
             is_completed=True,
             created_at=getattr(payment, 'created_at', None),
+            commit=False,
         )
 
-        # Связываем платеж с транзакцией
-        kassa_ai_crud = import_module('app.database.crud.kassa_ai')
-        await kassa_ai_crud.update_kassa_ai_payment_status(
-            db=db,
-            payment=payment,
-            status=payment.status,
-            transaction_id=transaction.id,
-        )
+        # Связываем платеж с транзакцией (без commit, чтобы сохранить атомарность)
+        payment.transaction_id = transaction.id
+        payment.updated_at = datetime.now(UTC)
+        await db.flush()
 
         old_balance = user.balance_kopeks
         was_first_topup = not user.has_made_first_topup
@@ -288,6 +292,19 @@ class KassaAiPaymentMixin:
         topup_status = 'Первое пополнение' if was_first_topup else 'Пополнение'
 
         await db.commit()
+
+        # Emit deferred side-effects after atomic commit
+        from app.database.crud.transaction import emit_transaction_side_effects
+
+        await emit_transaction_side_effects(
+            db,
+            transaction,
+            amount_kopeks=payment.amount_kopeks,
+            user_id=payment.user_id,
+            type=TransactionType.DEPOSIT,
+            payment_method=PaymentMethod.KASSA_AI,
+            external_id=str(intid) if intid else payment.order_id,
+        )
 
         # Обработка реферального пополнения
         try:
