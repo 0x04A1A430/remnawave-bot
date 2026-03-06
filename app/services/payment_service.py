@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from importlib import import_module
 from typing import Any
 
@@ -35,7 +36,7 @@ from app.services.payment.kassa_ai import KassaAiPaymentMixin
 from app.services.platega_service import PlategaService
 from app.services.wata_service import WataService
 from app.services.yookassa_service import YooKassaService
-from app.utils.currency_converter import currency_converter  # noqa: F401
+from app.utils.currency_converter import currency_converter
 
 
 logger = structlog.get_logger(__name__)
@@ -294,6 +295,13 @@ async def update_cloudpayments_payment(*args, **kwargs):
     return await cloudpayments_crud.update_cloudpayments_payment(*args, **kwargs)
 
 
+# Mapping from model_name to getter function name for providers
+# where it differs from the standard get_{model_name}_payment_by_id pattern.
+_GETTER_OVERRIDES: dict[str, str] = {
+    'mulenpay': 'get_mulenpay_payment_by_local_id',
+}
+
+
 class PaymentService(
     PaymentCommonMixin,
     TelegramStarsMixin,
@@ -381,11 +389,35 @@ class PaymentService(
         success, or ``None`` when the requested provider is unavailable or
         the creation call fails.
         """
-        guest_metadata = {
+        guest_metadata: dict[str, Any] = {
             'purpose': 'guest_purchase',
             'purchase_token': purchase_token,
             'source': 'landing',
         }
+
+        async def _patch_guest_metadata(local_payment_id: int, model_name: str) -> None:
+            """Merge guest_metadata into the local payment record's metadata_json."""
+            try:
+                crud_module = import_module(f'app.database.crud.{model_name}')
+                getter_name = _GETTER_OVERRIDES.get(model_name, f'get_{model_name}_payment_by_id')
+                getter = getattr(crud_module, getter_name, None)
+                if getter is None:
+                    logger.warning('No getter found for patching guest metadata', model_name=model_name, getter_name=getter_name)
+                    return
+                payment_record = await getter(db, local_payment_id)
+                if payment_record is None:
+                    return
+                existing_meta = dict(getattr(payment_record, 'metadata_json', None) or {})
+                existing_meta.update(guest_metadata)
+                payment_record.metadata_json = existing_meta
+                await db.commit()
+            except Exception as patch_error:
+                logger.warning(
+                    'Failed to patch guest metadata into payment record',
+                    model_name=model_name,
+                    local_payment_id=local_payment_id,
+                    error=patch_error,
+                )
 
         # --- YooKassa (card / sbp) -------------------------------------------
         if payment_method in ('yookassa', 'yookassa_sbp'):
@@ -422,17 +454,234 @@ class PaymentService(
                 }
             return None
 
-        # --- Other providers: placeholder for future integration --------------
-        # TODO: Add per-provider branches following the same pattern as above.
-        # Each branch should:
-        #   1. Check that the corresponding service is initialised (not None).
-        #   2. Call the provider-specific ``create_*_payment`` mixin method,
-        #      passing ``guest_metadata`` so the purchase_token is persisted.
-        #   3. Return a dict with ``payment_url``, ``payment_id``, ``provider``.
+        # --- CryptoBot --------------------------------------------------------
+        if payment_method == 'cryptobot':
+            if self.cryptobot_service is None:
+                logger.warning('CryptoBot is not enabled, cannot create guest payment')
+                return None
 
+            amount_rubles = amount_kopeks / 100
+            try:
+                amount_usd = await currency_converter.rub_to_usd(amount_rubles)
+            except Exception as conv_error:
+                logger.error('Currency conversion failed for CryptoBot guest payment', error=conv_error)
+                return None
+
+            # Encode guest metadata into the payload string (CryptoBot uses payload, not metadata dict)
+            payload_str = json.dumps(guest_metadata, ensure_ascii=False)
+
+            result = await self.create_cryptobot_payment(
+                db=db,
+                user_id=None,
+                amount_usd=amount_usd,
+                asset='USDT',
+                description=description,
+                payload=payload_str,
+            )
+            if result:
+                # CryptoBot stores guest_metadata in the payload field (no metadata_json column)
+                payment_url = result.get('bot_invoice_url') or result.get('mini_app_invoice_url')
+                return {
+                    'payment_url': payment_url,
+                    'payment_id': result.get('invoice_id'),
+                    'provider': 'cryptobot',
+                }
+            return None
+
+        # --- Heleket ----------------------------------------------------------
+        if payment_method == 'heleket':
+            if self.heleket_service is None:
+                logger.warning('Heleket is not enabled, cannot create guest payment')
+                return None
+
+            result = await self.create_heleket_payment(
+                db=db,
+                user_id=None,
+                amount_kopeks=amount_kopeks,
+                description=description,
+            )
+            if result:
+                await _patch_guest_metadata(result['local_payment_id'], 'heleket')
+                return {
+                    'payment_url': result.get('payment_url'),
+                    'payment_id': result.get('uuid'),
+                    'provider': 'heleket',
+                }
+            return None
+
+        # --- MulenPay ---------------------------------------------------------
+        if payment_method == 'mulenpay':
+            if self.mulenpay_service is None:
+                logger.warning('MulenPay is not enabled, cannot create guest payment')
+                return None
+
+            result = await self.create_mulenpay_payment(
+                db=db,
+                user_id=None,
+                amount_kopeks=amount_kopeks,
+                description=description,
+            )
+            if result:
+                await _patch_guest_metadata(result['local_payment_id'], 'mulenpay')
+                return {
+                    'payment_url': result.get('payment_url'),
+                    'payment_id': result.get('uuid'),
+                    'provider': 'mulenpay',
+                }
+            return None
+
+        # --- Pal24 (PayPalych) ------------------------------------------------
+        if payment_method in ('pal24', 'pal24_sbp', 'pal24_card'):
+            if self.pal24_service is None:
+                logger.warning('Pal24 is not enabled, cannot create guest payment')
+                return None
+
+            pal24_method = 'sbp' if payment_method == 'pal24_sbp' else (
+                'card' if payment_method == 'pal24_card' else None
+            )
+
+            result = await self.create_pal24_payment(
+                db=db,
+                user_id=None,
+                amount_kopeks=amount_kopeks,
+                description=description,
+                language=settings.DEFAULT_LANGUAGE,
+                payment_method=pal24_method,
+            )
+            if result:
+                await _patch_guest_metadata(result['local_payment_id'], 'pal24')
+                return {
+                    'payment_url': result.get('payment_url') or result.get('primary_url'),
+                    'payment_id': result.get('bill_id'),
+                    'provider': 'pal24',
+                }
+            return None
+
+        # --- Platega ----------------------------------------------------------
+        if payment_method.startswith('platega'):
+            if self.platega_service is None:
+                logger.warning('Platega is not enabled, cannot create guest payment')
+                return None
+
+            # Extract method code: "platega_2" -> 2, "platega" -> first active method
+            method_code: int | None = None
+            if '_' in payment_method:
+                suffix = payment_method.split('_', 1)[1]
+                try:
+                    method_code = int(suffix)
+                except ValueError:
+                    pass
+
+            if method_code is None:
+                active_methods = settings.get_platega_active_methods()
+                method_code = active_methods[0] if active_methods else 2
+
+            result = await self.create_platega_payment(
+                db=db,
+                user_id=None,
+                amount_kopeks=amount_kopeks,
+                description=description,
+                language=settings.DEFAULT_LANGUAGE,
+                payment_method_code=method_code,
+            )
+            if result:
+                await _patch_guest_metadata(result['local_payment_id'], 'platega')
+                return {
+                    'payment_url': result.get('redirect_url'),
+                    'payment_id': result.get('correlation_id'),
+                    'provider': 'platega',
+                }
+            return None
+
+        # --- WATA -------------------------------------------------------------
+        if payment_method == 'wata':
+            if self.wata_service is None:
+                logger.warning('WATA is not enabled, cannot create guest payment')
+                return None
+
+            result = await self.create_wata_payment(
+                db=db,
+                user_id=None,
+                amount_kopeks=amount_kopeks,
+                description=description,
+            )
+            if result:
+                await _patch_guest_metadata(result['local_payment_id'], 'wata')
+                return {
+                    'payment_url': result.get('payment_url'),
+                    'payment_id': result.get('payment_link_id'),
+                    'provider': 'wata',
+                }
+            return None
+
+        # --- CloudPayments ----------------------------------------------------
+        if payment_method == 'cloudpayments':
+            if self.cloudpayments_service is None:
+                logger.warning('CloudPayments is not enabled, cannot create guest payment')
+                return None
+
+            result = await self.create_cloudpayments_payment(
+                db=db,
+                user_id=None,
+                amount_kopeks=amount_kopeks,
+                description=description,
+            )
+            if result:
+                await _patch_guest_metadata(result['payment_id'], 'cloudpayments')
+                return {
+                    'payment_url': result.get('payment_url'),
+                    'payment_id': result.get('invoice_id'),
+                    'provider': 'cloudpayments',
+                }
+            return None
+
+        # --- Freekassa --------------------------------------------------------
+        if payment_method in ('freekassa', 'freekassa_sbp', 'freekassa_card'):
+            if not settings.is_freekassa_enabled():
+                logger.warning('Freekassa is not enabled, cannot create guest payment')
+                return None
+
+            result = await self.create_freekassa_payment(
+                db=db,
+                user_id=None,
+                amount_kopeks=amount_kopeks,
+                description=description,
+                payment_method=payment_method,
+            )
+            if result:
+                await _patch_guest_metadata(result['local_payment_id'], 'freekassa')
+                return {
+                    'payment_url': result.get('payment_url'),
+                    'payment_id': result.get('order_id'),
+                    'provider': 'freekassa',
+                }
+            return None
+
+        # --- KassaAI ----------------------------------------------------------
+        if payment_method == 'kassa_ai':
+            if not settings.is_kassa_ai_enabled():
+                logger.warning('KassaAI is not enabled, cannot create guest payment')
+                return None
+
+            result = await self.create_kassa_ai_payment(
+                db=db,
+                user_id=None,
+                amount_kopeks=amount_kopeks,
+                description=description,
+            )
+            if result:
+                await _patch_guest_metadata(result['local_payment_id'], 'kassa_ai')
+                return {
+                    'payment_url': result.get('payment_url'),
+                    'payment_id': result.get('order_id'),
+                    'provider': 'kassa_ai',
+                }
+            return None
+
+        # --- Unsupported provider ---------------------------------------------
         logger.warning(
             'Guest payment requested for unsupported provider',
             payment_method=payment_method,
-            purchase_token=purchase_token,
+            purchase_token_prefix=purchase_token[:5],
         )
         return None

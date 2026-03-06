@@ -68,7 +68,7 @@ class WataPaymentMixin:
     async def create_wata_payment(
         self,
         db: AsyncSession,
-        user_id: int,
+        user_id: int | None,
         amount_kopeks: int,
         description: str,
         *,
@@ -98,7 +98,10 @@ class WataPaymentMixin:
 
         # Добавляем идентификатор плательщика (telegram_id или email) в описание
         try:
-            user = await payment_module.get_user_by_id(db, user_id)
+            if user_id is not None:
+                user = await payment_module.get_user_by_id(db, user_id)
+            else:
+                user = None
             if user:
                 if user.telegram_id:
                     description = f'{description} | ID: {user.telegram_id}'
@@ -107,7 +110,7 @@ class WataPaymentMixin:
         except Exception as error:
             logger.debug('Не удалось получить данные пользователя для описания WATA', error=error)
 
-        order_id = f'wata_{user_id}_{uuid.uuid4().hex[:12]}'
+        order_id = f'wata_{user_id or "guest"}_{uuid.uuid4().hex[:12]}'
 
         try:
             response = await self.wata_service.create_payment_link(  # type: ignore[union-attr]
@@ -436,6 +439,20 @@ class WataPaymentMixin:
                 payment_link_id=payment.payment_link_id,
                 transaction_id=payment.transaction_id,
             )
+            return payment
+
+        # --- Guest purchase flow (landing page) ---
+        wata_metadata = dict(getattr(payment, 'metadata_json', {}) or {})
+        from app.services.payment.common import try_fulfill_guest_purchase
+
+        guest_result = await try_fulfill_guest_purchase(
+            db,
+            metadata=wata_metadata,
+            payment_amount_kopeks=payment.amount_kopeks,
+            provider_payment_id=payment.payment_link_id,
+            provider_name='wata',
+        )
+        if guest_result is not None:
             return payment
 
         user = await payment_module.get_user_by_id(db, payment.user_id)

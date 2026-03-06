@@ -15,7 +15,7 @@ logger = structlog.get_logger(__name__)
 async def create_heleket_payment(
     db: AsyncSession,
     *,
-    user_id: int,
+    user_id: int | None,
     uuid: str,
     order_id: str,
     amount: str,

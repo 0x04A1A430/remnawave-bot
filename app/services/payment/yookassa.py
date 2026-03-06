@@ -569,83 +569,19 @@ class YooKassaPaymentMixin:
                     return True
 
             # --- Guest purchase flow (landing page) ---------------------------
-            if payment_metadata.get('purpose') == 'guest_purchase':
-                purchase_token = payment_metadata.get('purchase_token')
-                if purchase_token:
-                    try:
-                        from app.database.crud.landing import get_purchase_by_token, update_purchase_status
-                        from app.database.models import GuestPurchaseStatus
-                        from app.services.guest_purchase_service import fulfill_purchase
+            webhook_amount_value = event_object.get('amount', {}).get('value', '0')
+            webhook_amount_kopeks = int(Decimal(str(webhook_amount_value)) * 100)
 
-                        # Verify webhook amount matches the stored purchase amount
-                        webhook_amount_value = event_object.get('amount', {}).get('value', '0')
-                        webhook_amount_kopeks = int(Decimal(str(webhook_amount_value)) * 100)
+            from app.services.payment.common import try_fulfill_guest_purchase
 
-                        existing = await get_purchase_by_token(db, purchase_token)
-                        if existing and webhook_amount_kopeks != existing.amount_kopeks:
-                            logger.error(
-                                'Webhook amount does not match purchase amount',
-                                webhook_kopeks=webhook_amount_kopeks,
-                                purchase_kopeks=existing.amount_kopeks,
-                                purchase_token_prefix=purchase_token[:5],
-                            )
-                            await update_purchase_status(db, purchase_token, GuestPurchaseStatus.FAILED)
-                            return True
-
-                        # Idempotency: check if already in terminal state
-                        if existing and existing.status in (
-                            GuestPurchaseStatus.DELIVERED.value,
-                            GuestPurchaseStatus.FAILED.value,
-                        ):
-                            logger.info(
-                                'Guest purchase already in terminal state, skipping',
-                                purchase_token_prefix=purchase_token[:5],
-                                status=existing.status,
-                            )
-                            await db.commit()
-                            return True
-
-                        # Mark as PAID without committing — let fulfill_purchase do atomic commit
-                        await update_purchase_status(
-                            db,
-                            purchase_token,
-                            GuestPurchaseStatus.PAID,
-                            commit=False,
-                            payment_id=payment.yookassa_payment_id,
-                            paid_at=datetime.now(UTC),
-                        )
-
-                        # Fulfill: create user, subscription, deliver (commits on success)
-                        await fulfill_purchase(db, purchase_token)
-
-                        logger.info(
-                            'Guest purchase fulfilled via YooKassa',
-                            yookassa_payment_id=payment.yookassa_payment_id,
-                            purchase_token_prefix=purchase_token[:5],
-                        )
-                    except Exception as guest_error:
-                        await db.rollback()
-                        logger.exception(
-                            'Error fulfilling guest purchase from YooKassa webhook',
-                            yookassa_payment_id=payment.yookassa_payment_id,
-                            error=guest_error,
-                        )
-                        # Mark as FAILED so it doesn't get retried forever
-                        try:
-                            await update_purchase_status(
-                                db,
-                                purchase_token,
-                                GuestPurchaseStatus.FAILED,
-                            )
-                        except Exception:
-                            logger.exception('Failed to mark guest purchase as FAILED')
-                else:
-                    logger.error(
-                        'Guest purchase metadata missing purchase_token',
-                        yookassa_payment_id=payment.yookassa_payment_id,
-                    )
-                    await db.commit()
-
+            guest_result = await try_fulfill_guest_purchase(
+                db,
+                metadata=payment_metadata,
+                payment_amount_kopeks=webhook_amount_kopeks,
+                provider_payment_id=payment.yookassa_payment_id,
+                provider_name='yookassa',
+            )
+            if guest_result is not None:
                 return True
 
             # --- Standard user payment flow ------------------------------------

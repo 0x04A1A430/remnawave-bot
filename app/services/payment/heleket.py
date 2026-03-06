@@ -22,7 +22,7 @@ class HeleketPaymentMixin:
     async def create_heleket_payment(
         self,
         db: AsyncSession,
-        user_id: int,
+        user_id: int | None,
         amount_kopeks: int,
         description: str,
         *,
@@ -39,7 +39,7 @@ class HeleketPaymentMixin:
         amount_rubles = amount_kopeks / 100
         amount_str = f'{amount_rubles:.2f}'
 
-        order_id = f'heleket_{user_id}_{int(time.time())}_{secrets.token_hex(3)}'
+        order_id = f'heleket_{user_id or "guest"}_{int(time.time())}_{secrets.token_hex(3)}'
 
         markup_percent = settings.get_heleket_markup_percent()
         discount_percent: int | None = None
@@ -301,6 +301,21 @@ class HeleketPaymentMixin:
                 'Heleket платеж имеет некорректную сумму', uuid=updated_payment.uuid, amount=updated_payment.amount
             )
             return None
+
+        # --- Guest purchase flow (landing page) ---
+        # Re-read metadata from the locked row to avoid stale data
+        locked_metadata = dict(getattr(updated_payment, 'metadata_json', {}) or {})
+        from app.services.payment.common import try_fulfill_guest_purchase
+
+        guest_result = await try_fulfill_guest_purchase(
+            db,
+            metadata=locked_metadata,
+            payment_amount_kopeks=amount_kopeks,
+            provider_payment_id=updated_payment.uuid,
+            provider_name='heleket',
+        )
+        if guest_result is not None:
+            return updated_payment
 
         transaction = await payment_module.create_transaction(
             db,

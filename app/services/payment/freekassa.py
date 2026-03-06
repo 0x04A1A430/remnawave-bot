@@ -24,7 +24,7 @@ class FreekassaPaymentMixin:
         self,
         db: AsyncSession,
         *,
-        user_id: int,
+        user_id: int | None,
         amount_kopeks: int,
         description: str = 'Пополнение баланса',
         email: str | None = None,
@@ -68,7 +68,7 @@ class FreekassaPaymentMixin:
             return None
 
         # Генерируем уникальный order_id
-        order_id = f'fk_{user_id}_{uuid.uuid4().hex[:12]}'
+        order_id = f'fk_{user_id or "guest"}_{uuid.uuid4().hex[:12]}'
         amount_rubles = amount_kopeks / 100
         currency = settings.FREEKASSA_CURRENCY
 
@@ -124,7 +124,7 @@ class FreekassaPaymentMixin:
                 description=description,
                 payment_url=payment_url,
                 expires_at=expires_at,
-                metadata_json=json.dumps(metadata, ensure_ascii=False),
+                metadata_json=metadata,
             )
 
             logger.info(
@@ -261,6 +261,20 @@ class FreekassaPaymentMixin:
             logger.info(
                 'Freekassa платеж уже привязан к транзакции (trigger=)', order_id=payment.order_id, trigger=trigger
             )
+            return True
+
+        # --- Guest purchase flow (landing page) ---
+        fk_metadata = dict(getattr(payment, 'metadata_json', {}) or {})
+        from app.services.payment.common import try_fulfill_guest_purchase
+
+        guest_result = await try_fulfill_guest_purchase(
+            db,
+            metadata=fk_metadata,
+            payment_amount_kopeks=payment.amount_kopeks,
+            provider_payment_id=str(intid) if intid else payment.order_id,
+            provider_name='freekassa',
+        )
+        if guest_result is not None:
             return True
 
         # Получаем пользователя

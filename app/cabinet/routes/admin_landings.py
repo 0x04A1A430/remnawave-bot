@@ -7,6 +7,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cabinet.utils.locale import (
+    ensure_locale_dict,
+    validate_locale_dict,
+)
 from app.database.crud.landing import (
     create_landing,
     delete_landing,
@@ -48,8 +52,23 @@ _RESERVED_SLUGS = frozenset(
 
 class LandingFeatureInput(BaseModel):
     icon: str = Field(default='', max_length=100)
-    title: str = Field(default='', max_length=200)
-    description: str = Field(default='', max_length=500)
+    title: dict[str, str] = Field(default_factory=dict)
+    description: dict[str, str] = Field(default_factory=dict)
+
+    @field_validator('title', 'description', mode='before')
+    @classmethod
+    def coerce_to_dict(cls, v: dict[str, str] | str | None) -> dict[str, str]:
+        return ensure_locale_dict(v)
+
+    @field_validator('title')
+    @classmethod
+    def validate_title_length(cls, v: dict[str, str]) -> dict[str, str]:
+        return validate_locale_dict(v, max_length=200, field_name='feature.title')
+
+    @field_validator('description')
+    @classmethod
+    def validate_description_length(cls, v: dict[str, str]) -> dict[str, str]:
+        return validate_locale_dict(v, max_length=500, field_name='feature.description')
 
 
 class LandingPaymentMethodInput(BaseModel):
@@ -71,34 +90,116 @@ class LandingPaymentMethodInput(BaseModel):
 
 class LandingCreateRequest(BaseModel):
     slug: str = Field(pattern=r'^[a-z0-9\-]+$', min_length=1, max_length=100)
-    title: str = Field(min_length=1, max_length=500)
-    subtitle: str | None = Field(default=None, max_length=1000)
+    title: dict[str, str] = Field(default_factory=lambda: {'ru': ''})
+    subtitle: dict[str, str] | None = None
     is_active: bool = True
     features: list[LandingFeatureInput] = Field(default_factory=list, max_length=20)
-    footer_text: str | None = Field(default=None, max_length=5000)
+    footer_text: dict[str, str] | None = None
     allowed_tariff_ids: list[int] = Field(default_factory=list)
     allowed_periods: dict[str, list[int]] = Field(default_factory=dict)
     payment_methods: list[LandingPaymentMethodInput] = Field(default_factory=list, max_length=10)
     gift_enabled: bool = True
     custom_css: str | None = Field(default=None, max_length=10000)
-    meta_title: str | None = Field(default=None, max_length=200)
-    meta_description: str | None = Field(default=None, max_length=500)
+    meta_title: dict[str, str] | None = None
+    meta_description: dict[str, str] | None = None
+
+    @field_validator('title', 'subtitle', 'footer_text', 'meta_title', 'meta_description', mode='before')
+    @classmethod
+    def coerce_text_to_dict(cls, v: dict[str, str] | str | None) -> dict[str, str] | None:
+        if v is None:
+            return None
+        return ensure_locale_dict(v)
+
+    @field_validator('title')
+    @classmethod
+    def validate_title(cls, v: dict[str, str]) -> dict[str, str]:
+        return validate_locale_dict(v, max_length=500, field_name='title')
+
+    @field_validator('subtitle')
+    @classmethod
+    def validate_subtitle(cls, v: dict[str, str] | None) -> dict[str, str] | None:
+        if v is None:
+            return None
+        return validate_locale_dict(v, max_length=1000, field_name='subtitle')
+
+    @field_validator('footer_text')
+    @classmethod
+    def validate_footer_text(cls, v: dict[str, str] | None) -> dict[str, str] | None:
+        if v is None:
+            return None
+        return validate_locale_dict(v, max_length=5000, field_name='footer_text')
+
+    @field_validator('meta_title')
+    @classmethod
+    def validate_meta_title(cls, v: dict[str, str] | None) -> dict[str, str] | None:
+        if v is None:
+            return None
+        return validate_locale_dict(v, max_length=200, field_name='meta_title')
+
+    @field_validator('meta_description')
+    @classmethod
+    def validate_meta_description(cls, v: dict[str, str] | None) -> dict[str, str] | None:
+        if v is None:
+            return None
+        return validate_locale_dict(v, max_length=500, field_name='meta_description')
 
 
 class LandingUpdateRequest(BaseModel):
     slug: str | None = Field(default=None, pattern=r'^[a-z0-9\-]+$', min_length=1, max_length=100)
-    title: str | None = Field(default=None, min_length=1, max_length=500)
-    subtitle: str | None = Field(default=None, max_length=1000)
+    title: dict[str, str] | None = None
+    subtitle: dict[str, str] | None = None
     is_active: bool | None = None
     features: list[LandingFeatureInput] | None = Field(default=None, max_length=20)
-    footer_text: str | None = Field(default=None, max_length=5000)
+    footer_text: dict[str, str] | None = None
     allowed_tariff_ids: list[int] | None = None
     allowed_periods: dict[str, list[int]] | None = None
     payment_methods: list[LandingPaymentMethodInput] | None = Field(default=None, max_length=10)
     gift_enabled: bool | None = None
     custom_css: str | None = Field(default=None, max_length=10000)
-    meta_title: str | None = Field(default=None, max_length=200)
-    meta_description: str | None = Field(default=None, max_length=500)
+    meta_title: dict[str, str] | None = None
+    meta_description: dict[str, str] | None = None
+
+    @field_validator('title', 'subtitle', 'footer_text', 'meta_title', 'meta_description', mode='before')
+    @classmethod
+    def coerce_text_to_dict(cls, v: dict[str, str] | str | None) -> dict[str, str] | None:
+        if v is None:
+            return None
+        return ensure_locale_dict(v)
+
+    @field_validator('title')
+    @classmethod
+    def validate_title(cls, v: dict[str, str] | None) -> dict[str, str] | None:
+        if v is None:
+            return None
+        return validate_locale_dict(v, max_length=500, field_name='title')
+
+    @field_validator('subtitle')
+    @classmethod
+    def validate_subtitle(cls, v: dict[str, str] | None) -> dict[str, str] | None:
+        if v is None:
+            return None
+        return validate_locale_dict(v, max_length=1000, field_name='subtitle')
+
+    @field_validator('footer_text')
+    @classmethod
+    def validate_footer_text(cls, v: dict[str, str] | None) -> dict[str, str] | None:
+        if v is None:
+            return None
+        return validate_locale_dict(v, max_length=5000, field_name='footer_text')
+
+    @field_validator('meta_title')
+    @classmethod
+    def validate_meta_title(cls, v: dict[str, str] | None) -> dict[str, str] | None:
+        if v is None:
+            return None
+        return validate_locale_dict(v, max_length=200, field_name='meta_title')
+
+    @field_validator('meta_description')
+    @classmethod
+    def validate_meta_description(cls, v: dict[str, str] | None) -> dict[str, str] | None:
+        if v is None:
+            return None
+        return validate_locale_dict(v, max_length=500, field_name='meta_description')
 
 
 class PurchaseStats(BaseModel):
@@ -113,7 +214,7 @@ class PurchaseStats(BaseModel):
 class LandingListItem(BaseModel):
     id: int
     slug: str
-    title: str
+    title: dict[str, str]
     is_active: bool
     display_order: int
     gift_enabled: bool
@@ -123,6 +224,11 @@ class LandingListItem(BaseModel):
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
+    @field_validator('title', mode='before')
+    @classmethod
+    def coerce_title(cls, v: dict[str, str] | str | None) -> dict[str, str]:
+        return ensure_locale_dict(v)
+
     class Config:
         from_attributes = True
 
@@ -130,21 +236,28 @@ class LandingListItem(BaseModel):
 class LandingDetailResponse(BaseModel):
     id: int
     slug: str
-    title: str
-    subtitle: str | None = None
+    title: dict[str, str]
+    subtitle: dict[str, str] | None = None
     is_active: bool
     display_order: int
     features: list[LandingFeatureInput]
-    footer_text: str | None = None
+    footer_text: dict[str, str] | None = None
     allowed_tariff_ids: list[int]
     allowed_periods: dict[str, list[int]]
     payment_methods: list[LandingPaymentMethodInput]
     gift_enabled: bool
     custom_css: str | None = None
-    meta_title: str | None = None
-    meta_description: str | None = None
+    meta_title: dict[str, str] | None = None
+    meta_description: dict[str, str] | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
+
+    @field_validator('title', 'subtitle', 'footer_text', 'meta_title', 'meta_description', mode='before')
+    @classmethod
+    def coerce_to_dict(cls, v: dict[str, str] | str | None) -> dict[str, str] | None:
+        if v is None:
+            return None
+        return ensure_locale_dict(v)
 
     class Config:
         from_attributes = True
@@ -358,12 +471,15 @@ async def toggle_landing_active(
 
 
 def _landing_to_detail(landing) -> LandingDetailResponse:
-    """Convert a LandingPage model to LandingDetailResponse."""
+    """Convert a LandingPage model to LandingDetailResponse.
+
+    Admin detail view returns full locale dicts for all text fields.
+    """
     features = [
         LandingFeatureInput(
             icon=f.get('icon', ''),
-            title=f.get('title', ''),
-            description=f.get('description', ''),
+            title=f.get('title', {}),
+            description=f.get('description', {}),
         )
         for f in (landing.features or [])
     ]
@@ -382,7 +498,7 @@ def _landing_to_detail(landing) -> LandingDetailResponse:
     return LandingDetailResponse(
         id=landing.id,
         slug=landing.slug,
-        title=landing.title,
+        title=landing.title or {},
         subtitle=landing.subtitle,
         is_active=landing.is_active,
         display_order=landing.display_order,

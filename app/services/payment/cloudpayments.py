@@ -21,7 +21,7 @@ class CloudPaymentsPaymentMixin:
     async def create_cloudpayments_payment(
         self,
         db: AsyncSession,
-        user_id: int,
+        user_id: int | None,
         amount_kopeks: int,
         description: str,
         *,
@@ -211,6 +211,27 @@ class CloudPaymentsPaymentMixin:
                 expected_kopeks=payment.amount_kopeks,
             )
             return False
+
+        # --- Guest purchase flow (landing page) ---
+        cp_metadata = dict(getattr(payment, 'metadata_json', {}) or {})
+        from app.services.payment.common import try_fulfill_guest_purchase
+
+        guest_result = await try_fulfill_guest_purchase(
+            db,
+            metadata=cp_metadata,
+            payment_amount_kopeks=amount_kopeks,
+            provider_payment_id=str(transaction_id_cp) if transaction_id_cp else invoice_id,
+            provider_name='cloudpayments',
+        )
+        if guest_result is not None:
+            # Update payment record even for guest purchases
+            payment.transaction_id_cp = transaction_id_cp
+            payment.status = 'completed'
+            payment.is_paid = True
+            payment.paid_at = datetime.now(UTC)
+            payment.callback_payload = webhook_data
+            await db.flush()
+            return True
 
         # Update payment record
         payment.transaction_id_cp = transaction_id_cp

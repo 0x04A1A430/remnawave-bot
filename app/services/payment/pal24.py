@@ -23,7 +23,7 @@ class Pal24PaymentMixin:
         self,
         db: AsyncSession,
         *,
-        user_id: int,
+        user_id: int | None,
         amount_kopeks: int,
         description: str,
         language: str,
@@ -53,7 +53,7 @@ class Pal24PaymentMixin:
             )
             return None
 
-        order_id = f'pal24_{user_id}_{uuid.uuid4().hex}'
+        order_id = f'pal24_{user_id or "guest"}_{uuid.uuid4().hex}'
 
         custom_payload = {
             'user_id': user_id,
@@ -355,6 +355,20 @@ class Pal24PaymentMixin:
 
         if payment.transaction_id:
             logger.info('Pal24 платеж уже привязан к транзакции (trigger=)', bill_id=payment.bill_id, trigger=trigger)
+            return True
+
+        # --- Guest purchase flow (landing page) ---
+        payment_meta = dict(getattr(payment, 'metadata_json', {}) or {})
+        from app.services.payment.common import try_fulfill_guest_purchase
+
+        guest_result = await try_fulfill_guest_purchase(
+            db,
+            metadata=payment_meta,
+            payment_amount_kopeks=payment.amount_kopeks,
+            provider_payment_id=payment.bill_id,
+            provider_name='pal24',
+        )
+        if guest_result is not None:
             return True
 
         user = await payment_module.get_user_by_id(db, payment.user_id)

@@ -4,11 +4,12 @@ import re
 from datetime import UTC, datetime, timedelta
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Path, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cabinet.utils.locale import DEFAULT_LOCALE, resolve_locale_text
 from app.config import settings
 from app.database.crud.landing import get_active_landing_by_slug, get_purchase_by_token
 from app.database.models import Tariff
@@ -126,6 +127,18 @@ class PurchaseStatusResponse(BaseModel):
 
 
 # ============ Helpers ============
+
+
+def _mask_contact(value: str) -> str:
+    """Mask contact value to avoid leaking PII in API responses."""
+    if '@' in value and not value.startswith('@'):
+        # Email: show first 2 chars + mask + domain
+        local, domain = value.rsplit('@', 1)
+        return f'{local[:2]}***@{domain}'
+    if value.startswith('@'):
+        # Telegram: show first 3 chars + mask
+        return f'{value[:3]}***'
+    return value[:3] + '***'
 
 
 def _period_label(days: int) -> str:
@@ -256,12 +269,14 @@ async def get_purchase_status(
             subscription_url = purchase.subscription_url
             subscription_crypto_link = purchase.subscription_crypto_link
 
+    masked_contact = _mask_contact(purchase.contact_value) if purchase.contact_value else None
+
     return PurchaseStatusResponse(
         status=purchase.status,
         subscription_url=subscription_url,
         subscription_crypto_link=subscription_crypto_link,
         is_gift=purchase.is_gift,
-        contact_value=purchase.contact_value,
+        contact_value=masked_contact,
         period_days=purchase.period_days,
         tariff_name=tariff_name,
     )
@@ -269,13 +284,19 @@ async def get_purchase_status(
 
 @router.get('/{slug}', response_model=LandingConfigResponse)
 async def get_landing_config(
+    raw_request: Request,
     slug: str = Path(max_length=100),
+    lang: str = Query(DEFAULT_LOCALE, max_length=5, description='Locale: ru, en, zh, fa'),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get public landing page configuration with tariffs and payment methods.
 
-    No authentication required.
+    No authentication required. Pass ``?lang=en`` to get localized text.
     """
+    client_ip = get_client_ip(raw_request)
+    if await RateLimitCache.is_ip_rate_limited(client_ip, 'landing_config', limit=60, window=60, fail_closed=True):
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail='Too many requests')
+
     landing = await get_active_landing_by_slug(db, slug)
     if landing is None:
         raise HTTPException(
@@ -298,27 +319,28 @@ async def get_landing_config(
         for m in raw_methods
     ]
 
+    # Resolve locale dicts to flat strings for the requested language
     features = [
         LandingFeature(
             icon=f.get('icon', ''),
-            title=f.get('title', ''),
-            description=f.get('description', ''),
+            title=resolve_locale_text(f.get('title'), lang),
+            description=resolve_locale_text(f.get('description'), lang),
         )
         for f in (landing.features or [])
     ]
 
     return LandingConfigResponse(
         slug=landing.slug,
-        title=landing.title,
-        subtitle=landing.subtitle,
+        title=resolve_locale_text(landing.title, lang),
+        subtitle=resolve_locale_text(landing.subtitle, lang) or None,
         features=features,
-        footer_text=landing.footer_text,
+        footer_text=resolve_locale_text(landing.footer_text, lang) or None,
         tariffs=tariffs,
         payment_methods=payment_methods,
         gift_enabled=landing.gift_enabled,
         custom_css=landing.custom_css,
-        meta_title=landing.meta_title,
-        meta_description=landing.meta_description,
+        meta_title=resolve_locale_text(landing.meta_title, lang) or None,
+        meta_description=resolve_locale_text(landing.meta_description, lang) or None,
     )
 
 

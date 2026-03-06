@@ -13,7 +13,7 @@ logger = structlog.get_logger(__name__)
 
 async def create_cryptobot_payment(
     db: AsyncSession,
-    user_id: int,
+    user_id: int | None,
     invoice_id: str,
     amount: str,
     asset: str,

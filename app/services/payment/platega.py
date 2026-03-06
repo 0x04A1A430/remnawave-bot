@@ -27,7 +27,7 @@ class PlategaPaymentMixin:
         self,
         db: AsyncSession,
         *,
-        user_id: int,
+        user_id: int | None,
         amount_kopeks: int,
         description: str,
         language: str,
@@ -292,6 +292,20 @@ class PlategaPaymentMixin:
 
         # Read fresh metadata AFTER lock to avoid stale data
         metadata = dict(getattr(payment, 'metadata_json', {}) or {})
+
+        # --- Guest purchase flow (landing page) ---
+        from app.services.payment.common import try_fulfill_guest_purchase
+
+        guest_result = await try_fulfill_guest_purchase(
+            db,
+            metadata=metadata,
+            payment_amount_kopeks=payment.amount_kopeks,
+            provider_payment_id=payment.correlation_id,
+            provider_name='platega',
+        )
+        if guest_result is not None:
+            return payment
+
         if payload is not None:
             metadata['webhook'] = payload
 

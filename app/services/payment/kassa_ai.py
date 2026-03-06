@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import uuid
 from datetime import UTC, datetime, timedelta
 from importlib import import_module
@@ -24,7 +23,7 @@ class KassaAiPaymentMixin:
         self,
         db: AsyncSession,
         *,
-        user_id: int,
+        user_id: int | None,
         amount_kopeks: int,
         description: str = 'Пополнение баланса',
         email: str | None = None,
@@ -67,8 +66,11 @@ class KassaAiPaymentMixin:
 
         # Получаем telegram_id пользователя для order_id
         payment_module = import_module('app.services.payment_service')
-        user = await payment_module.get_user_by_id(db, user_id)
-        tg_id = user.telegram_id if user else user_id
+        if user_id is not None:
+            user = await payment_module.get_user_by_id(db, user_id)
+        else:
+            user = None
+        tg_id = user.telegram_id if user else (user_id or 'guest')
 
         # Генерируем уникальный order_id с telegram_id для удобного поиска
         order_id = f'k{tg_id}_{uuid.uuid4().hex[:6]}'
@@ -118,7 +120,7 @@ class KassaAiPaymentMixin:
                 payment_url=payment_url,
                 payment_system_id=settings.KASSA_AI_PAYMENT_SYSTEM_ID,
                 expires_at=expires_at,
-                metadata_json=json.dumps(metadata, ensure_ascii=False),
+                metadata_json=metadata,
             )
 
             logger.info(
@@ -247,6 +249,20 @@ class KassaAiPaymentMixin:
             logger.info(
                 'KassaAI платеж уже привязан к транзакции (trigger=)', order_id=payment.order_id, trigger=trigger
             )
+            return True
+
+        # --- Guest purchase flow (landing page) ---
+        kai_metadata = dict(getattr(payment, 'metadata_json', {}) or {})
+        from app.services.payment.common import try_fulfill_guest_purchase
+
+        guest_result = await try_fulfill_guest_purchase(
+            db,
+            metadata=kai_metadata,
+            payment_amount_kopeks=payment.amount_kopeks,
+            provider_payment_id=str(intid) if intid else payment.order_id,
+            provider_name='kassa_ai',
+        )
+        if guest_result is not None:
             return True
 
         # Получаем пользователя
