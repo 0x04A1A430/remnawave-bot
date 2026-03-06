@@ -4,7 +4,7 @@ from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database.crud.referral import create_referral_earning, get_user_campaign_id
+from app.database.crud.referral import create_referral_earning, get_commission_payment_count, get_user_campaign_id
 from app.database.crud.user import add_user_balance, get_user_by_id
 from app.database.models import ReferralEarning, TransactionType, User
 from app.services.notification_delivery_service import (
@@ -169,6 +169,18 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
                     topup_amount_kopeks=topup_amount_kopeks / 100,
                 )
 
+                if commission_amount > 0 and settings.REFERRAL_MAX_COMMISSION_PAYMENTS > 0:
+                    paid_count = await get_commission_payment_count(db, referrer.id, user.id)
+                    if paid_count >= settings.REFERRAL_MAX_COMMISSION_PAYMENTS:
+                        logger.info(
+                            'Лимит комиссионных платежей исчерпан',
+                            referrer_id=referrer.id,
+                            referral_id=user.id,
+                            paid_count=paid_count,
+                            max_payments=settings.REFERRAL_MAX_COMMISSION_PAYMENTS,
+                        )
+                        return True
+
                 if commission_amount > 0:
                     balance_ok = await add_user_balance(
                         db,
@@ -325,6 +337,18 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
                     )
 
         elif commission_amount > 0:
+            if settings.REFERRAL_MAX_COMMISSION_PAYMENTS > 0:
+                paid_count = await get_commission_payment_count(db, referrer.id, user.id)
+                if paid_count >= settings.REFERRAL_MAX_COMMISSION_PAYMENTS:
+                    logger.info(
+                        'Лимит комиссионных платежей исчерпан',
+                        referrer_id=referrer.id,
+                        referral_id=user.id,
+                        paid_count=paid_count,
+                        max_payments=settings.REFERRAL_MAX_COMMISSION_PAYMENTS,
+                    )
+                    return True
+
             balance_ok = await add_user_balance(
                 db,
                 referrer,
