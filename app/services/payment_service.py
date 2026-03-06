@@ -618,7 +618,7 @@ class PaymentService(
             return None
 
         # --- CloudPayments ----------------------------------------------------
-        if payment_method in ('cloudpayments', 'cloudpayments_card', 'cloudpayments_sbp'):
+        if payment_method == 'cloudpayments':
             if self.cloudpayments_service is None:
                 logger.warning('CloudPayments is not enabled, cannot create guest payment')
                 return None
