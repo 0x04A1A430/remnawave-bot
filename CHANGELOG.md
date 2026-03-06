@@ -1,5 +1,20 @@
 # Changelog
 
+## [3.23.1](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.23.0...v3.23.1) (2026-03-06)
+
+
+### Bug Fixes
+
+* complete FK migration — add 27 missing constraints, fix broadcast_history nullable ([fe393d2](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/fe393d2ca6ce302d8213cc751842ea92ef277e76))
+* UniqueViolation при мерже аккаунтов с общим OAuth/telegram/email ID ([1c89bd8](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/1c89bd8b2acfe49de2c97dd75446a037a54fded7))
+* дедупликация promocode_uses при мерже аккаунтов ([00a7db2](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/00a7db26905d53a9a978aaf6b97800ca3042b957))
+* добавить ON DELETE CASCADE/SET NULL на все FK к users.id ([34c82c3](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/34c82c348829cf528154bd1e2f5d77006d7ed5da))
+* дубликаты системных ролей при переименовании и сброс permissions ([7a7fb71](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/7a7fb71bf535e2a501f0677747ba63ca0b27ede5))
+* исправления системы реферальных конкурсов ([6713b34](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/6713b3497854e73dddc212280d7bf12db818f38a))
+* кнопка «Назад» в тарифах ведёт в админ панель, а не в настройки ([04562fd](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/04562fd7e74de26776517549730819389b24a0d0))
+* промокоды — конвертация триалов, race condition, savepoints ([7fb839a](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/7fb839aef6234294b95064f9575c19d5a0c3f892))
+* устранение race conditions и атомарность платёжной системы ([4984f20](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/4984f20e8fb030ee338723d797d51aee21f67ca8))
+
 ## [3.23.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.22.0...v3.23.0) (2026-03-05)
 
 
