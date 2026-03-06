@@ -82,6 +82,7 @@ class BotConfigurationService:
         'PAYMENT_VERIFICATION': '🕵️ Проверка платежей',
         'TELEGRAM': '⭐ Telegram Stars',
         'TELEGRAM_WIDGET': '🔐 Telegram Login Widget',
+        'TELEGRAM_OIDC': '🔑 Telegram Login (OIDC)',
         'CRYPTOBOT': '🪙 CryptoBot',
         'HELEKET': '🪙 Heleket',
         'CLOUDPAYMENTS': '💳 CloudPayments',
@@ -153,6 +154,7 @@ class BotConfigurationService:
         'TRIBUTE': 'Tribute и донат-сервисы.',
         'TELEGRAM': 'Telegram Stars и их стоимость.',
         'TELEGRAM_WIDGET': 'Внешний вид виджета авторизации Telegram на странице входа в кабинет.',
+        'TELEGRAM_OIDC': 'OpenID Connect авторизация через Telegram (новая система). Требует настройки в BotFather > Bot Settings > Web Login.',
         'WATA': 'Wata: токен доступа, тип платежа и пределы сумм.',
         'EXTERNAL_ADMIN': 'Токен внешней админки для проверки запросов.',
         'SUBSCRIPTIONS_CORE': 'Лимиты устройств, трафика и базовые цены подписок.',
@@ -334,6 +336,7 @@ class BotConfigurationService:
         'TRAFFIC_': 'TRAFFIC',
         'REFERRAL_': 'REFERRAL',
         'AUTOPAY_': 'AUTOPAY',
+        'TELEGRAM_OIDC_': 'TELEGRAM_OIDC',
         'TELEGRAM_WIDGET_': 'TELEGRAM_WIDGET',
         'TELEGRAM_STARS': 'TELEGRAM',
         'TRIBUTE_': 'TRIBUTE',
@@ -928,6 +931,24 @@ class BotConfigurationService:
             'format': 'Булево значение.',
             'example': 'true',
             'warning': 'При отключении бот не сможет писать пользователю первым.',
+        },
+        'TELEGRAM_OIDC_ENABLED': {
+            'description': 'Включить авторизацию через новый Telegram Login (OpenID Connect). При включении заменяет legacy виджет.',
+            'format': 'Булево значение.',
+            'example': 'true',
+            'warning': 'Требует заполнения CLIENT_ID и CLIENT_SECRET из BotFather.',
+        },
+        'TELEGRAM_OIDC_CLIENT_ID': {
+            'description': 'ID бота (числовой) из BotFather > Bot Settings > Web Login.',
+            'format': 'Числовой ID бота.',
+            'example': '8521897198',
+            'warning': 'Должен совпадать с ID бота, используемого для авторизации.',
+        },
+        'TELEGRAM_OIDC_CLIENT_SECRET': {
+            'description': 'Секрет для OIDC из BotFather > Bot Settings > Web Login.',
+            'format': 'Строка-секрет.',
+            'example': 'xxxxxxxxxxxxxxxxxxxxxxxx',
+            'warning': 'НЕ совпадает с BOT_TOKEN. Получается отдельно в BotFather.',
         },
     }
 
