@@ -549,6 +549,7 @@ async def auth_telegram_widget(
 @router.post('/telegram/oidc', response_model=AuthResponse)
 async def auth_telegram_oidc(
     request: TelegramOIDCAuthRequest,
+    raw_request: Request,
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """
@@ -557,6 +558,11 @@ async def auth_telegram_oidc(
     The frontend uses Telegram.Login.init() popup which returns an id_token.
     We validate it via JWKS and create/login the user.
     """
+    # Rate limit
+    client_ip = get_client_ip(raw_request)
+    if await RateLimitCache.is_ip_rate_limited(client_ip, 'telegram_oidc', limit=10, window=60, fail_closed=True):
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail='Too many requests')
+
     if not settings.TELEGRAM_OIDC_ENABLED or not settings.TELEGRAM_OIDC_CLIENT_ID:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -574,7 +580,13 @@ async def auth_telegram_oidc(
         )
 
     # Extract user info from OIDC claims
-    telegram_id = int(claims.get('id', claims.get('sub', 0)))
+    try:
+        telegram_id = int(claims.get('id', claims.get('sub', 0)))
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='Invalid user ID in OIDC claims',
+        )
     if not telegram_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -583,6 +595,9 @@ async def auth_telegram_oidc(
 
     first_name = claims.get('name', claims.get('given_name', ''))
     username = claims.get('preferred_username')
+    last_name = claims.get('family_name')
+    _photo_url = claims.get('picture')  # extracted for future use
+    language = claims.get('locale', 'ru')[:2] if claims.get('locale') else 'ru'
 
     user = await get_user_by_telegram_id(db, telegram_id)
 
@@ -593,8 +608,8 @@ async def auth_telegram_oidc(
             referrer = await get_user_by_referral_code(db, request.referral_code)
             if referrer:
                 referrer_id = referrer.id
-        except Exception as e:
-            logger.warning('Failed to resolve referral code', referral_code=request.referral_code, error=e)
+        except (ValueError, LookupError) as e:
+            logger.warning('Failed to resolve referral code', referral_code=request.referral_code, error=str(e))
 
     if not user:
         logger.info('Creating new user from cabinet OIDC', telegram_id=telegram_id, username=username)
@@ -603,7 +618,8 @@ async def auth_telegram_oidc(
             telegram_id=telegram_id,
             username=username,
             first_name=first_name,
-            language='ru',
+            last_name=last_name,
+            language=language,
             referred_by_id=referrer_id,
         )
         logger.info('User created successfully', user_id=user.id, telegram_id=user.telegram_id)
@@ -619,6 +635,8 @@ async def auth_telegram_oidc(
         user.username = username
     if first_name and first_name != user.first_name:
         user.first_name = first_name
+    if last_name is not None and last_name != user.last_name:
+        user.last_name = last_name
 
     user.cabinet_last_login = datetime.now(UTC)
     await db.commit()

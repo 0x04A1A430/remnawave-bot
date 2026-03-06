@@ -34,7 +34,7 @@ class TelegramWidgetAuthRequest(BaseModel):
 class TelegramOIDCAuthRequest(BaseModel):
     """Request for Telegram OIDC authentication (popup flow)."""
 
-    id_token: str = Field(..., description='JWT id_token from Telegram OIDC popup')
+    id_token: str = Field(..., max_length=4096, description='JWT id_token from Telegram OIDC popup')
     campaign_slug: str | None = Field(
         None, min_length=1, max_length=64, pattern=r'^[a-zA-Z0-9_-]+$', description='Campaign slug from web link'
     )

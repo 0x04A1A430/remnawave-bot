@@ -1,5 +1,6 @@
 """Telegram authentication validation for cabinet."""
 
+import asyncio
 import hashlib
 import hmac
 import json
@@ -146,6 +147,18 @@ _JWKS_URL = 'https://oauth.telegram.org/.well-known/jwks.json'
 _OIDC_ISSUER = 'https://oauth.telegram.org'
 _OIDC_TOKEN_URL = 'https://oauth.telegram.org/token'
 
+_jwks_lock = asyncio.Lock()
+
+
+def _build_public_keys(jwks_data: dict[str, Any]) -> dict[str, Any]:
+    """Build public key mapping from JWKS data."""
+    public_keys: dict[str, Any] = {}
+    for key_data in jwks_data.get('keys', []):
+        kid = key_data.get('kid')
+        if kid:
+            public_keys[kid] = pyjwt.algorithms.RSAAlgorithm.from_jwk(key_data)
+    return public_keys
+
 
 async def _get_jwks() -> dict[str, Any]:
     """Fetch and cache Telegram OIDC JWKS keys."""
@@ -155,12 +168,18 @@ async def _get_jwks() -> dict[str, Any]:
     if _jwks_cache and _jwks_cache_expiry and now < _jwks_cache_expiry:
         return _jwks_cache
 
-    async with httpx.AsyncClient(timeout=10) as client:
-        response = await client.get(_JWKS_URL)
-        response.raise_for_status()
-        _jwks_cache = response.json()
-        _jwks_cache_expiry = now + timedelta(seconds=_JWKS_CACHE_TTL_SECONDS)
-        return _jwks_cache
+    async with _jwks_lock:
+        # Double-check after acquiring lock
+        now = datetime.now(UTC)
+        if _jwks_cache and _jwks_cache_expiry and now < _jwks_cache_expiry:
+            return _jwks_cache
+
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.get(_JWKS_URL)
+            response.raise_for_status()
+            _jwks_cache = response.json()
+            _jwks_cache_expiry = now + timedelta(seconds=_JWKS_CACHE_TTL_SECONDS)
+            return _jwks_cache
 
 
 async def validate_telegram_oidc_token(id_token: str, client_id: str) -> dict[str, Any] | None:
@@ -176,16 +195,21 @@ async def validate_telegram_oidc_token(id_token: str, client_id: str) -> dict[st
         Claims include: sub, id, name, preferred_username, picture, iss, aud, exp, iat
     """
     try:
+        # Build public keys from JWKS
         jwks_data = await _get_jwks()
-        public_keys = {}
-        for key_data in jwks_data.get('keys', []):
-            kid = key_data.get('kid')
-            if kid:
-                public_keys[kid] = pyjwt.algorithms.RSAAlgorithm.from_jwk(key_data)
+        public_keys = _build_public_keys(jwks_data)
 
         # Decode header to get kid
         unverified_header = pyjwt.get_unverified_header(id_token)
         kid = unverified_header.get('kid')
+
+        # If kid not found, force JWKS refresh (key rotation)
+        if kid and kid not in public_keys:
+            global _jwks_cache_expiry
+            _jwks_cache_expiry = None
+            jwks_data = await _get_jwks()
+            public_keys = _build_public_keys(jwks_data)
+
         if not kid or kid not in public_keys:
             logger.warning('Telegram OIDC: unknown kid in id_token', kid=kid)
             return None
@@ -211,43 +235,3 @@ async def validate_telegram_oidc_token(id_token: str, client_id: str) -> dict[st
         return None
 
 
-async def exchange_telegram_oidc_code(
-    code: str,
-    client_id: str,
-    client_secret: str,
-    redirect_uri: str,
-    code_verifier: str | None = None,
-) -> str | None:
-    """
-    Exchange authorization code for id_token at Telegram OIDC token endpoint.
-
-    Args:
-        code: Authorization code from Telegram
-        client_id: Bot numeric ID
-        client_secret: OIDC secret from BotFather
-        redirect_uri: Must match the one used in authorization request
-        code_verifier: PKCE code_verifier if S256 was used
-
-    Returns:
-        id_token string if successful, None otherwise
-    """
-    try:
-        data: dict[str, str] = {
-            'grant_type': 'authorization_code',
-            'code': code,
-            'redirect_uri': redirect_uri,
-            'client_id': client_id,
-            'client_secret': client_secret,
-        }
-        if code_verifier:
-            data['code_verifier'] = code_verifier
-
-        async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.post(_OIDC_TOKEN_URL, data=data)
-            response.raise_for_status()
-            token_data = response.json()
-            return token_data.get('id_token')
-
-    except httpx.HTTPError as e:
-        logger.error('Telegram OIDC: token exchange failed', error=str(e))
-        return None
