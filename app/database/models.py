@@ -3055,6 +3055,8 @@ class GuestPurchase(Base):
     created_at = Column(AwareDateTime(), server_default=func.now())
     paid_at = Column(AwareDateTime(), nullable=True)
     delivered_at = Column(AwareDateTime(), nullable=True)
+    cabinet_password = Column(Text, nullable=True)
+    auto_login_token = Column(Text, nullable=True)
 
     landing = relationship('LandingPage', back_populates='guest_purchases', lazy='selectin')
     tariff = relationship('Tariff', lazy='selectin')

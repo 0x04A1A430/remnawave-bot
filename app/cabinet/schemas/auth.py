@@ -76,6 +76,12 @@ class PasswordResetRequest(BaseModel):
     password: str = Field(..., min_length=8, max_length=128, description='New password (min 8 chars)')
 
 
+class AutoLoginRequest(BaseModel):
+    """Request for auto-login from guest purchase success page."""
+
+    token: str = Field(..., description='Auto-login JWT token')
+
+
 class TokenResponse(BaseModel):
     """Token pair response."""
 

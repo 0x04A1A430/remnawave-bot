@@ -2,6 +2,7 @@
 
 from .jwt_handler import (
     create_access_token,
+    create_auto_login_token,
     create_refresh_token,
     decode_token,
     get_token_payload,
@@ -12,6 +13,7 @@ from .telegram_auth import validate_telegram_init_data, validate_telegram_login_
 
 __all__ = [
     'create_access_token',
+    'create_auto_login_token',
     'create_refresh_token',
     'decode_token',
     'get_token_payload',

@@ -5,7 +5,7 @@ import hashlib
 from datetime import UTC, datetime
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,6 +31,7 @@ from app.database.models import CabinetRefreshToken, User
 from app.services.campaign_service import AdvertisingCampaignService
 from app.services.disposable_email_service import disposable_email_service
 from app.services.referral_service import process_referral_registration
+from app.utils.cache import RateLimitCache
 from app.utils.timezone import panel_datetime_to_utc
 
 from ..auth import (
@@ -53,8 +54,10 @@ from ..auth.email_verification import (
 )
 from ..auth.jwt_handler import get_refresh_token_expires_at
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
+from ..ip_utils import get_client_ip
 from ..schemas.auth import (
     AuthResponse,
+    AutoLoginRequest,
     CampaignBonusInfo,
     EmailChangeRequest,
     EmailChangeResponse,
@@ -1061,6 +1064,47 @@ async def logout(
     return {'message': 'Logged out successfully'}
 
 
+@router.post('/login/auto', response_model=AuthResponse)
+async def auto_login(
+    request: AutoLoginRequest,
+    raw_request: Request,
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Auto-login using a short-lived JWT from guest purchase success page."""
+    client_ip = get_client_ip(raw_request)
+    if await RateLimitCache.is_ip_rate_limited(client_ip, 'auto_login', limit=5, window=60, fail_closed=True):
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail='Too many requests')
+
+    payload = get_token_payload(request.token, expected_type='auto_login')
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='Invalid or expired auto-login token',
+        )
+
+    try:
+        user_id = int(payload['sub'])
+    except (KeyError, ValueError, TypeError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='Invalid token payload',
+        )
+
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='User not found',
+        )
+
+    response = await _create_auth_response(user, db)
+    await _store_refresh_token(db, user.id, response.refresh_token)
+    user.cabinet_last_login = datetime.now(UTC)
+    await db.commit()
+
+    return response
+
+
 @router.post('/password/forgot')
 async def forgot_password(
     request: PasswordForgotRequest,
@@ -1071,7 +1115,16 @@ async def forgot_password(
     user = result.scalar_one_or_none()
 
     # Always return success to prevent email enumeration
-    if not user or not user.email_verified:
+    if not user:
+        return {'message': 'If the email exists, a password reset link has been sent'}
+
+    # Auto-fix guest-created email users who have a password but weren't verified
+    if not user.email_verified and user.password_hash and user.auth_type == 'email':
+        user.email_verified = True
+        user.email_verified_at = datetime.now(UTC)
+        await db.commit()
+
+    if not user.email_verified:
         return {'message': 'If the email exists, a password reset link has been sent'}
 
     # Generate reset token

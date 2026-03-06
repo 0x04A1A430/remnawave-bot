@@ -9,10 +9,12 @@ from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cabinet.dependencies import get_cabinet_db
+from app.cabinet.ip_utils import get_client_ip
 from app.cabinet.utils.locale import DEFAULT_LOCALE, resolve_locale_text
 from app.config import settings
 from app.database.crud.landing import get_active_landing_by_slug, get_purchase_by_token
-from app.database.models import GuestPurchase, LandingPage, Tariff
+from app.database.models import GuestPurchase, GuestPurchaseStatus, LandingPage, Tariff
 from app.services.guest_purchase_service import (
     GuestPurchaseError,
     activate_purchase as activate_guest_purchase,
@@ -21,9 +23,6 @@ from app.services.guest_purchase_service import (
 )
 from app.services.payment_service import PaymentService
 from app.utils.cache import RateLimitCache
-
-from ..dependencies import get_cabinet_db
-from ..ip_utils import get_client_ip
 
 
 logger = structlog.get_logger(__name__)
@@ -130,6 +129,10 @@ class PurchaseStatusResponse(BaseModel):
     period_days: int | None = None
     tariff_name: str | None = None
     gift_message: str | None = None
+    contact_type: str | None = None
+    cabinet_email: str | None = None
+    cabinet_password: str | None = None
+    auto_login_token: str | None = None
 
 
 # ============ Helpers ============
@@ -154,11 +157,13 @@ def _build_purchase_status_response(purchase: GuestPurchase) -> PurchaseStatusRe
     """Build a PurchaseStatusResponse from a GuestPurchase record."""
     tariff_name = purchase.tariff.name if purchase.tariff else None
 
+    within_ttl = False
     subscription_url = None
     subscription_crypto_link = None
     if purchase.delivered_at and purchase.subscription_url:
         age = datetime.now(UTC) - purchase.delivered_at
         if age < timedelta(hours=_SUBSCRIPTION_URL_EXPIRY_HOURS):
+            within_ttl = True
             subscription_url = purchase.subscription_url
             subscription_crypto_link = purchase.subscription_crypto_link
 
@@ -171,6 +176,31 @@ def _build_purchase_status_response(purchase: GuestPurchase) -> PurchaseStatusRe
             recipient_contact_value = _mask_contact(purchase.gift_recipient_value)
         gift_message = purchase.gift_message
 
+    # Determine effective contact type for the recipient
+    if purchase.is_gift and purchase.gift_recipient_type:
+        effective_contact_type = purchase.gift_recipient_type
+    else:
+        effective_contact_type = purchase.contact_type
+
+    # Cabinet credentials for email self-purchases (not gifts)
+    cabinet_email = None
+    cabinet_password = None
+    auto_login_token = None
+    is_terminal = purchase.status in (GuestPurchaseStatus.DELIVERED.value, GuestPurchaseStatus.PENDING_ACTIVATION.value)
+    is_email_self_purchase = effective_contact_type == 'email' and not purchase.is_gift
+
+    if is_terminal and is_email_self_purchase:
+        cabinet_email = purchase.contact_value
+        # For PENDING_ACTIVATION: cap credential exposure at 72h from paid_at
+        pending_within_ttl = (
+            purchase.status == GuestPurchaseStatus.PENDING_ACTIVATION.value
+            and purchase.paid_at
+            and (datetime.now(UTC) - purchase.paid_at) < timedelta(hours=72)
+        )
+        if within_ttl or pending_within_ttl:
+            cabinet_password = purchase.cabinet_password
+            auto_login_token = purchase.auto_login_token
+
     return PurchaseStatusResponse(
         status=purchase.status,
         subscription_url=subscription_url,
@@ -181,6 +211,10 @@ def _build_purchase_status_response(purchase: GuestPurchase) -> PurchaseStatusRe
         period_days=purchase.period_days,
         tariff_name=tariff_name,
         gift_message=gift_message,
+        contact_type=effective_contact_type,
+        cabinet_email=cabinet_email,
+        cabinet_password=cabinet_password,
+        auto_login_token=auto_login_token,
     )
 
 
@@ -299,7 +333,28 @@ async def get_purchase_status(
             detail='Purchase not found',
         )
 
-    return _build_purchase_status_response(purchase)
+    response = _build_purchase_status_response(purchase)
+
+    # Cleanup: null expired credentials from DB
+    needs_cleanup = False
+    if purchase.delivered_at and (purchase.cabinet_password or purchase.auto_login_token):
+        age = datetime.now(UTC) - purchase.delivered_at
+        if age >= timedelta(hours=_SUBSCRIPTION_URL_EXPIRY_HOURS):
+            needs_cleanup = True
+    elif (
+        purchase.status == GuestPurchaseStatus.PENDING_ACTIVATION.value
+        and purchase.paid_at
+        and (purchase.cabinet_password or purchase.auto_login_token)
+        and (datetime.now(UTC) - purchase.paid_at) >= timedelta(hours=72)
+    ):
+        needs_cleanup = True
+
+    if needs_cleanup:
+        purchase.cabinet_password = None
+        purchase.auto_login_token = None
+        await db.commit()
+
+    return response
 
 
 @router.post('/activate/{token}', response_model=PurchaseStatusResponse)

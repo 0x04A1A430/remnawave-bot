@@ -65,6 +65,7 @@ class EmailNotificationTemplates:
             NotificationType.GUEST_SUBSCRIPTION_DELIVERED: self._guest_subscription_delivered_template,
             NotificationType.GUEST_ACTIVATION_REQUIRED: self._guest_activation_required_template,
             NotificationType.GUEST_GIFT_RECEIVED: self._guest_gift_received_template,
+            NotificationType.GUEST_CABINET_CREDENTIALS: self._guest_cabinet_credentials_template,
         }
 
         template_func = template_map.get(notification_type)
@@ -1188,8 +1189,8 @@ class EmailNotificationTemplates:
 
     def _email_verification_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
         """Template for email verification."""
-        username = context.get('username', '')
-        verification_url = context.get('verification_url', '#')
+        username = html.escape(context.get('username', ''))
+        verification_url = html.escape(context.get('verification_url', '#'))
         expire_hours = context.get('expire_hours', 24)
 
         subjects = {
@@ -1260,8 +1261,8 @@ class EmailNotificationTemplates:
 
     def _password_reset_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
         """Template for password reset."""
-        username = context.get('username', '')
-        reset_url = context.get('reset_url', '#')
+        username = html.escape(context.get('username', ''))
+        reset_url = html.escape(context.get('reset_url', '#'))
         expire_hours = context.get('expire_hours', 1)
 
         subjects = {
@@ -1340,6 +1341,8 @@ class EmailNotificationTemplates:
         tariff_name = html.escape(context.get('tariff_name', ''))
         period_days = context.get('period_days', 0)
         success_page_url = html.escape(context.get('success_page_url', ''))
+        is_existing_user = context.get('is_existing_user', False)
+        cabinet_url = html.escape(context.get('cabinet_url', ''))
 
         subjects = {
             'ru': 'Ваша VPN подписка готова',
@@ -1349,63 +1352,113 @@ class EmailNotificationTemplates:
             'fa': 'اشتراک VPN شما آماده است',
         }
 
-        bodies = {
-            'ru': f"""
-                <h2>Ваша VPN подписка готова!</h2>
-                <div class="highlight success">
-                    <p>Тариф: <strong>{tariff_name}</strong></p>
-                    <p>Период: <strong>{period_days} дней</strong></p>
-                </div>
-                <p>Ваша ссылка подписки:</p>
-                <p style="word-break: break-all;"><a href="{subscription_url}">{subscription_url}</a></p>
-                <p>Скопируйте ссылку и добавьте в ваше VPN-приложение.</p>
-                <p style="text-align: center;"><a href="{success_page_url}" class="button">Открыть страницу подписки</a></p>
-            """,
-            'en': f"""
-                <h2>Your VPN subscription is ready!</h2>
-                <div class="highlight success">
-                    <p>Plan: <strong>{tariff_name}</strong></p>
-                    <p>Period: <strong>{period_days} days</strong></p>
-                </div>
-                <p>Your subscription link:</p>
-                <p style="word-break: break-all;"><a href="{subscription_url}">{subscription_url}</a></p>
-                <p>Copy the link and add it to your VPN app.</p>
-                <p style="text-align: center;"><a href="{success_page_url}" class="button">Open subscription page</a></p>
-            """,
-            'zh': f"""
-                <h2>您的VPN订阅已准备就绪！</h2>
-                <div class="highlight success">
-                    <p>套餐: <strong>{tariff_name}</strong></p>
-                    <p>期限: <strong>{period_days} 天</strong></p>
-                </div>
-                <p>您的订阅链接:</p>
-                <p style="word-break: break-all;"><a href="{subscription_url}">{subscription_url}</a></p>
-                <p>复制链接并添加到您的VPN应用中。</p>
-                <p style="text-align: center;"><a href="{success_page_url}" class="button">打开订阅页面</a></p>
-            """,
-            'ua': f"""
-                <h2>Ваша VPN підписка готова!</h2>
-                <div class="highlight success">
-                    <p>Тариф: <strong>{tariff_name}</strong></p>
-                    <p>Період: <strong>{period_days} днів</strong></p>
-                </div>
-                <p>Ваше посилання підписки:</p>
-                <p style="word-break: break-all;"><a href="{subscription_url}">{subscription_url}</a></p>
-                <p>Скопіюйте посилання та додайте у ваш VPN-додаток.</p>
-                <p style="text-align: center;"><a href="{success_page_url}" class="button">Відкрити сторінку підписки</a></p>
-            """,
-            'fa': f"""
-                <h2>اشتراک VPN شما آماده است!</h2>
-                <div class="highlight success">
-                    <p>طرح: <strong>{tariff_name}</strong></p>
-                    <p>مدت: <strong>{period_days} روز</strong></p>
-                </div>
-                <p>لینک اشتراک شما:</p>
-                <p style="word-break: break-all;"><a href="{subscription_url}">{subscription_url}</a></p>
-                <p>لینک را کپی کنید و به اپلیکیشن VPN خود اضافه کنید.</p>
-                <p style="text-align: center;"><a href="{success_page_url}" class="button">باز کردن صفحه اشتراک</a></p>
-            """,
-        }
+        # For existing users: show cabinet link instead of subscription URL
+        if is_existing_user and cabinet_url:
+            bodies = {
+                'ru': f"""
+                    <h2>Ваша VPN подписка готова!</h2>
+                    <div class="highlight success">
+                        <p>Тариф: <strong>{tariff_name}</strong></p>
+                        <p>Период: <strong>{period_days} дней</strong></p>
+                    </div>
+                    <p>Подписка активирована в вашем личном кабинете.</p>
+                    <p style="text-align: center;"><a href="{cabinet_url}" class="button">Перейти в личный кабинет</a></p>
+                """,
+                'en': f"""
+                    <h2>Your VPN subscription is ready!</h2>
+                    <div class="highlight success">
+                        <p>Plan: <strong>{tariff_name}</strong></p>
+                        <p>Period: <strong>{period_days} days</strong></p>
+                    </div>
+                    <p>Your subscription has been activated in your cabinet.</p>
+                    <p style="text-align: center;"><a href="{cabinet_url}" class="button">Go to Cabinet</a></p>
+                """,
+                'zh': f"""
+                    <h2>您的VPN订阅已准备就绪！</h2>
+                    <div class="highlight success">
+                        <p>套餐: <strong>{tariff_name}</strong></p>
+                        <p>期限: <strong>{period_days} 天</strong></p>
+                    </div>
+                    <p>订阅已在您的个人中心激活。</p>
+                    <p style="text-align: center;"><a href="{cabinet_url}" class="button">前往个人中心</a></p>
+                """,
+                'ua': f"""
+                    <h2>Ваша VPN підписка готова!</h2>
+                    <div class="highlight success">
+                        <p>Тариф: <strong>{tariff_name}</strong></p>
+                        <p>Період: <strong>{period_days} днів</strong></p>
+                    </div>
+                    <p>Підписка активована у вашому особистому кабінеті.</p>
+                    <p style="text-align: center;"><a href="{cabinet_url}" class="button">Перейти до кабінету</a></p>
+                """,
+                'fa': f"""
+                    <h2>اشتراک VPN شما آماده است!</h2>
+                    <div class="highlight success">
+                        <p>طرح: <strong>{tariff_name}</strong></p>
+                        <p>مدت: <strong>{period_days} روز</strong></p>
+                    </div>
+                    <p>اشتراک شما در پنل کاربری فعال شده است.</p>
+                    <p style="text-align: center;"><a href="{cabinet_url}" class="button">رفتن به پنل کاربری</a></p>
+                """,
+            }
+        else:
+            bodies = {
+                'ru': f"""
+                    <h2>Ваша VPN подписка готова!</h2>
+                    <div class="highlight success">
+                        <p>Тариф: <strong>{tariff_name}</strong></p>
+                        <p>Период: <strong>{period_days} дней</strong></p>
+                    </div>
+                    <p>Ваша ссылка подписки:</p>
+                    <p style="word-break: break-all;"><a href="{subscription_url}">{subscription_url}</a></p>
+                    <p>Скопируйте ссылку и добавьте в ваше VPN-приложение.</p>
+                    <p style="text-align: center;"><a href="{success_page_url}" class="button">Открыть страницу подписки</a></p>
+                """,
+                'en': f"""
+                    <h2>Your VPN subscription is ready!</h2>
+                    <div class="highlight success">
+                        <p>Plan: <strong>{tariff_name}</strong></p>
+                        <p>Period: <strong>{period_days} days</strong></p>
+                    </div>
+                    <p>Your subscription link:</p>
+                    <p style="word-break: break-all;"><a href="{subscription_url}">{subscription_url}</a></p>
+                    <p>Copy the link and add it to your VPN app.</p>
+                    <p style="text-align: center;"><a href="{success_page_url}" class="button">Open subscription page</a></p>
+                """,
+                'zh': f"""
+                    <h2>您的VPN订阅已准备就绪！</h2>
+                    <div class="highlight success">
+                        <p>套餐: <strong>{tariff_name}</strong></p>
+                        <p>期限: <strong>{period_days} 天</strong></p>
+                    </div>
+                    <p>您的订阅链接:</p>
+                    <p style="word-break: break-all;"><a href="{subscription_url}">{subscription_url}</a></p>
+                    <p>复制链接并添加到您的VPN应用中。</p>
+                    <p style="text-align: center;"><a href="{success_page_url}" class="button">打开订阅页面</a></p>
+                """,
+                'ua': f"""
+                    <h2>Ваша VPN підписка готова!</h2>
+                    <div class="highlight success">
+                        <p>Тариф: <strong>{tariff_name}</strong></p>
+                        <p>Період: <strong>{period_days} днів</strong></p>
+                    </div>
+                    <p>Ваше посилання підписки:</p>
+                    <p style="word-break: break-all;"><a href="{subscription_url}">{subscription_url}</a></p>
+                    <p>Скопіюйте посилання та додайте у ваш VPN-додаток.</p>
+                    <p style="text-align: center;"><a href="{success_page_url}" class="button">Відкрити сторінку підписки</a></p>
+                """,
+                'fa': f"""
+                    <h2>اشتراک VPN شما آماده است!</h2>
+                    <div class="highlight success">
+                        <p>طرح: <strong>{tariff_name}</strong></p>
+                        <p>مدت: <strong>{period_days} روز</strong></p>
+                    </div>
+                    <p>لینک اشتراک شما:</p>
+                    <p style="word-break: break-all;"><a href="{subscription_url}">{subscription_url}</a></p>
+                    <p>لینک را کپی کنید و به اپلیکیشن VPN خود اضافه کنید.</p>
+                    <p style="text-align: center;"><a href="{success_page_url}" class="button">باز کردن صفحه اشتراک</a></p>
+                """,
+            }
 
         return {
             'subject': subjects.get(language, subjects['ru']),
@@ -1506,6 +1559,56 @@ class EmailNotificationTemplates:
         period_days = context.get('period_days', 0)
         gift_message = context.get('gift_message')
         success_page_url = html.escape(context.get('success_page_url', ''))
+        cabinet_password = context.get('cabinet_password')
+        cabinet_email = html.escape(context.get('cabinet_email', ''))
+        cabinet_url = html.escape(context.get('cabinet_url', ''))
+
+        # Credentials block for gift recipients who got a new cabinet account
+        cred_block = {'ru': '', 'en': '', 'zh': '', 'ua': '', 'fa': ''}
+        if cabinet_password and cabinet_email:
+            escaped_pw = html.escape(cabinet_password)
+            cred_block = {
+                'ru': f"""
+                    <div class="highlight">
+                        <p><strong>Данные для входа в личный кабинет:</strong></p>
+                        <p>Email: <code>{cabinet_email}</code></p>
+                        <p>Пароль: <code>{escaped_pw}</code></p>
+                    </div>
+                    <p style="text-align: center;"><a href="{cabinet_url}" class="button">Перейти в личный кабинет</a></p>
+                """,
+                'en': f"""
+                    <div class="highlight">
+                        <p><strong>Your cabinet login credentials:</strong></p>
+                        <p>Email: <code>{cabinet_email}</code></p>
+                        <p>Password: <code>{escaped_pw}</code></p>
+                    </div>
+                    <p style="text-align: center;"><a href="{cabinet_url}" class="button">Go to Cabinet</a></p>
+                """,
+                'zh': f"""
+                    <div class="highlight">
+                        <p><strong>个人中心登录信息：</strong></p>
+                        <p>邮箱: <code>{cabinet_email}</code></p>
+                        <p>密码: <code>{escaped_pw}</code></p>
+                    </div>
+                    <p style="text-align: center;"><a href="{cabinet_url}" class="button">前往个人中心</a></p>
+                """,
+                'ua': f"""
+                    <div class="highlight">
+                        <p><strong>Дані для входу в особистий кабінет:</strong></p>
+                        <p>Email: <code>{cabinet_email}</code></p>
+                        <p>Пароль: <code>{escaped_pw}</code></p>
+                    </div>
+                    <p style="text-align: center;"><a href="{cabinet_url}" class="button">Перейти до кабінету</a></p>
+                """,
+                'fa': f"""
+                    <div class="highlight">
+                        <p><strong>اطلاعات ورود به پنل کاربری:</strong></p>
+                        <p>ایمیل: <code dir="ltr">{cabinet_email}</code></p>
+                        <p>رمز عبور: <code dir="ltr">{escaped_pw}</code></p>
+                    </div>
+                    <p style="text-align: center;"><a href="{cabinet_url}" class="button">رفتن به پنل کاربری</a></p>
+                """,
+            }
 
         gift_block_ru = ''
         gift_block_en = ''
@@ -1539,6 +1642,7 @@ class EmailNotificationTemplates:
                 <p>Ваша ссылка подписки:</p>
                 <p style="word-break: break-all;"><a href="{subscription_url}">{subscription_url}</a></p>
                 <p>Скопируйте ссылку и добавьте в ваше VPN-приложение.</p>
+                {cred_block['ru']}
                 <p style="text-align: center;"><a href="{success_page_url}" class="button">Открыть страницу подписки</a></p>
             """,
             'en': f"""
@@ -1551,6 +1655,7 @@ class EmailNotificationTemplates:
                 <p>Your subscription link:</p>
                 <p style="word-break: break-all;"><a href="{subscription_url}">{subscription_url}</a></p>
                 <p>Copy the link and add it to your VPN app.</p>
+                {cred_block['en']}
                 <p style="text-align: center;"><a href="{success_page_url}" class="button">Open subscription page</a></p>
             """,
             'zh': f"""
@@ -1563,6 +1668,7 @@ class EmailNotificationTemplates:
                 <p>您的订阅链接:</p>
                 <p style="word-break: break-all;"><a href="{subscription_url}">{subscription_url}</a></p>
                 <p>复制链接并添加到您的VPN应用中。</p>
+                {cred_block['zh']}
                 <p style="text-align: center;"><a href="{success_page_url}" class="button">打开订阅页面</a></p>
             """,
             'ua': f"""
@@ -1575,6 +1681,7 @@ class EmailNotificationTemplates:
                 <p>Ваше посилання підписки:</p>
                 <p style="word-break: break-all;"><a href="{subscription_url}">{subscription_url}</a></p>
                 <p>Скопіюйте посилання та додайте у ваш VPN-додаток.</p>
+                {cred_block['ua']}
                 <p style="text-align: center;"><a href="{success_page_url}" class="button">Відкрити сторінку підписки</a></p>
             """,
             'fa': f"""
@@ -1587,7 +1694,97 @@ class EmailNotificationTemplates:
                 <p>لینک اشتراک شما:</p>
                 <p style="word-break: break-all;"><a href="{subscription_url}">{subscription_url}</a></p>
                 <p>لینک را کپی کنید و به اپلیکیشن VPN خود اضافه کنید.</p>
+                {cred_block['fa']}
                 <p style="text-align: center;"><a href="{success_page_url}" class="button">باز کردن صفحه اشتراک</a></p>
+            """,
+        }
+
+        return {
+            'subject': subjects.get(language, subjects['ru']),
+            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+        }
+
+    def _guest_cabinet_credentials_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+        """Template for cabinet login credentials email (sent separately from subscription)."""
+        cabinet_email = html.escape(context.get('cabinet_email', ''))
+        cabinet_password = html.escape(context.get('cabinet_password', ''))
+        cabinet_url = html.escape(context.get('cabinet_url', ''))
+        tariff_name = html.escape(context.get('tariff_name', ''))
+        period_days = context.get('period_days', 0)
+
+        subjects = {
+            'ru': 'Данные для входа в личный кабинет',
+            'en': 'Your cabinet login credentials',
+            'zh': '您的个人中心登录信息',
+            'ua': 'Дані для входу в особистий кабінет',
+            'fa': 'اطلاعات ورود به پنل کاربری',
+        }
+
+        bodies = {
+            'ru': f"""
+                <h2>Данные для входа в личный кабинет</h2>
+                <div class="highlight success">
+                    <p>Тариф: <strong>{tariff_name}</strong></p>
+                    <p>Период: <strong>{period_days} дней</strong></p>
+                </div>
+                <div class="highlight">
+                    <p><strong>Email:</strong> <code>{cabinet_email}</code></p>
+                    <p><strong>Пароль:</strong> <code>{cabinet_password}</code></p>
+                </div>
+                <p>Сохраните эти данные для входа. Вы можете изменить пароль в настройках кабинета.</p>
+                <p style="text-align: center;"><a href="{cabinet_url}" class="button">Перейти в личный кабинет</a></p>
+            """,
+            'en': f"""
+                <h2>Your cabinet login credentials</h2>
+                <div class="highlight success">
+                    <p>Plan: <strong>{tariff_name}</strong></p>
+                    <p>Period: <strong>{period_days} days</strong></p>
+                </div>
+                <div class="highlight">
+                    <p><strong>Email:</strong> <code>{cabinet_email}</code></p>
+                    <p><strong>Password:</strong> <code>{cabinet_password}</code></p>
+                </div>
+                <p>Save these credentials. You can change your password in cabinet settings.</p>
+                <p style="text-align: center;"><a href="{cabinet_url}" class="button">Go to Cabinet</a></p>
+            """,
+            'zh': f"""
+                <h2>您的个人中心登录信息</h2>
+                <div class="highlight success">
+                    <p>套餐: <strong>{tariff_name}</strong></p>
+                    <p>期限: <strong>{period_days} 天</strong></p>
+                </div>
+                <div class="highlight">
+                    <p><strong>邮箱:</strong> <code>{cabinet_email}</code></p>
+                    <p><strong>密码:</strong> <code>{cabinet_password}</code></p>
+                </div>
+                <p>请保存这些登录信息。您可以在个人中心设置中更改密码。</p>
+                <p style="text-align: center;"><a href="{cabinet_url}" class="button">前往个人中心</a></p>
+            """,
+            'ua': f"""
+                <h2>Дані для входу в особистий кабінет</h2>
+                <div class="highlight success">
+                    <p>Тариф: <strong>{tariff_name}</strong></p>
+                    <p>Період: <strong>{period_days} днів</strong></p>
+                </div>
+                <div class="highlight">
+                    <p><strong>Email:</strong> <code>{cabinet_email}</code></p>
+                    <p><strong>Пароль:</strong> <code>{cabinet_password}</code></p>
+                </div>
+                <p>Збережіть ці дані. Ви можете змінити пароль у налаштуваннях кабінету.</p>
+                <p style="text-align: center;"><a href="{cabinet_url}" class="button">Перейти до кабінету</a></p>
+            """,
+            'fa': f"""
+                <h2>اطلاعات ورود به پنل کاربری</h2>
+                <div class="highlight success">
+                    <p>طرح: <strong>{tariff_name}</strong></p>
+                    <p>مدت: <strong>{period_days} روز</strong></p>
+                </div>
+                <div class="highlight">
+                    <p><strong>ایمیل:</strong> <code dir="ltr">{cabinet_email}</code></p>
+                    <p><strong>رمز عبور:</strong> <code dir="ltr">{cabinet_password}</code></p>
+                </div>
+                <p>این اطلاعات را ذخیره کنید. می‌توانید رمز عبور خود را در تنظیمات پنل تغییر دهید.</p>
+                <p style="text-align: center;"><a href="{cabinet_url}" class="button">رفتن به پنل کاربری</a></p>
             """,
         }
 

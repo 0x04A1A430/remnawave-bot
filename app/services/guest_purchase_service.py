@@ -1,6 +1,7 @@
 """Service for guest (unauthenticated) purchases via landing pages."""
 
 import asyncio
+import secrets
 from datetime import UTC, datetime
 from typing import Literal
 
@@ -9,6 +10,8 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cabinet.auth.jwt_handler import create_auto_login_token
+from app.cabinet.auth.password_utils import hash_password
 from app.config import settings
 from app.database.crud.landing import create_guest_purchase
 from app.database.crud.subscription import create_paid_subscription, get_subscription_by_user_id, replace_subscription
@@ -124,7 +127,8 @@ async def fulfill_purchase(db: AsyncSession, purchase_token: str) -> GuestPurcha
     """After payment: find/create user, create subscription, send notification.
 
     Uses SELECT ... FOR UPDATE to prevent concurrent fulfillment of the same purchase.
-    All operations happen within a single transaction — commit at the end.
+    The PENDING_ACTIVATION path commits early and returns (terminal for this call).
+    The DELIVERED path commits after subscription creation.
     Returns the updated purchase or None if not found.
     """
     result = await db.execute(select(GuestPurchase).where(GuestPurchase.token == purchase_token).with_for_update())
@@ -147,7 +151,7 @@ async def fulfill_purchase(db: AsyncSession, purchase_token: str) -> GuestPurcha
         recipient_type, recipient_value = _get_recipient_contact(purchase)
 
         # Find or create user for the recipient (no commit — stays within our transaction)
-        user = await _find_or_create_user(db, recipient_type, recipient_value)
+        user, is_new_account = await _find_or_create_user(db, recipient_type, recipient_value, purchase=purchase)
 
         # Load tariff early — needed for both PENDING_ACTIVATION and DELIVERED paths
         tariff = await get_tariff_by_id(db, purchase.tariff_id)
@@ -157,13 +161,38 @@ async def fulfill_purchase(db: AsyncSession, purchase_token: str) -> GuestPurcha
 
         # Resolve notification params before any commit (avoids lazy-loading after commit)
         notification_tariff_name = tariff.name
-        notification_language = user.language if hasattr(user, 'language') and user.language else 'ru'
+        notification_language = user.language or 'ru'
+
+        # Verify the purchase amount matches the tariff price (before any state change)
+        expected_price = tariff.get_price_for_period(purchase.period_days)
+        if expected_price is None:
+            logger.error(
+                'Price no longer configured for period — aborting fulfillment',
+                purchase_id=purchase.id,
+                tariff_id=tariff.id,
+                period_days=purchase.period_days,
+            )
+            purchase.status = GuestPurchaseStatus.FAILED.value
+            await db.commit()
+            return purchase
+        if expected_price != purchase.amount_kopeks:
+            logger.error(
+                'Purchase amount mismatch — aborting fulfillment',
+                purchase_id=purchase.id,
+                expected_kopeks=expected_price,
+                actual_kopeks=purchase.amount_kopeks,
+            )
+            purchase.status = GuestPurchaseStatus.FAILED.value
+            await db.commit()
+            return purchase
 
         # Check if user already has an active subscription — hold for manual activation
         existing_subscription = await get_subscription_by_user_id(db, user.id)
         if existing_subscription is not None and existing_subscription.is_active:
             purchase.status = GuestPurchaseStatus.PENDING_ACTIVATION.value
             purchase.user_id = user.id
+            if recipient_type == 'email' and not purchase.is_gift:
+                purchase.auto_login_token = create_auto_login_token(user.id)
             await db.commit()
             await db.refresh(purchase)
 
@@ -173,9 +202,15 @@ async def fulfill_purchase(db: AsyncSession, purchase_token: str) -> GuestPurcha
                     is_pending_activation=True,
                     tariff_name=notification_tariff_name,
                     language=notification_language,
+                    is_new_account=is_new_account,
                 )
             except Exception:
                 logger.exception('Failed to send pending_activation notification', purchase_id=purchase.id)
+
+            # Clear plaintext password after email delivery
+            if purchase.cabinet_password:
+                purchase.cabinet_password = None
+                await db.commit()
 
             logger.info(
                 'Guest purchase held for activation (existing subscription)',
@@ -183,19 +218,6 @@ async def fulfill_purchase(db: AsyncSession, purchase_token: str) -> GuestPurcha
                 token_prefix=purchase_token[:5],
                 user_id=user.id,
             )
-            return purchase
-
-        # Verify the purchase amount matches the tariff price
-        expected_price = tariff.get_price_for_period(purchase.period_days)
-        if expected_price is not None and purchase.amount_kopeks != expected_price:
-            logger.error(
-                'Purchase amount mismatch — aborting fulfillment',
-                purchase_id=purchase.id,
-                expected_kopeks=expected_price,
-                actual_kopeks=purchase.amount_kopeks,
-            )
-            purchase.status = GuestPurchaseStatus.FAILED.value
-            await db.commit()
             return purchase
 
         subscription = await create_paid_subscription(
@@ -219,6 +241,8 @@ async def fulfill_purchase(db: AsyncSession, purchase_token: str) -> GuestPurcha
         purchase.status = GuestPurchaseStatus.DELIVERED.value
         purchase.user_id = user.id
         purchase.delivered_at = datetime.now(UTC)
+        if recipient_type == 'email' and not purchase.is_gift:
+            purchase.auto_login_token = create_auto_login_token(user.id)
 
         await db.commit()
         await db.refresh(purchase)
@@ -229,9 +253,15 @@ async def fulfill_purchase(db: AsyncSession, purchase_token: str) -> GuestPurcha
                 is_pending_activation=False,
                 tariff_name=notification_tariff_name,
                 language=notification_language,
+                is_new_account=is_new_account,
             )
         except Exception:
             logger.exception('Failed to send delivery notification', purchase_id=purchase.id)
+
+        # Clear plaintext password after email delivery — no longer needed in DB
+        if purchase.cabinet_password:
+            purchase.cabinet_password = None
+            await db.commit()
 
         logger.info(
             'Guest purchase fulfilled',
@@ -242,6 +272,7 @@ async def fulfill_purchase(db: AsyncSession, purchase_token: str) -> GuestPurcha
         )
 
     except GuestPurchaseError:
+        await db.rollback()
         raise
     except Exception:
         await db.rollback()
@@ -275,11 +306,14 @@ async def _find_or_create_user(
     db: AsyncSession,
     contact_type: Literal['email', 'telegram'],
     contact_value: str,
-) -> User:
+    purchase: GuestPurchase | None = None,
+) -> tuple[User, bool]:
     """Find user by email/telegram username or create a new one.
 
-    For email contacts: looks up by User.email
-    For telegram contacts: looks up by User.username (without leading @)
+    For email contacts: creates a verified cabinet account with generated password.
+    For telegram contacts: creates user without password (QR flow only).
+
+    Returns (user, is_new_account) where is_new_account means a new password was generated.
 
     NOTE: Does NOT commit — caller is responsible for committing the transaction.
     This preserves FOR UPDATE locks held by the caller.
@@ -288,14 +322,31 @@ async def _find_or_create_user(
         result = await db.execute(select(User).where(User.email == contact_value))
         user = result.scalars().first()
         if user:
-            return user
+            is_new_account = False
+            # Existing user WITHOUT password — generate one and set up cabinet access
+            if not user.password_hash:
+                plain_password = secrets.token_urlsafe(12)
+                user.password_hash = hash_password(plain_password)
+                if purchase:
+                    purchase.cabinet_password = plain_password
+                is_new_account = True
+            # Fix email_verified for all existing guest users
+            if not user.email_verified:
+                user.email_verified = True
+                user.email_verified_at = datetime.now(UTC)
+            return user, is_new_account
 
-        # Create new email-only user
+        # Create new email user with verified cabinet account
+        plain_password = secrets.token_urlsafe(12)
         user = User(
             auth_type='email',
             email=contact_value,
-            email_verified=False,
+            email_verified=True,
+            email_verified_at=datetime.now(UTC),
+            password_hash=hash_password(plain_password),
         )
+        if purchase:
+            purchase.cabinet_password = plain_password
         try:
             async with db.begin_nested():
                 db.add(user)
@@ -304,21 +355,38 @@ async def _find_or_create_user(
             result = await db.execute(select(User).where(User.email == contact_value))
             user = result.scalars().first()
             if user:
-                return user
+                # Clear stale password from failed insert, then check if re-fetched user needs one
+                if purchase:
+                    purchase.cabinet_password = None
+                is_new_account = False
+                if not user.password_hash:
+                    regen_password = secrets.token_urlsafe(12)
+                    user.password_hash = hash_password(regen_password)
+                    if purchase:
+                        purchase.cabinet_password = regen_password
+                    is_new_account = True
+                if not user.email_verified:
+                    user.email_verified = True
+                    user.email_verified_at = datetime.now(UTC)
+                return user, is_new_account
             raise
         logger.info(
-            'Created new email user for guest purchase', user_id=user.id, email_masked=_mask_email(contact_value)
+            'Created new email user with cabinet account for guest purchase',
+            user_id=user.id,
+            email_masked=_mask_email(contact_value),
         )
-        return user
+        return user, True
 
-    # contact_type == 'telegram'
+    if contact_type != 'telegram':
+        raise GuestPurchaseError(f'Unsupported contact type: {contact_type}', status_code=500)
+
     username = contact_value.lstrip('@').lower()
     result = await db.execute(
         select(User).where(User.username == username),
     )
     user = result.scalars().first()
     if user:
-        return user
+        return user, False
 
     # Create new telegram user (without telegram_id — will be linked later)
     user = User(
@@ -333,10 +401,10 @@ async def _find_or_create_user(
         result = await db.execute(select(User).where(User.username == username))
         user = result.scalars().first()
         if user:
-            return user
+            return user, False
         raise
     logger.info('Created new telegram user for guest purchase', user_id=user.id, username=username)
-    return user
+    return user, False
 
 
 def _get_recipient_contact(purchase: GuestPurchase) -> tuple[str, str]:
@@ -352,6 +420,7 @@ async def send_guest_notification(
     is_pending_activation: bool = False,
     tariff_name: str = '',
     language: str = 'ru',
+    is_new_account: bool = False,
 ) -> None:
     """Send email notification for guest purchase delivery or activation requirement.
 
@@ -363,6 +432,7 @@ async def send_guest_notification(
         is_pending_activation: Whether this is a pending activation notification.
         tariff_name: Pre-resolved tariff name (avoids lazy-loading after commit).
         language: User language for email template (avoids lazy-loading user relationship).
+        is_new_account: Whether a new cabinet account / password was just created.
     """
     # Lazy imports to avoid circular dependencies (cabinet services -> services -> cabinet)
     from app.cabinet.services.email_service import email_service
@@ -374,7 +444,8 @@ async def send_guest_notification(
     if recipient_type != 'email':
         return
 
-    success_page_url = f'{(settings.CABINET_URL or "").rstrip("/")}/buy/success/{purchase.token}'
+    cabinet_base = (settings.CABINET_URL or '').rstrip('/')
+    success_page_url = f'{cabinet_base}/buy/success/{purchase.token}'
 
     context = {
         'tariff_name': tariff_name,
@@ -383,6 +454,10 @@ async def send_guest_notification(
         'subscription_url': purchase.subscription_url or '',
         'is_gift': purchase.is_gift,
         'gift_message': purchase.gift_message,
+        'is_existing_user': not is_new_account,
+        'cabinet_url': cabinet_base,
+        'cabinet_email': recipient_email,
+        'cabinet_password': purchase.cabinet_password,
     }
 
     if is_pending_activation:
@@ -419,6 +494,25 @@ async def send_guest_notification(
             notification_type=notification_type.value,
         )
 
+    # Send separate credentials email for new/upgraded accounts (non-gift self-purchases)
+    if purchase.cabinet_password and not purchase.is_gift:
+        cred_template = templates.get_template(NotificationType.GUEST_CABINET_CREDENTIALS, language, context)
+        if cred_template:
+            cred_result = await asyncio.to_thread(
+                email_service.send_email,
+                to_email=recipient_email,
+                subject=cred_template['subject'],
+                body_html=cred_template['body_html'],
+            )
+            if cred_result:
+                logger.info(
+                    'Cabinet credentials email sent',
+                    purchase_id=purchase.id,
+                    recipient_masked=_mask_email(recipient_email),
+                )
+            else:
+                logger.warning('Failed to send cabinet credentials email', purchase_id=purchase.id)
+
 
 async def activate_purchase(db: AsyncSession, purchase_token: str) -> GuestPurchase:
     """Activate a PENDING_ACTIVATION purchase by replacing or creating a subscription.
@@ -452,9 +546,20 @@ async def activate_purchase(db: AsyncSession, purchase_token: str) -> GuestPurch
     if user is None:
         raise GuestPurchaseError('User not found', status_code=500)
 
+    # Ensure email users have cabinet access
+    is_new_account = False
+    if user.auth_type == 'email' and not user.password_hash:
+        plain_password = secrets.token_urlsafe(12)
+        user.password_hash = hash_password(plain_password)
+        purchase.cabinet_password = plain_password
+        is_new_account = True
+    if user.auth_type == 'email' and not user.email_verified:
+        user.email_verified = True
+        user.email_verified_at = datetime.now(UTC)
+
     # Resolve notification params before any commit (avoids lazy-loading after commit)
     notification_tariff_name = tariff.name
-    notification_language = user.language if hasattr(user, 'language') and user.language else 'ru'
+    notification_language = user.language or 'ru'
 
     try:
         existing_subscription = await get_subscription_by_user_id(db, user.id)
@@ -489,6 +594,8 @@ async def activate_purchase(db: AsyncSession, purchase_token: str) -> GuestPurch
         purchase.subscription_crypto_link = subscription.subscription_crypto_link
         purchase.status = GuestPurchaseStatus.DELIVERED.value
         purchase.delivered_at = datetime.now(UTC)
+        if user.auth_type == 'email' and not purchase.is_gift:
+            purchase.auto_login_token = create_auto_login_token(user.id)
         await db.commit()
         await db.refresh(purchase)
 
@@ -498,9 +605,15 @@ async def activate_purchase(db: AsyncSession, purchase_token: str) -> GuestPurch
                 is_pending_activation=False,
                 tariff_name=notification_tariff_name,
                 language=notification_language,
+                is_new_account=is_new_account,
             )
         except Exception:
             logger.exception('Failed to send delivery notification after activation', purchase_id=purchase.id)
+
+        # Clear plaintext password after email delivery
+        if purchase.cabinet_password:
+            purchase.cabinet_password = None
+            await db.commit()
 
         logger.info(
             'Guest purchase activated',
@@ -510,6 +623,7 @@ async def activate_purchase(db: AsyncSession, purchase_token: str) -> GuestPurch
         )
 
     except GuestPurchaseError:
+        await db.rollback()
         raise
     except Exception:
         await db.rollback()
