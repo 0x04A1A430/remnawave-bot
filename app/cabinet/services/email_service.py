@@ -69,6 +69,10 @@ class EmailService:
             logger.warning('SMTP is not configured, cannot send email')
             return False
 
+        # Defensive: strip newlines to prevent header injection
+        to_email = to_email.strip().replace('\n', '').replace('\r', '')
+        subject = subject.replace('\n', '').replace('\r', '')
+
         try:
             msg = MIMEMultipart('alternative')
             msg['Subject'] = subject

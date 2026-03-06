@@ -12,9 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.cabinet.utils.locale import DEFAULT_LOCALE, resolve_locale_text
 from app.config import settings
 from app.database.crud.landing import get_active_landing_by_slug, get_purchase_by_token
-from app.database.models import Tariff
+from app.database.models import GuestPurchase, LandingPage, Tariff
 from app.services.guest_purchase_service import (
     GuestPurchaseError,
+    activate_purchase as activate_guest_purchase,
     create_purchase,
     validate_and_calculate,
 )
@@ -62,6 +63,9 @@ class LandingPaymentMethod(BaseModel):
     description: str | None = None
     icon_url: str | None = None
     sort_order: int = 0
+    min_amount_kopeks: int | None = None
+    max_amount_kopeks: int | None = None
+    currency: str | None = None
 
 
 class LandingConfigResponse(BaseModel):
@@ -122,8 +126,10 @@ class PurchaseStatusResponse(BaseModel):
     subscription_crypto_link: str | None = None
     is_gift: bool = False
     contact_value: str | None = None
+    recipient_contact_value: str | None = None
     period_days: int | None = None
     tariff_name: str | None = None
+    gift_message: str | None = None
 
 
 # ============ Helpers ============
@@ -139,6 +145,43 @@ def _mask_contact(value: str) -> str:
         # Telegram: show first 3 chars + mask
         return f'{value[:3]}***'
     return value[:3] + '***'
+
+
+_SUBSCRIPTION_URL_EXPIRY_HOURS = 24
+
+
+def _build_purchase_status_response(purchase: GuestPurchase) -> PurchaseStatusResponse:
+    """Build a PurchaseStatusResponse from a GuestPurchase record."""
+    tariff_name = purchase.tariff.name if purchase.tariff else None
+
+    subscription_url = None
+    subscription_crypto_link = None
+    if purchase.delivered_at and purchase.subscription_url:
+        age = datetime.now(UTC) - purchase.delivered_at
+        if age < timedelta(hours=_SUBSCRIPTION_URL_EXPIRY_HOURS):
+            subscription_url = purchase.subscription_url
+            subscription_crypto_link = purchase.subscription_crypto_link
+
+    masked_contact = _mask_contact(purchase.contact_value) if purchase.contact_value else None
+
+    recipient_contact_value = None
+    gift_message = None
+    if purchase.is_gift:
+        if purchase.gift_recipient_value:
+            recipient_contact_value = _mask_contact(purchase.gift_recipient_value)
+        gift_message = purchase.gift_message
+
+    return PurchaseStatusResponse(
+        status=purchase.status,
+        subscription_url=subscription_url,
+        subscription_crypto_link=subscription_crypto_link,
+        is_gift=purchase.is_gift,
+        contact_value=masked_contact,
+        recipient_contact_value=recipient_contact_value,
+        period_days=purchase.period_days,
+        tariff_name=tariff_name,
+        gift_message=gift_message,
+    )
 
 
 def _period_label(days: int) -> str:
@@ -173,7 +216,7 @@ def _period_label(days: int) -> str:
     return f'{days} days'
 
 
-async def _load_landing_tariffs(db: AsyncSession, landing) -> list[LandingTariff]:
+async def _load_landing_tariffs(db: AsyncSession, landing: LandingPage) -> list[LandingTariff]:
     """Load tariffs for a landing page, filtered by allowed IDs and periods."""
     allowed_ids = landing.allowed_tariff_ids or []
     if not allowed_ids:
@@ -256,30 +299,29 @@ async def get_purchase_status(
             detail='Purchase not found',
         )
 
-    tariff_name = None
-    if purchase.tariff:
-        tariff_name = purchase.tariff.name
+    return _build_purchase_status_response(purchase)
 
-    # Only expose subscription URLs within 24 hours of delivery
-    subscription_url = None
-    subscription_crypto_link = None
-    if purchase.delivered_at and purchase.subscription_url:
-        age = datetime.now(UTC) - purchase.delivered_at
-        if age < timedelta(hours=24):
-            subscription_url = purchase.subscription_url
-            subscription_crypto_link = purchase.subscription_crypto_link
 
-    masked_contact = _mask_contact(purchase.contact_value) if purchase.contact_value else None
+@router.post('/activate/{token}', response_model=PurchaseStatusResponse)
+async def activate_purchase(
+    token: str,
+    raw_request: Request,
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Activate a pending guest purchase, replacing the user's current subscription.
 
-    return PurchaseStatusResponse(
-        status=purchase.status,
-        subscription_url=subscription_url,
-        subscription_crypto_link=subscription_crypto_link,
-        is_gift=purchase.is_gift,
-        contact_value=masked_contact,
-        period_days=purchase.period_days,
-        tariff_name=tariff_name,
-    )
+    No authentication required (token is the secret).
+    """
+    client_ip = get_client_ip(raw_request)
+    if await RateLimitCache.is_ip_rate_limited(client_ip, 'activate_purchase', limit=5, window=60, fail_closed=True):
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail='Too many requests')
+
+    try:
+        purchase = await activate_guest_purchase(db, token)
+    except GuestPurchaseError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+
+    return _build_purchase_status_response(purchase)
 
 
 @router.get('/{slug}', response_model=LandingConfigResponse)
@@ -315,6 +357,9 @@ async def get_landing_config(
             description=m.get('description'),
             icon_url=m.get('icon_url'),
             sort_order=m.get('sort_order', 0),
+            min_amount_kopeks=m.get('min_amount_kopeks'),
+            max_amount_kopeks=m.get('max_amount_kopeks'),
+            currency=m.get('currency'),
         )
         for m in raw_methods
     ]
@@ -376,8 +421,9 @@ async def create_landing_purchase(
         )
 
     # Validate payment method is available on this landing
-    available_method_ids = {m.get('method_id') for m in (landing.payment_methods or [])}
-    if body.payment_method not in available_method_ids:
+    raw_methods = landing.payment_methods or []
+    method_config = next((m for m in raw_methods if m.get('method_id') == body.payment_method), None)
+    if method_config is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Payment method is not available on this landing page',
@@ -388,6 +434,20 @@ async def create_landing_purchase(
         tariff, amount_kopeks = await validate_and_calculate(db, landing, body.tariff_id, body.period_days)
     except GuestPurchaseError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+
+    # Validate amount against per-method min/max limits (before creating purchase record)
+    min_amount = method_config.get('min_amount_kopeks')
+    max_amount = method_config.get('max_amount_kopeks')
+    if min_amount is not None and amount_kopeks < min_amount:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f'Amount is below the minimum ({settings.format_price(min_amount)}) for this payment method',
+        )
+    if max_amount is not None and amount_kopeks > max_amount:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f'Amount exceeds the maximum ({settings.format_price(max_amount)}) for this payment method',
+        )
 
     # Create purchase record (no commit yet — wait for payment creation)
     purchase = await create_purchase(
@@ -406,9 +466,15 @@ async def create_landing_purchase(
         commit=False,
     )
 
-    # Initiate payment via the configured provider
+    # Determine return URL: per-method override → default cabinet URL
     cabinet_base = (settings.CABINET_URL or '').rstrip('/')
-    return_url = f'{cabinet_base}/buy/success/{purchase.token}'
+    default_return_url = f'{cabinet_base}/buy/success/{purchase.token}'
+    method_return_url = method_config.get('return_url')
+    if method_return_url:
+        # Allow {token} placeholder in custom return URLs
+        return_url = method_return_url.replace('{token}', purchase.token)
+    else:
+        return_url = default_return_url
 
     payment_service = PaymentService()
     payment_result = await payment_service.create_guest_payment(

@@ -62,6 +62,9 @@ class EmailNotificationTemplates:
             NotificationType.PAYMENT_RECEIVED: self._payment_received_template,
             NotificationType.EMAIL_VERIFICATION: self._email_verification_template,
             NotificationType.PASSWORD_RESET: self._password_reset_template,
+            NotificationType.GUEST_SUBSCRIPTION_DELIVERED: self._guest_subscription_delivered_template,
+            NotificationType.GUEST_ACTIVATION_REQUIRED: self._guest_activation_required_template,
+            NotificationType.GUEST_GIFT_RECEIVED: self._guest_gift_received_template,
         }
 
         template_func = template_map.get(notification_type)
@@ -1319,6 +1322,272 @@ class EmailNotificationTemplates:
                 <p><a href="{reset_url}">{reset_url}</a></p>
                 <p>Посилання дійсне протягом {expire_hours} годин.</p>
                 <p class="warning" style="color: #dc3545; font-weight: bold;">Якщо ви не запитували скидання пароля, проігноруйте цей лист або зв'яжіться з підтримкою.</p>
+            """,
+        }
+
+        return {
+            'subject': subjects.get(language, subjects['ru']),
+            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+        }
+
+    # ============================================================================
+    # Guest Purchase Templates
+    # ============================================================================
+
+    def _guest_subscription_delivered_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+        """Template for guest subscription delivered notification."""
+        subscription_url = html.escape(context.get('subscription_url', ''))
+        tariff_name = html.escape(context.get('tariff_name', ''))
+        period_days = context.get('period_days', 0)
+        success_page_url = html.escape(context.get('success_page_url', ''))
+
+        subjects = {
+            'ru': 'Ваша VPN подписка готова',
+            'en': 'Your VPN subscription is ready',
+            'zh': '您的VPN订阅已准备就绪',
+            'ua': 'Ваша VPN підписка готова',
+            'fa': 'اشتراک VPN شما آماده است',
+        }
+
+        bodies = {
+            'ru': f"""
+                <h2>Ваша VPN подписка готова!</h2>
+                <div class="highlight success">
+                    <p>Тариф: <strong>{tariff_name}</strong></p>
+                    <p>Период: <strong>{period_days} дней</strong></p>
+                </div>
+                <p>Ваша ссылка подписки:</p>
+                <p style="word-break: break-all;"><a href="{subscription_url}">{subscription_url}</a></p>
+                <p>Скопируйте ссылку и добавьте в ваше VPN-приложение.</p>
+                <p style="text-align: center;"><a href="{success_page_url}" class="button">Открыть страницу подписки</a></p>
+            """,
+            'en': f"""
+                <h2>Your VPN subscription is ready!</h2>
+                <div class="highlight success">
+                    <p>Plan: <strong>{tariff_name}</strong></p>
+                    <p>Period: <strong>{period_days} days</strong></p>
+                </div>
+                <p>Your subscription link:</p>
+                <p style="word-break: break-all;"><a href="{subscription_url}">{subscription_url}</a></p>
+                <p>Copy the link and add it to your VPN app.</p>
+                <p style="text-align: center;"><a href="{success_page_url}" class="button">Open subscription page</a></p>
+            """,
+            'zh': f"""
+                <h2>您的VPN订阅已准备就绪！</h2>
+                <div class="highlight success">
+                    <p>套餐: <strong>{tariff_name}</strong></p>
+                    <p>期限: <strong>{period_days} 天</strong></p>
+                </div>
+                <p>您的订阅链接:</p>
+                <p style="word-break: break-all;"><a href="{subscription_url}">{subscription_url}</a></p>
+                <p>复制链接并添加到您的VPN应用中。</p>
+                <p style="text-align: center;"><a href="{success_page_url}" class="button">打开订阅页面</a></p>
+            """,
+            'ua': f"""
+                <h2>Ваша VPN підписка готова!</h2>
+                <div class="highlight success">
+                    <p>Тариф: <strong>{tariff_name}</strong></p>
+                    <p>Період: <strong>{period_days} днів</strong></p>
+                </div>
+                <p>Ваше посилання підписки:</p>
+                <p style="word-break: break-all;"><a href="{subscription_url}">{subscription_url}</a></p>
+                <p>Скопіюйте посилання та додайте у ваш VPN-додаток.</p>
+                <p style="text-align: center;"><a href="{success_page_url}" class="button">Відкрити сторінку підписки</a></p>
+            """,
+            'fa': f"""
+                <h2>اشتراک VPN شما آماده است!</h2>
+                <div class="highlight success">
+                    <p>طرح: <strong>{tariff_name}</strong></p>
+                    <p>مدت: <strong>{period_days} روز</strong></p>
+                </div>
+                <p>لینک اشتراک شما:</p>
+                <p style="word-break: break-all;"><a href="{subscription_url}">{subscription_url}</a></p>
+                <p>لینک را کپی کنید و به اپلیکیشن VPN خود اضافه کنید.</p>
+                <p style="text-align: center;"><a href="{success_page_url}" class="button">باز کردن صفحه اشتراک</a></p>
+            """,
+        }
+
+        return {
+            'subject': subjects.get(language, subjects['ru']),
+            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+        }
+
+    def _guest_activation_required_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+        """Template for guest purchase pending activation (user already has a subscription)."""
+        tariff_name = html.escape(context.get('tariff_name', ''))
+        period_days = context.get('period_days', 0)
+        success_page_url = html.escape(context.get('success_page_url', ''))
+        gift_message = context.get('gift_message')
+        is_gift = context.get('is_gift', False)
+
+        gift_block_ru = ''
+        gift_block_en = ''
+        gift_block_zh = ''
+        gift_block_ua = ''
+        gift_block_fa = ''
+        if is_gift and gift_message:
+            escaped_msg = html.escape(gift_message)
+            gift_block_ru = f'<div class="highlight"><p><em>Сообщение: {escaped_msg}</em></p></div>'
+            gift_block_en = f'<div class="highlight"><p><em>Message: {escaped_msg}</em></p></div>'
+            gift_block_zh = f'<div class="highlight"><p><em>留言: {escaped_msg}</em></p></div>'
+            gift_block_ua = f'<div class="highlight"><p><em>Повідомлення: {escaped_msg}</em></p></div>'
+            gift_block_fa = f'<div class="highlight"><p><em>پیام: {escaped_msg}</em></p></div>'
+
+        subjects = {
+            'ru': 'Требуется активация подписки',
+            'en': 'Subscription activation required',
+            'zh': '需要激活订阅',
+            'ua': 'Потрібна активація підписки',
+            'fa': 'فعال‌سازی اشتراک لازم است',
+        }
+
+        bodies = {
+            'ru': f"""
+                <h2>Требуется активация подписки</h2>
+                {gift_block_ru}
+                <div class="highlight">
+                    <p>Тариф: <strong>{tariff_name}</strong></p>
+                    <p>Период: <strong>{period_days} дней</strong></p>
+                </div>
+                <p class="warning">У вас уже есть активная подписка. Активация новой заменит текущую.</p>
+                <p style="text-align: center;"><a href="{success_page_url}" class="button">Активировать подписку</a></p>
+            """,
+            'en': f"""
+                <h2>Subscription activation required</h2>
+                {gift_block_en}
+                <div class="highlight">
+                    <p>Plan: <strong>{tariff_name}</strong></p>
+                    <p>Period: <strong>{period_days} days</strong></p>
+                </div>
+                <p class="warning">You already have an active subscription. Activating will replace your current one.</p>
+                <p style="text-align: center;"><a href="{success_page_url}" class="button">Activate subscription</a></p>
+            """,
+            'zh': f"""
+                <h2>需要激活订阅</h2>
+                {gift_block_zh}
+                <div class="highlight">
+                    <p>套餐: <strong>{tariff_name}</strong></p>
+                    <p>期限: <strong>{period_days} 天</strong></p>
+                </div>
+                <p class="warning">您已有活跃订阅。激活新订阅将替换当前订阅。</p>
+                <p style="text-align: center;"><a href="{success_page_url}" class="button">激活订阅</a></p>
+            """,
+            'ua': f"""
+                <h2>Потрібна активація підписки</h2>
+                {gift_block_ua}
+                <div class="highlight">
+                    <p>Тариф: <strong>{tariff_name}</strong></p>
+                    <p>Період: <strong>{period_days} днів</strong></p>
+                </div>
+                <p class="warning">У вас вже є активна підписка. Активація нової замінить поточну.</p>
+                <p style="text-align: center;"><a href="{success_page_url}" class="button">Активувати підписку</a></p>
+            """,
+            'fa': f"""
+                <h2>فعال‌سازی اشتراک لازم است</h2>
+                {gift_block_fa}
+                <div class="highlight">
+                    <p>طرح: <strong>{tariff_name}</strong></p>
+                    <p>مدت: <strong>{period_days} روز</strong></p>
+                </div>
+                <p class="warning">شما از قبل اشتراک فعالی دارید. فعال‌سازی اشتراک جدید جایگزین فعلی خواهد شد.</p>
+                <p style="text-align: center;"><a href="{success_page_url}" class="button">فعال‌سازی اشتراک</a></p>
+            """,
+        }
+
+        return {
+            'subject': subjects.get(language, subjects['ru']),
+            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+        }
+
+    def _guest_gift_received_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+        """Template for gift subscription received notification."""
+        subscription_url = html.escape(context.get('subscription_url', ''))
+        tariff_name = html.escape(context.get('tariff_name', ''))
+        period_days = context.get('period_days', 0)
+        gift_message = context.get('gift_message')
+        success_page_url = html.escape(context.get('success_page_url', ''))
+
+        gift_block_ru = ''
+        gift_block_en = ''
+        gift_block_zh = ''
+        gift_block_ua = ''
+        gift_block_fa = ''
+        if gift_message:
+            escaped_msg = html.escape(gift_message)
+            gift_block_ru = f'<div class="highlight"><p><em>Сообщение: {escaped_msg}</em></p></div>'
+            gift_block_en = f'<div class="highlight"><p><em>Message: {escaped_msg}</em></p></div>'
+            gift_block_zh = f'<div class="highlight"><p><em>留言: {escaped_msg}</em></p></div>'
+            gift_block_ua = f'<div class="highlight"><p><em>Повідомлення: {escaped_msg}</em></p></div>'
+            gift_block_fa = f'<div class="highlight"><p><em>پیام: {escaped_msg}</em></p></div>'
+
+        subjects = {
+            'ru': 'Вам подарили VPN подписку!',
+            'en': "You've been gifted a VPN subscription!",
+            'zh': '您收到了VPN订阅礼物！',
+            'ua': 'Вам подарували VPN підписку!',
+            'fa': 'یک اشتراک VPN به شما هدیه داده شده است!',
+        }
+
+        bodies = {
+            'ru': f"""
+                <h2>Вам подарили VPN подписку!</h2>
+                {gift_block_ru}
+                <div class="highlight success">
+                    <p>Тариф: <strong>{tariff_name}</strong></p>
+                    <p>Период: <strong>{period_days} дней</strong></p>
+                </div>
+                <p>Ваша ссылка подписки:</p>
+                <p style="word-break: break-all;"><a href="{subscription_url}">{subscription_url}</a></p>
+                <p>Скопируйте ссылку и добавьте в ваше VPN-приложение.</p>
+                <p style="text-align: center;"><a href="{success_page_url}" class="button">Открыть страницу подписки</a></p>
+            """,
+            'en': f"""
+                <h2>You've been gifted a VPN subscription!</h2>
+                {gift_block_en}
+                <div class="highlight success">
+                    <p>Plan: <strong>{tariff_name}</strong></p>
+                    <p>Period: <strong>{period_days} days</strong></p>
+                </div>
+                <p>Your subscription link:</p>
+                <p style="word-break: break-all;"><a href="{subscription_url}">{subscription_url}</a></p>
+                <p>Copy the link and add it to your VPN app.</p>
+                <p style="text-align: center;"><a href="{success_page_url}" class="button">Open subscription page</a></p>
+            """,
+            'zh': f"""
+                <h2>您收到了VPN订阅礼物！</h2>
+                {gift_block_zh}
+                <div class="highlight success">
+                    <p>套餐: <strong>{tariff_name}</strong></p>
+                    <p>期限: <strong>{period_days} 天</strong></p>
+                </div>
+                <p>您的订阅链接:</p>
+                <p style="word-break: break-all;"><a href="{subscription_url}">{subscription_url}</a></p>
+                <p>复制链接并添加到您的VPN应用中。</p>
+                <p style="text-align: center;"><a href="{success_page_url}" class="button">打开订阅页面</a></p>
+            """,
+            'ua': f"""
+                <h2>Вам подарували VPN підписку!</h2>
+                {gift_block_ua}
+                <div class="highlight success">
+                    <p>Тариф: <strong>{tariff_name}</strong></p>
+                    <p>Період: <strong>{period_days} днів</strong></p>
+                </div>
+                <p>Ваше посилання підписки:</p>
+                <p style="word-break: break-all;"><a href="{subscription_url}">{subscription_url}</a></p>
+                <p>Скопіюйте посилання та додайте у ваш VPN-додаток.</p>
+                <p style="text-align: center;"><a href="{success_page_url}" class="button">Відкрити сторінку підписки</a></p>
+            """,
+            'fa': f"""
+                <h2>یک اشتراک VPN به شما هدیه داده شده است!</h2>
+                {gift_block_fa}
+                <div class="highlight success">
+                    <p>طرح: <strong>{tariff_name}</strong></p>
+                    <p>مدت: <strong>{period_days} روز</strong></p>
+                </div>
+                <p>لینک اشتراک شما:</p>
+                <p style="word-break: break-all;"><a href="{subscription_url}">{subscription_url}</a></p>
+                <p>لینک را کپی کنید و به اپلیکیشن VPN خود اضافه کنید.</p>
+                <p style="text-align: center;"><a href="{success_page_url}" class="button">باز کردن صفحه اشتراک</a></p>
             """,
         }
 

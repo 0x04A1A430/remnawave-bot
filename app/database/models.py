@@ -3023,6 +3023,7 @@ class GuestPurchaseStatus(str, Enum):
     PENDING = 'pending'
     PAID = 'paid'
     DELIVERED = 'delivered'
+    PENDING_ACTIVATION = 'pending_activation'
     FAILED = 'failed'
     EXPIRED = 'expired'
 

@@ -462,6 +462,7 @@ async def try_fulfill_guest_purchase(
         # Idempotency: skip terminal states
         if existing and existing.status in (
             GuestPurchaseStatus.DELIVERED.value,
+            GuestPurchaseStatus.PENDING_ACTIVATION.value,
             GuestPurchaseStatus.FAILED.value,
         ):
             logger.info(

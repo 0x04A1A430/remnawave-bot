@@ -1,10 +1,11 @@
 """Admin routes for landing page management in cabinet."""
 
 from datetime import datetime
+from urllib.parse import urlparse
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cabinet.utils.locale import (
@@ -21,7 +22,7 @@ from app.database.crud.landing import (
     update_landing,
     update_landing_order,
 )
-from app.database.models import User
+from app.database.models import LandingPage, User
 
 from ..dependencies import get_cabinet_db, require_permission
 
@@ -72,11 +73,15 @@ class LandingFeatureInput(BaseModel):
 
 
 class LandingPaymentMethodInput(BaseModel):
-    method_id: str
-    display_name: str
-    description: str | None = None
-    icon_url: str | None = None
+    method_id: str = Field(max_length=50)
+    display_name: str = Field(max_length=200)
+    description: str | None = Field(default=None, max_length=500)
+    icon_url: str | None = Field(default=None, max_length=500)
     sort_order: int = 0
+    min_amount_kopeks: int | None = None
+    max_amount_kopeks: int | None = None
+    currency: str | None = Field(default=None, max_length=10)
+    return_url: str | None = Field(default=None, max_length=500)
 
     @field_validator('icon_url', mode='before')
     @classmethod
@@ -86,6 +91,42 @@ class LandingPaymentMethodInput(BaseModel):
         if not v.startswith(('https://', '/')):
             raise ValueError('icon_url must use HTTPS or be a relative path')
         return v
+
+    @field_validator('return_url', mode='before')
+    @classmethod
+    def validate_return_url(cls, v: str | None) -> str | None:
+        if not v:
+            return None
+        if not v.startswith('https://'):
+            raise ValueError('return_url must use HTTPS')
+        parsed = urlparse(v)
+        if not parsed.hostname or parsed.username or parsed.password:
+            raise ValueError('return_url must be a valid HTTPS URL without credentials')
+        return v
+
+    @field_validator('currency', mode='before')
+    @classmethod
+    def validate_currency(cls, v: str | None) -> str | None:
+        if not v:
+            return None
+        return v.strip().upper()
+
+    @field_validator('min_amount_kopeks', 'max_amount_kopeks')
+    @classmethod
+    def validate_amounts(cls, v: int | None) -> int | None:
+        if v is not None and v < 0:
+            raise ValueError('Amount cannot be negative')
+        return v
+
+    @model_validator(mode='after')
+    def validate_amount_range(self) -> 'LandingPaymentMethodInput':
+        if (
+            self.min_amount_kopeks is not None
+            and self.max_amount_kopeks is not None
+            and self.min_amount_kopeks > self.max_amount_kopeks
+        ):
+            raise ValueError('min_amount_kopeks cannot be greater than max_amount_kopeks')
+        return self
 
 
 class LandingCreateRequest(BaseModel):
@@ -470,7 +511,7 @@ async def toggle_landing_active(
 # ============ Helpers ============
 
 
-def _landing_to_detail(landing) -> LandingDetailResponse:
+def _landing_to_detail(landing: LandingPage) -> LandingDetailResponse:
     """Convert a LandingPage model to LandingDetailResponse.
 
     Admin detail view returns full locale dicts for all text fields.
@@ -491,6 +532,10 @@ def _landing_to_detail(landing) -> LandingDetailResponse:
             description=m.get('description'),
             icon_url=m.get('icon_url'),
             sort_order=m.get('sort_order', 0),
+            min_amount_kopeks=m.get('min_amount_kopeks'),
+            max_amount_kopeks=m.get('max_amount_kopeks'),
+            currency=m.get('currency'),
+            return_url=m.get('return_url'),
         )
         for m in (landing.payment_methods or [])
     ]
