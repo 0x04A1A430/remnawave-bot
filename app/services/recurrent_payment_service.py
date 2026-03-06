@@ -285,10 +285,12 @@ async def _process_single_subscription(
                 if result.get('paid'):
                     keyboard = InlineKeyboardMarkup(
                         inline_keyboard=[
-                            [InlineKeyboardButton(
-                                text=texts.t('SUBSCRIPTION_EXTEND', '💎 Продлить подписку'),
-                                callback_data='subscription_extend',
-                            )],
+                            [
+                                InlineKeyboardButton(
+                                    text=texts.t('SUBSCRIPTION_EXTEND', '💎 Продлить подписку'),
+                                    callback_data='subscription_extend',
+                                )
+                            ],
                         ]
                     )
                     msg = texts.t(
@@ -320,10 +322,12 @@ async def _process_single_subscription(
             texts = get_texts(user.language)
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [InlineKeyboardButton(
-                        text=texts.t('SUBSCRIPTION_EXTEND', '💎 Продлить подписку'),
-                        callback_data='subscription_extend',
-                    )],
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t('SUBSCRIPTION_EXTEND', '💎 Продлить подписку'),
+                            callback_data='subscription_extend',
+                        )
+                    ],
                 ]
             )
             msg = texts.t(

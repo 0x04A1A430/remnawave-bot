@@ -434,11 +434,7 @@ class MonitoringService:
                         continue
 
                     # Пропускаем уведомление если autopay + рекуррентные платежи с карты настроены
-                    if (
-                        subscription.autopay_enabled
-                        and settings.ENABLE_AUTOPAY
-                        and settings.YOOKASSA_RECURRENT_ENABLED
-                    ):
+                    if subscription.autopay_enabled and settings.ENABLE_AUTOPAY and settings.YOOKASSA_RECURRENT_ENABLED:
                         from app.database.crud.saved_payment_method import get_active_payment_methods_by_user
 
                         saved_methods = await get_active_payment_methods_by_user(db, user.id)
