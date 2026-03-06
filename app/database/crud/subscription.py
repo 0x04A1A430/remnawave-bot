@@ -443,6 +443,9 @@ async def extend_subscription(
         logger.info(
             '🔄 Статус подписки изменён с на ACTIVE', subscription_id=subscription.id, previous_status=previous_status
         )
+    elif days > 0 and subscription.status == SubscriptionStatus.TRIAL.value:
+        subscription.status = SubscriptionStatus.ACTIVE.value
+        logger.info('🔄 Статус подписки изменён с trial на ACTIVE', subscription_id=subscription.id)
     elif days > 0 and subscription.status == SubscriptionStatus.PENDING.value:
         logger.warning('⚠️ Попытка продлить PENDING подписку , дни', subscription_id=subscription.id, days=days)
 

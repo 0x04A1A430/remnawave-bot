@@ -423,6 +423,13 @@ class WataPaymentMixin:
             metadata=existing_metadata,
         )
 
+        wata_lock_crud = import_module('app.database.crud.wata')
+        locked = await wata_lock_crud.get_wata_payment_by_id_for_update(db, payment.id)
+        if not locked:
+            logger.error('WATA: не удалось заблокировать платёж', payment_id=payment.id)
+            return None
+        payment = locked
+
         if payment.transaction_id:
             logger.info(
                 'WATA платеж уже привязан к транзакции',
@@ -449,6 +456,7 @@ class WataPaymentMixin:
             external_id=transaction_external_id or payment.payment_link_id,
             is_completed=True,
             created_at=getattr(payment, 'created_at', None),
+            commit=False,
         )
 
         await payment_module.link_wata_payment_to_transaction(db, payment, transaction.id)
@@ -459,6 +467,20 @@ class WataPaymentMixin:
         user.balance_kopeks += payment.amount_kopeks
         user.updated_at = datetime.now(UTC)
         await db.commit()
+
+        # Emit deferred side-effects after atomic commit
+        from app.database.crud.transaction import emit_transaction_side_effects
+
+        await emit_transaction_side_effects(
+            db,
+            transaction,
+            amount_kopeks=payment.amount_kopeks,
+            user_id=payment.user_id,
+            type=TransactionType.DEPOSIT,
+            payment_method=PaymentMethod.WATA,
+            external_id=transaction_external_id or payment.payment_link_id,
+        )
+
         user = await payment_module.get_user_by_id(db, user.id)
         if not user:
             logger.error('Пользователь не найден после коммита WATA', user_id=payment.user_id)

@@ -38,6 +38,8 @@ async def create_transaction(
     external_id: str | None = None,
     is_completed: bool = True,
     created_at: datetime | None = None,
+    *,
+    commit: bool = True,
 ) -> Transaction:
     # SUBSCRIPTION_PAYMENT — always store as negative (debit from user balance)
     # Keep original for downstream consumers (events, contests)
@@ -58,7 +60,10 @@ async def create_transaction(
     )
 
     db.add(transaction)
-    await db.commit()
+    if commit:
+        await db.commit()
+    else:
+        await db.flush()
     await db.refresh(transaction)
 
     logger.info(
@@ -68,7 +73,69 @@ async def create_transaction(
         user_id=user_id,
     )
 
-    # Отправляем событие о транзакции
+    # Side-effects skipped when commit=False to preserve caller's transaction atomicity.
+    # Callers using commit=False should call emit_transaction_side_effects() after their own db.commit().
+    if commit:
+        try:
+            from app.services.event_emitter import event_emitter
+
+            await event_emitter.emit(
+                'payment.completed' if type == TransactionType.DEPOSIT else 'transaction.created',
+                {
+                    'transaction_id': transaction.id,
+                    'user_id': user_id,
+                    'type': type.value,
+                    'amount_kopeks': abs(amount_kopeks),
+                    'amount_rubles': abs(amount_kopeks) / 100,
+                    'payment_method': payment_method.value if payment_method else None,
+                    'external_id': external_id,
+                    'is_completed': is_completed,
+                    'description': description,
+                },
+                db=db,
+            )
+        except Exception as error:
+            logger.warning('Failed to emit transaction event', error=error)
+
+        try:
+            from app.services.promo_group_assignment import (
+                maybe_assign_promo_group_by_total_spent,
+            )
+
+            await maybe_assign_promo_group_by_total_spent(db, user_id)
+        except Exception as exc:
+            logger.debug('Не удалось проверить автовыдачу промогруппы для пользователя', user_id=user_id, exc=exc)
+        if type == TransactionType.SUBSCRIPTION_PAYMENT and is_completed:
+            try:
+                from app.services.referral_contest_service import referral_contest_service
+
+                await referral_contest_service.on_subscription_payment(
+                    db,
+                    user_id,
+                    abs(amount_kopeks),
+                )
+            except Exception as exc:
+                logger.debug('Не удалось записать событие конкурса для пользователя', user_id=user_id, exc=exc)
+
+    return transaction
+
+
+async def emit_transaction_side_effects(
+    db: AsyncSession,
+    transaction: Transaction,
+    *,
+    amount_kopeks: int,
+    user_id: int,
+    type: TransactionType,
+    payment_method: PaymentMethod | None = None,
+    external_id: str | None = None,
+    is_completed: bool = True,
+    description: str = '',
+) -> None:
+    """Fire side-effects that were deferred when create_transaction(commit=False) was used.
+
+    Call this AFTER db.commit() to emit events and run promo checks.
+    """
     try:
         from app.services.event_emitter import event_emitter
 
@@ -88,7 +155,7 @@ async def create_transaction(
             db=db,
         )
     except Exception as error:
-        logger.warning('Failed to emit transaction event', error=error)
+        logger.warning('Failed to emit deferred transaction event', error=error)
 
     try:
         from app.services.promo_group_assignment import (
@@ -98,7 +165,8 @@ async def create_transaction(
         await maybe_assign_promo_group_by_total_spent(db, user_id)
     except Exception as exc:
         logger.debug('Не удалось проверить автовыдачу промогруппы для пользователя', user_id=user_id, exc=exc)
-    if type == TransactionType.SUBSCRIPTION_PAYMENT:
+
+    if type == TransactionType.SUBSCRIPTION_PAYMENT and is_completed:
         try:
             from app.services.referral_contest_service import referral_contest_service
 
@@ -109,8 +177,6 @@ async def create_transaction(
             )
         except Exception as exc:
             logger.debug('Не удалось записать событие конкурса для пользователя', user_id=user_id, exc=exc)
-
-    return transaction
 
 
 async def get_transaction_by_id(db: AsyncSession, transaction_id: int) -> Transaction | None:

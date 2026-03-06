@@ -127,7 +127,7 @@ async def link_yookassa_payment_to_transaction(
         .where(YooKassaPayment.yookassa_payment_id == yookassa_payment_id)
         .values(transaction_id=transaction_id, updated_at=datetime.now(UTC))
     )
-    await db.commit()
+    await db.flush()
 
     result = await db.execute(
         select(YooKassaPayment)

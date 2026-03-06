@@ -276,6 +276,13 @@ class HeleketPaymentMixin:
             except Exception as error:  # pragma: no cover - diagnostics
                 logger.warning('Не удалось обновить метаданные Heleket после удаления счёта', error=error)
 
+        heleket_lock_crud = import_module('app.database.crud.heleket')
+        locked = await heleket_lock_crud.get_heleket_payment_by_id_for_update(db, updated_payment.id)
+        if not locked:
+            logger.error('Heleket: не удалось заблокировать платёж', payment_id=updated_payment.id)
+            return None
+        updated_payment = locked
+
         if updated_payment.transaction_id:
             logger.info(
                 'Heleket платеж уже связан с транзакцией',
@@ -309,6 +316,7 @@ class HeleketPaymentMixin:
             external_id=updated_payment.uuid,
             is_completed=True,
             created_at=getattr(updated_payment, 'created_at', None),
+            commit=False,
         )
 
         linked_payment = await heleket_crud.link_heleket_payment_to_transaction(
@@ -333,6 +341,19 @@ class HeleketPaymentMixin:
 
         await db.commit()
         await db.refresh(user)
+
+        # Emit deferred side-effects after atomic commit
+        from app.database.crud.transaction import emit_transaction_side_effects
+
+        await emit_transaction_side_effects(
+            db,
+            transaction,
+            amount_kopeks=amount_kopeks,
+            user_id=updated_payment.user_id,
+            type=TransactionType.DEPOSIT,
+            payment_method=PaymentMethod.HELEKET,
+            external_id=updated_payment.uuid,
+        )
 
         try:
             from app.services.referral_service import process_referral_topup

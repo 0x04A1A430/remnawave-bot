@@ -450,6 +450,7 @@ class YooKassaPaymentMixin:
                             exc_info=True,
                         )
 
+                await db.commit()
                 return True
 
             payment_metadata: dict[str, Any] = {}
@@ -560,6 +561,7 @@ class YooKassaPaymentMixin:
                                 exc_info=True,
                             )
 
+                    await db.commit()
                     return True
 
             payment_description = getattr(payment, 'description', 'YooKassa платеж')

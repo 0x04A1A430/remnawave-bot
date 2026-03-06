@@ -346,6 +346,13 @@ class Pal24PaymentMixin:
             except Exception as error:  # pragma: no cover - diagnostics
                 logger.warning('Не удалось обновить метаданные PayPalych после удаления счёта', error=error)
 
+        pal24_lock_crud = import_module('app.database.crud.pal24')
+        locked = await pal24_lock_crud.get_pal24_payment_by_id_for_update(db, payment.id)
+        if not locked:
+            logger.error('Pal24: не удалось заблокировать платёж', payment_id=payment.id)
+            return False
+        payment = locked
+
         if payment.transaction_id:
             logger.info('Pal24 платеж уже привязан к транзакции (trigger=)', bill_id=payment.bill_id, trigger=trigger)
             return True
@@ -370,6 +377,7 @@ class Pal24PaymentMixin:
             external_id=str(payment_id) if payment_id else payment.bill_id,
             is_completed=True,
             created_at=getattr(payment, 'created_at', None),
+            commit=False,
         )
 
         await payment_module.link_pal24_payment_to_transaction(db, payment, transaction.id)
@@ -386,6 +394,19 @@ class Pal24PaymentMixin:
         topup_status = '🆕 Первое пополнение' if was_first_topup else '🔄 Пополнение'
 
         await db.commit()
+
+        # Emit deferred side-effects after atomic commit
+        from app.database.crud.transaction import emit_transaction_side_effects
+
+        await emit_transaction_side_effects(
+            db,
+            transaction,
+            amount_kopeks=payment.amount_kopeks,
+            user_id=payment.user_id,
+            type=TransactionType.DEPOSIT,
+            payment_method=PaymentMethod.PAL24,
+            external_id=payment.bill_id,
+        )
 
         try:
             from app.services.referral_service import process_referral_topup
