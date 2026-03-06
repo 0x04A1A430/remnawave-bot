@@ -41,6 +41,7 @@ from ..auth import (
     hash_password,
     validate_telegram_init_data,
     validate_telegram_login_widget,
+    validate_telegram_oidc_token,
     verify_password,
 )
 from ..auth.email_verification import (
@@ -71,6 +72,7 @@ from ..schemas.auth import (
     RefreshTokenRequest,
     RegisterResponse,
     TelegramAuthRequest,
+    TelegramOIDCAuthRequest,
     TelegramWidgetAuthRequest,
     TokenResponse,
     UserResponse,
@@ -537,6 +539,95 @@ async def auth_telegram_widget(
     await _process_referral_code(db, user, request.referral_code)
 
     # Process campaign bonus
+    response.campaign_bonus = await _process_campaign_bonus(db, user, request.campaign_slug)
+    if response.campaign_bonus:
+        response.user = _user_to_response(user)
+
+    return response
+
+
+@router.post('/telegram/oidc', response_model=AuthResponse)
+async def auth_telegram_oidc(
+    request: TelegramOIDCAuthRequest,
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """
+    Authenticate using Telegram OIDC id_token (popup flow).
+
+    The frontend uses Telegram.Login.init() popup which returns an id_token.
+    We validate it via JWKS and create/login the user.
+    """
+    if not settings.TELEGRAM_OIDC_ENABLED or not settings.TELEGRAM_OIDC_CLIENT_ID:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Telegram OIDC is not configured',
+        )
+
+    claims = await validate_telegram_oidc_token(
+        request.id_token,
+        settings.TELEGRAM_OIDC_CLIENT_ID,
+    )
+    if not claims:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='Invalid or expired Telegram OIDC token',
+        )
+
+    # Extract user info from OIDC claims
+    telegram_id = int(claims.get('id', claims.get('sub', 0)))
+    if not telegram_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='Missing user ID in OIDC claims',
+        )
+
+    first_name = claims.get('name', claims.get('given_name', ''))
+    username = claims.get('preferred_username')
+
+    user = await get_user_by_telegram_id(db, telegram_id)
+
+    # Resolve referral code for new users
+    referrer_id = None
+    if request.referral_code and not user:
+        try:
+            referrer = await get_user_by_referral_code(db, request.referral_code)
+            if referrer:
+                referrer_id = referrer.id
+        except Exception as e:
+            logger.warning('Failed to resolve referral code', referral_code=request.referral_code, error=e)
+
+    if not user:
+        logger.info('Creating new user from cabinet OIDC', telegram_id=telegram_id, username=username)
+        user = await create_user(
+            db=db,
+            telegram_id=telegram_id,
+            username=username,
+            first_name=first_name,
+            language='ru',
+            referred_by_id=referrer_id,
+        )
+        logger.info('User created successfully', user_id=user.id, telegram_id=user.telegram_id)
+
+    if user.status != 'active':
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='User account is not active',
+        )
+
+    # Update user info from OIDC claims
+    if username and username != user.username:
+        user.username = username
+    if first_name and first_name != user.first_name:
+        user.first_name = first_name
+
+    user.cabinet_last_login = datetime.now(UTC)
+    await db.commit()
+
+    response = await _create_auth_response(user, db)
+    await _store_refresh_token(db, user.id, response.refresh_token)
+
+    await _process_referral_code(db, user, request.referral_code)
+
     response.campaign_bonus = await _process_campaign_bonus(db, user, request.campaign_slug)
     if response.campaign_bonus:
         response.user = _user_to_response(user)

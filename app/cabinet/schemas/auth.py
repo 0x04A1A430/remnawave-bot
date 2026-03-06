@@ -31,6 +31,16 @@ class TelegramWidgetAuthRequest(BaseModel):
     referral_code: str | None = Field(None, max_length=32, description='Referral code of inviter')
 
 
+class TelegramOIDCAuthRequest(BaseModel):
+    """Request for Telegram OIDC authentication (popup flow)."""
+
+    id_token: str = Field(..., description='JWT id_token from Telegram OIDC popup')
+    campaign_slug: str | None = Field(
+        None, min_length=1, max_length=64, pattern=r'^[a-zA-Z0-9_-]+$', description='Campaign slug from web link'
+    )
+    referral_code: str | None = Field(None, max_length=32, description='Referral code of inviter')
+
+
 class EmailRegisterRequest(BaseModel):
     """Request to register/link email to existing Telegram account."""
 
