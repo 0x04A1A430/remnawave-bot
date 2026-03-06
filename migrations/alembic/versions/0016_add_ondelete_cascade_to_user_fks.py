@@ -13,11 +13,34 @@ FK constraints from being created. This migration:
 from typing import Sequence, Union
 
 from alembic import op
+from sqlalchemy import text
 
 revision: str = '0016'
 down_revision: Union[str, None] = '0015'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
+
+
+def _get_actual_fk_name(connection, table: str, column: str) -> str | None:
+    """Look up actual FK constraint name from pg_constraint for a given table+column."""
+    result = connection.execute(
+        text("""
+            SELECT con.conname
+            FROM pg_constraint con
+            JOIN pg_class rel ON rel.oid = con.conrelid
+            JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace
+            JOIN pg_attribute att ON att.attrelid = con.conrelid
+                AND att.attnum = ANY(con.conkey)
+            WHERE rel.relname = :table
+                AND att.attname = :column
+                AND con.contype = 'f'
+                AND nsp.nspname = 'public'
+            LIMIT 1
+        """),
+        {'table': table, 'column': column},
+    )
+    row = result.fetchone()
+    return row[0] if row else None
 
 # (table, column, ondelete, fk_name)
 _FK_CHANGES: list[tuple[str, str, str, str]] = [
@@ -139,9 +162,25 @@ _ALL_USER_FKS: list[tuple[str, str, bool]] = [
 ]
 
 
+def _table_exists(connection, table: str) -> bool:
+    """Check if a table exists in the public schema."""
+    result = connection.execute(
+        text("""
+            SELECT 1 FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = :table
+        """),
+        {'table': table},
+    )
+    return result.fetchone() is not None
+
+
 def upgrade() -> None:
+    connection = op.get_bind()
+
     # Step 1: Clean orphan records for ALL tables referencing users.id
     for table, column, nullable in _ALL_USER_FKS:
+        if not _table_exists(connection, table):
+            continue
         if nullable:
             op.execute(
                 f'UPDATE {table} SET {column} = NULL '
@@ -156,12 +195,23 @@ def upgrade() -> None:
 
     # Step 2: Drop old FK constraints and recreate with ON DELETE CASCADE/SET NULL
     for table, column, ondelete, fk_name in _FK_CHANGES:
-        op.drop_constraint(fk_name, table, type_='foreignkey')
+        if not _table_exists(connection, table):
+            continue
+        # Look up the actual constraint name in the database (may differ from assumed name)
+        actual_fk = _get_actual_fk_name(connection, table, column)
+        if actual_fk:
+            op.drop_constraint(actual_fk, table, type_='foreignkey')
+        # Always create the FK with the desired ondelete behavior
         op.create_foreign_key(fk_name, table, 'users', [column], ['id'], ondelete=ondelete)
 
 
 def downgrade() -> None:
+    connection = op.get_bind()
     # Revert to FK constraints without ON DELETE behavior
     for table, column, _ondelete, fk_name in _FK_CHANGES:
-        op.drop_constraint(fk_name, table, type_='foreignkey')
+        if not _table_exists(connection, table):
+            continue
+        actual_fk = _get_actual_fk_name(connection, table, column)
+        if actual_fk:
+            op.drop_constraint(actual_fk, table, type_='foreignkey')
         op.create_foreign_key(fk_name, table, 'users', [column], ['id'])
