@@ -107,7 +107,7 @@ class PurchaseRequest(BaseModel):
     period_days: int
     contact_type: str = Field(pattern=r'^(email|telegram)$')
     contact_value: str = Field(min_length=1, max_length=255)
-    payment_method: str
+    payment_method: str = Field(min_length=1, max_length=50, pattern=r'^[a-z0-9_]+$')
     is_gift: bool = False
     gift_recipient_type: str | None = Field(default=None, pattern=r'^(email|telegram)$')
     gift_recipient_value: str | None = Field(default=None, max_length=255)
@@ -432,7 +432,7 @@ async def get_landing_config(
                 # If landing has explicit sub_options config, respect it; otherwise all enabled
                 if raw_sub_options is None or raw_sub_options.get(opt_id, True):
                     resolved.append(LandingPaymentMethodSubOption(id=opt_id, name=opt['name']))
-            if len(resolved) > 1:
+            if resolved:
                 resolved_sub_options = resolved
 
         payment_methods.append(
@@ -507,17 +507,31 @@ async def create_landing_purchase(
 
     # Validate payment method is available on this landing.
     # The frontend may send a suffixed method ID (e.g. "platega_2", "yookassa_sbp")
-    # to select a specific sub-option. We match against the base method_id.
+    # to select a specific sub-option. We match against the base method_id and
+    # validate the suffix against known & enabled sub-options.
     raw_methods = landing.payment_methods or []
-    base_payment_method = body.payment_method
-    method_config = next((m for m in raw_methods if m.get('method_id') == base_payment_method), None)
+    method_defaults = _get_method_defaults()
+
+    method_config = next((m for m in raw_methods if m.get('method_id') == body.payment_method), None)
     if method_config is None:
         # Try matching by prefix: "platega_2" → base "platega"
-        for m in raw_methods:
+        # Sort by length descending so "freekassa_sbp" is checked before "freekassa"
+        sorted_methods = sorted(raw_methods, key=lambda m: len(m.get('method_id', '')), reverse=True)
+        for m in sorted_methods:
             mid = m.get('method_id', '')
-            if base_payment_method.startswith(mid + '_'):
+            if body.payment_method.startswith(mid + '_'):
+                suffix = body.payment_method[len(mid) + 1:]
+                # Validate suffix is a known sub-option
+                method_def = method_defaults.get(mid)
+                available = (method_def.get('available_sub_options') if method_def else None) or []
+                valid_ids = {opt['id'] for opt in available}
+                if suffix not in valid_ids:
+                    break  # invalid suffix → reject
+                # Validate suffix is enabled on this landing
+                raw_sub_options = m.get('sub_options')  # dict[str, bool] | None
+                if raw_sub_options is not None and not raw_sub_options.get(suffix, True):
+                    break  # disabled sub-option → reject
                 method_config = m
-                base_payment_method = mid
                 break
     if method_config is None:
         raise HTTPException(

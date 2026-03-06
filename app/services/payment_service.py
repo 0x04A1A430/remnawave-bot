@@ -420,7 +420,7 @@ class PaymentService(
                 )
 
         # --- YooKassa (card / sbp) -------------------------------------------
-        if payment_method in ('yookassa', 'yookassa_sbp'):
+        if payment_method in ('yookassa', 'yookassa_card', 'yookassa_sbp'):
             if self.yookassa_service is None:
                 logger.warning('YooKassa is not enabled, cannot create guest payment')
                 return None
@@ -618,7 +618,7 @@ class PaymentService(
             return None
 
         # --- CloudPayments ----------------------------------------------------
-        if payment_method == 'cloudpayments':
+        if payment_method in ('cloudpayments', 'cloudpayments_card', 'cloudpayments_sbp'):
             if self.cloudpayments_service is None:
                 logger.warning('CloudPayments is not enabled, cannot create guest payment')
                 return None
