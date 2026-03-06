@@ -1329,6 +1329,7 @@
     "REFERRAL_RECENT_EARNINGS_ITEM": "• {reason}: <b>{amount}</b> از {referral_name}",
     "REFERRAL_REWARDS_HEADER": "🎁 <b>نحوه عملکرد پاداش‌ها:</b>",
     "REFERRAL_REWARD_COMMISSION": "• کمیسیون از هر شارژ دعوت‌شده: <b>{percent}%</b>",
+    "REFERRAL_REWARD_COMMISSION_LIMITED": "• کمیسیون از شارژ دعوت‌شده: <b>{percent}%</b>",
     "REFERRAL_REWARD_INVITER": "• پاداش اولین شارژ دعوت‌شده: <b>{bonus}</b>",
     "REFERRAL_REWARD_NEW_USER": "• کاربر جدید دریافت می‌کند: <b>{bonus}</b> با اولین شارژ از <b>{minimum}</b>",
     "REFERRAL_SHARE_BUTTON": "📤 اشتراک‌گذاری",

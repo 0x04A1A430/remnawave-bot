@@ -1247,6 +1247,7 @@
  "REFERRAL_RECENT_EARNINGS_ITEM": "• {reason}: <b>{amount}</b> від {referral_name}",
  "REFERRAL_REWARDS_HEADER": "🎁 <b>Як працюють нагороди:</b>",
   "REFERRAL_REWARD_COMMISSION": "• Комісія з кожного поповнення реферала: <b>{percent}%</b>",
+  "REFERRAL_REWARD_COMMISSION_LIMITED": "• Комісія з поповнень реферала: <b>{percent}%</b>",
  "REFERRAL_REWARD_INVITER": "• Ви отримуєте при першому поповненні реферала: <b>{bonus}</b>",
  "REFERRAL_REWARD_NEW_USER": "• Новий користувач отримує: <b>{bonus}</b> при першому поповненні від <b>{minimum}</b>",
  "REFERRAL_SHARE_BUTTON": "📤 Поділитися",

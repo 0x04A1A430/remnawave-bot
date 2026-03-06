@@ -1308,6 +1308,7 @@
   "REFERRAL_RECENT_EARNINGS_ITEM": "• {reason}: <b>{amount}</b> from {referral_name}",
   "REFERRAL_REWARDS_HEADER": "🎁 <b>How rewards work:</b>",
   "REFERRAL_REWARD_COMMISSION": "• Commission from each referral top-up: <b>{percent}%</b>",
+  "REFERRAL_REWARD_COMMISSION_LIMITED": "• Commission from referral top-ups: <b>{percent}%</b>",
   "REFERRAL_REWARD_INVITER": "• You receive on the referral's first top-up: <b>{bonus}</b>",
   "REFERRAL_REWARD_NEW_USER": "• New user receives: <b>{bonus}</b> on the first top-up from <b>{minimum}</b>",
   "REFERRAL_SHARE_BUTTON": "📤 Share",

@@ -99,19 +99,30 @@ async def process_referral_registration(db: AsyncSession, new_user_id: int, refe
             commission_percent = get_effective_referral_commission_percent(referrer)
             referral_notification = (
                 f'🎉 <b>Добро пожаловать!</b>\n\n'
-                f'Вы перешли по реферальной ссылке пользователя <b>{referrer.full_name}</b>!\n\n'
-                f'💰 При первом пополнении от {settings.format_price(settings.REFERRAL_MINIMUM_TOPUP_KOPEKS)} '
-                f'вы получите бонус {settings.format_price(settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS)}!\n\n'
-                # f"🎁 Ваш реферер также получит награду за ваше первое пополнение."
+                f'Вы перешли по реферальной ссылке пользователя <b>{referrer.full_name}</b>!'
             )
+            if settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS > 0:
+                referral_notification += (
+                    f'\n\n💰 При первом пополнении от {settings.format_price(settings.REFERRAL_MINIMUM_TOPUP_KOPEKS)} '
+                    f'вы получите бонус {settings.format_price(settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS)}!'
+                )
             await send_referral_notification(bot, new_user.telegram_id, referral_notification, user=new_user)
 
             inviter_notification = (
                 f'👥 <b>Новый реферал!</b>\n\n'
                 f'По вашей ссылке зарегистрировался пользователь <b>{new_user.full_name}</b>!\n\n'
                 f'💰 Когда он пополнит баланс от {settings.format_price(settings.REFERRAL_MINIMUM_TOPUP_KOPEKS)}, '
-                f'вы получите минимум {settings.format_price(settings.REFERRAL_INVITER_BONUS_KOPEKS)} или '
-                f'{commission_percent}% от суммы (что больше).\n\n'
+            )
+            if settings.REFERRAL_INVITER_BONUS_KOPEKS > 0:
+                inviter_notification += (
+                    f'вы получите минимум {settings.format_price(settings.REFERRAL_INVITER_BONUS_KOPEKS)} или '
+                    f'{commission_percent}% от суммы (что больше).\n\n'
+                )
+            else:
+                inviter_notification += (
+                    f'вы получите {commission_percent}% от суммы.\n\n'
+                )
+            inviter_notification += (
                 f'📈 С каждого последующего пополнения вы будете получать {commission_percent}% комиссии.'
             )
             await send_referral_notification(

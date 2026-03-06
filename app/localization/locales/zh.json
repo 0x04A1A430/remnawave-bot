@@ -1245,6 +1245,7 @@
 "REFERRAL_RECENT_EARNINGS_ITEM": "•{reason}:<b>{amount}</b>(来自{referral_name})",
 "REFERRAL_REWARDS_HEADER": "🎁<b>奖励如何运作：</b>",
 "REFERRAL_REWARD_COMMISSION": "•每次推荐充值的佣金：<b>{percent}%</b>",
+"REFERRAL_REWARD_COMMISSION_LIMITED": "•推荐充值佣金：<b>{percent}%</b>",
 "REFERRAL_REWARD_INVITER": "•推荐首次充值时您将获得：<b>{bonus}</b>",
 "REFERRAL_REWARD_NEW_USER": "•新用户首次充值<b>{minimum}</b>起将获得：<b>{bonus}</b>",
 "REFERRAL_SHARE_BUTTON": "📤分享",
