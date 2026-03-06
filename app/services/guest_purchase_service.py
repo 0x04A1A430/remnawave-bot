@@ -83,10 +83,12 @@ async def create_purchase(
     gift_recipient_type: str | None = None,
     gift_recipient_value: str | None = None,
     gift_message: str | None = None,
+    commit: bool = True,
 ) -> GuestPurchase:
     """Create a guest purchase record."""
     purchase = await create_guest_purchase(
         db,
+        commit=commit,
         landing_id=landing.id,
         tariff_id=tariff.id,
         period_days=period_days,
@@ -104,7 +106,7 @@ async def create_purchase(
     logger.info(
         'Guest purchase created',
         purchase_id=purchase.id,
-        token_prefix=purchase.token[:8],
+        token_prefix=purchase.token[:5],
         landing_slug=landing.slug,
         tariff_id=tariff.id,
         period_days=period_days,
@@ -122,21 +124,17 @@ async def fulfill_purchase(db: AsyncSession, purchase_token: str) -> GuestPurcha
     All operations happen within a single transaction — commit at the end.
     Returns the updated purchase or None if not found.
     """
-    result = await db.execute(
-        select(GuestPurchase)
-        .where(GuestPurchase.token == purchase_token)
-        .with_for_update()
-    )
+    result = await db.execute(select(GuestPurchase).where(GuestPurchase.token == purchase_token).with_for_update())
     purchase = result.scalars().first()
 
     if purchase is None:
-        logger.warning('Fulfill called for unknown purchase', token_prefix=purchase_token[:8])
+        logger.warning('Fulfill called for unknown purchase', token_prefix=purchase_token[:5])
         return None
 
     if purchase.status != GuestPurchaseStatus.PAID.value:
         logger.warning(
             'Fulfill called for purchase not in PAID status',
-            token_prefix=purchase_token[:8],
+            token_prefix=purchase_token[:5],
             current_status=purchase.status,
         )
         return purchase
@@ -163,11 +161,14 @@ async def fulfill_purchase(db: AsyncSession, purchase_token: str) -> GuestPurcha
         expected_price = tariff.get_price_for_period(purchase.period_days)
         if expected_price is not None and purchase.amount_kopeks != expected_price:
             logger.error(
-                'Purchase amount mismatch',
+                'Purchase amount mismatch — aborting fulfillment',
                 purchase_id=purchase.id,
                 expected_kopeks=expected_price,
                 actual_kopeks=purchase.amount_kopeks,
             )
+            purchase.status = GuestPurchaseStatus.FAILED.value
+            await db.commit()
+            return purchase
 
         subscription = await create_paid_subscription(
             db=db,
@@ -194,10 +195,12 @@ async def fulfill_purchase(db: AsyncSession, purchase_token: str) -> GuestPurcha
         await db.commit()
         await db.refresh(purchase)
 
+        # TODO: Send delivery notification (email or Telegram) with subscription_url
+
         logger.info(
             'Guest purchase fulfilled',
             purchase_id=purchase.id,
-            token_prefix=purchase_token[:8],
+            token_prefix=purchase_token[:5],
             user_id=user.id,
             recipient_type=recipient_type,
         )
@@ -206,7 +209,7 @@ async def fulfill_purchase(db: AsyncSession, purchase_token: str) -> GuestPurcha
         await db.rollback()
         logger.exception(
             'Failed to fulfill purchase',
-            token_prefix=purchase_token[:8],
+            token_prefix=purchase_token[:5],
             purchase_id=purchase.id,
         )
         raise
@@ -251,17 +254,19 @@ async def _find_or_create_user(
             email=contact_value,
             email_verified=False,
         )
-        db.add(user)
         try:
-            await db.flush()
+            async with db.begin_nested():
+                db.add(user)
+                await db.flush()
         except IntegrityError:
-            await db.rollback()
             result = await db.execute(select(User).where(User.email == contact_value))
             user = result.scalars().first()
             if user:
                 return user
             raise
-        logger.info('Created new email user for guest purchase', user_id=user.id, email_masked=_mask_email(contact_value))
+        logger.info(
+            'Created new email user for guest purchase', user_id=user.id, email_masked=_mask_email(contact_value)
+        )
         return user
 
     # contact_type == 'telegram'
@@ -278,7 +283,15 @@ async def _find_or_create_user(
         auth_type='telegram',
         username=username,
     )
-    db.add(user)
-    await db.flush()
+    try:
+        async with db.begin_nested():
+            db.add(user)
+            await db.flush()
+    except IntegrityError:
+        result = await db.execute(select(User).where(User.username == username))
+        user = result.scalars().first()
+        if user:
+            return user
+        raise
     logger.info('Created new telegram user for guest purchase', user_id=user.id, username=username)
     return user

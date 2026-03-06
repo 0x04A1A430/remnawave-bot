@@ -4,16 +4,16 @@ from datetime import datetime
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.crud.landing import (
     create_landing,
     delete_landing,
+    get_all_landing_purchase_stats,
     get_all_landings,
     get_landing_by_id,
     get_landing_by_slug,
-    get_landing_purchase_stats,
     update_landing,
     update_landing_order,
 )
@@ -27,16 +27,29 @@ logger = structlog.get_logger(__name__)
 router = APIRouter(prefix='/admin/landings', tags=['Cabinet Admin Landings'])
 
 # Slugs that conflict with public landing router path segments
-_RESERVED_SLUGS = frozenset({'purchase', 'admin', 'api', 'health'})
+_RESERVED_SLUGS = frozenset(
+    {
+        'purchase',
+        'admin',
+        'api',
+        'health',
+        'static',
+        'assets',
+        'favicon',
+        'robots',
+        'sitemap',
+        'well-known',
+    }
+)
 
 
 # ============ Schemas ============
 
 
 class LandingFeatureInput(BaseModel):
-    icon: str = ''
-    title: str = ''
-    description: str = ''
+    icon: str = Field(default='', max_length=100)
+    title: str = Field(default='', max_length=200)
+    description: str = Field(default='', max_length=500)
 
 
 class LandingPaymentMethodInput(BaseModel):
@@ -46,37 +59,46 @@ class LandingPaymentMethodInput(BaseModel):
     icon_url: str | None = None
     sort_order: int = 0
 
+    @field_validator('icon_url')
+    @classmethod
+    def validate_icon_url(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        if not v.startswith(('https://', '/')):
+            raise ValueError('icon_url must use HTTPS or be a relative path')
+        return v
+
 
 class LandingCreateRequest(BaseModel):
     slug: str = Field(pattern=r'^[a-z0-9\-]+$', min_length=1, max_length=100)
     title: str = Field(min_length=1, max_length=500)
-    subtitle: str | None = None
+    subtitle: str | None = Field(default=None, max_length=1000)
     is_active: bool = True
-    features: list[LandingFeatureInput] = Field(default_factory=list)
-    footer_text: str | None = None
+    features: list[LandingFeatureInput] = Field(default_factory=list, max_length=20)
+    footer_text: str | None = Field(default=None, max_length=5000)
     allowed_tariff_ids: list[int] = Field(default_factory=list)
     allowed_periods: dict[str, list[int]] = Field(default_factory=dict)
-    payment_methods: list[LandingPaymentMethodInput] = Field(default_factory=list)
+    payment_methods: list[LandingPaymentMethodInput] = Field(default_factory=list, max_length=10)
     gift_enabled: bool = True
-    custom_css: str | None = None
+    custom_css: str | None = Field(default=None, max_length=10000)
     meta_title: str | None = Field(default=None, max_length=200)
-    meta_description: str | None = None
+    meta_description: str | None = Field(default=None, max_length=500)
 
 
 class LandingUpdateRequest(BaseModel):
     slug: str | None = Field(default=None, pattern=r'^[a-z0-9\-]+$', min_length=1, max_length=100)
     title: str | None = Field(default=None, min_length=1, max_length=500)
-    subtitle: str | None = None
+    subtitle: str | None = Field(default=None, max_length=1000)
     is_active: bool | None = None
-    features: list[LandingFeatureInput] | None = None
-    footer_text: str | None = None
+    features: list[LandingFeatureInput] | None = Field(default=None, max_length=20)
+    footer_text: str | None = Field(default=None, max_length=5000)
     allowed_tariff_ids: list[int] | None = None
     allowed_periods: dict[str, list[int]] | None = None
-    payment_methods: list[LandingPaymentMethodInput] | None = None
+    payment_methods: list[LandingPaymentMethodInput] | None = Field(default=None, max_length=10)
     gift_enabled: bool | None = None
-    custom_css: str | None = None
+    custom_css: str | None = Field(default=None, max_length=10000)
     meta_title: str | None = Field(default=None, max_length=200)
-    meta_description: str | None = None
+    meta_description: str | None = Field(default=None, max_length=500)
 
 
 class PurchaseStats(BaseModel):
@@ -145,9 +167,12 @@ async def list_landings(
 ):
     """List all landing pages with purchase stats."""
     landings = await get_all_landings(db)
+    all_stats = await get_all_landing_purchase_stats(db)
+    empty_stats = {'total': 0, 'pending': 0, 'paid': 0, 'delivered': 0, 'failed': 0, 'expired': 0}
+
     items = []
     for landing in landings:
-        stats = await get_landing_purchase_stats(db, landing.id)
+        stats = all_stats.get(landing.id, empty_stats)
         items.append(
             LandingListItem(
                 id=landing.id,

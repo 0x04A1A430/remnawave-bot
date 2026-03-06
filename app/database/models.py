@@ -3060,5 +3060,5 @@ class GuestPurchase(Base):
     user = relationship('User', lazy='selectin')
 
     def __repr__(self) -> str:
-        token_prefix = self.token[:8] if self.token else '?'
+        token_prefix = self.token[:5] if self.token else '?'
         return f"<GuestPurchase token='{token_prefix}...' status='{self.status}'>"

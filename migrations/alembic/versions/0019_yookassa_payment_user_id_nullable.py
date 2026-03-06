@@ -20,4 +20,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # WARNING: Will fail if any rows have user_id=NULL (guest payments).
+    # Backfill required: UPDATE yookassa_payments SET user_id = 0 WHERE user_id IS NULL;
     op.alter_column('yookassa_payments', 'user_id', existing_type=sa.Integer(), nullable=False)

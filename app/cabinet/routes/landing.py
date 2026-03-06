@@ -1,6 +1,7 @@
 """Public landing page routes for guest quick-purchase flow."""
 
 import re
+from datetime import UTC, datetime, timedelta
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Path, Request, status
@@ -76,7 +77,7 @@ class LandingConfigResponse(BaseModel):
     meta_description: str | None = None
 
 
-_EMAIL_RE = re.compile(r'^[^\s@]+@[^\s@]+\.[^\s@]+$')
+_EMAIL_RE = re.compile(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$')
 _TELEGRAM_RE = re.compile(r'^@?[a-zA-Z][a-zA-Z0-9_]{3,31}$')
 
 
@@ -224,12 +225,17 @@ async def _load_landing_tariffs(db: AsyncSession, landing) -> list[LandingTariff
 @router.get('/purchase/{token}', response_model=PurchaseStatusResponse)
 async def get_purchase_status(
     token: str,
+    raw_request: Request,
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get the status of a guest purchase by token.
 
     No authentication required.
     """
+    client_ip = get_client_ip(raw_request)
+    if await RateLimitCache.is_ip_rate_limited(client_ip, 'purchase_status', limit=30, window=60, fail_closed=True):
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail='Too many requests')
+
     purchase = await get_purchase_by_token(db, token)
     if purchase is None:
         raise HTTPException(
@@ -241,10 +247,19 @@ async def get_purchase_status(
     if purchase.tariff:
         tariff_name = purchase.tariff.name
 
+    # Only expose subscription URLs within 24 hours of delivery
+    subscription_url = None
+    subscription_crypto_link = None
+    if purchase.delivered_at and purchase.subscription_url:
+        age = datetime.now(UTC) - purchase.delivered_at
+        if age < timedelta(hours=24):
+            subscription_url = purchase.subscription_url
+            subscription_crypto_link = purchase.subscription_crypto_link
+
     return PurchaseStatusResponse(
         status=purchase.status,
-        subscription_url=purchase.subscription_url,
-        subscription_crypto_link=purchase.subscription_crypto_link,
+        subscription_url=subscription_url,
+        subscription_crypto_link=subscription_crypto_link,
         is_gift=purchase.is_gift,
         contact_value=purchase.contact_value,
         period_days=purchase.period_days,
@@ -352,7 +367,7 @@ async def create_landing_purchase(
     except GuestPurchaseError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 
-    # Create purchase record
+    # Create purchase record (no commit yet — wait for payment creation)
     purchase = await create_purchase(
         db,
         landing=landing,
@@ -366,6 +381,7 @@ async def create_landing_purchase(
         gift_recipient_type=body.gift_recipient_type,
         gift_recipient_value=body.gift_recipient_value,
         gift_message=body.gift_message,
+        commit=False,
     )
 
     # Initiate payment via the configured provider
@@ -383,6 +399,7 @@ async def create_landing_purchase(
     )
 
     if payment_result is None:
+        await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail='Payment provider is unavailable, please try again later',
@@ -390,15 +407,19 @@ async def create_landing_purchase(
 
     payment_url = payment_result.get('payment_url')
     if not payment_url:
+        await db.rollback()
         logger.error(
             'Payment created but no payment_url returned',
-            purchase_token=purchase.token[:8],
+            purchase_token=purchase.token[:5],
             provider=payment_result.get('provider'),
         )
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail='Payment provider returned an invalid response',
         )
+
+    await db.commit()
+    await db.refresh(purchase)
 
     return PurchaseResponse(
         purchase_token=purchase.token,

@@ -54,11 +54,24 @@ async def create_landing(db: AsyncSession, **kwargs) -> LandingPage:
     return landing
 
 
-_LANDING_UPDATABLE_FIELDS = frozenset({
-    'slug', 'title', 'subtitle', 'is_active', 'features', 'footer_text',
-    'allowed_tariff_ids', 'allowed_periods', 'payment_methods', 'gift_enabled',
-    'custom_css', 'meta_title', 'meta_description', 'display_order',
-})
+_LANDING_UPDATABLE_FIELDS = frozenset(
+    {
+        'slug',
+        'title',
+        'subtitle',
+        'is_active',
+        'features',
+        'footer_text',
+        'allowed_tariff_ids',
+        'allowed_periods',
+        'payment_methods',
+        'gift_enabled',
+        'custom_css',
+        'meta_title',
+        'meta_description',
+        'display_order',
+    }
+)
 
 
 async def update_landing(db: AsyncSession, landing_id: int, data: dict) -> LandingPage | None:
@@ -111,7 +124,7 @@ def generate_purchase_token() -> str:
     return secrets.token_urlsafe(48)
 
 
-async def create_guest_purchase(db: AsyncSession, **kwargs) -> GuestPurchase:
+async def create_guest_purchase(db: AsyncSession, *, commit: bool = True, **kwargs) -> GuestPurchase:
     """Create a new guest purchase with an auto-generated token."""
     if 'token' not in kwargs:
         kwargs['token'] = generate_purchase_token()
@@ -119,12 +132,13 @@ async def create_guest_purchase(db: AsyncSession, **kwargs) -> GuestPurchase:
     purchase = GuestPurchase(**kwargs)
     db.add(purchase)
     await db.flush()
-    await db.commit()
+    if commit:
+        await db.commit()
     await db.refresh(purchase)
     logger.info(
         'Created guest purchase',
         purchase_id=purchase.id,
-        token_prefix=purchase.token[:8],
+        token_prefix=purchase.token[:5],
         status=purchase.status,
         landing_id=purchase.landing_id,
     )
@@ -135,6 +149,18 @@ async def get_purchase_by_token(db: AsyncSession, token: str) -> GuestPurchase |
     """Get a guest purchase by its token."""
     result = await db.execute(select(GuestPurchase).where(GuestPurchase.token == token))
     return result.scalars().first()
+
+
+_PURCHASE_UPDATABLE_FIELDS = frozenset(
+    {
+        'payment_id',
+        'paid_at',
+        'delivered_at',
+        'subscription_url',
+        'subscription_crypto_link',
+        'user_id',
+    }
+)
 
 
 async def update_purchase_status(
@@ -153,10 +179,9 @@ async def update_purchase_status(
     old_status = purchase.status
     purchase.status = status.value if isinstance(status, GuestPurchaseStatus) else status
 
-    _purchase_columns = {c.name for c in GuestPurchase.__table__.columns}
     for key, value in extra_fields.items():
-        if key not in _purchase_columns:
-            logger.warning('Ignoring unknown field in purchase update', field=key)
+        if key not in _PURCHASE_UPDATABLE_FIELDS:
+            logger.warning('Ignoring disallowed field in purchase update', field=key)
             continue
         setattr(purchase, key, value)
 
@@ -169,7 +194,7 @@ async def update_purchase_status(
     logger.info(
         'Updated guest purchase status',
         purchase_id=purchase.id,
-        token_prefix=token[:8],
+        token_prefix=token[:5],
         old_status=old_status,
         new_status=purchase.status,
     )
@@ -195,3 +220,31 @@ async def get_landing_purchase_stats(db: AsyncSession, landing_id: int) -> dict:
         stats['total'] += count
 
     return stats
+
+
+async def get_all_landing_purchase_stats(db: AsyncSession) -> dict[int, dict]:
+    """Get purchase counts grouped by landing_id and status in a single query.
+
+    Returns a dict mapping landing_id -> {status: count, 'total': count}.
+    """
+    result = await db.execute(
+        select(
+            GuestPurchase.landing_id,
+            GuestPurchase.status,
+            func.count(GuestPurchase.id),
+        )
+        .where(GuestPurchase.landing_id.is_not(None))
+        .group_by(GuestPurchase.landing_id, GuestPurchase.status)
+    )
+    rows = result.all()
+
+    all_stats: dict[int, dict] = {}
+    for landing_id, status_value, count in rows:
+        if landing_id not in all_stats:
+            stats = {s.value: 0 for s in GuestPurchaseStatus}
+            stats['total'] = 0
+            all_stats[landing_id] = stats
+        all_stats[landing_id][status_value] = count
+        all_stats[landing_id]['total'] += count
+
+    return all_stats

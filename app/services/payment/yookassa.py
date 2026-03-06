@@ -577,15 +577,29 @@ class YooKassaPaymentMixin:
                         from app.database.models import GuestPurchaseStatus
                         from app.services.guest_purchase_service import fulfill_purchase
 
-                        # Idempotency: check if already in terminal state
+                        # Verify webhook amount matches the stored purchase amount
+                        webhook_amount_value = event_object.get('amount', {}).get('value', '0')
+                        webhook_amount_kopeks = int(Decimal(str(webhook_amount_value)) * 100)
+
                         existing = await get_purchase_by_token(db, purchase_token)
+                        if existing and webhook_amount_kopeks != existing.amount_kopeks:
+                            logger.error(
+                                'Webhook amount does not match purchase amount',
+                                webhook_kopeks=webhook_amount_kopeks,
+                                purchase_kopeks=existing.amount_kopeks,
+                                purchase_token_prefix=purchase_token[:5],
+                            )
+                            await update_purchase_status(db, purchase_token, GuestPurchaseStatus.FAILED)
+                            return True
+
+                        # Idempotency: check if already in terminal state
                         if existing and existing.status in (
                             GuestPurchaseStatus.DELIVERED.value,
                             GuestPurchaseStatus.FAILED.value,
                         ):
                             logger.info(
                                 'Guest purchase already in terminal state, skipping',
-                                purchase_token_prefix=purchase_token[:8],
+                                purchase_token_prefix=purchase_token[:5],
                                 status=existing.status,
                             )
                             await db.commit()
@@ -607,7 +621,7 @@ class YooKassaPaymentMixin:
                         logger.info(
                             'Guest purchase fulfilled via YooKassa',
                             yookassa_payment_id=payment.yookassa_payment_id,
-                            purchase_token_prefix=purchase_token[:8],
+                            purchase_token_prefix=purchase_token[:5],
                         )
                     except Exception as guest_error:
                         await db.rollback()
