@@ -4,6 +4,7 @@ import html
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.utils import formatdate, make_msgid
 
 import structlog
 
@@ -81,6 +82,8 @@ class EmailService:
             safe_from_email = self.from_email.replace('\n', '').replace('\r', '') if self.from_email else ''
             msg['From'] = f'{safe_from_name} <{safe_from_email}>'
             msg['To'] = to_email
+            msg['Date'] = formatdate(localtime=False)
+            msg['Message-ID'] = make_msgid(domain=self.from_email.split('@')[-1])
 
             # Plain text version
             if body_text is None:
