@@ -228,6 +228,7 @@ async def fulfill_purchase(db: AsyncSession, purchase_token: str) -> GuestPurcha
             device_limit=tariff.device_limit,
             connected_squads=tariff.allowed_squads,
             tariff_id=tariff.id,
+            update_server_counters=True,
         )
 
         subscription_service = SubscriptionService()
@@ -574,8 +575,11 @@ async def activate_purchase(db: AsyncSession, purchase_token: str) -> GuestPurch
                 device_limit=tariff.device_limit,
                 connected_squads=tariff.allowed_squads,
                 is_trial=False,
+                update_server_counters=True,
             )
             subscription.tariff_id = tariff.id
+            await db.commit()
+            await db.refresh(subscription, ['tariff'])
         else:
             subscription = await create_paid_subscription(
                 db=db,
@@ -585,6 +589,7 @@ async def activate_purchase(db: AsyncSession, purchase_token: str) -> GuestPurch
                 device_limit=tariff.device_limit,
                 connected_squads=tariff.allowed_squads,
                 tariff_id=tariff.id,
+                update_server_counters=True,
             )
 
         await subscription_service.create_remnawave_user(db, subscription)

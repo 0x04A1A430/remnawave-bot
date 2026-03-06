@@ -996,7 +996,9 @@ class SubscriptionService:
                 subscription.remnawave_short_uuid = None
                 subscription.subscription_url = ''
                 subscription.subscription_crypto_link = ''
-                subscription.connected_squads = []
+                # connected_squads intentionally NOT cleared — it holds the desired squad
+                # configuration for this subscription period and must be preserved so that
+                # create_remnawave_user() can send it to the Remnawave API.
 
                 user.remnawave_uuid = None
 
