@@ -256,6 +256,10 @@ class TelegramWidgetConfigResponse(BaseModel):
     userpic: bool = True
     request_access: bool = True
 
+    # OIDC fields (frontend decides which flow to use)
+    oidc_enabled: bool = False
+    oidc_client_id: str = ''
+
 
 class LiteModeEnabledResponse(BaseModel):
     """Lite mode enabled setting."""
@@ -863,14 +867,20 @@ async def get_telegram_widget_config(
     userpic_val = await get_setting_value(db, TELEGRAM_WIDGET_USERPIC_KEY)
     request_access_val = await get_setting_value(db, TELEGRAM_WIDGET_REQUEST_ACCESS_KEY)
 
+    oidc_enabled = settings.TELEGRAM_OIDC_ENABLED and bool(settings.TELEGRAM_OIDC_CLIENT_ID)
+
     return TelegramWidgetConfigResponse(
         bot_username=bot_username,
         size=size_val if size_val in ('large', 'medium', 'small') else settings.TELEGRAM_WIDGET_SIZE,
-        radius=max(0, min(int(radius_val), 20)) if radius_val and radius_val.isdigit() else settings.TELEGRAM_WIDGET_RADIUS,
+        radius=max(0, min(int(radius_val), 20))
+        if radius_val and radius_val.isdigit()
+        else settings.TELEGRAM_WIDGET_RADIUS,
         userpic=userpic_val.lower() == 'true' if userpic_val is not None else settings.TELEGRAM_WIDGET_USERPIC,
         request_access=request_access_val.lower() == 'true'
         if request_access_val is not None
         else settings.TELEGRAM_WIDGET_REQUEST_ACCESS,
+        oidc_enabled=oidc_enabled,
+        oidc_client_id=settings.TELEGRAM_OIDC_CLIENT_ID if oidc_enabled else '',
     )
 
 
