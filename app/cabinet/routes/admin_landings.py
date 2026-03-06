@@ -82,6 +82,19 @@ class LandingPaymentMethodInput(BaseModel):
     max_amount_kopeks: int | None = None
     currency: str | None = Field(default=None, max_length=10)
     return_url: str | None = Field(default=None, max_length=500)
+    sub_options: dict[str, bool] | None = None
+
+    @field_validator('sub_options', mode='before')
+    @classmethod
+    def validate_sub_options(cls, v: dict[str, bool] | None) -> dict[str, bool] | None:
+        if not v:
+            return None
+        if len(v) > 20:
+            raise ValueError('sub_options cannot have more than 20 keys')
+        for key in v:
+            if not isinstance(key, str) or len(key) > 50:
+                raise ValueError('sub_options keys must be strings of at most 50 characters')
+        return v
 
     @field_validator('icon_url', mode='before')
     @classmethod
@@ -538,6 +551,7 @@ def _landing_to_detail(landing: LandingPage) -> LandingDetailResponse:
             max_amount_kopeks=m.get('max_amount_kopeks'),
             currency=m.get('currency'),
             return_url=m.get('return_url'),
+            sub_options=m.get('sub_options'),
         )
         for m in (landing.payment_methods or [])
     ]

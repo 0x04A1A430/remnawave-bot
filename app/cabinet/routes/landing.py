@@ -65,6 +65,9 @@ class LandingPaymentMethod(BaseModel):
     min_amount_kopeks: int | None = None
     max_amount_kopeks: int | None = None
     currency: str | None = None
+    # UI hint: maps sub-option IDs to enabled/disabled. Missing keys = enabled (opt-out model).
+    # None means all sub-options available. Not enforced server-side during purchase.
+    sub_options: dict[str, bool] | None = None
 
 
 class LandingConfigResponse(BaseModel):
@@ -415,6 +418,7 @@ async def get_landing_config(
             min_amount_kopeks=m.get('min_amount_kopeks'),
             max_amount_kopeks=m.get('max_amount_kopeks'),
             currency=m.get('currency'),
+            sub_options=m.get('sub_options'),
         )
         for m in raw_methods
     ]
