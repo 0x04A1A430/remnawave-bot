@@ -325,6 +325,11 @@ class Settings(BaseSettings):
     TELEGRAM_WIDGET_USERPIC: bool = True
     TELEGRAM_WIDGET_REQUEST_ACCESS: bool = True
 
+    # Telegram Login OIDC (new system via oauth.telegram.org)
+    TELEGRAM_OIDC_ENABLED: bool = False
+    TELEGRAM_OIDC_CLIENT_ID: str = ''
+    TELEGRAM_OIDC_CLIENT_SECRET: str = ''
+
     TRIBUTE_ENABLED: bool = False
     TRIBUTE_API_KEY: str | None = None
     TRIBUTE_DONATE_LINK: str | None = None
