@@ -78,11 +78,11 @@ class LandingPaymentMethodInput(BaseModel):
     icon_url: str | None = None
     sort_order: int = 0
 
-    @field_validator('icon_url')
+    @field_validator('icon_url', mode='before')
     @classmethod
     def validate_icon_url(cls, v: str | None) -> str | None:
-        if v is None:
-            return v
+        if not v:
+            return None
         if not v.startswith(('https://', '/')):
             raise ValueError('icon_url must use HTTPS or be a relative path')
         return v
