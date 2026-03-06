@@ -312,9 +312,7 @@ class YooKassaService:
                     'payment_method_type': payment_info_yk.payment_method.type
                     if payment_info_yk.payment_method
                     else None,
-                    'payment_method_id': payment_info_yk.payment_method.id
-                    if payment_info_yk.payment_method
-                    else None,
+                    'payment_method_id': payment_info_yk.payment_method.id if payment_info_yk.payment_method else None,
                     'payment_method_saved': payment_info_yk.payment_method.saved
                     if payment_info_yk.payment_method and hasattr(payment_info_yk.payment_method, 'saved')
                     else False,
