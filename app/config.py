@@ -522,6 +522,21 @@ class Settings(BaseSettings):
     # Способ оплаты: 44 = СБП (QR код), 36 = Карты РФ, 43 = SberPay
     KASSA_AI_PAYMENT_SYSTEM_ID: int = 44
 
+    # RioPay (api.riopay.online)
+    RIOPAY_ENABLED: bool = False
+    RIOPAY_API_TOKEN: str | None = None          # x-api-token header
+    RIOPAY_JWT_TOKEN: str | None = None          # Authorization: Bearer
+    RIOPAY_MERCHANT_ID: str | None = None        # x-merchant-id (опционально)
+    RIOPAY_DISPLAY_NAME: str = 'RioPay'
+    RIOPAY_CURRENCY: str = 'RUB'
+    RIOPAY_MIN_AMOUNT_KOPEKS: int = 10000        # 100₽
+    RIOPAY_MAX_AMOUNT_KOPEKS: int = 100000000    # 1 000 000₽
+    RIOPAY_WEBHOOK_PATH: str = '/riopay-webhook'
+    RIOPAY_WEBHOOK_HOST: str = '0.0.0.0'
+    RIOPAY_WEBHOOK_PORT: int = 8090
+    RIOPAY_SUCCESS_URL: str | None = None
+    RIOPAY_FAIL_URL: str | None = None
+
     MAIN_MENU_MODE: str = 'default'  # 'default' | 'cabinet'
     # Стиль кнопок Cabinet: primary (синий), success (зелёный), danger (красный), '' (по умолчанию для каждой секции)
     CABINET_BUTTON_STYLE: str = ''
@@ -1793,6 +1808,20 @@ class Settings(BaseSettings):
 
     def get_kassa_ai_display_name_html(self) -> str:
         return html.escape(self.get_kassa_ai_display_name())
+
+    def is_riopay_enabled(self) -> bool:
+        return (
+            self.RIOPAY_ENABLED
+            and self.RIOPAY_API_TOKEN is not None
+            and self.RIOPAY_JWT_TOKEN is not None
+        )
+
+    def get_riopay_display_name(self) -> str:
+        name = (self.RIOPAY_DISPLAY_NAME or '').strip()
+        return name if name else 'RioPay'
+
+    def get_riopay_display_name_html(self) -> str:
+        return html.escape(self.get_riopay_display_name())
 
     def is_payment_verification_auto_check_enabled(self) -> bool:
         return self.PAYMENT_VERIFICATION_AUTO_CHECK_ENABLED
