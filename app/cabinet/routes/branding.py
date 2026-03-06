@@ -39,6 +39,10 @@ GOOGLE_ADS_ID_KEY = 'CABINET_GOOGLE_ADS_ID'  # Stores conversion ID (e.g. "AW-12
 GOOGLE_ADS_LABEL_KEY = 'CABINET_GOOGLE_ADS_LABEL'  # Stores conversion label (alphanumeric)
 LITE_MODE_ENABLED_KEY = 'CABINET_LITE_MODE_ENABLED'  # Stores "true" or "false"
 ANIMATION_CONFIG_KEY = 'CABINET_ANIMATION_CONFIG'  # Stores JSON with animation config
+TELEGRAM_WIDGET_SIZE_KEY = 'TELEGRAM_WIDGET_SIZE'
+TELEGRAM_WIDGET_RADIUS_KEY = 'TELEGRAM_WIDGET_RADIUS'
+TELEGRAM_WIDGET_USERPIC_KEY = 'TELEGRAM_WIDGET_USERPIC'
+TELEGRAM_WIDGET_REQUEST_ACCESS_KEY = 'TELEGRAM_WIDGET_REQUEST_ACCESS'
 
 # Default animation config
 DEFAULT_ANIMATION_CONFIG = {
@@ -241,6 +245,16 @@ class EmailAuthEnabledUpdate(BaseModel):
     """Request to update email auth setting."""
 
     enabled: bool
+
+
+class TelegramWidgetConfigResponse(BaseModel):
+    """Public Telegram Login Widget configuration."""
+
+    bot_username: str
+    size: Literal['large', 'medium', 'small'] = 'large'
+    radius: int = Field(default=8, ge=0, le=20)
+    userpic: bool = True
+    request_access: bool = True
 
 
 class LiteModeEnabledResponse(BaseModel):
@@ -828,6 +842,36 @@ async def update_email_auth_enabled(
     logger.info('Admin set email auth enabled', telegram_id=admin.telegram_id, enabled=payload.enabled)
 
     return EmailAuthEnabledResponse(enabled=payload.enabled)
+
+
+# ============ Telegram Widget Config Routes ============
+
+
+@router.get('/telegram-widget', response_model=TelegramWidgetConfigResponse)
+async def get_telegram_widget_config(
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """
+    Get Telegram Login Widget configuration.
+    This is a public endpoint - no authentication required.
+    Returns widget display settings and bot username for the login page.
+    """
+    bot_username = settings.BOT_USERNAME or ''
+
+    size_val = await get_setting_value(db, TELEGRAM_WIDGET_SIZE_KEY)
+    radius_val = await get_setting_value(db, TELEGRAM_WIDGET_RADIUS_KEY)
+    userpic_val = await get_setting_value(db, TELEGRAM_WIDGET_USERPIC_KEY)
+    request_access_val = await get_setting_value(db, TELEGRAM_WIDGET_REQUEST_ACCESS_KEY)
+
+    return TelegramWidgetConfigResponse(
+        bot_username=bot_username,
+        size=size_val if size_val in ('large', 'medium', 'small') else settings.TELEGRAM_WIDGET_SIZE,
+        radius=max(0, min(int(radius_val), 20)) if radius_val and radius_val.isdigit() else settings.TELEGRAM_WIDGET_RADIUS,
+        userpic=userpic_val.lower() == 'true' if userpic_val is not None else settings.TELEGRAM_WIDGET_USERPIC,
+        request_access=request_access_val.lower() == 'true'
+        if request_access_val is not None
+        else settings.TELEGRAM_WIDGET_REQUEST_ACCESS,
+    )
 
 
 # ============ Analytics Counters Routes ============

@@ -7,6 +7,7 @@ import re
 from collections import defaultdict
 from datetime import time
 from pathlib import Path
+from typing import Literal
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
@@ -317,6 +318,12 @@ class Settings(BaseSettings):
     TELEGRAM_STARS_ENABLED: bool = True
     TELEGRAM_STARS_RATE_RUB: float = 1.3
     TELEGRAM_STARS_DISPLAY_NAME: str = 'Telegram Stars'
+
+    # Telegram Login Widget (cabinet auth page)
+    TELEGRAM_WIDGET_SIZE: Literal['large', 'medium', 'small'] = 'large'
+    TELEGRAM_WIDGET_RADIUS: int = Field(default=8, ge=0, le=20)
+    TELEGRAM_WIDGET_USERPIC: bool = True
+    TELEGRAM_WIDGET_REQUEST_ACCESS: bool = True
 
     TRIBUTE_ENABLED: bool = False
     TRIBUTE_API_KEY: str | None = None
