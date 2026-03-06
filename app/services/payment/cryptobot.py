@@ -228,10 +228,9 @@ class CryptoBotPaymentMixin:
                     skip_amount_check=True,  # USD->RUB conversion introduces imprecision
                 )
                 if guest_result is not None:
-                    locked.status = 'completed'
-                    locked.is_paid = True
+                    locked.status = 'paid'
                     locked.paid_at = datetime.now(UTC)
-                    await db.flush()
+                    await db.commit()
                     return True
 
             if not updated_payment.transaction_id:
