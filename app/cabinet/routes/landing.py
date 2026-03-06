@@ -21,6 +21,7 @@ from app.services.guest_purchase_service import (
     create_purchase,
     validate_and_calculate,
 )
+from app.services.payment_method_config_service import _get_method_defaults
 from app.services.payment_service import PaymentService
 from app.utils.cache import RateLimitCache
 
@@ -56,6 +57,11 @@ class LandingTariff(BaseModel):
     periods: list[LandingTariffPeriod]
 
 
+class LandingPaymentMethodSubOption(BaseModel):
+    id: str
+    name: str
+
+
 class LandingPaymentMethod(BaseModel):
     method_id: str
     display_name: str
@@ -65,9 +71,9 @@ class LandingPaymentMethod(BaseModel):
     min_amount_kopeks: int | None = None
     max_amount_kopeks: int | None = None
     currency: str | None = None
-    # UI hint: maps sub-option IDs to enabled/disabled. Missing keys = enabled (opt-out model).
-    # None means all sub-options available. Not enforced server-side during purchase.
-    sub_options: dict[str, bool] | None = None
+    # Enabled sub-options with display labels (e.g. СБП, Карта).
+    # None or empty means no sub-option selection needed.
+    sub_options: list[LandingPaymentMethodSubOption] | None = None
 
 
 class LandingConfigResponse(BaseModel):
@@ -408,20 +414,40 @@ async def get_landing_config(
 
     # Build payment methods from landing config
     raw_methods = landing.payment_methods or []
-    payment_methods = [
-        LandingPaymentMethod(
-            method_id=m.get('method_id', ''),
-            display_name=m.get('display_name', ''),
-            description=m.get('description'),
-            icon_url=m.get('icon_url'),
-            sort_order=m.get('sort_order', 0),
-            min_amount_kopeks=m.get('min_amount_kopeks'),
-            max_amount_kopeks=m.get('max_amount_kopeks'),
-            currency=m.get('currency'),
-            sub_options=m.get('sub_options'),
+    method_defaults = _get_method_defaults()
+
+    payment_methods: list[LandingPaymentMethod] = []
+    for m in raw_methods:
+        method_id = m.get('method_id', '')
+        raw_sub_options = m.get('sub_options')  # dict[str, bool] | None
+
+        # Resolve sub-options: filter enabled ones and attach display names
+        resolved_sub_options: list[LandingPaymentMethodSubOption] | None = None
+        method_def = method_defaults.get(method_id)
+        available = method_def.get('available_sub_options') if method_def else None
+        if available:
+            resolved = []
+            for opt in available:
+                opt_id = opt['id']
+                # If landing has explicit sub_options config, respect it; otherwise all enabled
+                if raw_sub_options is None or raw_sub_options.get(opt_id, True):
+                    resolved.append(LandingPaymentMethodSubOption(id=opt_id, name=opt['name']))
+            if len(resolved) > 1:
+                resolved_sub_options = resolved
+
+        payment_methods.append(
+            LandingPaymentMethod(
+                method_id=method_id,
+                display_name=m.get('display_name', ''),
+                description=m.get('description'),
+                icon_url=m.get('icon_url'),
+                sort_order=m.get('sort_order', 0),
+                min_amount_kopeks=m.get('min_amount_kopeks'),
+                max_amount_kopeks=m.get('max_amount_kopeks'),
+                currency=m.get('currency'),
+                sub_options=resolved_sub_options,
+            )
         )
-        for m in raw_methods
-    ]
 
     # Resolve locale dicts to flat strings for the requested language
     features = [
@@ -479,9 +505,20 @@ async def create_landing_purchase(
             detail='Gift purchases are not enabled for this landing page',
         )
 
-    # Validate payment method is available on this landing
+    # Validate payment method is available on this landing.
+    # The frontend may send a suffixed method ID (e.g. "platega_2", "yookassa_sbp")
+    # to select a specific sub-option. We match against the base method_id.
     raw_methods = landing.payment_methods or []
-    method_config = next((m for m in raw_methods if m.get('method_id') == body.payment_method), None)
+    base_payment_method = body.payment_method
+    method_config = next((m for m in raw_methods if m.get('method_id') == base_payment_method), None)
+    if method_config is None:
+        # Try matching by prefix: "platega_2" → base "platega"
+        for m in raw_methods:
+            mid = m.get('method_id', '')
+            if base_payment_method.startswith(mid + '_'):
+                method_config = m
+                base_payment_method = mid
+                break
     if method_config is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
