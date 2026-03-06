@@ -499,6 +499,7 @@ class PaymentService(
                 user_id=None,
                 amount_kopeks=amount_kopeks,
                 description=description,
+                return_url=return_url,
             )
             if result:
                 await _patch_guest_metadata(result['local_payment_id'], 'heleket')
@@ -583,6 +584,7 @@ class PaymentService(
                 description=description,
                 language=settings.DEFAULT_LANGUAGE,
                 payment_method_code=method_code,
+                return_url=return_url,
             )
             if result:
                 await _patch_guest_metadata(result['local_payment_id'], 'platega')
@@ -604,6 +606,7 @@ class PaymentService(
                 user_id=None,
                 amount_kopeks=amount_kopeks,
                 description=description,
+                return_url=return_url,
             )
             if result:
                 await _patch_guest_metadata(result['local_payment_id'], 'wata')
@@ -625,6 +628,7 @@ class PaymentService(
                 user_id=None,
                 amount_kopeks=amount_kopeks,
                 description=description,
+                return_url=return_url,
             )
             if result:
                 await _patch_guest_metadata(result['payment_id'], 'cloudpayments')

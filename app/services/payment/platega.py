@@ -32,6 +32,7 @@ class PlategaPaymentMixin:
         description: str,
         language: str,
         payment_method_code: int,
+        return_url: str | None = None,
     ) -> dict[str, Any] | None:
         service: PlategaService | None = getattr(self, 'platega_service', None)
         if not service or not service.is_configured:
@@ -59,13 +60,15 @@ class PlategaPaymentMixin:
 
         amount_value = amount_kopeks / 100
 
+        effective_return_url = return_url or settings.get_platega_return_url()
+
         try:
             response = await service.create_payment(
                 payment_method=payment_method_code,
                 amount=amount_value,
                 currency=settings.PLATEGA_CURRENCY,
                 description=description,
-                return_url=settings.get_platega_return_url(),
+                return_url=effective_return_url,
                 failed_url=settings.get_platega_failed_url(),
                 payload=payload_token,
             )
@@ -101,7 +104,7 @@ class PlategaPaymentMixin:
             correlation_id=correlation_id,
             platega_transaction_id=transaction_id,
             redirect_url=redirect_url,
-            return_url=settings.get_platega_return_url(),
+            return_url=effective_return_url,
             failed_url=settings.get_platega_failed_url(),
             payload=payload_token,
             metadata=metadata,

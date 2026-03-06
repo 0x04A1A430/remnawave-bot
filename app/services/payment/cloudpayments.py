@@ -28,6 +28,7 @@ class CloudPaymentsPaymentMixin:
         telegram_id: int | None = None,
         language: str | None = None,
         email: str | None = None,
+        return_url: str | None = None,
     ) -> dict[str, Any] | None:
         """
         Create a CloudPayments payment and return payment link info.
@@ -78,6 +79,7 @@ class CloudPaymentsPaymentMixin:
                 invoice_id=invoice_id,
                 description=description,
                 email=email,
+                success_redirect_url=return_url,
             )
         except CloudPaymentsAPIError as error:
             logger.error('Ошибка создания CloudPayments платежа', error=error)
