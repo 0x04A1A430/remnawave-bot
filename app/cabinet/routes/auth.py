@@ -672,7 +672,7 @@ async def auth_telegram_oidc(
         user.last_name = last_name
 
     user.cabinet_last_login = datetime.now(UTC)
-    await db.flush()
+    await db.commit()
 
     response = await _create_auth_response(user, db)
     await _store_refresh_token(db, user.id, response.refresh_token)
@@ -683,7 +683,6 @@ async def auth_telegram_oidc(
     if response.campaign_bonus:
         response.user = _user_to_response(user)
 
-    await db.commit()
     return response
 
 
