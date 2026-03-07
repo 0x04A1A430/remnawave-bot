@@ -374,6 +374,7 @@ async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -
 @router.post('/telegram', response_model=AuthResponse)
 async def auth_telegram(
     request: TelegramAuthRequest,
+    raw_request: Request,
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """
@@ -382,6 +383,13 @@ async def auth_telegram(
     This endpoint validates the initData from Telegram WebApp and returns
     JWT tokens for authenticated access.
     """
+    client_ip = get_client_ip(raw_request)
+    if await RateLimitCache.is_ip_rate_limited(client_ip, 'telegram_initdata', limit=10, window=60, fail_closed=True):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail='Too many requests',
+            headers={'Retry-After': '60'},
+        )
     user_data = validate_telegram_init_data(request.init_data)
 
     if not user_data:
@@ -782,6 +790,7 @@ async def register_email(
 @router.post('/email/register/standalone', response_model=RegisterResponse)
 async def register_email_standalone(
     request: EmailRegisterStandaloneRequest,
+    raw_request: Request,
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """
@@ -794,6 +803,13 @@ async def register_email_standalone(
 
     If TEST_EMAIL is configured, test email accounts are auto-verified.
     """
+    client_ip = get_client_ip(raw_request)
+    if await RateLimitCache.is_ip_rate_limited(client_ip, 'email_register', limit=5, window=60, fail_closed=True):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail='Too many requests',
+            headers={'Retry-After': '60'},
+        )
     # Check if this is a test email registration
     is_test_email = settings.is_test_email(request.email)
 
@@ -924,9 +940,17 @@ async def register_email_standalone(
 @router.post('/email/verify', response_model=AuthResponse)
 async def verify_email(
     request: EmailVerifyRequest,
+    raw_request: Request,
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Verify email with token and return auth tokens."""
+    client_ip = get_client_ip(raw_request)
+    if await RateLimitCache.is_ip_rate_limited(client_ip, 'email_verify', limit=10, window=60, fail_closed=True):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail='Too many requests',
+            headers={'Retry-After': '60'},
+        )
     # Find user with this token
     result = await db.execute(select(User).where(User.email_verification_token == request.token))
     user = result.scalar_one_or_none()
@@ -1139,11 +1163,11 @@ async def refresh_token(
 
     try:
         user_id = int(payload.get('sub'))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError) as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail='Invalid token payload',
-        )
+        ) from e
 
     # Verify token exists in database and is not revoked
     token_hash = hashlib.sha256(request.refresh_token.encode()).hexdigest()
@@ -1239,17 +1263,23 @@ async def auto_login(
 
     try:
         user_id = int(payload['sub'])
-    except (KeyError, ValueError, TypeError):
+    except (KeyError, ValueError, TypeError) as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail='Invalid token payload',
-        )
+        ) from e
 
     user = await get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail='User not found',
+        )
+
+    if user.status != 'active':
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='Account is deactivated',
         )
 
     response = await _create_auth_response(user, db)
@@ -1263,9 +1293,17 @@ async def auto_login(
 @router.post('/password/forgot')
 async def forgot_password(
     request: PasswordForgotRequest,
+    raw_request: Request,
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Request password reset."""
+    client_ip = get_client_ip(raw_request)
+    if await RateLimitCache.is_ip_rate_limited(client_ip, 'password_forgot', limit=3, window=60, fail_closed=True):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail='Too many requests',
+            headers={'Retry-After': '60'},
+        )
     result = await db.execute(select(User).where(User.email == request.email))
     user = result.scalar_one_or_none()
 
@@ -1324,9 +1362,17 @@ async def forgot_password(
 @router.post('/password/reset')
 async def reset_password(
     request: PasswordResetRequest,
+    raw_request: Request,
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Reset password with token."""
+    client_ip = get_client_ip(raw_request)
+    if await RateLimitCache.is_ip_rate_limited(client_ip, 'password_reset', limit=5, window=60, fail_closed=True):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail='Too many requests',
+            headers={'Retry-After': '60'},
+        )
     result = await db.execute(select(User).where(User.password_reset_token == request.token))
     user = result.scalar_one_or_none()
 

@@ -161,18 +161,18 @@ def _build_public_keys(jwks_data: dict[str, Any]) -> dict[str, Any]:
     return public_keys
 
 
-async def _get_jwks() -> dict[str, Any]:
+async def _get_jwks(force: bool = False) -> dict[str, Any]:
     """Fetch and cache Telegram OIDC JWKS keys."""
     global _jwks_cache, _jwks_cache_expiry
 
     now = datetime.now(UTC)
-    if _jwks_cache and _jwks_cache_expiry and now < _jwks_cache_expiry:
+    if not force and _jwks_cache and _jwks_cache_expiry and now < _jwks_cache_expiry:
         return _jwks_cache
 
     async with _jwks_lock:
         # Double-check after acquiring lock
         now = datetime.now(UTC)
-        if _jwks_cache and _jwks_cache_expiry and now < _jwks_cache_expiry:
+        if not force and _jwks_cache and _jwks_cache_expiry and now < _jwks_cache_expiry:
             return _jwks_cache
 
         async with httpx.AsyncClient(timeout=10) as client:
@@ -181,6 +181,21 @@ async def _get_jwks() -> dict[str, Any]:
             _jwks_cache = response.json()
             _jwks_cache_expiry = now + timedelta(seconds=_JWKS_CACHE_TTL_SECONDS)
             return _jwks_cache
+
+
+async def _force_refresh_jwks(kid: str) -> dict[str, Any] | None:
+    """Force JWKS refresh with cooldown protection. Returns refreshed JWKS or None if on cooldown."""
+    global _jwks_cache_expiry, _jwks_last_force_refresh
+
+    async with _jwks_lock:
+        now = datetime.now(UTC)
+        if _jwks_last_force_refresh and (now - _jwks_last_force_refresh).total_seconds() < _JWKS_FORCE_REFRESH_COOLDOWN_SECONDS:
+            logger.warning('Telegram OIDC: JWKS force refresh on cooldown', kid=kid)
+            return None
+        _jwks_last_force_refresh = now
+        _jwks_cache_expiry = None
+
+    return await _get_jwks(force=True)
 
 
 async def validate_telegram_oidc_token(id_token: str, client_id: str) -> dict[str, Any] | None:
@@ -206,15 +221,9 @@ async def validate_telegram_oidc_token(id_token: str, client_id: str) -> dict[st
 
         # If kid not found, force JWKS refresh (key rotation) with cooldown
         if kid and kid not in public_keys:
-            global _jwks_cache_expiry, _jwks_last_force_refresh
-            now = datetime.now(UTC)
-            if _jwks_last_force_refresh and (now - _jwks_last_force_refresh).total_seconds() < _JWKS_FORCE_REFRESH_COOLDOWN_SECONDS:
-                logger.warning('Telegram OIDC: JWKS force refresh on cooldown', kid=kid)
-            else:
-                _jwks_last_force_refresh = now
-                _jwks_cache_expiry = None
-                jwks_data = await _get_jwks()
-                public_keys = _build_public_keys(jwks_data)
+            refreshed = await _force_refresh_jwks(kid)
+            if refreshed:
+                public_keys = _build_public_keys(refreshed)
 
         if not kid or kid not in public_keys:
             logger.warning('Telegram OIDC: unknown kid in id_token', kid=kid)

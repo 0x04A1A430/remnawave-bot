@@ -72,7 +72,7 @@ def _create_base_app() -> FastAPI:
                     CORSMiddleware,
                     allow_origins=['*'],
                     allow_credentials=False,
-                    allow_methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+                    allow_methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
                     allow_headers=['Authorization', 'Content-Type'],
                 )
             else:
@@ -80,7 +80,7 @@ def _create_base_app() -> FastAPI:
                     CORSMiddleware,
                     allow_origins=cabinet_origins,
                     allow_credentials=True,
-                    allow_methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+                    allow_methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
                     allow_headers=['Authorization', 'Content-Type'],
                 )
             app.include_router(cabinet_router)

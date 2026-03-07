@@ -200,7 +200,7 @@ def create_web_api_app() -> FastAPI:
             CORSMiddleware,
             allow_origins=['*'],
             allow_credentials=False,
-            allow_methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+            allow_methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
             allow_headers=['Authorization', 'Content-Type'],
         )
     else:
@@ -208,7 +208,7 @@ def create_web_api_app() -> FastAPI:
             CORSMiddleware,
             allow_origins=all_origins,
             allow_credentials=True,
-            allow_methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+            allow_methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
             allow_headers=['Authorization', 'Content-Type'],
         )
 
