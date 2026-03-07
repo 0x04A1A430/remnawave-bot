@@ -469,7 +469,24 @@ async def send_guest_notification(
         notification_type = NotificationType.GUEST_SUBSCRIPTION_DELIVERED
 
     templates = EmailNotificationTemplates()
-    template = templates.get_template(notification_type, language, context)
+
+    # Check DB override first, then fall back to hardcoded template
+    template = None
+    try:
+        from app.cabinet.services.email_template_overrides import get_template_override
+
+        override = await get_template_override(notification_type.value, language)
+        if override:
+            template = {
+                'subject': override['subject'],
+                'body_html': templates._get_base_template(override['body_html'], language),
+            }
+    except Exception as e:
+        logger.debug('Failed to check template override', e=e)
+
+    if not template:
+        template = templates.get_template(notification_type, language, context)
+
     if not template:
         logger.warning('No email template found for guest notification', notification_type=notification_type.value)
         return
@@ -497,7 +514,18 @@ async def send_guest_notification(
 
     # Send separate credentials email for new/upgraded accounts (non-gift self-purchases)
     if purchase.cabinet_password and not purchase.is_gift:
-        cred_template = templates.get_template(NotificationType.GUEST_CABINET_CREDENTIALS, language, context)
+        cred_template = None
+        try:
+            cred_override = await get_template_override(NotificationType.GUEST_CABINET_CREDENTIALS.value, language)
+            if cred_override:
+                cred_template = {
+                    'subject': cred_override['subject'],
+                    'body_html': templates._get_base_template(cred_override['body_html'], language),
+                }
+        except Exception:
+            pass
+        if not cred_template:
+            cred_template = templates.get_template(NotificationType.GUEST_CABINET_CREDENTIALS, language, context)
         if cred_template:
             cred_result = await asyncio.to_thread(
                 email_service.send_email,
