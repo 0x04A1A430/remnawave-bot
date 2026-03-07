@@ -3013,6 +3013,11 @@ class LandingPage(Base):
     meta_title = Column(JSON, nullable=True)
     meta_description = Column(JSON, nullable=True)
     display_order = Column(Integer, nullable=False, default=0)
+    discount_percent = Column(Integer, nullable=True)  # 1-99, global discount for all tariffs
+    discount_overrides = Column(JSON, nullable=True)  # {"tariff_id": percent} per-tariff override
+    discount_starts_at = Column(AwareDateTime(), nullable=True)
+    discount_ends_at = Column(AwareDateTime(), nullable=True)
+    discount_badge_text = Column(JSON, nullable=True)  # LocaleDict {"ru": "...", "en": "..."}
     created_at = Column(AwareDateTime(), server_default=func.now())
     updated_at = Column(AwareDateTime(), server_default=func.now(), onupdate=func.now())
 

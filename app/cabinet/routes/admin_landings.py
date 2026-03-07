@@ -1,6 +1,6 @@
 """Admin routes for landing page management in cabinet."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from urllib.parse import urlparse
 
 import structlog
@@ -149,15 +149,32 @@ class LandingCreateRequest(BaseModel):
     is_active: bool = True
     features: list[LandingFeatureInput] = Field(default_factory=list, max_length=20)
     footer_text: dict[str, str] | None = None
-    allowed_tariff_ids: list[int] = Field(default_factory=list)
+    allowed_tariff_ids: list[int] = Field(default_factory=list, max_length=50)
     allowed_periods: dict[str, list[int]] = Field(default_factory=dict)
     payment_methods: list[LandingPaymentMethodInput] = Field(default_factory=list, max_length=10)
+
+    @field_validator('allowed_periods')
+    @classmethod
+    def validate_allowed_periods_size(cls, v: dict[str, list[int]]) -> dict[str, list[int]]:
+        if len(v) > 50:
+            raise ValueError('allowed_periods cannot have more than 50 entries')
+        for key, periods in v.items():
+            if len(periods) > 20:
+                raise ValueError(f'allowed_periods[{key}] cannot have more than 20 periods')
+        return v
     gift_enabled: bool = True
     custom_css: str | None = Field(default=None, max_length=10000)
     meta_title: dict[str, str] | None = None
     meta_description: dict[str, str] | None = None
+    discount_percent: int | None = Field(default=None, ge=1, le=99)
+    discount_overrides: dict[str, int] | None = None  # {"tariff_id": percent}
+    discount_starts_at: datetime | None = None
+    discount_ends_at: datetime | None = None
+    discount_badge_text: dict[str, str] | None = None
 
-    @field_validator('title', 'subtitle', 'footer_text', 'meta_title', 'meta_description', mode='before')
+    @field_validator(
+        'title', 'subtitle', 'footer_text', 'meta_title', 'meta_description', 'discount_badge_text', mode='before'
+    )
     @classmethod
     def coerce_text_to_dict(cls, v: dict[str, str] | str | None) -> dict[str, str] | None:
         if v is None:
@@ -197,6 +214,46 @@ class LandingCreateRequest(BaseModel):
             return None
         return validate_locale_dict(v, max_length=500, field_name='meta_description')
 
+    @field_validator('discount_badge_text')
+    @classmethod
+    def validate_discount_badge_text(cls, v: dict[str, str] | None) -> dict[str, str] | None:
+        if v is None:
+            return None
+        return validate_locale_dict(v, max_length=200, field_name='discount_badge_text')
+
+    @field_validator('discount_starts_at', 'discount_ends_at', mode='after')
+    @classmethod
+    def ensure_aware_datetime(cls, v: datetime | None) -> datetime | None:
+        if v is not None and v.tzinfo is None:
+            v = v.replace(tzinfo=UTC)
+        return v
+
+    @model_validator(mode='after')
+    def validate_discount(self) -> 'LandingCreateRequest':
+        has_discount = self.discount_percent is not None
+        has_dates = self.discount_starts_at is not None or self.discount_ends_at is not None
+        if has_dates and not has_discount:
+            raise ValueError('discount_percent is required when discount dates are set')
+        if has_discount and not (self.discount_starts_at and self.discount_ends_at):
+            raise ValueError('discount_starts_at and discount_ends_at are required when discount_percent is set')
+        if self.discount_starts_at and self.discount_ends_at:
+            if self.discount_starts_at >= self.discount_ends_at:
+                raise ValueError('discount_starts_at must be before discount_ends_at')
+        if self.discount_overrides:
+            if len(self.discount_overrides) > 100:
+                raise ValueError('discount_overrides cannot have more than 100 entries')
+            for key, val in self.discount_overrides.items():
+                if not key.isdigit():
+                    raise ValueError('discount_overrides keys must be tariff ID strings')
+                if not (1 <= val <= 99):
+                    raise ValueError('discount_overrides values must be 1-99')
+            if self.allowed_tariff_ids:
+                allowed_set = {str(tid) for tid in self.allowed_tariff_ids}
+                invalid = set(self.discount_overrides.keys()) - allowed_set
+                if invalid:
+                    raise ValueError(f'discount_overrides contains tariff IDs not in allowed_tariff_ids: {invalid}')
+        return self
+
 
 class LandingUpdateRequest(BaseModel):
     slug: str | None = Field(default=None, pattern=r'^[a-z0-9\-]+$', min_length=1, max_length=100)
@@ -205,15 +262,34 @@ class LandingUpdateRequest(BaseModel):
     is_active: bool | None = None
     features: list[LandingFeatureInput] | None = Field(default=None, max_length=20)
     footer_text: dict[str, str] | None = None
-    allowed_tariff_ids: list[int] | None = None
+    allowed_tariff_ids: list[int] | None = Field(default=None, max_length=50)
     allowed_periods: dict[str, list[int]] | None = None
     payment_methods: list[LandingPaymentMethodInput] | None = Field(default=None, max_length=10)
     gift_enabled: bool | None = None
     custom_css: str | None = Field(default=None, max_length=10000)
     meta_title: dict[str, str] | None = None
     meta_description: dict[str, str] | None = None
+    discount_percent: int | None = Field(default=None, ge=1, le=99)
+    discount_overrides: dict[str, int] | None = None
+    discount_starts_at: datetime | None = None
+    discount_ends_at: datetime | None = None
+    discount_badge_text: dict[str, str] | None = None
 
-    @field_validator('title', 'subtitle', 'footer_text', 'meta_title', 'meta_description', mode='before')
+    @field_validator('allowed_periods')
+    @classmethod
+    def validate_allowed_periods_size(cls, v: dict[str, list[int]] | None) -> dict[str, list[int]] | None:
+        if v is None:
+            return None
+        if len(v) > 50:
+            raise ValueError('allowed_periods cannot have more than 50 entries')
+        for key, periods in v.items():
+            if len(periods) > 20:
+                raise ValueError(f'allowed_periods[{key}] cannot have more than 20 periods')
+        return v
+
+    @field_validator(
+        'title', 'subtitle', 'footer_text', 'meta_title', 'meta_description', 'discount_badge_text', mode='before'
+    )
     @classmethod
     def coerce_text_to_dict(cls, v: dict[str, str] | str | None) -> dict[str, str] | None:
         if v is None:
@@ -255,6 +331,35 @@ class LandingUpdateRequest(BaseModel):
             return None
         return validate_locale_dict(v, max_length=500, field_name='meta_description')
 
+    @field_validator('discount_badge_text')
+    @classmethod
+    def validate_discount_badge_text(cls, v: dict[str, str] | None) -> dict[str, str] | None:
+        if v is None:
+            return None
+        return validate_locale_dict(v, max_length=200, field_name='discount_badge_text')
+
+    @field_validator('discount_starts_at', 'discount_ends_at', mode='after')
+    @classmethod
+    def ensure_aware_datetime(cls, v: datetime | None) -> datetime | None:
+        if v is not None and v.tzinfo is None:
+            v = v.replace(tzinfo=UTC)
+        return v
+
+    @model_validator(mode='after')
+    def validate_discount(self) -> 'LandingUpdateRequest':
+        if self.discount_starts_at is not None and self.discount_ends_at is not None:
+            if self.discount_starts_at >= self.discount_ends_at:
+                raise ValueError('discount_starts_at must be before discount_ends_at')
+        if self.discount_overrides:
+            if len(self.discount_overrides) > 100:
+                raise ValueError('discount_overrides cannot have more than 100 entries')
+            for key, val in self.discount_overrides.items():
+                if not key.isdigit():
+                    raise ValueError('discount_overrides keys must be tariff ID strings')
+                if not (1 <= val <= 99):
+                    raise ValueError('discount_overrides values must be 1-99')
+        return self
+
 
 class PurchaseStats(BaseModel):
     total: int = 0
@@ -276,6 +381,7 @@ class LandingListItem(BaseModel):
     tariff_count: int
     method_count: int
     purchase_stats: PurchaseStats
+    has_active_discount: bool = False
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -304,10 +410,17 @@ class LandingDetailResponse(BaseModel):
     custom_css: str | None = None
     meta_title: dict[str, str] | None = None
     meta_description: dict[str, str] | None = None
+    discount_percent: int | None = None
+    discount_overrides: dict[str, int] | None = None
+    discount_starts_at: datetime | None = None
+    discount_ends_at: datetime | None = None
+    discount_badge_text: dict[str, str] | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
-    @field_validator('title', 'subtitle', 'footer_text', 'meta_title', 'meta_description', mode='before')
+    @field_validator(
+        'title', 'subtitle', 'footer_text', 'meta_title', 'meta_description', 'discount_badge_text', mode='before'
+    )
     @classmethod
     def coerce_to_dict(cls, v: dict[str, str] | str | None) -> dict[str, str] | None:
         if v is None:
@@ -346,9 +459,16 @@ async def list_landings(
         'expired': 0,
     }
 
+    now = datetime.now(UTC)
     items = []
     for landing in landings:
         stats = all_stats.get(landing.id, empty_stats)
+        discount_active = bool(
+            landing.discount_percent
+            and landing.discount_starts_at
+            and landing.discount_ends_at
+            and landing.discount_starts_at <= now < landing.discount_ends_at
+        )
         items.append(
             LandingListItem(
                 id=landing.id,
@@ -368,6 +488,7 @@ async def list_landings(
                     failed=stats.get('failed', 0),
                     expired=stats.get('expired', 0),
                 ),
+                has_active_discount=discount_active,
                 created_at=landing.created_at,
                 updated_at=landing.updated_at,
             )
@@ -410,6 +531,11 @@ async def create_landing_page(
         custom_css=request.custom_css,
         meta_title=request.meta_title,
         meta_description=request.meta_description,
+        discount_percent=request.discount_percent,
+        discount_overrides=request.discount_overrides,
+        discount_starts_at=request.discount_starts_at,
+        discount_ends_at=request.discount_ends_at,
+        discount_badge_text=request.discount_badge_text,
     )
 
     logger.info('Admin created landing page', admin_id=admin.id, slug=landing.slug, landing_id=landing.id)
@@ -474,6 +600,25 @@ async def update_landing_page(
         data['features'] = [f.model_dump() if hasattr(f, 'model_dump') else f for f in data['features']]
     if 'payment_methods' in data and data['payment_methods'] is not None:
         data['payment_methods'] = [m.model_dump() if hasattr(m, 'model_dump') else m for m in data['payment_methods']]
+
+    # Cascade-clear all discount fields when discount_percent is explicitly set to None
+    if 'discount_percent' in data and data['discount_percent'] is None:
+        data['discount_overrides'] = None
+        data['discount_starts_at'] = None
+        data['discount_ends_at'] = None
+        data['discount_badge_text'] = None
+
+    # Validate merged discount dates on partial update
+    if 'discount_starts_at' in data or 'discount_ends_at' in data:
+        existing_landing = await get_landing_by_id(db, landing_id)
+        if existing_landing is not None:
+            effective_starts = data.get('discount_starts_at', existing_landing.discount_starts_at)
+            effective_ends = data.get('discount_ends_at', existing_landing.discount_ends_at)
+            if effective_starts and effective_ends and effective_starts >= effective_ends:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail='discount_starts_at must be before discount_ends_at',
+                )
 
     landing = await update_landing(db, landing_id, data)
     if landing is None:
@@ -580,6 +725,11 @@ def _landing_to_detail(landing: LandingPage) -> LandingDetailResponse:
         custom_css=landing.custom_css,
         meta_title=landing.meta_title,
         meta_description=landing.meta_description,
+        discount_percent=landing.discount_percent,
+        discount_overrides=landing.discount_overrides,
+        discount_starts_at=landing.discount_starts_at,
+        discount_ends_at=landing.discount_ends_at,
+        discount_badge_text=landing.discount_badge_text,
         created_at=landing.created_at,
         updated_at=landing.updated_at,
     )

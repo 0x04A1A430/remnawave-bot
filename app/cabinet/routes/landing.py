@@ -45,6 +45,9 @@ class LandingTariffPeriod(BaseModel):
     label: str
     price_kopeks: int
     price_label: str
+    original_price_kopeks: int | None = None  # set if discount active
+    original_price_label: str | None = None
+    discount_percent: int | None = None  # effective discount for this tariff
 
 
 class LandingTariff(BaseModel):
@@ -76,6 +79,12 @@ class LandingPaymentMethod(BaseModel):
     sub_options: list[LandingPaymentMethodSubOption] | None = None
 
 
+class LandingDiscountInfo(BaseModel):
+    percent: int  # default discount
+    ends_at: str  # ISO datetime
+    badge_text: str | None = None  # resolved locale text
+
+
 class LandingConfigResponse(BaseModel):
     slug: str
     title: str
@@ -88,6 +97,7 @@ class LandingConfigResponse(BaseModel):
     custom_css: str | None = None
     meta_title: str | None = None
     meta_description: str | None = None
+    discount: LandingDiscountInfo | None = None  # null if no active discount
 
 
 _EMAIL_RE = re.compile(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$')
@@ -259,7 +269,24 @@ def _period_label(days: int) -> str:
     return f'{days} days'
 
 
-async def _load_landing_tariffs(db: AsyncSession, landing: LandingPage) -> list[LandingTariff]:
+def _get_active_discount(landing: LandingPage, lang: str) -> LandingDiscountInfo | None:
+    """Return discount info if currently active, else None."""
+    if not landing.discount_percent or not landing.discount_starts_at or not landing.discount_ends_at:
+        return None
+    now = datetime.now(UTC)
+    if not (landing.discount_starts_at <= now < landing.discount_ends_at):
+        return None
+    badge = resolve_locale_text(landing.discount_badge_text, lang) if landing.discount_badge_text else None
+    return LandingDiscountInfo(
+        percent=landing.discount_percent,
+        ends_at=landing.discount_ends_at.isoformat(),
+        badge_text=badge or None,
+    )
+
+
+async def _load_landing_tariffs(
+    db: AsyncSession, landing: LandingPage, discount: LandingDiscountInfo | None = None
+) -> list[LandingTariff]:
     """Load tariffs for a landing page, filtered by allowed IDs and periods."""
     allowed_ids = landing.allowed_tariff_ids or []
     if not allowed_ids:
@@ -288,12 +315,28 @@ async def _load_landing_tariffs(db: AsyncSession, landing: LandingPage) -> list[
             price = tariff.get_price_for_period(days)
             if price is None:
                 continue
+
+            original_price_kopeks = None
+            original_price_label = None
+            effective_discount = None
+
+            if discount:
+                # Per-tariff override takes priority
+                tariff_override = (discount.overrides or {}).get(str(tariff.id))
+                effective_discount = tariff_override if tariff_override is not None else discount.percent
+                original_price_kopeks = price
+                original_price_label = settings.format_price(price)
+                price = max(1, price - (price * effective_discount // 100))
+
             periods.append(
                 LandingTariffPeriod(
                     days=days,
                     label=_period_label(days),
                     price_kopeks=price,
                     price_label=settings.format_price(price),
+                    original_price_kopeks=original_price_kopeks,
+                    original_price_label=original_price_label,
+                    discount_percent=effective_discount,
                 )
             )
 
@@ -410,7 +453,8 @@ async def get_landing_config(
             detail='Landing page not found',
         )
 
-    tariffs = await _load_landing_tariffs(db, landing)
+    discount = _get_active_discount(landing, lang)
+    tariffs = await _load_landing_tariffs(db, landing, discount)
 
     # Build payment methods from landing config
     raw_methods = landing.payment_methods or []
@@ -471,6 +515,7 @@ async def get_landing_config(
         custom_css=landing.custom_css,
         meta_title=resolve_locale_text(landing.meta_title, lang) or None,
         meta_description=resolve_locale_text(landing.meta_description, lang) or None,
+        discount=discount,
     )
 
 

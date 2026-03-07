@@ -70,6 +70,11 @@ _LANDING_UPDATABLE_FIELDS = frozenset(
         'meta_title',
         'meta_description',
         'display_order',
+        'discount_percent',
+        'discount_overrides',
+        'discount_starts_at',
+        'discount_ends_at',
+        'discount_badge_text',
     }
 )
 

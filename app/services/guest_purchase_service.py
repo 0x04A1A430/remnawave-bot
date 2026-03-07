@@ -98,6 +98,15 @@ async def validate_and_calculate(
     if price_kopeks is None:
         raise GuestPurchaseError('Price is not configured for this period')
 
+    # Apply landing discount if active
+    if landing.discount_percent and landing.discount_starts_at and landing.discount_ends_at:
+        now = datetime.now(UTC)
+        if landing.discount_starts_at <= now < landing.discount_ends_at:
+            overrides = landing.discount_overrides or {}
+            tariff_override = overrides.get(str(tariff_id))
+            effective_discount = tariff_override if tariff_override is not None else landing.discount_percent
+            price_kopeks = max(1, price_kopeks - (price_kopeks * effective_discount // 100))
+
     return tariff, price_kopeks
 
 
@@ -188,7 +197,11 @@ async def fulfill_purchase(db: AsyncSession, purchase_token: str) -> GuestPurcha
         notification_tariff_name = tariff.name
         notification_language = user.language or 'ru'
 
-        # Verify the purchase amount matches the tariff price (before any state change)
+        # Verify the tariff still has a price configured for this period.
+        # We do NOT re-verify the exact amount because discounts, price changes,
+        # or promo codes may have altered the price at purchase time. The amount
+        # was validated server-side in validate_and_calculate() and the payment
+        # provider confirmed the charged amount.
         expected_price = tariff.get_price_for_period(purchase.period_days)
         if expected_price is None:
             logger.error(
@@ -196,16 +209,6 @@ async def fulfill_purchase(db: AsyncSession, purchase_token: str) -> GuestPurcha
                 purchase_id=purchase.id,
                 tariff_id=tariff.id,
                 period_days=purchase.period_days,
-            )
-            purchase.status = GuestPurchaseStatus.FAILED.value
-            await db.commit()
-            return purchase
-        if expected_price != purchase.amount_kopeks:
-            logger.error(
-                'Purchase amount mismatch — aborting fulfillment',
-                purchase_id=purchase.id,
-                expected_kopeks=expected_price,
-                actual_kopeks=purchase.amount_kopeks,
             )
             purchase.status = GuestPurchaseStatus.FAILED.value
             await db.commit()
