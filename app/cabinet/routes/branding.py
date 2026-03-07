@@ -45,6 +45,7 @@ TELEGRAM_WIDGET_RADIUS_KEY = 'TELEGRAM_WIDGET_RADIUS'
 TELEGRAM_WIDGET_USERPIC_KEY = 'TELEGRAM_WIDGET_USERPIC'
 TELEGRAM_WIDGET_REQUEST_ACCESS_KEY = 'TELEGRAM_WIDGET_REQUEST_ACCESS'
 TELEGRAM_OIDC_ENABLED_KEY = 'TELEGRAM_OIDC_ENABLED'
+TELEGRAM_OIDC_CLIENT_ID_KEY = 'TELEGRAM_OIDC_CLIENT_ID'
 
 # Default animation config
 DEFAULT_ANIMATION_CONFIG = {
@@ -864,11 +865,13 @@ async def get_telegram_widget_config(
     request_access_val = await get_setting_value(db, TELEGRAM_WIDGET_REQUEST_ACCESS_KEY)
 
     oidc_enabled_val = await get_setting_value(db, TELEGRAM_OIDC_ENABLED_KEY)
+    oidc_client_id_val = await get_setting_value(db, TELEGRAM_OIDC_CLIENT_ID_KEY)
+    oidc_client_id = oidc_client_id_val or settings.TELEGRAM_OIDC_CLIENT_ID
     oidc_enabled = (
         oidc_enabled_val.lower() == 'true'
         if oidc_enabled_val is not None
         else settings.TELEGRAM_OIDC_ENABLED
-    ) and bool(settings.TELEGRAM_OIDC_CLIENT_ID)
+    ) and bool(oidc_client_id)
 
     return TelegramWidgetConfigResponse(
         bot_username=bot_username,
@@ -881,7 +884,7 @@ async def get_telegram_widget_config(
         if request_access_val is not None
         else settings.TELEGRAM_WIDGET_REQUEST_ACCESS,
         oidc_enabled=oidc_enabled,
-        oidc_client_id=settings.TELEGRAM_OIDC_CLIENT_ID if oidc_enabled else '',
+        oidc_client_id=oidc_client_id if oidc_enabled else '',
     )
 
 

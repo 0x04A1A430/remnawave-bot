@@ -416,6 +416,27 @@ return c
         return await RateLimitCache._atomic_rate_check(key, limit, window, fail_closed=fail_closed)
 
 
+class TokenReplayCache:
+    """Prevents OIDC id_token replay by storing token hashes with TTL."""
+
+    @staticmethod
+    async def is_token_replayed(token_hash: str, ttl: int = 300) -> bool:
+        """Check if token was already used. Returns True if replayed.
+
+        Sets the token hash in Redis with TTL on first use.
+        If Redis is unavailable, allows the request (fail-open,
+        since rate limiting already provides protection).
+        """
+        if not cache._connected or cache.redis_client is None:
+            return False
+        try:
+            key = cache_key('oidc_token', token_hash)
+            was_set = await cache.redis_client.set(key, '1', ex=ttl, nx=True)
+            return not was_set  # nx=True returns None if key already exists
+        except Exception:
+            return False
+
+
 class ChannelSubCache:
     """Cache for user channel subscription statuses.
 

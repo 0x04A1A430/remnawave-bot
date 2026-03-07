@@ -66,13 +66,23 @@ def _create_base_app() -> FastAPI:
             from fastapi.middleware.cors import CORSMiddleware
 
             cabinet_origins = settings.get_cabinet_allowed_origins()
-            app.add_middleware(
-                CORSMiddleware,
-                allow_origins=['*'] if '*' in cabinet_origins else cabinet_origins,
-                allow_credentials=True,
-                allow_methods=['*'],
-                allow_headers=['*'],
-            )
+            if '*' in cabinet_origins:
+                logger.warning('CORS wildcard with credentials is insecure, disabling credentials for wildcard')
+                app.add_middleware(
+                    CORSMiddleware,
+                    allow_origins=['*'],
+                    allow_credentials=False,
+                    allow_methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+                    allow_headers=['Authorization', 'Content-Type'],
+                )
+            else:
+                app.add_middleware(
+                    CORSMiddleware,
+                    allow_origins=cabinet_origins,
+                    allow_credentials=True,
+                    allow_methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+                    allow_headers=['Authorization', 'Content-Type'],
+                )
             app.include_router(cabinet_router)
 
     _attach_docs_alias(app, app.docs_url)

@@ -16,6 +16,7 @@ from app.database.crud.campaign import (
     get_campaign_registration_by_user,
 )
 from app.database.crud.rbac import UserRoleCRUD
+from app.database.crud.system_setting import get_setting_value
 from app.database.crud.user import (
     clear_email_change_pending,
     create_user,
@@ -31,7 +32,7 @@ from app.database.models import CabinetRefreshToken, User
 from app.services.campaign_service import AdvertisingCampaignService
 from app.services.disposable_email_service import disposable_email_service
 from app.services.referral_service import process_referral_registration
-from app.utils.cache import RateLimitCache
+from app.utils.cache import RateLimitCache, TokenReplayCache
 from app.utils.timezone import panel_datetime_to_utc
 
 from ..auth import (
@@ -471,6 +472,7 @@ async def auth_telegram(
 @router.post('/telegram/widget', response_model=AuthResponse)
 async def auth_telegram_widget(
     request: TelegramWidgetAuthRequest,
+    raw_request: Request,
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """
@@ -479,6 +481,15 @@ async def auth_telegram_widget(
     This endpoint validates data from Telegram Login Widget and returns
     JWT tokens for authenticated access.
     """
+    # Rate limit
+    client_ip = get_client_ip(raw_request)
+    if await RateLimitCache.is_ip_rate_limited(client_ip, 'telegram_widget', limit=10, window=60, fail_closed=True):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail='Too many requests',
+            headers={'Retry-After': '60'},
+        )
+
     widget_data = request.model_dump(exclude={'campaign_slug', 'referral_code'})
 
     if not validate_telegram_login_widget(widget_data):
@@ -561,17 +572,21 @@ async def auth_telegram_oidc(
     # Rate limit
     client_ip = get_client_ip(raw_request)
     if await RateLimitCache.is_ip_rate_limited(client_ip, 'telegram_oidc', limit=10, window=60, fail_closed=True):
-        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail='Too many requests')
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail='Too many requests',
+            headers={'Retry-After': '60'},
+        )
 
     # Check OIDC enabled from DB first, fallback to env
-    from app.database.crud.system_setting import get_setting_value
-
     oidc_enabled_val = await get_setting_value(db, 'TELEGRAM_OIDC_ENABLED')
+    oidc_client_id_val = await get_setting_value(db, 'TELEGRAM_OIDC_CLIENT_ID')
+    oidc_client_id = oidc_client_id_val or settings.TELEGRAM_OIDC_CLIENT_ID
     oidc_enabled = (
         oidc_enabled_val.lower() == 'true'
         if oidc_enabled_val is not None
         else settings.TELEGRAM_OIDC_ENABLED
-    ) and bool(settings.TELEGRAM_OIDC_CLIENT_ID)
+    ) and bool(oidc_client_id)
 
     if not oidc_enabled:
         raise HTTPException(
@@ -581,9 +596,18 @@ async def auth_telegram_oidc(
 
     claims = await validate_telegram_oidc_token(
         request.id_token,
-        settings.TELEGRAM_OIDC_CLIENT_ID,
+        oidc_client_id,
     )
     if not claims:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='Invalid or expired Telegram OIDC token',
+        )
+
+    # Replay detection: reject if this exact token was already used
+    token_hash = hashlib.sha256(request.id_token.encode()).hexdigest()
+    token_ttl = max(int(claims.get('exp', 0) - datetime.now(UTC).timestamp()), 60)
+    if await TokenReplayCache.is_token_replayed(token_hash, ttl=min(token_ttl, 600)):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail='Invalid or expired Telegram OIDC token',
@@ -648,7 +672,7 @@ async def auth_telegram_oidc(
         user.last_name = last_name
 
     user.cabinet_last_login = datetime.now(UTC)
-    await db.commit()
+    await db.flush()
 
     response = await _create_auth_response(user, db)
     await _store_refresh_token(db, user.id, response.refresh_token)
@@ -659,6 +683,7 @@ async def auth_telegram_oidc(
     if response.campaign_bonus:
         response.user = _user_to_response(user)
 
+    await db.commit()
     return response
 
 
