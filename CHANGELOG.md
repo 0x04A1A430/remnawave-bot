@@ -1,5 +1,34 @@
 # Changelog
 
+## [3.25.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.24.0...v3.25.0) (2026-03-07)
+
+
+### New Features
+
+* add configurable animated background for landing pages ([11d3e63](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/11d3e637c106590a73ed804fc762bf303b37dd62))
+* add landing page statistics endpoint with charts data ([25478ce](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/25478ced209fdbf12f2c398ad1c8d48ac26c923e))
+* add paginated purchases list endpoint for landing pages ([0ba1127](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/0ba112746913bb9927338a7554370ac8c4e12039))
+
+
+### Bug Fixes
+
+* add or [] guard to remaining connected_squads call site in fulfill_purchase ([d9f9f3d](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/d9f9f3dca126963967782160766bd5b26bde7a49))
+* align context_vars and SAMPLE_CONTEXTS with actual runtime context keys ([ab5313a](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/ab5313a381f8175346b470d6d1df54d8d7d11ff8))
+* align subscription_renewed/activated context_vars with runtime keys ([c507634](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/c507634398d3e934246b2c66183ebad1b9949769))
+* correct device_limit and connected_squads in guest purchase fulfillment ([44d46fe](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/44d46feb0adec9255fbf167e9937ea70b711e289))
+* drop legacy prize_days column from contest_templates ([5214f55](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/5214f55f46391c7870a38ea51c2efc2f4e518f58))
+* handle expired subscription in guest purchase fulfillment ([9e78509](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/9e785092843cf7f6b3ebb5bfa1710030c74ceafb))
+* remaining context_vars/SAMPLE_CONTEXTS mismatches found by agents ([d72ea6b](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/d72ea6b7f999c320038f0327a0c541d1cd276244))
+* resolve alembic migration failures on fresh database install ([bbd353f](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/bbd353ff38af57aa9a8f15c60bded3259a3e3e26))
+* resolve NameError in YooKassa successful payment processing ([9d5329d](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/9d5329d9d1051eeaf77cfea4932557cdfbf21cc6))
+* strip newlines from subject substitution, fix subscription notification context ([c9ea2b1](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/c9ea2b15e9d670d6e1888c0396a145713ec749c0))
+* substitute context variables in email template overrides ([d52c87b](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/d52c87b2b752d3f432096318ac2ec4f9ad792929))
+* substitute sample context in admin test email for template overrides ([351d714](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/351d714f2d4c200e8ab4263ff006ae33ec062d95))
+* support {total_amount} placeholder in cart notification templates ([f4ab174](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/f4ab174d32be8b48470320c27c92e75fdabd6d58))
+* use --frozen instead of --locked in Dockerfile to avoid version mismatch ([923b36a](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/923b36a8b9caed5db1c147a5ef4c001f66f8170a))
+* use information_schema for constraint existence checks in migrations ([fc65e2d](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/fc65e2de4c9c08e7df1886c458b53f7a05894934))
+* use pg_class lookup for constraint existence checks in migrations ([ba335fe](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/ba335fe78430e26b9e2449dbbd6db209557698e0))
+
 ## [3.24.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.23.2...v3.24.0) (2026-03-07)
 
 
