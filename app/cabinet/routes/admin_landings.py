@@ -1,11 +1,12 @@
 """Admin routes for landing page management in cabinet."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from urllib.parse import urlparse
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field, field_validator, model_validator
+from sqlalchemy import and_, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cabinet.utils.locale import (
@@ -22,7 +23,7 @@ from app.database.crud.landing import (
     update_landing,
     update_landing_order,
 )
-from app.database.models import LandingPage, User
+from app.database.models import GuestPurchase, GuestPurchaseStatus, LandingPage, Tariff, User
 
 from ..dependencies import get_cabinet_db, require_permission
 
@@ -436,6 +437,37 @@ class OrderRequest(BaseModel):
     landing_ids: list[int]
 
 
+class LandingDailyStat(BaseModel):
+    date: str  # YYYY-MM-DD
+    purchases: int
+    revenue_kopeks: int
+    gifts: int
+
+
+class LandingTariffStat(BaseModel):
+    tariff_id: int | None
+    tariff_name: str
+    purchases: int
+    revenue_kopeks: int
+
+
+class LandingStatsResponse(BaseModel):
+    # Summary
+    total_purchases: int
+    total_revenue_kopeks: int
+    total_gifts: int
+    total_regular: int
+    avg_purchase_kopeks: int
+    # Conversion: created -> paid/delivered
+    total_created: int
+    total_successful: int  # paid + delivered + pending_activation
+    conversion_rate: float  # percent
+    # Daily chart data (last 30 days)
+    daily_stats: list[LandingDailyStat]
+    # Tariff breakdown
+    tariff_stats: list[LandingTariffStat]
+
+
 # ============ Routes ============
 
 # IMPORTANT: /order MUST come before /{landing_id} to avoid "order" being
@@ -675,6 +707,139 @@ async def toggle_landing_active(
     )
 
     return _landing_to_detail(landing)
+
+
+_SUCCESSFUL_STATUSES = (
+    GuestPurchaseStatus.PAID.value,
+    GuestPurchaseStatus.DELIVERED.value,
+    GuestPurchaseStatus.PENDING_ACTIVATION.value,
+)
+
+_STATS_PERIOD_DAYS = 30
+
+
+@router.get('/{landing_id}/stats', response_model=LandingStatsResponse)
+async def get_landing_stats(
+    landing_id: int,
+    admin: User = Depends(require_permission('landings:read')),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> LandingStatsResponse:
+    """Get daily statistics and tariff breakdown for a landing page."""
+    landing = await get_landing_by_id(db, landing_id)
+    if landing is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='Landing page not found',
+        )
+
+    # -- Summary stats (single query) --
+    is_successful = GuestPurchase.status.in_(_SUCCESSFUL_STATUSES)
+    summary_result = await db.execute(
+        select(
+            func.count(GuestPurchase.id).label('total_created'),
+            func.count(case((is_successful, GuestPurchase.id))).label('total_successful'),
+            func.coalesce(func.sum(case((is_successful, GuestPurchase.amount_kopeks))), 0).label(
+                'total_revenue_kopeks'
+            ),
+            func.count(
+                case((and_(is_successful, GuestPurchase.is_gift.is_(True)), GuestPurchase.id))
+            ).label('total_gifts'),
+        ).where(GuestPurchase.landing_id == landing_id)
+    )
+    row = summary_result.one()
+    total_created: int = row.total_created
+    total_successful: int = row.total_successful
+    total_revenue_kopeks: int = row.total_revenue_kopeks
+    total_gifts: int = row.total_gifts
+    total_regular = total_successful - total_gifts
+    avg_purchase_kopeks = total_revenue_kopeks // total_successful if total_successful > 0 else 0
+    conversion_rate = round(total_successful / total_created * 100, 1) if total_created > 0 else 0.0
+
+    # -- Daily stats for last N days --
+    now = datetime.now(UTC)
+    cutoff = now - timedelta(days=_STATS_PERIOD_DAYS)
+    day_at_utc = func.date(func.timezone('UTC', GuestPurchase.paid_at))
+    daily_result = await db.execute(
+        select(
+            day_at_utc.label('day'),
+            func.count(GuestPurchase.id).label('purchases'),
+            func.coalesce(func.sum(GuestPurchase.amount_kopeks), 0).label('revenue_kopeks'),
+            func.count(case((GuestPurchase.is_gift.is_(True), GuestPurchase.id))).label('gifts'),
+        )
+        .where(
+            GuestPurchase.landing_id == landing_id,
+            is_successful,
+            GuestPurchase.paid_at >= cutoff,
+        )
+        .group_by(day_at_utc)
+        .order_by(day_at_utc)
+    )
+    daily_rows = {str(r.day): r for r in daily_result.all()}
+
+    # Fill missing days with zeros
+    today = now.date()
+    daily_stats: list[LandingDailyStat] = []
+    for i in range(_STATS_PERIOD_DAYS, -1, -1):
+        day = today - timedelta(days=i)
+        day_str = day.isoformat()
+        if day_str in daily_rows:
+            r = daily_rows[day_str]
+            daily_stats.append(
+                LandingDailyStat(
+                    date=day_str,
+                    purchases=r.purchases,
+                    revenue_kopeks=r.revenue_kopeks,
+                    gifts=r.gifts,
+                )
+            )
+        else:
+            daily_stats.append(
+                LandingDailyStat(
+                    date=day_str,
+                    purchases=0,
+                    revenue_kopeks=0,
+                    gifts=0,
+                )
+            )
+
+    # -- Tariff breakdown --
+    tariff_result = await db.execute(
+        select(
+            GuestPurchase.tariff_id,
+            func.coalesce(Tariff.name, 'Unknown').label('tariff_name'),
+            func.count(GuestPurchase.id).label('purchases'),
+            func.coalesce(func.sum(GuestPurchase.amount_kopeks), 0).label('revenue_kopeks'),
+        )
+        .outerjoin(Tariff, GuestPurchase.tariff_id == Tariff.id)
+        .where(
+            GuestPurchase.landing_id == landing_id,
+            is_successful,
+        )
+        .group_by(GuestPurchase.tariff_id, Tariff.name)
+        .order_by(func.coalesce(func.sum(GuestPurchase.amount_kopeks), 0).desc())
+    )
+    tariff_stats = [
+        LandingTariffStat(
+            tariff_id=r.tariff_id,
+            tariff_name=r.tariff_name,
+            purchases=r.purchases,
+            revenue_kopeks=r.revenue_kopeks,
+        )
+        for r in tariff_result.all()
+    ]
+
+    return LandingStatsResponse(
+        total_purchases=total_successful,
+        total_revenue_kopeks=total_revenue_kopeks,
+        total_gifts=total_gifts,
+        total_regular=total_regular,
+        avg_purchase_kopeks=avg_purchase_kopeks,
+        total_created=total_created,
+        total_successful=total_successful,
+        conversion_rate=conversion_rate,
+        daily_stats=daily_stats,
+        tariff_stats=tariff_stats,
+    )
 
 
 # ============ Helpers ============
