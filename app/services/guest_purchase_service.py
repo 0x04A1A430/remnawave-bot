@@ -259,7 +259,7 @@ async def fulfill_purchase(db: AsyncSession, purchase_token: str) -> GuestPurcha
                 existing_subscription,
                 duration_days=purchase.period_days,
                 traffic_limit_gb=tariff.traffic_limit_gb,
-                device_limit=tariff.device_limit or settings.DEFAULT_DEVICE_LIMIT,
+                device_limit=tariff.device_limit,
                 connected_squads=tariff.allowed_squads or [],
                 is_trial=False,
                 update_server_counters=True,
@@ -658,7 +658,7 @@ async def activate_purchase(db: AsyncSession, purchase_token: str) -> GuestPurch
                 duration_days=purchase.period_days,
                 traffic_limit_gb=tariff.traffic_limit_gb,
                 device_limit=tariff.device_limit,
-                connected_squads=tariff.allowed_squads,
+                connected_squads=tariff.allowed_squads or [],
                 is_trial=False,
                 update_server_counters=True,
             )
@@ -672,7 +672,7 @@ async def activate_purchase(db: AsyncSession, purchase_token: str) -> GuestPurch
                 duration_days=purchase.period_days,
                 traffic_limit_gb=tariff.traffic_limit_gb,
                 device_limit=tariff.device_limit,
-                connected_squads=tariff.allowed_squads,
+                connected_squads=tariff.allowed_squads or [],
                 tariff_id=tariff.id,
                 update_server_counters=True,
             )
