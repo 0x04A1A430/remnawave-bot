@@ -29,7 +29,7 @@ def _resolve_media(message: types.Message):
         return get_logo_media()
     if settings.ENABLE_LOGO_MODE and not is_qr_message(message):
         return get_logo_media()
-    if message.photo:
+    if message.photo and not is_qr_message(message):
         return message.photo[-1].file_id
     return get_logo_media()
 
