@@ -76,6 +76,7 @@ class PaymentMethodConfigUpdateRequest(BaseModel):
             if not isinstance(key, str) or len(key) > 50:
                 raise ValueError('sub_options keys must be strings of at most 50 characters')
         return v
+
     first_topup_filter: str | None = Field(default=None, pattern='^(any|yes|no)$')
     promo_group_filter_mode: str | None = Field(default=None, pattern='^(all|selected)$')
     allowed_promo_group_ids: list[int] | None = None

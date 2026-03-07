@@ -336,7 +336,15 @@ async def list_landings(
     """List all landing pages with purchase stats."""
     landings = await get_all_landings(db)
     all_stats = await get_all_landing_purchase_stats(db)
-    empty_stats = {'total': 0, 'pending': 0, 'paid': 0, 'delivered': 0, 'pending_activation': 0, 'failed': 0, 'expired': 0}
+    empty_stats = {
+        'total': 0,
+        'pending': 0,
+        'paid': 0,
+        'delivered': 0,
+        'pending_activation': 0,
+        'failed': 0,
+        'expired': 0,
+    }
 
     items = []
     for landing in landings:

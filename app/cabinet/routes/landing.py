@@ -520,7 +520,7 @@ async def create_landing_purchase(
         for m in sorted_methods:
             mid = m.get('method_id', '')
             if body.payment_method.startswith(mid + '_'):
-                suffix = body.payment_method[len(mid) + 1:]
+                suffix = body.payment_method[len(mid) + 1 :]
                 # Validate suffix is a known sub-option
                 method_def = method_defaults.get(mid)
                 available = (method_def.get('available_sub_options') if method_def else None) or []

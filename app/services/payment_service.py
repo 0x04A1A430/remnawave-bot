@@ -402,7 +402,9 @@ class PaymentService(
                 getter_name = _GETTER_OVERRIDES.get(model_name, f'get_{model_name}_payment_by_id')
                 getter = getattr(crud_module, getter_name, None)
                 if getter is None:
-                    logger.warning('No getter found for patching guest metadata', model_name=model_name, getter_name=getter_name)
+                    logger.warning(
+                        'No getter found for patching guest metadata', model_name=model_name, getter_name=getter_name
+                    )
                     return
                 payment_record = await getter(db, local_payment_id)
                 if payment_record is None:
@@ -537,8 +539,8 @@ class PaymentService(
                 logger.warning('Pal24 is not enabled, cannot create guest payment')
                 return None
 
-            pal24_method = 'sbp' if payment_method == 'pal24_sbp' else (
-                'card' if payment_method == 'pal24_card' else None
+            pal24_method = (
+                'sbp' if payment_method == 'pal24_sbp' else ('card' if payment_method == 'pal24_card' else None)
             )
 
             result = await self.create_pal24_payment(
