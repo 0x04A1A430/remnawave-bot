@@ -10,12 +10,19 @@ duplicate PromoCodeUse records for the same user+promocode.
 
 from typing import Sequence, Union
 
+import sqlalchemy as sa
 from alembic import op
 
 revision: str = '0015'
 down_revision: Union[str, None] = '0014'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
+
+
+def _has_unique_constraint(table: str, constraint_name: str) -> bool:
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    return any(uc['name'] == constraint_name for uc in inspector.get_unique_constraints(table))
 
 
 def upgrade() -> None:
@@ -29,11 +36,12 @@ def upgrade() -> None:
         )
     """)
 
-    op.create_unique_constraint(
-        'uq_promocode_uses_user_promo',
-        'promocode_uses',
-        ['user_id', 'promocode_id'],
-    )
+    if not _has_unique_constraint('promocode_uses', 'uq_promocode_uses_user_promo'):
+        op.create_unique_constraint(
+            'uq_promocode_uses_user_promo',
+            'promocode_uses',
+            ['user_id', 'promocode_id'],
+        )
 
 
 def downgrade() -> None:

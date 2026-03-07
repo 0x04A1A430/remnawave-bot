@@ -11,12 +11,19 @@ NULL external_id values do not violate the constraint in PostgreSQL.
 
 from typing import Sequence, Union
 
+import sqlalchemy as sa
 from alembic import op
 
 revision: str = '0017'
 down_revision: Union[str, None] = '0016'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
+
+
+def _has_unique_constraint(table: str, constraint_name: str) -> bool:
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    return any(uc['name'] == constraint_name for uc in inspector.get_unique_constraints(table))
 
 
 def upgrade() -> None:
@@ -35,11 +42,12 @@ def upgrade() -> None:
           )
     """)
 
-    op.create_unique_constraint(
-        'uq_transaction_external_id_method',
-        'transactions',
-        ['external_id', 'payment_method'],
-    )
+    if not _has_unique_constraint('transactions', 'uq_transaction_external_id_method'):
+        op.create_unique_constraint(
+            'uq_transaction_external_id_method',
+            'transactions',
+            ['external_id', 'payment_method'],
+        )
 
 
 def downgrade() -> None:

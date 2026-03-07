@@ -14,6 +14,7 @@ from sqlalchemy import (
     JSON,
     BigInteger,
     Boolean,
+    CheckConstraint,
     Column,
     Date,
     DateTime,
@@ -1860,6 +1861,25 @@ class SystemSetting(Base):
     updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 
 
+class EmailTemplate(Base):
+    """Custom email template overrides (accessed via raw SQL in cabinet services)."""
+
+    __tablename__ = 'email_templates'
+    __table_args__ = (
+        UniqueConstraint('notification_type', 'language', name='uq_email_templates_type_lang'),
+        Index('ix_email_templates_notification_type', 'notification_type'),
+    )
+
+    id = Column(Integer, primary_key=True)
+    notification_type = Column(String(100), nullable=False)
+    language = Column(String(10), nullable=False)
+    subject = Column(String(500), nullable=False)
+    body_html = Column(Text, nullable=False)
+    is_active = Column(Boolean, nullable=False, server_default='true')
+    created_at = Column(AwareDateTime(), nullable=False, server_default=func.now())
+    updated_at = Column(AwareDateTime(), nullable=False, server_default=func.now())
+
+
 class MonitoringLog(Base):
     __tablename__ = 'monitoring_logs'
 
@@ -2997,6 +3017,16 @@ class LandingPage(Base):
     """Public quick-purchase landing page configuration."""
 
     __tablename__ = 'landing_pages'
+    __table_args__ = (
+        CheckConstraint(
+            'discount_percent IS NULL OR (discount_percent >= 1 AND discount_percent <= 99)',
+            name='chk_landing_discount_percent_range',
+        ),
+        CheckConstraint(
+            'discount_starts_at IS NULL OR discount_ends_at IS NULL OR discount_starts_at < discount_ends_at',
+            name='chk_landing_discount_dates_order',
+        ),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     slug = Column(String(100), unique=True, nullable=False, index=True)
@@ -3041,6 +3071,11 @@ class GuestPurchase(Base):
     """Guest (unauthenticated) purchase record."""
 
     __tablename__ = 'guest_purchases'
+    __table_args__ = (
+        Index('ix_guest_purchases_status', 'status'),
+        Index('ix_guest_purchases_contact', 'contact_type', 'contact_value'),
+        Index('ix_guest_purchases_landing_status_paid', 'landing_id', 'status', 'paid_at'),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     token = Column(String(64), unique=True, nullable=False, index=True)
