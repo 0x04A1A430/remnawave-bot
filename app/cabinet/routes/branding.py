@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.database.crud.system_setting import get_setting_value
 from app.database.models import SystemSetting, User
 
 from ..dependencies import get_cabinet_db, require_permission
@@ -314,12 +315,6 @@ def ensure_branding_dir():
     """Ensure branding directory exists."""
     BRANDING_DIR.mkdir(parents=True, exist_ok=True)
 
-
-async def get_setting_value(db: AsyncSession, key: str) -> str | None:
-    """Get a setting value from database."""
-    result = await db.execute(select(SystemSetting).where(SystemSetting.key == key))
-    setting = result.scalar_one_or_none()
-    return setting.value if setting else None
 
 
 async def set_setting_value(db: AsyncSession, key: str, value: str):

@@ -564,7 +564,7 @@ async def auth_telegram_oidc(
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail='Too many requests')
 
     # Check OIDC enabled from DB first, fallback to env
-    from app.database.crud.system_settings import get_setting_value
+    from app.database.crud.system_setting import get_setting_value
 
     oidc_enabled_val = await get_setting_value(db, 'TELEGRAM_OIDC_ENABLED')
     oidc_enabled = (
@@ -592,11 +592,11 @@ async def auth_telegram_oidc(
     # Extract user info from OIDC claims
     try:
         telegram_id = int(claims.get('id', claims.get('sub', 0)))
-    except (ValueError, TypeError):
+    except (ValueError, TypeError) as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail='Invalid user ID in OIDC claims',
-        )
+        ) from e
     if not telegram_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -606,7 +606,6 @@ async def auth_telegram_oidc(
     first_name = claims.get('name', claims.get('given_name', ''))
     username = claims.get('preferred_username')
     last_name = claims.get('family_name')
-    _photo_url = claims.get('picture')  # extracted for future use
     language = claims.get('locale', 'ru')[:2] if claims.get('locale') else 'ru'
 
     user = await get_user_by_telegram_id(db, telegram_id)

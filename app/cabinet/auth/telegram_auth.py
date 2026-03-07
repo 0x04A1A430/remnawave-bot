@@ -145,9 +145,10 @@ _jwks_cache_expiry: datetime | None = None
 _JWKS_CACHE_TTL_SECONDS = 3600  # 1 hour
 _JWKS_URL = 'https://oauth.telegram.org/.well-known/jwks.json'
 _OIDC_ISSUER = 'https://oauth.telegram.org'
-_OIDC_TOKEN_URL = 'https://oauth.telegram.org/token'
 
 _jwks_lock = asyncio.Lock()
+_jwks_last_force_refresh: datetime | None = None
+_JWKS_FORCE_REFRESH_COOLDOWN_SECONDS = 30
 
 
 def _build_public_keys(jwks_data: dict[str, Any]) -> dict[str, Any]:
@@ -203,12 +204,17 @@ async def validate_telegram_oidc_token(id_token: str, client_id: str) -> dict[st
         unverified_header = pyjwt.get_unverified_header(id_token)
         kid = unverified_header.get('kid')
 
-        # If kid not found, force JWKS refresh (key rotation)
+        # If kid not found, force JWKS refresh (key rotation) with cooldown
         if kid and kid not in public_keys:
-            global _jwks_cache_expiry
-            _jwks_cache_expiry = None
-            jwks_data = await _get_jwks()
-            public_keys = _build_public_keys(jwks_data)
+            global _jwks_cache_expiry, _jwks_last_force_refresh
+            now = datetime.now(UTC)
+            if _jwks_last_force_refresh and (now - _jwks_last_force_refresh).total_seconds() < _JWKS_FORCE_REFRESH_COOLDOWN_SECONDS:
+                logger.warning('Telegram OIDC: JWKS force refresh on cooldown', kid=kid)
+            else:
+                _jwks_last_force_refresh = now
+                _jwks_cache_expiry = None
+                jwks_data = await _get_jwks()
+                public_keys = _build_public_keys(jwks_data)
 
         if not kid or kid not in public_keys:
             logger.warning('Telegram OIDC: unknown kid in id_token', kid=kid)
