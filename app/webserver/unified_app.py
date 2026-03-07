@@ -73,7 +73,7 @@ def _create_base_app() -> FastAPI:
                     allow_origins=['*'],
                     allow_credentials=False,
                     allow_methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-                    allow_headers=['Authorization', 'Content-Type'],
+                    allow_headers=['Authorization', 'Content-Type', 'X-CSRF-Token', 'X-Telegram-Init-Data'],
                 )
             else:
                 app.add_middleware(
@@ -81,7 +81,7 @@ def _create_base_app() -> FastAPI:
                     allow_origins=cabinet_origins,
                     allow_credentials=True,
                     allow_methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-                    allow_headers=['Authorization', 'Content-Type'],
+                    allow_headers=['Authorization', 'Content-Type', 'X-CSRF-Token', 'X-Telegram-Init-Data'],
                 )
             app.include_router(cabinet_router)
 
