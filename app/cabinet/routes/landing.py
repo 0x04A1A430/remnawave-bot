@@ -321,8 +321,9 @@ async def _load_landing_tariffs(
             effective_discount = None
 
             if discount:
-                # Per-tariff override takes priority
-                tariff_override = (discount.overrides or {}).get(str(tariff.id))
+                # Per-tariff override takes priority (read from landing model, not response DTO)
+                overrides = landing.discount_overrides or {}
+                tariff_override = overrides.get(str(tariff.id))
                 effective_discount = tariff_override if tariff_override is not None else discount.percent
                 original_price_kopeks = price
                 original_price_label = settings.format_price(price)
