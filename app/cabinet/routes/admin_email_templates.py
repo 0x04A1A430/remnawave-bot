@@ -96,7 +96,7 @@ TEMPLATE_TYPES = [
             'zh': '订阅已续期通知',
             'ua': 'Сповіщення про продовження підписки',
         },
-        'context_vars': ['new_end_date', 'tariff_name'],
+        'context_vars': ['new_expires_at', 'tariff_name', 'traffic_limit_gb', 'device_limit'],
     },
     {
         'type': 'subscription_activated',
@@ -112,7 +112,7 @@ TEMPLATE_TYPES = [
             'zh': '订阅已激活通知',
             'ua': 'Сповіщення про активацію підписки',
         },
-        'context_vars': ['tariff_name', 'end_date'],
+        'context_vars': ['expires_at', 'tariff_name', 'traffic_limit_gb', 'device_limit'],
     },
     {
         'type': 'autopay_success',
@@ -386,8 +386,8 @@ SAMPLE_CONTEXTS: dict[str, dict[str, Any]] = {
     },
     'subscription_expiring': {'days_left': 3, 'expires_at': '2025-01-30'},
     'subscription_expired': {},
-    'subscription_renewed': {'new_end_date': '2025-02-28', 'tariff_name': 'Premium'},
-    'subscription_activated': {'tariff_name': 'Premium', 'end_date': '2025-02-28'},
+    'subscription_renewed': {'new_expires_at': '2025-02-28', 'tariff_name': 'Premium', 'traffic_limit_gb': 100, 'device_limit': 3},
+    'subscription_activated': {'expires_at': '2025-02-28', 'tariff_name': 'Premium', 'traffic_limit_gb': 100, 'device_limit': 3},
     'autopay_success': {'formatted_amount': '300.00 ₽', 'amount_rubles': 300, 'new_expires_at': '2025-02-28'},
     'autopay_failed': {'reason': 'Card declined'},
     'autopay_insufficient_funds': {'required_amount': '300.00 ₽', 'current_balance': '50.00 ₽'},
