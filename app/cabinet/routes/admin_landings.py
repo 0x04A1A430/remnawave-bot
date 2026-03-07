@@ -162,6 +162,7 @@ class LandingCreateRequest(BaseModel):
             if len(periods) > 20:
                 raise ValueError(f'allowed_periods[{key}] cannot have more than 20 periods')
         return v
+
     gift_enabled: bool = True
     custom_css: str | None = Field(default=None, max_length=10000)
     meta_title: dict[str, str] | None = None
