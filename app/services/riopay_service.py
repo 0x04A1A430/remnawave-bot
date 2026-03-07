@@ -1,6 +1,7 @@
-"""Сервис для работы с API RioPay (api.riopay.online)."""
+"""Сервис для работы с API RioPay (api.riopay.online) v2.0.1."""
 
-import asyncio
+import hashlib
+import hmac
 from typing import Any
 
 import aiohttp
@@ -13,18 +14,12 @@ logger = structlog.get_logger(__name__)
 
 API_BASE_URL = 'https://api.riopay.online'
 
-# Кэш для публичного ключа
-_cached_pubkey: str | None = None
-_pubkey_lock = asyncio.Lock()
-
 
 class RioPayService:
     """Сервис для работы с API RioPay."""
 
     def __init__(self):
         self._api_token: str | None = None
-        self._jwt_token: str | None = None
-        self._merchant_id: str | None = None
 
     @property
     def api_token(self) -> str:
@@ -33,27 +28,16 @@ class RioPayService:
         return self._api_token or ''
 
     @property
-    def jwt_token(self) -> str:
-        if self._jwt_token is None:
-            self._jwt_token = settings.RIOPAY_JWT_TOKEN
-        return self._jwt_token or ''
-
-    @property
-    def merchant_id(self) -> str | None:
-        if self._merchant_id is None:
-            self._merchant_id = settings.RIOPAY_MERCHANT_ID
-        return self._merchant_id
+    def webhook_secret(self) -> str:
+        """Ключ для HMAC-SHA512 верификации вебхуков. По умолчанию = api_token."""
+        return settings.RIOPAY_WEBHOOK_SECRET or self.api_token
 
     def _get_headers(self) -> dict[str, str]:
         """Формирует заголовки для API запросов."""
-        headers = {
-            'Authorization': f'Bearer {self.jwt_token}',
+        return {
             'x-api-token': self.api_token,
             'Content-Type': 'application/json',
         }
-        if self.merchant_id:
-            headers['x-merchant-id'] = self.merchant_id
-        return headers
 
     async def create_order(
         self,
@@ -73,7 +57,7 @@ class RioPayService:
             OrderData dict с полями id, status, paymentLink, amount, currency, etc.
         """
         payload: dict[str, Any] = {
-            'amount': amount,
+            'amount': str(amount),
             'currency': currency,
             'externalId': external_id,
             'purpose': purpose,
@@ -150,85 +134,15 @@ class RioPayService:
             logger.exception('RioPay API connection error', error=e)
             raise
 
-    async def get_public_key(self) -> str:
-        """
-        Получает публичный ключ для проверки подписи вебхуков.
-        GET /v1/orders/pubkey
-        Результат кэшируется.
-        """
-        global _cached_pubkey
-
-        if _cached_pubkey:
-            return _cached_pubkey
-
-        async with _pubkey_lock:
-            if _cached_pubkey:
-                return _cached_pubkey
-
-            try:
-                async with (
-                    aiohttp.ClientSession() as session,
-                    session.get(
-                        f'{API_BASE_URL}/v1/orders/pubkey',
-                        headers=self._get_headers(),
-                        timeout=aiohttp.ClientTimeout(total=15),
-                    ) as response,
-                ):
-                    if response.status == 200:
-                        pubkey = await response.text()
-                        _cached_pubkey = pubkey.strip()
-                        logger.info('RioPay: получен публичный ключ для верификации')
-                        return _cached_pubkey
-
-                    text = await response.text()
-                    logger.error('RioPay pubkey error', status_code=response.status, text=text)
-                    raise Exception(f'RioPay pubkey error ({response.status}): {text}')
-
-            except aiohttp.ClientError as e:
-                logger.exception('RioPay pubkey connection error', error=e)
-                raise
-
-    async def verify_webhook_signature(self, raw_body: bytes, signature: str) -> bool:
-        """
-        Проверяет подпись webhook через публичный ключ RSA/ECDSA.
-
-        Args:
-            raw_body: Сырое тело запроса (bytes)
-            signature: Подпись из заголовка (base64-encoded)
-
-        Returns:
-            True если подпись валидна
-        """
+    def verify_webhook_signature(self, raw_body: bytes, signature: str) -> bool:
+        """HMAC-SHA512 верификация подписи webhook."""
         try:
-            import base64
-
-            from cryptography.hazmat.primitives import hashes, serialization
-            from cryptography.hazmat.primitives.asymmetric import ec, padding, utils
-
-            pubkey_pem = await self.get_public_key()
-
-            public_key = serialization.load_pem_public_key(pubkey_pem.encode())
-            signature_bytes = base64.b64decode(signature)
-
-            # Определяем тип ключа и проверяем подпись
-            if hasattr(public_key, 'key_size'):
-                # RSA ключ
-                public_key.verify(
-                    signature_bytes,
-                    raw_body,
-                    padding.PKCS1v15(),
-                    hashes.SHA256(),
-                )
-            else:
-                # ECDSA ключ
-                public_key.verify(
-                    signature_bytes,
-                    raw_body,
-                    ec.ECDSA(hashes.SHA256()),
-                )
-
-            return True
-
+            expected = hmac.new(
+                self.webhook_secret.encode(),
+                raw_body,
+                hashlib.sha512,
+            ).hexdigest()
+            return hmac.compare_digest(expected, signature)
         except Exception as e:
             logger.error('RioPay webhook verify error', error=e)
             return False

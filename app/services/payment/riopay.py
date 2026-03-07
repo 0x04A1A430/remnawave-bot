@@ -172,11 +172,14 @@ class RioPayPaymentMixin:
             True если платеж успешно обработан
         """
         try:
-            # Проверка подписи (если есть)
-            if signature:
-                if not await riopay_service.verify_webhook_signature(raw_body, signature):
-                    logger.warning('RioPay webhook: неверная подпись')
-                    return False
+            # Проверка подписи (обязательна)
+            if not signature:
+                logger.warning('RioPay webhook: отсутствует подпись')
+                return False
+
+            if not riopay_service.verify_webhook_signature(raw_body, signature):
+                logger.warning('RioPay webhook: неверная подпись')
+                return False
 
             # Извлекаем данные из payload
             riopay_order_id = payload.get('id')
@@ -222,6 +225,7 @@ class RioPayPaymentMixin:
                 'status': riopay_status,
                 'amount': amount,
                 'payment_type': payload.get('paymentType'),
+                'included_fee': payload.get('includedFee'),
                 'raw_payload': payload,
             }
 

@@ -522,11 +522,10 @@ class Settings(BaseSettings):
     # Способ оплаты: 44 = СБП (QR код), 36 = Карты РФ, 43 = SberPay
     KASSA_AI_PAYMENT_SYSTEM_ID: int = 44
 
-    # RioPay (api.riopay.online)
+    # RioPay (api.riopay.online) v2.0.1
     RIOPAY_ENABLED: bool = False
     RIOPAY_API_TOKEN: str | None = None          # x-api-token header
-    RIOPAY_JWT_TOKEN: str | None = None          # Authorization: Bearer
-    RIOPAY_MERCHANT_ID: str | None = None        # x-merchant-id (опционально)
+    RIOPAY_WEBHOOK_SECRET: str | None = None     # HMAC-SHA512 ключ для вебхуков (по умолчанию = API_TOKEN)
     RIOPAY_DISPLAY_NAME: str = 'RioPay'
     RIOPAY_CURRENCY: str = 'RUB'
     RIOPAY_MIN_AMOUNT_KOPEKS: int = 10000        # 100₽
@@ -1813,7 +1812,6 @@ class Settings(BaseSettings):
         return (
             self.RIOPAY_ENABLED
             and self.RIOPAY_API_TOKEN is not None
-            and self.RIOPAY_JWT_TOKEN is not None
         )
 
     def get_riopay_display_name(self) -> str:

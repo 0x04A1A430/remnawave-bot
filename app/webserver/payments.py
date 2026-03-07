@@ -1131,8 +1131,23 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                 logger.error('RioPay webhook: не удалось прочитать JSON', parse_error=parse_error)
                 return Response('Error reading JSON', status_code=status.HTTP_400_BAD_REQUEST)
 
-            # Подпись из заголовка (X-Signature)
+            # Подпись из заголовка (обязательна)
             signature = request.headers.get('X-Signature') or request.headers.get('x-signature')
+            if not signature:
+                logger.warning('RioPay webhook: отсутствует подпись')
+                return JSONResponse(
+                    {'status': 'error', 'reason': 'missing_signature'},
+                    status_code=status.HTTP_403_FORBIDDEN,
+                )
+
+            from app.services.riopay_service import riopay_service
+
+            if not riopay_service.verify_webhook_signature(raw_body, signature):
+                logger.warning('RioPay webhook: неверная подпись')
+                return JSONResponse(
+                    {'status': 'error', 'reason': 'invalid_signature'},
+                    status_code=status.HTTP_403_FORBIDDEN,
+                )
 
             # Обрабатываем webhook
             db_generator = get_db()
