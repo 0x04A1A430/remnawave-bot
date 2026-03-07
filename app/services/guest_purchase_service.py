@@ -473,13 +473,14 @@ async def send_guest_notification(
     # Check DB override first, then fall back to hardcoded template
     template = None
     try:
-        from app.cabinet.services.email_template_overrides import get_template_override
+        from app.cabinet.services.email_template_overrides import get_rendered_override
 
-        override = await get_template_override(notification_type.value, language)
-        if override:
+        rendered = await get_rendered_override(notification_type.value, language, context)
+        if rendered:
+            subject, body_html = rendered
             template = {
-                'subject': override['subject'],
-                'body_html': templates._get_base_template(override['body_html'], language),
+                'subject': subject,
+                'body_html': body_html,
             }
     except Exception as e:
         logger.debug('Failed to check template override', e=e)
@@ -516,11 +517,16 @@ async def send_guest_notification(
     if purchase.cabinet_password and not purchase.is_gift:
         cred_template = None
         try:
-            cred_override = await get_template_override(NotificationType.GUEST_CABINET_CREDENTIALS.value, language)
-            if cred_override:
+            from app.cabinet.services.email_template_overrides import get_rendered_override
+
+            cred_rendered = await get_rendered_override(
+                NotificationType.GUEST_CABINET_CREDENTIALS.value, language, context
+            )
+            if cred_rendered:
+                cred_subject, cred_body = cred_rendered
                 cred_template = {
-                    'subject': cred_override['subject'],
-                    'body_html': templates._get_base_template(cred_override['body_html'], language),
+                    'subject': cred_subject,
+                    'body_html': cred_body,
                 }
         except Exception:
             pass

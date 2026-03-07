@@ -403,7 +403,6 @@ SAMPLE_CONTEXTS: dict[str, dict[str, Any]] = {
         'tariff_name': 'Premium',
         'period_days': 30,
         'cabinet_url': 'https://example.com/cabinet',
-        'is_existing_user': False,
     },
     'guest_activation_required': {
         'tariff_name': 'Premium',
