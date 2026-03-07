@@ -716,14 +716,13 @@ async def send_test_email(
     sample_context = SAMPLE_CONTEXTS.get(notification_type, {})
     templates_instance = EmailNotificationTemplates()
 
-    # Check for DB override
-    from ..services.email_template_overrides import get_template_override
+    # Check for DB override (get_rendered_override substitutes sample context vars)
+    from ..services.email_template_overrides import get_rendered_override
 
-    override = await get_template_override(notification_type, language, db)
+    rendered = await get_rendered_override(notification_type, language, sample_context, db)
 
-    if override:
-        subject = override['subject']
-        body_html = templates_instance._get_base_template(override['body_html'], language)
+    if rendered:
+        subject, body_html = rendered
     else:
         try:
             from app.services.notification_delivery_service import NotificationType
