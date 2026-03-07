@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 from urllib.parse import urlparse
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import and_, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -468,6 +468,29 @@ class LandingStatsResponse(BaseModel):
     tariff_stats: list[LandingTariffStat]
 
 
+class LandingPurchaseItem(BaseModel):
+    id: int
+    token: str
+    contact_type: str
+    contact_value: str
+    is_gift: bool
+    gift_recipient_type: str | None = None
+    gift_recipient_value: str | None = None
+    tariff_name: str | None = None
+    period_days: int
+    amount_kopeks: int
+    currency: str
+    payment_method: str | None = None
+    status: str
+    created_at: datetime | None = None
+    paid_at: datetime | None = None
+
+
+class LandingPurchaseListResponse(BaseModel):
+    items: list[LandingPurchaseItem]
+    total: int
+
+
 # ============ Routes ============
 
 # IMPORTANT: /order MUST come before /{landing_id} to avoid "order" being
@@ -741,9 +764,9 @@ async def get_landing_stats(
             func.coalesce(func.sum(case((is_successful, GuestPurchase.amount_kopeks))), 0).label(
                 'total_revenue_kopeks'
             ),
-            func.count(
-                case((and_(is_successful, GuestPurchase.is_gift.is_(True)), GuestPurchase.id))
-            ).label('total_gifts'),
+            func.count(case((and_(is_successful, GuestPurchase.is_gift.is_(True)), GuestPurchase.id))).label(
+                'total_gifts'
+            ),
         ).where(GuestPurchase.landing_id == landing_id)
     )
     row = summary_result.one()
@@ -840,6 +863,89 @@ async def get_landing_stats(
         daily_stats=daily_stats,
         tariff_stats=tariff_stats,
     )
+
+
+_PURCHASE_LIST_MAX_LIMIT = 100
+_PURCHASE_LIST_DEFAULT_LIMIT = 20
+_PURCHASE_TOKEN_VISIBLE_CHARS = 8
+
+
+@router.get('/{landing_id}/purchases', response_model=LandingPurchaseListResponse)
+async def get_landing_purchases(
+    landing_id: int,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=_PURCHASE_LIST_DEFAULT_LIMIT, ge=1, le=_PURCHASE_LIST_MAX_LIMIT),
+    status_filter: GuestPurchaseStatus | None = Query(default=None, alias='status'),
+    admin: User = Depends(require_permission('landings:read')),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> LandingPurchaseListResponse:
+    """Get paginated list of purchases for a landing page."""
+    landing = await get_landing_by_id(db, landing_id)
+    if landing is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='Landing page not found',
+        )
+
+    # Base filter conditions
+    conditions = [GuestPurchase.landing_id == landing_id]
+    if status_filter is not None:
+        conditions.append(GuestPurchase.status == status_filter.value)
+
+    where_clause = and_(*conditions)
+
+    # Total count
+    count_result = await db.execute(select(func.count(GuestPurchase.id)).select_from(GuestPurchase).where(where_clause))
+    total: int = count_result.scalar_one()
+
+    # Fetch page with tariff name join
+    items_result = await db.execute(
+        select(
+            GuestPurchase.id,
+            GuestPurchase.token,
+            GuestPurchase.contact_type,
+            GuestPurchase.contact_value,
+            GuestPurchase.is_gift,
+            GuestPurchase.gift_recipient_type,
+            GuestPurchase.gift_recipient_value,
+            func.coalesce(Tariff.name, 'Unknown').label('tariff_name'),
+            GuestPurchase.period_days,
+            GuestPurchase.amount_kopeks,
+            GuestPurchase.currency,
+            GuestPurchase.payment_method,
+            GuestPurchase.status,
+            GuestPurchase.created_at,
+            GuestPurchase.paid_at,
+        )
+        .outerjoin(Tariff, GuestPurchase.tariff_id == Tariff.id)
+        .where(where_clause)
+        .order_by(GuestPurchase.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+
+    items = [
+        LandingPurchaseItem(
+            id=row.id,
+            token=(row.token[:_PURCHASE_TOKEN_VISIBLE_CHARS] + '...') if row.token else '???',
+            contact_type=row.contact_type,
+            contact_value=row.contact_value,
+            is_gift=row.is_gift,
+            gift_recipient_type=row.gift_recipient_type,
+            gift_recipient_value=row.gift_recipient_value,
+            tariff_name=row.tariff_name,
+            period_days=row.period_days,
+            amount_kopeks=row.amount_kopeks,
+            currency=row.currency,
+            payment_method=row.payment_method,
+            status=row.status,
+            created_at=row.created_at,
+            paid_at=row.paid_at,
+        )
+        for row in items_result.all()
+    ]
+
+    return LandingPurchaseListResponse(items=items, total=total)
 
 
 # ============ Helpers ============
