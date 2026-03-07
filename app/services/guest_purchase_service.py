@@ -272,7 +272,7 @@ async def fulfill_purchase(db: AsyncSession, purchase_token: str) -> GuestPurcha
                 duration_days=purchase.period_days,
                 traffic_limit_gb=tariff.traffic_limit_gb,
                 device_limit=tariff.device_limit,
-                connected_squads=tariff.allowed_squads,
+                connected_squads=tariff.allowed_squads or [],
                 tariff_id=tariff.id,
                 update_server_counters=True,
             )
