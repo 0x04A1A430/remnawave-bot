@@ -214,9 +214,10 @@ async def fulfill_purchase(db: AsyncSession, purchase_token: str) -> GuestPurcha
             await db.commit()
             return purchase
 
-        # Check if user already has an active subscription — hold for manual activation
+        # Check if user already has a subscription
         existing_subscription = await get_subscription_by_user_id(db, user.id)
         if existing_subscription is not None and existing_subscription.is_active:
+            # Active subscription — hold for manual activation
             purchase.status = GuestPurchaseStatus.PENDING_ACTIVATION.value
             purchase.user_id = user.id
             if recipient_type == 'email' and not purchase.is_gift:
@@ -250,16 +251,31 @@ async def fulfill_purchase(db: AsyncSession, purchase_token: str) -> GuestPurcha
             )
             return purchase
 
-        subscription = await create_paid_subscription(
-            db=db,
-            user_id=user.id,
-            duration_days=purchase.period_days,
-            traffic_limit_gb=tariff.traffic_limit_gb,
-            device_limit=tariff.device_limit,
-            connected_squads=tariff.allowed_squads,
-            tariff_id=tariff.id,
-            update_server_counters=True,
-        )
+        if existing_subscription is not None:
+            # Expired/inactive subscription — replace it
+            existing_subscription.tariff_id = tariff.id
+            subscription = await replace_subscription(
+                db,
+                existing_subscription,
+                duration_days=purchase.period_days,
+                traffic_limit_gb=tariff.traffic_limit_gb,
+                device_limit=tariff.device_limit or settings.DEFAULT_DEVICE_LIMIT,
+                connected_squads=tariff.allowed_squads or [],
+                is_trial=False,
+                update_server_counters=True,
+            )
+        else:
+            # No subscription at all — create new
+            subscription = await create_paid_subscription(
+                db=db,
+                user_id=user.id,
+                duration_days=purchase.period_days,
+                traffic_limit_gb=tariff.traffic_limit_gb,
+                device_limit=tariff.device_limit,
+                connected_squads=tariff.allowed_squads,
+                tariff_id=tariff.id,
+                update_server_counters=True,
+            )
 
         subscription_service = SubscriptionService()
         await subscription_service.create_remnawave_user(db, subscription)
