@@ -12,7 +12,9 @@ class TelegramAuthRequest(BaseModel):
     campaign_slug: str | None = Field(
         None, min_length=1, max_length=64, pattern=r'^[a-zA-Z0-9_-]+$', description='Campaign slug from web link'
     )
-    referral_code: str | None = Field(None, max_length=32, description='Referral code of inviter')
+    referral_code: str | None = Field(
+        None, max_length=32, pattern=r'^[a-zA-Z0-9_-]+$', description='Referral code of inviter'
+    )
 
 
 class TelegramWidgetAuthRequest(BaseModel):
@@ -28,7 +30,9 @@ class TelegramWidgetAuthRequest(BaseModel):
     campaign_slug: str | None = Field(
         None, min_length=1, max_length=64, pattern=r'^[a-zA-Z0-9_-]+$', description='Campaign slug from web link'
     )
-    referral_code: str | None = Field(None, max_length=32, description='Referral code of inviter')
+    referral_code: str | None = Field(
+        None, max_length=32, pattern=r'^[a-zA-Z0-9_-]+$', description='Referral code of inviter'
+    )
 
 
 class TelegramOIDCAuthRequest(BaseModel):
@@ -131,7 +135,9 @@ class EmailRegisterStandaloneRequest(BaseModel):
     password: str = Field(..., min_length=8, max_length=128, description='Password (min 8 chars)')
     first_name: str | None = Field(None, max_length=64, description='First name')
     language: str = Field('ru', description='Preferred language')
-    referral_code: str | None = Field(None, max_length=32, description='Referral code of inviter')
+    referral_code: str | None = Field(
+        None, max_length=32, pattern=r'^[a-zA-Z0-9_-]+$', description='Referral code of inviter'
+    )
 
 
 class CampaignBonusInfo(BaseModel):

@@ -1041,12 +1041,21 @@ async def resend_verification(
 @router.post('/email/login', response_model=AuthResponse)
 async def login_email(
     request: EmailLoginRequest,
+    raw_request: Request,
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Login with email and password.
 
     Test email accounts (configured via TEST_EMAIL) bypass email verification.
     """
+    client_ip = get_client_ip(raw_request)
+    if await RateLimitCache.is_ip_rate_limited(client_ip, 'email_login', limit=10, window=60, fail_closed=True):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail='Too many requests',
+            headers={'Retry-After': '60'},
+        )
+
     # Check if this is a test email login
     is_test_email = settings.is_test_email(request.email)
 
@@ -1215,7 +1224,11 @@ async def auto_login(
     """Auto-login using a short-lived JWT from guest purchase success page."""
     client_ip = get_client_ip(raw_request)
     if await RateLimitCache.is_ip_rate_limited(client_ip, 'auto_login', limit=5, window=60, fail_closed=True):
-        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail='Too many requests')
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail='Too many requests',
+            headers={'Retry-After': '60'},
+        )
 
     payload = get_token_payload(request.token, expected_type='auto_login')
     if not payload:
