@@ -75,6 +75,7 @@ _LANDING_UPDATABLE_FIELDS = frozenset(
         'discount_starts_at',
         'discount_ends_at',
         'discount_badge_text',
+        'background_config',
     }
 )
 

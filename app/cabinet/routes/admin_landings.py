@@ -26,6 +26,7 @@ from app.database.crud.landing import (
 from app.database.models import GuestPurchase, GuestPurchaseStatus, LandingPage, Tariff, User
 
 from ..dependencies import get_cabinet_db, require_permission
+from .branding import ALLOWED_BG_TYPES, _validate_settings
 
 
 logger = structlog.get_logger(__name__)
@@ -47,6 +48,36 @@ _RESERVED_SLUGS = frozenset(
         'well-known',
     }
 )
+
+
+_ALLOWED_BG_CONFIG_KEYS = frozenset({'enabled', 'type', 'settings', 'opacity', 'blur', 'reducedOnMobile'})
+
+
+def _validate_background_config(v: dict | None) -> dict | None:
+    """Validate and sanitize background_config, reusing branding constraints."""
+    if v is None:
+        return None
+    if not isinstance(v.get('enabled'), bool):
+        raise ValueError('background_config.enabled must be a boolean')
+    bg_type = v.get('type')
+    if not isinstance(bg_type, str) or bg_type not in ALLOWED_BG_TYPES:
+        raise ValueError(f'background_config.type must be one of: {", ".join(ALLOWED_BG_TYPES)}')
+    if 'settings' in v:
+        if not isinstance(v['settings'], dict):
+            raise ValueError('background_config.settings must be a dict')
+        _validate_settings(v['settings'])
+    if 'opacity' in v:
+        opacity = v['opacity']
+        if not isinstance(opacity, int | float) or not (0 <= opacity <= 1):
+            raise ValueError('background_config.opacity must be 0-1')
+    if 'blur' in v:
+        blur = v['blur']
+        if not isinstance(blur, int | float) or not (0 <= blur <= 100):
+            raise ValueError('background_config.blur must be 0-100')
+    if 'reducedOnMobile' in v and not isinstance(v['reducedOnMobile'], bool):
+        raise ValueError('background_config.reducedOnMobile must be a boolean')
+    # Strip unknown keys
+    return {k: val for k, val in v.items() if k in _ALLOWED_BG_CONFIG_KEYS}
 
 
 # ============ Schemas ============
@@ -173,6 +204,12 @@ class LandingCreateRequest(BaseModel):
     discount_starts_at: datetime | None = None
     discount_ends_at: datetime | None = None
     discount_badge_text: dict[str, str] | None = None
+    background_config: dict | None = None
+
+    @field_validator('background_config')
+    @classmethod
+    def validate_background_config(cls, v: dict | None) -> dict | None:
+        return _validate_background_config(v)
 
     @field_validator(
         'title', 'subtitle', 'footer_text', 'meta_title', 'meta_description', 'discount_badge_text', mode='before'
@@ -276,6 +313,12 @@ class LandingUpdateRequest(BaseModel):
     discount_starts_at: datetime | None = None
     discount_ends_at: datetime | None = None
     discount_badge_text: dict[str, str] | None = None
+    background_config: dict | None = None
+
+    @field_validator('background_config')
+    @classmethod
+    def validate_background_config(cls, v: dict | None) -> dict | None:
+        return _validate_background_config(v)
 
     @field_validator('allowed_periods')
     @classmethod
@@ -417,6 +460,7 @@ class LandingDetailResponse(BaseModel):
     discount_starts_at: datetime | None = None
     discount_ends_at: datetime | None = None
     discount_badge_text: dict[str, str] | None = None
+    background_config: dict | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -592,6 +636,7 @@ async def create_landing_page(
         discount_starts_at=request.discount_starts_at,
         discount_ends_at=request.discount_ends_at,
         discount_badge_text=request.discount_badge_text,
+        background_config=request.background_config,
     )
 
     logger.info('Admin created landing page', admin_id=admin.id, slug=landing.slug, landing_id=landing.id)
@@ -1002,6 +1047,7 @@ def _landing_to_detail(landing: LandingPage) -> LandingDetailResponse:
         discount_starts_at=landing.discount_starts_at,
         discount_ends_at=landing.discount_ends_at,
         discount_badge_text=landing.discount_badge_text,
+        background_config=landing.background_config,
         created_at=landing.created_at,
         updated_at=landing.updated_at,
     )
