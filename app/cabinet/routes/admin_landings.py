@@ -1,11 +1,12 @@
 """Admin routes for landing page management in cabinet."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from urllib.parse import urlparse
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, field_validator, model_validator
+from sqlalchemy import and_, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cabinet.utils.locale import (
@@ -22,9 +23,10 @@ from app.database.crud.landing import (
     update_landing,
     update_landing_order,
 )
-from app.database.models import LandingPage, User
+from app.database.models import GuestPurchase, GuestPurchaseStatus, LandingPage, Tariff, User
 
 from ..dependencies import get_cabinet_db, require_permission
+from .branding import ALLOWED_BG_TYPES, _validate_settings
 
 
 logger = structlog.get_logger(__name__)
@@ -46,6 +48,36 @@ _RESERVED_SLUGS = frozenset(
         'well-known',
     }
 )
+
+
+_ALLOWED_BG_CONFIG_KEYS = frozenset({'enabled', 'type', 'settings', 'opacity', 'blur', 'reducedOnMobile'})
+
+
+def _validate_background_config(v: dict | None) -> dict | None:
+    """Validate and sanitize background_config, reusing branding constraints."""
+    if v is None:
+        return None
+    if not isinstance(v.get('enabled'), bool):
+        raise ValueError('background_config.enabled must be a boolean')
+    bg_type = v.get('type')
+    if not isinstance(bg_type, str) or bg_type not in ALLOWED_BG_TYPES:
+        raise ValueError(f'background_config.type must be one of: {", ".join(ALLOWED_BG_TYPES)}')
+    if 'settings' in v:
+        if not isinstance(v['settings'], dict):
+            raise ValueError('background_config.settings must be a dict')
+        _validate_settings(v['settings'])
+    if 'opacity' in v:
+        opacity = v['opacity']
+        if not isinstance(opacity, int | float) or not (0 <= opacity <= 1):
+            raise ValueError('background_config.opacity must be 0-1')
+    if 'blur' in v:
+        blur = v['blur']
+        if not isinstance(blur, int | float) or not (0 <= blur <= 100):
+            raise ValueError('background_config.blur must be 0-100')
+    if 'reducedOnMobile' in v and not isinstance(v['reducedOnMobile'], bool):
+        raise ValueError('background_config.reducedOnMobile must be a boolean')
+    # Strip unknown keys
+    return {k: val for k, val in v.items() if k in _ALLOWED_BG_CONFIG_KEYS}
 
 
 # ============ Schemas ============
@@ -172,6 +204,12 @@ class LandingCreateRequest(BaseModel):
     discount_starts_at: datetime | None = None
     discount_ends_at: datetime | None = None
     discount_badge_text: dict[str, str] | None = None
+    background_config: dict | None = None
+
+    @field_validator('background_config')
+    @classmethod
+    def validate_background_config(cls, v: dict | None) -> dict | None:
+        return _validate_background_config(v)
 
     @field_validator(
         'title', 'subtitle', 'footer_text', 'meta_title', 'meta_description', 'discount_badge_text', mode='before'
@@ -275,6 +313,12 @@ class LandingUpdateRequest(BaseModel):
     discount_starts_at: datetime | None = None
     discount_ends_at: datetime | None = None
     discount_badge_text: dict[str, str] | None = None
+    background_config: dict | None = None
+
+    @field_validator('background_config')
+    @classmethod
+    def validate_background_config(cls, v: dict | None) -> dict | None:
+        return _validate_background_config(v)
 
     @field_validator('allowed_periods')
     @classmethod
@@ -416,6 +460,7 @@ class LandingDetailResponse(BaseModel):
     discount_starts_at: datetime | None = None
     discount_ends_at: datetime | None = None
     discount_badge_text: dict[str, str] | None = None
+    background_config: dict | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -434,6 +479,60 @@ class LandingDetailResponse(BaseModel):
 
 class OrderRequest(BaseModel):
     landing_ids: list[int]
+
+
+class LandingDailyStat(BaseModel):
+    date: str  # YYYY-MM-DD
+    purchases: int
+    revenue_kopeks: int
+    gifts: int
+
+
+class LandingTariffStat(BaseModel):
+    tariff_id: int | None
+    tariff_name: str
+    purchases: int
+    revenue_kopeks: int
+
+
+class LandingStatsResponse(BaseModel):
+    # Summary
+    total_purchases: int
+    total_revenue_kopeks: int
+    total_gifts: int
+    total_regular: int
+    avg_purchase_kopeks: int
+    # Conversion: created -> paid/delivered
+    total_created: int
+    total_successful: int  # paid + delivered + pending_activation
+    conversion_rate: float  # percent
+    # Daily chart data (last 30 days)
+    daily_stats: list[LandingDailyStat]
+    # Tariff breakdown
+    tariff_stats: list[LandingTariffStat]
+
+
+class LandingPurchaseItem(BaseModel):
+    id: int
+    token: str
+    contact_type: str
+    contact_value: str
+    is_gift: bool
+    gift_recipient_type: str | None = None
+    gift_recipient_value: str | None = None
+    tariff_name: str | None = None
+    period_days: int
+    amount_kopeks: int
+    currency: str
+    payment_method: str | None = None
+    status: str
+    created_at: datetime | None = None
+    paid_at: datetime | None = None
+
+
+class LandingPurchaseListResponse(BaseModel):
+    items: list[LandingPurchaseItem]
+    total: int
 
 
 # ============ Routes ============
@@ -537,6 +636,7 @@ async def create_landing_page(
         discount_starts_at=request.discount_starts_at,
         discount_ends_at=request.discount_ends_at,
         discount_badge_text=request.discount_badge_text,
+        background_config=request.background_config,
     )
 
     logger.info('Admin created landing page', admin_id=admin.id, slug=landing.slug, landing_id=landing.id)
@@ -677,6 +777,222 @@ async def toggle_landing_active(
     return _landing_to_detail(landing)
 
 
+_SUCCESSFUL_STATUSES = (
+    GuestPurchaseStatus.PAID.value,
+    GuestPurchaseStatus.DELIVERED.value,
+    GuestPurchaseStatus.PENDING_ACTIVATION.value,
+)
+
+_STATS_PERIOD_DAYS = 30
+
+
+@router.get('/{landing_id}/stats', response_model=LandingStatsResponse)
+async def get_landing_stats(
+    landing_id: int,
+    admin: User = Depends(require_permission('landings:read')),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> LandingStatsResponse:
+    """Get daily statistics and tariff breakdown for a landing page."""
+    landing = await get_landing_by_id(db, landing_id)
+    if landing is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='Landing page not found',
+        )
+
+    # -- Summary stats (single query) --
+    is_successful = GuestPurchase.status.in_(_SUCCESSFUL_STATUSES)
+    summary_result = await db.execute(
+        select(
+            func.count(GuestPurchase.id).label('total_created'),
+            func.count(case((is_successful, GuestPurchase.id))).label('total_successful'),
+            func.coalesce(func.sum(case((is_successful, GuestPurchase.amount_kopeks))), 0).label(
+                'total_revenue_kopeks'
+            ),
+            func.count(case((and_(is_successful, GuestPurchase.is_gift.is_(True)), GuestPurchase.id))).label(
+                'total_gifts'
+            ),
+        ).where(GuestPurchase.landing_id == landing_id)
+    )
+    row = summary_result.one()
+    total_created: int = row.total_created
+    total_successful: int = row.total_successful
+    total_revenue_kopeks: int = row.total_revenue_kopeks
+    total_gifts: int = row.total_gifts
+    total_regular = total_successful - total_gifts
+    avg_purchase_kopeks = total_revenue_kopeks // total_successful if total_successful > 0 else 0
+    conversion_rate = round(total_successful / total_created * 100, 1) if total_created > 0 else 0.0
+
+    # -- Daily stats for last N days --
+    now = datetime.now(UTC)
+    cutoff = now - timedelta(days=_STATS_PERIOD_DAYS)
+    day_at_utc = func.date(func.timezone('UTC', GuestPurchase.paid_at))
+    daily_result = await db.execute(
+        select(
+            day_at_utc.label('day'),
+            func.count(GuestPurchase.id).label('purchases'),
+            func.coalesce(func.sum(GuestPurchase.amount_kopeks), 0).label('revenue_kopeks'),
+            func.count(case((GuestPurchase.is_gift.is_(True), GuestPurchase.id))).label('gifts'),
+        )
+        .where(
+            GuestPurchase.landing_id == landing_id,
+            is_successful,
+            GuestPurchase.paid_at >= cutoff,
+        )
+        .group_by(day_at_utc)
+        .order_by(day_at_utc)
+    )
+    daily_rows = {str(r.day): r for r in daily_result.all()}
+
+    # Fill missing days with zeros
+    today = now.date()
+    daily_stats: list[LandingDailyStat] = []
+    for i in range(_STATS_PERIOD_DAYS, -1, -1):
+        day = today - timedelta(days=i)
+        day_str = day.isoformat()
+        if day_str in daily_rows:
+            r = daily_rows[day_str]
+            daily_stats.append(
+                LandingDailyStat(
+                    date=day_str,
+                    purchases=r.purchases,
+                    revenue_kopeks=r.revenue_kopeks,
+                    gifts=r.gifts,
+                )
+            )
+        else:
+            daily_stats.append(
+                LandingDailyStat(
+                    date=day_str,
+                    purchases=0,
+                    revenue_kopeks=0,
+                    gifts=0,
+                )
+            )
+
+    # -- Tariff breakdown --
+    tariff_result = await db.execute(
+        select(
+            GuestPurchase.tariff_id,
+            func.coalesce(Tariff.name, 'Unknown').label('tariff_name'),
+            func.count(GuestPurchase.id).label('purchases'),
+            func.coalesce(func.sum(GuestPurchase.amount_kopeks), 0).label('revenue_kopeks'),
+        )
+        .outerjoin(Tariff, GuestPurchase.tariff_id == Tariff.id)
+        .where(
+            GuestPurchase.landing_id == landing_id,
+            is_successful,
+        )
+        .group_by(GuestPurchase.tariff_id, Tariff.name)
+        .order_by(func.coalesce(func.sum(GuestPurchase.amount_kopeks), 0).desc())
+    )
+    tariff_stats = [
+        LandingTariffStat(
+            tariff_id=r.tariff_id,
+            tariff_name=r.tariff_name,
+            purchases=r.purchases,
+            revenue_kopeks=r.revenue_kopeks,
+        )
+        for r in tariff_result.all()
+    ]
+
+    return LandingStatsResponse(
+        total_purchases=total_successful,
+        total_revenue_kopeks=total_revenue_kopeks,
+        total_gifts=total_gifts,
+        total_regular=total_regular,
+        avg_purchase_kopeks=avg_purchase_kopeks,
+        total_created=total_created,
+        total_successful=total_successful,
+        conversion_rate=conversion_rate,
+        daily_stats=daily_stats,
+        tariff_stats=tariff_stats,
+    )
+
+
+_PURCHASE_LIST_MAX_LIMIT = 100
+_PURCHASE_LIST_DEFAULT_LIMIT = 20
+_PURCHASE_TOKEN_VISIBLE_CHARS = 8
+
+
+@router.get('/{landing_id}/purchases', response_model=LandingPurchaseListResponse)
+async def get_landing_purchases(
+    landing_id: int,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=_PURCHASE_LIST_DEFAULT_LIMIT, ge=1, le=_PURCHASE_LIST_MAX_LIMIT),
+    status_filter: GuestPurchaseStatus | None = Query(default=None, alias='status'),
+    admin: User = Depends(require_permission('landings:read')),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> LandingPurchaseListResponse:
+    """Get paginated list of purchases for a landing page."""
+    landing = await get_landing_by_id(db, landing_id)
+    if landing is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='Landing page not found',
+        )
+
+    # Base filter conditions
+    conditions = [GuestPurchase.landing_id == landing_id]
+    if status_filter is not None:
+        conditions.append(GuestPurchase.status == status_filter.value)
+
+    where_clause = and_(*conditions)
+
+    # Total count
+    count_result = await db.execute(select(func.count(GuestPurchase.id)).select_from(GuestPurchase).where(where_clause))
+    total: int = count_result.scalar_one()
+
+    # Fetch page with tariff name join
+    items_result = await db.execute(
+        select(
+            GuestPurchase.id,
+            GuestPurchase.token,
+            GuestPurchase.contact_type,
+            GuestPurchase.contact_value,
+            GuestPurchase.is_gift,
+            GuestPurchase.gift_recipient_type,
+            GuestPurchase.gift_recipient_value,
+            func.coalesce(Tariff.name, 'Unknown').label('tariff_name'),
+            GuestPurchase.period_days,
+            GuestPurchase.amount_kopeks,
+            GuestPurchase.currency,
+            GuestPurchase.payment_method,
+            GuestPurchase.status,
+            GuestPurchase.created_at,
+            GuestPurchase.paid_at,
+        )
+        .outerjoin(Tariff, GuestPurchase.tariff_id == Tariff.id)
+        .where(where_clause)
+        .order_by(GuestPurchase.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+
+    items = [
+        LandingPurchaseItem(
+            id=row.id,
+            token=(row.token[:_PURCHASE_TOKEN_VISIBLE_CHARS] + '...') if row.token else '???',
+            contact_type=row.contact_type,
+            contact_value=row.contact_value,
+            is_gift=row.is_gift,
+            gift_recipient_type=row.gift_recipient_type,
+            gift_recipient_value=row.gift_recipient_value,
+            tariff_name=row.tariff_name,
+            period_days=row.period_days,
+            amount_kopeks=row.amount_kopeks,
+            currency=row.currency,
+            payment_method=row.payment_method,
+            status=row.status,
+            created_at=row.created_at,
+            paid_at=row.paid_at,
+        )
+        for row in items_result.all()
+    ]
+
+    return LandingPurchaseListResponse(items=items, total=total)
+
+
 # ============ Helpers ============
 
 
@@ -731,6 +1047,7 @@ def _landing_to_detail(landing: LandingPage) -> LandingDetailResponse:
         discount_starts_at=landing.discount_starts_at,
         discount_ends_at=landing.discount_ends_at,
         discount_badge_text=landing.discount_badge_text,
+        background_config=landing.background_config,
         created_at=landing.created_at,
         updated_at=landing.updated_at,
     )

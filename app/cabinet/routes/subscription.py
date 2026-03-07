@@ -1832,11 +1832,11 @@ async def submit_purchase(
                     user=user,
                     notification_type=notification_type,
                     context={
-                        'subscription': subscription,
                         'expires_at': end_date_str,  # for SUBSCRIPTION_ACTIVATED
                         'new_expires_at': end_date_str,  # for SUBSCRIPTION_RENEWED
                         'traffic_limit_gb': subscription.traffic_limit_gb,
                         'device_limit': subscription.device_limit,
+                        'tariff_name': '',  # classic mode has no tariff
                     },
                     bot=None,
                 )
@@ -2282,7 +2282,6 @@ async def purchase_tariff(
                     user=user,
                     notification_type=notification_type,
                     context={
-                        'subscription': subscription,
                         'expires_at': end_date_str,  # for SUBSCRIPTION_ACTIVATED
                         'new_expires_at': end_date_str,  # for SUBSCRIPTION_RENEWED
                         'traffic_limit_gb': subscription.traffic_limit_gb,

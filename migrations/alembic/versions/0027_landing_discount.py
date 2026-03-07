@@ -17,7 +17,16 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def _has_column(table: str, column: str) -> bool:
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    return column in [c['name'] for c in inspector.get_columns(table)]
+
+
 def upgrade() -> None:
+    if _has_column('landing_pages', 'discount_percent'):
+        return
+
     op.add_column('landing_pages', sa.Column('discount_percent', sa.Integer(), nullable=True))
     op.add_column('landing_pages', sa.Column('discount_overrides', sa.JSON(), nullable=True))
     op.add_column(

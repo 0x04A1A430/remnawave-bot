@@ -98,6 +98,7 @@ class LandingConfigResponse(BaseModel):
     meta_title: str | None = None
     meta_description: str | None = None
     discount: LandingDiscountInfo | None = None  # null if no active discount
+    background_config: dict | None = None
 
 
 _EMAIL_RE = re.compile(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$')
@@ -517,6 +518,7 @@ async def get_landing_config(
         meta_title=resolve_locale_text(landing.meta_title, lang) or None,
         meta_description=resolve_locale_text(landing.meta_description, lang) or None,
         discount=discount,
+        background_config=landing.background_config,
     )
 
 

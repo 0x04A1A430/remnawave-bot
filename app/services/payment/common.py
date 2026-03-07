@@ -342,16 +342,23 @@ async def send_cart_notification_after_topup(
 
     # Build message based on whether balance is sufficient
     fmt = settings.format_price
+    cart_total_formatted = fmt(cart_total)
     if balance >= cart_total:
         template = texts.get('BALANCE_TOPPED_UP_CART_SUFFICIENT', '')
-        message_text = template.format(amount=fmt(amount_kopeks), balance=fmt(balance), cart_total=fmt(cart_total))
+        message_text = template.format(
+            amount=fmt(amount_kopeks),
+            balance=fmt(balance),
+            cart_total=cart_total_formatted,
+            total_amount=cart_total_formatted,
+        )
     else:
         missing = cart_total - balance
         template = texts.get('BALANCE_TOPPED_UP_CART_INSUFFICIENT', '')
         message_text = template.format(
             amount=fmt(amount_kopeks),
             balance=fmt(balance),
-            cart_total=fmt(cart_total),
+            cart_total=cart_total_formatted,
+            total_amount=cart_total_formatted,
             missing=fmt(missing),
         )
 
