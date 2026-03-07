@@ -18,7 +18,7 @@ logger = structlog.get_logger(__name__)
 async def create_cloudpayments_payment(
     db: AsyncSession,
     *,
-    user_id: int,
+    user_id: int | None,
     invoice_id: str,
     amount_kopeks: int,
     description: str | None = None,

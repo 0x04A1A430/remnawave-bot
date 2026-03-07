@@ -22,11 +22,12 @@ class HeleketPaymentMixin:
     async def create_heleket_payment(
         self,
         db: AsyncSession,
-        user_id: int,
+        user_id: int | None,
         amount_kopeks: int,
         description: str,
         *,
         language: str | None = None,
+        return_url: str | None = None,
     ) -> dict[str, Any] | None:
         if not getattr(self, 'heleket_service', None):
             logger.error('Heleket сервис не инициализирован')
@@ -39,7 +40,7 @@ class HeleketPaymentMixin:
         amount_rubles = amount_kopeks / 100
         amount_str = f'{amount_rubles:.2f}'
 
-        order_id = f'heleket_{user_id}_{int(time.time())}_{secrets.token_hex(3)}'
+        order_id = f'heleket_{user_id or "guest"}_{int(time.time())}_{secrets.token_hex(3)}'
 
         markup_percent = settings.get_heleket_markup_percent()
         discount_percent: int | None = None
@@ -70,10 +71,12 @@ class HeleketPaymentMixin:
         if callback_url:
             payload['url_callback'] = callback_url
 
-        if settings.HELEKET_RETURN_URL:
-            payload['url_return'] = settings.HELEKET_RETURN_URL
-        if settings.HELEKET_SUCCESS_URL:
-            payload['url_success'] = settings.HELEKET_SUCCESS_URL
+        effective_return = return_url or settings.HELEKET_RETURN_URL
+        effective_success = return_url or settings.HELEKET_SUCCESS_URL
+        if effective_return:
+            payload['url_return'] = effective_return
+        if effective_success:
+            payload['url_success'] = effective_success
 
         if discount_percent is not None:
             payload['discount_percent'] = discount_percent
@@ -301,6 +304,21 @@ class HeleketPaymentMixin:
                 'Heleket платеж имеет некорректную сумму', uuid=updated_payment.uuid, amount=updated_payment.amount
             )
             return None
+
+        # --- Guest purchase flow (landing page) ---
+        # Re-read metadata from the locked row to avoid stale data
+        locked_metadata = dict(getattr(updated_payment, 'metadata_json', {}) or {})
+        from app.services.payment.common import try_fulfill_guest_purchase
+
+        guest_result = await try_fulfill_guest_purchase(
+            db,
+            metadata=locked_metadata,
+            payment_amount_kopeks=amount_kopeks,
+            provider_payment_id=updated_payment.uuid,
+            provider_name='heleket',
+        )
+        if guest_result is not None:
+            return updated_payment
 
         transaction = await payment_module.create_transaction(
             db,

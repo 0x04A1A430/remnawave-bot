@@ -78,6 +78,7 @@ PERMISSION_REGISTRY: dict[str, list[str]] = {
     'apps': ['read', 'edit'],
     'email_templates': ['read', 'edit'],
     'pinned_messages': ['read', 'create', 'edit', 'delete'],
+    'landings': ['read', 'create', 'edit', 'delete'],
     'updates': ['read', 'manage'],
 }
 

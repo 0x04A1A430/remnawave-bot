@@ -439,6 +439,7 @@ class RemnaWaveAPI:
         description: str | None = None,
         tag: str | None = None,
         active_internal_squads: list[str] | None = None,
+        external_squad_uuid: str | None = None,
     ) -> RemnaWaveUser:
         data = {
             'username': username,
@@ -460,6 +461,8 @@ class RemnaWaveAPI:
             data['tag'] = tag
         if active_internal_squads:
             data['activeInternalSquads'] = active_internal_squads
+        if external_squad_uuid is not None:
+            data['externalSquadUuid'] = external_squad_uuid
 
         logger.info(
             'POST /api/users payload',
@@ -539,6 +542,7 @@ class RemnaWaveAPI:
         description: str | None = None,
         tag: str | None = None,
         active_internal_squads: list[str] | None = None,
+        external_squad_uuid: str | None | type(...) = ...,
     ) -> RemnaWaveUser:
         data = {'uuid': uuid}
 
@@ -562,6 +566,8 @@ class RemnaWaveAPI:
             data['tag'] = tag
         if active_internal_squads is not None:
             data['activeInternalSquads'] = active_internal_squads
+        if external_squad_uuid is not ...:
+            data['externalSquadUuid'] = external_squad_uuid
 
         logger.info(
             'PATCH /api/users payload',

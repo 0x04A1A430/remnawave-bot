@@ -55,7 +55,7 @@ class CryptoBotPaymentMixin:
     async def create_cryptobot_payment(
         self,
         db: AsyncSession,
-        user_id: int,
+        user_id: int | None,
         amount_usd: float,
         asset: str = 'USDT',
         description: str = 'Пополнение баланса',
@@ -200,6 +200,38 @@ class CryptoBotPaymentMixin:
                 logger.error('CryptoBot: не удалось заблокировать платёж', payment_id=updated_payment.id)
                 return False
             updated_payment = locked
+
+            # --- Guest purchase flow (landing page) ---
+            # CryptoBot stores guest metadata in the payload field (JSON string),
+            # not in metadata_json (which doesn't exist on CryptoBotPayment).
+            crypto_payload_str = getattr(updated_payment, 'payload', '') or ''
+            crypto_guest_meta: dict[str, Any] | None = None
+            if crypto_payload_str:
+                try:
+                    import json as _json
+
+                    parsed = _json.loads(crypto_payload_str)
+                    if isinstance(parsed, dict) and parsed.get('purpose') == 'guest_purchase':
+                        crypto_guest_meta = parsed
+                except (ValueError, TypeError):
+                    pass
+
+            if crypto_guest_meta is not None:
+                from app.services.payment.common import try_fulfill_guest_purchase
+
+                guest_result = await try_fulfill_guest_purchase(
+                    db,
+                    metadata=crypto_guest_meta,
+                    payment_amount_kopeks=0,  # not used: skip_amount_check=True
+                    provider_payment_id=invoice_id,
+                    provider_name='cryptobot',
+                    skip_amount_check=True,  # USD->RUB conversion introduces imprecision
+                )
+                if guest_result is not None:
+                    locked.status = 'paid'
+                    locked.paid_at = datetime.now(UTC)
+                    await db.commit()
+                    return True
 
             if not updated_payment.transaction_id:
                 amount_usd = updated_payment.amount_float

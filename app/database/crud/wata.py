@@ -16,7 +16,7 @@ logger = structlog.get_logger(__name__)
 async def create_wata_payment(
     db: AsyncSession,
     *,
-    user_id: int,
+    user_id: int | None,
     payment_link_id: str,
     amount_kopeks: int,
     currency: str,

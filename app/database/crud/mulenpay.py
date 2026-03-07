@@ -14,7 +14,7 @@ logger = structlog.get_logger(__name__)
 async def create_mulenpay_payment(
     db: AsyncSession,
     *,
-    user_id: int,
+    user_id: int | None,
     amount_kopeks: int,
     uuid: str,
     description: str,

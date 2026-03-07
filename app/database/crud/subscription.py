@@ -560,7 +560,7 @@ async def extend_subscription(
     subscription.updated_at = current_time
 
     await db.commit()
-    await db.refresh(subscription)
+    await db.refresh(subscription, ['tariff'])
     await clear_notifications(db, subscription.id)
 
     logger.info('✅ Подписка продлена до', end_date=subscription.end_date)

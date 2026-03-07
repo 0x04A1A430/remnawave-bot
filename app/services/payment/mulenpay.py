@@ -21,7 +21,7 @@ class MulenPayPaymentMixin:
     async def create_mulenpay_payment(
         self,
         db: AsyncSession,
-        user_id: int,
+        user_id: int | None,
         amount_kopeks: int,
         description: str,
         language: str | None = None,
@@ -53,7 +53,7 @@ class MulenPayPaymentMixin:
 
         payment_module = import_module('app.services.payment_service')
         try:
-            payment_uuid = f'mulen_{user_id}_{uuid.uuid4().hex}'
+            payment_uuid = f'mulen_{user_id or "guest"}_{uuid.uuid4().hex}'
             amount_rubles = amount_kopeks / 100
 
             items = [
@@ -235,6 +235,20 @@ class MulenPayPaymentMixin:
 
                 if payment.transaction_id:
                     logger.info('Для платежа уже создана транзакция', display_name=display_name, uuid=payment.uuid)
+                    return True
+
+                # --- Guest purchase flow (landing page) ---
+                payment_meta = dict(getattr(payment, 'metadata_json', {}) or {})
+                from app.services.payment.common import try_fulfill_guest_purchase
+
+                guest_result = await try_fulfill_guest_purchase(
+                    db,
+                    metadata=payment_meta,
+                    payment_amount_kopeks=payment.amount_kopeks,
+                    provider_payment_id=payment.uuid,
+                    provider_name='mulenpay',
+                )
+                if guest_result is not None:
                     return True
 
                 payment_description = getattr(

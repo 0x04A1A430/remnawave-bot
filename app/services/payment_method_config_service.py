@@ -117,10 +117,9 @@ def _get_method_defaults() -> dict:
             'is_configured': settings.is_cloudpayments_enabled(),
             'default_min': settings.CLOUDPAYMENTS_MIN_AMOUNT_KOPEKS,
             'default_max': settings.CLOUDPAYMENTS_MAX_AMOUNT_KOPEKS,
-            'available_sub_options': [
-                {'id': 'card', 'name': 'Карта'},
-                {'id': 'sbp', 'name': 'СБП'},
-            ],
+            # CloudPayments doesn't support programmatic card/sbp routing —
+            # user selects payment method on the provider's payment page.
+            'available_sub_options': None,
         },
         'kassa_ai': {
             'default_display_name': settings.get_kassa_ai_display_name(),

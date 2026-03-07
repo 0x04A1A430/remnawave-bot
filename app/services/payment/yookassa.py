@@ -89,12 +89,13 @@ class YooKassaPaymentMixin:
     async def create_yookassa_payment(
         self,
         db: AsyncSession,
-        user_id: int,
+        user_id: int | None,
         amount_kopeks: int,
         description: str,
         receipt_email: str | None = None,
         receipt_phone: str | None = None,
         metadata: dict[str, Any] | None = None,
+        return_url: str | None = None,
     ) -> dict[str, Any] | None:
         """Создаёт обычный платёж в YooKassa и сохраняет локальную запись."""
         if not getattr(self, 'yookassa_service', None):
@@ -109,7 +110,7 @@ class YooKassaPaymentMixin:
             payment_metadata = metadata.copy() if metadata else {}
 
             # Всегда добавляем telegram_id в метаданные для возможности возврата платежа
-            if 'user_telegram_id' not in payment_metadata:
+            if user_id is not None and 'user_telegram_id' not in payment_metadata:
                 try:
                     from app.database.crud.user import get_user_by_id
 
@@ -124,7 +125,7 @@ class YooKassaPaymentMixin:
             existing_type = payment_metadata.get('type')
             payment_metadata.update(
                 {
-                    'user_id': str(user_id),
+                    'user_id': str(user_id) if user_id is not None else '',
                     'amount_kopeks': str(amount_kopeks),
                     'type': existing_type or 'balance_topup',
                 }
@@ -137,6 +138,7 @@ class YooKassaPaymentMixin:
                 metadata=payment_metadata,
                 receipt_email=receipt_email,
                 receipt_phone=receipt_phone,
+                return_url=return_url,
             )
 
             if not yookassa_response or yookassa_response.get('error'):
@@ -191,12 +193,13 @@ class YooKassaPaymentMixin:
     async def create_yookassa_sbp_payment(
         self,
         db: AsyncSession,
-        user_id: int,
+        user_id: int | None,
         amount_kopeks: int,
         description: str,
         receipt_email: str | None = None,
         receipt_phone: str | None = None,
         metadata: dict[str, Any] | None = None,
+        return_url: str | None = None,
     ) -> dict[str, Any] | None:
         """Создаёт платёж по СБП через YooKassa."""
         if not getattr(self, 'yookassa_service', None):
@@ -211,7 +214,7 @@ class YooKassaPaymentMixin:
             payment_metadata = metadata.copy() if metadata else {}
 
             # Всегда добавляем telegram_id в метаданные для возможности возврата платежа
-            if 'user_telegram_id' not in payment_metadata:
+            if user_id is not None and 'user_telegram_id' not in payment_metadata:
                 try:
                     from app.database.crud.user import get_user_by_id
 
@@ -226,7 +229,7 @@ class YooKassaPaymentMixin:
             existing_type = payment_metadata.get('type')
             payment_metadata.update(
                 {
-                    'user_id': str(user_id),
+                    'user_id': str(user_id) if user_id is not None else '',
                     'amount_kopeks': str(amount_kopeks),
                     'type': existing_type or 'balance_topup_sbp',
                 }
@@ -239,6 +242,7 @@ class YooKassaPaymentMixin:
                 metadata=payment_metadata,
                 receipt_email=receipt_email,
                 receipt_phone=receipt_phone,
+                return_url=return_url,
             )
 
             if not yookassa_response or yookassa_response.get('error'):
@@ -564,6 +568,23 @@ class YooKassaPaymentMixin:
                     await db.commit()
                     return True
 
+            # --- Guest purchase flow (landing page) ---------------------------
+            webhook_amount_value = event_object.get('amount', {}).get('value', '0')
+            webhook_amount_kopeks = int(Decimal(str(webhook_amount_value)) * 100)
+
+            from app.services.payment.common import try_fulfill_guest_purchase
+
+            guest_result = await try_fulfill_guest_purchase(
+                db,
+                metadata=payment_metadata,
+                payment_amount_kopeks=webhook_amount_kopeks,
+                provider_payment_id=payment.yookassa_payment_id,
+                provider_name='yookassa',
+            )
+            if guest_result is not None:
+                return True
+
+            # --- Standard user payment flow ------------------------------------
             payment_description = getattr(payment, 'description', 'YooKassa платеж')
 
             payment_purpose = payment_metadata.get('payment_purpose', '')

@@ -191,7 +191,7 @@ class YooKassaPayment(Base):
     __tablename__ = 'yookassa_payments'
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=True)
     yookassa_payment_id = Column(String(255), unique=True, nullable=False, index=True)
     amount_kopeks = Column(Integer, nullable=False)
     currency = Column(String(3), default='RUB', nullable=False)
@@ -240,7 +240,7 @@ class CryptoBotPayment(Base):
     __tablename__ = 'cryptobot_payments'
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=True)
 
     invoice_id = Column(String(255), unique=True, nullable=False, index=True)
     amount = Column(String(50), nullable=False)
@@ -290,7 +290,7 @@ class HeleketPayment(Base):
     __tablename__ = 'heleket_payments'
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=True)
 
     uuid = Column(String(255), unique=True, nullable=False, index=True)
     order_id = Column(String(128), unique=True, nullable=False, index=True)
@@ -349,7 +349,7 @@ class MulenPayPayment(Base):
     __tablename__ = 'mulenpay_payments'
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=True)
 
     mulen_payment_id = Column(Integer, nullable=True, index=True)
     uuid = Column(String(255), unique=True, nullable=False, index=True)
@@ -385,7 +385,7 @@ class Pal24Payment(Base):
     __tablename__ = 'pal24_payments'
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=True)
 
     bill_id = Column(String(255), unique=True, nullable=False, index=True)
     order_id = Column(String(255), nullable=True, index=True)
@@ -442,7 +442,7 @@ class WataPayment(Base):
     __tablename__ = 'wata_payments'
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=True)
 
     payment_link_id = Column(String(64), unique=True, nullable=False, index=True)
     order_id = Column(String(255), nullable=True, index=True)
@@ -485,7 +485,7 @@ class PlategaPayment(Base):
     __tablename__ = 'platega_payments'
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=True)
 
     platega_transaction_id = Column(String(255), unique=True, nullable=True, index=True)
     correlation_id = Column(String(64), unique=True, nullable=False, index=True)
@@ -527,7 +527,7 @@ class CloudPaymentsPayment(Base):
     __tablename__ = 'cloudpayments_payments'
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=True)
 
     # CloudPayments идентификаторы
     transaction_id_cp = Column(BigInteger, unique=True, nullable=True, index=True)  # TransactionId от CloudPayments
@@ -596,7 +596,7 @@ class FreekassaPayment(Base):
     __tablename__ = 'freekassa_payments'
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=True)
 
     # Идентификаторы
     order_id = Column(String(64), unique=True, nullable=False, index=True)  # Наш ID заказа
@@ -658,7 +658,7 @@ class KassaAiPayment(Base):
     __tablename__ = 'kassa_ai_payments'
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=True)
 
     # Идентификаторы
     order_id = Column(String(64), unique=True, nullable=False, index=True)  # Наш ID заказа
@@ -879,6 +879,9 @@ class Tariff(Base):
 
     # Режим сброса трафика: DAY, WEEK, MONTH, NO_RESET (по умолчанию берётся из конфига)
     traffic_reset_mode = Column(String(20), nullable=True, default=None)  # None = использовать глобальную настройку
+
+    # Внешний сквад RemnaWave (UUID) — назначается пользователю при создании подписки
+    external_squad_uuid = Column(String(255), nullable=True, default=None)
 
     created_at = Column(AwareDateTime(), default=func.now())
     updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
@@ -2988,3 +2991,85 @@ class AdminAuditLog(Base):
 
     def __repr__(self) -> str:
         return f'<AdminAuditLog id={self.id} action={self.action!r} status={self.status!r}>'
+
+
+class LandingPage(Base):
+    """Public quick-purchase landing page configuration."""
+
+    __tablename__ = 'landing_pages'
+
+    id = Column(Integer, primary_key=True, index=True)
+    slug = Column(String(100), unique=True, nullable=False, index=True)
+    is_active = Column(Boolean, nullable=False, default=True)
+    title = Column(JSON, nullable=False, default=dict)
+    subtitle = Column(JSON, nullable=True)
+    features = Column(JSON, nullable=False, default=list)
+    footer_text = Column(JSON, nullable=True)
+    allowed_tariff_ids = Column(JSON, nullable=False, default=list)
+    allowed_periods = Column(JSON, nullable=False, default=dict)
+    payment_methods = Column(JSON, nullable=False, default=list)
+    gift_enabled = Column(Boolean, nullable=False, default=True)
+    custom_css = Column(Text, nullable=True)
+    meta_title = Column(JSON, nullable=True)
+    meta_description = Column(JSON, nullable=True)
+    display_order = Column(Integer, nullable=False, default=0)
+    discount_percent = Column(Integer, nullable=True)  # 1-99, global discount for all tariffs
+    discount_overrides = Column(JSON, nullable=True)  # {"tariff_id": percent} per-tariff override
+    discount_starts_at = Column(AwareDateTime(), nullable=True)
+    discount_ends_at = Column(AwareDateTime(), nullable=True)
+    discount_badge_text = Column(JSON, nullable=True)  # LocaleDict {"ru": "...", "en": "..."}
+    created_at = Column(AwareDateTime(), server_default=func.now())
+    updated_at = Column(AwareDateTime(), server_default=func.now(), onupdate=func.now())
+
+    guest_purchases = relationship('GuestPurchase', back_populates='landing', lazy='noload')
+
+    def __repr__(self) -> str:
+        return f"<LandingPage slug='{self.slug}' active={self.is_active}>"
+
+
+class GuestPurchaseStatus(str, Enum):
+    PENDING = 'pending'
+    PAID = 'paid'
+    DELIVERED = 'delivered'
+    PENDING_ACTIVATION = 'pending_activation'
+    FAILED = 'failed'
+    EXPIRED = 'expired'
+
+
+class GuestPurchase(Base):
+    """Guest (unauthenticated) purchase record."""
+
+    __tablename__ = 'guest_purchases'
+
+    id = Column(Integer, primary_key=True, index=True)
+    token = Column(String(64), unique=True, nullable=False, index=True)
+    landing_id = Column(Integer, ForeignKey('landing_pages.id', ondelete='SET NULL'), nullable=True)
+    contact_type = Column(String(20), nullable=False)  # 'email' or 'telegram'
+    contact_value = Column(String(255), nullable=False)
+    is_gift = Column(Boolean, nullable=False, default=False)
+    gift_recipient_type = Column(String(20), nullable=True)
+    gift_recipient_value = Column(String(255), nullable=True)
+    gift_message = Column(Text, nullable=True)
+    tariff_id = Column(Integer, ForeignKey('tariffs.id', ondelete='SET NULL'), nullable=True)
+    period_days = Column(Integer, nullable=False)
+    amount_kopeks = Column(Integer, nullable=False)
+    currency = Column(String(3), nullable=False, default='RUB')
+    payment_method = Column(String(50), nullable=True)
+    payment_id = Column(String(255), nullable=True)
+    status = Column(String(20), nullable=False, default=GuestPurchaseStatus.PENDING.value)
+    subscription_url = Column(Text, nullable=True)
+    subscription_crypto_link = Column(Text, nullable=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    created_at = Column(AwareDateTime(), server_default=func.now())
+    paid_at = Column(AwareDateTime(), nullable=True)
+    delivered_at = Column(AwareDateTime(), nullable=True)
+    cabinet_password = Column(Text, nullable=True)
+    auto_login_token = Column(Text, nullable=True)
+
+    landing = relationship('LandingPage', back_populates='guest_purchases', lazy='selectin')
+    tariff = relationship('Tariff', lazy='selectin')
+    user = relationship('User', lazy='selectin')
+
+    def __repr__(self) -> str:
+        token_prefix = self.token[:5] if self.token else '?'
+        return f"<GuestPurchase token='{token_prefix}...' status='{self.status}'>"

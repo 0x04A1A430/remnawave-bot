@@ -14,7 +14,7 @@ logger = structlog.get_logger(__name__)
 
 async def create_yookassa_payment(
     db: AsyncSession,
-    user_id: int,
+    user_id: int | None,
     yookassa_payment_id: str,
     amount_kopeks: int,
     currency: str,
