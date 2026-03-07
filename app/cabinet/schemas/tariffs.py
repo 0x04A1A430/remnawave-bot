@@ -112,11 +112,24 @@ class TariffDetailResponse(BaseModel):
     daily_price_kopeks: int = 0
     # Режим сброса трафика
     traffic_reset_mode: str | None = None  # DAY, WEEK, MONTH, NO_RESET, None = глобальная настройка
+    # Внешний сквад RemnaWave
+    external_squad_uuid: str | None = None
     created_at: datetime
     updated_at: datetime | None = None
 
     class Config:
         from_attributes = True
+
+
+class ExternalSquadInfoResponse(BaseModel):
+    """External squad info from RemnaWave."""
+
+    uuid: str
+    name: str
+    members_count: int
+
+
+UUID_PATTERN = r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
 
 
 class TariffCreateRequest(BaseModel):
@@ -155,6 +168,8 @@ class TariffCreateRequest(BaseModel):
     daily_price_kopeks: int = Field(0, ge=0)
     # Режим сброса трафика
     traffic_reset_mode: str | None = None  # DAY, WEEK, MONTH, NO_RESET, None = глобальная настройка
+    # Внешний сквад RemnaWave
+    external_squad_uuid: str | None = Field(None, pattern=UUID_PATTERN)
 
 
 class TariffUpdateRequest(BaseModel):
@@ -192,6 +207,8 @@ class TariffUpdateRequest(BaseModel):
     daily_price_kopeks: int | None = Field(None, ge=0)
     # Режим сброса трафика
     traffic_reset_mode: str | None = None  # DAY, WEEK, MONTH, NO_RESET, None = глобальная настройка
+    # Внешний сквад RemnaWave
+    external_squad_uuid: str | None = Field(None, pattern=UUID_PATTERN)
 
 
 class TariffSortOrderRequest(BaseModel):

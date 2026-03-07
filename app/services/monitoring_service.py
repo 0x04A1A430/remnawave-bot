@@ -312,8 +312,9 @@ class MonitoringService:
                 return None
 
             # Обновляем subscription в сессии, чтобы избежать detached instance
+            # Загружаем tariff для определения внешнего сквада
             try:
-                await db.refresh(subscription)
+                await db.refresh(subscription, ['tariff'])
             except Exception:
                 pass
 
@@ -370,6 +371,12 @@ class MonitoringService:
 
                 if hwid_limit is not None:
                     update_kwargs['hwid_device_limit'] = hwid_limit
+
+                # Внешний сквад: синхронизируем из тарифа или сбрасываем
+                if subscription.tariff and subscription.tariff.external_squad_uuid:
+                    update_kwargs['external_squad_uuid'] = subscription.tariff.external_squad_uuid
+                else:
+                    update_kwargs['external_squad_uuid'] = None
 
                 updated_user = await api.update_user(**update_kwargs)
 
