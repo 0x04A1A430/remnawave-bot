@@ -1,5 +1,15 @@
 # Changelog
 
+## [3.23.2](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.23.1...v3.23.2) (2026-03-06)
+
+
+### Bug Fixes
+
+* device_limit fallback 1→0 для корректного отображения безлимита ([3e26832](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/3e26832e745368a0dab2617e4e8ae2c410c6bca2))
+* sync uv.lock version with pyproject.toml 3.23.1 ([8eb6a8c](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/8eb6a8c4606a0ea48e383c031ad83219fc8e062b))
+* sync uv.lock version with pyproject.toml 3.23.1 ([bc52fd2](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/bc52fd27113f95a4154b1990142d46ae606fd2e0))
+* миграция 0016 падает если FK constraint отсутствует в БД ([15fe45d](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/15fe45d11341001714599f8db963d182dc371aa3))
+
 ## [3.23.1](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.23.0...v3.23.1) (2026-03-06)
 
 
