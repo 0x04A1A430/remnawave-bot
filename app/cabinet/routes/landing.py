@@ -102,7 +102,7 @@ class LandingConfigResponse(BaseModel):
 
 
 _EMAIL_RE = re.compile(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$')
-_TELEGRAM_RE = re.compile(r'^@?[a-zA-Z][a-zA-Z0-9_]{3,31}$')
+_TELEGRAM_RE = re.compile(r'^@?[a-zA-Z][a-zA-Z0-9_]{4,31}$')
 
 
 def _validate_contact(contact_type: str, contact_value: str) -> None:
@@ -153,6 +153,8 @@ class PurchaseStatusResponse(BaseModel):
     cabinet_email: str | None = None
     cabinet_password: str | None = None
     auto_login_token: str | None = None
+    recipient_in_bot: bool | None = None
+    bot_link: str | None = None
 
 
 # ============ Helpers ============
@@ -221,6 +223,16 @@ def _build_purchase_status_response(purchase: GuestPurchase) -> PurchaseStatusRe
             cabinet_password = purchase.cabinet_password
             auto_login_token = purchase.auto_login_token
 
+    # For telegram gifts: indicate whether recipient is known to the bot
+    recipient_in_bot: bool | None = None
+    bot_link: str | None = None
+    if purchase.is_gift and effective_contact_type == 'telegram':
+        recipient_in_bot = purchase.user is not None and purchase.user.telegram_id is not None
+        if not recipient_in_bot:
+            bot_username = settings.get_bot_username()
+            if bot_username:
+                bot_link = f'https://t.me/{bot_username}'
+
     return PurchaseStatusResponse(
         status=purchase.status,
         subscription_url=subscription_url,
@@ -235,6 +247,8 @@ def _build_purchase_status_response(purchase: GuestPurchase) -> PurchaseStatusRe
         cabinet_email=cabinet_email,
         cabinet_password=cabinet_password,
         auto_login_token=auto_login_token,
+        recipient_in_bot=recipient_in_bot,
+        bot_link=bot_link,
     )
 
 
