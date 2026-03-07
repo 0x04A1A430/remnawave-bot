@@ -476,6 +476,9 @@ async def send_guest_notification(
 
     cabinet_base = (settings.CABINET_URL or '').rstrip('/')
     success_page_url = f'{cabinet_base}/buy/success/{purchase.token}'
+    # For gift pending activation: add hint so the recipient's success page shows the activate button
+    if is_pending_activation and purchase.is_gift:
+        success_page_url += '?activate=1'
 
     context = {
         'tariff_name': tariff_name,
