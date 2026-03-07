@@ -20,13 +20,17 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
-def _constraint_exists(constraint_name: str) -> bool:
+def _constraint_exists(table: str, constraint_name: str) -> bool:
     conn = op.get_bind()
     result = conn.execute(
         sa.text(
-            "SELECT 1 FROM pg_class WHERE relname = :name AND relkind IN ('i', 'I')"
+            "SELECT 1 FROM information_schema.table_constraints "
+            "WHERE table_schema = current_schema() "
+            "AND table_name = :table "
+            "AND constraint_name = :name "
+            "AND constraint_type = 'UNIQUE'"
         ),
-        {'name': constraint_name},
+        {'table': table, 'name': constraint_name},
     )
     return result.scalar() is not None
 
@@ -47,7 +51,7 @@ def upgrade() -> None:
           )
     """)
 
-    if not _constraint_exists('uq_transaction_external_id_method'):
+    if not _constraint_exists('transactions', 'uq_transaction_external_id_method'):
         op.create_unique_constraint(
             'uq_transaction_external_id_method',
             'transactions',
