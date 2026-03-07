@@ -37,16 +37,13 @@ async def _send_admin_notification(
 
         from app.services.admin_notification_service import AdminNotificationService
 
-        bot = Bot(token=settings.BOT_TOKEN)
-        try:
+        async with Bot(token=settings.BOT_TOKEN) as bot:
             service = AdminNotificationService(bot)
             await service.send_guest_purchase_notification(
                 purchase,
                 tariff_name,
                 is_pending_activation=is_pending_activation,
             )
-        finally:
-            await bot.session.close()
     except Exception:
         logger.warning('Failed to send admin notification for guest purchase', purchase_id=purchase.id, exc_info=True)
 
@@ -222,7 +219,7 @@ async def fulfill_purchase(db: AsyncSession, purchase_token: str) -> GuestPurcha
             if recipient_type == 'email' and not purchase.is_gift:
                 purchase.auto_login_token = create_auto_login_token(user.id)
             await db.commit()
-            await db.refresh(purchase, ['landing'])
+            await db.refresh(purchase, attribute_names=['landing'])
 
             try:
                 await send_guest_notification(
@@ -276,7 +273,7 @@ async def fulfill_purchase(db: AsyncSession, purchase_token: str) -> GuestPurcha
             purchase.auto_login_token = create_auto_login_token(user.id)
 
         await db.commit()
-        await db.refresh(purchase, ['landing'])
+        await db.refresh(purchase, attribute_names=['landing'])
 
         try:
             await send_guest_notification(
@@ -668,7 +665,7 @@ async def activate_purchase(db: AsyncSession, purchase_token: str) -> GuestPurch
         if user.auth_type == 'email' and not purchase.is_gift:
             purchase.auto_login_token = create_auto_login_token(user.id)
         await db.commit()
-        await db.refresh(purchase, ['landing'])
+        await db.refresh(purchase, attribute_names=['landing'])
 
         try:
             await send_guest_notification(

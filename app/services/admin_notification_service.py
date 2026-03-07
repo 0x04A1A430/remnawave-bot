@@ -1301,7 +1301,7 @@ class AdminNotificationService:
                 '<blockquote>',
                 f'🏷️ Тариф: <b>{html.escape(tariff_name)}</b>',
                 f'📅 Период: {purchase.period_days} дн.',
-                f'💵 <b>{settings.format_price(purchase.amount_kopeks)}</b> • {html.escape(payment_method)}',
+                f'💵 <b>{settings.format_price(purchase.amount_kopeks)}</b> • {payment_method}',
             ]
 
             if purchase.payment_id:
