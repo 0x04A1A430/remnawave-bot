@@ -189,7 +189,10 @@ async def _force_refresh_jwks(kid: str) -> dict[str, Any] | None:
 
     async with _jwks_lock:
         now = datetime.now(UTC)
-        if _jwks_last_force_refresh and (now - _jwks_last_force_refresh).total_seconds() < _JWKS_FORCE_REFRESH_COOLDOWN_SECONDS:
+        if (
+            _jwks_last_force_refresh
+            and (now - _jwks_last_force_refresh).total_seconds() < _JWKS_FORCE_REFRESH_COOLDOWN_SECONDS
+        ):
             logger.warning('Telegram OIDC: JWKS force refresh on cooldown', kid=kid)
             return None
         _jwks_last_force_refresh = now
@@ -248,5 +251,3 @@ async def validate_telegram_oidc_token(id_token: str, client_id: str) -> dict[st
     except httpx.HTTPError as e:
         logger.error('Telegram OIDC: failed to fetch JWKS', error=str(e))
         return None
-
-

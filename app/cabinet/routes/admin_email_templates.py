@@ -344,7 +344,14 @@ TEMPLATE_TYPES = [
             'zh': '发送给礼物订阅接收者的邮件',
             'ua': 'Лист отримувачу подарункової підписки',
         },
-        'context_vars': ['tariff_name', 'period_days', 'cabinet_url', 'gift_message', 'cabinet_email', 'cabinet_password'],
+        'context_vars': [
+            'tariff_name',
+            'period_days',
+            'cabinet_url',
+            'gift_message',
+            'cabinet_email',
+            'cabinet_password',
+        ],
     },
     {
         'type': 'guest_cabinet_credentials',

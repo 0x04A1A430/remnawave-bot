@@ -591,9 +591,7 @@ async def auth_telegram_oidc(
     oidc_client_id_val = await get_setting_value(db, 'TELEGRAM_OIDC_CLIENT_ID')
     oidc_client_id = oidc_client_id_val or settings.TELEGRAM_OIDC_CLIENT_ID
     oidc_enabled = (
-        oidc_enabled_val.lower() == 'true'
-        if oidc_enabled_val is not None
-        else settings.TELEGRAM_OIDC_ENABLED
+        oidc_enabled_val.lower() == 'true' if oidc_enabled_val is not None else settings.TELEGRAM_OIDC_ENABLED
     ) and bool(oidc_client_id)
 
     if not oidc_enabled:

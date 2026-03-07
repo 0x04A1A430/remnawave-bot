@@ -317,7 +317,6 @@ def ensure_branding_dir():
     BRANDING_DIR.mkdir(parents=True, exist_ok=True)
 
 
-
 async def set_setting_value(db: AsyncSession, key: str, value: str):
     """Set a setting value in database."""
     result = await db.execute(select(SystemSetting).where(SystemSetting.key == key))
@@ -868,9 +867,7 @@ async def get_telegram_widget_config(
     oidc_client_id_val = await get_setting_value(db, TELEGRAM_OIDC_CLIENT_ID_KEY)
     oidc_client_id = oidc_client_id_val or settings.TELEGRAM_OIDC_CLIENT_ID
     oidc_enabled = (
-        oidc_enabled_val.lower() == 'true'
-        if oidc_enabled_val is not None
-        else settings.TELEGRAM_OIDC_ENABLED
+        oidc_enabled_val.lower() == 'true' if oidc_enabled_val is not None else settings.TELEGRAM_OIDC_ENABLED
     ) and bool(oidc_client_id)
 
     return TelegramWidgetConfigResponse(

@@ -23,6 +23,34 @@ from app.services.subscription_service import SubscriptionService
 logger = structlog.get_logger(__name__)
 
 
+async def _send_admin_notification(
+    purchase: GuestPurchase,
+    tariff_name: str,
+    *,
+    is_pending_activation: bool = False,
+) -> None:
+    """Send admin topic notification about a guest purchase (best-effort)."""
+    if not getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False) or not settings.BOT_TOKEN:
+        return
+    try:
+        from aiogram import Bot
+
+        from app.services.admin_notification_service import AdminNotificationService
+
+        bot = Bot(token=settings.BOT_TOKEN)
+        try:
+            service = AdminNotificationService(bot)
+            await service.send_guest_purchase_notification(
+                purchase,
+                tariff_name,
+                is_pending_activation=is_pending_activation,
+            )
+        finally:
+            await bot.session.close()
+    except Exception:
+        logger.warning('Failed to send admin notification for guest purchase', purchase_id=purchase.id, exc_info=True)
+
+
 class GuestPurchaseError(Exception):
     """Domain error for guest purchase operations."""
 
@@ -194,7 +222,7 @@ async def fulfill_purchase(db: AsyncSession, purchase_token: str) -> GuestPurcha
             if recipient_type == 'email' and not purchase.is_gift:
                 purchase.auto_login_token = create_auto_login_token(user.id)
             await db.commit()
-            await db.refresh(purchase)
+            await db.refresh(purchase, ['landing'])
 
             try:
                 await send_guest_notification(
@@ -206,6 +234,8 @@ async def fulfill_purchase(db: AsyncSession, purchase_token: str) -> GuestPurcha
                 )
             except Exception:
                 logger.exception('Failed to send pending_activation notification', purchase_id=purchase.id)
+
+            await _send_admin_notification(purchase, notification_tariff_name, is_pending_activation=True)
 
             # Clear plaintext password after email delivery
             if purchase.cabinet_password:
@@ -246,7 +276,7 @@ async def fulfill_purchase(db: AsyncSession, purchase_token: str) -> GuestPurcha
             purchase.auto_login_token = create_auto_login_token(user.id)
 
         await db.commit()
-        await db.refresh(purchase)
+        await db.refresh(purchase, ['landing'])
 
         try:
             await send_guest_notification(
@@ -258,6 +288,8 @@ async def fulfill_purchase(db: AsyncSession, purchase_token: str) -> GuestPurcha
             )
         except Exception:
             logger.exception('Failed to send delivery notification', purchase_id=purchase.id)
+
+        await _send_admin_notification(purchase, notification_tariff_name, is_pending_activation=False)
 
         # Clear plaintext password after email delivery — no longer needed in DB
         if purchase.cabinet_password:
@@ -636,7 +668,7 @@ async def activate_purchase(db: AsyncSession, purchase_token: str) -> GuestPurch
         if user.auth_type == 'email' and not purchase.is_gift:
             purchase.auto_login_token = create_auto_login_token(user.id)
         await db.commit()
-        await db.refresh(purchase)
+        await db.refresh(purchase, ['landing'])
 
         try:
             await send_guest_notification(
@@ -648,6 +680,8 @@ async def activate_purchase(db: AsyncSession, purchase_token: str) -> GuestPurch
             )
         except Exception:
             logger.exception('Failed to send delivery notification after activation', purchase_id=purchase.id)
+
+        await _send_admin_notification(purchase, notification_tariff_name, is_pending_activation=False)
 
         # Clear plaintext password after email delivery
         if purchase.cabinet_password:

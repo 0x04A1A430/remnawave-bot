@@ -15,6 +15,7 @@ from app.database.crud.transaction import get_transaction_by_id
 from app.database.crud.user import get_user_by_id
 from app.database.models import (
     AdvertisingCampaign,
+    GuestPurchase,
     PromoCodeType,
     PromoGroup,
     Subscription,
@@ -1242,6 +1243,81 @@ class AdminNotificationService:
             return False
         return await self._send_message(text, reply_markup=reply_markup)
 
+    async def send_guest_purchase_notification(
+        self,
+        purchase: GuestPurchase,
+        tariff_name: str,
+        *,
+        is_pending_activation: bool = False,
+    ) -> bool:
+        """Send admin notification for a guest (landing page) purchase."""
+        if not self._is_enabled():
+            return False
+
+        try:
+            if is_pending_activation:
+                event_title = '⏳ ПОКУПКА С ЛЕНДИНГА (ожидает активации)'
+            elif purchase.is_gift:
+                event_title = '🎁 ПОКУПКА В ПОДАРОК С ЛЕНДИНГА'
+            else:
+                event_title = '🛒 ПОКУПКА С ЛЕНДИНГА'
+
+            # Landing page slug
+            landing_slug = '—'
+            try:
+                landing = purchase.landing
+                if landing:
+                    landing_slug = landing.slug
+                elif purchase.landing_id:
+                    landing_slug = f'ID:{purchase.landing_id}'
+            except Exception:
+                if purchase.landing_id:
+                    landing_slug = f'ID:{purchase.landing_id}'
+
+            # Contact info
+            contact_display = html.escape(purchase.contact_value or '—')
+            contact_icon = '📧' if purchase.contact_type == 'email' else '📱'
+
+            payment_method = self._get_payment_method_display(purchase.payment_method)
+
+            message_lines = [
+                f'<b>{event_title}</b>',
+                '',
+                f'🌐 Страница: <b>/buy/{html.escape(landing_slug)}</b>',
+                f'{contact_icon} Покупатель: <code>{contact_display}</code>',
+            ]
+
+            if purchase.is_gift:
+                recipient_value = html.escape(purchase.gift_recipient_value or '—')
+                recipient_icon = '📧' if purchase.gift_recipient_type == 'email' else '📱'
+                message_lines.append(f'{recipient_icon} Получатель: <code>{recipient_value}</code>')
+                if purchase.gift_message:
+                    raw_msg = purchase.gift_message[:100]
+                    suffix = '…' if len(purchase.gift_message) > 100 else ''
+                    message_lines.append(f'💬 <i>{html.escape(raw_msg)}{suffix}</i>')
+
+            # Payment details in blockquote
+            payment_lines = [
+                '<blockquote>',
+                f'🏷️ Тариф: <b>{html.escape(tariff_name)}</b>',
+                f'📅 Период: {purchase.period_days} дн.',
+                f'💵 <b>{settings.format_price(purchase.amount_kopeks)}</b> • {html.escape(payment_method)}',
+            ]
+
+            if purchase.payment_id:
+                payment_lines.append(f'🆔 {html.escape(str(purchase.payment_id))}')
+
+            payment_lines.append('</blockquote>')
+            message_lines.extend(payment_lines)
+
+            message_lines.append(f'<i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M")}</i>')
+
+            return await self._send_message('\n'.join(message_lines))
+
+        except Exception as e:
+            logger.error('Ошибка отправки уведомления о гостевой покупке', error=e)
+            return False
+
     async def send_webhook_notification(self, text: str) -> bool:
         """Send a generic webhook/infrastructure notification to admin chat.
 
@@ -1273,7 +1349,7 @@ class AdminNotificationService:
             'balance': '💰 С баланса',
         }
 
-        return method_names.get(payment_method, f'💳 {payment_method}')
+        return method_names.get(payment_method, f'💳 {html.escape(payment_method)}')
 
     def _format_traffic(self, traffic_gb: int) -> str:
         if traffic_gb == 0:
