@@ -563,7 +563,17 @@ async def auth_telegram_oidc(
     if await RateLimitCache.is_ip_rate_limited(client_ip, 'telegram_oidc', limit=10, window=60, fail_closed=True):
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail='Too many requests')
 
-    if not settings.TELEGRAM_OIDC_ENABLED or not settings.TELEGRAM_OIDC_CLIENT_ID:
+    # Check OIDC enabled from DB first, fallback to env
+    from app.database.crud.system_settings import get_setting_value
+
+    oidc_enabled_val = await get_setting_value(db, 'TELEGRAM_OIDC_ENABLED')
+    oidc_enabled = (
+        oidc_enabled_val.lower() == 'true'
+        if oidc_enabled_val is not None
+        else settings.TELEGRAM_OIDC_ENABLED
+    ) and bool(settings.TELEGRAM_OIDC_CLIENT_ID)
+
+    if not oidc_enabled:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Telegram OIDC is not configured',
