@@ -182,7 +182,7 @@ def _build_purchase_status_response(purchase: GuestPurchase) -> PurchaseStatusRe
     within_ttl = False
     subscription_url = None
     subscription_crypto_link = None
-    if purchase.delivered_at and purchase.subscription_url:
+    if purchase.delivered_at and purchase.subscription_url and not purchase.is_gift:
         age = datetime.now(UTC) - purchase.delivered_at
         if age < timedelta(hours=_SUBSCRIPTION_URL_EXPIRY_HOURS):
             within_ttl = True

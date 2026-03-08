@@ -219,14 +219,14 @@ async def fulfill_purchase(db: AsyncSession, purchase_token: str) -> GuestPurcha
 
         # Check if user already has a subscription
         existing_subscription = await get_subscription_by_user_id(db, user.id)
-        if existing_subscription is not None and existing_subscription.is_active:
-            # Active subscription — hold for manual activation
+        if existing_subscription is not None and (existing_subscription.is_active or purchase.is_gift):
+            # Active subscription or gift with any existing subscription — hold for manual activation
             purchase.status = GuestPurchaseStatus.PENDING_ACTIVATION.value
             purchase.user_id = user.id
             if recipient_type == 'email' and not purchase.is_gift:
                 purchase.auto_login_token = create_auto_login_token(user.id)
             await db.commit()
-            await db.refresh(purchase, attribute_names=['landing'])
+            await db.refresh(purchase, attribute_names=['landing', 'user'])
 
             try:
                 await send_guest_notification(
@@ -295,7 +295,7 @@ async def fulfill_purchase(db: AsyncSession, purchase_token: str) -> GuestPurcha
             purchase.auto_login_token = create_auto_login_token(user.id)
 
         await db.commit()
-        await db.refresh(purchase, attribute_names=['landing'])
+        await db.refresh(purchase, attribute_names=['landing', 'user'])
 
         try:
             await send_guest_notification(
@@ -832,7 +832,7 @@ async def activate_purchase(db: AsyncSession, purchase_token: str, *, skip_notif
         if user.auth_type == 'email' and not purchase.is_gift:
             purchase.auto_login_token = create_auto_login_token(user.id)
         await db.commit()
-        await db.refresh(purchase, attribute_names=['landing'])
+        await db.refresh(purchase, attribute_names=['landing', 'user'])
 
         if not skip_notification:
             try:
