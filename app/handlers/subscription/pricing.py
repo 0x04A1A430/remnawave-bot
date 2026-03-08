@@ -309,11 +309,11 @@ async def get_subscription_cost(subscription, db: AsyncSession) -> int:
             return 0
 
         from app.config import settings
+        from app.database.crud.tariff import get_tariff_by_id
         from app.services.subscription_service import SubscriptionService
 
         subscription_service = SubscriptionService()
 
-        base_cost_original = PERIOD_PRICES.get(30, 0)
         try:
             owner = subscription.user
         except AttributeError:
@@ -328,58 +328,86 @@ async def get_subscription_cost(subscription, db: AsyncSession) -> int:
             except AttributeError:
                 period_discount_percent = 0
 
+        # В тарифном режиме цена тарифа уже включает серверы и трафик
+        tariff = None
+        tariff_price_found = False
+        if settings.is_tariffs_mode() and subscription.tariff_id:
+            tariff = await get_tariff_by_id(db, subscription.tariff_id)
+            if tariff and tariff.period_prices:
+                base_cost_original = tariff.period_prices.get('30', 0) or tariff.period_prices.get(30, 0)
+                if base_cost_original > 0:
+                    tariff_price_found = True
+
+        if not tariff_price_found:
+            base_cost_original = PERIOD_PRICES.get(30, 0)
+
         base_cost, _ = apply_percentage_discount(
             base_cost_original,
             period_discount_percent,
         )
 
-        try:
-            servers_cost, _ = await subscription_service.get_countries_price_by_uuids(
-                subscription.connected_squads,
-                db,
-                promo_group_id=promo_group_id,
-            )
-        except AttributeError:
-            servers_cost, _ = await get_countries_price_by_uuids_fallback(
-                subscription.connected_squads,
-                db,
-                promo_group_id=promo_group_id,
-            )
-
-        traffic_cost = settings.get_traffic_price(subscription.traffic_limit_gb)
-        device_limit = subscription.device_limit
-        if device_limit is None:
-            if settings.is_devices_selection_enabled():
-                device_limit = settings.DEFAULT_DEVICE_LIMIT
+        if tariff_price_found:
+            # Тарифный режим: серверы и трафик уже включены в цену.
+            # Добавляем только доп. устройства сверх тарифного лимита.
+            tariff_device_limit = tariff.device_limit if tariff and tariff.device_limit else 0
+            extra_devices = max(0, (subscription.device_limit or 0) - tariff_device_limit)
+            if extra_devices > 0:
+                device_price = (
+                    tariff.device_price_kopeks
+                    if tariff and tariff.device_price_kopeks is not None
+                    else settings.PRICE_PER_DEVICE
+                )
+                devices_discount_percent = 0
+                if owner:
+                    try:
+                        devices_discount_percent = owner.get_promo_discount('devices', 30)
+                    except AttributeError:
+                        pass
+                devices_cost, _ = apply_percentage_discount(
+                    extra_devices * device_price,
+                    devices_discount_percent,
+                )
             else:
-                forced_limit = settings.get_disabled_mode_device_limit()
-                if forced_limit is None:
+                devices_cost = 0
+
+            total_cost = base_cost + devices_cost
+        else:
+            # Классический режим: серверы + трафик + устройства считаются отдельно
+            try:
+                servers_cost, _ = await subscription_service.get_countries_price_by_uuids(
+                    subscription.connected_squads,
+                    db,
+                    promo_group_id=promo_group_id,
+                )
+            except AttributeError:
+                servers_cost, _ = await get_countries_price_by_uuids_fallback(
+                    subscription.connected_squads,
+                    db,
+                    promo_group_id=promo_group_id,
+                )
+
+            traffic_cost = settings.get_traffic_price(subscription.traffic_limit_gb)
+            device_limit = subscription.device_limit
+            if device_limit is None:
+                if settings.is_devices_selection_enabled():
                     device_limit = settings.DEFAULT_DEVICE_LIMIT
                 else:
-                    device_limit = forced_limit
+                    forced_limit = settings.get_disabled_mode_device_limit()
+                    if forced_limit is None:
+                        device_limit = settings.DEFAULT_DEVICE_LIMIT
+                    else:
+                        device_limit = forced_limit
 
-        devices_cost = max(0, (device_limit or 0) - settings.DEFAULT_DEVICE_LIMIT) * settings.PRICE_PER_DEVICE
+            devices_cost = max(0, (device_limit or 0) - settings.DEFAULT_DEVICE_LIMIT) * settings.PRICE_PER_DEVICE
 
-        total_cost = base_cost + servers_cost + traffic_cost + devices_cost
+            total_cost = base_cost + servers_cost + traffic_cost + devices_cost
 
-        logger.info('📊 Месячная стоимость конфигурации подписки', subscription_id=subscription.id)
-        base_log = f'   📅 Базовый тариф (30 дней): {base_cost_original / 100}₽'
-        if period_discount_percent > 0:
-            discount_value = base_cost_original * period_discount_percent // 100
-            base_log += f' → {base_cost / 100}₽ (скидка {period_discount_percent}%: -{discount_value / 100}₽)'
-        logger.info(base_log)
-        if servers_cost > 0:
-            logger.info('🌍 Серверы: ₽', servers_cost=servers_cost / 100)
-        if traffic_cost > 0:
-            logger.info('📊 Трафик: ₽', traffic_cost=traffic_cost / 100)
-        if devices_cost > 0:
-            logger.info('📱 Устройства: ₽', devices_cost=devices_cost / 100)
-        logger.info('💎 ИТОГО: ₽', total_cost=total_cost / 100)
+        logger.info('Месячная стоимость подписки', subscription_id=subscription.id, total_cost_kopeks=total_cost)
 
         return total_cost
 
     except Exception as e:
-        logger.error('⚠️ Ошибка расчета стоимости подписки', error=e)
+        logger.error('Ошибка расчета стоимости подписки', error=e)
         return 0
 
 
