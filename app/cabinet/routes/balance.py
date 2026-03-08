@@ -6,6 +6,9 @@ from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 import httpx
 import structlog
+from aiogram import Bot
+from aiogram.client.default import DefaultBotProperties
+from aiogram.enums import ParseMode
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -1043,8 +1046,12 @@ async def check_payment_status(
     old_is_paid = record.is_paid
 
     # Run manual check
-    payment_service = PaymentService()
-    updated = await run_manual_check(db, payment_method, payment_id, payment_service)
+    bot = Bot(token=settings.BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    try:
+        payment_service = PaymentService(bot=bot)
+        updated = await run_manual_check(db, payment_method, payment_id, payment_service)
+    finally:
+        await bot.session.close()
 
     if not updated:
         return ManualCheckResponse(

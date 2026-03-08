@@ -260,6 +260,13 @@ async def _sync_subscription_to_panel(
         hwid_limit = resolve_hwid_device_limit_for_payload(subscription)
         traffic_limit_bytes = subscription.traffic_limit_gb * (1024**3) if subscription.traffic_limit_gb > 0 else 0
 
+        # Загружаем tariff для определения внешнего сквада
+        try:
+            await db.refresh(subscription, ['tariff'])
+        except Exception:
+            pass
+        ext_squad_uuid = subscription.tariff.external_squad_uuid if subscription.tariff else None
+
         changes = {}
         async with service.get_api_client() as api:
             panel_uuid = user.remnawave_uuid
@@ -304,6 +311,12 @@ async def _sync_subscription_to_panel(
                 if hwid_limit is not None:
                     update_kwargs['hwid_device_limit'] = hwid_limit
 
+                # Внешний сквад: синхронизируем из тарифа или сбрасываем
+                if ext_squad_uuid is not None:
+                    update_kwargs['external_squad_uuid'] = ext_squad_uuid
+                else:
+                    update_kwargs['external_squad_uuid'] = None
+
                 try:
                     updated_panel_user = await api.update_user(**update_kwargs)
                     subscription.subscription_url = updated_panel_user.subscription_url
@@ -332,6 +345,8 @@ async def _sync_subscription_to_panel(
                 }
                 if hwid_limit is not None:
                     create_kwargs['hwid_device_limit'] = hwid_limit
+                if ext_squad_uuid is not None:
+                    create_kwargs['external_squad_uuid'] = ext_squad_uuid
 
                 new_panel_user = await api.create_user(**create_kwargs)
                 user.remnawave_uuid = new_panel_user.uuid
@@ -2634,6 +2649,13 @@ async def sync_user_to_panel(
         hwid_limit = resolve_hwid_device_limit_for_payload(sub)
         traffic_limit_bytes = sub.traffic_limit_gb * (1024**3) if sub.traffic_limit_gb > 0 else 0
 
+        # Загружаем tariff для внешнего сквада
+        try:
+            await db.refresh(sub, ['tariff'])
+        except Exception:
+            pass
+        ext_squad_uuid = sub.tariff.external_squad_uuid if sub.tariff else None
+
         async with service.get_api_client() as api:
             # Validate existing UUID
             if panel_uuid:
@@ -2685,6 +2707,12 @@ async def sync_user_to_panel(
                     update_kwargs['hwid_device_limit'] = hwid_limit
                     changes['device_limit'] = hwid_limit
 
+                # Внешний сквад: синхронизируем из тарифа или сбрасываем
+                if ext_squad_uuid is not None:
+                    update_kwargs['external_squad_uuid'] = ext_squad_uuid
+                else:
+                    update_kwargs['external_squad_uuid'] = None
+
                 try:
                     await api.update_user(**update_kwargs)
                     action = 'updated'
@@ -2711,6 +2739,8 @@ async def sync_user_to_panel(
 
                 if hwid_limit is not None:
                     create_kwargs['hwid_device_limit'] = hwid_limit
+                if ext_squad_uuid is not None:
+                    create_kwargs['external_squad_uuid'] = ext_squad_uuid
 
                 new_panel_user = await api.create_user(**create_kwargs)
                 panel_uuid = new_panel_user.uuid

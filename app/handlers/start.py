@@ -1168,11 +1168,6 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
     language = data.get('language', DEFAULT_LANGUAGE)
     texts = get_texts(language)
 
-    campaign_id = data.get('campaign_id')
-    is_new_user_registration = existing_user is None or (
-        existing_user and existing_user.status == UserStatus.DELETED.value
-    )
-
     referrer_id = data.get('referrer_id')
     if not referrer_id and data.get('referral_code'):
         referrer = await get_user_by_referral_code(db, data['referral_code'])
@@ -1279,16 +1274,7 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
 
     offer_text = await get_welcome_text_for_user(db, callback.from_user)
 
-    skip_welcome_offer = bool(campaign_id) and is_new_user_registration
-
-    if skip_welcome_offer:
-        logger.info(
-            'ℹ️ Пропускаем приветственное предложение для нового пользователя из рекламной кампании',
-            telegram_id=user.telegram_id,
-            campaign_id=campaign_id,
-        )
-
-    if offer_text and not skip_welcome_offer:
+    if offer_text:
         try:
             await callback.message.answer(
                 offer_text,
@@ -1433,11 +1419,6 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
     language = data.get('language', DEFAULT_LANGUAGE)
     texts = get_texts(language)
 
-    campaign_id = data.get('campaign_id')
-    is_new_user_registration = existing_user is None or (
-        existing_user and existing_user.status == UserStatus.DELETED.value
-    )
-
     referrer_id = data.get('referrer_id')
     if not referrer_id and data.get('referral_code'):
         referrer = await get_user_by_referral_code(db, data['referral_code'])
@@ -1573,16 +1554,7 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
 
     offer_text = await get_welcome_text_for_user(db, message.from_user)
 
-    skip_welcome_offer = bool(campaign_id) and is_new_user_registration
-
-    if skip_welcome_offer:
-        logger.info(
-            'ℹ️ Пропускаем приветственное предложение для нового пользователя из рекламной кампании',
-            telegram_id=user.telegram_id,
-            campaign_id=campaign_id,
-        )
-
-    if offer_text and not skip_welcome_offer:
+    if offer_text:
         try:
             # Если у пользователя уже есть подписка (например, от промокода), не предлагаем триал
             user_has_subscription = user.subscription and getattr(user.subscription, 'is_active', False)

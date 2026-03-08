@@ -15,11 +15,11 @@ WORKDIR /app
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     --mount=type=bind,source=uv.lock,target=uv.lock \
-    uv sync --locked --no-dev
+    uv sync --frozen --no-dev
 
 FROM python:3.13-slim
 
-ARG VERSION="v3.18.0" # x-release-please-version
+ARG VERSION="v3.25.0" # x-release-please-version
 ARG BUILD_DATE
 ARG VCS_REF
 
