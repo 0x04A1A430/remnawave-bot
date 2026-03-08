@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import uuid
 from datetime import UTC, datetime, timedelta
 from importlib import import_module
@@ -125,7 +124,7 @@ class RioPayPaymentMixin:
                 riopay_order_id=riopay_order_id,
                 payment_method=result.get('paymentType'),
                 expires_at=expires_at,
-                metadata_json=json.dumps(metadata, ensure_ascii=False),
+                metadata_json=metadata,
             )
 
             logger.info(
@@ -264,7 +263,7 @@ class RioPayPaymentMixin:
 
         if payment.transaction_id:
             logger.info(
-                'RioPay платеж уже привязан к транзакции (trigger=)', order_id=payment.order_id, trigger=trigger
+                'RioPay платеж уже привязан к транзакции', order_id=payment.order_id, trigger=trigger
             )
             return True
 
@@ -272,7 +271,7 @@ class RioPayPaymentMixin:
         user = await payment_module.get_user_by_id(db, payment.user_id)
         if not user:
             logger.error(
-                'Пользователь не найден для RioPay платежа (trigger=)',
+                'Пользователь не найден для RioPay платежа',
                 user_id=payment.user_id,
                 order_id=payment.order_id,
                 trigger=trigger,
@@ -308,6 +307,10 @@ class RioPayPaymentMixin:
         user.balance_kopeks += payment.amount_kopeks
         user.updated_at = datetime.now(UTC)
 
+        # Обновляем флаг первого пополнения в том же коммите
+        if was_first_topup:
+            user.has_made_first_topup = True
+
         promo_group = user.get_primary_promo_group()
         subscription = getattr(user, 'subscription', None)
         referrer_info = format_referrer_info(user)
@@ -322,10 +325,6 @@ class RioPayPaymentMixin:
             await process_referral_topup(db, user.id, payment.amount_kopeks, getattr(self, 'bot', None))
         except Exception as error:
             logger.error('Ошибка обработки реферального пополнения RioPay', error=error)
-
-        if was_first_topup and not user.has_made_first_topup:
-            user.has_made_first_topup = True
-            await db.commit()
 
         await db.refresh(user)
         await db.refresh(payment)
@@ -385,7 +384,7 @@ class RioPayPaymentMixin:
             )
 
         logger.info(
-            '✅ Обработан RioPay платеж для пользователя (trigger=)',
+            'Обработан RioPay платеж',
             order_id=payment.order_id,
             user_id=payment.user_id,
             trigger=trigger,

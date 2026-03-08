@@ -15,11 +15,21 @@ logger = structlog.get_logger(__name__)
 API_BASE_URL = 'https://api.riopay.online'
 
 
+class RioPayAPIError(Exception):
+    """Ошибка API RioPay."""
+
+    def __init__(self, status_code: int, message: str):
+        self.status_code = status_code
+        self.message = message
+        super().__init__(f'RioPay API error ({status_code}): {message}')
+
+
 class RioPayService:
     """Сервис для работы с API RioPay."""
 
     def __init__(self):
         self._api_token: str | None = None
+        self._session: aiohttp.ClientSession | None = None
 
     @property
     def api_token(self) -> str:
@@ -38,6 +48,20 @@ class RioPayService:
             'x-api-token': self.api_token,
             'Content-Type': 'application/json',
         }
+
+    async def _get_session(self) -> aiohttp.ClientSession:
+        """Возвращает переиспользуемую HTTP-сессию."""
+        if self._session is None or self._session.closed:
+            self._session = aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=30),
+            )
+        return self._session
+
+    async def close(self) -> None:
+        """Закрывает HTTP-сессию."""
+        if self._session and not self._session.closed:
+            await self._session.close()
+            self._session = None
 
     async def create_order(
         self,
@@ -76,23 +100,19 @@ class RioPayService:
         )
 
         try:
-            async with (
-                aiohttp.ClientSession() as session,
-                session.post(
-                    f'{API_BASE_URL}/v1/orders',
-                    json=payload,
-                    headers=self._get_headers(),
-                    timeout=aiohttp.ClientTimeout(total=30),
-                ) as response,
-            ):
-                text = await response.text()
-                logger.info('RioPay API response', status_code=response.status, text=text)
-
+            session = await self._get_session()
+            async with session.post(
+                f'{API_BASE_URL}/v1/orders',
+                json=payload,
+                headers=self._get_headers(),
+            ) as response:
                 if response.status == 201:
                     data = await response.json(content_type=None)
+                    logger.info('RioPay API order created', status_code=response.status, order_id=data.get('id'))
                     return data
 
                 # Ошибка
+                text = await response.text()
                 try:
                     error_data = await response.json(content_type=None)
                     error_msg = error_data.get('message') or error_data.get('error') or text
@@ -100,7 +120,7 @@ class RioPayService:
                     error_msg = text
 
                 logger.error('RioPay create_order error', status_code=response.status, error_msg=error_msg)
-                raise Exception(f'RioPay API error ({response.status}): {error_msg}')
+                raise RioPayAPIError(response.status, error_msg)
 
         except aiohttp.ClientError as e:
             logger.exception('RioPay API connection error', error=e)
@@ -114,21 +134,17 @@ class RioPayService:
         logger.info('RioPay get_order', order_id=order_id)
 
         try:
-            async with (
-                aiohttp.ClientSession() as session,
-                session.get(
-                    f'{API_BASE_URL}/v1/orders/{order_id}',
-                    headers=self._get_headers(),
-                    timeout=aiohttp.ClientTimeout(total=30),
-                ) as response,
-            ):
-                text = await response.text()
-                logger.info('RioPay get_order response', status_code=response.status, text=text)
-
+            session = await self._get_session()
+            async with session.get(
+                f'{API_BASE_URL}/v1/orders/{order_id}',
+                headers=self._get_headers(),
+            ) as response:
                 if response.status == 200:
                     return await response.json(content_type=None)
 
-                raise Exception(f'RioPay get_order error ({response.status}): {text}')
+                text = await response.text()
+                logger.error('RioPay get_order error', status_code=response.status)
+                raise RioPayAPIError(response.status, text)
 
         except aiohttp.ClientError as e:
             logger.exception('RioPay API connection error', error=e)

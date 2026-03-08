@@ -18,6 +18,19 @@ from app.utils.decorators import error_handler
 logger = structlog.get_logger(__name__)
 
 
+def _check_topup_restriction(db_user: User, texts) -> InlineKeyboardMarkup | None:
+    """Проверяет ограничение на пополнение. Возвращает клавиатуру если ограничен, иначе None."""
+    if not getattr(db_user, 'restriction_topup', False):
+        return None
+
+    keyboard = []
+    support_url = settings.get_support_contact_url()
+    if support_url:
+        keyboard.append([InlineKeyboardButton(text='🆘 Обжаловать', url=support_url)])
+    keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
 async def _create_riopay_payment_and_respond(
     message_or_callback,
     db_user: User,
@@ -111,7 +124,7 @@ async def _create_riopay_payment_and_respond(
             parse_mode='HTML',
         )
 
-    logger.info('RioPay payment created: user amount=₽', telegram_id=db_user.telegram_id, amount_rub=amount_rub)
+    logger.info('RioPay payment created', telegram_id=db_user.telegram_id, amount_rub=amount_rub)
 
 
 @error_handler
@@ -127,19 +140,13 @@ async def process_riopay_payment_amount(
     """
     texts = get_texts(db_user.language)
 
-    # Проверка ограничения на пополнение
-    if getattr(db_user, 'restriction_topup', False):
+    restriction_kb = _check_topup_restriction(db_user, texts)
+    if restriction_kb:
         reason = getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором'
-        support_url = settings.get_support_contact_url()
-        keyboard = []
-        if support_url:
-            keyboard.append([InlineKeyboardButton(text='🆘 Обжаловать', url=support_url)])
-        keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
-
         await message.answer(
             f'🚫 <b>Пополнение ограничено</b>\n\n{reason}',
             parse_mode='HTML',
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
+            reply_markup=restriction_kb,
         )
         await state.clear()
         return
@@ -191,19 +198,13 @@ async def start_riopay_topup(
     """
     texts = get_texts(db_user.language)
 
-    # Проверка ограничения на пополнение
-    if getattr(db_user, 'restriction_topup', False):
+    restriction_kb = _check_topup_restriction(db_user, texts)
+    if restriction_kb:
         reason = getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором'
-        support_url = settings.get_support_contact_url()
-        keyboard = []
-        if support_url:
-            keyboard.append([InlineKeyboardButton(text='🆘 Обжаловать', url=support_url)])
-        keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
-
         await callback.message.edit_text(
             f'🚫 <b>Пополнение ограничено</b>\n\n{reason}',
             parse_mode='HTML',
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
+            reply_markup=restriction_kb,
         )
         return
 
@@ -261,7 +262,7 @@ async def process_riopay_custom_amount(
     try:
         amount_text = message.text.replace(',', '.').replace(' ', '').strip()
         amount_rubles = float(amount_text)
-        amount_kopeks = int(amount_rubles * 100)
+        amount_kopeks = round(amount_rubles * 100)
     except (ValueError, TypeError):
         await message.answer(
             texts.t(
@@ -313,19 +314,13 @@ async def process_riopay_quick_amount(
         await callback.answer('Invalid amount', show_alert=True)
         return
 
-    # Проверка ограничения на пополнение
-    if getattr(db_user, 'restriction_topup', False):
+    restriction_kb = _check_topup_restriction(db_user, texts)
+    if restriction_kb:
         reason = getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором'
-        support_url = settings.get_support_contact_url()
-        keyboard = []
-        if support_url:
-            keyboard.append([InlineKeyboardButton(text='🆘 Обжаловать', url=support_url)])
-        keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
-
         await callback.message.edit_text(
             f'🚫 <b>Пополнение ограничено</b>\n\n{reason}',
             parse_mode='HTML',
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
+            reply_markup=restriction_kb,
         )
         return
 

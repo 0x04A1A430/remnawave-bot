@@ -721,7 +721,7 @@ class RioPayPayment(Base):
     __tablename__ = 'riopay_payments'
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
 
     # Идентификаторы
     order_id = Column(String(64), unique=True, nullable=False, index=True)  # Наш internal ID

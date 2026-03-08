@@ -1166,7 +1166,11 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                 if success:
                     return JSONResponse({'status': 'ok'}, status_code=status.HTTP_200_OK)
 
-                logger.error('RioPay webhook processing failed', payload=payload)
+                logger.error(
+                    'RioPay webhook processing failed',
+                    order_id=payload.get('id'),
+                    status=payload.get('status'),
+                )
                 return Response('Error', status_code=status.HTTP_400_BAD_REQUEST)
             except Exception as e:
                 logger.exception('RioPay webhook processing error', e=e)

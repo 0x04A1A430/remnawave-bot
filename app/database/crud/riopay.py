@@ -1,6 +1,5 @@
 """CRUD операции для платежей RioPay."""
 
-import json
 from datetime import UTC, datetime
 
 import structlog
@@ -25,7 +24,7 @@ async def create_riopay_payment(
     payment_method: str | None = None,
     riopay_order_id: str | None = None,
     expires_at: datetime | None = None,
-    metadata_json: str | None = None,
+    metadata_json: dict | None = None,
 ) -> RioPayPayment:
     """Создает запись о платеже RioPay."""
     payment = RioPayPayment(
@@ -38,14 +37,14 @@ async def create_riopay_payment(
         payment_method=payment_method,
         riopay_order_id=riopay_order_id,
         expires_at=expires_at,
-        metadata_json=json.loads(metadata_json) if metadata_json else None,
+        metadata_json=metadata_json,
         status='pending',
         is_paid=False,
     )
     db.add(payment)
     await db.commit()
     await db.refresh(payment)
-    logger.info('Создан платеж RioPay: order_id=, user_id', order_id=order_id, user_id=user_id)
+    logger.info('Создан платеж RioPay', order_id=order_id, user_id=user_id)
     return payment
 
 
@@ -72,7 +71,7 @@ async def update_riopay_payment_status(
     payment: RioPayPayment,
     *,
     status: str,
-    is_paid: bool = False,
+    is_paid: bool | None = None,
     riopay_order_id: str | None = None,
     payment_method: str | None = None,
     callback_payload: dict | None = None,
@@ -80,11 +79,12 @@ async def update_riopay_payment_status(
 ) -> RioPayPayment:
     """Обновляет статус платежа."""
     payment.status = status
-    payment.is_paid = is_paid
     payment.updated_at = datetime.now(UTC)
 
-    if is_paid:
-        payment.paid_at = datetime.now(UTC)
+    if is_paid is not None:
+        payment.is_paid = is_paid
+        if is_paid:
+            payment.paid_at = datetime.now(UTC)
     if riopay_order_id:
         payment.riopay_order_id = riopay_order_id
     if payment_method is not None:
@@ -97,10 +97,10 @@ async def update_riopay_payment_status(
     await db.commit()
     await db.refresh(payment)
     logger.info(
-        'Обновлен статус платежа RioPay: order_id=, status=, is_paid',
+        'Обновлен статус платежа RioPay',
         order_id=payment.order_id,
         status=status,
-        is_paid=is_paid,
+        is_paid=payment.is_paid,
     )
     return payment
 
