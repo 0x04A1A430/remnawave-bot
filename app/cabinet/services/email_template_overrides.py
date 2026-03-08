@@ -204,7 +204,8 @@ async def get_rendered_override(
     # Also substitute in subject
     if context:
         for key, value in context.items():
-            subject = subject.replace(f'{{{key}}}', str(value))
+            safe_value = str(value).replace('\r', '').replace('\n', '')
+            subject = subject.replace(f'{{{key}}}', safe_value)
 
     return (subject, rendered)
 

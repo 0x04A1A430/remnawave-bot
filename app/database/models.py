@@ -3111,7 +3111,9 @@ class LandingPage(Base):
     discount_starts_at = Column(AwareDateTime(), nullable=True)
     discount_ends_at = Column(AwareDateTime(), nullable=True)
     discount_badge_text = Column(JSON, nullable=True)  # LocaleDict {"ru": "...", "en": "..."}
-    background_config = Column(JSON, nullable=True)  # AnimationConfig: {enabled, type, settings, opacity, blur, reducedOnMobile}
+    background_config = Column(
+        JSON, nullable=True
+    )  # AnimationConfig: {enabled, type, settings, opacity, blur, reducedOnMobile}
     created_at = Column(AwareDateTime(), server_default=func.now())
     updated_at = Column(AwareDateTime(), server_default=func.now(), onupdate=func.now())
 
