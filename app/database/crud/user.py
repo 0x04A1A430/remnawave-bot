@@ -449,40 +449,10 @@ async def add_user_balance(
             amount_kopeks=amount_kopeks,
         )
 
-        # Автоматическое возобновление приостановленной суточной подписки
-        try:
-            from app.database.crud.subscription import get_subscription_by_user_id, resume_daily_subscription
-            from app.database.crud.tariff import get_tariff_by_id
-            from app.database.models import SubscriptionStatus
-
-            # Загружаем подписку явно, чтобы избежать lazy loading
-            subscription = await get_subscription_by_user_id(db, user.id)
-            if subscription and subscription.status == SubscriptionStatus.DISABLED.value:
-                # Проверяем что это суточный тариф
-                is_daily = getattr(subscription, 'is_daily_tariff', False)
-                if is_daily and subscription.tariff_id:
-                    # Загружаем тариф явно
-                    tariff = await get_tariff_by_id(db, subscription.tariff_id)
-                    if tariff:
-                        daily_price = getattr(tariff, 'daily_price_kopeks', 0)
-                        # Если баланс достаточный для суточной оплаты - возобновляем
-                        if daily_price > 0 and user.balance_kopeks >= daily_price:
-                            await resume_daily_subscription(db, subscription)
-                            logger.info(
-                                '✅ Автоматически возобновлена суточная подписка после пополнения баланса (user_id=)',
-                                subscription_id=subscription.id,
-                                user_id=user.id,
-                            )
-                            # Синхронизируем с RemnaWave
-                            try:
-                                from app.services.subscription_service import SubscriptionService
-
-                                subscription_service = SubscriptionService()
-                                await subscription_service.update_remnawave_user(db, subscription)
-                            except Exception as sync_err:
-                                logger.warning('Не удалось синхронизировать с RemnaWave', sync_err=sync_err)
-        except Exception as resume_err:
-            logger.warning('Ошибка при попытке возобновить суточную подписку', resume_err=resume_err)
+        # Авто-возобновление суточной подписки НЕ делаем здесь —
+        # это обязанность try_resume_disabled_daily_after_topup (через send_cart_notification_after_topup)
+        # и DailySubscriptionService.process_auto_resume (30-минутный цикл).
+        # Они корректно списывают суточную плату при возобновлении.
 
         return True
 

@@ -15,7 +15,7 @@ from app.config import settings
 from app.database.crud.subscription import extend_subscription
 from app.database.crud.transaction import create_transaction
 from app.database.crud.user import get_user_by_id, subtract_user_balance
-from app.database.models import Subscription, TransactionType, User
+from app.database.models import Subscription, SubscriptionStatus, TransactionType, User
 from app.localization.texts import get_texts
 from app.services.admin_notification_service import AdminNotificationService
 from app.services.subscription_checkout_service import clear_subscription_checkout_draft
@@ -1637,6 +1637,574 @@ async def _auto_add_traffic(
             )
         except Exception as error:
             logger.warning('⚠️ Автопокупка трафика: не удалось уведомить админов', error=error)
+
+    return True
+
+
+async def try_auto_extend_expired_after_topup(
+    db: AsyncSession,
+    user: User,
+    *,
+    bot: Bot | None = None,
+) -> bool:
+    """Try to auto-extend an expired subscription after balance top-up.
+
+    Unlike cart-based auto-purchase, this works without a saved cart.
+    It finds the user's expired subscription and attempts to extend it
+    with the shortest available period if the balance is sufficient.
+
+    Returns True if the subscription was successfully extended.
+    """
+    from app.cabinet.routes.websocket import notify_user_subscription_renewed
+    from app.database.crud.subscription import get_subscription_by_user_id
+    from app.database.crud.transaction import get_user_transactions
+
+    if not user or not getattr(user, 'id', None):
+        return False
+
+    subscription = await get_subscription_by_user_id(db, user.id)
+    if subscription is None:
+        logger.debug(
+            '🔄 Автопродление expired: у пользователя нет подписки',
+            format_user_id=_format_user_id(user),
+        )
+        return False
+
+    # Only process expired subscriptions (not trial, not disabled)
+    if subscription.status != SubscriptionStatus.EXPIRED.value:
+        return False
+    if subscription.is_trial:
+        return False
+
+    # Only process subscriptions expired within the last 30 days
+    if subscription.end_date is None:
+        return False
+    expired_delta = datetime.now(UTC) - subscription.end_date
+    if expired_delta.days > 30:
+        logger.info(
+            '🔄 Автопродление expired: подписка истекла более 30 дней назад',
+            format_user_id=_format_user_id(user),
+            expired_days=expired_delta.days,
+        )
+        return False
+
+    # Determine renewal period from tariff or default to 30 days
+    tariff = getattr(subscription, 'tariff', None)
+    if tariff:
+        period_days = tariff.get_shortest_period() or 30
+    else:
+        period_days = 30
+
+    # Calculate renewal price
+    subscription_service = SubscriptionService()
+    try:
+        renewal_cost = await subscription_service.calculate_renewal_price(
+            subscription, period_days, db, user=user,
+        )
+    except Exception as error:
+        logger.error(
+            '❌ Автопродление expired: ошибка расчёта стоимости',
+            format_user_id=_format_user_id(user),
+            error=error,
+            exc_info=True,
+        )
+        return False
+
+    if renewal_cost <= 0:
+        logger.warning(
+            '❌ Автопродление expired: некорректная стоимость',
+            format_user_id=_format_user_id(user),
+            renewal_cost=renewal_cost,
+        )
+        return False
+
+    # Check balance
+    if user.balance_kopeks < renewal_cost:
+        logger.info(
+            '🔄 Автопродление expired: недостаточно средств',
+            format_user_id=_format_user_id(user),
+            balance_kopeks=user.balance_kopeks,
+            renewal_cost=renewal_cost,
+        )
+        return False
+
+    # Race condition guard: skip if a subscription payment was made in the last 60 seconds
+    try:
+        recent_transactions = await get_user_transactions(db, user.id, limit=1)
+        if recent_transactions:
+            last_tx = recent_transactions[0]
+            if (
+                last_tx.type == TransactionType.SUBSCRIPTION_PAYMENT
+                and last_tx.created_at
+                and (datetime.now(UTC) - last_tx.created_at) < timedelta(seconds=60)
+            ):
+                logger.info(
+                    '🔄 Автопродление expired: пропуск — подписка оплачена секунд назад',
+                    format_user_id=_format_user_id(user),
+                    total_seconds=(datetime.now(UTC) - last_tx.created_at).total_seconds(),
+                )
+                return False
+    except Exception as check_error:
+        logger.warning(
+            '🔄 Автопродление expired: ошибка проверки последней транзакции',
+            format_user_id=_format_user_id(user),
+            check_error=check_error,
+        )
+
+    # Determine if promo offer discount was applied (for consume flag)
+    from app.utils.promo_offer import get_user_active_promo_discount_percent
+
+    consume_promo_offer = get_user_active_promo_discount_percent(user) > 0
+
+    # Deduct balance
+    description = f'Автопродление истёкшей подписки на {period_days} дней'
+    try:
+        deducted = await subtract_user_balance(
+            db,
+            user,
+            renewal_cost,
+            description,
+            consume_promo_offer=consume_promo_offer,
+            mark_as_paid_subscription=True,
+        )
+    except Exception as error:
+        logger.error(
+            '❌ Автопродление expired: ошибка списания средств',
+            format_user_id=_format_user_id(user),
+            error=error,
+            exc_info=True,
+        )
+        return False
+
+    if not deducted:
+        logger.warning(
+            '❌ Автопродление expired: списание средств не выполнено',
+            format_user_id=_format_user_id(user),
+        )
+        return False
+
+    old_end_date = subscription.end_date
+    was_trial = subscription.is_trial
+
+    # Extend subscription
+    try:
+        updated_subscription = await extend_subscription(db, subscription, period_days)
+
+        # Convert trial to paid if needed
+        if was_trial and subscription.is_trial:
+            subscription.is_trial = False
+            subscription.status = 'active'
+            await db.commit()
+            logger.info(
+                '✅ Триал конвертирован в платную подписку (автопродление expired)',
+                subscription_id=subscription.id,
+                format_user_id=_format_user_id(user),
+            )
+    except Exception as error:
+        logger.error(
+            '❌ Автопродление expired: не удалось продлить подписку',
+            format_user_id=_format_user_id(user),
+            error=error,
+            exc_info=True,
+        )
+        await db.rollback()
+        return False
+
+    # Create transaction record
+    transaction = None
+    try:
+        transaction = await create_transaction(
+            db=db,
+            user_id=user.id,
+            type=TransactionType.SUBSCRIPTION_PAYMENT,
+            amount_kopeks=renewal_cost,
+            description=description,
+        )
+    except Exception as error:
+        logger.error(
+            '⚠️ Автопродление expired: не удалось зафиксировать транзакцию',
+            format_user_id=_format_user_id(user),
+            error=error,
+            exc_info=True,
+        )
+
+    # Update RemnaWave
+    try:
+        await subscription_service.update_remnawave_user(
+            db,
+            updated_subscription,
+            reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT,
+            reset_reason='автопродление истёкшей подписки',
+        )
+    except Exception as error:
+        logger.error(
+            '⚠️ Автопродление expired: не удалось обновить RemnaWave',
+            format_user_id=_format_user_id(user),
+            error=error,
+        )
+
+    texts = get_texts(getattr(user, 'language', 'ru'))
+    period_label = format_period_description(period_days, getattr(user, 'language', 'ru'))
+    new_end_date = updated_subscription.end_date
+    end_date_label = format_local_datetime(new_end_date, '%d.%m.%Y %H:%M')
+
+    # Admin notification
+    try:
+        from app.services.subscription_renewal_service import with_admin_notification_service
+
+        await with_admin_notification_service(
+            lambda svc: svc.send_subscription_extension_notification(
+                db,
+                user,
+                updated_subscription,
+                transaction,
+                period_days,
+                old_end_date,
+                new_end_date=new_end_date,
+                balance_after=user.balance_kopeks,
+            )
+        )
+    except Exception as error:
+        logger.error(
+            '⚠️ Автопродление expired: не удалось уведомить администраторов',
+            format_user_id=_format_user_id(user),
+            error=error,
+        )
+
+    # Send user notification (only for Telegram users)
+    if bot and user.telegram_id:
+        try:
+            auto_message = texts.t(
+                'AUTO_PURCHASE_SUBSCRIPTION_EXTENDED',
+                '✅ Subscription automatically extended for {period}.',
+            ).format(period=period_label)
+            details_message = texts.t(
+                'AUTO_PURCHASE_SUBSCRIPTION_EXTENDED_DETAILS',
+                'New expiration date: {date}.',
+            ).format(date=end_date_label)
+            hint_message = texts.t(
+                'AUTO_PURCHASE_SUBSCRIPTION_HINT',
+                "Open the 'My subscription' section to access your link.",
+            )
+
+            full_message = '\n\n'.join(
+                part.strip() for part in [auto_message, details_message, hint_message] if part and part.strip()
+            )
+
+            keyboard = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 My subscription'),
+                            callback_data='menu_subscription',
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '🏠 Main menu'),
+                            callback_data='back_to_menu',
+                        )
+                    ],
+                ]
+            )
+
+            await bot.send_message(
+                chat_id=user.telegram_id,
+                text=full_message,
+                reply_markup=keyboard,
+                parse_mode='HTML',
+            )
+        except Exception as error:
+            logger.error(
+                '⚠️ Автопродление expired: не удалось уведомить пользователя',
+                telegram_id=user.telegram_id or user.id,
+                error=error,
+            )
+
+    logger.info(
+        '✅ Автопродление expired: подписка продлена для пользователя',
+        period_days=period_days,
+        renewal_cost=renewal_cost,
+        format_user_id=_format_user_id(user),
+    )
+
+    # Send WebSocket notification
+    try:
+        await notify_user_subscription_renewed(
+            user_id=user.id,
+            new_expires_at=new_end_date.isoformat() if new_end_date else '',
+            amount_kopeks=renewal_cost,
+        )
+    except Exception as ws_error:
+        logger.warning(
+            '⚠️ Автопродление expired: не удалось отправить WS уведомление',
+            format_user_id=_format_user_id(user),
+            ws_error=ws_error,
+        )
+
+    return True
+
+
+async def try_resume_disabled_daily_after_topup(
+    db: AsyncSession,
+    user: User,
+    *,
+    bot: Bot | None = None,
+) -> bool:
+    """Resume a DISABLED daily subscription immediately after balance top-up.
+
+    Daily subscriptions get DISABLED when balance is insufficient.
+    The DailySubscriptionService loop picks them up every 30 minutes,
+    but this function provides instant resumption right when the user tops up.
+
+    Returns True if the subscription was successfully resumed and charged.
+    """
+    from app.cabinet.routes.websocket import notify_user_subscription_renewed
+    from app.database.crud.subscription import get_subscription_by_user_id, update_daily_charge_time
+
+    if not user or not getattr(user, 'id', None):
+        return False
+
+    subscription = await get_subscription_by_user_id(db, user.id)
+    if subscription is None:
+        return False
+
+    # Only handle DISABLED (or EXPIRED) daily tariff subscriptions
+    if subscription.status not in (SubscriptionStatus.DISABLED.value, SubscriptionStatus.EXPIRED.value):
+        return False
+    if not getattr(subscription, 'is_daily_tariff', False):
+        return False
+    if subscription.is_trial:
+        return False
+    # Skip user-paused subscriptions — they chose to pause, don't auto-resume
+    if getattr(subscription, 'is_daily_paused', False):
+        return False
+
+    tariff = getattr(subscription, 'tariff', None)
+    if not tariff:
+        return False
+
+    daily_price = getattr(tariff, 'daily_price_kopeks', 0)
+    if daily_price <= 0:
+        return False
+
+    # Check balance
+    if user.balance_kopeks < daily_price:
+        logger.info(
+            '🔄 Авто-возобновление daily: недостаточно средств',
+            format_user_id=_format_user_id(user),
+            balance_kopeks=user.balance_kopeks,
+            daily_price=daily_price,
+        )
+        return False
+
+    # Race condition guard: skip if a subscription payment was made in the last 60 seconds
+    from app.database.crud.transaction import get_user_transactions
+
+    try:
+        recent_transactions = await get_user_transactions(db, user.id, limit=1)
+        if recent_transactions:
+            last_tx = recent_transactions[0]
+            if (
+                last_tx.type == TransactionType.SUBSCRIPTION_PAYMENT
+                and last_tx.created_at
+                and (datetime.now(UTC) - last_tx.created_at) < timedelta(seconds=60)
+            ):
+                logger.info(
+                    '🔄 Авто-возобновление daily: пропуск — оплата секунд назад',
+                    format_user_id=_format_user_id(user),
+                )
+                return False
+    except Exception as check_error:
+        logger.warning(
+            '🔄 Авто-возобновление daily: ошибка проверки последней транзакции',
+            format_user_id=_format_user_id(user),
+            check_error=check_error,
+        )
+
+    # Deduct daily price FIRST (before changing status to avoid free-access window)
+    previous_status = subscription.status
+    description = f'Суточная оплата тарифа «{tariff.name}» (авто-возобновление)'
+    try:
+        deducted = await subtract_user_balance(
+            db,
+            user,
+            daily_price,
+            description,
+            mark_as_paid_subscription=True,
+        )
+    except Exception as error:
+        logger.error(
+            '❌ Авто-возобновление daily: ошибка списания средств',
+            format_user_id=_format_user_id(user),
+            error=error,
+            exc_info=True,
+        )
+        return False
+
+    if not deducted:
+        logger.warning(
+            '❌ Авто-возобновление daily: списание не выполнено',
+            format_user_id=_format_user_id(user),
+        )
+        return False
+
+    # Activate the subscription (balance already deducted)
+    subscription.status = SubscriptionStatus.ACTIVE.value
+    try:
+        await db.commit()
+        await db.refresh(subscription)
+    except Exception as error:
+        logger.error(
+            '❌ Авто-возобновление daily: ошибка активации подписки',
+            format_user_id=_format_user_id(user),
+            error=error,
+            exc_info=True,
+        )
+        await db.rollback()
+        return False
+
+    logger.info(
+        '✅ Авто-возобновление daily: подписка → ACTIVE после пополнения',
+        format_user_id=_format_user_id(user),
+        previous_status=previous_status,
+        subscription_id=subscription.id,
+    )
+
+    # Create transaction
+    transaction = None
+    try:
+        transaction = await create_transaction(
+            db=db,
+            user_id=user.id,
+            type=TransactionType.SUBSCRIPTION_PAYMENT,
+            amount_kopeks=daily_price,
+            description=description,
+        )
+    except Exception as error:
+        logger.error(
+            '⚠️ Авто-возобновление daily: не удалось создать транзакцию',
+            format_user_id=_format_user_id(user),
+            error=error,
+        )
+
+    # Update charge time and end_date (+24h)
+    old_end_date = subscription.end_date
+    try:
+        subscription = await update_daily_charge_time(db, subscription)
+    except Exception as error:
+        logger.error(
+            '⚠️ Авто-возобновление daily: не удалось обновить время списания',
+            format_user_id=_format_user_id(user),
+            error=error,
+        )
+
+    # Sync with RemnaWave
+    try:
+        subscription_service = SubscriptionService()
+        await subscription_service.create_remnawave_user(
+            db,
+            subscription,
+            reset_traffic=False,
+            reset_reason=None,
+        )
+    except Exception as error:
+        logger.error(
+            '⚠️ Авто-возобновление daily: не удалось обновить RemnaWave',
+            format_user_id=_format_user_id(user),
+            error=error,
+        )
+
+    # Admin notification
+    try:
+        from app.services.subscription_renewal_service import with_admin_notification_service
+
+        await with_admin_notification_service(
+            lambda svc: svc.send_subscription_extension_notification(
+                db,
+                user,
+                subscription,
+                transaction,
+                1,
+                old_end_date,
+                new_end_date=subscription.end_date,
+                balance_after=user.balance_kopeks,
+            )
+        )
+    except Exception as error:
+        logger.error(
+            '⚠️ Авто-возобновление daily: не удалось уведомить администраторов',
+            format_user_id=_format_user_id(user),
+            error=error,
+        )
+
+    # User notification
+    if bot and user.telegram_id:
+        try:
+            texts = get_texts(getattr(user, 'language', 'ru'))
+
+            message = texts.t(
+                'DAILY_SUBSCRIPTION_RESUMED_AFTER_TOPUP',
+                '✅ <b>Подписка возобновлена!</b>\n\n'
+                'Ваш суточный тариф «{tariff_name}» возобновлён после пополнения баланса.\n\n'
+                '💳 Списано: {amount}\n'
+                '💰 Остаток: {balance}',
+            ).format(
+                tariff_name=tariff.name,
+                amount=settings.format_price(daily_price),
+                balance=settings.format_price(user.balance_kopeks),
+            )
+
+            keyboard = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 My subscription'),
+                            callback_data='menu_subscription',
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '🏠 Main menu'),
+                            callback_data='back_to_menu',
+                        )
+                    ],
+                ]
+            )
+
+            await bot.send_message(
+                chat_id=user.telegram_id,
+                text=message,
+                reply_markup=keyboard,
+                parse_mode='HTML',
+            )
+        except Exception as error:
+            logger.error(
+                '⚠️ Авто-возобновление daily: не удалось уведомить пользователя',
+                telegram_id=user.telegram_id or user.id,
+                error=error,
+            )
+
+    logger.info(
+        '✅ Авто-возобновление daily: подписка возобновлена для пользователя',
+        format_user_id=_format_user_id(user),
+        daily_price=daily_price,
+        tariff_name=tariff.name,
+    )
+
+    # WebSocket notification
+    try:
+        await notify_user_subscription_renewed(
+            user_id=user.id,
+            new_expires_at=subscription.end_date.isoformat() if subscription.end_date else '',
+            amount_kopeks=daily_price,
+        )
+    except Exception as ws_error:
+        logger.warning(
+            '⚠️ Авто-возобновление daily: не удалось отправить WS уведомление',
+            format_user_id=_format_user_id(user),
+            ws_error=ws_error,
+        )
 
     return True
 

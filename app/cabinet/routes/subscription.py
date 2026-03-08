@@ -4454,19 +4454,27 @@ async def toggle_subscription_pause(
             detail='Pause is only available for daily tariffs',
         )
 
-    # Toggle pause state
-    is_currently_paused = getattr(user.subscription, 'is_daily_paused', False)
-    new_paused_state = not is_currently_paused
-    user.subscription.is_daily_paused = new_paused_state
-
-    # Сохраняем статус ДО изменения для проверки RemnaWave
+    # Determine current state
     from app.database.models import SubscriptionStatus
 
-    was_disabled = user.subscription.status == SubscriptionStatus.DISABLED.value
+    is_currently_paused = getattr(user.subscription, 'is_daily_paused', False)
+    was_disabled = user.subscription.status in (
+        SubscriptionStatus.DISABLED.value,
+        SubscriptionStatus.EXPIRED.value,
+    )
 
-    # If resuming, check balance
+    # System-DISABLED subs (insufficient balance) should always be treated as needing resume,
+    # even if is_daily_paused is False (it's set by the system, not the user)
+    if was_disabled and not is_currently_paused:
+        new_paused_state = False  # Force resume path
+    else:
+        new_paused_state = not is_currently_paused
+    user.subscription.is_daily_paused = new_paused_state
+
+    daily_price = getattr(tariff, 'daily_price_kopeks', 0)
+
+    # If resuming, check balance and charge
     if not new_paused_state:
-        daily_price = getattr(tariff, 'daily_price_kopeks', 0)
         if daily_price > 0 and user.balance_kopeks < daily_price:
             raise HTTPException(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
@@ -4478,8 +4486,44 @@ async def toggle_subscription_pause(
                 },
             )
 
-        # Restore ACTIVE status if was DISABLED
+        # Charge daily fee FIRST, then restore ACTIVE status
         if was_disabled:
+            if daily_price > 0:
+                from app.database.crud.user import subtract_user_balance
+
+                deducted = await subtract_user_balance(
+                    db,
+                    user,
+                    daily_price,
+                    f'Суточная оплата тарифа «{tariff.name}» (возобновление)',
+                    mark_as_paid_subscription=True,
+                )
+                if not deducted:
+                    raise HTTPException(
+                        status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                        detail={
+                            'code': 'insufficient_balance',
+                            'message': 'Balance deduction failed',
+                            'required': daily_price,
+                            'balance': user.balance_kopeks,
+                        },
+                    )
+
+                from app.database.crud.transaction import create_transaction
+                from app.database.models import TransactionType
+
+                try:
+                    await create_transaction(
+                        db=db,
+                        user_id=user.id,
+                        type=TransactionType.SUBSCRIPTION_PAYMENT,
+                        amount_kopeks=daily_price,
+                        description=f'Суточная оплата тарифа «{tariff.name}» (возобновление)',
+                    )
+                except Exception as exc:
+                    logger.warning('Failed to create resume transaction', error=exc)
+
+            # Balance deducted successfully — now activate
             user.subscription.status = SubscriptionStatus.ACTIVE.value
             user.subscription.last_daily_charge_at = datetime.now(UTC)
             user.subscription.end_date = datetime.now(UTC) + timedelta(days=1)
@@ -4489,14 +4533,17 @@ async def toggle_subscription_pause(
     await db.refresh(user)
 
     # Sync with RemnaWave only when resuming from DISABLED state
-    # При паузе НЕ отключаем - пользователь может пользоваться до конца оплаченного периода
-    # При возобновлении включаем только если подписка была отключена (DISABLED)
-    if not new_paused_state and user.remnawave_uuid and was_disabled:
+    if not new_paused_state and was_disabled:
         try:
             subscription_service = SubscriptionService()
-            await subscription_service.enable_remnawave_user(user.remnawave_uuid)
+            await subscription_service.create_remnawave_user(
+                db,
+                user.subscription,
+                reset_traffic=False,
+                reset_reason=None,
+            )
         except Exception as e:
-            logger.error('Error enabling RemnaWave user on resume', error=e)
+            logger.error('Error syncing RemnaWave user on resume', error=e)
 
     if new_paused_state:
         message = 'Daily subscription paused'

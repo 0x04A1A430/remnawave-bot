@@ -7337,14 +7337,26 @@ async def toggle_daily_subscription_pause_endpoint(
             detail={'code': 'not_daily_tariff', 'message': 'Subscription is not on a daily tariff'},
         )
 
-    # Переключаем состояние паузы
+    # Определяем состояние
+    from app.database.models import SubscriptionStatus
+
     is_currently_paused = getattr(subscription, 'is_daily_paused', False)
-    new_paused_state = not is_currently_paused
+    was_disabled = subscription.status in (
+        SubscriptionStatus.DISABLED.value,
+        SubscriptionStatus.EXPIRED.value,
+    )
+
+    # System-DISABLED subs (is_daily_paused=False) должны идти по пути resume
+    if was_disabled and not is_currently_paused:
+        new_paused_state = False  # Force resume path
+    else:
+        new_paused_state = not is_currently_paused
     subscription.is_daily_paused = new_paused_state
 
-    # Если снимаем с паузы, нужно проверить баланс для активации
+    daily_price = getattr(tariff, 'daily_price_kopeks', 0)
+
+    # Если снимаем с паузы, проверяем баланс и списываем оплату
     if not new_paused_state:
-        daily_price = getattr(tariff, 'daily_price_kopeks', 0)
         if daily_price > 0 and user.balance_kopeks < daily_price:
             raise HTTPException(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
@@ -7356,29 +7368,68 @@ async def toggle_daily_subscription_pause_endpoint(
                 },
             )
 
-        # Восстанавливаем статус ACTIVE если подписка была DISABLED (недостаток средств)
-        from app.database.models import SubscriptionStatus
+        # Списываем суточную оплату ПЕРЕД активацией
+        if was_disabled:
+            if daily_price > 0:
+                from app.database.crud.user import subtract_user_balance
 
-        if subscription.status == SubscriptionStatus.DISABLED.value:
+                deducted = await subtract_user_balance(
+                    db,
+                    user,
+                    daily_price,
+                    f'Суточная оплата тарифа «{tariff.name}» (возобновление)',
+                    mark_as_paid_subscription=True,
+                )
+                if not deducted:
+                    raise HTTPException(
+                        status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                        detail={
+                            'code': 'insufficient_balance',
+                            'message': 'Balance deduction failed',
+                            'required': daily_price,
+                            'balance': user.balance_kopeks,
+                        },
+                    )
+
+                from app.database.crud.transaction import create_transaction
+                from app.database.models import TransactionType
+
+                try:
+                    await create_transaction(
+                        db=db,
+                        user_id=user.id,
+                        type=TransactionType.SUBSCRIPTION_PAYMENT,
+                        amount_kopeks=daily_price,
+                        description=f'Суточная оплата тарифа «{tariff.name}» (возобновление)',
+                    )
+                except Exception as exc:
+                    logger.warning('Failed to create resume transaction in miniapp', error=exc)
+
+            # Баланс списан — теперь активируем
             subscription.status = SubscriptionStatus.ACTIVE.value
-            # Обновляем время последнего списания для корректного расчёта следующего
             subscription.last_daily_charge_at = datetime.now(UTC)
             subscription.end_date = datetime.now(UTC) + timedelta(days=1)
-            logger.info('✅ Суточная подписка восстановлена из DISABLED в ACTIVE', subscription_id=subscription.id)
+
+            logger.info(
+                '✅ Суточная подписка восстановлена в ACTIVE (miniapp)',
+                subscription_id=subscription.id,
+                previous_status='disabled/expired',
+            )
 
     await db.commit()
     await db.refresh(subscription)
     await db.refresh(user)
 
-    # Синхронизация с RemnaWave
-    # При паузе VPN продолжает работать до конца оплаченного времени,
-    # поэтому НЕ отключаем пользователя в RemnaWave
-    # При возобновлении включаем если был отключен (например, из-за истечения срока)
-    if not new_paused_state:
+    # Синхронизация с RemnaWave только при возобновлении из DISABLED/EXPIRED
+    if not new_paused_state and was_disabled:
         try:
             service = SubscriptionService()
-            if user.remnawave_uuid:
-                await service.enable_remnawave_user(user.remnawave_uuid)
+            await service.create_remnawave_user(
+                db,
+                subscription,
+                reset_traffic=False,
+                reset_reason=None,
+            )
         except Exception as e:
             logger.error('Ошибка синхронизации с RemnaWave при возобновлении', error=e)
 
