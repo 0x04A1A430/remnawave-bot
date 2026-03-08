@@ -2385,7 +2385,11 @@ async def toggle_tariff_squad(
     # Применяем изменения серверов к существующим подпискам
     from app.services.subscription_service import SubscriptionService
 
-    await SubscriptionService().propagate_tariff_squads(db, tariff.id, list(current_squads))
+    propagate_result = await SubscriptionService().propagate_tariff_squads(db, tariff.id, list(current_squads))
+    if propagate_result.failed_ids:
+        await callback.message.answer(
+            f'⚠️ {len(propagate_result.failed_ids)} из {propagate_result.total} подписок не синхронизированы с RemnaWave',
+        )
 
 
 @admin_required
@@ -2444,7 +2448,11 @@ async def clear_tariff_squads(
     # Применяем изменения серверов к существующим подпискам (пустой список = все серверы)
     from app.services.subscription_service import SubscriptionService
 
-    await SubscriptionService().propagate_tariff_squads(db, tariff.id, [])
+    propagate_result = await SubscriptionService().propagate_tariff_squads(db, tariff.id, [])
+    if propagate_result.failed_ids:
+        await callback.message.answer(
+            f'⚠️ {len(propagate_result.failed_ids)} из {propagate_result.total} подписок не синхронизированы с RemnaWave',
+        )
 
 
 @admin_required
@@ -2504,7 +2512,11 @@ async def select_all_tariff_squads(
     # Применяем изменения серверов к существующим подпискам
     from app.services.subscription_service import SubscriptionService
 
-    await SubscriptionService().propagate_tariff_squads(db, tariff.id, all_uuids)
+    propagate_result = await SubscriptionService().propagate_tariff_squads(db, tariff.id, all_uuids)
+    if propagate_result.failed_ids:
+        await callback.message.answer(
+            f'⚠️ {len(propagate_result.failed_ids)} из {propagate_result.total} подписок не синхронизированы с RemnaWave',
+        )
 
 
 # ============ РЕДАКТИРОВАНИЕ ПРОМОГРУПП ============
