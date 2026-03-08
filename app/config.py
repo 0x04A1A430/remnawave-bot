@@ -536,12 +536,12 @@ class Settings(BaseSettings):
 
     # RioPay (api.riopay.online) v2.0.1
     RIOPAY_ENABLED: bool = False
-    RIOPAY_API_TOKEN: str | None = None          # x-api-token header
-    RIOPAY_WEBHOOK_SECRET: str | None = None     # HMAC-SHA512 ключ для вебхуков (по умолчанию = API_TOKEN)
+    RIOPAY_API_TOKEN: str | None = None  # x-api-token header
+    RIOPAY_WEBHOOK_SECRET: str | None = None  # HMAC-SHA512 ключ для вебхуков (по умолчанию = API_TOKEN)
     RIOPAY_DISPLAY_NAME: str = 'RioPay'
     RIOPAY_CURRENCY: str = 'RUB'
-    RIOPAY_MIN_AMOUNT_KOPEKS: int = 10000        # 100₽
-    RIOPAY_MAX_AMOUNT_KOPEKS: int = 100000000    # 1 000 000₽
+    RIOPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
+    RIOPAY_MAX_AMOUNT_KOPEKS: int = 100000000  # 1 000 000₽
     RIOPAY_WEBHOOK_PATH: str = '/riopay-webhook'
     RIOPAY_WEBHOOK_HOST: str = '0.0.0.0'
     RIOPAY_WEBHOOK_PORT: int = 8090
@@ -1821,10 +1821,7 @@ class Settings(BaseSettings):
         return html.escape(self.get_kassa_ai_display_name())
 
     def is_riopay_enabled(self) -> bool:
-        return (
-            self.RIOPAY_ENABLED
-            and self.RIOPAY_API_TOKEN is not None
-        )
+        return self.RIOPAY_ENABLED and self.RIOPAY_API_TOKEN is not None
 
     def get_riopay_display_name(self) -> str:
         name = (self.RIOPAY_DISPLAY_NAME or '').strip()

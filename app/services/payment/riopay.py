@@ -107,7 +107,9 @@ class RioPayPaymentMixin:
                 logger.error('RioPay API не вернул URL платежа', result=result)
                 return None
 
-            logger.info('RioPay API: создан заказ', order_id=order_id, riopay_order_id=riopay_order_id, payment_url=payment_url)
+            logger.info(
+                'RioPay API: создан заказ', order_id=order_id, riopay_order_id=riopay_order_id, payment_url=payment_url
+            )
 
             # Импортируем CRUD модуль
             riopay_crud = import_module('app.database.crud.riopay')
@@ -262,9 +264,7 @@ class RioPayPaymentMixin:
         payment_module = import_module('app.services.payment_service')
 
         if payment.transaction_id:
-            logger.info(
-                'RioPay платеж уже привязан к транзакции', order_id=payment.order_id, trigger=trigger
-            )
+            logger.info('RioPay платеж уже привязан к транзакции', order_id=payment.order_id, trigger=trigger)
             return True
 
         # Получаем пользователя
