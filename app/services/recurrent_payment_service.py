@@ -19,7 +19,6 @@ from sqlalchemy.orm import selectinload
 from app.config import settings
 from app.database.database import AsyncSessionLocal
 from app.database.models import (
-    SavedPaymentMethod,
     Subscription,
     SubscriptionStatus,
     User,
