@@ -30,9 +30,7 @@ async def show_promocode_menu(callback: types.CallbackQuery, db_user: User, stat
         except TelegramBadRequest as error:
             error_message = str(error).lower()
             if 'there is no text in the message to edit' in error_message:
-                await callback.message.answer(
-                    texts.PROMOCODE_ENTER, reply_markup=get_back_keyboard(db_user.language)
-                )
+                await callback.message.answer(texts.PROMOCODE_ENTER, reply_markup=get_back_keyboard(db_user.language))
             else:
                 raise
 

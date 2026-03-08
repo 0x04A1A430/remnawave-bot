@@ -266,9 +266,10 @@ async def get_quick_amount_buttons(language: str, user: User) -> list:
             period_label = f'{period} дней'
 
             # Скидка считается от полной базовой стоимости (период + аддоны без скидок)
-            total_base = base_price_kopeks + (
-                devices_price_per_month + sum(servers_per_month_prices) + traffic_price_per_month
-            ) * months
+            total_base = (
+                base_price_kopeks
+                + (devices_price_per_month + sum(servers_per_month_prices) + traffic_price_per_month) * months
+            )
             has_discount = total_base > total_price and total_base > 0
 
             if has_discount:
