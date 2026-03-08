@@ -801,16 +801,22 @@ class UserService:
                             subscription_service = SubscriptionService()
                             disabled = await subscription_service.disable_remnawave_user(user.remnawave_uuid)
                             result.panel_deleted = disabled
-                            if not disabled:
+                            if disabled:
+                                logger.info(
+                                    '✅ RemnaWave пользователь деактивирован',
+                                    remnawave_uuid=user.remnawave_uuid,
+                                    delete_mode=delete_mode,
+                                )
+                            else:
                                 result.panel_error = 'disable_remnawave_user вернул False'
-                            logger.info(
-                                '✅ RemnaWave пользователь деактивирован (режим: )',
-                                remnawave_uuid=user.remnawave_uuid,
-                                delete_mode=delete_mode,
-                            )
+                                logger.warning(
+                                    '⚠️ Не удалось деактивировать пользователя в RemnaWave',
+                                    remnawave_uuid=user.remnawave_uuid,
+                                    delete_mode=delete_mode,
+                                )
 
                     except Exception as e:
-                        result.panel_error = str(e)
+                        result.panel_error = 'Ошибка обработки пользователя в Remnawave'
                         logger.warning(
                             '⚠️ Ошибка обработки пользователя в Remnawave (режим: )',
                             delete_mode=delete_mode,
@@ -826,10 +832,15 @@ class UserService:
                                 if disabled:
                                     result.panel_deleted = True
                                     result.panel_error = 'Удаление не удалось, пользователь деактивирован'
-                                logger.info(
-                                    '✅ RemnaWave пользователь деактивирован как fallback',
-                                    remnawave_uuid=user.remnawave_uuid,
-                                )
+                                    logger.info(
+                                        '✅ RemnaWave пользователь деактивирован как fallback',
+                                        remnawave_uuid=user.remnawave_uuid,
+                                    )
+                                else:
+                                    logger.warning(
+                                        '⚠️ Fallback деактивация RemnaWave тоже не удалась',
+                                        remnawave_uuid=user.remnawave_uuid,
+                                    )
                             except Exception as fallback_e:
                                 logger.error('❌ Ошибка деактивации RemnaWave как fallback', fallback_e=fallback_e)
 
