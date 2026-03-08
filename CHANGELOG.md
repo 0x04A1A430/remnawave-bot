@@ -1,5 +1,22 @@
 # Changelog
 
+## [3.26.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.25.0...v3.26.0) (2026-03-08)
+
+
+### New Features
+
+* add telegram gift notification with inline activation button ([9ba61a0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/9ba61a08796fbc06e0dea2ee9cb02edc4126b335))
+
+
+### Bug Fixes
+
+* auto-purchase classic extend missing device_limit and traffic_limit_gb ([7dc5e4a](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/7dc5e4ab94a415dc739a49c74cde511aad0cbb29))
+* gift purchase notification and activation flow ([330d1cb](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/330d1cb6fe2eee81a3e8f841de75d41e8b4cde40))
+* multiple payment and notification bugs ([f4eeb9a](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/f4eeb9a503d6da8a152f8cb60b89f7ebbdf41c4a))
+* quick topup buttons include device/server/traffic costs, broadcast button crash on media messages ([5ebe107](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/5ebe1072c9c8a1dcb6ee4cbbea2dc55211b534c4))
+* remove is_active_paid_subscription guard from admin deactivation ([1f664a9](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/1f664a9083d81bc4462c30bf0626a44b5a30f03e))
+* respect send_before_menu flag for pinned messages during new user registration ([20727b1](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/20727b1017457769feccccf83e99523c19026a7e))
+
 ## [3.25.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.24.0...v3.25.0) (2026-03-07)
 
 
