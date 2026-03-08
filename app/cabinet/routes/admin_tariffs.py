@@ -21,6 +21,7 @@ from app.database.models import PromoGroup, Subscription, Tariff, Transaction, T
 
 from ..dependencies import get_cabinet_db, require_permission
 from ..schemas.tariffs import (
+    ExternalSquadInfoResponse,
     PeriodPrice,
     PromoGroupInfo,
     ServerInfo,
@@ -158,6 +159,30 @@ async def get_available_servers(
     ]
 
 
+@router.get('/available-external-squads', response_model=list[ExternalSquadInfoResponse])
+async def get_available_external_squads(
+    admin: User = Depends(require_permission('tariffs:read')),
+):
+    """Fetch external squads from RemnaWave panel."""
+    from app.services.remnawave_service import RemnaWaveService
+
+    try:
+        service = RemnaWaveService()
+        async with service.get_api_client() as api:
+            squads = await api.get_external_squads()
+            return [
+                {
+                    'uuid': s.uuid,
+                    'name': s.name,
+                    'members_count': s.members_count,
+                }
+                for s in squads
+            ]
+    except Exception:
+        logger.warning('Failed to fetch external squads from RemnaWave', exc_info=True)
+        return []
+
+
 @router.put('/order')
 async def update_tariff_order(
     request: TariffSortOrderRequest,
@@ -238,6 +263,8 @@ async def get_tariff(
         daily_price_kopeks=tariff.daily_price_kopeks,
         # Режим сброса трафика
         traffic_reset_mode=tariff.traffic_reset_mode,
+        # Внешний сквад
+        external_squad_uuid=tariff.external_squad_uuid,
         created_at=tariff.created_at,
         updated_at=tariff.updated_at,
     )
@@ -292,6 +319,8 @@ async def create_new_tariff(
         daily_price_kopeks=request.daily_price_kopeks,
         # Режим сброса трафика
         traffic_reset_mode=request.traffic_reset_mode,
+        # Внешний сквад
+        external_squad_uuid=request.external_squad_uuid,
     )
 
     logger.info('Admin created tariff', admin_id=admin.id, tariff_id=tariff.id, tariff_name=tariff.name)
@@ -381,6 +410,9 @@ async def update_existing_tariff(
     # Режим сброса трафика (None допускается как значение для сброса к глобальной настройке)
     if 'traffic_reset_mode' in request.model_fields_set:
         updates['traffic_reset_mode'] = request.traffic_reset_mode
+    # Внешний сквад (None допускается для сброса)
+    if 'external_squad_uuid' in request.model_fields_set:
+        updates['external_squad_uuid'] = request.external_squad_uuid
 
     if updates:
         await update_tariff(db, tariff, **updates)

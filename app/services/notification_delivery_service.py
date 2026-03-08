@@ -84,6 +84,12 @@ class NotificationType(Enum):
     BROADCAST = 'broadcast'
     PAYMENT_RECEIVED = 'payment_received'
 
+    # Guest purchase notifications
+    GUEST_SUBSCRIPTION_DELIVERED = 'guest_subscription_delivered'
+    GUEST_ACTIVATION_REQUIRED = 'guest_activation_required'
+    GUEST_GIFT_RECEIVED = 'guest_gift_received'
+    GUEST_CABINET_CREDENTIALS = 'guest_cabinet_credentials'
+
 
 class NotificationDeliveryService:
     """

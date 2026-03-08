@@ -298,6 +298,77 @@ TEMPLATE_TYPES = [
         },
         'context_vars': ['username', 'reset_url', 'expire_hours'],
     },
+    {
+        'type': 'guest_subscription_delivered',
+        'label': {
+            'ru': 'Быстрая покупка: подписка доставлена',
+            'en': 'Quick Purchase: Subscription Delivered',
+            'zh': '快捷购买：订阅已交付',
+            'ua': 'Швидка покупка: підписка доставлена',
+        },
+        'description': {
+            'ru': 'Письмо покупателю после успешной оплаты через лендинг',
+            'en': 'Email to buyer after successful landing page payment',
+            'zh': '通过落地页成功付款后发送给买家的邮件',
+            'ua': 'Лист покупцю після успішної оплати через лендінг',
+        },
+        'context_vars': ['tariff_name', 'period_days', 'cabinet_url'],
+    },
+    {
+        'type': 'guest_activation_required',
+        'label': {
+            'ru': 'Быстрая покупка: требуется активация',
+            'en': 'Quick Purchase: Activation Required',
+            'zh': '快捷购买：需要激活',
+            'ua': 'Швидка покупка: потрібна активація',
+        },
+        'description': {
+            'ru': 'Письмо когда у покупателя уже есть активная подписка',
+            'en': 'Email when buyer already has an active subscription',
+            'zh': '买家已有活跃订阅时发送的邮件',
+            'ua': 'Лист коли у покупця вже є активна підписка',
+        },
+        'context_vars': ['tariff_name', 'period_days', 'success_page_url', 'gift_message'],
+    },
+    {
+        'type': 'guest_gift_received',
+        'label': {
+            'ru': 'Быстрая покупка: подарок получен',
+            'en': 'Quick Purchase: Gift Received',
+            'zh': '快捷购买：收到礼物',
+            'ua': 'Швидка покупка: подарунок отримано',
+        },
+        'description': {
+            'ru': 'Письмо получателю подарочной подписки',
+            'en': 'Email to gift subscription recipient',
+            'zh': '发送给礼物订阅接收者的邮件',
+            'ua': 'Лист отримувачу подарункової підписки',
+        },
+        'context_vars': [
+            'tariff_name',
+            'period_days',
+            'cabinet_url',
+            'gift_message',
+            'cabinet_email',
+            'cabinet_password',
+        ],
+    },
+    {
+        'type': 'guest_cabinet_credentials',
+        'label': {
+            'ru': 'Быстрая покупка: данные для входа',
+            'en': 'Quick Purchase: Login Credentials',
+            'zh': '快捷购买：登录凭据',
+            'ua': 'Швидка покупка: дані для входу',
+        },
+        'description': {
+            'ru': 'Письмо с логином и паролем для личного кабинета',
+            'en': 'Email with login credentials for the cabinet',
+            'zh': '包含个人中心登录信息的邮件',
+            'ua': 'Лист з логіном та паролем для особистого кабінету',
+        },
+        'context_vars': ['tariff_name', 'period_days', 'cabinet_url', 'cabinet_email', 'cabinet_password'],
+    },
 ]
 
 SAMPLE_CONTEXTS: dict[str, dict[str, Any]] = {
@@ -335,6 +406,33 @@ SAMPLE_CONTEXTS: dict[str, dict[str, Any]] = {
         'expire_hours': 24,
     },
     'password_reset': {'username': 'John', 'reset_url': 'https://example.com/reset?token=abc123', 'expire_hours': 1},
+    'guest_subscription_delivered': {
+        'tariff_name': 'Premium',
+        'period_days': 30,
+        'cabinet_url': 'https://example.com/cabinet',
+    },
+    'guest_activation_required': {
+        'tariff_name': 'Premium',
+        'period_days': 30,
+        'success_page_url': 'https://example.com/cabinet/buy/success/abc123',
+        'is_gift': True,
+        'gift_message': 'Happy birthday!',
+    },
+    'guest_gift_received': {
+        'tariff_name': 'Premium',
+        'period_days': 30,
+        'cabinet_url': 'https://example.com/cabinet',
+        'gift_message': 'Happy birthday!',
+        'cabinet_email': 'recipient@example.com',
+        'cabinet_password': 'SecurePass123',
+    },
+    'guest_cabinet_credentials': {
+        'tariff_name': 'Premium',
+        'period_days': 30,
+        'cabinet_url': 'https://example.com/cabinet',
+        'cabinet_email': 'user@example.com',
+        'cabinet_password': 'SecurePass123',
+    },
 }
 
 AVAILABLE_LANGUAGES = ['ru', 'en', 'zh', 'ua', 'fa']

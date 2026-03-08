@@ -121,7 +121,7 @@ async def _award_prize(db: AsyncSession, user_id: int, prize_type: str, prize_va
         if not user:
             return 'Error: user not found'
 
-        user.balance += amount
+        user.balance_kopeks += int(round(amount * 100))
         await db.commit()
         await db.refresh(user)
 

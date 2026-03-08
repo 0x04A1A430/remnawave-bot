@@ -2,6 +2,15 @@ from app.config import settings
 from app.localization.texts import get_texts
 
 
+def verify_payment_amount(
+    received_kopeks: int,
+    expected_kopeks: int,
+    tolerance_kopeks: int = 1,
+) -> bool:
+    """Check that the received amount matches the expected amount within tolerance."""
+    return abs(received_kopeks - expected_kopeks) <= tolerance_kopeks
+
+
 def get_available_payment_methods() -> list[dict[str, str]]:
     """
     Возвращает список доступных способов оплаты с их настройками

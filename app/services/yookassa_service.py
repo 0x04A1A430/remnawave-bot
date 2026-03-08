@@ -66,6 +66,7 @@ class YooKassaService:
         metadata: dict[str, Any],
         receipt_email: str | None = None,
         receipt_phone: str | None = None,
+        return_url: str | None = None,
     ) -> dict[str, Any] | None:
         """Создает платеж в YooKassa"""
 
@@ -93,7 +94,7 @@ class YooKassaService:
             builder = PaymentRequestBuilder()
             builder.set_amount({'value': str(round(amount, 2)), 'currency': currency.upper()})
             builder.set_capture(True)
-            builder.set_confirmation({'type': ConfirmationType.REDIRECT, 'return_url': self.return_url})
+            builder.set_confirmation({'type': ConfirmationType.REDIRECT, 'return_url': return_url or self.return_url})
             builder.set_description(description)
             builder.set_metadata(metadata)
 
@@ -164,6 +165,7 @@ class YooKassaService:
         metadata: dict[str, Any],
         receipt_email: str | None = None,
         receipt_phone: str | None = None,
+        return_url: str | None = None,
     ) -> dict[str, Any] | None:
         if not self.configured:
             logger.error('YooKassa не сконфигурирован. Невозможно создать платеж через СБП.')
@@ -195,7 +197,7 @@ class YooKassaService:
             builder.set_capture(True)
 
             # Устанавливаем подтверждение через redirect для получения вебхуков
-            builder.set_confirmation({'type': 'redirect', 'return_url': self.return_url})
+            builder.set_confirmation({'type': 'redirect', 'return_url': return_url or self.return_url})
 
             builder.set_description(description)
 

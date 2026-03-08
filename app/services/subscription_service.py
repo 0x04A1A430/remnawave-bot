@@ -204,6 +204,9 @@ class SubscriptionService:
 
             user_tag = self._resolve_user_tag(subscription)
 
+            # Определяем внешний сквад из тарифа
+            ext_squad_uuid = subscription.tariff.external_squad_uuid if subscription.tariff else None
+
             async with self.get_api_client() as api:
                 hwid_limit = resolve_hwid_device_limit_for_payload(subscription)
 
@@ -264,6 +267,12 @@ class SubscriptionService:
                     if hwid_limit is not None:
                         update_kwargs['hwid_device_limit'] = hwid_limit
 
+                    # Внешний сквад: назначаем из тарифа или сбрасываем
+                    if ext_squad_uuid is not None:
+                        update_kwargs['external_squad_uuid'] = ext_squad_uuid
+                    else:
+                        update_kwargs['external_squad_uuid'] = None
+
                     updated_user = await api.update_user(**update_kwargs)
 
                     if reset_traffic:
@@ -310,6 +319,9 @@ class SubscriptionService:
 
                     if hwid_limit is not None:
                         create_kwargs['hwid_device_limit'] = hwid_limit
+
+                    if ext_squad_uuid is not None:
+                        create_kwargs['external_squad_uuid'] = ext_squad_uuid
 
                     updated_user = await api.create_user(**create_kwargs)
 
@@ -379,6 +391,9 @@ class SubscriptionService:
 
             user_tag = self._resolve_user_tag(subscription)
 
+            # Определяем внешний сквад из тарифа
+            ext_squad_uuid = subscription.tariff.external_squad_uuid if subscription.tariff else None
+
             async with self.get_api_client() as api:
                 hwid_limit = resolve_hwid_device_limit_for_payload(subscription)
 
@@ -406,6 +421,13 @@ class SubscriptionService:
 
                 if hwid_limit is not None:
                     update_kwargs['hwid_device_limit'] = hwid_limit
+
+                # Внешний сквад: синхронизируем из тарифа или сбрасываем
+                if ext_squad_uuid is not None:
+                    update_kwargs['external_squad_uuid'] = ext_squad_uuid
+                else:
+                    # Тариф без внешнего сквада — сбрасываем у пользователя
+                    update_kwargs['external_squad_uuid'] = None
 
                 updated_user = await api.update_user(**update_kwargs)
 
@@ -996,7 +1018,9 @@ class SubscriptionService:
                 subscription.remnawave_short_uuid = None
                 subscription.subscription_url = ''
                 subscription.subscription_crypto_link = ''
-                subscription.connected_squads = []
+                # connected_squads intentionally NOT cleared — it holds the desired squad
+                # configuration for this subscription period and must be preserved so that
+                # create_remnawave_user() can send it to the Remnawave API.
 
                 user.remnawave_uuid = None
 

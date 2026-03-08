@@ -91,20 +91,18 @@ async def mark_user_as_had_paid_subscription(db: AsyncSession, user: User) -> bo
             logger.debug('Пользователь уже отмечен как имевший платную подписку', user_id=user.id)
             return True
 
-        await db.execute(
-            update(User).where(User.id == user.id).values(has_had_paid_subscription=True, updated_at=datetime.now(UTC))
-        )
+        async with db.begin_nested():
+            await db.execute(
+                update(User)
+                .where(User.id == user.id)
+                .values(has_had_paid_subscription=True, updated_at=datetime.now(UTC))
+            )
 
-        await db.commit()
         logger.info('✅ Пользователь отмечен как имевший платную подписку', user_id=user.id)
         return True
 
     except Exception as e:
         logger.error('Ошибка отметки пользователя как имевшего платную подписку', user_id=user.id, error=e)
-        try:
-            await db.rollback()
-        except Exception as rollback_error:
-            logger.error('Ошибка отката транзакции', rollback_error=rollback_error)
         return False
 
 
