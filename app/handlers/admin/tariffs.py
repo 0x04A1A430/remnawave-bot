@@ -2291,7 +2291,7 @@ async def start_edit_tariff_squads(
             [
                 InlineKeyboardButton(
                     text=f'{prefix} {squad.display_name}',
-                    callback_data=f'admin_tariff_toggle_squad:{tariff_id}:{squad.squad_uuid}',
+                    callback_data=f'trf_sq:{tariff_id}:{squad.squad_uuid}',
                 )
             ]
         )
@@ -2355,7 +2355,7 @@ async def toggle_tariff_squad(
             [
                 InlineKeyboardButton(
                     text=f'{prefix} {squad.display_name}',
-                    callback_data=f'admin_tariff_toggle_squad:{tariff_id}:{squad.squad_uuid}',
+                    callback_data=f'trf_sq:{tariff_id}:{squad.squad_uuid}',
                 )
             ]
         )
@@ -2411,7 +2411,7 @@ async def clear_tariff_squads(
             [
                 InlineKeyboardButton(
                     text=f'⬜ {squad.display_name}',
-                    callback_data=f'admin_tariff_toggle_squad:{tariff_id}:{squad.squad_uuid}',
+                    callback_data=f'trf_sq:{tariff_id}:{squad.squad_uuid}',
                 )
             ]
         )
@@ -2466,7 +2466,7 @@ async def select_all_tariff_squads(
             [
                 InlineKeyboardButton(
                     text=f'✅ {squad.display_name}',
-                    callback_data=f'admin_tariff_toggle_squad:{tariff_id}:{squad.squad_uuid}',
+                    callback_data=f'trf_sq:{tariff_id}:{squad.squad_uuid}',
                 )
             ]
         )
@@ -2799,7 +2799,13 @@ def register_handlers(dp: Dispatcher):
     # Просмотр и переключение
     dp.callback_query.register(view_tariff, F.data.startswith('admin_tariff_view:'))
     dp.callback_query.register(
-        toggle_tariff, F.data.startswith('admin_tariff_toggle:') & ~F.data.startswith('admin_tariff_toggle_trial:')
+        toggle_tariff,
+        F.data.startswith('admin_tariff_toggle:')
+        & ~F.data.startswith('admin_tariff_toggle_trial:')
+        & ~F.data.startswith('trf_sq:')
+        & ~F.data.startswith('admin_tariff_toggle_promo:')
+        & ~F.data.startswith('admin_tariff_toggle_traffic_topup:')
+        & ~F.data.startswith('admin_tariff_toggle_daily:'),
     )
     dp.callback_query.register(toggle_trial_tariff, F.data.startswith('admin_tariff_toggle_trial:'))
 
@@ -2821,7 +2827,8 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(start_edit_tariff_description, F.data.startswith('admin_tariff_edit_desc:'))
     dp.message.register(process_edit_tariff_description, AdminStates.editing_tariff_description)
 
-    # Редактирование трафика
+    # Редактирование трафика (traffic_topup BEFORE traffic to avoid prefix conflict)
+    dp.callback_query.register(start_edit_tariff_traffic_topup, F.data.startswith('admin_tariff_edit_traffic_topup:'))
     dp.callback_query.register(start_edit_tariff_traffic, F.data.startswith('admin_tariff_edit_traffic:'))
     dp.message.register(process_edit_tariff_traffic, AdminStates.editing_tariff_traffic)
 
@@ -2849,8 +2856,7 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(start_edit_tariff_trial_days, F.data.startswith('admin_tariff_edit_trial_days:'))
     dp.message.register(process_edit_tariff_trial_days, AdminStates.editing_tariff_trial_days)
 
-    # Редактирование докупки трафика
-    dp.callback_query.register(start_edit_tariff_traffic_topup, F.data.startswith('admin_tariff_edit_traffic_topup:'))
+    # Редактирование докупки трафика (start_edit_tariff_traffic_topup registered above with traffic)
     dp.callback_query.register(toggle_tariff_traffic_topup, F.data.startswith('admin_tariff_toggle_traffic_topup:'))
     dp.callback_query.register(
         start_edit_traffic_topup_packages, F.data.startswith('admin_tariff_edit_topup_packages:')
@@ -2861,13 +2867,13 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(start_edit_max_topup_traffic, F.data.startswith('admin_tariff_edit_max_topup:'))
     dp.message.register(process_edit_max_topup_traffic, AdminStates.editing_tariff_max_topup_traffic)
 
-    # Удаление
-    dp.callback_query.register(confirm_delete_tariff, F.data.startswith('admin_tariff_delete:'))
+    # Удаление (delete_confirm BEFORE delete to avoid prefix conflict)
     dp.callback_query.register(delete_tariff_confirmed, F.data.startswith('admin_tariff_delete_confirm:'))
+    dp.callback_query.register(confirm_delete_tariff, F.data.startswith('admin_tariff_delete:'))
 
     # Редактирование серверов
     dp.callback_query.register(start_edit_tariff_squads, F.data.startswith('admin_tariff_edit_squads:'))
-    dp.callback_query.register(toggle_tariff_squad, F.data.startswith('admin_tariff_toggle_squad:'))
+    dp.callback_query.register(toggle_tariff_squad, F.data.startswith('trf_sq:'))
     dp.callback_query.register(clear_tariff_squads, F.data.startswith('admin_tariff_clear_squads:'))
     dp.callback_query.register(select_all_tariff_squads, F.data.startswith('admin_tariff_select_all_squads:'))
 
