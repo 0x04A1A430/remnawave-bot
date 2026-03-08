@@ -1205,6 +1205,7 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
                 subscription_is_active=subscription_is_active,
             )
 
+        pinned_message = await get_active_pinned_message(db)
         try:
             keyboard = await get_main_menu_keyboard_async(
                 db=db,
@@ -1219,8 +1220,11 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
                 is_moderator=is_moderator,
                 custom_buttons=custom_buttons,
             )
+            if pinned_message and pinned_message.send_before_menu:
+                await _send_pinned_message(callback.bot, db, existing_user, pinned_message)
             await callback.message.answer(menu_text, reply_markup=keyboard, parse_mode='HTML')
-            await _send_pinned_message(callback.bot, db, existing_user)
+            if pinned_message and not pinned_message.send_before_menu:
+                await _send_pinned_message(callback.bot, db, existing_user, pinned_message)
         except Exception as e:
             logger.error('Ошибка при показе главного меню существующему пользователю', error=e)
             await callback.message.answer(
@@ -1371,15 +1375,19 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
     from app.database.crud.welcome_text import get_welcome_text_for_user
 
     offer_text = await get_welcome_text_for_user(db, callback.from_user)
+    pinned_message = await get_active_pinned_message(db)
 
     if offer_text:
         try:
+            if pinned_message and pinned_message.send_before_menu:
+                await _send_pinned_message(callback.bot, db, user, pinned_message)
             await callback.message.answer(
                 offer_text,
                 reply_markup=get_post_registration_keyboard(user.language),
             )
             logger.info('✅ Приветственное сообщение отправлено пользователю', telegram_id=user.telegram_id)
-            await _send_pinned_message(callback.bot, db, user)
+            if pinned_message and not pinned_message.send_before_menu:
+                await _send_pinned_message(callback.bot, db, user, pinned_message)
         except TelegramBadRequest as e:
             if 'parse entities' in str(e).lower() or "can't parse" in str(e).lower():
                 logger.warning('HTML parse error в приветственном сообщении, повтор без parse_mode', error=e)
@@ -1389,7 +1397,8 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
                         reply_markup=get_post_registration_keyboard(user.language),
                         parse_mode=None,
                     )
-                    await _send_pinned_message(callback.bot, db, user)
+                    if pinned_message and not pinned_message.send_before_menu:
+                        await _send_pinned_message(callback.bot, db, user, pinned_message)
                 except Exception as fallback_err:
                     logger.error('Ошибка при повторной отправке приветственного сообщения', fallback_err=fallback_err)
             else:
@@ -1434,8 +1443,11 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
                 is_moderator=is_moderator,
                 custom_buttons=custom_buttons,
             )
+            if pinned_message and pinned_message.send_before_menu:
+                await _send_pinned_message(callback.bot, db, user, pinned_message)
             await callback.message.answer(menu_text, reply_markup=keyboard, parse_mode='HTML')
-            await _send_pinned_message(callback.bot, db, user)
+            if pinned_message and not pinned_message.send_before_menu:
+                await _send_pinned_message(callback.bot, db, user, pinned_message)
             logger.info('✅ Главное меню показано пользователю', telegram_id=user.telegram_id)
         except Exception as e:
             logger.error('Ошибка при показе главного меню', error=e)
@@ -1485,6 +1497,7 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
                 subscription_is_active=subscription_is_active,
             )
 
+        pinned_message = await get_active_pinned_message(db)
         try:
             keyboard = await get_main_menu_keyboard_async(
                 db=db,
@@ -1499,8 +1512,11 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
                 is_moderator=is_moderator,
                 custom_buttons=custom_buttons,
             )
+            if pinned_message and pinned_message.send_before_menu:
+                await _send_pinned_message(message.bot, db, existing_user, pinned_message)
             await message.answer(menu_text, reply_markup=keyboard, parse_mode='HTML')
-            await _send_pinned_message(message.bot, db, existing_user)
+            if pinned_message and not pinned_message.send_before_menu:
+                await _send_pinned_message(message.bot, db, existing_user, pinned_message)
         except Exception as e:
             logger.error('Ошибка при показе главного меню существующему пользователю', error=e)
             await message.answer(
@@ -1677,6 +1693,7 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
     from app.database.crud.welcome_text import get_welcome_text_for_user
 
     offer_text = await get_welcome_text_for_user(db, message.from_user)
+    pinned_message = await get_active_pinned_message(db)
 
     if offer_text:
         try:
@@ -1687,12 +1704,15 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
             else:
                 keyboard = get_post_registration_keyboard(user.language)
 
+            if pinned_message and pinned_message.send_before_menu:
+                await _send_pinned_message(message.bot, db, user, pinned_message)
             await message.answer(
                 offer_text,
                 reply_markup=keyboard,
             )
             logger.info('✅ Приветственное сообщение отправлено пользователю', telegram_id=user.telegram_id)
-            await _send_pinned_message(message.bot, db, user)
+            if pinned_message and not pinned_message.send_before_menu:
+                await _send_pinned_message(message.bot, db, user, pinned_message)
         except TelegramBadRequest as e:
             if 'parse entities' in str(e).lower() or "can't parse" in str(e).lower():
                 logger.warning('HTML parse error в приветственном сообщении, повтор без parse_mode', error=e)
@@ -1702,7 +1722,8 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
                         reply_markup=keyboard,
                         parse_mode=None,
                     )
-                    await _send_pinned_message(message.bot, db, user)
+                    if pinned_message and not pinned_message.send_before_menu:
+                        await _send_pinned_message(message.bot, db, user, pinned_message)
                 except Exception as fallback_err:
                     logger.error('Ошибка при повторной отправке приветственного сообщения', fallback_err=fallback_err)
             else:
@@ -1747,9 +1768,12 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
                 is_moderator=is_moderator,
                 custom_buttons=custom_buttons,
             )
+            if pinned_message and pinned_message.send_before_menu:
+                await _send_pinned_message(message.bot, db, user, pinned_message)
             await message.answer(menu_text, reply_markup=keyboard, parse_mode='HTML')
             logger.info('✅ Главное меню показано пользователю', telegram_id=user.telegram_id)
-            await _send_pinned_message(message.bot, db, user)
+            if pinned_message and not pinned_message.send_before_menu:
+                await _send_pinned_message(message.bot, db, user, pinned_message)
         except Exception as e:
             logger.error('Ошибка при показе главного меню', error=e)
             await message.answer(
@@ -2101,6 +2125,10 @@ async def required_sub_channel_check(
                 custom_buttons=custom_buttons,
             )
 
+            pinned_message = await get_active_pinned_message(db)
+            if pinned_message and pinned_message.send_before_menu:
+                await _send_pinned_message(bot, db, user, pinned_message)
+
             if settings.ENABLE_LOGO_MODE and len(menu_text) <= 900:
                 _result = await bot.send_photo(
                     chat_id=query.from_user.id,
@@ -2117,7 +2145,8 @@ async def required_sub_channel_check(
                     reply_markup=keyboard,
                     parse_mode='HTML',
                 )
-            await _send_pinned_message(bot, db, user)
+            if pinned_message and not pinned_message.send_before_menu:
+                await _send_pinned_message(bot, db, user, pinned_message)
         else:
             from app.keyboards.inline import get_rules_keyboard
 
@@ -2222,6 +2251,10 @@ async def required_sub_channel_check(
                         custom_buttons=custom_buttons,
                     )
 
+                    pinned_message = await get_active_pinned_message(db)
+                    if pinned_message and pinned_message.send_before_menu:
+                        await _send_pinned_message(bot, db, user, pinned_message)
+
                     if settings.ENABLE_LOGO_MODE and len(menu_text) <= 900:
                         _result = await bot.send_photo(
                             chat_id=query.from_user.id,
@@ -2238,7 +2271,8 @@ async def required_sub_channel_check(
                             reply_markup=keyboard,
                             parse_mode='HTML',
                         )
-                    await _send_pinned_message(bot, db, user)
+                    if pinned_message and not pinned_message.send_before_menu:
+                        await _send_pinned_message(bot, db, user, pinned_message)
                 else:
                     await bot.send_message(
                         chat_id=query.from_user.id,
