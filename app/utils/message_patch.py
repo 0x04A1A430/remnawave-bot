@@ -189,6 +189,19 @@ async def _edit_with_photo(self: Message, text: str, **kwargs):
     # Уважаем флаг в рантайме: если логотип выключен — не подменяем редактирование
     if not settings.ENABLE_LOGO_MODE:
         kwargs.setdefault('disable_web_page_preview', True)
+        # Медиа-сообщения (фото/видео из рассылки и т.д.) не имеют text — edit_text упадёт.
+        # Удаляем старое сообщение и отправляем новое.
+        if self.text is None:
+            try:
+                await self.delete()
+            except TelegramBadRequest:
+                pass
+            try:
+                return await _original_answer(self, text, **kwargs)
+            except TelegramBadRequest as error:
+                if is_topic_required_error(error):
+                    return None
+                raise
         return await _original_edit_text(self, text, **kwargs)
     if self.photo:
         language = _get_language(self)
@@ -242,6 +255,19 @@ async def _edit_with_photo(self: Message, text: str, **kwargs):
                 if is_topic_required_error(inner_error):
                     return None
                 raise
+    # Не-фото медиа (видео, анимация и т.д.) с включённым логотипом — удаляем и отправляем с фото
+    if self.text is None:
+        try:
+            await self.delete()
+        except TelegramBadRequest:
+            pass
+        try:
+            return await _answer_with_photo(self, text, **kwargs)
+        except TelegramBadRequest as error:
+            if is_topic_required_error(error):
+                return None
+            raise
+
     # Обработка ошибок MESSAGE_ID_INVALID для сообщений без фото
     try:
         return await _text_edit(self, text, **kwargs)
