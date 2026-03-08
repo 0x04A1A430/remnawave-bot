@@ -321,13 +321,6 @@ async def get_subscription_cost(subscription, db: AsyncSession) -> int:
 
         promo_group_id = getattr(owner, 'promo_group_id', None) if owner else None
 
-        period_discount_percent = 0
-        if owner:
-            try:
-                period_discount_percent = owner.get_promo_discount('period', 30)
-            except AttributeError:
-                period_discount_percent = 0
-
         # В тарифном режиме цена тарифа уже включает серверы и трафик
         tariff = None
         tariff_price_found = False
@@ -341,38 +334,55 @@ async def get_subscription_cost(subscription, db: AsyncSession) -> int:
         if not tariff_price_found:
             base_cost_original = PERIOD_PRICES.get(30, 0)
 
-        base_cost, _ = apply_percentage_discount(
-            base_cost_original,
-            period_discount_percent,
-        )
-
         if tariff_price_found:
-            # Тарифный режим: серверы и трафик уже включены в цену.
-            # Добавляем только доп. устройства сверх тарифного лимита.
-            tariff_device_limit = tariff.device_limit if tariff and tariff.device_limit else 0
-            extra_devices = max(0, (subscription.device_limit or 0) - tariff_device_limit)
-            if extra_devices > 0:
-                device_price = (
-                    tariff.device_price_kopeks
-                    if tariff and tariff.device_price_kopeks is not None
-                    else settings.PRICE_PER_DEVICE
-                )
-                devices_discount_percent = 0
-                if owner:
-                    try:
-                        devices_discount_percent = owner.get_promo_discount('devices', 30)
-                    except AttributeError:
-                        pass
-                devices_cost, _ = apply_percentage_discount(
-                    extra_devices * device_price,
-                    devices_discount_percent,
-                )
-            else:
-                devices_cost = 0
+            # Тарифный режим: серверы и трафик включены в цену.
+            # Порядок: база + устройства → скидка на полную сумму (как в calculate_renewal_price).
+            from app.utils.promo_offer import get_user_active_promo_discount_percent
 
-            total_cost = base_cost + devices_cost
+            original_price = base_cost_original
+
+            tariff_device_limit = tariff.device_limit if tariff.device_limit is not None else 0
+            device_limit = (
+                subscription.device_limit if subscription.device_limit is not None else tariff_device_limit
+            )
+            extra_devices = max(0, device_limit - tariff_device_limit)
+            device_price_per_unit = (
+                tariff.device_price_kopeks
+                if tariff and tariff.device_price_kopeks is not None
+                else settings.PRICE_PER_DEVICE
+            )
+            devices_price = extra_devices * device_price_per_unit
+            original_price += devices_price
+
+            # Скидка промогруппы на полную сумму (база + устройства)
+            period_discount_percent = 0
+            if owner:
+                try:
+                    period_discount_percent = owner.get_promo_discount('period', 30)
+                except AttributeError:
+                    pass
+            discount_total = original_price * period_discount_percent // 100
+            total_cost = original_price - discount_total
+
+            # Promo-offer скидка (временная)
+            promo_offer_percent = get_user_active_promo_discount_percent(owner)
+            if promo_offer_percent > 0:
+                promo_offer_discount = total_cost * promo_offer_percent // 100
+                total_cost = total_cost - promo_offer_discount
         else:
             # Классический режим: серверы + трафик + устройства считаются отдельно
+            period_discount_percent = 0
+            if owner:
+                try:
+                    period_discount_percent = owner.get_promo_discount('period', 30)
+                except AttributeError:
+                    period_discount_percent = 0
+
+            base_cost, _ = apply_percentage_discount(
+                base_cost_original,
+                period_discount_percent,
+            )
+
             try:
                 servers_cost, _ = await subscription_service.get_countries_price_by_uuids(
                     subscription.connected_squads,

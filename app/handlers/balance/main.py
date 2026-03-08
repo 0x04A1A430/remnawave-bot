@@ -453,35 +453,44 @@ async def show_payment_methods(callback: types.CallbackQuery, db_user: User, db:
             if base_price_original <= 0:
                 base_price_original = PERIOD_PRICES.get(duration_days, 0)
 
-            period_discount_percent = db_user.get_promo_discount('period', duration_days)
-            base_price, base_discount_total = apply_percentage_discount(
-                base_price_original,
-                period_discount_percent,
-            )
-
             if tariff_price_found:
-                # В тарифном режиме серверы и трафик уже включены в цену тарифа.
-                # Добавляем только стоимость доп. устройств сверх тарифного лимита.
-                tariff_device_limit = tariff.device_limit if tariff and tariff.device_limit else 0
-                extra_devices = max(0, (current_device_limit or 0) - tariff_device_limit)
-                if extra_devices > 0:
-                    device_price = (
-                        tariff.device_price_kopeks
-                        if tariff and tariff.device_price_kopeks is not None
-                        else settings.PRICE_PER_DEVICE
-                    )
-                    devices_discount_percent = db_user.get_promo_discount('devices', duration_days)
-                    devices_cost, _ = apply_percentage_discount(
-                        extra_devices * device_price,
-                        devices_discount_percent,
-                    )
-                else:
-                    devices_cost = 0
+                # Тарифный режим: серверы и трафик включены в цену тарифа.
+                # Порядок: база + устройства → скидка на полную сумму (как в calculate_renewal_price).
+                from app.utils.promo_offer import get_user_active_promo_discount_percent
 
+                original_price = base_price_original
+
+                tariff_device_limit = tariff.device_limit if tariff.device_limit is not None else 0
+                device_limit = (
+                    subscription.device_limit if subscription.device_limit is not None else tariff_device_limit
+                )
+                extra_devices = max(0, device_limit - tariff_device_limit)
+                device_price_per_unit = (
+                    tariff.device_price_kopeks
+                    if tariff and tariff.device_price_kopeks is not None
+                    else settings.PRICE_PER_DEVICE
+                )
                 months_in_period = calculate_months_from_days(duration_days)
-                total_price = base_price + devices_cost * months_in_period
+                devices_price = extra_devices * device_price_per_unit * months_in_period
+                original_price += devices_price
+
+                # Скидка промогруппы на полную сумму (база + устройства)
+                period_discount_percent = db_user.get_promo_discount('period', duration_days)
+                discount_total = original_price * period_discount_percent // 100
+                total_price = original_price - discount_total
+
+                # Promo-offer скидка (временная)
+                promo_offer_percent = get_user_active_promo_discount_percent(db_user)
+                if promo_offer_percent > 0:
+                    promo_offer_discount = total_price * promo_offer_percent // 100
+                    total_price = total_price - promo_offer_discount
             else:
                 # Классический режим: серверы + трафик + устройства считаются отдельно
+                period_discount_percent = db_user.get_promo_discount('period', duration_days)
+                base_price, base_discount_total = apply_percentage_discount(
+                    base_price_original,
+                    period_discount_percent,
+                )
                 from app.services.subscription_service import SubscriptionService
 
                 subscription_service = SubscriptionService()
