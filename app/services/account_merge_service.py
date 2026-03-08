@@ -387,12 +387,21 @@ async def execute_merge(
     )
 
     # 1. Перенос OAuth ID
+    # Два прохода: сначала очищаем secondary (flush для освобождения unique constraint),
+    # затем устанавливаем на primary. Без этого SQLAlchemy может отправить UPDATE primary
+    # раньше UPDATE secondary, что вызовет UniqueViolation.
+    oauth_transfers: list[tuple[str, object]] = []
     for field in _OAUTH_FIELDS:
         secondary_value = getattr(secondary, field)
         primary_value = getattr(primary, field)
         if secondary_value and not primary_value:
-            setattr(primary, field, secondary_value)
+            oauth_transfers.append((field, secondary_value))
             setattr(secondary, field, None)
+
+    if oauth_transfers:
+        await db.flush()  # Освобождаем unique constraints перед переносом
+        for field, value in oauth_transfers:
+            setattr(primary, field, value)
             logger.info(
                 'Перенесён OAuth ID',
                 field=field,
@@ -400,27 +409,34 @@ async def execute_merge(
                 secondary_id=secondary.id,
             )
 
-    # 2. Перенос telegram_id
+    # 2. Перенос telegram_id (unique constraint — тот же паттерн: очистка → flush → установка)
     if secondary.telegram_id and not primary.telegram_id:
-        primary.telegram_id = secondary.telegram_id
+        transferred_tg_id = secondary.telegram_id
         secondary.telegram_id = None
+        await db.flush()
+        primary.telegram_id = transferred_tg_id
         logger.info(
             'Перенесён telegram_id',
             primary_id=primary.id,
             secondary_id=secondary.id,
         )
 
-    # 3. Перенос email + password
+    # 3. Перенос email + password (unique constraint на email — тот же паттерн)
     if not primary.email and secondary.email:
-        primary.email = secondary.email
-        primary.email_verified = secondary.email_verified
-        primary.email_verified_at = secondary.email_verified_at
-        primary.password_hash = secondary.password_hash
-        # Очищаем на secondary для освобождения unique constraint
+        transferred_email = secondary.email
+        transferred_verified = secondary.email_verified
+        transferred_verified_at = secondary.email_verified_at
+        transferred_password_hash = secondary.password_hash
+        # Очищаем на secondary и flush перед установкой на primary
         secondary.email = None
         secondary.email_verified = False
         secondary.email_verified_at = None
         secondary.password_hash = None
+        await db.flush()
+        primary.email = transferred_email
+        primary.email_verified = transferred_verified
+        primary.email_verified_at = transferred_verified_at
+        primary.password_hash = transferred_password_hash
         logger.info(
             'Перенесены email и пароль',
             primary_id=primary.id,
@@ -601,7 +617,14 @@ async def execute_merge(
         .values(referrer_id=primary.id)
     )
 
-    # 10i. Переназначение promocode_uses (без unique constraint — простое переназначение)
+    # 10i. Переназначение promocode_uses (unique constraint: user_id + promocode_id)
+    primary_promo_ids = select(PromoCodeUse.promocode_id).where(PromoCodeUse.user_id == primary.id)
+    await db.execute(
+        delete(PromoCodeUse).where(
+            PromoCodeUse.user_id == secondary.id,
+            PromoCodeUse.promocode_id.in_(primary_promo_ids),
+        )
+    )
     await db.execute(update(PromoCodeUse).where(PromoCodeUse.user_id == secondary.id).values(user_id=primary.id))
 
     # 10j. Переназначение partner_applications

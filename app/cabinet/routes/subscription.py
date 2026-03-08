@@ -225,7 +225,7 @@ def _subscription_to_response(
         traffic_limit_gb=traffic_limit_gb,
         traffic_used_gb=round(traffic_used_gb, 2),
         traffic_used_percent=round(traffic_used_percent, 1),
-        device_limit=subscription.device_limit or 1,
+        device_limit=subscription.device_limit or 0,
         connected_squads=subscription.connected_squads or [],
         servers=servers or [],
         autopay_enabled=subscription.autopay_enabled or False,
@@ -1832,11 +1832,11 @@ async def submit_purchase(
                     user=user,
                     notification_type=notification_type,
                     context={
-                        'subscription': subscription,
                         'expires_at': end_date_str,  # for SUBSCRIPTION_ACTIVATED
                         'new_expires_at': end_date_str,  # for SUBSCRIPTION_RENEWED
                         'traffic_limit_gb': subscription.traffic_limit_gb,
                         'device_limit': subscription.device_limit,
+                        'tariff_name': '',  # classic mode has no tariff
                     },
                     bot=None,
                 )
@@ -2282,7 +2282,6 @@ async def purchase_tariff(
                     user=user,
                     notification_type=notification_type,
                     context={
-                        'subscription': subscription,
                         'expires_at': end_date_str,  # for SUBSCRIPTION_ACTIVATED
                         'new_expires_at': end_date_str,  # for SUBSCRIPTION_RENEWED
                         'traffic_limit_gb': subscription.traffic_limit_gb,
@@ -3557,7 +3556,7 @@ async def get_devices(
         return {
             'devices': [],
             'total': 0,
-            'device_limit': user.subscription.device_limit or 1,
+            'device_limit': user.subscription.device_limit or 0,
         }
 
     try:
@@ -3585,7 +3584,7 @@ async def get_devices(
             return {
                 'devices': formatted_devices,
                 'total': response.get('total', len(formatted_devices)),
-                'device_limit': user.subscription.device_limit or 1,
+                'device_limit': user.subscription.device_limit or 0,
             }
 
     except Exception as e:
@@ -3593,7 +3592,7 @@ async def get_devices(
         return {
             'devices': [],
             'total': 0,
-            'device_limit': user.subscription.device_limit or 1,
+            'device_limit': user.subscription.device_limit or 0,
         }
 
 

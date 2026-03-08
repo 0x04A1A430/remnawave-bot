@@ -4579,6 +4579,13 @@ async def admin_buy_subscription_execute(callback: types.CallbackQuery, db_user:
 
                 hwid_limit = resolve_hwid_device_limit_for_payload(subscription)
 
+                # Загружаем tariff для внешнего сквада
+                try:
+                    await db.refresh(subscription, ['tariff'])
+                except Exception:
+                    pass
+                ext_squad_uuid = subscription.tariff.external_squad_uuid if subscription.tariff else None
+
                 if target_user.remnawave_uuid:
                     async with remnawave_service.get_api_client() as api:
                         update_kwargs = dict(
@@ -4601,6 +4608,12 @@ async def admin_buy_subscription_execute(callback: types.CallbackQuery, db_user:
 
                         if hwid_limit is not None:
                             update_kwargs['hwid_device_limit'] = hwid_limit
+
+                        # Внешний сквад: синхронизируем из тарифа или сбрасываем
+                        if ext_squad_uuid is not None:
+                            update_kwargs['external_squad_uuid'] = ext_squad_uuid
+                        else:
+                            update_kwargs['external_squad_uuid'] = None
 
                         remnawave_user = await api.update_user(**update_kwargs)
                 else:
@@ -4633,6 +4646,8 @@ async def admin_buy_subscription_execute(callback: types.CallbackQuery, db_user:
 
                         if hwid_limit is not None:
                             create_kwargs['hwid_device_limit'] = hwid_limit
+                        if ext_squad_uuid is not None:
+                            create_kwargs['external_squad_uuid'] = ext_squad_uuid
 
                         remnawave_user = await api.create_user(**create_kwargs)
 

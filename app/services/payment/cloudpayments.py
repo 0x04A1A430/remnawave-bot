@@ -21,13 +21,14 @@ class CloudPaymentsPaymentMixin:
     async def create_cloudpayments_payment(
         self,
         db: AsyncSession,
-        user_id: int,
+        user_id: int | None,
         amount_kopeks: int,
         description: str,
         *,
         telegram_id: int | None = None,
         language: str | None = None,
         email: str | None = None,
+        return_url: str | None = None,
     ) -> dict[str, Any] | None:
         """
         Create a CloudPayments payment and return payment link info.
@@ -78,6 +79,7 @@ class CloudPaymentsPaymentMixin:
                 invoice_id=invoice_id,
                 description=description,
                 email=email,
+                success_redirect_url=return_url,
             )
         except CloudPaymentsAPIError as error:
             logger.error('Ошибка создания CloudPayments платежа', error=error)
@@ -138,7 +140,7 @@ class CloudPaymentsPaymentMixin:
         invoice_id = webhook_data.get('invoice_id')
         transaction_id_cp = webhook_data.get('transaction_id')
         amount = webhook_data.get('amount', 0)
-        amount_kopeks = int(amount * 100)
+        amount_kopeks = int(round(amount * 100))
         account_id = webhook_data.get('account_id', '')
         token = webhook_data.get('token')
         test_mode = webhook_data.get('test_mode', False)
@@ -186,9 +188,51 @@ class CloudPaymentsPaymentMixin:
                 logger.error('Не удалось создать запись платежа')
                 return False
 
-        # Check if already processed
-        if payment.is_paid:
+        # Lock payment row to prevent concurrent double-processing
+        from app.database.crud.cloudpayments import get_cloudpayments_payment_by_id_for_update
+
+        locked = await get_cloudpayments_payment_by_id_for_update(db, payment.id)
+        if not locked:
+            logger.error('CloudPayments: не удалось заблокировать платёж', payment_id=payment.id)
+            return False
+        payment = locked
+
+        # Check if already processed (under lock)
+        if payment.is_paid or payment.transaction_id:
             logger.info('CloudPayments платёж уже обработан: invoice', invoice_id=invoice_id)
+            return True
+
+        # Verify webhook amount matches stored amount
+        from app.utils.payment_utils import verify_payment_amount
+
+        if not verify_payment_amount(amount_kopeks, payment.amount_kopeks):
+            logger.warning(
+                'CloudPayments: несоответствие суммы',
+                invoice_id=invoice_id,
+                received_kopeks=amount_kopeks,
+                expected_kopeks=payment.amount_kopeks,
+            )
+            return False
+
+        # --- Guest purchase flow (landing page) ---
+        cp_metadata = dict(getattr(payment, 'metadata_json', {}) or {})
+        from app.services.payment.common import try_fulfill_guest_purchase
+
+        guest_result = await try_fulfill_guest_purchase(
+            db,
+            metadata=cp_metadata,
+            payment_amount_kopeks=amount_kopeks,
+            provider_payment_id=str(transaction_id_cp) if transaction_id_cp else invoice_id,
+            provider_name='cloudpayments',
+        )
+        if guest_result is not None:
+            # Update payment record even for guest purchases
+            payment.transaction_id_cp = transaction_id_cp
+            payment.status = 'completed'
+            payment.is_paid = True
+            payment.paid_at = datetime.now(UTC)
+            payment.callback_payload = webhook_data
+            await db.flush()
             return True
 
         # Update payment record
@@ -205,10 +249,8 @@ class CloudPaymentsPaymentMixin:
         payment.test_mode = test_mode
         payment.callback_payload = webhook_data
 
-        await db.flush()
-
         # Get user
-        from app.database.crud.user import add_user_balance, get_user_by_id
+        from app.database.crud.user import get_user_by_id
 
         user = await get_user_by_id(db, payment.user_id)
 
@@ -216,8 +258,9 @@ class CloudPaymentsPaymentMixin:
             logger.error('Пользователь не найден: id', user_id=payment.user_id)
             return False
 
-        # Add balance (без автоматической транзакции - создадим ниже с external_id)
-        await add_user_balance(db, user, amount_kopeks, create_transaction=False)
+        # Credit balance directly (not via add_user_balance which commits)
+        user.balance_kopeks += amount_kopeks
+        user.updated_at = datetime.now(UTC)
 
         # Create transaction record
         from app.database.crud.transaction import create_transaction
@@ -232,10 +275,25 @@ class CloudPaymentsPaymentMixin:
             external_id=str(transaction_id_cp) if transaction_id_cp else invoice_id,
             is_completed=True,
             created_at=getattr(payment, 'created_at', None),
+            commit=False,
         )
 
         payment.transaction_id = transaction.id
         await db.commit()
+
+        # Emit deferred side-effects after atomic commit
+        from app.database.crud.transaction import emit_transaction_side_effects
+
+        await emit_transaction_side_effects(
+            db,
+            transaction,
+            amount_kopeks=amount_kopeks,
+            user_id=user.id,
+            type=TransactionType.DEPOSIT,
+            payment_method=PaymentMethod.CLOUDPAYMENTS,
+            external_id=str(transaction_id_cp) if transaction_id_cp else invoice_id,
+            description=payment.description or settings.CLOUDPAYMENTS_DESCRIPTION,
+        )
 
         user_id_display = user.telegram_id or user.email or f'#{user.id}'
         logger.info(
