@@ -1,10 +1,14 @@
+import asyncio
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 import structlog
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.database.crud.server_squad import get_all_server_squads
 from app.database.crud.user import get_user_by_id
 from app.database.models import PromoGroup, Subscription, SubscriptionStatus, User
 from app.external.remnawave_api import RemnaWaveAPI, RemnaWaveAPIError, RemnaWaveUser, TrafficLimitStrategy, UserStatus
@@ -1485,3 +1489,86 @@ class SubscriptionService:
         if bytes_value == 0:
             return 0.0
         return bytes_value / (1024 * 1024 * 1024)
+
+    async def propagate_tariff_squads(
+        self, db: AsyncSession, tariff_id: int, new_squads: list[str], *, concurrency: int = 5
+    ) -> 'PropagateSquadsResult':
+        """Применяет изменение серверов тарифа к активным подпискам и синхронизирует с RemnaWave.
+
+        Если new_squads пустой — означает "все серверы", будут подставлены все доступные.
+        Синхронизация с RemnaWave выполняется параллельно с ограничением concurrency.
+        """
+        squads_to_set = list(new_squads)
+        if not squads_to_set:
+            all_servers, _ = await get_all_server_squads(db, available_only=True, limit=10000)
+            squads_to_set = [s.squad_uuid for s in all_servers if s.squad_uuid]
+
+        result = await db.execute(
+            select(Subscription).where(
+                Subscription.tariff_id == tariff_id,
+                Subscription.status.in_([SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value]),
+            )
+        )
+        subscriptions = result.scalars().all()
+
+        if not subscriptions:
+            return PropagateSquadsResult(total=0, synced=0)
+
+        for sub in subscriptions:
+            sub.connected_squads = squads_to_set
+        await db.commit()
+
+        # Параллельная синхронизация с RemnaWave
+        semaphore = asyncio.Semaphore(concurrency)
+        synced = 0
+        failed_ids: list[int] = []
+
+        async def _sync_one(sub: Subscription) -> bool:
+            async with semaphore:
+                try:
+                    updated = await self.update_remnawave_user(db, sub)
+                    return updated is not None
+                except Exception as e:
+                    logger.warning(
+                        '⚠️ Не удалось обновить сквады в RemnaWave',
+                        subscription_id=sub.id,
+                        user_id=sub.user_id,
+                        error=e,
+                    )
+                    return False
+
+        results = await asyncio.gather(*[_sync_one(sub) for sub in subscriptions])
+        for i, success in enumerate(results):
+            if success:
+                synced += 1
+            else:
+                failed_ids.append(subscriptions[i].id)
+
+        propagate_result = PropagateSquadsResult(total=len(subscriptions), synced=synced, failed_ids=failed_ids)
+
+        if failed_ids:
+            logger.warning(
+                '⚠️ Частичная синхронизация скводов с RemnaWave',
+                tariff_id=tariff_id,
+                total=propagate_result.total,
+                synced=synced,
+                failed_ids=failed_ids,
+            )
+        else:
+            logger.info(
+                '🔄 Обновлены сквады подписок для тарифа',
+                tariff_id=tariff_id,
+                total=propagate_result.total,
+                synced=synced,
+            )
+
+        return propagate_result
+
+
+@dataclass
+class PropagateSquadsResult:
+    """Результат применения скводов тарифа к подпискам."""
+
+    total: int = 0
+    synced: int = 0
+    failed_ids: list[int] | None = None

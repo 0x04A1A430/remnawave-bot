@@ -748,6 +748,12 @@ class UserService:
     async def delete_user_account(
         self, db: AsyncSession, user_id: int, admin_id: int, *, force_panel_delete: bool = False
     ) -> DeleteUserResult:
+        """Полное удаление пользователя из бота и (опционально) из панели RemnaWave.
+
+        force_panel_delete=True: пропускает проверку активной подписки и принудительно
+        удаляет (не деактивирует) пользователя из панели RemnaWave. Используется
+        при полном удалении через кабинет администратора.
+        """
         result = DeleteUserResult()
         try:
             user = await get_user_by_id(db, user_id)

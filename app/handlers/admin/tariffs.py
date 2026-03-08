@@ -5,7 +5,6 @@ from aiogram import Dispatcher, F, types
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -19,7 +18,7 @@ from app.database.crud.tariff import (
     get_tariffs_with_subscriptions_count,
     update_tariff,
 )
-from app.database.models import Subscription, SubscriptionStatus, Tariff, User
+from app.database.models import Tariff, User
 from app.localization.texts import get_texts
 from app.states import AdminStates
 from app.utils.decorators import admin_required, error_handler
@@ -56,50 +55,6 @@ def _format_period(days: int) -> str:
     if days % 10 == 1:
         return f'{days} день'
     return f'{days} дня'
-
-
-async def _propagate_squads_to_subscriptions(db: AsyncSession, tariff: Tariff, new_squads: list[str]) -> int:
-    """Применяет изменение серверов тарифа к существующим активным подпискам и синхронизирует с RemnaWave."""
-    squads_to_set = list(new_squads)
-    if not squads_to_set:
-        all_servers, _ = await get_all_server_squads(db, available_only=True)
-        squads_to_set = [s.squad_uuid for s in all_servers if s.squad_uuid]
-
-    result = await db.execute(
-        select(Subscription).where(
-            Subscription.tariff_id == tariff.id,
-            Subscription.status.in_([SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value]),
-        )
-    )
-    subscriptions = result.scalars().all()
-
-    if not subscriptions:
-        return 0
-
-    for sub in subscriptions:
-        sub.connected_squads = squads_to_set
-    await db.commit()
-
-    from app.services.subscription_service import SubscriptionService
-
-    subscription_service = SubscriptionService()
-    synced = 0
-    for sub in subscriptions:
-        try:
-            updated = await subscription_service.update_remnawave_user(db, sub)
-            if updated:
-                synced += 1
-        except Exception as e:
-            logger.warning('⚠️ Не удалось обновить сквады в RemnaWave', subscription_id=sub.id, error=e)
-
-    logger.info(
-        '🔄 Обновлены сквады подписок для тарифа',
-        tariff_id=tariff.id,
-        tariff_name=tariff.name,
-        total=len(subscriptions),
-        synced=synced,
-    )
-    return len(subscriptions)
 
 
 def _parse_period_prices(text: str) -> dict[str, int]:
@@ -2320,7 +2275,7 @@ async def start_edit_tariff_squads(
         await callback.answer('Тариф не найден', show_alert=True)
         return
 
-    squads, _ = await get_all_server_squads(db)
+    squads, _ = await get_all_server_squads(db, limit=10000)
 
     if not squads:
         await callback.answer('Нет доступных серверов', show_alert=True)
@@ -2389,7 +2344,7 @@ async def toggle_tariff_squad(
     tariff = await update_tariff(db, tariff, allowed_squads=list(current_squads))
 
     # Перерисовываем меню
-    squads, _ = await get_all_server_squads(db)
+    squads, _ = await get_all_server_squads(db, limit=10000)
     texts = get_texts(db_user.language)
 
     buttons = []
@@ -2428,7 +2383,9 @@ async def toggle_tariff_squad(
     await callback.answer()
 
     # Применяем изменения серверов к существующим подпискам
-    await _propagate_squads_to_subscriptions(db, tariff, list(current_squads))
+    from app.services.subscription_service import SubscriptionService
+
+    await SubscriptionService().propagate_tariff_squads(db, tariff.id, list(current_squads))
 
 
 @admin_required
@@ -2450,7 +2407,7 @@ async def clear_tariff_squads(
     await callback.answer('Все серверы очищены')
 
     # Перерисовываем меню
-    squads, _ = await get_all_server_squads(db)
+    squads, _ = await get_all_server_squads(db, limit=10000)
     texts = get_texts(db_user.language)
 
     buttons = []
@@ -2485,7 +2442,9 @@ async def clear_tariff_squads(
         pass
 
     # Применяем изменения серверов к существующим подпискам (пустой список = все серверы)
-    await _propagate_squads_to_subscriptions(db, tariff, [])
+    from app.services.subscription_service import SubscriptionService
+
+    await SubscriptionService().propagate_tariff_squads(db, tariff.id, [])
 
 
 @admin_required
@@ -2503,7 +2462,7 @@ async def select_all_tariff_squads(
         await callback.answer('Тариф не найден', show_alert=True)
         return
 
-    squads, _ = await get_all_server_squads(db)
+    squads, _ = await get_all_server_squads(db, limit=10000)
     all_uuids = [s.squad_uuid for s in squads if s.squad_uuid]
 
     tariff = await update_tariff(db, tariff, allowed_squads=all_uuids)
@@ -2543,7 +2502,9 @@ async def select_all_tariff_squads(
         pass
 
     # Применяем изменения серверов к существующим подпискам
-    await _propagate_squads_to_subscriptions(db, tariff, all_uuids)
+    from app.services.subscription_service import SubscriptionService
+
+    await SubscriptionService().propagate_tariff_squads(db, tariff.id, all_uuids)
 
 
 # ============ РЕДАКТИРОВАНИЕ ПРОМОГРУПП ============
