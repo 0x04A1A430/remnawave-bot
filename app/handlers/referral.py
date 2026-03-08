@@ -81,25 +81,19 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
     )
 
     if settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS > 0:
-        referral_text += (
-            '\n'
-            + texts.t(
-                'REFERRAL_REWARD_NEW_USER',
-                '• Новый пользователь получает: <b>{bonus}</b> при первом пополнении от <b>{minimum}</b>',
-            ).format(
-                bonus=texts.format_price(settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS),
-                minimum=texts.format_price(settings.REFERRAL_MINIMUM_TOPUP_KOPEKS),
-            )
+        referral_text += '\n' + texts.t(
+            'REFERRAL_REWARD_NEW_USER',
+            '• Новый пользователь получает: <b>{bonus}</b> при первом пополнении от <b>{minimum}</b>',
+        ).format(
+            bonus=texts.format_price(settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS),
+            minimum=texts.format_price(settings.REFERRAL_MINIMUM_TOPUP_KOPEKS),
         )
 
     if settings.REFERRAL_INVITER_BONUS_KOPEKS > 0:
-        referral_text += (
-            '\n'
-            + texts.t(
-                'REFERRAL_REWARD_INVITER',
-                '• Вы получаете при первом пополнении реферала: <b>{bonus}</b>',
-            ).format(bonus=texts.format_price(settings.REFERRAL_INVITER_BONUS_KOPEKS))
-        )
+        referral_text += '\n' + texts.t(
+            'REFERRAL_REWARD_INVITER',
+            '• Вы получаете при первом пополнении реферала: <b>{bonus}</b>',
+        ).format(bonus=texts.format_price(settings.REFERRAL_INVITER_BONUS_KOPEKS))
 
     if settings.REFERRAL_MAX_COMMISSION_PAYMENTS > 0:
         commission_line = texts.t(
@@ -476,20 +470,15 @@ async def create_invite_message(callback: types.CallbackQuery, db_user: User):
     bot_username = (await callback.bot.get_me()).username
     referral_link = f'https://t.me/{bot_username}?start={db_user.referral_code}'
 
-    invite_text = (
-        texts.t('REFERRAL_INVITE_TITLE', '🎉 Присоединяйся к VPN сервису!')
-    )
+    invite_text = texts.t('REFERRAL_INVITE_TITLE', '🎉 Присоединяйся к VPN сервису!')
 
     if settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS > 0:
-        invite_text += (
-            '\n\n'
-            + texts.t(
-                'REFERRAL_INVITE_BONUS',
-                '💎 При первом пополнении от {minimum} ты получишь {bonus} бонусом на баланс!',
-            ).format(
-                minimum=texts.format_price(settings.REFERRAL_MINIMUM_TOPUP_KOPEKS),
-                bonus=texts.format_price(settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS),
-            )
+        invite_text += '\n\n' + texts.t(
+            'REFERRAL_INVITE_BONUS',
+            '💎 При первом пополнении от {minimum} ты получишь {bonus} бонусом на баланс!',
+        ).format(
+            minimum=texts.format_price(settings.REFERRAL_MINIMUM_TOPUP_KOPEKS),
+            bonus=texts.format_price(settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS),
         )
 
     invite_text += (

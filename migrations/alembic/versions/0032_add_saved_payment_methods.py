@@ -1,7 +1,7 @@
 """add saved_payment_methods table for recurrent payments
 
-Revision ID: 0015
-Revises: 0014
+Revision ID: 0032
+Revises: 0031
 Create Date: 2026-03-05
 
 Adds saved_payment_methods table for storing YooKassa saved payment methods
@@ -13,8 +13,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = '0015'
-down_revision: Union[str, None] = '0014'
+revision: str = '0032'
+down_revision: Union[str, None] = '0031'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

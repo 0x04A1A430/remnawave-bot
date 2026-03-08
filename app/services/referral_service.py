@@ -119,9 +119,7 @@ async def process_referral_registration(db: AsyncSession, new_user_id: int, refe
                     f'{commission_percent}% от суммы (что больше).\n\n'
                 )
             else:
-                inviter_notification += (
-                    f'вы получите {commission_percent}% от суммы.\n\n'
-                )
+                inviter_notification += f'вы получите {commission_percent}% от суммы.\n\n'
             inviter_notification += (
                 f'📈 С каждого последующего пополнения вы будете получать {commission_percent}% комиссии.'
             )
