@@ -1241,17 +1241,41 @@ async def _auto_add_devices(
         await user_cart_service.delete_user_cart(user.id)
         return False
 
+    # Load tariff for device price and max limit
+    tariff = None
+    if subscription.tariff_id:
+        from app.database.crud.tariff import get_tariff_by_id
+
+        tariff = await get_tariff_by_id(db, subscription.tariff_id)
+
+    if tariff and tariff.device_price_kopeks is not None:
+        tariff_device_price = tariff.device_price_kopeks
+        tariff_max_device_limit = tariff.max_device_limit
+    else:
+        tariff_device_price = settings.PRICE_PER_DEVICE
+        tariff_max_device_limit = settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else None
+
+    # Block purchase if device price is 0 or negative (purchase unavailable for this tariff)
+    if not tariff_device_price or tariff_device_price <= 0:
+        logger.warning(
+            '🔁 Автопокупка устройств: докупка устройств недоступна для тарифа, корзина удалена',
+            format_user_id=_format_user_id(user),
+            tariff_id=subscription.tariff_id,
+            tariff_device_price=tariff_device_price,
+        )
+        await user_cart_service.delete_user_cart(user.id)
+        return False
+
     # Check max device limit before charging
     old_device_limit = subscription.device_limit or 1
     new_device_limit = old_device_limit + devices_to_add
-    max_devices = settings.MAX_DEVICES_LIMIT
-    if max_devices > 0 and new_device_limit > max_devices:
+    if tariff_max_device_limit and new_device_limit > tariff_max_device_limit:
         logger.warning(
             '🔁 Автопокупка устройств: превышен лимит устройств',
             format_user_id=_format_user_id(user),
             current=old_device_limit,
             requested=new_device_limit,
-            max_devices=max_devices,
+            tariff_max_device_limit=tariff_max_device_limit,
         )
         await user_cart_service.delete_user_cart(user.id)
         return False
@@ -1293,7 +1317,7 @@ async def _auto_add_devices(
     old_device_limit = subscription.device_limit or 1
     new_device_limit = old_device_limit + devices_to_add
 
-    if max_devices > 0 and new_device_limit > max_devices:
+    if tariff_max_device_limit and new_device_limit > tariff_max_device_limit:
         # Concurrent modification exceeded limit — refund
         user_refund = await db.execute(
             select(User).where(User.id == user.id).with_for_update().execution_options(populate_existing=True)

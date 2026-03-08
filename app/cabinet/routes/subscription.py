@@ -1008,9 +1008,10 @@ async def purchase_devices_legacy(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
-    """Purchase additional device slots (legacy endpoint without tariff support).
+    """Purchase additional device slots (legacy endpoint).
 
     DEPRECATED: Use /devices/purchase instead for full tariff and discount support.
+    Now uses tariff-aware pricing when subscription has a tariff_id.
     """
     if getattr(user, 'restriction_subscription', False):
         raise HTTPException(
@@ -1033,8 +1034,34 @@ async def purchase_devices_legacy(
             detail='No subscription found',
         )
 
-    price_per_device = settings.PRICE_PER_DEVICE
-    base_total_price = price_per_device * request.devices
+    if subscription.status not in ['active', 'trial']:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Ваша подписка неактивна',
+        )
+
+    # Get tariff for device price (if exists)
+    tariff = None
+    if subscription.tariff_id:
+        from app.database.crud.tariff import get_tariff_by_id
+
+        tariff = await get_tariff_by_id(db, subscription.tariff_id)
+
+    # Determine device price and max limit from tariff or settings
+    if tariff and tariff.device_price_kopeks is not None:
+        device_price = tariff.device_price_kopeks
+        max_device_limit = tariff.max_device_limit
+    else:
+        device_price = settings.PRICE_PER_DEVICE
+        max_device_limit = settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else None
+
+    if not device_price or device_price <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Докупка устройств недоступна',
+        )
+
+    base_total_price = device_price * request.devices
 
     # Apply discount from promo group
     discount_result = _apply_addon_discount(user, 'devices', base_total_price, 30)
@@ -1048,12 +1075,11 @@ async def purchase_devices_legacy(
     # Check max devices limit (under row lock — prevents concurrent purchases exceeding limit)
     current_devices = subscription.device_limit or 1
     new_devices = current_devices + request.devices
-    max_devices = settings.MAX_DEVICES_LIMIT
 
-    if new_devices > max_devices:
+    if max_device_limit and new_devices > max_device_limit:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'Maximum device limit is {max_devices}',
+            detail=f'Максимальное количество устройств: {max_device_limit}',
         )
 
     # Check balance
@@ -1127,7 +1153,7 @@ async def purchase_devices_legacy(
 
     actual_current = subscription.device_limit or 1
     actual_new = actual_current + request.devices
-    if max_devices > 0 and actual_new > max_devices:
+    if max_device_limit and actual_new > max_device_limit:
         # Concurrent purchase already exceeded limit — refund balance
         user_refund = await db.execute(
             select(User).where(User.id == user.id).with_for_update().execution_options(populate_existing=True)
@@ -1137,13 +1163,24 @@ async def purchase_devices_legacy(
         await db.commit()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f'Maximum device limit is {max_devices}. Balance refunded.',
+            detail=f'Максимальное количество устройств: {max_device_limit}. Баланс возвращён.',
         )
 
     # Add devices (under lock)
     subscription.device_limit = actual_new
     await db.commit()
+    await db.refresh(subscription)
     await db.refresh(user)
+
+    # Sync with RemnaWave
+    try:
+        service = SubscriptionService()
+        if getattr(user, 'remnawave_uuid', None):
+            await service.update_remnawave_user(db, subscription)
+        else:
+            await service.create_remnawave_user(db, subscription)
+    except Exception as e:
+        logger.error('Failed to sync devices with RemnaWave (legacy endpoint)', error=e)
 
     # Отправляем уведомление админам
     try:

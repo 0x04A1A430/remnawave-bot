@@ -5024,14 +5024,29 @@ async def _build_subscription_settings(
     default_device_limit = max(settings.DEFAULT_DEVICE_LIMIT, 1)
     current_device_limit = int(subscription.device_limit or default_device_limit)
 
-    max_devices_setting = settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else None
+    # Load tariff for device price and max limit
+    tariff = None
+    if subscription.tariff_id:
+        tariff = await get_tariff_by_id(db, subscription.tariff_id)
+
+    # Determine device price and max limit from tariff or global settings
+    if tariff and tariff.device_price_kopeks is not None:
+        base_device_price = tariff.device_price_kopeks
+        max_devices_setting = tariff.max_device_limit
+    else:
+        base_device_price = settings.PRICE_PER_DEVICE
+        max_devices_setting = settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else None
+
+    # If device price is 0 or negative, device purchase is unavailable
+    devices_can_update = bool(base_device_price and base_device_price > 0)
+
     if max_devices_setting is not None:
         max_devices = max(max_devices_setting, current_device_limit, default_device_limit)
     else:
         max_devices = max(current_device_limit, default_device_limit) + 10
 
     discounted_single_device, _ = apply_percentage_discount(
-        settings.PRICE_PER_DEVICE,
+        base_device_price,
         devices_discount,
     )
 
@@ -5039,7 +5054,7 @@ async def _build_subscription_settings(
     for value in range(1, max_devices + 1):
         chargeable = max(0, value - default_device_limit)
         discounted_per_month, _ = apply_percentage_discount(
-            chargeable * settings.PRICE_PER_DEVICE,
+            chargeable * base_device_price,
             devices_discount,
         )
         devices_options.append(
@@ -5074,7 +5089,7 @@ async def _build_subscription_settings(
         ),
         devices=MiniAppSubscriptionDevicesSettings(
             options=devices_options,
-            can_update=True,
+            can_update=devices_can_update,
             min=1,
             max=max_devices_setting or 0,
             step=1,
@@ -6102,12 +6117,32 @@ async def update_subscription_devices_endpoint(
             detail={'code': 'validation_error', 'message': 'Device limit must be positive'},
         )
 
-    if settings.MAX_DEVICES_LIMIT > 0 and new_devices > settings.MAX_DEVICES_LIMIT:
+    # Load tariff for device price and max limit
+    tariff = None
+    if subscription.tariff_id:
+        tariff = await get_tariff_by_id(db, subscription.tariff_id)
+
+    if tariff and tariff.device_price_kopeks is not None:
+        tariff_device_price = tariff.device_price_kopeks
+        tariff_max_device_limit = tariff.max_device_limit
+    else:
+        tariff_device_price = settings.PRICE_PER_DEVICE
+        tariff_max_device_limit = settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else None
+
+    # Block purchase if device price is 0 (purchase unavailable for this tariff)
+    if not tariff_device_price or tariff_device_price <= 0:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail={'code': 'devices_unavailable', 'message': 'Докупка устройств недоступна'},
+        )
+
+    # Enforce tariff max device limit
+    if tariff_max_device_limit and new_devices > tariff_max_device_limit:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'devices_limit_exceeded',
-                'message': (f'Превышен максимальный лимит устройств ({settings.MAX_DEVICES_LIMIT})'),
+                'message': f'Превышен максимальный лимит устройств ({tariff_max_device_limit})',
             },
         )
 
@@ -6140,7 +6175,7 @@ async def update_subscription_devices_endpoint(
         new_chargeable = max(0, new_devices - settings.DEFAULT_DEVICE_LIMIT)
         chargeable_diff = new_chargeable - current_chargeable
 
-        price_per_month = chargeable_diff * settings.PRICE_PER_DEVICE
+        price_per_month = chargeable_diff * tariff_device_price
         months_remaining = get_remaining_months(subscription.end_date)
         period_hint_days = months_remaining * 30 if months_remaining > 0 else None
         devices_discount = _get_addon_discount_percent_for_user(
@@ -6206,9 +6241,8 @@ async def update_subscription_devices_endpoint(
 
         actual_current = subscription.device_limit or 1
         actual_delta = new_devices - actual_current
-        max_devices_limit = settings.MAX_DEVICES_LIMIT
 
-        if actual_delta <= 0 or (max_devices_limit > 0 and new_devices > max_devices_limit):
+        if actual_delta <= 0 or (tariff_max_device_limit and new_devices > tariff_max_device_limit):
             # Concurrent request already applied the change or pushed limit beyond max — refund
             user_refund = await db.execute(
                 select(User).where(User.id == user.id).with_for_update().execution_options(populate_existing=True)
@@ -6228,7 +6262,7 @@ async def update_subscription_devices_endpoint(
                 status.HTTP_409_CONFLICT,
                 detail={
                     'code': 'devices_limit_exceeded',
-                    'message': f'Превышен максимальный лимит устройств ({max_devices_limit}). Баланс возвращён.',
+                    'message': f'Превышен максимальный лимит устройств ({tariff_max_device_limit}). Баланс возвращён.',
                 },
             )
 
