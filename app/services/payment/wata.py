@@ -194,7 +194,7 @@ class WataPaymentMixin:
             return False
 
         order_id_raw = payload.get('orderId')
-        payment_link_raw = payload.get('paymentLinkId') or payload.get('id')
+        payment_link_raw = payload.get('paymentLinkId') or payload.get('id') or payload.get('transactionId')
         transaction_status_raw = payload.get('transactionStatus')
 
         order_id = str(order_id_raw) if order_id_raw else None

@@ -1,5 +1,6 @@
 import structlog
 from aiogram import Bot, Dispatcher, F, types
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import InaccessibleMessage
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,7 +25,16 @@ async def show_promocode_menu(callback: types.CallbackQuery, db_user: User, stat
     if isinstance(callback.message, InaccessibleMessage):
         await callback.message.answer(texts.PROMOCODE_ENTER, reply_markup=get_back_keyboard(db_user.language))
     else:
-        await callback.message.edit_text(texts.PROMOCODE_ENTER, reply_markup=get_back_keyboard(db_user.language))
+        try:
+            await callback.message.edit_text(texts.PROMOCODE_ENTER, reply_markup=get_back_keyboard(db_user.language))
+        except TelegramBadRequest as error:
+            error_message = str(error).lower()
+            if 'there is no text in the message to edit' in error_message:
+                await callback.message.answer(
+                    texts.PROMOCODE_ENTER, reply_markup=get_back_keyboard(db_user.language)
+                )
+            else:
+                raise
 
     await state.set_state(PromoCodeStates.waiting_for_code)
     await callback.answer()

@@ -27,7 +27,6 @@ from app.services.user_cart_service import user_cart_service
 from app.utils.pagination import paginate_list
 from app.utils.pricing_utils import (
     apply_percentage_discount,
-    calculate_prorated_price,
     get_remaining_months,
 )
 from app.utils.subscription_utils import (
@@ -339,9 +338,10 @@ async def confirm_change_devices(callback: types.CallbackQuery, db_user: User, d
             total_discount = int(discount_per_month * days_left / 30)
             period_label = f'{days_left} дн.' if days_left > 1 else '1 день'
         else:
-            # Для обычных тарифов - по месяцам
-            months_hint = get_remaining_months(subscription.end_date)
-            period_hint_days = months_hint * 30 if months_hint > 0 else None
+            # Для обычных тарифов - по дням (как в кабинете)
+            now = datetime.now(UTC)
+            days_left = max(1, (subscription.end_date - now).days)
+            period_hint_days = days_left
 
             devices_discount_percent = _get_addon_discount_percent_for_user(
                 db_user,
@@ -352,12 +352,11 @@ async def confirm_change_devices(callback: types.CallbackQuery, db_user: User, d
                 devices_price_per_month,
                 devices_discount_percent,
             )
-            price, charged_months = calculate_prorated_price(
-                discounted_per_month,
-                subscription.end_date,
-            )
-            total_discount = discount_per_month * charged_months
-            period_label = f'{charged_months} мес'
+            # Цена = месячная_цена * days_left / 30
+            price = int(discounted_per_month * days_left / 30)
+            price = max(100, price)  # Минимум 1 рубль
+            total_discount = int(discount_per_month * days_left / 30)
+            period_label = f'{days_left} дн.' if days_left > 1 else '1 день'
 
         if price > 0 and db_user.balance_kopeks < price:
             missing_kopeks = price - db_user.balance_kopeks
@@ -1161,9 +1160,10 @@ async def confirm_add_devices(callback: types.CallbackQuery, db_user: User, db: 
         total_discount = int(discount_per_month * days_left / 30)
         period_label = f'{days_left} дн.' if days_left > 1 else '1 день'
     else:
-        # Для обычных тарифов - по месяцам
-        months_hint = get_remaining_months(subscription.end_date)
-        period_hint_days = months_hint * 30 if months_hint > 0 else None
+        # Для обычных тарифов - по дням (как в кабинете)
+        now = datetime.now(UTC)
+        days_left = max(1, (subscription.end_date - now).days)
+        period_hint_days = days_left
 
         devices_discount_percent = _get_addon_discount_percent_for_user(
             db_user,
@@ -1174,12 +1174,11 @@ async def confirm_add_devices(callback: types.CallbackQuery, db_user: User, db: 
             devices_price_per_month,
             devices_discount_percent,
         )
-        price, charged_months = calculate_prorated_price(
-            discounted_per_month,
-            subscription.end_date,
-        )
-        total_discount = discount_per_month * charged_months
-        period_label = f'{charged_months} мес'
+        # Цена = месячная_цена * days_left / 30
+        price = int(discounted_per_month * days_left / 30)
+        price = max(100, price)  # Минимум 1 рубль
+        total_discount = int(discount_per_month * days_left / 30)
+        period_label = f'{days_left} дн.' if days_left > 1 else '1 день'
 
     logger.info(
         'Добавление устройств: ₽/мес × = ₽ (скидка ₽)',

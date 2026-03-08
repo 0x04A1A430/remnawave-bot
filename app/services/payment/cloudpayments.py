@@ -258,6 +258,20 @@ class CloudPaymentsPaymentMixin:
             logger.error('Пользователь не найден: id', user_id=payment.user_id)
             return False
 
+        # Загружаем промогруппы и данные для уведомлений
+        await db.refresh(user, attribute_names=['promo_group', 'user_promo_groups'])
+        for user_promo_group in getattr(user, 'user_promo_groups', []):
+            await db.refresh(user_promo_group, attribute_names=['promo_group'])
+
+        from app.utils.user_utils import format_referrer_info
+
+        promo_group = user.get_primary_promo_group()
+        subscription = getattr(user, 'subscription', None)
+        referrer_info = format_referrer_info(user)
+
+        old_balance = user.balance_kopeks
+        was_first_topup = not user.has_made_first_topup
+
         # Credit balance directly (not via add_user_balance which commits)
         user.balance_kopeks += amount_kopeks
         user.updated_at = datetime.now(UTC)
@@ -312,6 +326,44 @@ class CloudPaymentsPaymentMixin:
             )
         except Exception as error:
             logger.exception('Ошибка отправки уведомления CloudPayments', error=error)
+
+        # Начисляем реферальную комиссию
+        try:
+            from app.services.referral_service import process_referral_topup
+
+            await process_referral_topup(
+                db,
+                user.id,
+                amount_kopeks,
+                getattr(self, 'bot', None),
+            )
+        except Exception as error:
+            logger.error('Ошибка обработки реферального пополнения CloudPayments', error=error)
+
+        if was_first_topup and not user.has_made_first_topup:
+            user.has_made_first_topup = True
+            await db.commit()
+            await db.refresh(user)
+
+        topup_status = '🆕 Первое пополнение' if was_first_topup else '🔄 Пополнение'
+
+        if getattr(self, 'bot', None):
+            try:
+                from app.services.admin_notification_service import AdminNotificationService
+
+                notification_service = AdminNotificationService(self.bot)
+                await notification_service.send_balance_topup_notification(
+                    user,
+                    transaction,
+                    old_balance,
+                    topup_status=topup_status,
+                    referrer_info=referrer_info,
+                    subscription=subscription,
+                    promo_group=promo_group,
+                    db=db,
+                )
+            except Exception as error:
+                logger.error('Ошибка отправки админ уведомления CloudPayments', error=error)
 
         # Автопокупка из сохранённой корзины и уведомление о корзине
         try:
