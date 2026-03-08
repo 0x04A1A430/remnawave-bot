@@ -122,6 +122,30 @@ async def get_user_by_telegram_id(db: AsyncSession, telegram_id: int) -> User | 
     return user
 
 
+async def find_phantom_user_by_username(db: AsyncSession, username: str) -> User | None:
+    """Find a phantom user created by guest purchase (no telegram_id, auth_type=telegram).
+
+    Used during /start to reconcile phantom users with real Telegram accounts.
+    """
+    if not username:
+        return None
+
+    normalized = username.lower()
+    result = await db.execute(
+        select(User)
+        .options(
+            selectinload(User.subscription).selectinload(Subscription.tariff),
+        )
+        .where(
+            User.telegram_id.is_(None),
+            User.auth_type == 'telegram',
+            func.lower(User.username) == normalized,
+        )
+        .with_for_update()
+    )
+    return result.scalars().first()
+
+
 async def get_user_by_username(db: AsyncSession, username: str) -> User | None:
     if not username:
         return None

@@ -1738,7 +1738,7 @@ class Settings(BaseSettings):
         return info.get('title') or info.get('name') or f'Platega {method_code}'
 
     def is_wata_enabled(self) -> bool:
-        return self.WATA_ENABLED and self.WATA_ACCESS_TOKEN is not None and self.WATA_TERMINAL_PUBLIC_ID is not None
+        return self.WATA_ENABLED and self.WATA_ACCESS_TOKEN is not None
 
     def get_wata_display_name(self) -> str:
         name = (self.WATA_DISPLAY_NAME or '').strip()

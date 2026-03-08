@@ -248,7 +248,8 @@ class SubscriptionService:
                         expire_at=subscription.end_date,
                         traffic_limit_bytes=self._gb_to_bytes(subscription.traffic_limit_gb),
                         traffic_limit_strategy=get_traffic_reset_strategy(subscription.tariff),
-                        email=user.email,  # Обновляем email в панели RemnaWave
+                        telegram_id=user.telegram_id,
+                        email=user.email,
                         description=settings.format_remnawave_user_description(
                             full_name=user.full_name,
                             username=user.username,
@@ -403,7 +404,8 @@ class SubscriptionService:
                     expire_at=subscription.end_date,
                     traffic_limit_bytes=self._gb_to_bytes(subscription.traffic_limit_gb),
                     traffic_limit_strategy=get_traffic_reset_strategy(subscription.tariff),
-                    email=user.email,  # Обновляем email в панели RemnaWave
+                    telegram_id=user.telegram_id,
+                    email=user.email,
                     description=settings.format_remnawave_user_description(
                         full_name=user.full_name,
                         username=user.username,
