@@ -1952,6 +1952,8 @@ async def confirm_extend_subscription(callback: types.CallbackQuery, db_user: Us
             'return_to_cart': True,
             'description': f'Продление подписки на {days} дней',
             'consume_promo_offer': bool(promo_component['discount'] > 0),
+            'device_limit': device_limit,
+            'traffic_limit_gb': renewal_traffic_gb,
         }
 
         await user_cart_service.save_user_cart(db_user.id, cart_data)

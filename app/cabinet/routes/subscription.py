@@ -510,12 +510,16 @@ async def renew_subscription(
             'source': 'cabinet',
         }
 
-        # Add tariff parameters for tariffs mode
+        # Add subscription parameters for auto-purchase
         if tariff_id:
             cart_data['traffic_limit_gb'] = tariff_traffic_limit_gb
             # Сохраняем актуальный device_limit подписки (включая докупленные устройства)
             cart_data['device_limit'] = user.subscription.device_limit
             cart_data['allowed_squads'] = tariff_allowed_squads
+        else:
+            # Classic mode: сохраняем текущие параметры подписки для корректной автопокупки
+            cart_data['device_limit'] = user.subscription.device_limit
+            cart_data['traffic_limit_gb'] = user.subscription.traffic_limit_gb
 
         try:
             await user_cart_service.save_user_cart(user.id, cart_data)
