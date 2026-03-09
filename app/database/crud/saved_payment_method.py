@@ -120,7 +120,7 @@ async def get_user_ids_with_active_payment_methods(
         select(SavedPaymentMethod.user_id)
         .where(
             SavedPaymentMethod.user_id.in_(user_ids),
-            SavedPaymentMethod.is_active == True,  # noqa: E712
+            SavedPaymentMethod.is_active == True,
         )
         .distinct()
     )
