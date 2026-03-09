@@ -57,7 +57,7 @@ async def get_commission_payment_count(db: AsyncSession, referrer_id: int, refer
             and_(
                 ReferralEarning.user_id == referrer_id,
                 ReferralEarning.referral_id == referral_id,
-                ReferralEarning.reason.in_(['referral_commission_topup', 'referral_first_topup']),
+                ReferralEarning.reason == 'referral_commission_topup',
             )
         )
     )

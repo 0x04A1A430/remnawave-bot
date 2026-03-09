@@ -1018,10 +1018,10 @@ async def update_user_subscription(
         )
 
     if request.action == 'extend':
-        if not request.days:
+        if not request.days or request.days <= 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='Days parameter is required for extend action',
+                detail='Days must be a positive integer',
             )
 
         await extend_subscription(db, subscription, request.days)
@@ -1041,10 +1041,10 @@ async def update_user_subscription(
         )
 
     if request.action == 'shorten':
-        if not request.days:
+        if not request.days or request.days <= 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='Days parameter is required for shorten action',
+                detail='Days must be a positive integer',
             )
 
         await extend_subscription(db, subscription, -request.days)

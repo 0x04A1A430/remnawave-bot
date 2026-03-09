@@ -1114,13 +1114,15 @@ class YooKassaPaymentMixin:
                 get_payment_method_by_yookassa_id,
             )
 
-            # Проверяем, не сохранён ли уже
-            existing = await get_payment_method_by_yookassa_id(db, pm_id)
+            # Проверяем, не сохранён ли уже (включая деактивированные —
+            # если пользователь удалил карту, не реактивируем её)
+            existing = await get_payment_method_by_yookassa_id(db, pm_id, include_inactive=True)
             if existing:
                 logger.debug(
                     'Метод оплаты уже сохранён',
                     yookassa_payment_method_id=pm_id,
                     user_id=payment.user_id,
+                    is_active=existing.is_active,
                 )
                 return
 

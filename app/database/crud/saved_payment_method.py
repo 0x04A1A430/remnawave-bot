@@ -26,28 +26,36 @@ async def create_saved_payment_method(
     """Создаёт или реактивирует сохранённый метод оплаты."""
 
     # Проверяем, есть ли уже такой метод (включая деактивированные)
-    existing = await get_payment_method_by_yookassa_id(db, yookassa_payment_method_id, include_inactive=True)
-    if existing:
-        # Реактивируем и обновляем данные
-        existing.is_active = True
-        existing.method_type = method_type
-        existing.card_first6 = card_first6
-        existing.card_last4 = card_last4
-        existing.card_type = card_type
-        existing.card_expiry_month = card_expiry_month
-        existing.card_expiry_year = card_expiry_year
-        existing.title = title
-        existing.updated_at = datetime.now(UTC)
-        await db.commit()
-        await db.refresh(existing)
+    result = await db.execute(
+        update(SavedPaymentMethod)
+        .where(
+            SavedPaymentMethod.yookassa_payment_method_id == yookassa_payment_method_id,
+            SavedPaymentMethod.user_id == user_id,
+        )
+        .values(
+            is_active=True,
+            method_type=method_type,
+            card_first6=card_first6,
+            card_last4=card_last4,
+            card_type=card_type,
+            card_expiry_month=card_expiry_month,
+            card_expiry_year=card_expiry_year,
+            title=title,
+            updated_at=datetime.now(UTC),
+        )
+        .returning(SavedPaymentMethod)
+    )
+    await db.commit()
+    reactivated = result.scalar_one_or_none()
+    if reactivated:
         logger.info(
             'Реактивирован сохранённый метод оплаты',
-            saved_method_id=existing.id,
+            saved_method_id=reactivated.id,
             user_id=user_id,
             method_type=method_type,
             card_last4=card_last4,
         )
-        return existing
+        return reactivated
 
     method = SavedPaymentMethod(
         user_id=user_id,
@@ -99,6 +107,24 @@ async def get_active_payment_methods_by_user(
         .order_by(SavedPaymentMethod.created_at.desc())
     )
     return list(result.scalars().all())
+
+
+async def get_user_ids_with_active_payment_methods(
+    db: AsyncSession,
+    user_ids: list[int],
+) -> set[int]:
+    """Вернуть подмножество user_ids, у которых есть хотя бы один активный метод оплаты."""
+    if not user_ids:
+        return set()
+    result = await db.execute(
+        select(SavedPaymentMethod.user_id)
+        .where(
+            SavedPaymentMethod.user_id.in_(user_ids),
+            SavedPaymentMethod.is_active == True,  # noqa: E712
+        )
+        .distinct()
+    )
+    return set(result.scalars().all())
 
 
 async def get_payment_method_by_yookassa_id(

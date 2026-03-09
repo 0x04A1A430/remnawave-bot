@@ -14,6 +14,10 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.database.crud.saved_payment_method import (
+    deactivate_payment_method,
+    get_active_payment_methods_by_user,
+)
 from app.database.crud.user import get_user_by_id
 from app.database.models import PaymentMethod, Transaction, User
 from app.services.payment_method_config_service import get_enabled_methods_for_user
@@ -1090,8 +1094,6 @@ async def get_saved_cards(
     if not recurrent_enabled:
         return SavedCardsListResponse(cards=[], recurrent_enabled=False)
 
-    from app.database.crud.saved_payment_method import get_active_payment_methods_by_user
-
     methods = await get_active_payment_methods_by_user(db, user.id)
 
     cards = [
@@ -1121,8 +1123,6 @@ async def delete_saved_card(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Recurrent payments are not enabled',
         )
-
-    from app.database.crud.saved_payment_method import deactivate_payment_method
 
     success = await deactivate_payment_method(db, card_id, user.id)
 

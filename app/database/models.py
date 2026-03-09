@@ -259,8 +259,8 @@ class SavedPaymentMethod(Base):
 
     is_active = Column(Boolean, default=True)
 
-    created_at = Column(AwareDateTime(), default=func.now())
-    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
+    created_at = Column(AwareDateTime(), nullable=False, server_default=func.now())
+    updated_at = Column(AwareDateTime(), nullable=False, server_default=func.now(), onupdate=func.now())
 
     user = relationship('User', backref='saved_payment_methods')
 

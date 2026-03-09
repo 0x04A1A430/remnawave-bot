@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class BalanceResponse(BaseModel):
@@ -26,8 +26,7 @@ class TransactionResponse(BaseModel):
     created_at: datetime
     completed_at: datetime | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TransactionListResponse(BaseModel):
@@ -114,8 +113,7 @@ class PendingPaymentResponse(BaseModel):
     user_telegram_id: int | None = None
     user_username: str | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PendingPaymentListResponse(BaseModel):
@@ -149,8 +147,7 @@ class SavedCardResponse(BaseModel):
     title: str | None = None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SavedCardsListResponse(BaseModel):

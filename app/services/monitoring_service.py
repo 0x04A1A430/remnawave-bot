@@ -420,6 +420,15 @@ class MonitoringService:
                 expiring_subscriptions = await self._get_expiring_paid_subscriptions(db, days)
                 sent_count = 0
 
+                # Batch-запрос: собираем user_id с autopay и проверяем наличие карт одним запросом
+                users_with_cards: set[int] = set()
+                if settings.ENABLE_AUTOPAY and settings.YOOKASSA_RECURRENT_ENABLED:
+                    autopay_user_ids = [s.user_id for s in expiring_subscriptions if s.autopay_enabled]
+                    if autopay_user_ids:
+                        from app.database.crud.saved_payment_method import get_user_ids_with_active_payment_methods
+
+                        users_with_cards = await get_user_ids_with_active_payment_methods(db, autopay_user_ids)
+
                 for subscription in expiring_subscriptions:
                     user = await get_user_by_id(db, subscription.user_id)
                     if not user:
@@ -440,18 +449,7 @@ class MonitoringService:
                         )
                         continue
 
-                    # Пропускаем уведомление если autopay + рекуррентные платежи с карты настроены
-                    if subscription.autopay_enabled and settings.ENABLE_AUTOPAY and settings.YOOKASSA_RECURRENT_ENABLED:
-                        from app.database.crud.saved_payment_method import get_active_payment_methods_by_user
-
-                        saved_methods = await get_active_payment_methods_by_user(db, user.id)
-                        if saved_methods:
-                            logger.debug(
-                                'Пропускаем уведомление об истечении: autopay + сохранённая карта',
-                                user_identifier=user_identifier,
-                                days=days,
-                            )
-                            continue
+                    has_saved_card = subscription.autopay_enabled and user.id in users_with_cards
 
                     should_send = True
                     for other_days in warning_days:
@@ -489,7 +487,9 @@ class MonitoringService:
                         continue
 
                     if self.bot:
-                        success = await self._send_subscription_expiring_notification(user, subscription, days)
+                        success = await self._send_subscription_expiring_notification(
+                            user, subscription, days, has_saved_card=has_saved_card
+                        )
                         if success:
                             await record_notification(db, user.id, subscription.id, 'expiring', days)
                             all_processed_users.add(user_key)
@@ -979,7 +979,7 @@ class MonitoringService:
 
             # Берём ACTIVE + недавно EXPIRED (middleware или check_and_update могли
             # экспайрить до того, как monitoring успел запустить autopay)
-            recently_expired_threshold = current_time - timedelta(hours=48)
+            recently_expired_threshold = current_time - timedelta(hours=2)
             result = await db.execute(
                 select(Subscription)
                 .options(
@@ -1283,7 +1283,9 @@ class MonitoringService:
             )
             return False
 
-    async def _send_subscription_expiring_notification(self, user: User, subscription: Subscription, days: int) -> bool:
+    async def _send_subscription_expiring_notification(
+        self, user: User, subscription: Subscription, days: int, *, has_saved_card: bool = False
+    ) -> bool:
         try:
             from app.utils.formatters import format_days_declension
 
@@ -1291,27 +1293,56 @@ class MonitoringService:
             days_text = format_days_declension(days, user.language)
 
             if settings.ENABLE_AUTOPAY:
-                if subscription.autopay_enabled:
-                    autopay_status = '✅ Включен - подписка продлится автоматически'
-                    action_text = (
-                        f'💰 Убедитесь, что на балансе достаточно средств: {texts.format_price(user.balance_kopeks)}'
+                if subscription.autopay_enabled and has_saved_card:
+                    autopay_status = texts.t(
+                        'AUTOPAY_STATUS_CARD_ACTIVE',
+                        '✅ Включен — будет автоматическое списание с карты',
                     )
+                    action_text = texts.t(
+                        'AUTOPAY_ACTION_CHECK_BALANCE',
+                        '💰 Убедитесь, что на балансе достаточно средств: {balance}',
+                    ).format(balance=texts.format_price(user.balance_kopeks))
+                elif subscription.autopay_enabled:
+                    autopay_status = texts.t(
+                        'AUTOPAY_STATUS_NO_CARD',
+                        '✅ Включен — подписка продлится автоматически',
+                    )
+                    action_text = texts.t(
+                        'AUTOPAY_ACTION_CHECK_BALANCE',
+                        '💰 Убедитесь, что на балансе достаточно средств: {balance}',
+                    ).format(balance=texts.format_price(user.balance_kopeks))
                 else:
-                    autopay_status = '❌ Отключен - не забудьте продлить вручную!'
-                    action_text = '💡 Включите автоплатеж или продлите подписку вручную'
+                    autopay_status = texts.t(
+                        'AUTOPAY_STATUS_OFF',
+                        '❌ Отключен — не забудьте продлить вручную!',
+                    )
+                    action_text = texts.t(
+                        'AUTOPAY_ACTION_ENABLE',
+                        '💡 Включите автоплатеж или продлите подписку вручную',
+                    )
             else:
-                autopay_status = '❌ Отключен - не забудьте продлить вручную!'
-                action_text = '💡 Продлите подписку вручную'
+                autopay_status = texts.t(
+                    'AUTOPAY_STATUS_OFF',
+                    '❌ Отключен — не забудьте продлить вручную!',
+                )
+                action_text = texts.t(
+                    'AUTOPAY_ACTION_RENEW',
+                    '💡 Продлите подписку вручную',
+                )
 
-            message = f"""
-⚠️ <b>Подписка истекает через {days_text}!</b>
-
-Ваша платная подписка истекает {format_local_datetime(subscription.end_date, '%d.%m.%Y %H:%M')}.
-
-💳 <b>Автоплатеж:</b> {autopay_status}
-
-{action_text}
-"""
+            end_date = format_local_datetime(subscription.end_date, '%d.%m.%Y %H:%M')
+            message = texts.t(
+                'SUBSCRIPTION_EXPIRING_PAID',
+                '\n⚠️ <b>Подписка истекает через {days_text}!</b>\n\n'
+                'Ваша платная подписка истекает {end_date}.\n\n'
+                '💳 <b>Автоплатеж:</b> {autopay_status}\n\n'
+                '{action_text}\n',
+            ).format(
+                days_text=days_text,
+                end_date=end_date,
+                autopay_status=autopay_status,
+                action_text=action_text,
+            )
 
             from aiogram.types import InlineKeyboardMarkup
 

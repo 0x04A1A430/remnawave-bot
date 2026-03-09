@@ -1,5 +1,6 @@
 import asyncio
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -357,6 +358,7 @@ class YooKassaService:
         metadata: dict[str, Any],
         receipt_email: str | None = None,
         receipt_phone: str | None = None,
+        idempotence_key: str | None = None,
     ) -> dict[str, Any] | None:
         """Создаёт рекуррентный автоплатёж через сохранённый payment_method_id (без confirmation)."""
 
@@ -398,11 +400,13 @@ class YooKassaService:
             receipt_data_dict: dict[str, Any] = {'customer': customer_contact_for_receipt, 'items': receipt_items_list}
             builder.set_receipt(receipt_data_dict)
 
-            idempotence_key = str(uuid.uuid4())
+            if not idempotence_key:
+                sub_id = metadata.get('subscription_id', uuid.uuid4())
+                idempotence_key = f'autopay_{sub_id}_{datetime.now(UTC).strftime("%Y-%m-%d")}'
             payment_request = builder.build()
 
             logger.info(
-                'Создание автоплатежа YooKassa. Сумма: . payment_method_id: . Метаданные: ',
+                'Создание автоплатежа YooKassa',
                 amount=amount,
                 currency=currency,
                 payment_method_id=payment_method_id,
@@ -416,7 +420,7 @@ class YooKassaService:
             )
 
             logger.info(
-                'Ответ YooKassa автоплатёж: ID=, Status=, Paid',
+                'Ответ YooKassa автоплатёж',
                 response_id=response.id,
                 status=response.status,
                 paid=response.paid,

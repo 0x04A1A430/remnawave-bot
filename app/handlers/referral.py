@@ -98,8 +98,11 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
     if settings.REFERRAL_MAX_COMMISSION_PAYMENTS > 0:
         commission_line = texts.t(
             'REFERRAL_REWARD_COMMISSION_LIMITED',
-            '• Комиссия с пополнений реферала: <b>{percent}%</b>',
-        ).format(percent=get_effective_referral_commission_percent(db_user))
+            '• Комиссия с первых {max_payments} пополнений реферала: <b>{percent}%</b>',
+        ).format(
+            percent=get_effective_referral_commission_percent(db_user),
+            max_payments=settings.REFERRAL_MAX_COMMISSION_PAYMENTS,
+        )
     else:
         commission_line = texts.t(
             'REFERRAL_REWARD_COMMISSION',

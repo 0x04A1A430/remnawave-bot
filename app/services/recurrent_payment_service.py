@@ -64,6 +64,7 @@ async def process_recurrent_payments(bot: Bot | None = None) -> dict:
         'checked': 0,
         'payments_created': 0,
         'insufficient_no_card': 0,
+        'all_cards_failed': 0,
         'already_processed': 0,
         'errors': 0,
     }
@@ -91,6 +92,8 @@ async def process_recurrent_payments(bot: Bot | None = None) -> dict:
                             _processed_today.add(guard_key)
                         elif result == 'no_card':
                             stats['insufficient_no_card'] += 1
+                        elif result == 'all_cards_failed':
+                            stats['all_cards_failed'] += 1
                         elif result == 'skipped':
                             stats['already_processed'] += 1
                     except Exception as e:
@@ -234,13 +237,17 @@ async def _process_single_subscription(
     }
 
     # Перебираем все сохранённые карты пока не найдём рабочую
+    today = datetime.now(UTC).strftime('%Y-%m-%d')
     for saved_method in saved_methods:
+        # Детерминированный ключ: при рестарте/повторе YooKassa вернёт тот же платёж
+        idem_key = f'recurrent_{subscription.id}_{saved_method.id}_{today}'
         result = await yookassa_service.create_autopayment(
             amount=topup_amount_rubles,
             currency='RUB',
             description=description,
             payment_method_id=saved_method.yookassa_payment_method_id,
             metadata=metadata,
+            idempotence_key=idem_key,
         )
 
         if not result:
@@ -254,14 +261,28 @@ async def _process_single_subscription(
             )
             continue
 
-        # Успешно — создаём локальную запись платежа
+        # Успешно — сохраняем локальную запись с привязкой к YooKassa ID
         try:
-            result_payment = await payment_service.create_yookassa_payment(
+            from app.database.crud.yookassa import create_yookassa_payment
+
+            yookassa_created_at = None
+            if result.get('created_at'):
+                try:
+                    yookassa_created_at = datetime.fromisoformat(result['created_at'].replace('Z', '+00:00'))
+                except Exception:
+                    pass
+
+            result_payment = await create_yookassa_payment(
                 db=db,
                 user_id=user.id,
+                yookassa_payment_id=result['id'],
                 amount_kopeks=topup_amount_kopeks,
+                currency='RUB',
                 description=description,
-                metadata=metadata,
+                status=result.get('status', 'pending'),
+                metadata_json=metadata,
+                yookassa_created_at=yookassa_created_at,
+                test_mode=result.get('test_mode', False),
             )
             if result_payment:
                 logger.info(
@@ -269,7 +290,7 @@ async def _process_single_subscription(
                     user_id=user.id,
                     subscription_id=subscription.id,
                     amount_kopeks=topup_amount_kopeks,
-                    yookassa_payment_id=result.get('id'),
+                    yookassa_payment_id=result['id'],
                 )
         except Exception as e:
             logger.warning('Ошибка создания локальной записи рекуррентного платежа', error=e)
@@ -342,4 +363,4 @@ async def _process_single_subscription(
         except Exception as notify_error:
             logger.warning('Ошибка уведомления о неудачном автоплатеже', notify_error=notify_error)
 
-    return 'skipped'
+    return 'all_cards_failed'
