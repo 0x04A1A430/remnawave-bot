@@ -97,9 +97,9 @@ async def create_promo_group(
 ) -> PromoGroup:
     normalized_period_discounts = _normalize_period_discounts(period_discounts)
 
-    auto_assign_total_spent_kopeks = (
-        max(0, auto_assign_total_spent_kopeks) if auto_assign_total_spent_kopeks is not None else None
-    )
+    if auto_assign_total_spent_kopeks is not None:
+        value = max(0, auto_assign_total_spent_kopeks)
+        auto_assign_total_spent_kopeks = value if value > 0 else None
 
     existing_default = await get_default_promo_group(db)
     should_be_default = existing_default is None or is_default
