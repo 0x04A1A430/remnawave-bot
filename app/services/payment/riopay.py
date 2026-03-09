@@ -4,13 +4,21 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime, timedelta
-from importlib import import_module
 from typing import Any
 
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database.models import PaymentMethod, TransactionType
+from app.database.crud.riopay import (
+    create_riopay_payment as crud_create_riopay_payment,
+    get_riopay_payment_by_order_id,
+    get_riopay_payment_by_riopay_order_id,
+    update_riopay_payment_status,
+)
+from app.database.crud.transaction import create_transaction
+from app.database.crud.user import get_user_by_id
+from app.database.models import PaymentMethod, TransactionType, User as UserModel
 from app.services.riopay_service import riopay_service
 from app.utils.payment_logger import payment_logger as logger
 from app.utils.user_utils import format_referrer_info
@@ -68,8 +76,7 @@ class RioPayPaymentMixin:
             return None
 
         # Получаем telegram_id пользователя для order_id
-        payment_module = import_module('app.services.payment_service')
-        user = await payment_module.get_user_by_id(db, user_id)
+        user = await get_user_by_id(db, user_id)
         tg_id = user.telegram_id if user else user_id
 
         # Генерируем уникальный order_id с telegram_id для удобного поиска
@@ -111,11 +118,8 @@ class RioPayPaymentMixin:
                 'RioPay API: создан заказ', order_id=order_id, riopay_order_id=riopay_order_id, payment_url=payment_url
             )
 
-            # Импортируем CRUD модуль
-            riopay_crud = import_module('app.database.crud.riopay')
-
             # Сохраняем в БД
-            local_payment = await riopay_crud.create_riopay_payment(
+            local_payment = await crud_create_riopay_payment(
                 db=db,
                 user_id=user_id,
                 order_id=order_id,
@@ -157,31 +161,20 @@ class RioPayPaymentMixin:
         db: AsyncSession,
         *,
         payload: dict[str, Any],
-        raw_body: bytes,
-        signature: str | None = None,
     ) -> bool:
         """
         Обрабатывает webhook от RioPay.
 
+        Подпись проверяется в webserver/payments.py до вызова этого метода.
+
         Args:
             db: Сессия БД
             payload: JSON тело webhook
-            raw_body: Сырое тело для проверки подписи
-            signature: Подпись из заголовка
 
         Returns:
             True если платеж успешно обработан
         """
         try:
-            # Проверка подписи (обязательна)
-            if not signature:
-                logger.warning('RioPay webhook: отсутствует подпись')
-                return False
-
-            if not riopay_service.verify_webhook_signature(raw_body, signature):
-                logger.warning('RioPay webhook: неверная подпись')
-                return False
-
             # Извлекаем данные из payload
             riopay_order_id = payload.get('id')
             external_id = payload.get('externalId')
@@ -192,15 +185,12 @@ class RioPayPaymentMixin:
                 logger.warning('RioPay webhook: отсутствуют обязательные поля', payload=payload)
                 return False
 
-            # Импортируем CRUD модуль
-            riopay_crud = import_module('app.database.crud.riopay')
-
             # Ищем платеж по external_id (наш order_id) или riopay_order_id
             payment = None
             if external_id:
-                payment = await riopay_crud.get_riopay_payment_by_order_id(db, external_id)
+                payment = await get_riopay_payment_by_order_id(db, external_id)
             if not payment and riopay_order_id:
-                payment = await riopay_crud.get_riopay_payment_by_riopay_order_id(db, riopay_order_id)
+                payment = await get_riopay_payment_by_riopay_order_id(db, riopay_order_id)
 
             if not payment:
                 logger.warning(
@@ -227,10 +217,9 @@ class RioPayPaymentMixin:
                 'amount': amount,
                 'payment_type': payload.get('paymentType'),
                 'included_fee': payload.get('includedFee'),
-                'raw_payload': payload,
             }
 
-            payment = await riopay_crud.update_riopay_payment_status(
+            payment = await update_riopay_payment_status(
                 db=db,
                 payment=payment,
                 status=internal_status,
@@ -239,6 +228,18 @@ class RioPayPaymentMixin:
                 payment_method=payload.get('paymentType'),
                 callback_payload=callback_payload,
             )
+
+            # Проверка суммы: payload.amount должен совпадать с суммой в базе
+            if is_paid and amount is not None:
+                expected = payment.amount_kopeks / 100
+                if abs(float(amount) - expected) > 0.01:
+                    logger.error(
+                        'RioPay amount mismatch',
+                        expected=expected,
+                        received=amount,
+                        order_id=payment.order_id,
+                    )
+                    return False
 
             # Финализируем платеж если оплачен
             if is_paid:
@@ -261,14 +262,12 @@ class RioPayPaymentMixin:
         trigger: str,
     ) -> bool:
         """Создаёт транзакцию, начисляет баланс и отправляет уведомления."""
-        payment_module = import_module('app.services.payment_service')
-
         if payment.transaction_id:
             logger.info('RioPay платеж уже привязан к транзакции', order_id=payment.order_id, trigger=trigger)
             return True
 
         # Получаем пользователя
-        user = await payment_module.get_user_by_id(db, payment.user_id)
+        user = await get_user_by_id(db, payment.user_id)
         if not user:
             logger.error(
                 'Пользователь не найден для RioPay платежа',
@@ -279,7 +278,7 @@ class RioPayPaymentMixin:
             return False
 
         # Создаем транзакцию
-        transaction = await payment_module.create_transaction(
+        transaction = await create_transaction(
             db,
             user_id=payment.user_id,
             type=TransactionType.DEPOSIT,
@@ -292,8 +291,7 @@ class RioPayPaymentMixin:
         )
 
         # Связываем платеж с транзакцией
-        riopay_crud = import_module('app.database.crud.riopay')
-        await riopay_crud.update_riopay_payment_status(
+        await update_riopay_payment_status(
             db=db,
             payment=payment,
             status=payment.status,
@@ -303,13 +301,20 @@ class RioPayPaymentMixin:
         old_balance = user.balance_kopeks
         was_first_topup = not user.has_made_first_topup
 
-        # Начисляем баланс
-        user.balance_kopeks += payment.amount_kopeks
-        user.updated_at = datetime.now(UTC)
-
-        # Обновляем флаг первого пополнения в том же коммите
+        # Атомарное начисление баланса через SQL UPDATE, чтобы избежать race condition
+        # при одновременных вебхуках / check_riopay_payment_status
+        update_values: dict[str, Any] = {
+            UserModel.balance_kopeks: UserModel.balance_kopeks + payment.amount_kopeks,
+            UserModel.updated_at: datetime.now(UTC),
+        }
         if was_first_topup:
-            user.has_made_first_topup = True
+            update_values[UserModel.has_made_first_topup] = True
+
+        await db.execute(
+            update(UserModel)
+            .where(UserModel.id == user.id)
+            .values(update_values)
+        )
 
         promo_group = user.get_primary_promo_group()
         subscription = getattr(user, 'subscription', None)
@@ -401,9 +406,7 @@ class RioPayPaymentMixin:
         Проверяет статус платежа через API.
         """
         try:
-            riopay_crud = import_module('app.database.crud.riopay')
-
-            payment = await riopay_crud.get_riopay_payment_by_order_id(db, order_id)
+            payment = await get_riopay_payment_by_order_id(db, order_id)
             if not payment:
                 logger.warning('RioPay payment not found', order_id=order_id)
                 return None
@@ -433,7 +436,7 @@ class RioPayPaymentMixin:
                                 'riopay_order_data': order_data,
                             }
 
-                            payment = await riopay_crud.update_riopay_payment_status(
+                            payment = await update_riopay_payment_status(
                                 db=db,
                                 payment=payment,
                                 status='success',
@@ -451,7 +454,7 @@ class RioPayPaymentMixin:
                             )
                         elif internal_status != payment.status:
                             # Обновляем статус если изменился
-                            payment = await riopay_crud.update_riopay_payment_status(
+                            payment = await update_riopay_payment_status(
                                 db=db,
                                 payment=payment,
                                 status=internal_status,

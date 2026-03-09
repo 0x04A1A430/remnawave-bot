@@ -119,7 +119,8 @@ class RioPayService:
                 except Exception:
                     error_msg = text
 
-                logger.error('RioPay create_order error', status_code=response.status, error_msg=error_msg)
+                logger.error('RioPay create_order error', status_code=response.status)
+                logger.debug('RioPay create_order error details', error_msg=error_msg)
                 raise RioPayAPIError(response.status, error_msg)
 
         except aiohttp.ClientError as e:

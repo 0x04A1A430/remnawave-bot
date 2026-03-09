@@ -1152,8 +1152,6 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                 success = await payment_service.process_riopay_webhook(
                     db,
                     payload=payload,
-                    raw_body=raw_body,
-                    signature=signature,
                 )
                 if success:
                     return JSONResponse({'status': 'ok'}, status_code=status.HTTP_200_OK)

@@ -38,6 +38,7 @@ from app.services.payment_verification_service import (
 from app.services.referral_contest_service import referral_contest_service
 from app.services.remnawave_sync_service import remnawave_sync_service
 from app.services.reporting_service import reporting_service
+from app.services.riopay_service import riopay_service
 from app.services.system_settings_service import bot_configuration_service
 from app.services.traffic_monitoring_service import traffic_monitoring_scheduler
 from app.services.version_service import version_service
@@ -933,6 +934,11 @@ async def main():
                 logger.info('✅ Административное веб-API остановлено')
             except Exception as error:
                 logger.error('Ошибка остановки веб-API', error=error)
+
+        try:
+            await riopay_service.close()
+        except Exception as e:
+            logger.error('Ошибка закрытия сессии RioPay', error=e)
 
         if 'bot' in locals():
             try:

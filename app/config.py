@@ -543,8 +543,6 @@ class Settings(BaseSettings):
     RIOPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
     RIOPAY_MAX_AMOUNT_KOPEKS: int = 100000000  # 1 000 000₽
     RIOPAY_WEBHOOK_PATH: str = '/riopay-webhook'
-    RIOPAY_WEBHOOK_HOST: str = '0.0.0.0'
-    RIOPAY_WEBHOOK_PORT: int = 8090
     RIOPAY_SUCCESS_URL: str | None = None
     RIOPAY_FAIL_URL: str | None = None
 
