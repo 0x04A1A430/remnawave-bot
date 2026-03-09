@@ -349,6 +349,7 @@ async def create_topup(
     amount_rubles = request.amount_kopeks / 100
     payment_url = None
     payment_id = None
+    cabinet_return_url = f'{settings.CABINET_URL}/balance/top-up/result'
 
     try:
         if request.payment_method == 'yookassa':
@@ -373,6 +374,7 @@ async def create_topup(
                     amount_kopeks=request.amount_kopeks,
                     description=description,
                     metadata=yookassa_metadata,
+                    return_url=cabinet_return_url,
                 )
             else:
                 result = await payment_service.create_yookassa_payment(
@@ -381,6 +383,7 @@ async def create_topup(
                     amount_kopeks=request.amount_kopeks,
                     description=description,
                     metadata=yookassa_metadata,
+                    return_url=cabinet_return_url,
                 )
 
             if result:
@@ -490,6 +493,7 @@ async def create_topup(
                 ),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
                 payment_method_code=method_code,
+                return_url=cabinet_return_url,
             )
 
             if result and result.get('redirect_url'):
@@ -515,6 +519,7 @@ async def create_topup(
                 amount_kopeks=request.amount_kopeks,
                 description=settings.get_balance_payment_description(request.amount_kopeks),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+                return_url=cabinet_return_url,
             )
 
             if result and result.get('payment_url'):
@@ -612,6 +617,7 @@ async def create_topup(
                 amount_kopeks=request.amount_kopeks,
                 description=settings.get_balance_payment_description(request.amount_kopeks),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+                return_url=cabinet_return_url,
             )
 
             if result and result.get('payment_url'):
@@ -638,6 +644,7 @@ async def create_topup(
                 description=settings.get_balance_payment_description(request.amount_kopeks),
                 telegram_id=user.telegram_id,
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+                return_url=cabinet_return_url,
             )
 
             if result and result.get('payment_url'):
