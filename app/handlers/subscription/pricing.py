@@ -342,9 +342,7 @@ async def get_subscription_cost(subscription, db: AsyncSession) -> int:
             original_price = base_cost_original
 
             tariff_device_limit = tariff.device_limit if tariff.device_limit is not None else 0
-            device_limit = (
-                subscription.device_limit if subscription.device_limit is not None else tariff_device_limit
-            )
+            device_limit = subscription.device_limit if subscription.device_limit is not None else tariff_device_limit
             extra_devices = max(0, device_limit - tariff_device_limit)
             device_price_per_unit = (
                 tariff.device_price_kopeks

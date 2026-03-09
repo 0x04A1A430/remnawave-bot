@@ -1349,7 +1349,10 @@ async def handle_activate_button(callback: types.CallbackQuery, db_user: User, d
             )
 
             await callback.answer(
-                texts.t('ACTIVATION_SUCCESS', f'✅ Подписка продлена на {best_period} дней за {pricing.final_total // 100} ₽!'),
+                texts.t(
+                    'ACTIVATION_SUCCESS',
+                    f'✅ Подписка продлена на {best_period} дней за {pricing.final_total // 100} ₽!',
+                ),
                 show_alert=True,
             )
         else:

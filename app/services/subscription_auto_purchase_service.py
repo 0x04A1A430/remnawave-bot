@@ -1723,7 +1723,10 @@ async def try_auto_extend_expired_after_topup(
     subscription_service = SubscriptionService()
     try:
         renewal_cost = await subscription_service.calculate_renewal_price(
-            subscription, period_days, db, user=user,
+            subscription,
+            period_days,
+            db,
+            user=user,
         )
     except Exception as error:
         logger.error(

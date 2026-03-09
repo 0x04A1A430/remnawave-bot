@@ -1149,8 +1149,7 @@ async def confirm_add_devices(callback: types.CallbackQuery, db_user: User, db: 
         await callback.answer(
             texts.t(
                 'DEVICES_LIMIT_EXCEEDED_DETAIL',
-                '⚠️ Превышен максимальный лимит устройств ({limit}). '
-                'У вас: {current}, добавляете: {adding}',
+                '⚠️ Превышен максимальный лимит устройств ({limit}). У вас: {current}, добавляете: {adding}',
             ).format(limit=effective_max, current=subscription.device_limit, adding=devices_count),
             show_alert=True,
         )
