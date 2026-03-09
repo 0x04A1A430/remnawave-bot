@@ -275,26 +275,29 @@ class TributeService:
 
             async for session in get_db():
                 user = await get_user_by_telegram_id(session, user_id)
+                if not user:
+                    logger.warning('Пользователь не найден для уведомления Tribute', user_id=user_id)
+                    break
+
+                # Сначала отправляем стандартное уведомление
+                payment_service = PaymentService(self.bot)
+                keyboard = await payment_service.build_topup_success_keyboard(user)
+
+                text = (
+                    f'✅ **Платеж успешно получен!**\n\n'
+                    f'💰 Сумма: {int(amount_rubles)} ₽\n'
+                    f'💳 Способ оплаты: Tribute\n'
+                    f'🎉 Средства зачислены на баланс!\n\n'
+                    f'Спасибо за оплату! 🙏'
+                )
+
+                await self.bot.send_message(user_id, text, reply_markup=keyboard, parse_mode='Markdown')
+
+                # Проверяем наличие сохраненной корзины для возврата к оформлению подписки
+                from app.services.payment.common import send_cart_notification_after_topup
+
+                await send_cart_notification_after_topup(user, amount_kopeks, session, self.bot)
                 break
-
-            # Сначала отправляем стандартное уведомление
-            payment_service = PaymentService(self.bot)
-            keyboard = await payment_service.build_topup_success_keyboard(user)
-
-            text = (
-                f'✅ **Платеж успешно получен!**\n\n'
-                f'💰 Сумма: {int(amount_rubles)} ₽\n'
-                f'💳 Способ оплаты: Tribute\n'
-                f'🎉 Средства зачислены на баланс!\n\n'
-                f'Спасибо за оплату! 🙏'
-            )
-
-            await self.bot.send_message(user_id, text, reply_markup=keyboard, parse_mode='Markdown')
-
-            # Проверяем наличие сохраненной корзины для возврата к оформлению подписки
-            from app.services.payment.common import send_cart_notification_after_topup
-
-            await send_cart_notification_after_topup(user, amount_kopeks, session, self.bot)
 
         except Exception as e:
             logger.error('Ошибка отправки уведомления об успешном платеже', error=e)

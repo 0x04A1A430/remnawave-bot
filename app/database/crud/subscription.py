@@ -2094,6 +2094,9 @@ async def get_disabled_daily_subscriptions_for_resume(
                 Subscription.status == SubscriptionStatus.DISABLED.value,
                 User.status == UserStatus.ACTIVE.value,
                 Subscription.is_trial.is_(False),
+                # Не возобновляем подписки, приостановленные пользователем вручную
+                # is_(False) не ловит NULL, поэтому добавляем OR is_(None)
+                (Subscription.is_daily_paused.is_(False) | Subscription.is_daily_paused.is_(None)),
                 # Баланс пользователя >= суточной цены тарифа
                 User.balance_kopeks >= Tariff.daily_price_kopeks,
             )
@@ -2135,7 +2138,8 @@ async def get_expired_daily_subscriptions_for_recovery(db: AsyncSession) -> list
                 Tariff.is_active.is_(True),
                 Subscription.status == SubscriptionStatus.EXPIRED.value,
                 User.status == UserStatus.ACTIVE.value,
-                Subscription.is_daily_paused.is_(False),
+                # is_(False) не ловит NULL, поэтому добавляем OR is_(None)
+                (Subscription.is_daily_paused.is_(False) | Subscription.is_daily_paused.is_(None)),
                 Subscription.is_trial.is_(False),
                 # Только недавно экспайренные
                 Subscription.updated_at >= recovery_threshold,

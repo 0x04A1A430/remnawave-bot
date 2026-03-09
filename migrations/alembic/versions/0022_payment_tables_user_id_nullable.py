@@ -30,13 +30,21 @@ _TABLES = [
 ]
 
 
+def _table_exists(table_name: str) -> bool:
+    conn = op.get_bind()
+    insp = sa.inspect(conn)
+    return insp.has_table(table_name)
+
+
 def upgrade() -> None:
     for table in _TABLES:
-        op.alter_column(table, 'user_id', existing_type=sa.Integer(), nullable=True)
+        if _table_exists(table):
+            op.alter_column(table, 'user_id', existing_type=sa.Integer(), nullable=True)
 
 
 def downgrade() -> None:
     # WARNING: Will fail if any rows have user_id=NULL (guest payments).
     # Backfill required before downgrading.
     for table in _TABLES:
-        op.alter_column(table, 'user_id', existing_type=sa.Integer(), nullable=False)
+        if _table_exists(table):
+            op.alter_column(table, 'user_id', existing_type=sa.Integer(), nullable=False)

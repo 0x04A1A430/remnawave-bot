@@ -1008,9 +1008,10 @@ async def purchase_devices_legacy(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
-    """Purchase additional device slots (legacy endpoint without tariff support).
+    """Purchase additional device slots (legacy endpoint).
 
     DEPRECATED: Use /devices/purchase instead for full tariff and discount support.
+    Now uses tariff-aware pricing when subscription has a tariff_id.
     """
     if getattr(user, 'restriction_subscription', False):
         raise HTTPException(
@@ -1033,8 +1034,34 @@ async def purchase_devices_legacy(
             detail='No subscription found',
         )
 
-    price_per_device = settings.PRICE_PER_DEVICE
-    base_total_price = price_per_device * request.devices
+    if subscription.status not in ['active', 'trial']:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Ваша подписка неактивна',
+        )
+
+    # Get tariff for device price (if exists)
+    tariff = None
+    if subscription.tariff_id:
+        from app.database.crud.tariff import get_tariff_by_id
+
+        tariff = await get_tariff_by_id(db, subscription.tariff_id)
+
+    # Determine device price and max limit from tariff or settings
+    if tariff and tariff.device_price_kopeks is not None:
+        device_price = tariff.device_price_kopeks
+        max_device_limit = tariff.max_device_limit
+    else:
+        device_price = settings.PRICE_PER_DEVICE
+        max_device_limit = settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else None
+
+    if not device_price or device_price <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Докупка устройств недоступна',
+        )
+
+    base_total_price = device_price * request.devices
 
     # Apply discount from promo group
     discount_result = _apply_addon_discount(user, 'devices', base_total_price, 30)
@@ -1048,12 +1075,11 @@ async def purchase_devices_legacy(
     # Check max devices limit (under row lock — prevents concurrent purchases exceeding limit)
     current_devices = subscription.device_limit or 1
     new_devices = current_devices + request.devices
-    max_devices = settings.MAX_DEVICES_LIMIT
 
-    if new_devices > max_devices:
+    if max_device_limit and new_devices > max_device_limit:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'Maximum device limit is {max_devices}',
+            detail=f'Максимальное количество устройств: {max_device_limit}',
         )
 
     # Check balance
@@ -1127,7 +1153,7 @@ async def purchase_devices_legacy(
 
     actual_current = subscription.device_limit or 1
     actual_new = actual_current + request.devices
-    if max_devices > 0 and actual_new > max_devices:
+    if max_device_limit and actual_new > max_device_limit:
         # Concurrent purchase already exceeded limit — refund balance
         user_refund = await db.execute(
             select(User).where(User.id == user.id).with_for_update().execution_options(populate_existing=True)
@@ -1137,13 +1163,24 @@ async def purchase_devices_legacy(
         await db.commit()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f'Maximum device limit is {max_devices}. Balance refunded.',
+            detail=f'Максимальное количество устройств: {max_device_limit}. Баланс возвращён.',
         )
 
     # Add devices (under lock)
     subscription.device_limit = actual_new
     await db.commit()
+    await db.refresh(subscription)
     await db.refresh(user)
+
+    # Sync with RemnaWave
+    try:
+        service = SubscriptionService()
+        if getattr(user, 'remnawave_uuid', None):
+            await service.update_remnawave_user(db, subscription)
+        else:
+            await service.create_remnawave_user(db, subscription)
+    except Exception as e:
+        logger.error('Failed to sync devices with RemnaWave (legacy endpoint)', error=e)
 
     # Отправляем уведомление админам
     try:
@@ -4454,19 +4491,27 @@ async def toggle_subscription_pause(
             detail='Pause is only available for daily tariffs',
         )
 
-    # Toggle pause state
-    is_currently_paused = getattr(user.subscription, 'is_daily_paused', False)
-    new_paused_state = not is_currently_paused
-    user.subscription.is_daily_paused = new_paused_state
-
-    # Сохраняем статус ДО изменения для проверки RemnaWave
+    # Determine current state
     from app.database.models import SubscriptionStatus
 
-    was_disabled = user.subscription.status == SubscriptionStatus.DISABLED.value
+    is_currently_paused = getattr(user.subscription, 'is_daily_paused', False)
+    was_disabled = user.subscription.status in (
+        SubscriptionStatus.DISABLED.value,
+        SubscriptionStatus.EXPIRED.value,
+    )
 
-    # If resuming, check balance
+    # System-DISABLED subs (insufficient balance) should always be treated as needing resume,
+    # even if is_daily_paused is False (it's set by the system, not the user)
+    if was_disabled and not is_currently_paused:
+        new_paused_state = False  # Force resume path
+    else:
+        new_paused_state = not is_currently_paused
+    user.subscription.is_daily_paused = new_paused_state
+
+    daily_price = getattr(tariff, 'daily_price_kopeks', 0)
+
+    # If resuming, check balance and charge
     if not new_paused_state:
-        daily_price = getattr(tariff, 'daily_price_kopeks', 0)
         if daily_price > 0 and user.balance_kopeks < daily_price:
             raise HTTPException(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
@@ -4478,8 +4523,44 @@ async def toggle_subscription_pause(
                 },
             )
 
-        # Restore ACTIVE status if was DISABLED
+        # Charge daily fee FIRST, then restore ACTIVE status
         if was_disabled:
+            if daily_price > 0:
+                from app.database.crud.user import subtract_user_balance
+
+                deducted = await subtract_user_balance(
+                    db,
+                    user,
+                    daily_price,
+                    f'Суточная оплата тарифа «{tariff.name}» (возобновление)',
+                    mark_as_paid_subscription=True,
+                )
+                if not deducted:
+                    raise HTTPException(
+                        status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                        detail={
+                            'code': 'insufficient_balance',
+                            'message': 'Balance deduction failed',
+                            'required': daily_price,
+                            'balance': user.balance_kopeks,
+                        },
+                    )
+
+                from app.database.crud.transaction import create_transaction
+                from app.database.models import TransactionType
+
+                try:
+                    await create_transaction(
+                        db=db,
+                        user_id=user.id,
+                        type=TransactionType.SUBSCRIPTION_PAYMENT,
+                        amount_kopeks=daily_price,
+                        description=f'Суточная оплата тарифа «{tariff.name}» (возобновление)',
+                    )
+                except Exception as exc:
+                    logger.warning('Failed to create resume transaction', error=exc)
+
+            # Balance deducted successfully — now activate
             user.subscription.status = SubscriptionStatus.ACTIVE.value
             user.subscription.last_daily_charge_at = datetime.now(UTC)
             user.subscription.end_date = datetime.now(UTC) + timedelta(days=1)
@@ -4489,14 +4570,17 @@ async def toggle_subscription_pause(
     await db.refresh(user)
 
     # Sync with RemnaWave only when resuming from DISABLED state
-    # При паузе НЕ отключаем - пользователь может пользоваться до конца оплаченного периода
-    # При возобновлении включаем только если подписка была отключена (DISABLED)
-    if not new_paused_state and user.remnawave_uuid and was_disabled:
+    if not new_paused_state and was_disabled:
         try:
             subscription_service = SubscriptionService()
-            await subscription_service.enable_remnawave_user(user.remnawave_uuid)
+            await subscription_service.create_remnawave_user(
+                db,
+                user.subscription,
+                reset_traffic=False,
+                reset_reason=None,
+            )
         except Exception as e:
-            logger.error('Error enabling RemnaWave user on resume', error=e)
+            logger.error('Error syncing RemnaWave user on resume', error=e)
 
     if new_paused_state:
         message = 'Daily subscription paused'

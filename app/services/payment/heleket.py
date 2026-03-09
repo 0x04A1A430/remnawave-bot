@@ -28,6 +28,7 @@ class HeleketPaymentMixin:
         *,
         language: str | None = None,
         return_url: str | None = None,
+        success_url: str | None = None,
     ) -> dict[str, Any] | None:
         if not getattr(self, 'heleket_service', None):
             logger.error('Heleket сервис не инициализирован')
@@ -72,7 +73,7 @@ class HeleketPaymentMixin:
             payload['url_callback'] = callback_url
 
         effective_return = return_url or settings.HELEKET_RETURN_URL
-        effective_success = return_url or settings.HELEKET_SUCCESS_URL
+        effective_success = success_url or return_url or settings.HELEKET_SUCCESS_URL
         if effective_return:
             payload['url_return'] = effective_return
         if effective_success:

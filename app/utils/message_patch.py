@@ -1,3 +1,5 @@
+import html as html_module
+import re
 from pathlib import Path
 from typing import Any
 
@@ -9,6 +11,20 @@ from app.localization.texts import get_texts
 
 
 LOGO_PATH = Path(settings.LOGO_FILE)
+
+# Telegram API: caption limit is 1024 characters AFTER HTML entity parsing (tags stripped)
+TELEGRAM_CAPTION_LIMIT = 1024
+_HTML_TAG_RE = re.compile(r'<[^>]+>')
+
+
+def caption_exceeds_telegram_limit(text: str | None) -> bool:
+    """Check if text exceeds Telegram's caption limit (1024 parsed chars)."""
+    if not text:
+        return False
+    stripped = html_module.unescape(_HTML_TAG_RE.sub('', text))
+    return len(stripped) > TELEGRAM_CAPTION_LIMIT
+
+
 _PRIVACY_RESTRICTED_CODE = 'BUTTON_USER_PRIVACY_RESTRICTED'
 
 # Кеш file_id логотипа: после первой загрузки Telegram возвращает file_id,
@@ -139,7 +155,7 @@ async def _answer_with_photo(self: Message, text: str = None, **kwargs):
         return await _original_answer(self, text, **kwargs)
     # Если caption слишком длинный для фото — отправим как текст
     try:
-        if text is not None and len(text) > 900:
+        if caption_exceeds_telegram_limit(text):
             return await _text_answer(self, text, **kwargs)
     except Exception:
         pass
@@ -207,7 +223,7 @@ async def _edit_with_photo(self: Message, text: str, **kwargs):
         language = _get_language(self)
         # Если caption потенциально слишком длинный — отправим как текст вместо caption
         try:
-            if text is not None and len(text) > 900:
+            if caption_exceeds_telegram_limit(text):
                 try:
                     await self.delete()
                 except Exception:

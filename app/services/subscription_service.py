@@ -1,10 +1,14 @@
+import asyncio
 from contextlib import asynccontextmanager
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 import structlog
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.database.crud.server_squad import get_all_server_squads
 from app.database.crud.user import get_user_by_id
 from app.database.models import PromoGroup, Subscription, SubscriptionStatus, User
 from app.external.remnawave_api import RemnaWaveAPI, RemnaWaveAPIError, RemnaWaveUser, TrafficLimitStrategy, UserStatus
@@ -91,6 +95,15 @@ def get_traffic_reset_strategy(tariff=None):
     mapped_strategy = strategy_mapping.get(strategy, 'NO_RESET')
     logger.info('🔄 Стратегия сброса трафика из конфига', strategy=strategy, mapped_strategy=mapped_strategy)
     return getattr(TrafficLimitStrategy, mapped_strategy)
+
+
+@dataclass
+class PropagateSquadsResult:
+    """Результат применения скводов тарифа к подпискам."""
+
+    total: int = 0
+    synced: int = 0
+    failed_ids: list[int] = field(default_factory=list)
 
 
 class SubscriptionService:
@@ -1485,3 +1498,154 @@ class SubscriptionService:
         if bytes_value == 0:
             return 0.0
         return bytes_value / (1024 * 1024 * 1024)
+
+    async def propagate_tariff_squads(
+        self, db: AsyncSession, tariff_id: int, new_squads: list[str], *, concurrency: int = 5
+    ) -> PropagateSquadsResult:
+        """Применяет изменение серверов тарифа к активным подпискам и синхронизирует с RemnaWave.
+
+        Если new_squads пустой — означает "все серверы", будут подставлены все доступные.
+        Синхронизация с RemnaWave выполняется параллельно с ограничением concurrency.
+        Паттерн: предзагрузка данных → параллельные API-вызовы → один commit.
+        """
+        squads_to_set = list(new_squads)
+        if not squads_to_set:
+            all_servers, _ = await get_all_server_squads(db, available_only=True, limit=10000)
+            squads_to_set = [s.squad_uuid for s in all_servers if s.squad_uuid]
+
+        result = await db.execute(
+            select(Subscription).where(
+                Subscription.tariff_id == tariff_id,
+                Subscription.status.in_([SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value]),
+            )
+        )
+        subscriptions = result.scalars().all()
+
+        if not subscriptions:
+            return PropagateSquadsResult(total=0, synced=0)
+
+        for sub in subscriptions:
+            sub.connected_squads = squads_to_set
+        await db.commit()
+
+        # Предзагружаем пользователей и тарифы — никаких DB-операций внутри gather
+        user_ids = [sub.user_id for sub in subscriptions]
+        users_result = await db.execute(select(User).where(User.id.in_(user_ids)))
+        users_map = {u.id: u for u in users_result.scalars().all()}
+
+        for sub in subscriptions:
+            try:
+                await db.refresh(sub, ['tariff'])
+            except Exception as exc:
+                logger.warning('Не удалось предзагрузить тариф подписки', subscription_id=sub.id, error=exc)
+
+        # Вычисляем стратегию сброса трафика один раз — все подписки одного тарифа
+        sample_tariff = subscriptions[0].tariff if subscriptions[0].tariff else None
+        traffic_strategy = get_traffic_reset_strategy(sample_tariff)
+
+        # Параллельная синхронизация: один API-клиент, только HTTP-вызовы внутри gather
+        failed_ids: list[int] = []
+        synced = 0
+
+        async with self.get_api_client() as api:
+            semaphore = asyncio.Semaphore(concurrency)
+
+            async def _sync_one(sub: Subscription) -> bool:
+                async with semaphore:
+                    try:
+                        user = users_map.get(sub.user_id)
+                        if not user or not user.remnawave_uuid:
+                            return False
+
+                        current_time = datetime.now(UTC)
+                        is_actually_active = (
+                            sub.status == SubscriptionStatus.ACTIVE.value and sub.end_date > current_time
+                        )
+
+                        user_tag = self._resolve_user_tag(sub)
+                        ext_squad_uuid = sub.tariff.external_squad_uuid if sub.tariff else None
+                        hwid_limit = resolve_hwid_device_limit_for_payload(sub)
+
+                        update_kwargs = dict(
+                            uuid=user.remnawave_uuid,
+                            status=UserStatus.ACTIVE if is_actually_active else UserStatus.EXPIRED,
+                            expire_at=sub.end_date,
+                            traffic_limit_bytes=self._gb_to_bytes(sub.traffic_limit_gb),
+                            traffic_limit_strategy=traffic_strategy,
+                            telegram_id=user.telegram_id,
+                            email=user.email,
+                            description=settings.format_remnawave_user_description(
+                                full_name=user.full_name,
+                                username=user.username,
+                                telegram_id=user.telegram_id,
+                                email=user.email,
+                                user_id=user.id,
+                            ),
+                        )
+
+                        if sub.connected_squads:
+                            update_kwargs['active_internal_squads'] = sub.connected_squads
+
+                        if user_tag is not None:
+                            update_kwargs['tag'] = user_tag
+
+                        if hwid_limit is not None:
+                            update_kwargs['hwid_device_limit'] = hwid_limit
+
+                        if ext_squad_uuid is not None:
+                            update_kwargs['external_squad_uuid'] = ext_squad_uuid
+                        else:
+                            update_kwargs['external_squad_uuid'] = None
+
+                        updated_user = await api.update_user(**update_kwargs)
+
+                        # Сохраняем в памяти — commit будет после gather
+                        sub.subscription_url = updated_user.subscription_url
+                        sub.subscription_crypto_link = updated_user.happ_crypto_link
+                        return True
+
+                    except Exception as e:
+                        logger.warning(
+                            'Не удалось обновить сквады в RemnaWave',
+                            subscription_id=sub.id,
+                            user_id=sub.user_id,
+                            error=e,
+                        )
+                        return False
+
+            results = await asyncio.gather(*[_sync_one(sub) for sub in subscriptions])
+
+        for i, success in enumerate(results):
+            if success:
+                synced += 1
+            else:
+                failed_ids.append(subscriptions[i].id)
+
+        # Один commit после всех API-вызовов
+        try:
+            await db.commit()
+        except Exception as commit_error:
+            logger.error('Ошибка фиксации транзакции при синхронизации скводов', error=commit_error)
+            await db.rollback()
+            failed_ids = [sub.id for sub in subscriptions]
+            synced = 0
+
+        propagate_result = PropagateSquadsResult(total=len(subscriptions), synced=synced, failed_ids=failed_ids)
+
+        if failed_ids:
+            logger.warning(
+                'Частичная синхронизация скводов с RemnaWave',
+                tariff_id=tariff_id,
+                total=propagate_result.total,
+                synced=synced,
+                failed_ids=failed_ids,
+            )
+        else:
+            logger.info(
+                'Обновлены сквады подписок для тарифа',
+                tariff_id=tariff_id,
+                total=propagate_result.total,
+                synced=synced,
+            )
+
+        return propagate_result
