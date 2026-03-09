@@ -978,7 +978,7 @@ async def get_latest_payment_by_method(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
-    """Get user's most recent payment for a given method."""
+    """Get user's most recent payment for a given method (any status, not just pending)."""
     try:
         payment_method = PaymentMethod(method)
     except ValueError:
@@ -987,18 +987,74 @@ async def get_latest_payment_by_method(
             detail=f'Invalid payment method: {method}',
         )
 
-    all_pending = await list_recent_pending_payments(db)
-    user_payments = [
-        p for p in all_pending if p.user and p.user.id == user.id and p.method == payment_method
-    ]
+    from datetime import UTC, datetime, timedelta
 
-    if not user_payments:
+    from sqlalchemy.orm import selectinload
+
+    from app.database.models import (
+        CloudPaymentsPayment,
+        CryptoBotPayment,
+        FreekassaPayment,
+        HeleketPayment,
+        KassaAiPayment,
+        MulenPayPayment,
+        Pal24Payment,
+        PlategaPayment,
+        WataPayment,
+        YooKassaPayment,
+    )
+
+    model_map: dict[PaymentMethod, type] = {
+        PaymentMethod.YOOKASSA: YooKassaPayment,
+        PaymentMethod.CRYPTOBOT: CryptoBotPayment,
+        PaymentMethod.HELEKET: HeleketPayment,
+        PaymentMethod.MULENPAY: MulenPayPayment,
+        PaymentMethod.PAL24: Pal24Payment,
+        PaymentMethod.WATA: WataPayment,
+        PaymentMethod.PLATEGA: PlategaPayment,
+        PaymentMethod.CLOUDPAYMENTS: CloudPaymentsPayment,
+        PaymentMethod.FREEKASSA: FreekassaPayment,
+        PaymentMethod.KASSA_AI: KassaAiPayment,
+    }
+
+    model = model_map.get(payment_method)
+    if not model:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f'Unsupported payment method: {method}',
+        )
+
+    cutoff = datetime.now(UTC) - timedelta(hours=1)
+    stmt = (
+        select(model)
+        .options(selectinload(model.user))
+        .where(model.user_id == user.id, model.created_at >= cutoff)
+        .order_by(desc(model.created_at))
+        .limit(1)
+    )
+    result = await db.execute(stmt)
+    payment = result.scalars().first()
+
+    if not payment:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail='No recent payments found',
         )
 
-    return _record_to_response(user_payments[0])
+    record = PendingPayment(
+        local_id=payment.id,
+        method=payment_method,
+        identifier=str(getattr(payment, 'correlation_id', None) or payment.id),
+        amount_kopeks=payment.amount_kopeks,
+        status=payment.status or '',
+        is_paid=bool(payment.is_paid),
+        created_at=payment.created_at,
+        expires_at=getattr(payment, 'expires_at', None),
+        user=payment.user,
+        payment=payment,
+    )
+
+    return _record_to_response(record)
 
 
 @router.get('/pending-payments/{method}/{payment_id}', response_model=PendingPaymentResponse)
