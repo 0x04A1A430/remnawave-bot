@@ -435,7 +435,11 @@ def _build_cabinet_main_menu_keyboard(
                 custom_cfg = custom_buttons_cfg.get(btn_id)
                 if not custom_cfg or not custom_cfg.get('url') or not custom_cfg.get('enabled', True):
                     continue
-                custom_text = custom_cfg.get('labels', {}).get(language, '') or custom_cfg.get('labels', {}).get('ru', '') or 'Link'
+                custom_text = (
+                    custom_cfg.get('labels', {}).get(language, '')
+                    or custom_cfg.get('labels', {}).get('ru', '')
+                    or 'Link'
+                )
                 resolved_style = _resolve_style(custom_cfg.get('style'))
                 resolved_emoji = custom_cfg.get('icon_custom_emoji_id') or None
                 open_in = custom_cfg.get('open_in', 'external')
@@ -461,7 +465,9 @@ def _build_cabinet_main_menu_keyboard(
                 case 'home':
                     if not section_cfg.get('enabled', True):
                         continue
-                    home_text = section_cfg.get('labels', {}).get(language, '') or texts.t('MENU_PROFILE', '👤 Личный кабинет')
+                    home_text = section_cfg.get('labels', {}).get(language, '') or texts.t(
+                        'MENU_PROFILE', '👤 Личный кабинет'
+                    )
                     row_buttons.append(_cabinet_button(home_text, '/', 'menu_profile_unavailable'))
 
                 case 'subscription':
@@ -505,11 +511,13 @@ def _build_cabinet_main_menu_keyboard(
                         continue
                     lang_text = section_cfg.get('labels', {}).get(language, '') or texts.MENU_LANGUAGE
                     resolved_lang_emoji = section_cfg.get('icon_custom_emoji_id') or None
-                    row_buttons.append(InlineKeyboardButton(
-                        text=lang_text,
-                        callback_data='menu_language',
-                        icon_custom_emoji_id=resolved_lang_emoji,
-                    ))
+                    row_buttons.append(
+                        InlineKeyboardButton(
+                            text=lang_text,
+                            callback_data='menu_language',
+                            icon_custom_emoji_id=resolved_lang_emoji,
+                        )
+                    )
 
                 case 'admin':
                     if not is_admin:
