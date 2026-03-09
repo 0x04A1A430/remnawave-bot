@@ -1,0 +1,76 @@
+"""Schemas for cabinet gift subscription feature."""
+
+from __future__ import annotations
+
+from pydantic import BaseModel, Field, model_validator
+
+
+class GiftConfigSubOption(BaseModel):
+    id: str
+    name: str
+
+
+class GiftConfigTariffPeriod(BaseModel):
+    days: int
+    price_kopeks: int
+    price_label: str
+    original_price_kopeks: int | None = None
+    discount_percent: int | None = None
+
+
+class GiftConfigTariff(BaseModel):
+    id: int
+    name: str
+    description: str | None = None
+    traffic_limit_gb: int
+    device_limit: int
+    periods: list[GiftConfigTariffPeriod]
+
+
+class GiftConfigPaymentMethod(BaseModel):
+    method_id: str
+    display_name: str
+    description: str | None = None
+    icon_url: str | None = None
+    min_amount_kopeks: int | None = None
+    max_amount_kopeks: int | None = None
+    sub_options: list[GiftConfigSubOption] | None = None
+
+
+class GiftConfigResponse(BaseModel):
+    is_enabled: bool
+    tariffs: list[GiftConfigTariff] = []
+    payment_methods: list[GiftConfigPaymentMethod] = []
+    balance_kopeks: int = 0
+    currency_symbol: str = '\u20bd'
+
+
+class GiftPurchaseRequest(BaseModel):
+    tariff_id: int
+    period_days: int
+    recipient_type: str = Field(pattern=r'^(email|telegram)$')
+    recipient_value: str = Field(min_length=1, max_length=255)
+    gift_message: str | None = Field(default=None, max_length=1000)
+    payment_mode: str = Field(pattern=r'^(balance|gateway)$')
+    payment_method: str | None = Field(default=None, max_length=50)
+
+    @model_validator(mode='after')
+    def validate_payment(self) -> GiftPurchaseRequest:
+        if self.payment_mode == 'gateway' and not self.payment_method:
+            raise ValueError('payment_method is required for gateway mode')
+        return self
+
+
+class GiftPurchaseResponse(BaseModel):
+    status: str
+    purchase_token: str
+    payment_url: str | None = None
+
+
+class GiftPurchaseStatusResponse(BaseModel):
+    status: str
+    is_gift: bool = True
+    recipient_contact_value: str | None = None
+    gift_message: str | None = None
+    tariff_name: str | None = None
+    period_days: int | None = None

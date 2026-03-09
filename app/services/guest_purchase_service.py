@@ -115,7 +115,7 @@ async def validate_and_calculate(
 
 async def create_purchase(
     db: AsyncSession,
-    landing: LandingPage,
+    landing: LandingPage | None,
     tariff: Tariff,
     period_days: int,
     amount_kopeks: int,
@@ -126,13 +126,15 @@ async def create_purchase(
     gift_recipient_type: str | None = None,
     gift_recipient_value: str | None = None,
     gift_message: str | None = None,
+    source: str = 'landing',
+    buyer_user_id: int | None = None,
     commit: bool = True,
 ) -> GuestPurchase:
     """Create a guest purchase record."""
     purchase = await create_guest_purchase(
         db,
         commit=commit,
-        landing_id=landing.id,
+        landing_id=landing.id if landing else None,
         tariff_id=tariff.id,
         period_days=period_days,
         amount_kopeks=amount_kopeks,
@@ -143,6 +145,8 @@ async def create_purchase(
         gift_recipient_type=gift_recipient_type,
         gift_recipient_value=gift_recipient_value,
         gift_message=gift_message,
+        source=source,
+        buyer_user_id=buyer_user_id,
         status=GuestPurchaseStatus.PENDING.value,
     )
 
@@ -150,11 +154,12 @@ async def create_purchase(
         'Guest purchase created',
         purchase_id=purchase.id,
         token_prefix=purchase.token[:5],
-        landing_slug=landing.slug,
+        landing_slug=landing.slug if landing else None,
         tariff_id=tariff.id,
         period_days=period_days,
         amount_kopeks=amount_kopeks,
         is_gift=is_gift,
+        source=source,
     )
 
     return purchase

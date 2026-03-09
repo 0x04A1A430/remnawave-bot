@@ -36,6 +36,7 @@ from .auth import router as auth_router
 from .balance import router as balance_router
 from .branding import router as branding_router
 from .contests import router as contests_router
+from .gift import router as gift_router
 from .info import router as info_router
 from .landing import router as landing_router
 from .media import router as media_router
@@ -85,6 +86,9 @@ router.include_router(media_router)
 
 # Wheel routes
 router.include_router(wheel_router)
+
+# Gift routes
+router.include_router(gift_router)
 
 # Admin routes (notifications router MUST be before tickets router to avoid route conflict)
 router.include_router(admin_ticket_notifications_router)
