@@ -277,6 +277,11 @@ def _validate_update_payload(rows: list[RowConfig]) -> None:
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail=f'Custom button "{btn.id}" must have a URL starting with http:// or https://.',
                     )
+                if btn.open_in == 'webapp' and not btn.url.startswith('https://'):
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f'Custom button "{btn.id}" with webapp mode requires an https:// URL.',
+                    )
 
             # Validate style
             all_allowed = ALLOWED_STYLE_VALUES | VALID_CUSTOM_BUTTON_STYLES
