@@ -202,7 +202,10 @@ async def fulfill_purchase(
 
         # Find or create user for the recipient (no commit — stays within our transaction)
         user, is_new_account = await _find_or_create_user(
-            db, recipient_type, recipient_value, purchase=purchase,
+            db,
+            recipient_type,
+            recipient_value,
+            purchase=purchase,
             pre_resolved_telegram_id=pre_resolved_telegram_id,
         )
 
