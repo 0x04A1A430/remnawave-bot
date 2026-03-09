@@ -349,7 +349,9 @@ async def create_topup(
     amount_rubles = request.amount_kopeks / 100
     payment_url = None
     payment_id = None
-    cabinet_return_url = f'{settings.CABINET_URL}/balance/top-up/result?method={request.payment_method}'
+    cabinet_return_url = f'{settings.CABINET_URL.rstrip("/")}/balance/top-up/result?method={request.payment_method}'
+    cabinet_success_url = f'{cabinet_return_url}&status=success'
+    cabinet_failed_url = f'{cabinet_return_url}&status=failed'
 
     try:
         if request.payment_method == 'yookassa':
@@ -493,7 +495,8 @@ async def create_topup(
                 ),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
                 payment_method_code=method_code,
-                return_url=cabinet_return_url,
+                return_url=cabinet_success_url,
+                failed_url=cabinet_failed_url,
             )
 
             if result and result.get('redirect_url'):
@@ -520,6 +523,7 @@ async def create_topup(
                 description=settings.get_balance_payment_description(request.amount_kopeks),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
                 return_url=cabinet_return_url,
+                success_url=cabinet_success_url,
             )
 
             if result and result.get('payment_url'):
@@ -617,7 +621,8 @@ async def create_topup(
                 amount_kopeks=request.amount_kopeks,
                 description=settings.get_balance_payment_description(request.amount_kopeks),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
-                return_url=cabinet_return_url,
+                return_url=cabinet_success_url,
+                failed_url=cabinet_failed_url,
             )
 
             if result and result.get('payment_url'):
@@ -644,7 +649,8 @@ async def create_topup(
                 description=settings.get_balance_payment_description(request.amount_kopeks),
                 telegram_id=user.telegram_id,
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
-                return_url=cabinet_return_url,
+                return_url=cabinet_success_url,
+                failed_url=cabinet_failed_url,
             )
 
             if result and result.get('payment_url'):
