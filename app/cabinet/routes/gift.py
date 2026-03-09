@@ -45,35 +45,6 @@ _EMAIL_RE = re.compile(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$')
 _TELEGRAM_RE = re.compile(r'^@?[a-zA-Z][a-zA-Z0-9_]{4,31}$')
 
 
-def _period_label(days: int) -> str:
-    """Human-readable label for a period in days."""
-    if days == 1:
-        return '1 day'
-    if days <= 6:
-        return f'{days} days'
-    if days == 7:
-        return '1 week'
-    if days == 14:
-        return '2 weeks'
-    if days == 30:
-        return '1 month'
-    if days == 60:
-        return '2 months'
-    if days == 90:
-        return '3 months'
-    if days == 180:
-        return '6 months'
-    if days == 365:
-        return '1 year'
-    months = days // 30
-    remainder = days % 30
-    if months > 0 and remainder == 0:
-        return f'{months} mo.'
-    if months > 0:
-        return f'{months} mo. + {remainder} d.'
-    return f'{days} days'
-
-
 async def _is_gift_enabled(db: AsyncSession) -> bool:
     """Check if the gift feature is enabled via system settings."""
     value = await get_setting_value(db, GIFT_ENABLED_KEY)
