@@ -12,6 +12,7 @@ from .admin_campaigns import router as admin_campaigns_router
 from .admin_channels import router as admin_channels_router
 from .admin_email_templates import router as admin_email_templates_router
 from .admin_landings import router as admin_landings_router
+from .admin_menu_layout import router as admin_menu_layout_router
 from .admin_partners import router as admin_partners_router
 from .admin_payment_methods import router as admin_payment_methods_router
 from .admin_payments import router as admin_payments_router
@@ -117,6 +118,7 @@ router.include_router(admin_updates_router)
 router.include_router(admin_traffic_router)
 router.include_router(admin_pinned_messages_router)
 router.include_router(admin_button_styles_router)
+router.include_router(admin_menu_layout_router)
 router.include_router(admin_channels_router)
 router.include_router(admin_apps_router)
 router.include_router(admin_roles_router)
