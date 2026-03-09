@@ -168,7 +168,8 @@ async def update_promo_group(
         normalized_period_discounts = _normalize_period_discounts(period_discounts)
         group.period_discounts = normalized_period_discounts or None
     if auto_assign_total_spent_kopeks is not None:
-        group.auto_assign_total_spent_kopeks = max(0, auto_assign_total_spent_kopeks)
+        value = max(0, auto_assign_total_spent_kopeks)
+        group.auto_assign_total_spent_kopeks = value if value > 0 else None
     if apply_discounts_to_addons is not None:
         group.apply_discounts_to_addons = bool(apply_discounts_to_addons)
 
