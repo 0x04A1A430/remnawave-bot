@@ -390,7 +390,7 @@ async def create_topup(
 
             if result:
                 payment_url = result.get('confirmation_url')
-                payment_id = result.get('yookassa_payment_id')
+                payment_id = str(result.get('local_payment_id') or result.get('yookassa_payment_id') or 'pending')
             else:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -571,7 +571,6 @@ async def create_topup(
             option = (request.payment_option or '').strip().lower()
             if option not in {'card', 'sbp'}:
                 option = 'sbp'
-            provider_method = 'card' if option == 'card' else 'sbp'
 
             payment_service = PaymentService()
             result = await payment_service.create_pal24_payment(
@@ -580,7 +579,6 @@ async def create_topup(
                 amount_kopeks=request.amount_kopeks,
                 description=settings.get_balance_payment_description(request.amount_kopeks),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
-                payment_method=provider_method,
             )
 
             if result:

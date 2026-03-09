@@ -41,10 +41,12 @@ async def create_transaction(
     *,
     commit: bool = True,
 ) -> Transaction:
-    # SUBSCRIPTION_PAYMENT — always store as negative (debit from user balance)
+    # SUBSCRIPTION_PAYMENT / GIFT_PAYMENT — always store as negative (debit from user balance)
     # Keep original for downstream consumers (events, contests)
     stored_amount = (
-        -amount_kopeks if type == TransactionType.SUBSCRIPTION_PAYMENT and amount_kopeks > 0 else amount_kopeks
+        -amount_kopeks
+        if type in (TransactionType.SUBSCRIPTION_PAYMENT, TransactionType.GIFT_PAYMENT) and amount_kopeks > 0
+        else amount_kopeks
     )
 
     transaction = Transaction(

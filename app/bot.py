@@ -248,7 +248,7 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     elif settings.is_cabinet_mode():
         logger.info('🏠 Режим Cabinet активен, базовый URL', MINIAPP_CUSTOM_URL=settings.MINIAPP_CUSTOM_URL)
 
-    # Load per-section button styles cache
+    # Load per-section button styles cache and menu layout cache
     if settings.is_cabinet_mode():
         try:
             from app.utils.button_styles_cache import load_button_styles_cache
@@ -256,6 +256,13 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
             await load_button_styles_cache()
         except Exception as e:
             logger.warning('Failed to load button styles cache', error=e)
+
+        try:
+            from app.utils.menu_layout_cache import load_menu_layout_cache
+
+            await load_menu_layout_cache()
+        except Exception as e:
+            logger.warning('Failed to load menu layout cache', error=e)
 
     logger.info('Бот успешно настроен')
 

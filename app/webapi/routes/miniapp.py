@@ -1155,8 +1155,6 @@ async def create_payment_link(
         option = (payload.payment_option or '').strip().lower()
         if option not in {'card', 'sbp'}:
             option = 'sbp'
-        provider_method = 'card' if option == 'card' else 'sbp'
-
         payment_service = PaymentService()
         result = await payment_service.create_pal24_payment(
             db=db,
@@ -1164,7 +1162,6 @@ async def create_payment_link(
             amount_kopeks=amount_kopeks,
             description=settings.get_balance_payment_description(amount_kopeks, telegram_user_id=user.telegram_id),
             language=user.language or settings.DEFAULT_LANGUAGE,
-            payment_method=provider_method,
         )
         if not result:
             raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail='Failed to create payment')
