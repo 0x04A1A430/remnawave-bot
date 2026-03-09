@@ -349,7 +349,7 @@ async def create_topup(
     amount_rubles = request.amount_kopeks / 100
     payment_url = None
     payment_id = None
-    cabinet_return_url = f'{settings.CABINET_URL}/balance/top-up/result'
+    cabinet_return_url = f'{settings.CABINET_URL}/balance/top-up/result?method={request.payment_method}'
 
     try:
         if request.payment_method == 'yookassa':
@@ -970,6 +970,35 @@ async def get_pending_payments(
         per_page=per_page,
         pages=pages,
     )
+
+
+@router.get('/pending-payments/{method}/latest', response_model=PendingPaymentResponse)
+async def get_latest_payment_by_method(
+    method: str,
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Get user's most recent payment for a given method."""
+    try:
+        payment_method = PaymentMethod(method)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f'Invalid payment method: {method}',
+        )
+
+    all_pending = await list_recent_pending_payments(db)
+    user_payments = [
+        p for p in all_pending if p.user and p.user.id == user.id and p.method == payment_method
+    ]
+
+    if not user_payments:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='No recent payments found',
+        )
+
+    return _record_to_response(user_payments[0])
 
 
 @router.get('/pending-payments/{method}/{payment_id}', response_model=PendingPaymentResponse)
