@@ -310,11 +310,7 @@ class RioPayPaymentMixin:
         if was_first_topup:
             update_values[UserModel.has_made_first_topup] = True
 
-        await db.execute(
-            update(UserModel)
-            .where(UserModel.id == user.id)
-            .values(update_values)
-        )
+        await db.execute(update(UserModel).where(UserModel.id == user.id).values(update_values))
 
         promo_group = user.get_primary_promo_group()
         subscription = getattr(user, 'subscription', None)
