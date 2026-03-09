@@ -438,14 +438,25 @@ def _build_cabinet_main_menu_keyboard(
                 custom_text = custom_cfg.get('labels', {}).get(language, '') or custom_cfg.get('labels', {}).get('ru', '') or 'Link'
                 resolved_style = _resolve_style(custom_cfg.get('style'))
                 resolved_emoji = custom_cfg.get('icon_custom_emoji_id') or None
-                row_buttons.append(
-                    InlineKeyboardButton(
-                        text=custom_text,
-                        url=custom_cfg['url'],
-                        style=resolved_style,
-                        icon_custom_emoji_id=resolved_emoji,
-                    ),
-                )
+                open_in = custom_cfg.get('open_in', 'external')
+                if open_in == 'webapp':
+                    row_buttons.append(
+                        InlineKeyboardButton(
+                            text=custom_text,
+                            web_app=types.WebAppInfo(url=custom_cfg['url']),
+                            style=resolved_style,
+                            icon_custom_emoji_id=resolved_emoji,
+                        ),
+                    )
+                else:
+                    row_buttons.append(
+                        InlineKeyboardButton(
+                            text=custom_text,
+                            url=custom_cfg['url'],
+                            style=resolved_style,
+                            icon_custom_emoji_id=resolved_emoji,
+                        ),
+                    )
                 continue
 
             # --- Built-in buttons ---

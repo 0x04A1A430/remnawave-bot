@@ -111,7 +111,11 @@ def _validate_custom_button(btn_id: str, data: dict) -> dict | None:
     if not isinstance(enabled, bool):
         enabled = True
 
-    return {'id': btn_id, 'url': url.strip(), 'style': style, 'labels': clean_labels, 'icon_custom_emoji_id': icon_custom_emoji_id, 'enabled': enabled}
+    open_in = data.get('open_in', 'external')
+    if open_in not in ('external', 'webapp'):
+        open_in = 'external'
+
+    return {'id': btn_id, 'url': url.strip(), 'style': style, 'labels': clean_labels, 'icon_custom_emoji_id': icon_custom_emoji_id, 'enabled': enabled, 'open_in': open_in}
 
 
 def _validate_layout(data: dict) -> dict[str, object]:

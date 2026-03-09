@@ -60,6 +60,7 @@ class ButtonConfig(BaseModel):
     enabled: bool = True
     labels: dict[str, str] = Field(default_factory=dict, max_length=10)
     url: str | None = Field(default=None, max_length=2048)
+    open_in: Literal['external', 'webapp'] = 'external'
 
 
 class RowConfig(BaseModel):
@@ -121,8 +122,11 @@ def _build_merged_response(
     """
     custom_buttons: dict[str, dict] = layout.get('custom_buttons', {})
 
-    # Collect row entries sorted by key (row_1, row_2, ...)
-    row_keys = sorted(k for k in layout if k.startswith('row_'))
+    # Collect row entries sorted numerically (row_1, row_2, ..., row_10, ...)
+    row_keys = sorted(
+        (k for k in layout if k.startswith('row_')),
+        key=lambda k: int(k.split('_', 1)[1]) if k.split('_', 1)[1].isdigit() else 0,
+    )
 
     rows: list[RowConfig] = []
     for row_key in row_keys:
@@ -161,6 +165,7 @@ def _build_merged_response(
                         enabled=cb.get('enabled', True),
                         labels=cb.get('labels', {}),
                         url=cb.get('url'),
+                        open_in=cb.get('open_in', 'external'),
                     ),
                 )
 
@@ -212,6 +217,7 @@ def _split_update(
                     'icon_custom_emoji_id': btn.icon_custom_emoji_id,
                     'enabled': btn.enabled,
                     'labels': btn.labels,
+                    'open_in': btn.open_in,
                 }
 
         layout_data[row_key] = {
