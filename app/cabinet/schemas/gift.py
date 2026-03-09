@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from pydantic import BaseModel, Field, model_validator
 
 
@@ -46,8 +48,8 @@ class GiftConfigResponse(BaseModel):
 
 
 class GiftPurchaseRequest(BaseModel):
-    tariff_id: int
-    period_days: int
+    tariff_id: int = Field(gt=0)
+    period_days: int = Field(gt=0, le=3650)
     recipient_type: str = Field(pattern=r'^(email|telegram)$')
     recipient_value: str = Field(min_length=1, max_length=255)
     gift_message: str | None = Field(default=None, max_length=1000)
@@ -65,6 +67,7 @@ class GiftPurchaseResponse(BaseModel):
     status: str
     purchase_token: str
     payment_url: str | None = None
+    warning: str | None = None
 
 
 class GiftPurchaseStatusResponse(BaseModel):
@@ -74,3 +77,12 @@ class GiftPurchaseStatusResponse(BaseModel):
     gift_message: str | None = None
     tariff_name: str | None = None
     period_days: int | None = None
+
+
+class PendingGiftResponse(BaseModel):
+    token: str
+    tariff_name: str | None = None
+    period_days: int
+    gift_message: str | None = None
+    sender_display: str | None = None
+    created_at: datetime | None = None

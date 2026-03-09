@@ -3078,6 +3078,10 @@ class GuestPurchase(Base):
         Index('ix_guest_purchases_status', 'status'),
         Index('ix_guest_purchases_contact', 'contact_type', 'contact_value'),
         Index('ix_guest_purchases_landing_status_paid', 'landing_id', 'status', 'paid_at'),
+        Index('ix_guest_purchases_source', 'source'),
+        Index('ix_guest_purchases_user_gift_status', 'user_id', 'is_gift', 'status'),
+        Index('ix_guest_purchases_status_paid_at', 'status', 'paid_at'),
+        Index('ix_guest_purchases_buyer_user_id', 'buyer_user_id'),
     )
 
     id = Column(Integer, primary_key=True, index=True)

@@ -226,6 +226,7 @@ class MonitoringService:
                 await self._check_trial_expiring_soon(db)
                 await self._check_trial_channel_subscriptions(db)
                 await self._check_expired_subscription_followups(db)
+                await self._retry_stuck_guest_purchases(db)
                 await self._cleanup_inactive_users(db)
                 await self._sync_with_remnawave(db)
 
@@ -1678,6 +1679,16 @@ class MonitoringService:
             logger.error(
                 'Ошибка отправки уведомления о неудачном автоплатеже пользователю', telegram_id=user.telegram_id, e=e
             )
+
+    async def _retry_stuck_guest_purchases(self, db: AsyncSession):
+        try:
+            from app.services.guest_purchase_service import retry_stuck_paid_purchases
+
+            retried = await retry_stuck_paid_purchases(db, stale_minutes=5, limit=10)
+            if retried:
+                logger.info('Retried stuck guest purchases', retried=retried)
+        except Exception:
+            logger.error('Error retrying stuck guest purchases', exc_info=True)
 
     async def _cleanup_inactive_users(self, db: AsyncSession):
         try:

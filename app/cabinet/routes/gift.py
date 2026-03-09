@@ -1,5 +1,6 @@
 """Gift subscription routes for cabinet."""
 
+import asyncio
 import re
 from datetime import UTC, datetime
 
@@ -12,15 +13,16 @@ from app.config import settings
 from app.database.crud.landing import get_purchase_by_token
 from app.database.crud.system_setting import get_setting_value
 from app.database.crud.tariff import get_tariff_by_id
-from app.database.crud.transaction import create_transaction
+from app.database.crud.transaction import create_transaction, emit_transaction_side_effects
 from app.database.crud.user import subtract_user_balance
-from app.database.models import GuestPurchaseStatus, PaymentMethod, Tariff, TransactionType, User
+from app.database.models import GuestPurchase, GuestPurchaseStatus, PaymentMethod, Tariff, TransactionType, User
 from app.services.guest_purchase_service import (
     GuestPurchaseError,
     create_purchase,
     fulfill_purchase,
 )
 from app.services.payment_method_config_service import get_enabled_methods_for_user
+from app.utils.cache import RateLimitCache
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 from ..schemas.gift import (
@@ -32,6 +34,7 @@ from ..schemas.gift import (
     GiftPurchaseRequest,
     GiftPurchaseResponse,
     GiftPurchaseStatusResponse,
+    PendingGiftResponse,
 )
 
 
@@ -141,6 +144,18 @@ async def create_gift_purchase(
             detail='Gift feature is not enabled',
         )
 
+    # Rate limit: 5 gift purchases per 60 seconds per user
+    is_limited = await RateLimitCache.is_rate_limited(user.id, 'gift_purchase', limit=5, window=60)
+    if is_limited:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail='Too many requests')
+
+    # Check if user has purchase restrictions
+    if getattr(user, 'restriction_subscription', False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='Purchases are restricted for this account',
+        )
+
     # Validate recipient format
     if body.recipient_type == 'email' and not _EMAIL_RE.match(body.recipient_value):
         raise HTTPException(
@@ -152,6 +167,21 @@ async def create_gift_purchase(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Invalid Telegram username format',
         )
+
+    # Prevent self-gift
+    if body.recipient_type == 'telegram':
+        normalized_recipient = body.recipient_value.lstrip('@').lower()
+        if user.username and user.username.lower() == normalized_recipient:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='Cannot gift to yourself',
+            )
+    elif body.recipient_type == 'email':
+        if user.email and user.email.lower() == body.recipient_value.lower():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='Cannot gift to yourself',
+            )
 
     # Find tariff and validate period
     tariff = await get_tariff_by_id(db, body.tariff_id)
@@ -193,6 +223,27 @@ async def create_gift_purchase(
             detail='Insufficient balance',
         )
 
+    # Pre-check: try to resolve Telegram username via Bot API
+    # Placed after validation gates to prevent zero-cost enumeration.
+    # The resolved ID is passed to fulfill_purchase to avoid a duplicate API call.
+    recipient_warning: str | None = None
+    pre_resolved_telegram_id: int | None = None
+    if body.recipient_type == 'telegram':
+        tg_username = body.recipient_value.lstrip('@')
+        try:
+            from aiogram import Bot
+
+            async with Bot(token=settings.BOT_TOKEN) as bot:
+                chat = await asyncio.wait_for(bot.get_chat(chat_id=f'@{tg_username}'), timeout=5.0)
+                pre_resolved_telegram_id = chat.id
+        except Exception:
+            recipient_warning = 'telegram_unresolvable'
+            logger.warning(
+                'Telegram username not resolvable for gift',
+                username=tg_username,
+                buyer_id=user.id,
+            )
+
     # Create purchase record
     try:
         purchase = await create_purchase(
@@ -231,7 +282,7 @@ async def create_gift_purchase(
         )
 
     # Create transaction record
-    await create_transaction(
+    transaction = await create_transaction(
         db,
         user_id=user.id,
         type=TransactionType.GIFT_PAYMENT,
@@ -247,9 +298,23 @@ async def create_gift_purchase(
 
     await db.commit()
 
+    # Emit deferred side-effects after atomic commit
+    await emit_transaction_side_effects(
+        db,
+        transaction,
+        amount_kopeks=price_kopeks,
+        user_id=user.id,
+        type=TransactionType.GIFT_PAYMENT,
+        payment_method=PaymentMethod.BALANCE,
+        description=f'Gift: {tariff.name} ({body.period_days}d) -> {body.recipient_value}',
+    )
+
+    # Capture token before fulfill_purchase — session state may change after rollback inside fulfill
+    purchase_token = purchase.token
+
     # Fulfill the purchase (find/create recipient user, create subscription, notify)
     try:
-        await fulfill_purchase(db, purchase.token)
+        await fulfill_purchase(db, purchase_token, pre_resolved_telegram_id=pre_resolved_telegram_id)
     except Exception:
         logger.exception(
             'Gift purchase fulfillment failed (purchase is paid, will retry)',
@@ -258,8 +323,47 @@ async def create_gift_purchase(
 
     return GiftPurchaseResponse(
         status='ok',
-        purchase_token=purchase.token,
+        purchase_token=purchase_token,
+        warning=recipient_warning,
     )
+
+
+@router.get('/pending', response_model=list[PendingGiftResponse])
+async def get_pending_gifts(
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Get pending gift purchases that the current user can activate."""
+    result = await db.execute(
+        select(GuestPurchase)
+        .where(
+            GuestPurchase.user_id == user.id,
+            GuestPurchase.is_gift.is_(True),
+            GuestPurchase.status == GuestPurchaseStatus.PENDING_ACTIVATION.value,
+        )
+        .order_by(GuestPurchase.created_at.desc())
+    )
+    purchases = result.scalars().all()
+
+    pending: list[PendingGiftResponse] = []
+    for p in purchases:
+        # Determine sender display name
+        sender_display = None
+        if p.contact_value:
+            sender_display = p.contact_value
+
+        pending.append(
+            PendingGiftResponse(
+                token=p.token,
+                tariff_name=p.tariff.name if p.tariff else None,
+                period_days=p.period_days,
+                gift_message=p.gift_message,
+                sender_display=sender_display,
+                created_at=p.created_at,
+            )
+        )
+
+    return pending
 
 
 @router.get('/purchase/{token}', response_model=GiftPurchaseStatusResponse)
@@ -276,11 +380,11 @@ async def get_gift_purchase_status(
             detail='Purchase not found',
         )
 
-    # Only the buyer can view this
+    # Uniform 404 prevents token existence oracle
     if purchase.buyer_user_id != user.id:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail='Access denied',
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='Purchase not found',
         )
 
     tariff_name = purchase.tariff.name if purchase.tariff else None
