@@ -3110,6 +3110,7 @@ class GuestPurchase(Base):
     delivered_at = Column(AwareDateTime(), nullable=True)
     cabinet_password = Column(Text, nullable=True)
     auto_login_token = Column(Text, nullable=True)
+    recipient_warning = Column(String(50), nullable=True)
 
     landing = relationship('LandingPage', back_populates='guest_purchases', lazy='selectin')
     tariff = relationship('Tariff', lazy='selectin')

@@ -77,6 +77,7 @@ class GiftPurchaseStatusResponse(BaseModel):
     gift_message: str | None = None
     tariff_name: str | None = None
     period_days: int | None = None
+    warning: str | None = None
 
 
 class PendingGiftResponse(BaseModel):
