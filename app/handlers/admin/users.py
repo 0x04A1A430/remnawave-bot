@@ -5329,6 +5329,18 @@ async def confirm_admin_tariff_change(callback: types.CallbackQuery, db_user: Us
         if settings.RESET_TRAFFIC_ON_TARIFF_SWITCH:
             subscription.traffic_used_gb = 0.0
 
+        # Записываем транзакцию о смене тарифа
+        from app.database.crud.transaction import create_transaction
+
+        await create_transaction(
+            db=db,
+            user_id=user.id,
+            type=TransactionType.SUBSCRIPTION_PAYMENT,
+            amount_kopeks=0,
+            description=f"Смена тарифа администратором на '{tariff.name}'",
+            commit=False,
+        )
+
         await db.commit()
 
         # Синхронизируем с RemnaWave (сброс трафика по админ-настройке)
