@@ -769,7 +769,7 @@ class YooKassaPaymentMixin:
                     )
 
                     # Используем full_user для форматирования реферальной информации, чтобы избежать проблем с ленивой загрузкой
-                    user_for_referrer = full_user if full_user else user
+                    user_for_referrer = full_user or user
                     referrer_info = format_referrer_info(user_for_referrer)
                     topup_status = '🆕 Первое пополнение' if was_first_topup else '🔄 Пополнение'
 

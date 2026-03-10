@@ -1,13 +1,13 @@
 """Schemas for Admin Users management in cabinet."""
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 
-class UserStatusEnum(str, Enum):
+class UserStatusEnum(StrEnum):
     """User status enum."""
 
     ACTIVE = 'active'
@@ -15,7 +15,7 @@ class UserStatusEnum(str, Enum):
     DELETED = 'deleted'
 
 
-class SubscriptionStatusEnum(str, Enum):
+class SubscriptionStatusEnum(StrEnum):
     """Subscription status enum."""
 
     TRIAL = 'trial'
@@ -25,7 +25,7 @@ class SubscriptionStatusEnum(str, Enum):
     PENDING = 'pending'
 
 
-class SortByEnum(str, Enum):
+class SortByEnum(StrEnum):
     """Sort options for users list."""
 
     CREATED_AT = 'created_at'

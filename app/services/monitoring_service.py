@@ -111,7 +111,11 @@ class MonitoringService:
             logger.debug('Пропуск уведомления: пользователь недоступен', user_id=user.id, status=user.status)
             return None
 
-        if settings.ENABLE_LOGO_MODE and LOGO_PATH.exists() and not caption_exceeds_telegram_limit(text):
+        if (
+            settings.ENABLE_LOGO_MODE
+            and await asyncio.to_thread(LOGO_PATH.exists)
+            and not caption_exceeds_telegram_limit(text)
+        ):
             try:
                 from app.utils.message_patch import _cache_logo_file_id, get_logo_media
 

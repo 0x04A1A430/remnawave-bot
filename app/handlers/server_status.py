@@ -169,7 +169,7 @@ def _split_into_pages(
 
         pages.append((current_online, current_offline))
 
-    return pages if pages else [([], [])]
+    return pages or [([], [])]
 
 
 def _format_server_lines(

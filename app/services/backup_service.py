@@ -347,7 +347,7 @@ class BackupService:
             with tempfile.TemporaryDirectory() as temp_dir:
                 temp_path = Path(temp_dir)
                 staging_dir = temp_path / 'backup'
-                staging_dir.mkdir(parents=True, exist_ok=True)
+                await asyncio.to_thread(staging_dir.mkdir, True, True)
 
                 database_info = await self._dump_database(staging_dir, include_logs=include_logs)
                 database_info.setdefault('tables_count', overview.get('tables_count', 0))
@@ -376,10 +376,10 @@ class BackupService:
 
                 mode = 'w:gz' if compress else 'w'
                 with tarfile.open(backup_path, mode) as tar:
-                    for item in staging_dir.iterdir():
+                    for item in await asyncio.to_thread(lambda: list(staging_dir.iterdir())):
                         tar.add(item, arcname=item.name)
 
-            file_size = backup_path.stat().st_size
+            file_size = (await asyncio.to_thread(backup_path.stat)).st_size
 
             await self._cleanup_old_backups()
 
@@ -415,7 +415,7 @@ class BackupService:
             logger.info('📄 Начинаем восстановление из', backup_file_path=backup_file_path)
 
             backup_path = Path(backup_file_path)
-            if not backup_path.exists():
+            if not await asyncio.to_thread(backup_path.exists):
                 return False, f'❌ Файл бекапа не найден: {backup_file_path}'
 
             if self._is_archive_backup(backup_path):
@@ -473,7 +473,11 @@ class BackupService:
             if pg_dump_path:
                 dump_path = staging_dir / 'database.sql'
                 await self._dump_postgres(dump_path, pg_dump_path)
-                size = dump_path.stat().st_size if dump_path.exists() else 0
+                size = (
+                    (await asyncio.to_thread(dump_path.stat)).st_size
+                    if await asyncio.to_thread(dump_path.exists)
+                    else 0
+                )
                 return {
                     'type': 'postgresql',
                     'path': dump_path.name,
@@ -488,7 +492,7 @@ class BackupService:
 
         dump_path = staging_dir / 'database.sqlite'
         await self._dump_sqlite(dump_path)
-        size = dump_path.stat().st_size if dump_path.exists() else 0
+        size = (await asyncio.to_thread(dump_path.stat)).st_size if await asyncio.to_thread(dump_path.exists) else 0
         return {
             'type': 'sqlite',
             'path': dump_path.name,
@@ -516,9 +520,9 @@ class BackupService:
         ]
 
         logger.info('📦 Экспорт PostgreSQL через pg_dump ...', pg_dump_path=pg_dump_path)
-        dump_path.parent.mkdir(parents=True, exist_ok=True)
+        await asyncio.to_thread(dump_path.parent.mkdir, True, True)
 
-        with dump_path.open('wb') as dump_file:
+        with open(dump_path, 'wb') as dump_file:
             process = await asyncio.create_subprocess_exec(
                 *command,
                 stdout=dump_file,
@@ -558,7 +562,7 @@ class BackupService:
         async with aiofiles.open(dump_path, 'w', encoding='utf-8') as dump_file:
             await dump_file.write(json_lib.dumps(dump_structure, ensure_ascii=False, indent=2))
 
-        size = dump_path.stat().st_size if dump_path.exists() else 0
+        size = (await asyncio.to_thread(dump_path.stat)).st_size if await asyncio.to_thread(dump_path.exists) else 0
 
         logger.info('✅ PostgreSQL экспортирован через ORM в JSON', dump_path=dump_path)
 
@@ -575,10 +579,10 @@ class BackupService:
 
     async def _dump_sqlite(self, dump_path: Path):
         sqlite_path = Path(settings.SQLITE_PATH)
-        if not sqlite_path.exists():
+        if not await asyncio.to_thread(sqlite_path.exists):
             raise FileNotFoundError(f'SQLite база данных не найдена по пути {sqlite_path}')
 
-        dump_path.parent.mkdir(parents=True, exist_ok=True)
+        await asyncio.to_thread(dump_path.parent.mkdir, True, True)
         await asyncio.to_thread(shutil.copy2, sqlite_path, dump_path)
         logger.info('✅ SQLite база данных скопирована', dump_path=dump_path)
 
@@ -662,11 +666,11 @@ class BackupService:
     async def _collect_files(self, staging_dir: Path, include_logs: bool) -> list[dict[str, Any]]:
         files_info: list[dict[str, Any]] = []
         files_dir = staging_dir / 'files'
-        files_dir.mkdir(parents=True, exist_ok=True)
+        await asyncio.to_thread(files_dir.mkdir, True, True)
 
         if include_logs and settings.LOG_FILE:
             log_path = Path(settings.LOG_FILE)
-            if log_path.exists():
+            if await asyncio.to_thread(log_path.exists):
                 dest = files_dir / log_path.name
                 await asyncio.to_thread(shutil.copy2, log_path, dest)
                 files_info.append(
@@ -676,8 +680,8 @@ class BackupService:
                     }
                 )
 
-        if not files_info and files_dir.exists():
-            files_dir.rmdir()
+        if not files_info and await asyncio.to_thread(files_dir.exists):
+            await asyncio.to_thread(files_dir.rmdir)
 
         return files_info
 
@@ -688,7 +692,7 @@ class BackupService:
             'items': 0,
         }
 
-        if not self.data_dir.exists():
+        if not await asyncio.to_thread(self.data_dir.exists):
             return snapshot_info
 
         counter = {'items': 0}
@@ -732,7 +736,7 @@ class BackupService:
                 tar.extractall(temp_path, filter='data')
 
             metadata_path = temp_path / 'metadata.json'
-            if not metadata_path.exists():
+            if not await asyncio.to_thread(metadata_path.exists):
                 return False, '❌ Метаданные бекапа отсутствуют'
 
             async with aiofiles.open(metadata_path, encoding='utf-8') as meta_file:
@@ -758,7 +762,7 @@ class BackupService:
                 await self._restore_sqlite(dump_file, clear_existing)
 
             data_dir = temp_path / 'data'
-            if data_dir.exists():
+            if await asyncio.to_thread(data_dir.exists):
                 await self._restore_data_snapshot(data_dir, clear_existing)
 
             if files_info:
@@ -775,7 +779,7 @@ class BackupService:
             return True, message
 
     async def _restore_postgres(self, dump_path: Path, clear_existing: bool):
-        if not dump_path.exists():
+        if not await asyncio.to_thread(dump_path.exists):
             raise FileNotFoundError(f'Dump PostgreSQL не найден: {dump_path}')
 
         psql_path = self._resolve_command_path('psql', 'PSQL_PATH')
@@ -833,7 +837,7 @@ class BackupService:
         logger.info('✅ PostgreSQL восстановлен', dump_path=dump_path)
 
     async def _restore_postgres_json(self, dump_path: Path, clear_existing: bool):
-        if not dump_path.exists():
+        if not await asyncio.to_thread(dump_path.exists):
             raise FileNotFoundError(f'JSON дамп PostgreSQL не найден: {dump_path}')
 
         async with aiofiles.open(dump_path, encoding='utf-8') as dump_file:
@@ -853,20 +857,20 @@ class BackupService:
         logger.info('✅ PostgreSQL восстановлен из ORM JSON', dump_path=dump_path)
 
     async def _restore_sqlite(self, dump_path: Path, clear_existing: bool):
-        if not dump_path.exists():
+        if not await asyncio.to_thread(dump_path.exists):
             raise FileNotFoundError(f'SQLite файл не найден: {dump_path}')
 
         target_path = Path(settings.SQLITE_PATH)
-        target_path.parent.mkdir(parents=True, exist_ok=True)
+        await asyncio.to_thread(target_path.parent.mkdir, True, True)
 
-        if clear_existing and target_path.exists():
-            target_path.unlink()
+        if clear_existing and await asyncio.to_thread(target_path.exists):
+            await asyncio.to_thread(target_path.unlink)
 
         await asyncio.to_thread(shutil.copy2, dump_path, target_path)
         logger.info('✅ SQLite база восстановлена', target_path=target_path)
 
     async def _restore_data_snapshot(self, source_dir: Path, clear_existing: bool):
-        if not source_dir.exists():
+        if not await asyncio.to_thread(source_dir.exists):
             return
 
         def _restore():
@@ -891,7 +895,7 @@ class BackupService:
         logger.info('📁 Снимок директории data восстановлен')
 
     async def _restore_files(self, files_info: list[dict[str, Any]], temp_path: Path):
-        allowed_base = self.data_dir.resolve()
+        allowed_base = await asyncio.to_thread(self.data_dir.resolve)
 
         for file_info in files_info:
             relative_path = file_info.get('relative_path')
@@ -899,21 +903,22 @@ class BackupService:
             if not relative_path or not target_path:
                 continue
 
-            target_resolved = target_path.resolve()
+            target_resolved = await asyncio.to_thread(target_path.resolve)
             if not str(target_resolved).startswith(str(allowed_base) + os.sep) and target_resolved != allowed_base:
                 logger.warning('Заблокирована запись за пределами data_dir', target_path=target_path)
                 continue
 
-            source_file = (temp_path / relative_path).resolve()
-            if not str(source_file).startswith(str(temp_path.resolve()) + os.sep):
+            source_file = await asyncio.to_thread((temp_path / relative_path).resolve)
+            temp_path_resolved = await asyncio.to_thread(temp_path.resolve)
+            if not str(source_file).startswith(str(temp_path_resolved) + os.sep):
                 logger.warning('Path traversal в relative_path', relative_path=relative_path)
                 continue
 
-            if not source_file.exists():
+            if not await asyncio.to_thread(source_file.exists):
                 logger.warning('Файл отсутствует в архиве', relative_path=relative_path)
                 continue
 
-            target_resolved.parent.mkdir(parents=True, exist_ok=True)
+            await asyncio.to_thread(target_resolved.parent.mkdir, True, True)
             await asyncio.to_thread(shutil.copy2, source_file, target_resolved)
             logger.info('📁 Файл восстановлен', target_resolved=target_resolved)
 
@@ -1573,8 +1578,10 @@ class BackupService:
         backups = []
 
         try:
-            for backup_file in sorted(self.backup_dir.glob('backup_*'), reverse=True):
-                if not backup_file.is_file():
+            for backup_file in sorted(
+                await asyncio.to_thread(lambda: list(self.backup_dir.glob('backup_*'))), reverse=True
+            ):
+                if not await asyncio.to_thread(backup_file.is_file):
                     continue
 
                 try:
@@ -1598,7 +1605,7 @@ class BackupService:
                                 backup_structure = json_lib.load(f)
                         metadata = backup_structure.get('metadata', {})
 
-                    file_stats = backup_file.stat()
+                    file_stats = await asyncio.to_thread(backup_file.stat)
 
                     backup_info = {
                         'filename': backup_file.name,
@@ -1626,7 +1633,7 @@ class BackupService:
 
                 except Exception as e:
                     logger.error('Ошибка чтения метаданных', backup_file=backup_file, error=e)
-                    file_stats = backup_file.stat()
+                    file_stats = await asyncio.to_thread(backup_file.stat)
                     backups.append(
                         {
                             'filename': backup_file.name,
@@ -1651,14 +1658,15 @@ class BackupService:
 
     async def delete_backup(self, backup_filename: str) -> tuple[bool, str]:
         try:
-            backup_path = (self.backup_dir / backup_filename).resolve()
-            if not str(backup_path).startswith(str(self.backup_dir.resolve()) + os.sep):
+            backup_path = await asyncio.to_thread((self.backup_dir / backup_filename).resolve)
+            backup_dir_resolved = await asyncio.to_thread(self.backup_dir.resolve)
+            if not str(backup_path).startswith(str(backup_dir_resolved) + os.sep):
                 return False, '❌ Недопустимое имя файла бекапа'
 
-            if not backup_path.is_file():
+            if not await asyncio.to_thread(backup_path.is_file):
                 return False, f'❌ Файл бекапа не найден: {backup_filename}'
 
-            backup_path.unlink()
+            await asyncio.to_thread(backup_path.unlink)
             message = f'✅ Бекап {backup_filename} удален'
             logger.info(message)
 
@@ -1826,9 +1834,9 @@ class BackupService:
             await self.bot.send_document(**send_kwargs)
             logger.info('Бекап отправлен в чат', chat_id=chat_id)
 
-            if temp_zip_path and Path(temp_zip_path).exists():
+            if temp_zip_path and await asyncio.to_thread(Path(temp_zip_path).exists):
                 try:
-                    Path(temp_zip_path).unlink()
+                    await asyncio.to_thread(Path(temp_zip_path).unlink)
                 except Exception as cleanup_error:
                     logger.warning('Не удалось удалить временный архив', cleanup_error=cleanup_error)
 
@@ -1838,7 +1846,7 @@ class BackupService:
     async def _create_password_protected_archive(self, file_path: str, password: str) -> str | None:
         try:
             source_path = Path(file_path)
-            if not source_path.exists():
+            if not await asyncio.to_thread(source_path.exists):
                 logger.error('Исходный файл бекапа не найден', file_path=file_path)
                 return None
 

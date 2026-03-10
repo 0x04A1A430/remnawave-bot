@@ -1,5 +1,6 @@
 """Branding routes for cabinet - logo, project name, and theme colors management."""
 
+import asyncio
 import json
 import os
 from pathlib import Path
@@ -401,7 +402,7 @@ async def get_logo():
     """
     logo_path = get_logo_path()
 
-    if logo_path is None or not logo_path.exists():
+    if logo_path is None or not await asyncio.to_thread(logo_path.exists):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No custom logo set')
 
     # Determine media type from file extension
@@ -470,7 +471,7 @@ async def upload_logo(
         )
 
     # Ensure directory exists
-    ensure_branding_dir()
+    await asyncio.to_thread(ensure_branding_dir)
 
     # Determine file extension from content type
     ext_map = {
@@ -483,12 +484,12 @@ async def upload_logo(
     extension = ext_map.get(file.content_type, '.png')
 
     # Remove old logo files with any extension
-    for old_file in BRANDING_DIR.glob('logo.*'):
-        old_file.unlink()
+    for old_file in await asyncio.to_thread(lambda: list(BRANDING_DIR.glob('logo.*'))):
+        await asyncio.to_thread(old_file.unlink)
 
     # Save new logo
     logo_path = BRANDING_DIR / f'logo{extension}'
-    logo_path.write_bytes(content)
+    await asyncio.to_thread(logo_path.write_bytes, content)
 
     # Mark that we have a custom logo
     await set_setting_value(db, BRANDING_LOGO_KEY, 'custom')
@@ -517,8 +518,8 @@ async def delete_logo(
 ):
     """Delete custom logo and revert to letter. Admin only."""
     # Remove logo files
-    for old_file in BRANDING_DIR.glob('logo.*'):
-        old_file.unlink()
+    for old_file in await asyncio.to_thread(lambda: list(BRANDING_DIR.glob('logo.*'))):
+        await asyncio.to_thread(old_file.unlink)
 
     # Update setting
     await set_setting_value(db, BRANDING_LOGO_KEY, 'default')

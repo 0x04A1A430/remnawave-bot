@@ -204,7 +204,7 @@ async def get_payment_methods(
                         'description': description,
                     }
                 )
-            options = formatted_options if formatted_options else None
+            options = formatted_options or None
 
         methods.append(
             PaymentMethodResponse(
@@ -891,7 +891,7 @@ def _is_checkable(record: PendingPayment) -> bool:
     if record.method == PaymentMethod.YOOKASSA:
         return status in {'pending', 'waiting_for_capture'}
     if record.method == PaymentMethod.CRYPTOBOT:
-        return status in {'active'}
+        return status == 'active'
     if record.method == PaymentMethod.CLOUDPAYMENTS:
         return status in {'pending', 'authorized'}
     if record.method == PaymentMethod.FREEKASSA:

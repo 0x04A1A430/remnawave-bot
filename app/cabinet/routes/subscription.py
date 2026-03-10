@@ -1469,7 +1469,7 @@ async def activate_trial(
         duration_days=trial_duration,
         traffic_limit_gb=trial_traffic_limit,
         device_limit=trial_device_limit,
-        connected_squads=trial_squads if trial_squads else None,
+        connected_squads=trial_squads or None,
         tariff_id=tariff_id_for_trial,
     )
 
