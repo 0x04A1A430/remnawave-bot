@@ -347,7 +347,7 @@ class BackupService:
             with tempfile.TemporaryDirectory() as temp_dir:
                 temp_path = Path(temp_dir)
                 staging_dir = temp_path / 'backup'
-                await asyncio.to_thread(staging_dir.mkdir, True, True)
+                await asyncio.to_thread(lambda: staging_dir.mkdir(parents=True, exist_ok=True))
 
                 database_info = await self._dump_database(staging_dir, include_logs=include_logs)
                 database_info.setdefault('tables_count', overview.get('tables_count', 0))
@@ -520,7 +520,7 @@ class BackupService:
         ]
 
         logger.info('📦 Экспорт PostgreSQL через pg_dump ...', pg_dump_path=pg_dump_path)
-        await asyncio.to_thread(dump_path.parent.mkdir, True, True)
+        await asyncio.to_thread(lambda: dump_path.parent.mkdir(parents=True, exist_ok=True))
 
         with open(dump_path, 'wb') as dump_file:
             process = await asyncio.create_subprocess_exec(
@@ -582,7 +582,7 @@ class BackupService:
         if not await asyncio.to_thread(sqlite_path.exists):
             raise FileNotFoundError(f'SQLite база данных не найдена по пути {sqlite_path}')
 
-        await asyncio.to_thread(dump_path.parent.mkdir, True, True)
+        await asyncio.to_thread(lambda: dump_path.parent.mkdir(parents=True, exist_ok=True))
         await asyncio.to_thread(shutil.copy2, sqlite_path, dump_path)
         logger.info('✅ SQLite база данных скопирована', dump_path=dump_path)
 
@@ -666,7 +666,7 @@ class BackupService:
     async def _collect_files(self, staging_dir: Path, include_logs: bool) -> list[dict[str, Any]]:
         files_info: list[dict[str, Any]] = []
         files_dir = staging_dir / 'files'
-        await asyncio.to_thread(files_dir.mkdir, True, True)
+        await asyncio.to_thread(lambda: files_dir.mkdir(parents=True, exist_ok=True))
 
         if include_logs and settings.LOG_FILE:
             log_path = Path(settings.LOG_FILE)
@@ -861,7 +861,7 @@ class BackupService:
             raise FileNotFoundError(f'SQLite файл не найден: {dump_path}')
 
         target_path = Path(settings.SQLITE_PATH)
-        await asyncio.to_thread(target_path.parent.mkdir, True, True)
+        await asyncio.to_thread(lambda: target_path.parent.mkdir(parents=True, exist_ok=True))
 
         if clear_existing and await asyncio.to_thread(target_path.exists):
             await asyncio.to_thread(target_path.unlink)
@@ -918,7 +918,7 @@ class BackupService:
                 logger.warning('Файл отсутствует в архиве', relative_path=relative_path)
                 continue
 
-            await asyncio.to_thread(target_resolved.parent.mkdir, True, True)
+            await asyncio.to_thread(lambda: target_resolved.parent.mkdir(parents=True, exist_ok=True))
             await asyncio.to_thread(shutil.copy2, source_file, target_resolved)
             logger.info('📁 Файл восстановлен', target_resolved=target_resolved)
 
