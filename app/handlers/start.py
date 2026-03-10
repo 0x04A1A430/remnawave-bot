@@ -640,6 +640,8 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
         if user:
             await _activate_pending_gift_after_registration(db, state, user, message.answer)
             await state.update_data(pending_gift_token=None)
+            # Refresh user to pick up newly created subscription
+            await db.refresh(user, attribute_names=['subscription'])
 
         has_active_subscription, subscription_is_active = _calculate_subscription_flags(user.subscription)
 
