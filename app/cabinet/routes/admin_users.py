@@ -1022,10 +1022,10 @@ async def update_user_subscription(
         )
 
     if request.action == 'extend':
-        if not request.days:
+        if not request.days or request.days <= 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='Days parameter is required for extend action',
+                detail='Days must be a positive integer',
             )
 
         await extend_subscription(db, subscription, request.days)
@@ -1041,6 +1041,36 @@ async def update_user_subscription(
         return UpdateSubscriptionResponse(
             success=True,
             message=f'Subscription extended by {request.days} days',
+            subscription=await _build_subscription_info_async(db, subscription),
+        )
+
+    if request.action == 'shorten':
+        if not request.days or request.days <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='Days must be a positive integer',
+            )
+
+        # Сокращение через отрицательный аргумент: extend_subscription(-N) уменьшает end_date
+        await extend_subscription(db, subscription, -request.days)
+        await db.refresh(subscription)
+
+        # Check if subscription expired after shortening
+        if subscription.end_date <= datetime.now(UTC):
+            subscription.status = SubscriptionStatus.EXPIRED.value
+            await db.commit()
+            await db.refresh(subscription)
+
+        # Sync to Remnawave panel
+        await _sync_subscription_to_panel(db, user, subscription)
+
+        logger.info(
+            'Admin shortened subscription for user by days', admin_id=admin.id, user_id=user_id, days=request.days
+        )
+
+        return UpdateSubscriptionResponse(
+            success=True,
+            message=f'Subscription shortened by {request.days} days',
             subscription=await _build_subscription_info_async(db, subscription),
         )
 
