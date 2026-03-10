@@ -1759,34 +1759,24 @@ class RemnaWaveService:
                     # Конвертируем локальную дату из БД в UTC для корректного сравнения
                     local_end_date_utc = self._local_to_utc(subscription.end_date)
 
-                    # КРИТИЧНО: НЕ перезаписываем end_date если локальная дата ПОЗЖЕ
-                    # Это защищает от ситуации когда подписка была продлена в боте,
-                    # но RemnaWave ещё не получил обновление или вернул старую дату
+                    # Панель авторитетна для ACTIVE подписок — обновляем end_date
+                    # в обоих направлениях (как вперёд, так и назад)
                     time_diff = abs((local_end_date_utc - expire_at).total_seconds())
                     if time_diff > 60:
-                        if expire_at > local_end_date_utc:
-                            # RemnaWave имеет более позднюю дату - обновляем
-                            # Конвертируем UTC обратно в локальное время для сохранения в БД
-                            new_end_date_local = expire_at.replace(tzinfo=self._utc_timezone).astimezone(
-                                self._panel_timezone
-                            )
-                            logger.info(
-                                '✅ Sync: обновлена end_date для user -> (разница: с)',
-                                value=getattr(user, 'telegram_id', '?'),
-                                end_date=subscription.end_date,
-                                new_end_date_local=new_end_date_local,
-                                time_diff=round(time_diff, 0),
-                            )
-                            subscription.end_date = new_end_date_local
-                        else:
-                            # Локальная дата позже - НЕ перезаписываем
-                            logger.debug(
-                                '⏭️ Sync: end_date для user актуальна: локальная ( UTC: ) RemnaWave ( UTC)',
-                                value=getattr(user, 'telegram_id', '?'),
-                                end_date=subscription.end_date,
-                                local_end_date_utc=local_end_date_utc,
-                                expire_at=expire_at,
-                            )
+                        # Конвертируем UTC обратно в локальное время для сохранения в БД
+                        new_end_date_local = expire_at.replace(tzinfo=self._utc_timezone).astimezone(
+                            self._panel_timezone
+                        )
+                        direction = '→' if expire_at > local_end_date_utc else '←'
+                        logger.info(
+                            '✅ Sync: обновлена end_date для user -> (разница: с, направление: )',
+                            value=getattr(user, 'telegram_id', '?'),
+                            end_date=subscription.end_date,
+                            new_end_date_local=new_end_date_local,
+                            time_diff=round(time_diff, 0),
+                            direction=direction,
+                        )
+                        subscription.end_date = new_end_date_local
                     else:
                         logger.debug(
                             '⏭️ Sync: пропускаем обновление end_date для user разница слишком мала (с < 60с)',
