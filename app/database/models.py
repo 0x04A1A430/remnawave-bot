@@ -241,9 +241,7 @@ class YooKassaPayment(Base):
 
 class SavedPaymentMethod(Base):
     __tablename__ = 'saved_payment_methods'
-    __table_args__ = (
-        Index('ix_saved_payment_methods_user_active', 'user_id', 'is_active'),
-    )
+    __table_args__ = (Index('ix_saved_payment_methods_user_active', 'user_id', 'is_active'),)
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
