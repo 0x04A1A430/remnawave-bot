@@ -23,6 +23,7 @@ from app.services.guest_purchase_service import (
 )
 from app.services.payment_method_config_service import get_enabled_methods_for_user
 from app.utils.cache import RateLimitCache
+from app.utils.promo_offer import get_user_active_promo_discount_percent
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 from ..schemas.gift import (
@@ -79,19 +80,53 @@ async def get_gift_config(
     )
     tariffs_db = result.scalars().all()
 
+    # Get user's promo group for discount calculation
+    promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else None
+    if promo_group is None:
+        promo_group = getattr(user, 'promo_group', None)
+    promo_group_name = promo_group.name if promo_group else None
+
+    # Get active promo offer discount
+    promo_offer_discount_percent = get_user_active_promo_discount_percent(user)
+
     tariffs: list[GiftConfigTariff] = []
     for tariff in tariffs_db:
         period_days_list = tariff.get_available_periods()
         periods: list[GiftConfigTariffPeriod] = []
         for days in period_days_list:
-            price = tariff.get_price_for_period(days)
-            if price is None:
+            base_price = tariff.get_price_for_period(days)
+            if base_price is None:
                 continue
+
+            original_price = base_price
+            price = base_price
+
+            # Apply promo group discount
+            promo_group_discount = 0
+            if promo_group:
+                promo_group_discount = promo_group.get_discount_percent('period', days)
+                if promo_group_discount > 0:
+                    price = int(price * (100 - promo_group_discount) / 100)
+
+            # Apply active promo offer discount (stacks on top)
+            if promo_offer_discount_percent > 0:
+                price = price - price * promo_offer_discount_percent // 100
+
+            # Ensure minimum price of 1 kopek after all discounts
+            price = max(1, price)
+
+            # Calculate combined discount percent
+            combined_discount = 0
+            if original_price > 0 and original_price != price:
+                combined_discount = int((original_price - price) * 100 / original_price)
+
             periods.append(
                 GiftConfigTariffPeriod(
                     days=days,
                     price_kopeks=price,
                     price_label=settings.format_price(price),
+                    original_price_kopeks=original_price if combined_discount > 0 else None,
+                    discount_percent=combined_discount if combined_discount > 0 else None,
                 )
             )
         if not periods:
@@ -131,6 +166,13 @@ async def get_gift_config(
         payment_methods=payment_methods,
         balance_kopeks=user.balance_kopeks,
         currency_symbol=getattr(settings, 'CURRENCY_SYMBOL', '\u20bd'),
+        promo_group_name=promo_group_name,
+        active_discount_percent=promo_offer_discount_percent if promo_offer_discount_percent > 0 else None,
+        active_discount_expires_at=(
+            getattr(user, 'promo_offer_discount_expires_at', None)
+            if promo_offer_discount_percent > 0
+            else None
+        ),
     )
 
 
@@ -205,6 +247,30 @@ async def create_gift_purchase(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Price is not configured for this period',
         )
+
+    # Lock user row to prevent concurrent promo offer double-spend
+    locked_result = await db.execute(
+        select(User).where(User.id == user.id).with_for_update().execution_options(populate_existing=True)
+    )
+    user = locked_result.scalar_one()
+
+    # Apply promo group discount
+    promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else None
+    if promo_group is None:
+        promo_group = getattr(user, 'promo_group', None)
+
+    if promo_group:
+        discount_percent = promo_group.get_discount_percent('period', body.period_days)
+        if discount_percent > 0:
+            price_kopeks = int(price_kopeks * (100 - discount_percent) / 100)
+
+    # Apply active promo offer discount (stacks)
+    promo_offer_discount_percent = get_user_active_promo_discount_percent(user)
+    if promo_offer_discount_percent > 0:
+        price_kopeks = price_kopeks - price_kopeks * promo_offer_discount_percent // 100
+
+    # Ensure minimum price of 1 kopek after all discounts
+    price_kopeks = max(1, price_kopeks)
 
     # Determine buyer contact info
     if user.email:
@@ -331,6 +397,12 @@ async def create_gift_purchase(
                 detail='Payment provider returned an invalid response',
             )
 
+        # Consume promo offer discount before committing gateway purchase
+        if promo_offer_discount_percent > 0 and getattr(user, 'promo_offer_discount_percent', 0):
+            user.promo_offer_discount_percent = 0
+            user.promo_offer_discount_source = None
+            user.promo_offer_discount_expires_at = None
+
         await db.commit()
         await db.refresh(purchase)
 
@@ -384,13 +456,14 @@ async def create_gift_purchase(
     if recipient_warning:
         purchase.recipient_warning = recipient_warning
 
-    # Subtract balance
+    # Subtract balance (consume promo offer if one was applied)
     balance_ok = await subtract_user_balance(
         db,
         user,
         price_kopeks,
         description=f'Gift: {tariff.name} ({body.period_days}d)',
         create_transaction=False,
+        consume_promo_offer=promo_offer_discount_percent > 0,
     )
     if not balance_ok:
         await db.rollback()
