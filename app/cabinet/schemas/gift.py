@@ -50,8 +50,8 @@ class GiftConfigResponse(BaseModel):
 class GiftPurchaseRequest(BaseModel):
     tariff_id: int = Field(gt=0)
     period_days: int = Field(gt=0, le=3650)
-    recipient_type: str = Field(pattern=r'^(email|telegram)$')
-    recipient_value: str = Field(min_length=1, max_length=255)
+    recipient_type: str | None = Field(default=None, pattern=r'^(email|telegram)$')
+    recipient_value: str | None = Field(default=None, max_length=255)
     gift_message: str | None = Field(default=None, max_length=1000)
     payment_mode: str = Field(pattern=r'^(balance|gateway)$')
     payment_method: str | None = Field(default=None, max_length=50)
@@ -87,3 +87,40 @@ class PendingGiftResponse(BaseModel):
     gift_message: str | None = None
     sender_display: str | None = None
     created_at: datetime | None = None
+
+
+class SentGiftResponse(BaseModel):
+    """A gift the current user has sent."""
+
+    token: str
+    tariff_name: str | None = None
+    period_days: int
+    device_limit: int = 1
+    status: str
+    gift_recipient_value: str | None = None
+    gift_message: str | None = None
+    activated_by_username: str | None = None
+    created_at: datetime | None = None
+
+
+class ReceivedGiftResponse(BaseModel):
+    """A gift the current user has received."""
+
+    token: str
+    tariff_name: str | None = None
+    period_days: int
+    device_limit: int = 1
+    status: str
+    sender_display: str | None = None
+    gift_message: str | None = None
+    created_at: datetime | None = None
+
+
+class ActivateGiftRequest(BaseModel):
+    code: str = Field(min_length=1, max_length=100)
+
+
+class ActivateGiftResponse(BaseModel):
+    status: str
+    tariff_name: str | None = None
+    period_days: int | None = None
