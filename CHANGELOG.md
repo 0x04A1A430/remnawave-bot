@@ -1,5 +1,34 @@
 # Changelog
 
+## [3.29.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.28.1...v3.29.0) (2026-03-10)
+
+
+### New Features
+
+* gift subscription code-only purchase + activation via deep link ([5ffce17](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/5ffce175dcb8aebf22cf536bfa032c66da284600))
+* prevent self-activation of gift codes ([b30c73c](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/b30c73c300019646ea4a0d7e1bf758464ee58f0f))
+
+
+### Bug Fixes
+
+* 3 bugs — notification type, referral with channel sub, BOT_USERNAME ([3c96c2a](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/3c96c2affd5a803311e3c0c9a0f844d2217f387a))
+* 3 critical issues from second-round review ([a90d2d9](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/a90d2d936793daaadf116cf314b736a9ebfb7c3b))
+* add minimum 8-char length check for gift token in bot deep link ([8a8337f](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/8a8337f538c3fcaf84b84c34b7a1e38a4ce9d580))
+* address review findings from 6-agent audit ([5c34656](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/5c3465647639d6f07432bc3d725bba9396af6c45))
+* code-only gifts skip fulfillment in gateway webhook + retry service ([05bcac5](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/05bcac502efb1b4298a1c6be91bba5d7c057b9f0))
+* panel sync now updates end_date in both directions ([def594b](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/def594bbb55ef45d3df81524bd8841de73a07340))
+* pass full token to svc_activate instead of truncated prefix ([38c6adf](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/38c6adfdb4d4fc786bf6ca34a5d54025126130c0))
+* refresh user subscription after gift activation in /start ([363ccce](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/363ccce56d3e61554ca49d725322a79b05bc65d3))
+* remove begin_nested that breaks activate_purchase transaction ([0005d59](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/0005d59da1e58c38561c8346db89d8475a25d7df))
+* stars rate rounding + device/traffic purchase stats ([641ff86](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/641ff86bf6f1ac1f22146f4344beda05759869fc))
+* support prefix-based gift code lookup for activation ([4fb72ae](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/4fb72ae6e3bc65d93ab84b594b4ff5b4856c5357))
+
+
+### Refactoring
+
+* deduplicate gift activation in start.py ([769d3a0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/769d3a0b309fb6be1c3175cd66a0df7cb6e2fb67))
+* rename GIFTCODE_ start parameter prefix to GIFT_ ([42b6c80](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/42b6c80a48ad0100d5ddbbe99a096ebb7b292f08))
+
 ## [3.28.1](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.28.0...v3.28.1) (2026-03-10)
 
 
