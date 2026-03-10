@@ -1135,6 +1135,7 @@ async def purchase_devices_legacy(
         description=description,
         create_transaction=True,
         payment_method=PaymentMethod.BALANCE,
+        transaction_type=TransactionType.SUBSCRIPTION_PAYMENT,
     )
     if not success:
         raise HTTPException(
@@ -1469,7 +1470,7 @@ async def activate_trial(
         duration_days=trial_duration,
         traffic_limit_gb=trial_traffic_limit,
         device_limit=trial_device_limit,
-        connected_squads=trial_squads if trial_squads else None,
+        connected_squads=trial_squads or None,
         tariff_id=tariff_id_for_trial,
     )
 
@@ -1904,7 +1905,7 @@ async def submit_purchase(
                         period_days=selection.period.days,
                         was_trial_conversion=result.get('was_trial_conversion', False),
                         amount_kopeks=pricing.final_total,
-                        purchase_type='renewal' if not is_new_subscription else None,
+                        purchase_type='renewal' if not is_new_subscription else 'first_purchase',
                     )
                 finally:
                     await bot.session.close()
@@ -2357,7 +2358,7 @@ async def purchase_tariff(
                         period_days=period_days,
                         was_trial_conversion=False,
                         amount_kopeks=price_kopeks,
-                        purchase_type='renewal' if not was_new_subscription else None,
+                        purchase_type='renewal' if not was_new_subscription else 'first_purchase',
                     )
                 finally:
                     await bot.session.close()
@@ -2523,6 +2524,7 @@ async def purchase_devices(
             description=description,
             create_transaction=True,
             payment_method=PaymentMethod.BALANCE,
+            transaction_type=TransactionType.SUBSCRIPTION_PAYMENT,
         )
         if not success:
             raise HTTPException(

@@ -825,7 +825,13 @@ async def _auto_purchase_tariff(
 
         await with_admin_notification_service(
             lambda svc: svc.send_subscription_purchase_notification(
-                db, user, subscription, transaction, period_days, was_trial_conversion
+                db,
+                user,
+                subscription,
+                transaction,
+                period_days,
+                was_trial_conversion,
+                purchase_type='renewal',
             )
         )
     except Exception as error:
@@ -1100,7 +1106,13 @@ async def _auto_purchase_daily_tariff(
 
         await with_admin_notification_service(
             lambda svc: svc.send_subscription_purchase_notification(
-                db, user, subscription, transaction, 1, was_trial_conversion
+                db,
+                user,
+                subscription,
+                transaction,
+                1,
+                was_trial_conversion,
+                purchase_type='renewal',
             )
         )
     except Exception as error:
@@ -1290,6 +1302,7 @@ async def _auto_add_devices(
             description,
             create_transaction=True,
             payment_method=PaymentMethod.BALANCE,
+            transaction_type=TransactionType.SUBSCRIPTION_PAYMENT,
         )
         if not success:
             logger.warning(
@@ -1528,6 +1541,7 @@ async def _auto_add_traffic(
             description,
             create_transaction=True,
             payment_method=PaymentMethod.BALANCE,
+            transaction_type=TransactionType.SUBSCRIPTION_PAYMENT,
         )
         if not success:
             logger.warning(
@@ -2398,6 +2412,7 @@ async def auto_purchase_saved_cart_after_topup(
                 transaction,
                 selection.period.days,
                 was_trial_conversion,
+                purchase_type='renewal',
             )
         except Exception as error:  # pragma: no cover - defensive logging
             logger.error(

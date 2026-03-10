@@ -111,7 +111,11 @@ class MonitoringService:
             logger.debug('Пропуск уведомления: пользователь недоступен', user_id=user.id, status=user.status)
             return None
 
-        if settings.ENABLE_LOGO_MODE and LOGO_PATH.exists() and not caption_exceeds_telegram_limit(text):
+        if (
+            settings.ENABLE_LOGO_MODE
+            and await asyncio.to_thread(LOGO_PATH.exists)
+            and not caption_exceeds_telegram_limit(text)
+        ):
             try:
                 from app.utils.message_patch import _cache_logo_file_id, get_logo_media
 
@@ -221,6 +225,18 @@ class MonitoringService:
                 # экспайрятся до того, как autopay успеет их продлить
                 if settings.ENABLE_AUTOPAY:
                     await self._process_autopayments(db)
+                    # Рекуррентные автоплатежи: пополнение баланса с сохранённой карты
+                    if settings.YOOKASSA_RECURRENT_ENABLED:
+                        try:
+                            from app.services.recurrent_payment_service import process_recurrent_payments
+
+                            await process_recurrent_payments(db=db, bot=self.bot)
+                        except Exception as recurrent_error:
+                            logger.error(
+                                'Ошибка рекуррентных автоплатежей',
+                                error=recurrent_error,
+                                exc_info=True,
+                            )
                 await self._check_expired_subscriptions(db)
                 await self._check_expiring_subscriptions(db)
                 await self._check_trial_expiring_soon(db)
@@ -410,6 +426,15 @@ class MonitoringService:
                 expiring_subscriptions = await self._get_expiring_paid_subscriptions(db, days)
                 sent_count = 0
 
+                # Batch-запрос: собираем user_id с autopay и проверяем наличие карт одним запросом
+                users_with_cards: set[int] = set()
+                if settings.ENABLE_AUTOPAY and settings.YOOKASSA_RECURRENT_ENABLED:
+                    autopay_user_ids = [s.user_id for s in expiring_subscriptions if s.autopay_enabled]
+                    if autopay_user_ids:
+                        from app.database.crud.saved_payment_method import get_user_ids_with_active_payment_methods
+
+                        users_with_cards = await get_user_ids_with_active_payment_methods(db, autopay_user_ids)
+
                 for subscription in expiring_subscriptions:
                     user = await get_user_by_id(db, subscription.user_id)
                     if not user:
@@ -429,6 +454,8 @@ class MonitoringService:
                             days=days,
                         )
                         continue
+
+                    has_saved_card = subscription.autopay_enabled and user.id in users_with_cards
 
                     should_send = True
                     for other_days in warning_days:
@@ -466,7 +493,9 @@ class MonitoringService:
                         continue
 
                     if self.bot:
-                        success = await self._send_subscription_expiring_notification(user, subscription, days)
+                        success = await self._send_subscription_expiring_notification(
+                            user, subscription, days, has_saved_card=has_saved_card
+                        )
                         if success:
                             await record_notification(db, user.id, subscription.id, 'expiring', days)
                             all_processed_users.add(user_key)
@@ -1260,7 +1289,9 @@ class MonitoringService:
             )
             return False
 
-    async def _send_subscription_expiring_notification(self, user: User, subscription: Subscription, days: int) -> bool:
+    async def _send_subscription_expiring_notification(
+        self, user: User, subscription: Subscription, days: int, *, has_saved_card: bool = False
+    ) -> bool:
         try:
             from app.utils.formatters import format_days_declension
 
@@ -1268,27 +1299,56 @@ class MonitoringService:
             days_text = format_days_declension(days, user.language)
 
             if settings.ENABLE_AUTOPAY:
-                if subscription.autopay_enabled:
-                    autopay_status = '✅ Включен - подписка продлится автоматически'
-                    action_text = (
-                        f'💰 Убедитесь, что на балансе достаточно средств: {texts.format_price(user.balance_kopeks)}'
+                if subscription.autopay_enabled and has_saved_card:
+                    autopay_status = texts.t(
+                        'AUTOPAY_STATUS_CARD_ACTIVE',
+                        '✅ Включен — будет автоматическое списание с карты',
                     )
+                    action_text = texts.t(
+                        'AUTOPAY_ACTION_CHECK_BALANCE',
+                        '💰 Убедитесь, что на балансе достаточно средств: {balance}',
+                    ).format(balance=texts.format_price(user.balance_kopeks))
+                elif subscription.autopay_enabled:
+                    autopay_status = texts.t(
+                        'AUTOPAY_STATUS_NO_CARD',
+                        '✅ Включен — подписка продлится автоматически',
+                    )
+                    action_text = texts.t(
+                        'AUTOPAY_ACTION_CHECK_BALANCE',
+                        '💰 Убедитесь, что на балансе достаточно средств: {balance}',
+                    ).format(balance=texts.format_price(user.balance_kopeks))
                 else:
-                    autopay_status = '❌ Отключен - не забудьте продлить вручную!'
-                    action_text = '💡 Включите автоплатеж или продлите подписку вручную'
+                    autopay_status = texts.t(
+                        'AUTOPAY_STATUS_OFF',
+                        '❌ Отключен — не забудьте продлить вручную!',
+                    )
+                    action_text = texts.t(
+                        'AUTOPAY_ACTION_ENABLE',
+                        '💡 Включите автоплатеж или продлите подписку вручную',
+                    )
             else:
-                autopay_status = '❌ Отключен - не забудьте продлить вручную!'
-                action_text = '💡 Продлите подписку вручную'
+                autopay_status = texts.t(
+                    'AUTOPAY_STATUS_OFF',
+                    '❌ Отключен — не забудьте продлить вручную!',
+                )
+                action_text = texts.t(
+                    'AUTOPAY_ACTION_RENEW',
+                    '💡 Продлите подписку вручную',
+                )
 
-            message = f"""
-⚠️ <b>Подписка истекает через {days_text}!</b>
-
-Ваша платная подписка истекает {format_local_datetime(subscription.end_date, '%d.%m.%Y %H:%M')}.
-
-💳 <b>Автоплатеж:</b> {autopay_status}
-
-{action_text}
-"""
+            end_date = format_local_datetime(subscription.end_date, '%d.%m.%Y %H:%M')
+            message = texts.t(
+                'SUBSCRIPTION_EXPIRING_PAID',
+                '\n⚠️ <b>Подписка истекает через {days_text}!</b>\n\n'
+                'Ваша платная подписка истекает {end_date}.\n\n'
+                '💳 <b>Автоплатеж:</b> {autopay_status}\n\n'
+                '{action_text}\n',
+            ).format(
+                days_text=days_text,
+                end_date=end_date,
+                autopay_status=autopay_status,
+                action_text=action_text,
+            )
 
             from aiogram.types import InlineKeyboardMarkup
 
@@ -1682,11 +1742,15 @@ class MonitoringService:
 
     async def _retry_stuck_guest_purchases(self, db: AsyncSession):
         try:
-            from app.services.guest_purchase_service import retry_stuck_paid_purchases
+            from app.services.guest_purchase_service import retry_stuck_paid_purchases, retry_stuck_pending_activation
 
             retried = await retry_stuck_paid_purchases(db, stale_minutes=5, limit=10)
             if retried:
                 logger.info('Retried stuck guest purchases', retried=retried)
+
+            retried_pa = await retry_stuck_pending_activation(db, stale_minutes=10, limit=10)
+            if retried_pa:
+                logger.info('Retried stuck pending_activation purchases', retried=retried_pa)
         except Exception:
             logger.error('Error retrying stuck guest purchases', exc_info=True)
 

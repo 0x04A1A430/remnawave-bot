@@ -909,6 +909,7 @@ async def handle_custom_confirm(
                 custom_days,
                 was_trial_conversion=False,
                 amount_kopeks=total_price,
+                purchase_type='renewal' if existing_subscription else 'first_purchase',
             )
         except Exception as e:
             logger.error('Ошибка отправки уведомления админу', error=e)
@@ -1221,6 +1222,7 @@ async def confirm_tariff_purchase(
                 period,
                 was_trial_conversion=False,
                 amount_kopeks=final_price,
+                purchase_type='renewal' if existing_subscription else 'first_purchase',
             )
         except Exception as e:
             logger.error('Ошибка отправки уведомления админу', error=e)
@@ -1404,6 +1406,7 @@ async def confirm_daily_tariff_purchase(
                 1,  # 1 день
                 was_trial_conversion=False,
                 amount_kopeks=daily_price,
+                purchase_type='renewal' if existing_subscription else 'first_purchase',
             )
         except Exception as e:
             logger.error('Ошибка отправки уведомления админу', error=e)
@@ -1765,6 +1768,7 @@ async def confirm_tariff_extend(
                 period,
                 was_trial_conversion=False,
                 amount_kopeks=final_price,
+                purchase_type='renewal',
             )
         except Exception as e:
             logger.error('Ошибка отправки уведомления админу', error=e)

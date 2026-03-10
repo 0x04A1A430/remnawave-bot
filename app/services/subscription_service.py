@@ -1536,7 +1536,7 @@ class SubscriptionService:
                 logger.warning('Не удалось предзагрузить тариф подписки', subscription_id=sub.id, error=exc)
 
         # Вычисляем стратегию сброса трафика один раз — все подписки одного тарифа
-        sample_tariff = subscriptions[0].tariff if subscriptions[0].tariff else None
+        sample_tariff = subscriptions[0].tariff or None
         traffic_strategy = get_traffic_reset_strategy(sample_tariff)
 
         # Параллельная синхронизация: один API-клиент, только HTTP-вызовы внутри gather

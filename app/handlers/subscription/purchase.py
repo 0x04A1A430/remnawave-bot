@@ -313,7 +313,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
             devices_used_str = str(devices_used)
 
     servers_names = await get_servers_display_names(subscription.connected_squads)
-    servers_display = servers_names if servers_names else texts.t('SUBSCRIPTION_NO_SERVERS', 'Нет серверов')
+    servers_display = servers_names or texts.t('SUBSCRIPTION_NO_SERVERS', 'Нет серверов')
 
     # Получаем информацию о тарифе для режима тарифов
     tariff_info_block = ''
@@ -2821,7 +2821,13 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
         try:
             notification_service = AdminNotificationService(callback.bot)
             await notification_service.send_subscription_purchase_notification(
-                db, db_user, subscription, transaction, period_days, was_trial_conversion
+                db,
+                db_user,
+                subscription,
+                transaction,
+                period_days,
+                was_trial_conversion,
+                purchase_type='renewal' if existing_subscription else 'first_purchase',
             )
         except Exception as e:
             logger.error('Ошибка отправки уведомления о покупке', error=e)

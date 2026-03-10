@@ -401,7 +401,7 @@ class AdminNotificationService:
         period_days: int,
         was_trial_conversion: bool = False,
         amount_kopeks: int | None = None,
-        purchase_type: str | None = None,  # 'tariff_switch', 'renewal', None (auto)
+        purchase_type: str | None = None,  # 'first_purchase', 'renewal', 'tariff_switch', None (auto-detect)
     ) -> bool:
         try:
             total_amount = (
@@ -436,7 +436,10 @@ class AdminNotificationService:
             elif was_trial_conversion:
                 event_title = '🔄 КОНВЕРСИЯ ИЗ ТРИАЛА'
                 user_status = 'Конверсия'
-            elif purchase_type == 'renewal' or user.has_had_paid_subscription:
+            elif purchase_type == 'first_purchase':
+                event_title = '💎 ПОКУПКА ПОДПИСКИ'
+                user_status = 'Первая покупка'
+            elif purchase_type == 'renewal' or (purchase_type is None and user.has_had_paid_subscription):
                 event_title = '💎 ПРОДЛЕНИЕ ПОДПИСКИ'
                 user_status = 'Продление'
             else:

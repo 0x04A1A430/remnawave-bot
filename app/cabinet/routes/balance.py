@@ -14,6 +14,10 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.database.crud.saved_payment_method import (
+    deactivate_payment_method,
+    get_active_payment_methods_by_user,
+)
 from app.database.crud.user import get_user_by_id
 from app.database.models import PaymentMethod, Transaction, User
 from app.services.payment_method_config_service import get_enabled_methods_for_user
@@ -35,6 +39,8 @@ from ..schemas.balance import (
     PaymentMethodResponse,
     PendingPaymentListResponse,
     PendingPaymentResponse,
+    SavedCardResponse,
+    SavedCardsListResponse,
     StarsInvoiceRequest,
     StarsInvoiceResponse,
     TopUpRequest,
@@ -198,7 +204,7 @@ async def get_payment_methods(
                         'description': description,
                     }
                 )
-            options = formatted_options if formatted_options else None
+            options = formatted_options or None
 
         methods.append(
             PaymentMethodResponse(
@@ -244,13 +250,16 @@ async def create_stars_invoice(
             detail='Maximum amount is 10,000.00 RUB',
         )
 
-    # Calculate Stars amount
+    # Calculate Stars amount and normalize kopeks to match exact star value
     try:
         amount_rubles = request.amount_kopeks / 100
         stars_amount = settings.rubles_to_stars(amount_rubles)
 
         if stars_amount <= 0:
             stars_amount = 1
+
+        # Normalize kopeks so credited amount = stars * rate (no rounding mismatch)
+        normalized_kopeks = round(stars_amount * settings.get_stars_rate() * 100)
     except Exception as e:
         logger.error('Error calculating Stars amount', error=e)
         raise HTTPException(
@@ -259,7 +268,7 @@ async def create_stars_invoice(
         )
 
     # Create payload for tracking payment
-    payload = f'balance_topup_{user.id}_{request.amount_kopeks}_{int(time.time())}'
+    payload = f'balance_topup_{user.id}_{normalized_kopeks}_{int(time.time())}'
 
     # Create invoice through Telegram Bot API
     try:
@@ -271,7 +280,7 @@ async def create_stars_invoice(
                 api_url,
                 json={
                     'title': 'Пополнение баланса VPN',
-                    'description': f'Пополнение баланса на {amount_rubles:.2f} ₽ ({stars_amount} ⭐)',
+                    'description': f'Пополнение баланса на {normalized_kopeks / 100:.2f} ₽ ({stars_amount} ⭐)',
                     'payload': payload,
                     'provider_token': '',  # Empty for Stars
                     'currency': 'XTR',
@@ -299,7 +308,7 @@ async def create_stars_invoice(
             return StarsInvoiceResponse(
                 invoice_url=invoice_url,
                 stars_amount=stars_amount,
-                amount_kopeks=request.amount_kopeks,
+                amount_kopeks=normalized_kopeks,
             )
 
     except httpx.HTTPError as e:
@@ -885,7 +894,7 @@ def _is_checkable(record: PendingPayment) -> bool:
     if record.method == PaymentMethod.YOOKASSA:
         return status in {'pending', 'waiting_for_capture'}
     if record.method == PaymentMethod.CRYPTOBOT:
-        return status in {'active'}
+        return status == 'active'
     if record.method == PaymentMethod.CLOUDPAYMENTS:
         return status in {'pending', 'authorized'}
     if record.method == PaymentMethod.FREEKASSA:
@@ -1171,3 +1180,55 @@ async def check_payment_status(
         old_status=old_status,
         new_status=updated.status,
     )
+
+
+@router.get('/saved-cards', response_model=SavedCardsListResponse)
+async def get_saved_cards(
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Get user's saved payment methods (cards) for recurrent payments."""
+    recurrent_enabled = settings.YOOKASSA_RECURRENT_ENABLED
+
+    if not recurrent_enabled:
+        return SavedCardsListResponse(cards=[], recurrent_enabled=False)
+
+    methods = await get_active_payment_methods_by_user(db, user.id)
+
+    cards = [
+        SavedCardResponse(
+            id=m.id,
+            method_type=m.method_type,
+            card_last4=m.card_last4,
+            card_type=m.card_type,
+            title=m.title,
+            created_at=m.created_at,
+        )
+        for m in methods
+    ]
+
+    return SavedCardsListResponse(cards=cards, recurrent_enabled=True)
+
+
+@router.delete('/saved-cards/{card_id}', status_code=status.HTTP_200_OK)
+async def delete_saved_card(
+    card_id: int,
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Unlink (deactivate) a saved payment method."""
+    if not settings.YOOKASSA_RECURRENT_ENABLED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Recurrent payments are not enabled',
+        )
+
+    success = await deactivate_payment_method(db, card_id, user.id)
+
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='Saved card not found',
+        )
+
+    return {'success': True, 'message': 'Card unlinked successfully'}

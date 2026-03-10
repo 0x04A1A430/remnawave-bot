@@ -303,7 +303,7 @@ async def create_new_tariff(
         period_prices=period_prices_dict,
         allowed_squads=request.allowed_squads,
         server_traffic_limits=server_limits_dict,
-        promo_group_ids=request.promo_group_ids if request.promo_group_ids else None,
+        promo_group_ids=request.promo_group_ids or None,
         # Произвольное количество дней
         custom_days_enabled=request.custom_days_enabled,
         price_per_day_kopeks=request.price_per_day_kopeks,
