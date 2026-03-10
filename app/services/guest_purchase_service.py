@@ -923,6 +923,8 @@ async def retry_stuck_paid_purchases(
             GuestPurchase.status == GuestPurchaseStatus.PAID.value,
             or_(GuestPurchase.paid_at < cutoff, GuestPurchase.paid_at.is_(None)),
             or_(GuestPurchase.paid_at > max_age, GuestPurchase.paid_at.is_(None)),
+            # Exclude code-only gifts — they stay PAID intentionally until activated
+            ~(GuestPurchase.is_gift.is_(True) & GuestPurchase.gift_recipient_type.is_(None)),
         )
         .order_by(GuestPurchase.paid_at.asc().nulls_first())
         .limit(limit)

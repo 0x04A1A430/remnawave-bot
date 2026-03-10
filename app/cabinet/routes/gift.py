@@ -517,9 +517,13 @@ async def get_gift_purchase_status(
     if purchase.gift_recipient_value:
         recipient_contact_value = purchase.gift_recipient_value
 
+    is_code_only = purchase.is_gift and not purchase.gift_recipient_type
+
     return GiftPurchaseStatusResponse(
         status=purchase.status,
         is_gift=True,
+        is_code_only=is_code_only,
+        purchase_token=purchase.token if is_code_only else None,
         recipient_contact_value=recipient_contact_value,
         gift_message=purchase.gift_message,
         tariff_name=tariff_name,

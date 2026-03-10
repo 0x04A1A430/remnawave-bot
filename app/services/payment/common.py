@@ -521,6 +521,17 @@ async def try_fulfill_guest_purchase(
             paid_at=datetime.now(UTC),
         )
 
+        # Code-only gifts (is_gift=True, no recipient) stay in PAID status
+        # — buyer shares the code manually, recipient activates via cabinet/bot
+        if existing and existing.is_gift and not existing.gift_recipient_type:
+            await db.commit()
+            logger.info(
+                'Code-only gift marked as PAID, skipping fulfillment',
+                purchase_token_prefix=purchase_token[:5],
+                provider=provider_name,
+            )
+            return True
+
         # Fulfill: create user, subscription, deliver (commits on success)
         await fulfill_purchase(db, purchase_token)
 
