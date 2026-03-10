@@ -108,15 +108,13 @@ async def _activate_pending_gift_after_registration(
             )
             and (gift_purchase.user_id is None or gift_purchase.user_id == user.id)
         ):
-            # Use savepoint so activation failure does not corrupt the parent session
-            async with db.begin_nested():
-                if gift_purchase.user_id is None:
-                    gift_purchase.user_id = user.id
-                # Transition PAID → PENDING_ACTIVATION so activate_purchase() accepts it
-                if gift_purchase.status == GuestPurchaseStatus.PAID.value:
-                    gift_purchase.status = GuestPurchaseStatus.PENDING_ACTIVATION.value
-                await db.flush()
-                await svc_activate(db, gift_purchase.token, skip_notification=True)
+            if gift_purchase.user_id is None:
+                gift_purchase.user_id = user.id
+            # Transition PAID → PENDING_ACTIVATION so activate_purchase() accepts it
+            if gift_purchase.status == GuestPurchaseStatus.PAID.value:
+                gift_purchase.status = GuestPurchaseStatus.PENDING_ACTIVATION.value
+            await db.commit()
+            await svc_activate(db, gift_purchase.token, skip_notification=True)
             tariff_name = gift_purchase.tariff.name if gift_purchase.tariff else ''
             await answer_func(
                 f'🎁 <b>Подарок активирован!</b>\n'
