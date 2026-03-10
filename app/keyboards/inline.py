@@ -1957,6 +1957,7 @@ def get_add_traffic_keyboard(
     discount_percent: int = 0,
 ) -> InlineKeyboardMarkup:
     from app.config import settings
+
     texts = get_texts(language)
     language_code = (language or DEFAULT_LANGUAGE).split('-')[0].lower()
     use_russian_fallback = language_code in {'ru', 'fa'}

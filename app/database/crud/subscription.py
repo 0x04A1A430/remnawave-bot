@@ -1581,7 +1581,9 @@ async def calculate_addon_cost_for_remaining_period(
         total_cost += traffic_total_cost
         message = f'Трафик +{additional_traffic_gb}ГБ: {traffic_price_per_month / 100}₽/мес × {days_to_pay} дн. = {traffic_total_cost / 100}₽'
         if traffic_discount_per_month > 0:
-            message += f' (скидка {traffic_discount_percent}%: -{int(traffic_discount_per_month * days_to_pay / 30) / 100}₽)'
+            message += (
+                f' (скидка {traffic_discount_percent}%: -{int(traffic_discount_per_month * days_to_pay / 30) / 100}₽)'
+            )
         logger.info(message)
 
     if additional_devices > 0:
@@ -1598,7 +1600,9 @@ async def calculate_addon_cost_for_remaining_period(
         total_cost += devices_total_cost
         message = f'Устройства +{additional_devices}: {devices_price_per_month / 100}₽/мес × {days_to_pay} дн. = {devices_total_cost / 100}₽'
         if devices_discount_per_month > 0:
-            message += f' (скидка {devices_discount_percent}%: -{int(devices_discount_per_month * days_to_pay / 30) / 100}₽)'
+            message += (
+                f' (скидка {devices_discount_percent}%: -{int(devices_discount_per_month * days_to_pay / 30) / 100}₽)'
+            )
         logger.info(message)
 
     if additional_server_ids:
@@ -1623,9 +1627,7 @@ async def calculate_addon_cost_for_remaining_period(
                 total_cost += server_total_cost
                 message = f'Сервер {server_name}: {server_price_per_month / 100}₽/мес × {days_to_pay} дн. = {server_total_cost / 100}₽'
                 if server_discount_per_month > 0:
-                    message += (
-                        f' (скидка {servers_discount_percent}%: -{int(server_discount_per_month * days_to_pay / 30) / 100}₽)'
-                    )
+                    message += f' (скидка {servers_discount_percent}%: -{int(server_discount_per_month * days_to_pay / 30) / 100}₽)'
                 logger.info(message)
 
     logger.info('💰 Итого доплата за дн.: ₽', days_to_pay=days_to_pay, total_cost=total_cost / 100)

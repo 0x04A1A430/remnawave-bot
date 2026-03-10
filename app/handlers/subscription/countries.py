@@ -292,9 +292,13 @@ async def apply_countries_changes(callback: types.CallbackQuery, db_user: User, 
 
     total_cost, charged_days = calculate_prorated_price(cost_per_month, subscription.end_date)
 
-    added_server_prices = [int(component['discounted_per_month'] * charged_days / 30) for component in added_server_components]
+    added_server_prices = [
+        int(component['discounted_per_month'] * charged_days / 30) for component in added_server_components
+    ]
 
-    total_discount = sum(int(component['discount_per_month'] * charged_days / 30) for component in added_server_components)
+    total_discount = sum(
+        int(component['discount_per_month'] * charged_days / 30) for component in added_server_components
+    )
 
     if added_names:
         logger.info(

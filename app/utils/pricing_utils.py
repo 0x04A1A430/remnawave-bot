@@ -18,7 +18,6 @@ def calculate_months_from_days(days: int) -> int:
     return max(1, round(days / 30))
 
 
-
 def calculate_period_multiplier(period_days: int) -> tuple[int, float]:
     exact_months = period_days / 30
     months_count = max(1, round(exact_months))

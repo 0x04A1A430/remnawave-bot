@@ -1431,9 +1431,7 @@ class SubscriptionService:
                 f' = {traffic_total_price / 100}₽'
             )
             if traffic_discount_per_month > 0:
-                message += (
-                    f' (скидка {traffic_discount_percent}%: -{int(traffic_discount_per_month * days_to_pay / 30) / 100}₽)'
-                )
+                message += f' (скидка {traffic_discount_percent}%: -{int(traffic_discount_per_month * days_to_pay / 30) / 100}₽)'
             logger.info(message)
 
         if additional_devices > 0:
@@ -1453,9 +1451,7 @@ class SubscriptionService:
                 f' = {devices_total_price / 100}₽'
             )
             if devices_discount_per_month > 0:
-                message += (
-                    f' (скидка {devices_discount_percent}%: -{int(devices_discount_per_month * days_to_pay / 30) / 100}₽)'
-                )
+                message += f' (скидка {devices_discount_percent}%: -{int(devices_discount_per_month * days_to_pay / 30) / 100}₽)'
             logger.info(message)
 
         if additional_server_ids and db:
