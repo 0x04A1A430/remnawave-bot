@@ -633,10 +633,21 @@ async def activate_gift_by_code(
     if code.upper().startswith('GIFT-'):
         code = code[5:]
 
+    if len(code) < 8:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Code too short')
+
+    # Support both full token and prefix-based lookup (displayed codes are truncated)
+    if len(code) >= 64:
+        # Full token — exact match
+        token_filter = GuestPurchase.token == code
+    else:
+        # Prefix match — for short display codes like GIFT-XXXXXXXXXXXX
+        token_filter = GuestPurchase.token.startswith(code)
+
     result = await db.execute(
         select(GuestPurchase)
         .options(selectinload(GuestPurchase.tariff))
-        .where(GuestPurchase.token == code)
+        .where(token_filter, GuestPurchase.is_gift.is_(True))
         .with_for_update()
     )
     purchase = result.scalars().first()

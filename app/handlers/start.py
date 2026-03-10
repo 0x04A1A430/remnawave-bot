@@ -85,10 +85,16 @@ async def _activate_pending_gift_after_registration(
 
         from app.services.guest_purchase_service import activate_purchase as svc_activate
 
+        # Support both full token and prefix-based lookup (Telegram truncates long start params)
+        if len(gift_token) >= 64:
+            token_filter = GuestPurchase.token == gift_token
+        else:
+            token_filter = GuestPurchase.token.startswith(gift_token)
+
         gift_result = await db.execute(
             select(GuestPurchase)
             .options(selectinload(GuestPurchase.tariff))
-            .where(GuestPurchase.token == gift_token)
+            .where(token_filter, GuestPurchase.is_gift.is_(True))
             .with_for_update()
         )
         gift_purchase = gift_result.scalars().first()
