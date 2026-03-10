@@ -516,9 +516,9 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
     if state_needs_update:
         await state.set_data(data)
 
-    # Handle gift code deep links: /start GIFTCODE_{token}
-    if start_parameter and start_parameter.startswith('GIFTCODE_'):
-        gift_token = start_parameter[9:]  # Strip "GIFTCODE_" prefix
+    # Handle gift code deep links: /start GIFT_{token}
+    if start_parameter and start_parameter.startswith('GIFT_'):
+        gift_token = start_parameter[5:]  # Strip "GIFT_" prefix
         if gift_token:
             logger.info(
                 'Gift code deep link detected',
@@ -637,7 +637,7 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             except Exception as e:
                 logger.error('Ошибка отправки уведомления о рекламной кампании', error=e)
 
-        # Auto-activate pending gift if deep link contained GIFTCODE_
+        # Auto-activate pending gift if deep link contained GIFT_
         if user:
             await _activate_pending_gift_after_registration(db, state, user, message.answer)
             await state.update_data(pending_gift_token=None)
