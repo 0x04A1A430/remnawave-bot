@@ -1904,7 +1904,7 @@ async def submit_purchase(
                         period_days=selection.period.days,
                         was_trial_conversion=result.get('was_trial_conversion', False),
                         amount_kopeks=pricing.final_total,
-                        purchase_type='renewal' if not is_new_subscription else None,
+                        purchase_type='renewal' if not is_new_subscription else 'first_purchase',
                     )
                 finally:
                     await bot.session.close()
@@ -2357,7 +2357,7 @@ async def purchase_tariff(
                         period_days=period_days,
                         was_trial_conversion=False,
                         amount_kopeks=price_kopeks,
-                        purchase_type='renewal' if not was_new_subscription else None,
+                        purchase_type='renewal' if not was_new_subscription else 'first_purchase',
                     )
                 finally:
                     await bot.session.close()

@@ -976,6 +976,7 @@ class YooKassaPaymentMixin:
                                         transaction,
                                         subscription_period,
                                         was_trial_conversion=False,
+                                        purchase_type='renewal' if (full_user or user).has_had_paid_subscription else 'first_purchase',
                                     )
                                 except Exception as admin_error:
                                     logger.error(

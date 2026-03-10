@@ -2118,14 +2118,6 @@ async def required_sub_channel_check(
             # Очищаем Redis после успешной проверки подписки
             await delete_pending_payload_from_redis(query.from_user.id)
 
-            # Всегда обновляем referral_code если есть новый payload
-            # (исправление бага с устаревшими данными в state)
-            campaign = await get_campaign_by_start_parameter(
-                db,
-                pending_start_payload,
-                only_active=True,
-            )
-
             # Обрабатываем payload только если ещё не обработан
             # (проверяем по наличию referral_code или campaign_id в state)
             if not state_data.get('referral_code') and not state_data.get('campaign_id'):
@@ -2137,7 +2129,13 @@ async def required_sub_channel_check(
 
                 if campaign:
                     state_data['campaign_id'] = campaign.id
-                    logger.info('📣 CHANNEL CHECK: Кампания восстановлена из payload', campaign_id=campaign.id)
+                    if campaign.partner_user_id:
+                        state_data['referrer_id'] = campaign.partner_user_id
+                    logger.info(
+                        '📣 CHANNEL CHECK: Кампания восстановлена из payload',
+                        campaign_id=campaign.id,
+                        partner_user_id=campaign.partner_user_id,
+                    )
                 else:
                     state_data['referral_code'] = pending_start_payload
                     logger.info(

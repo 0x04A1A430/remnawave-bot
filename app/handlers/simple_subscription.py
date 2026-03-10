@@ -649,6 +649,7 @@ async def handle_simple_subscription_pay_with_balance(
                 subscription_params['period_days'],
                 False,  # was_trial_conversion
                 amount_kopeks=price_kopeks,
+                purchase_type='renewal' if existing_subscription else 'first_purchase',
             )
         except Exception as e:
             logger.error('Ошибка отправки уведомления админам о покупке', error=e)
@@ -2368,6 +2369,7 @@ async def confirm_simple_subscription_purchase(
                 subscription_params['period_days'],
                 False,  # was_trial_conversion
                 amount_kopeks=price_kopeks,
+                purchase_type='renewal' if existing_subscription else 'first_purchase',
             )
         except Exception as e:
             logger.error('Ошибка отправки уведомления админам о покупке', error=e)

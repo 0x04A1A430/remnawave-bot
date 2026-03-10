@@ -345,6 +345,7 @@ class TelegramStarsMixin:
                     transaction,
                     period_display,
                     was_trial_conversion=False,
+                    purchase_type='renewal' if user.has_had_paid_subscription else 'first_purchase',
                 )
             except Exception as admin_error:  # pragma: no cover - диагностический лог
                 logger.error(

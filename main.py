@@ -295,6 +295,11 @@ async def main():
             bot, dp = await setup_bot()
             stage.log('Кеш и FSM подготовлены')
 
+        bot_user = await bot.get_me()
+        if bot_user.username and not settings.BOT_USERNAME:
+            settings.BOT_USERNAME = bot_user.username
+            logger.info('BOT_USERNAME auto-detected', bot_username=bot_user.username)
+
         monitoring_service.bot = bot
         maintenance_service.set_bot(bot)
         broadcast_service.set_bot(bot)
@@ -516,7 +521,6 @@ async def main():
             success_message='Токен внешней админки готов',
         ) as stage:
             try:
-                bot_user = await bot.get_me()
                 token = await ensure_external_admin_token(
                     bot_user.username,
                     bot_user.id,
