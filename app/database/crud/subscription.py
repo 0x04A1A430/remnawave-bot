@@ -310,7 +310,7 @@ async def replace_subscription(
 
     # Очищаем старые записи об отправленных уведомлениях при замене подписки
     # (аналогично extend_subscription), чтобы новые уведомления отправлялись корректно
-    await clear_notifications(db, subscription.id)
+    await clear_notifications(db, subscription.id, commit=commit)
 
     if update_server_counters:
         try:

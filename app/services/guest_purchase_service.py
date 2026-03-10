@@ -970,11 +970,11 @@ async def retry_stuck_pending_activation(
         select(GuestPurchase.token)
         .where(
             GuestPurchase.status == GuestPurchaseStatus.PENDING_ACTIVATION.value,
-            or_(GuestPurchase.updated_at < cutoff, GuestPurchase.updated_at.is_(None)),
-            or_(GuestPurchase.updated_at > max_age, GuestPurchase.updated_at.is_(None)),
+            or_(GuestPurchase.paid_at < cutoff, GuestPurchase.paid_at.is_(None)),
+            or_(GuestPurchase.paid_at > max_age, GuestPurchase.paid_at.is_(None)),
             GuestPurchase.user_id.isnot(None),
         )
-        .order_by(GuestPurchase.updated_at.asc().nulls_first())
+        .order_by(GuestPurchase.paid_at.asc().nulls_first())
         .limit(limit)
     )
     tokens = result.scalars().all()

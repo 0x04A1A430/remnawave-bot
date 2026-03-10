@@ -440,7 +440,7 @@ async def create_gift_purchase(
 
     return GiftPurchaseResponse(
         status='ok',
-        purchase_token=purchase_token,
+        purchase_token=purchase_token[:12],
         warning=recipient_warning,
     )
 
