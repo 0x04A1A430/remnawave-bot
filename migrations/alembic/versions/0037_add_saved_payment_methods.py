@@ -36,7 +36,7 @@ def upgrade() -> None:
             sa.Column('card_expiry_month', sa.String(2), nullable=True),
             sa.Column('card_expiry_year', sa.String(4), nullable=True),
             sa.Column('title', sa.String(255), nullable=True),
-            sa.Column('is_active', sa.Boolean(), server_default=sa.true_(), nullable=False),
+            sa.Column('is_active', sa.Boolean(), server_default=sa.True_(), nullable=False),
             sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
             sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
         )
