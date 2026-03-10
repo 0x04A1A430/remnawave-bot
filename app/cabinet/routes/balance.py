@@ -108,8 +108,8 @@ async def get_transactions(
     for t in transactions:
         # Determine sign based on transaction type
         # Credits (positive): DEPOSIT, REFERRAL_REWARD, REFUND, POLL_REWARD
-        # Debits (negative): SUBSCRIPTION_PAYMENT, WITHDRAWAL
-        is_debit = t.type in ['subscription_payment', 'withdrawal']
+        # Debits (negative): SUBSCRIPTION_PAYMENT, WITHDRAWAL, GIFT_PAYMENT
+        is_debit = t.type in ['subscription_payment', 'withdrawal', 'gift_payment']
         amount_kopeks = -abs(t.amount_kopeks) if is_debit else abs(t.amount_kopeks)
 
         items.append(
@@ -355,6 +355,9 @@ async def create_topup(
     amount_rubles = request.amount_kopeks / 100
     payment_url = None
     payment_id = None
+    cabinet_return_url = f'{settings.CABINET_URL.rstrip("/")}/balance/top-up/result?method={request.payment_method}'
+    cabinet_success_url = f'{cabinet_return_url}&status=success'
+    cabinet_failed_url = f'{cabinet_return_url}&status=failed'
 
     try:
         if request.payment_method == 'yookassa':
@@ -379,6 +382,7 @@ async def create_topup(
                     amount_kopeks=request.amount_kopeks,
                     description=description,
                     metadata=yookassa_metadata,
+                    return_url=cabinet_return_url,
                 )
             else:
                 result = await payment_service.create_yookassa_payment(
@@ -387,11 +391,12 @@ async def create_topup(
                     amount_kopeks=request.amount_kopeks,
                     description=description,
                     metadata=yookassa_metadata,
+                    return_url=cabinet_return_url,
                 )
 
             if result:
                 payment_url = result.get('confirmation_url')
-                payment_id = result.get('yookassa_payment_id')
+                payment_id = str(result.get('local_payment_id') or result.get('yookassa_payment_id') or 'pending')
             else:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -496,6 +501,8 @@ async def create_topup(
                 ),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
                 payment_method_code=method_code,
+                return_url=cabinet_success_url,
+                failed_url=cabinet_failed_url,
             )
 
             if result and result.get('redirect_url'):
@@ -521,6 +528,8 @@ async def create_topup(
                 amount_kopeks=request.amount_kopeks,
                 description=settings.get_balance_payment_description(request.amount_kopeks),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+                return_url=cabinet_return_url,
+                success_url=cabinet_success_url,
             )
 
             if result and result.get('payment_url'):
@@ -568,7 +577,6 @@ async def create_topup(
             option = (request.payment_option or '').strip().lower()
             if option not in {'card', 'sbp'}:
                 option = 'sbp'
-            provider_method = 'card' if option == 'card' else 'sbp'
 
             payment_service = PaymentService()
             result = await payment_service.create_pal24_payment(
@@ -577,7 +585,6 @@ async def create_topup(
                 amount_kopeks=request.amount_kopeks,
                 description=settings.get_balance_payment_description(request.amount_kopeks),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
-                payment_method=provider_method,
             )
 
             if result:
@@ -618,6 +625,8 @@ async def create_topup(
                 amount_kopeks=request.amount_kopeks,
                 description=settings.get_balance_payment_description(request.amount_kopeks),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+                return_url=cabinet_success_url,
+                failed_url=cabinet_failed_url,
             )
 
             if result and result.get('payment_url'):
@@ -644,6 +653,8 @@ async def create_topup(
                 description=settings.get_balance_payment_description(request.amount_kopeks),
                 telegram_id=user.telegram_id,
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+                return_url=cabinet_success_url,
+                failed_url=cabinet_failed_url,
             )
 
             if result and result.get('payment_url'):
@@ -969,6 +980,91 @@ async def get_pending_payments(
         per_page=per_page,
         pages=pages,
     )
+
+
+@router.get('/pending-payments/{method}/latest', response_model=PendingPaymentResponse)
+async def get_latest_payment_by_method(
+    method: str,
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Get user's most recent payment for a given method (any status, not just pending)."""
+    try:
+        payment_method = PaymentMethod(method)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f'Invalid payment method: {method}',
+        )
+
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy.orm import selectinload
+
+    from app.database.models import (
+        CloudPaymentsPayment,
+        CryptoBotPayment,
+        FreekassaPayment,
+        HeleketPayment,
+        KassaAiPayment,
+        MulenPayPayment,
+        Pal24Payment,
+        PlategaPayment,
+        WataPayment,
+        YooKassaPayment,
+    )
+
+    model_map: dict[PaymentMethod, type] = {
+        PaymentMethod.YOOKASSA: YooKassaPayment,
+        PaymentMethod.CRYPTOBOT: CryptoBotPayment,
+        PaymentMethod.HELEKET: HeleketPayment,
+        PaymentMethod.MULENPAY: MulenPayPayment,
+        PaymentMethod.PAL24: Pal24Payment,
+        PaymentMethod.WATA: WataPayment,
+        PaymentMethod.PLATEGA: PlategaPayment,
+        PaymentMethod.CLOUDPAYMENTS: CloudPaymentsPayment,
+        PaymentMethod.FREEKASSA: FreekassaPayment,
+        PaymentMethod.KASSA_AI: KassaAiPayment,
+    }
+
+    model = model_map.get(payment_method)
+    if not model:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f'Unsupported payment method: {method}',
+        )
+
+    cutoff = datetime.now(UTC) - timedelta(hours=1)
+    stmt = (
+        select(model)
+        .options(selectinload(model.user))
+        .where(model.user_id == user.id, model.created_at >= cutoff)
+        .order_by(desc(model.created_at))
+        .limit(1)
+    )
+    result = await db.execute(stmt)
+    payment = result.scalars().first()
+
+    if not payment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='No recent payments found',
+        )
+
+    record = PendingPayment(
+        local_id=payment.id,
+        method=payment_method,
+        identifier=str(getattr(payment, 'correlation_id', None) or payment.id),
+        amount_kopeks=payment.amount_kopeks,
+        status=payment.status or '',
+        is_paid=bool(payment.is_paid),
+        created_at=payment.created_at,
+        expires_at=getattr(payment, 'expires_at', None),
+        user=payment.user,
+        payment=payment,
+    )
+
+    return _record_to_response(record)
 
 
 @router.get('/pending-payments/{method}/{payment_id}', response_model=PendingPaymentResponse)

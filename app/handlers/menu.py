@@ -1295,32 +1295,48 @@ async def handle_activate_button(callback: types.CallbackQuery, db_user: User, d
     best_period = None
     best_price = 0
 
-    for period in available_periods:
-        price, _ = await subscription_service.calculate_subscription_price_with_months(
-            period, traffic_limit_gb, server_ids, device_limit, db, user=db_user
-        )
-        if price <= balance:
-            best_period = period
-            best_price = price
-            break
+    # Для продления используем тот же сервис, что и при реальном списании,
+    # чтобы сумма проверки совпадала с суммой списания.
+    renewal_service = SubscriptionRenewalService() if subscription else None
 
-    if not best_period:
-        # Показать сколько не хватает для минимального периода
-        min_period = min(available_periods) if available_periods else 30
-        min_price, _ = await subscription_service.calculate_subscription_price_with_months(
-            min_period, traffic_limit_gb, server_ids, device_limit, db, user=db_user
-        )
-        missing = min_price - balance
-        await callback.answer(
-            texts.t('INSUFFICIENT_FUNDS_DETAILED', f'❌ Недостаточно средств. Не хватает {missing // 100} ₽'),
-            show_alert=True,
-        )
+    try:
+        for period in available_periods:
+            if subscription and renewal_service:
+                pricing = await renewal_service.calculate_pricing(db, db_user, subscription, period)
+                price = pricing.final_total
+            else:
+                price, _ = await subscription_service.calculate_subscription_price_with_months(
+                    period, traffic_limit_gb, server_ids, device_limit, db, user=db_user
+                )
+            if price <= balance:
+                best_period = period
+                best_price = price
+                break
+
+        if not best_period:
+            # Показать сколько не хватает для минимального периода
+            min_period = min(available_periods) if available_periods else 30
+            if subscription and renewal_service:
+                pricing = await renewal_service.calculate_pricing(db, db_user, subscription, min_period)
+                min_price = pricing.final_total
+            else:
+                min_price, _ = await subscription_service.calculate_subscription_price_with_months(
+                    min_period, traffic_limit_gb, server_ids, device_limit, db, user=db_user
+                )
+            missing = min_price - balance
+            await callback.answer(
+                texts.t('INSUFFICIENT_FUNDS_DETAILED', f'❌ Недостаточно средств. Не хватает {missing // 100} ₽'),
+                show_alert=True,
+            )
+            return
+    except Exception as e:
+        logger.error('Ошибка расчёта стоимости при активации', error=e)
+        await callback.answer('❌ Ошибка расчёта стоимости', show_alert=True)
         return
 
     try:
         if subscription:
             # Продление существующей подписки
-            renewal_service = SubscriptionRenewalService()
             pricing = await renewal_service.calculate_pricing(db, db_user, subscription, best_period)
 
             await renewal_service.finalize(
@@ -1333,7 +1349,10 @@ async def handle_activate_button(callback: types.CallbackQuery, db_user: User, d
             )
 
             await callback.answer(
-                texts.t('ACTIVATION_SUCCESS', f'✅ Подписка продлена на {best_period} дней за {best_price // 100} ₽!'),
+                texts.t(
+                    'ACTIVATION_SUCCESS',
+                    f'✅ Подписка продлена на {best_period} дней за {pricing.final_total // 100} ₽!',
+                ),
                 show_alert=True,
             )
         else:

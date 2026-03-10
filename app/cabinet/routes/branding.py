@@ -39,6 +39,7 @@ YANDEX_METRIKA_ID_KEY = 'CABINET_YANDEX_METRIKA_ID'  # Stores counter ID (numeri
 GOOGLE_ADS_ID_KEY = 'CABINET_GOOGLE_ADS_ID'  # Stores conversion ID (e.g. "AW-123456789")
 GOOGLE_ADS_LABEL_KEY = 'CABINET_GOOGLE_ADS_LABEL'  # Stores conversion label (alphanumeric)
 LITE_MODE_ENABLED_KEY = 'CABINET_LITE_MODE_ENABLED'  # Stores "true" or "false"
+GIFT_ENABLED_KEY = 'CABINET_GIFT_ENABLED'  # Stores "true" or "false"
 ANIMATION_CONFIG_KEY = 'CABINET_ANIMATION_CONFIG'  # Stores JSON with animation config
 TELEGRAM_WIDGET_SIZE_KEY = 'TELEGRAM_WIDGET_SIZE'
 TELEGRAM_WIDGET_RADIUS_KEY = 'TELEGRAM_WIDGET_RADIUS'
@@ -272,6 +273,18 @@ class LiteModeEnabledResponse(BaseModel):
 
 class LiteModeEnabledUpdate(BaseModel):
     """Request to update lite mode setting."""
+
+    enabled: bool
+
+
+class GiftEnabledResponse(BaseModel):
+    """Gift feature enabled setting."""
+
+    enabled: bool = False
+
+
+class GiftEnabledUpdate(BaseModel):
+    """Request to update gift feature setting."""
 
     enabled: bool
 
@@ -983,3 +996,30 @@ async def update_lite_mode_enabled(
     logger.info('Admin set lite mode enabled', telegram_id=admin.telegram_id, enabled=payload.enabled)
 
     return LiteModeEnabledResponse(enabled=payload.enabled)
+
+
+# ============ Gift Feature Routes ============
+
+
+@router.get('/gift-enabled', response_model=GiftEnabledResponse)
+async def get_gift_enabled(
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Get gift feature enabled setting. Public endpoint."""
+    value = await get_setting_value(db, GIFT_ENABLED_KEY)
+    if value is not None:
+        enabled = value.lower() == 'true'
+        return GiftEnabledResponse(enabled=enabled)
+    return GiftEnabledResponse(enabled=False)
+
+
+@router.patch('/gift-enabled', response_model=GiftEnabledResponse)
+async def update_gift_enabled(
+    payload: GiftEnabledUpdate,
+    admin: User = Depends(require_permission('settings:edit')),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Update gift feature enabled setting. Admin only."""
+    await set_setting_value(db, GIFT_ENABLED_KEY, str(payload.enabled).lower())
+    logger.info('Admin set gift enabled', telegram_id=admin.telegram_id, enabled=payload.enabled)
+    return GiftEnabledResponse(enabled=payload.enabled)

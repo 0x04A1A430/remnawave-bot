@@ -21,7 +21,7 @@ from app.database.models import (
     UserPromoGroup,
     UserStatus,
 )
-from app.utils.pricing_utils import calculate_months_from_days, get_remaining_months
+from app.utils.pricing_utils import calculate_months_from_days
 from app.utils.timezone import format_local_datetime
 
 
@@ -190,6 +190,7 @@ async def create_paid_subscription(
     update_server_counters: bool = False,
     is_trial: bool = False,
     tariff_id: int | None = None,
+    commit: bool = True,
 ) -> Subscription:
     end_date = datetime.now(UTC) + timedelta(days=duration_days)
 
@@ -211,8 +212,11 @@ async def create_paid_subscription(
     )
 
     db.add(subscription)
-    await db.commit()
-    await db.refresh(subscription)
+    if commit:
+        await db.commit()
+        await db.refresh(subscription)
+    else:
+        await db.flush()
 
     logger.info(
         '💎 Создана платная подписка для пользователя ID: статус',
@@ -265,6 +269,7 @@ async def replace_subscription(
     autopay_enabled: bool | None = None,
     autopay_days_before: int | None = None,
     update_server_counters: bool = False,
+    commit: bool = True,
 ) -> Subscription:
     """Перезаписывает параметры существующей подписки пользователя."""
 
@@ -297,12 +302,15 @@ async def replace_subscription(
     subscription.autopay_days_before = new_autopay_days_before
     subscription.updated_at = current_time
 
-    await db.commit()
-    await db.refresh(subscription)
+    if commit:
+        await db.commit()
+        await db.refresh(subscription)
+    else:
+        await db.flush()
 
     # Очищаем старые записи об отправленных уведомлениях при замене подписки
     # (аналогично extend_subscription), чтобы новые уведомления отправлялись корректно
-    await clear_notifications(db, subscription.id)
+    await clear_notifications(db, subscription.id, commit=commit)
 
     if update_server_counters:
         try:
@@ -1114,7 +1122,8 @@ async def add_subscription_servers(
     await db.refresh(subscription)
 
     if paid_prices is None:
-        months_remaining = get_remaining_months(subscription.end_date)
+        now = datetime.now(UTC)
+        days_remaining = max(1, (subscription.end_date - now).days)
         paid_prices = []
 
         from app.database.models import ServerSquad
@@ -1122,7 +1131,7 @@ async def add_subscription_servers(
         for server_id in server_squad_ids:
             result = await db.execute(select(ServerSquad.price_kopeks).where(ServerSquad.id == server_id))
             server_price_per_month = result.scalar() or 0
-            total_price_for_period = server_price_per_month * months_remaining
+            total_price_for_period = int(server_price_per_month * days_remaining / 30)
             paid_prices.append(total_price_for_period)
 
     for i, server_id in enumerate(server_squad_ids):
@@ -1556,8 +1565,9 @@ async def calculate_addon_cost_for_remaining_period(
     if additional_server_ids is None:
         additional_server_ids = []
 
-    months_to_pay = get_remaining_months(subscription.end_date)
-    period_hint_days = months_to_pay * 30 if months_to_pay > 0 else None
+    now = datetime.now(UTC)
+    days_to_pay = max(1, (subscription.end_date - now).days)
+    period_hint_days = days_to_pay
 
     total_cost = 0
 
@@ -1575,11 +1585,13 @@ async def calculate_addon_cost_for_remaining_period(
         )
         traffic_discount_per_month = traffic_price_per_month * traffic_discount_percent // 100
         discounted_traffic_per_month = traffic_price_per_month - traffic_discount_per_month
-        traffic_total_cost = discounted_traffic_per_month * months_to_pay
+        traffic_total_cost = int(discounted_traffic_per_month * days_to_pay / 30)
         total_cost += traffic_total_cost
-        message = f'Трафик +{additional_traffic_gb}ГБ: {traffic_price_per_month / 100}₽/мес × {months_to_pay} = {traffic_total_cost / 100}₽'
+        message = f'Трафик +{additional_traffic_gb}ГБ: {traffic_price_per_month / 100}₽/мес × {days_to_pay} дн. = {traffic_total_cost / 100}₽'
         if traffic_discount_per_month > 0:
-            message += f' (скидка {traffic_discount_percent}%: -{traffic_discount_per_month * months_to_pay / 100}₽)'
+            message += (
+                f' (скидка {traffic_discount_percent}%: -{int(traffic_discount_per_month * days_to_pay / 30) / 100}₽)'
+            )
         logger.info(message)
 
     if additional_devices > 0:
@@ -1592,11 +1604,13 @@ async def calculate_addon_cost_for_remaining_period(
         )
         devices_discount_per_month = devices_price_per_month * devices_discount_percent // 100
         discounted_devices_per_month = devices_price_per_month - devices_discount_per_month
-        devices_total_cost = discounted_devices_per_month * months_to_pay
+        devices_total_cost = int(discounted_devices_per_month * days_to_pay / 30)
         total_cost += devices_total_cost
-        message = f'Устройства +{additional_devices}: {devices_price_per_month / 100}₽/мес × {months_to_pay} = {devices_total_cost / 100}₽'
+        message = f'Устройства +{additional_devices}: {devices_price_per_month / 100}₽/мес × {days_to_pay} дн. = {devices_total_cost / 100}₽'
         if devices_discount_per_month > 0:
-            message += f' (скидка {devices_discount_percent}%: -{devices_discount_per_month * months_to_pay / 100}₽)'
+            message += (
+                f' (скидка {devices_discount_percent}%: -{int(devices_discount_per_month * days_to_pay / 30) / 100}₽)'
+            )
         logger.info(message)
 
     if additional_server_ids:
@@ -1617,16 +1631,14 @@ async def calculate_addon_cost_for_remaining_period(
                 )
                 server_discount_per_month = server_price_per_month * servers_discount_percent // 100
                 discounted_server_per_month = server_price_per_month - server_discount_per_month
-                server_total_cost = discounted_server_per_month * months_to_pay
+                server_total_cost = int(discounted_server_per_month * days_to_pay / 30)
                 total_cost += server_total_cost
-                message = f'Сервер {server_name}: {server_price_per_month / 100}₽/мес × {months_to_pay} = {server_total_cost / 100}₽'
+                message = f'Сервер {server_name}: {server_price_per_month / 100}₽/мес × {days_to_pay} дн. = {server_total_cost / 100}₽'
                 if server_discount_per_month > 0:
-                    message += (
-                        f' (скидка {servers_discount_percent}%: -{server_discount_per_month * months_to_pay / 100}₽)'
-                    )
+                    message += f' (скидка {servers_discount_percent}%: -{int(server_discount_per_month * days_to_pay / 30) / 100}₽)'
                 logger.info(message)
 
-    logger.info('💰 Итого доплата за мес: ₽', months_to_pay=months_to_pay, total_cost=total_cost / 100)
+    logger.info('💰 Итого доплата за дн.: ₽', days_to_pay=days_to_pay, total_cost=total_cost / 100)
     return total_cost
 
 
@@ -2094,6 +2106,9 @@ async def get_disabled_daily_subscriptions_for_resume(
                 Subscription.status == SubscriptionStatus.DISABLED.value,
                 User.status == UserStatus.ACTIVE.value,
                 Subscription.is_trial.is_(False),
+                # Не возобновляем подписки, приостановленные пользователем вручную
+                # is_(False) не ловит NULL, поэтому добавляем OR is_(None)
+                (Subscription.is_daily_paused.is_(False) | Subscription.is_daily_paused.is_(None)),
                 # Баланс пользователя >= суточной цены тарифа
                 User.balance_kopeks >= Tariff.daily_price_kopeks,
             )
@@ -2135,7 +2150,8 @@ async def get_expired_daily_subscriptions_for_recovery(db: AsyncSession) -> list
                 Tariff.is_active.is_(True),
                 Subscription.status == SubscriptionStatus.EXPIRED.value,
                 User.status == UserStatus.ACTIVE.value,
-                Subscription.is_daily_paused.is_(False),
+                # is_(False) не ловит NULL, поэтому добавляем OR is_(None)
+                (Subscription.is_daily_paused.is_(False) | Subscription.is_daily_paused.is_(None)),
                 Subscription.is_trial.is_(False),
                 # Только недавно экспайренные
                 Subscription.updated_at >= recovery_threshold,

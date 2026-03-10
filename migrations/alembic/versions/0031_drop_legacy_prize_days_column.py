@@ -15,6 +15,12 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def _table_exists(table_name: str) -> bool:
+    conn = op.get_bind()
+    insp = sa.inspect(conn)
+    return insp.has_table(table_name)
+
+
 def _has_column(table: str, column: str) -> bool:
     conn = op.get_bind()
     inspector = sa.inspect(conn)
@@ -22,12 +28,12 @@ def _has_column(table: str, column: str) -> bool:
 
 
 def upgrade() -> None:
-    if _has_column('contest_templates', 'prize_days'):
+    if _table_exists('contest_templates') and _has_column('contest_templates', 'prize_days'):
         op.drop_column('contest_templates', 'prize_days')
 
 
 def downgrade() -> None:
-    if not _has_column('contest_templates', 'prize_days'):
+    if _table_exists('contest_templates') and not _has_column('contest_templates', 'prize_days'):
         op.add_column(
             'contest_templates',
             sa.Column('prize_days', sa.Integer(), nullable=True),

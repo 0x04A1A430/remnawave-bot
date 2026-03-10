@@ -22,6 +22,7 @@ from app.database.models import (
     Transaction,
     User,
 )
+from app.utils.message_patch import caption_exceeds_telegram_limit
 from app.utils.timezone import format_local_datetime
 
 
@@ -1915,7 +1916,7 @@ class AdminNotificationService:
         keyboard: types.InlineKeyboardMarkup | None = None,
     ) -> bool:
         """Отправить фото с текстом в тикет-топик.
-        Если текст <= 1024 символов — отправляем фото с caption.
+        Если текст помещается в caption (≤1024 символов после парсинга HTML) — фото с caption.
         Иначе — сначала текст, потом фото в тот же топик.
         """
         if not self.chat_id:
@@ -1924,7 +1925,7 @@ class AdminNotificationService:
         thread_id = self.ticket_topic_id or self.topic_id
 
         try:
-            if len(text) <= 1024:
+            if not caption_exceeds_telegram_limit(text):
                 # Фото с caption — всё в одном сообщении
                 photo_kwargs: dict = {
                     'chat_id': self.chat_id,

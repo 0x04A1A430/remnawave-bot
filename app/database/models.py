@@ -133,6 +133,7 @@ class TransactionType(Enum):
     REFUND = 'refund'
     REFERRAL_REWARD = 'referral_reward'
     POLL_REWARD = 'poll_reward'
+    GIFT_PAYMENT = 'gift_payment'
 
 
 class PromoCodeType(Enum):
@@ -3108,6 +3109,10 @@ class GuestPurchase(Base):
         Index('ix_guest_purchases_status', 'status'),
         Index('ix_guest_purchases_contact', 'contact_type', 'contact_value'),
         Index('ix_guest_purchases_landing_status_paid', 'landing_id', 'status', 'paid_at'),
+        Index('ix_guest_purchases_source', 'source'),
+        Index('ix_guest_purchases_user_gift_status', 'user_id', 'is_gift', 'status'),
+        Index('ix_guest_purchases_status_paid_at', 'status', 'paid_at'),
+        Index('ix_guest_purchases_buyer_user_id', 'buyer_user_id'),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -3116,6 +3121,8 @@ class GuestPurchase(Base):
     contact_type = Column(String(20), nullable=False)  # 'email' or 'telegram'
     contact_value = Column(String(255), nullable=False)
     is_gift = Column(Boolean, nullable=False, default=False)
+    source = Column(String(20), nullable=False, default='landing', server_default='landing')  # 'landing' or 'cabinet'
+    buyer_user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
     gift_recipient_type = Column(String(20), nullable=True)
     gift_recipient_value = Column(String(255), nullable=True)
     gift_message = Column(Text, nullable=True)
@@ -3134,10 +3141,12 @@ class GuestPurchase(Base):
     delivered_at = Column(AwareDateTime(), nullable=True)
     cabinet_password = Column(Text, nullable=True)
     auto_login_token = Column(Text, nullable=True)
+    recipient_warning = Column(String(50), nullable=True)
 
     landing = relationship('LandingPage', back_populates='guest_purchases', lazy='selectin')
     tariff = relationship('Tariff', lazy='selectin')
-    user = relationship('User', lazy='selectin')
+    user = relationship('User', foreign_keys=[user_id], lazy='selectin')
+    buyer = relationship('User', foreign_keys=[buyer_user_id], lazy='selectin')
 
     def __repr__(self) -> str:
         token_prefix = self.token[:5] if self.token else '?'

@@ -374,7 +374,7 @@ async def _sync_subscription_to_panel(
 
     except Exception as e:
         logger.error('Error syncing user to panel', user_id=user.id, error=e)
-        return {'error': str(e)}
+        return {'error': 'Ошибка синхронизации пользователя с панелью'}
 
 
 # === List & Search ===
@@ -610,14 +610,18 @@ async def get_user_detail(
     transactions_result = await db.execute(transactions_q)
     transactions = transactions_result.scalars().all()
 
-    _EXPENSE_TYPES = {TransactionType.WITHDRAWAL.value, TransactionType.SUBSCRIPTION_PAYMENT.value}
+    _EXPENSE_TYPES = {
+        TransactionType.WITHDRAWAL.value,
+        TransactionType.SUBSCRIPTION_PAYMENT.value,
+        TransactionType.GIFT_PAYMENT.value,
+    }
 
     recent_transactions = [
         UserTransactionItem(
             id=t.id,
             type=t.type,
-            amount_kopeks=abs(t.amount_kopeks) if t.type in _EXPENSE_TYPES else t.amount_kopeks,
-            amount_rubles=abs(t.amount_kopeks) / 100 if t.type in _EXPENSE_TYPES else t.amount_kopeks / 100,
+            amount_kopeks=-abs(t.amount_kopeks) if t.type in _EXPENSE_TYPES else t.amount_kopeks,
+            amount_rubles=-abs(t.amount_kopeks) / 100 if t.type in _EXPENSE_TYPES else t.amount_kopeks / 100,
             description=t.description,
             payment_method=t.payment_method,
             is_completed=t.is_completed,
@@ -1747,7 +1751,7 @@ async def delete_user_device(
 
     except Exception as e:
         logger.error('Error deleting device for user', hwid=hwid, user_id=user_id, error=e)
-        return DeleteDeviceResponse(success=False, message=str(e))
+        return DeleteDeviceResponse(success=False, message='Ошибка удаления устройства')
 
 
 @router.delete('/{user_id}/devices', response_model=ResetDevicesResponse)
@@ -1791,7 +1795,7 @@ async def reset_user_devices(
 
     except Exception as e:
         logger.error('Error resetting devices for user', user_id=user_id, error=e)
-        return ResetDevicesResponse(success=False, message=str(e))
+        return ResetDevicesResponse(success=False, message='Ошибка сброса устройств')
 
 
 # === Delete User ===
@@ -1859,28 +1863,32 @@ async def full_delete_user(
             detail='User not found',
         )
 
-    panel_error: str | None = None
-    deleted_from_panel = False
-
     # Pre-fetch admin.id to avoid MissingGreenlet after transaction rollback
     admin_id_val = admin.id
 
     # UserService.delete_user_account handles both bot DB and Remnawave panel
     user_service = UserService()
-    success = await user_service.delete_user_account(db, user_id, admin_id_val)
-
-    if success:
-        deleted_from_panel = request.delete_from_panel and user.remnawave_uuid is not None
+    delete_result = await user_service.delete_user_account(
+        db, user_id, admin_id_val, force_panel_delete=request.delete_from_panel
+    )
 
     reason_text = f' (reason: {request.reason})' if request.reason else ''
-    logger.info('Admin fully deleted user', admin_id=admin_id_val, user_id=user_id, reason_text=reason_text)
+    logger.info(
+        'Admin fully deleted user',
+        admin_id=admin_id_val,
+        user_id=user_id,
+        reason_text=reason_text,
+        bot_deleted=delete_result.bot_deleted,
+        panel_deleted=delete_result.panel_deleted,
+        panel_error=delete_result.panel_error,
+    )
 
     return FullDeleteUserResponse(
-        success=success,
-        message='User fully deleted from bot and panel' if success else 'Failed to delete user',
-        deleted_from_bot=success,
-        deleted_from_panel=deleted_from_panel,
-        panel_error=panel_error,
+        success=delete_result.bot_deleted,
+        message='User fully deleted from bot and panel' if delete_result.bot_deleted else 'Failed to delete user',
+        deleted_from_bot=delete_result.bot_deleted,
+        deleted_from_panel=delete_result.panel_deleted,
+        panel_error=delete_result.panel_error,
     )
 
 
@@ -2014,7 +2022,7 @@ async def reset_user_subscription(
             if panel_deactivated:
                 logger.info('Disabled Remnawave user for subscription reset', remnawave_uuid=user.remnawave_uuid)
         except Exception as e:
-            panel_error = str(e)
+            panel_error = 'Ошибка обработки пользователя в Remnawave'
             logger.warning('Failed to disable Remnawave user during subscription reset', error=e)
 
     # Delete subscription from database
@@ -2084,7 +2092,7 @@ async def disable_user(
             if panel_deactivated:
                 logger.info('Disabled Remnawave user', remnawave_uuid=user.remnawave_uuid)
         except Exception as e:
-            panel_error = str(e)
+            panel_error = 'Ошибка обработки пользователя в Remnawave'
             logger.warning('Failed to disable Remnawave user', error=e)
 
     # Deactivate subscription in bot database (skip if active paid subscription)
@@ -2188,14 +2196,18 @@ async def get_user_transactions(
     result = await db.execute(query)
     transactions = result.scalars().all()
 
-    _EXPENSE_TYPES = {TransactionType.WITHDRAWAL.value, TransactionType.SUBSCRIPTION_PAYMENT.value}
+    _EXPENSE_TYPES = {
+        TransactionType.WITHDRAWAL.value,
+        TransactionType.SUBSCRIPTION_PAYMENT.value,
+        TransactionType.GIFT_PAYMENT.value,
+    }
 
     items = [
         UserTransactionItem(
             id=t.id,
             type=t.type,
-            amount_kopeks=abs(t.amount_kopeks) if t.type in _EXPENSE_TYPES else t.amount_kopeks,
-            amount_rubles=abs(t.amount_kopeks) / 100 if t.type in _EXPENSE_TYPES else t.amount_kopeks / 100,
+            amount_kopeks=-abs(t.amount_kopeks) if t.type in _EXPENSE_TYPES else t.amount_kopeks,
+            amount_rubles=-abs(t.amount_kopeks) / 100 if t.type in _EXPENSE_TYPES else t.amount_kopeks / 100,
             description=t.description,
             payment_method=t.payment_method,
             is_completed=t.is_completed,

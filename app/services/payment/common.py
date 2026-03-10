@@ -306,7 +306,37 @@ async def send_cart_notification_after_topup(
     from aiogram import types
 
     from app.database.crud.user import get_user_by_id
-    from app.services.subscription_auto_purchase_service import auto_purchase_saved_cart_after_topup
+    from app.services.subscription_auto_purchase_service import (
+        auto_purchase_saved_cart_after_topup,
+        try_auto_extend_expired_after_topup,
+        try_resume_disabled_daily_after_topup,
+    )
+
+    # Try to resume DISABLED daily subscription immediately (highest priority)
+    try:
+        daily_resumed = await try_resume_disabled_daily_after_topup(db, user, bot=bot)
+        if daily_resumed:
+            return False
+    except Exception as daily_error:
+        logger.error(
+            'Ошибка авто-возобновления суточной подписки после пополнения',
+            user_id=user.id,
+            error=daily_error,
+            exc_info=True,
+        )
+
+    # Try to auto-extend expired subscription (works without cart)
+    try:
+        auto_extended = await try_auto_extend_expired_after_topup(db, user, bot=bot)
+        if auto_extended:
+            return False
+    except Exception as extend_error:
+        logger.error(
+            'Ошибка автопродления истёкшей подписки после пополнения',
+            user_id=user.id,
+            error=extend_error,
+            exc_info=True,
+        )
 
     cart_data = await user_cart_service.get_user_cart(user.id)
     if not cart_data:
@@ -490,6 +520,17 @@ async def try_fulfill_guest_purchase(
             payment_id=provider_payment_id,
             paid_at=datetime.now(UTC),
         )
+
+        # Code-only gifts (is_gift=True, no recipient) stay in PAID status
+        # — buyer shares the code manually, recipient activates via cabinet/bot
+        if existing and existing.is_gift and not existing.gift_recipient_type:
+            await db.commit()
+            logger.info(
+                'Code-only gift marked as PAID, skipping fulfillment',
+                purchase_token_prefix=purchase_token[:5],
+                provider=provider_name,
+            )
+            return True
 
         # Fulfill: create user, subscription, deliver (commits on success)
         await fulfill_purchase(db, purchase_token)

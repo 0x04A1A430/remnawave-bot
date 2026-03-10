@@ -208,7 +208,11 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
 
     current_time = datetime.now(UTC)
 
-    if subscription.status == 'expired' or subscription.end_date <= current_time:
+    if subscription.status == 'disabled':
+        actual_status = 'disabled'
+        status_display = texts.t('SUBSCRIPTION_STATUS_DISABLED', 'Приостановлена')
+        status_emoji = '⏸️'
+    elif subscription.status == 'expired' or subscription.end_date <= current_time:
         actual_status = 'expired'
         status_display = texts.t('SUBSCRIPTION_STATUS_EXPIRED', 'Истекла')
         status_emoji = '🔴'
@@ -1952,6 +1956,8 @@ async def confirm_extend_subscription(callback: types.CallbackQuery, db_user: Us
             'return_to_cart': True,
             'description': f'Продление подписки на {days} дней',
             'consume_promo_offer': bool(promo_component['discount'] > 0),
+            'device_limit': device_limit,
+            'traffic_limit_gb': renewal_traffic_gb,
         }
 
         await user_cart_service.save_user_cart(db_user.id, cart_data)
@@ -3220,6 +3226,42 @@ async def handle_toggle_daily_subscription_pause(callback: types.CallbackQuery, 
             return
 
     if needs_resume:
+        # Списываем суточную оплату ДО активации (чтобы не было бесплатного дня)
+        daily_price = getattr(tariff, 'daily_price_kopeks', 0)
+        if daily_price > 0 and is_inactive:
+            from app.database.crud.user import subtract_user_balance
+
+            deducted = await subtract_user_balance(
+                db,
+                db_user,
+                daily_price,
+                f'Суточная оплата тарифа «{tariff.name}» (возобновление)',
+                mark_as_paid_subscription=True,
+            )
+            if not deducted:
+                await callback.answer(
+                    texts.t(
+                        'INSUFFICIENT_BALANCE_FOR_RESUME',
+                        f'❌ Недостаточно средств для возобновления. Требуется: {settings.format_price(daily_price)}',
+                    ),
+                    show_alert=True,
+                )
+                return
+
+            from app.database.crud.transaction import create_transaction
+            from app.database.models import TransactionType
+
+            try:
+                await create_transaction(
+                    db=db,
+                    user_id=db_user.id,
+                    type=TransactionType.SUBSCRIPTION_PAYMENT,
+                    amount_kopeks=daily_price,
+                    description=f'Суточная оплата тарифа «{tariff.name}» (возобновление)',
+                )
+            except Exception as tx_error:
+                logger.warning('Не удалось создать транзакцию при возобновлении', error=tx_error)
+
         # Принудительный resume: снимаем паузу + восстанавливаем статус ACTIVE
         from app.database.crud.subscription import resume_daily_subscription
 

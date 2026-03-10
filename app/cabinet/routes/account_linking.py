@@ -5,6 +5,7 @@ Router 1 (`router`): JWT-protected endpoints for linking/unlinking OAuth provide
 Router 2 (`merge_router`): Public endpoints for merge preview and execution.
 """
 
+import hashlib
 from datetime import UTC, datetime
 from typing import Literal, NotRequired, TypedDict
 
@@ -14,6 +15,8 @@ from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
+from app.database.crud.system_setting import get_setting_value
 from app.database.crud.user import (
     OAUTH_PROVIDER_COLUMNS,
     clear_user_oauth_provider_id,
@@ -24,7 +27,7 @@ from app.database.crud.user import (
 )
 from app.database.models import User
 from app.services.account_merge_service import compute_auth_methods, execute_merge, get_merge_preview
-from app.utils.cache import RateLimitCache
+from app.utils.cache import RateLimitCache, TokenReplayCache
 
 from ..auth.merge_service import (
     MERGE_TOKEN_TTL_SECONDS,
@@ -38,7 +41,11 @@ from ..auth.oauth_providers import (
     get_provider,
     validate_oauth_state,
 )
-from ..auth.telegram_auth import validate_telegram_init_data, validate_telegram_login_widget
+from ..auth.telegram_auth import (
+    validate_telegram_init_data,
+    validate_telegram_login_widget,
+    validate_telegram_oidc_token,
+)
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 from ..ip_utils import get_client_ip
 from ..schemas.auth import UserResponse
@@ -70,8 +77,6 @@ class OAuthStateData(TypedDict):
 
 def _get_active_providers() -> list[str]:
     """Вернуть список активных провайдеров аутентификации (только включённые)."""
-    from app.config import settings
-
     providers: list[str] = ['telegram']
     if settings.is_cabinet_email_auth_enabled():
         providers.append('email')
@@ -117,10 +122,12 @@ class UnlinkResponse(BaseModel):
 
 
 class LinkTelegramRequest(BaseModel):
-    """Request for linking Telegram account. Supply EITHER init_data OR widget fields."""
+    """Request for linking Telegram account. Supply EITHER init_data, id_token, OR widget fields."""
 
     # Mini App: Telegram WebApp initData
     init_data: str | None = Field(None, max_length=4096, description='Telegram WebApp initData string')
+    # OIDC: id_token from Telegram Login popup
+    id_token: str | None = Field(None, max_length=4096, description='Telegram OIDC id_token (JWT)')
     # Login Widget fields
     id: int | None = Field(None, description='Telegram user ID from Login Widget')
     first_name: str | None = Field(None, max_length=256, description="User's first name")
@@ -133,11 +140,13 @@ class LinkTelegramRequest(BaseModel):
     @model_validator(mode='after')
     def check_exclusive(self) -> 'LinkTelegramRequest':
         has_init = self.init_data is not None
+        has_oidc = self.id_token is not None
         has_widget = self.id is not None or self.hash is not None or self.auth_date is not None
-        if has_init and has_widget:
-            raise ValueError('Provide either init_data or Login Widget fields, not both')
-        if not has_init and not has_widget:
-            raise ValueError('Provide either init_data or Login Widget fields (id, auth_date, hash)')
+        modes = sum([has_init, has_oidc, has_widget])
+        if modes > 1:
+            raise ValueError('Provide exactly one of: init_data, id_token, or Login Widget fields')
+        if modes == 0:
+            raise ValueError('Provide one of: init_data, id_token, or Login Widget fields (id, auth_date, hash)')
         if has_widget and not (self.id is not None and self.auth_date is not None and self.hash is not None):
             raise ValueError('Login Widget mode requires id, auth_date, and hash fields')
         return self
@@ -449,10 +458,20 @@ async def unlink_provider(
 @router.post('/link/telegram', response_model=LinkCallbackResponse)
 async def link_telegram(
     request: LinkTelegramRequest,
+    raw_request: Request,
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> LinkCallbackResponse:
-    """Link Telegram account via WebApp initData or Login Widget."""
+    """Link Telegram account via WebApp initData, OIDC id_token, or Login Widget."""
+    # Rate limit
+    client_ip = get_client_ip(raw_request)
+    if await RateLimitCache.is_ip_rate_limited(client_ip, 'link_telegram', limit=10, window=60, fail_closed=True):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail='Too many requests',
+            headers={'Retry-After': '60'},
+        )
+
     # 1. Already has Telegram linked?
     if user.telegram_id:
         raise HTTPException(
@@ -478,6 +497,53 @@ async def link_telegram(
         telegram_username = user_data.get('username')
         telegram_first_name = user_data.get('first_name')
         telegram_last_name = user_data.get('last_name')
+    elif request.id_token:
+        # OIDC flow: validate id_token via JWKS
+        oidc_enabled_val = await get_setting_value(db, 'TELEGRAM_OIDC_ENABLED')
+        oidc_client_id_val = await get_setting_value(db, 'TELEGRAM_OIDC_CLIENT_ID')
+        oidc_client_id = oidc_client_id_val or settings.TELEGRAM_OIDC_CLIENT_ID
+        oidc_enabled = (
+            oidc_enabled_val.lower() == 'true' if oidc_enabled_val is not None else settings.TELEGRAM_OIDC_ENABLED
+        ) and bool(oidc_client_id)
+
+        if not oidc_enabled:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='Telegram OIDC is not configured',
+            )
+
+        claims = await validate_telegram_oidc_token(request.id_token, oidc_client_id)
+        if not claims:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail='Invalid or expired Telegram OIDC token',
+            )
+
+        # Replay detection
+        token_hash = hashlib.sha256(request.id_token.encode()).hexdigest()
+        token_ttl = max(int(claims.get('exp', 0) - datetime.now(UTC).timestamp()), 60)
+        if await TokenReplayCache.is_token_replayed(token_hash, ttl=min(token_ttl, 600)):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail='Invalid or expired Telegram OIDC token',
+            )
+
+        try:
+            telegram_id = int(claims.get('id', claims.get('sub', 0)))
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail='Invalid user ID in OIDC claims',
+            ) from exc
+        if not telegram_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail='Missing user ID in OIDC claims',
+            )
+
+        telegram_username = claims.get('preferred_username')
+        telegram_first_name = claims.get('name', claims.get('given_name', ''))
+        telegram_last_name = claims.get('family_name')
     elif request.id is not None and request.hash is not None and request.auth_date is not None:
         # Login Widget flow: validate widget hash
         widget_data = {
@@ -506,7 +572,7 @@ async def link_telegram(
     else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Provide either init_data (Mini App) or Login Widget fields (id, auth_date, hash)',
+            detail='Provide init_data (Mini App), id_token (OIDC), or Login Widget fields (id, auth_date, hash)',
         )
 
     # 3. Check if telegram_id is linked to ANOTHER user

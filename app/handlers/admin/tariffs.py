@@ -2275,7 +2275,7 @@ async def start_edit_tariff_squads(
         await callback.answer('Тариф не найден', show_alert=True)
         return
 
-    squads, _ = await get_all_server_squads(db)
+    squads, _ = await get_all_server_squads(db, limit=10000)
 
     if not squads:
         await callback.answer('Нет доступных серверов', show_alert=True)
@@ -2291,7 +2291,7 @@ async def start_edit_tariff_squads(
             [
                 InlineKeyboardButton(
                     text=f'{prefix} {squad.display_name}',
-                    callback_data=f'admin_tariff_toggle_squad:{tariff_id}:{squad.squad_uuid}',
+                    callback_data=f'trf_sq:{tariff_id}:{squad.squad_uuid}',
                 )
             ]
         )
@@ -2344,7 +2344,7 @@ async def toggle_tariff_squad(
     tariff = await update_tariff(db, tariff, allowed_squads=list(current_squads))
 
     # Перерисовываем меню
-    squads, _ = await get_all_server_squads(db)
+    squads, _ = await get_all_server_squads(db, limit=10000)
     texts = get_texts(db_user.language)
 
     buttons = []
@@ -2355,7 +2355,7 @@ async def toggle_tariff_squad(
             [
                 InlineKeyboardButton(
                     text=f'{prefix} {squad.display_name}',
-                    callback_data=f'admin_tariff_toggle_squad:{tariff_id}:{squad.squad_uuid}',
+                    callback_data=f'trf_sq:{tariff_id}:{squad.squad_uuid}',
                 )
             ]
         )
@@ -2382,6 +2382,15 @@ async def toggle_tariff_squad(
 
     await callback.answer()
 
+    # Применяем изменения серверов к существующим подпискам
+    from app.services.subscription_service import SubscriptionService
+
+    propagate_result = await SubscriptionService().propagate_tariff_squads(db, tariff.id, list(current_squads))
+    if propagate_result.failed_ids:
+        await callback.message.answer(
+            f'⚠️ {len(propagate_result.failed_ids)} из {propagate_result.total} подписок не синхронизированы с RemnaWave',
+        )
+
 
 @admin_required
 @error_handler
@@ -2402,7 +2411,7 @@ async def clear_tariff_squads(
     await callback.answer('Все серверы очищены')
 
     # Перерисовываем меню
-    squads, _ = await get_all_server_squads(db)
+    squads, _ = await get_all_server_squads(db, limit=10000)
     texts = get_texts(db_user.language)
 
     buttons = []
@@ -2411,7 +2420,7 @@ async def clear_tariff_squads(
             [
                 InlineKeyboardButton(
                     text=f'⬜ {squad.display_name}',
-                    callback_data=f'admin_tariff_toggle_squad:{tariff_id}:{squad.squad_uuid}',
+                    callback_data=f'trf_sq:{tariff_id}:{squad.squad_uuid}',
                 )
             ]
         )
@@ -2436,6 +2445,15 @@ async def clear_tariff_squads(
     except TelegramBadRequest:
         pass
 
+    # Применяем изменения серверов к существующим подпискам (пустой список = все серверы)
+    from app.services.subscription_service import SubscriptionService
+
+    propagate_result = await SubscriptionService().propagate_tariff_squads(db, tariff.id, [])
+    if propagate_result.failed_ids:
+        await callback.message.answer(
+            f'⚠️ {len(propagate_result.failed_ids)} из {propagate_result.total} подписок не синхронизированы с RemnaWave',
+        )
+
 
 @admin_required
 @error_handler
@@ -2452,8 +2470,8 @@ async def select_all_tariff_squads(
         await callback.answer('Тариф не найден', show_alert=True)
         return
 
-    squads, _ = await get_all_server_squads(db)
-    all_uuids = [s.squad_uuid for s in squads]
+    squads, _ = await get_all_server_squads(db, limit=10000)
+    all_uuids = [s.squad_uuid for s in squads if s.squad_uuid]
 
     tariff = await update_tariff(db, tariff, allowed_squads=all_uuids)
     await callback.answer('Все серверы выбраны')
@@ -2466,7 +2484,7 @@ async def select_all_tariff_squads(
             [
                 InlineKeyboardButton(
                     text=f'✅ {squad.display_name}',
-                    callback_data=f'admin_tariff_toggle_squad:{tariff_id}:{squad.squad_uuid}',
+                    callback_data=f'trf_sq:{tariff_id}:{squad.squad_uuid}',
                 )
             ]
         )
@@ -2490,6 +2508,15 @@ async def select_all_tariff_squads(
         )
     except TelegramBadRequest:
         pass
+
+    # Применяем изменения серверов к существующим подпискам
+    from app.services.subscription_service import SubscriptionService
+
+    propagate_result = await SubscriptionService().propagate_tariff_squads(db, tariff.id, all_uuids)
+    if propagate_result.failed_ids:
+        await callback.message.answer(
+            f'⚠️ {len(propagate_result.failed_ids)} из {propagate_result.total} подписок не синхронизированы с RemnaWave',
+        )
 
 
 # ============ РЕДАКТИРОВАНИЕ ПРОМОГРУПП ============
@@ -2799,7 +2826,13 @@ def register_handlers(dp: Dispatcher):
     # Просмотр и переключение
     dp.callback_query.register(view_tariff, F.data.startswith('admin_tariff_view:'))
     dp.callback_query.register(
-        toggle_tariff, F.data.startswith('admin_tariff_toggle:') & ~F.data.startswith('admin_tariff_toggle_trial:')
+        toggle_tariff,
+        F.data.startswith('admin_tariff_toggle:')
+        & ~F.data.startswith('admin_tariff_toggle_trial:')
+        & ~F.data.startswith('trf_sq:')
+        & ~F.data.startswith('admin_tariff_toggle_promo:')
+        & ~F.data.startswith('admin_tariff_toggle_traffic_topup:')
+        & ~F.data.startswith('admin_tariff_toggle_daily:'),
     )
     dp.callback_query.register(toggle_trial_tariff, F.data.startswith('admin_tariff_toggle_trial:'))
 
@@ -2821,7 +2854,8 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(start_edit_tariff_description, F.data.startswith('admin_tariff_edit_desc:'))
     dp.message.register(process_edit_tariff_description, AdminStates.editing_tariff_description)
 
-    # Редактирование трафика
+    # Редактирование трафика (traffic_topup BEFORE traffic to avoid prefix conflict)
+    dp.callback_query.register(start_edit_tariff_traffic_topup, F.data.startswith('admin_tariff_edit_traffic_topup:'))
     dp.callback_query.register(start_edit_tariff_traffic, F.data.startswith('admin_tariff_edit_traffic:'))
     dp.message.register(process_edit_tariff_traffic, AdminStates.editing_tariff_traffic)
 
@@ -2849,8 +2883,7 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(start_edit_tariff_trial_days, F.data.startswith('admin_tariff_edit_trial_days:'))
     dp.message.register(process_edit_tariff_trial_days, AdminStates.editing_tariff_trial_days)
 
-    # Редактирование докупки трафика
-    dp.callback_query.register(start_edit_tariff_traffic_topup, F.data.startswith('admin_tariff_edit_traffic_topup:'))
+    # Редактирование докупки трафика (start_edit_tariff_traffic_topup registered above with traffic)
     dp.callback_query.register(toggle_tariff_traffic_topup, F.data.startswith('admin_tariff_toggle_traffic_topup:'))
     dp.callback_query.register(
         start_edit_traffic_topup_packages, F.data.startswith('admin_tariff_edit_topup_packages:')
@@ -2861,13 +2894,13 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(start_edit_max_topup_traffic, F.data.startswith('admin_tariff_edit_max_topup:'))
     dp.message.register(process_edit_max_topup_traffic, AdminStates.editing_tariff_max_topup_traffic)
 
-    # Удаление
-    dp.callback_query.register(confirm_delete_tariff, F.data.startswith('admin_tariff_delete:'))
+    # Удаление (delete_confirm BEFORE delete to avoid prefix conflict)
     dp.callback_query.register(delete_tariff_confirmed, F.data.startswith('admin_tariff_delete_confirm:'))
+    dp.callback_query.register(confirm_delete_tariff, F.data.startswith('admin_tariff_delete:'))
 
     # Редактирование серверов
     dp.callback_query.register(start_edit_tariff_squads, F.data.startswith('admin_tariff_edit_squads:'))
-    dp.callback_query.register(toggle_tariff_squad, F.data.startswith('admin_tariff_toggle_squad:'))
+    dp.callback_query.register(toggle_tariff_squad, F.data.startswith('trf_sq:'))
     dp.callback_query.register(clear_tariff_squads, F.data.startswith('admin_tariff_clear_squads:'))
     dp.callback_query.register(select_all_tariff_squads, F.data.startswith('admin_tariff_select_all_squads:'))
 
