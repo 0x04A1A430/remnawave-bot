@@ -250,13 +250,16 @@ async def create_stars_invoice(
             detail='Maximum amount is 10,000.00 RUB',
         )
 
-    # Calculate Stars amount
+    # Calculate Stars amount and normalize kopeks to match exact star value
     try:
         amount_rubles = request.amount_kopeks / 100
         stars_amount = settings.rubles_to_stars(amount_rubles)
 
         if stars_amount <= 0:
             stars_amount = 1
+
+        # Normalize kopeks so credited amount = stars * rate (no rounding mismatch)
+        normalized_kopeks = round(stars_amount * settings.get_stars_rate() * 100)
     except Exception as e:
         logger.error('Error calculating Stars amount', error=e)
         raise HTTPException(
@@ -265,7 +268,7 @@ async def create_stars_invoice(
         )
 
     # Create payload for tracking payment
-    payload = f'balance_topup_{user.id}_{request.amount_kopeks}_{int(time.time())}'
+    payload = f'balance_topup_{user.id}_{normalized_kopeks}_{int(time.time())}'
 
     # Create invoice through Telegram Bot API
     try:
@@ -277,7 +280,7 @@ async def create_stars_invoice(
                 api_url,
                 json={
                     'title': 'Пополнение баланса VPN',
-                    'description': f'Пополнение баланса на {amount_rubles:.2f} ₽ ({stars_amount} ⭐)',
+                    'description': f'Пополнение баланса на {normalized_kopeks / 100:.2f} ₽ ({stars_amount} ⭐)',
                     'payload': payload,
                     'provider_token': '',  # Empty for Stars
                     'currency': 'XTR',
@@ -305,7 +308,7 @@ async def create_stars_invoice(
             return StarsInvoiceResponse(
                 invoice_url=invoice_url,
                 stars_amount=stars_amount,
-                amount_kopeks=request.amount_kopeks,
+                amount_kopeks=normalized_kopeks,
             )
 
     except httpx.HTTPError as e:

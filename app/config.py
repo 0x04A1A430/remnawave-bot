@@ -1,7 +1,6 @@
 import hashlib
 import hmac
 import html
-import math
 import os
 import re
 from collections import defaultdict
@@ -2113,7 +2112,7 @@ class Settings(BaseSettings):
         rate = self.get_stars_rate()
         if rate <= 0:
             raise ValueError('Stars rate must be positive')
-        return max(1, math.ceil(rubles / rate))
+        return max(1, round(rubles / rate))
 
     def get_admin_notifications_chat_id(self) -> int | None:
         if not self.ADMIN_NOTIFICATIONS_CHAT_ID:

@@ -1135,6 +1135,7 @@ async def purchase_devices_legacy(
         description=description,
         create_transaction=True,
         payment_method=PaymentMethod.BALANCE,
+        transaction_type=TransactionType.SUBSCRIPTION_PAYMENT,
     )
     if not success:
         raise HTTPException(
@@ -2523,6 +2524,7 @@ async def purchase_devices(
             description=description,
             create_transaction=True,
             payment_method=PaymentMethod.BALANCE,
+            transaction_type=TransactionType.SUBSCRIPTION_PAYMENT,
         )
         if not success:
             raise HTTPException(

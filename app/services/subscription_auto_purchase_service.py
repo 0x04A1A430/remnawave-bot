@@ -1292,6 +1292,7 @@ async def _auto_add_devices(
             description,
             create_transaction=True,
             payment_method=PaymentMethod.BALANCE,
+            transaction_type=TransactionType.SUBSCRIPTION_PAYMENT,
         )
         if not success:
             logger.warning(
@@ -1530,6 +1531,7 @@ async def _auto_add_traffic(
             description,
             create_transaction=True,
             payment_method=PaymentMethod.BALANCE,
+            transaction_type=TransactionType.SUBSCRIPTION_PAYMENT,
         )
         if not success:
             logger.warning(
