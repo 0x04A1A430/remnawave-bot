@@ -1,7 +1,7 @@
 """add saved_payment_methods table for recurrent payments
 
-Revision ID: 0032
-Revises: 0031
+Revision ID: 0037
+Revises: 0036
 Create Date: 2026-03-05
 
 Adds saved_payment_methods table for storing YooKassa saved payment methods
@@ -39,6 +39,11 @@ def upgrade() -> None:
             sa.Column('is_active', sa.Boolean(), server_default=sa.true_(), nullable=False),
             sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
             sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
+        )
+        op.create_index(
+            'ix_saved_payment_methods_user_active',
+            'saved_payment_methods',
+            ['user_id', 'is_active'],
         )
 
 
