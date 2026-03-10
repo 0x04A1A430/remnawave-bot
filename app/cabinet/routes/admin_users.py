@@ -610,14 +610,18 @@ async def get_user_detail(
     transactions_result = await db.execute(transactions_q)
     transactions = transactions_result.scalars().all()
 
-    _EXPENSE_TYPES = {TransactionType.WITHDRAWAL.value, TransactionType.SUBSCRIPTION_PAYMENT.value}
+    _EXPENSE_TYPES = {
+        TransactionType.WITHDRAWAL.value,
+        TransactionType.SUBSCRIPTION_PAYMENT.value,
+        TransactionType.GIFT_PAYMENT.value,
+    }
 
     recent_transactions = [
         UserTransactionItem(
             id=t.id,
             type=t.type,
-            amount_kopeks=abs(t.amount_kopeks) if t.type in _EXPENSE_TYPES else t.amount_kopeks,
-            amount_rubles=abs(t.amount_kopeks) / 100 if t.type in _EXPENSE_TYPES else t.amount_kopeks / 100,
+            amount_kopeks=-abs(t.amount_kopeks) if t.type in _EXPENSE_TYPES else t.amount_kopeks,
+            amount_rubles=-abs(t.amount_kopeks) / 100 if t.type in _EXPENSE_TYPES else t.amount_kopeks / 100,
             description=t.description,
             payment_method=t.payment_method,
             is_completed=t.is_completed,
@@ -2163,14 +2167,18 @@ async def get_user_transactions(
     result = await db.execute(query)
     transactions = result.scalars().all()
 
-    _EXPENSE_TYPES = {TransactionType.WITHDRAWAL.value, TransactionType.SUBSCRIPTION_PAYMENT.value}
+    _EXPENSE_TYPES = {
+        TransactionType.WITHDRAWAL.value,
+        TransactionType.SUBSCRIPTION_PAYMENT.value,
+        TransactionType.GIFT_PAYMENT.value,
+    }
 
     items = [
         UserTransactionItem(
             id=t.id,
             type=t.type,
-            amount_kopeks=abs(t.amount_kopeks) if t.type in _EXPENSE_TYPES else t.amount_kopeks,
-            amount_rubles=abs(t.amount_kopeks) / 100 if t.type in _EXPENSE_TYPES else t.amount_kopeks / 100,
+            amount_kopeks=-abs(t.amount_kopeks) if t.type in _EXPENSE_TYPES else t.amount_kopeks,
+            amount_rubles=-abs(t.amount_kopeks) / 100 if t.type in _EXPENSE_TYPES else t.amount_kopeks / 100,
             description=t.description,
             payment_method=t.payment_method,
             is_completed=t.is_completed,

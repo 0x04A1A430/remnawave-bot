@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.crud.referral import get_referral_statistics
 from app.database.crud.subscription import get_subscriptions_statistics, get_trial_statistics
-from app.database.crud.transaction import get_transactions_statistics
+from app.database.crud.transaction import REAL_PAYMENT_METHODS, get_transactions_statistics
 from app.database.crud.user import get_users_statistics
 from app.database.models import (
     Subscription,
@@ -79,6 +79,7 @@ async def _get_overview(db: AsyncSession) -> dict[str, object]:
             select(func.coalesce(func.sum(Transaction.amount_kopeks), 0)).where(
                 func.date(Transaction.created_at) == today,
                 Transaction.type == TransactionType.DEPOSIT.value,
+                Transaction.payment_method.in_(REAL_PAYMENT_METHODS),
             )
         )
         or 0

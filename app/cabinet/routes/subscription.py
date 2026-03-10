@@ -98,12 +98,13 @@ def _apply_addon_discount(
 
     Returns dict with keys: discounted, discount, percent
     """
+    from app.utils.pricing_utils import apply_percentage_discount
+
     percent = _get_addon_discount_percent(user, category, period_days)
     if percent <= 0 or amount <= 0:
         return {'discounted': amount, 'discount': 0, 'percent': 0}
 
-    discount_value = int(amount * percent / 100)
-    discounted_amount = amount - discount_value
+    discounted_amount, discount_value = apply_percentage_discount(amount, percent)
     return {
         'discounted': discounted_amount,
         'discount': discount_value,
@@ -860,15 +861,15 @@ async def purchase_traffic(
     # Пропорциональный расчёт применяем только в классическом режиме.
     if is_tariff_mode:
         prorated_price = base_price_kopeks
-        months_charged = 1
+        days_charged = 30
     else:
-        prorated_price, months_charged = calculate_prorated_price(
+        prorated_price, days_charged = calculate_prorated_price(
             base_price_kopeks,
             subscription.end_date,
         )
 
     # Apply discount from promo group using proper method
-    period_hint_days = months_charged * 30 if months_charged > 0 else 30
+    period_hint_days = days_charged if days_charged > 0 else 30
     discount_result = _apply_addon_discount(user, 'traffic', prorated_price, period_hint_days)
     final_price = discount_result['discounted']
     traffic_discount_percent = discount_result['percent']
@@ -2644,7 +2645,6 @@ async def save_traffic_cart(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> dict[str, bool]:
     """Save cart for traffic purchase (for insufficient balance flow)."""
-    from app.utils.pricing_utils import calculate_prorated_price
 
     await db.refresh(user, ['subscription'])
     subscription = user.subscription
@@ -2715,26 +2715,18 @@ async def save_traffic_cart(
             )
         base_price_kopeks = matching_pkg['price']
 
-    # Apply promo group discount
-    traffic_discount_percent = 0
-    promo_group = (
-        user.get_primary_promo_group()
-        if hasattr(user, 'get_primary_promo_group')
-        else getattr(user, 'promo_group', None)
-    )
-    if promo_group:
-        apply_to_addons = getattr(promo_group, 'apply_discounts_to_addons', True)
-        if apply_to_addons:
-            traffic_discount_percent = max(0, min(100, int(getattr(promo_group, 'traffic_discount_percent', 0) or 0)))
+    # Calculate prorated price (days-based), then apply discount
+    from app.utils.pricing_utils import calculate_prorated_price as _calc_prorated
 
-    if traffic_discount_percent > 0:
-        base_price_kopeks = int(base_price_kopeks * (100 - traffic_discount_percent) / 100)
-
-    # Calculate prorated price
-    final_price, _ = calculate_prorated_price(
+    now = datetime.now(UTC)
+    days_left = max(1, (subscription.end_date - now).days)
+    prorated_price, _ = _calc_prorated(
         base_price_kopeks,
         subscription.end_date,
     )
+    discount_result = _apply_addon_discount(user, 'traffic', prorated_price, days_left)
+    final_price = discount_result['discounted']
+    traffic_discount_percent = discount_result['percent']
 
     # Save cart for auto-purchase after balance top-up
     cart_data = {
@@ -2812,14 +2804,26 @@ async def save_devices_cart(
     days_left = max(1, (end_date - now).days)
     total_days = 30
 
-    price_kopeks = int(device_price * request.devices * days_left / total_days)
-    price_kopeks = max(100, price_kopeks)  # Minimum 1 ruble
+    base_total_price = int(device_price * request.devices * days_left / total_days)
+    base_total_price = max(100, base_total_price)  # Minimum 1 ruble
+
+    # Apply discount from promo group
+    period_hint_days = days_left
+    discount_result = _apply_addon_discount(user, 'devices', base_total_price, period_hint_days)
+    price_kopeks = discount_result['discounted']
+    devices_discount_percent = discount_result['percent']
+
+    # Ensure minimum price after discount (except for 100% discount)
+    if devices_discount_percent < 100 and price_kopeks > 0:
+        price_kopeks = max(100, price_kopeks)
 
     # Save cart for auto-purchase after balance top-up
     cart_data = {
         'cart_mode': 'add_devices',
         'devices_to_add': request.devices,
         'price_kopeks': price_kopeks,
+        'base_price_kopeks': base_total_price,
+        'discount_percent': devices_discount_percent,
         'source': 'cabinet',
     }
     await user_cart_service.save_user_cart(user.id, cart_data)
@@ -2897,10 +2901,9 @@ async def get_device_price(
     days_left = max(1, (end_date - now).days)
     total_days = 30
 
-    # Calculate base price before discount
-    base_price_per_device = int(device_price * days_left / total_days)
-    base_price_per_device = max(100, base_price_per_device)
-    base_total_price = base_price_per_device * devices
+    # Calculate base price before discount (total first, then floor)
+    base_total_price = int(device_price * devices * days_left / total_days)
+    base_total_price = max(100, base_total_price)
 
     # Apply discount from promo group
     period_hint_days = days_left
@@ -2909,7 +2912,7 @@ async def get_device_price(
     devices_discount_percent = discount_result['percent']
     discount_value = discount_result['discount']
 
-    # Calculate per-device price after discount
+    # Ensure minimum price after discount (except for 100% discount)
     if devices_discount_percent < 100 and total_price_kopeks > 0:
         total_price_kopeks = max(100, total_price_kopeks)
     price_per_device_kopeks = total_price_kopeks // devices if devices > 0 else 0
@@ -3256,7 +3259,7 @@ async def update_countries(
             else:
                 discounted_per_month = server_price_per_month
 
-            charged_price, charged_months = calculate_prorated_price(
+            charged_price, charged_days = calculate_prorated_price(
                 discounted_per_month,
                 user.subscription.end_date,
             )
@@ -4668,7 +4671,7 @@ async def switch_traffic_package(
             price_diff = int(price_diff * (100 - traffic_discount_percent) / 100)
 
         # Prorated calculation
-        final_price, months_charged = calculate_prorated_price(price_diff, user.subscription.end_date)
+        final_price, days_charged = calculate_prorated_price(price_diff, user.subscription.end_date)
 
         if user.balance_kopeks < final_price:
             raise HTTPException(

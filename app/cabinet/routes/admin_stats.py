@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.crud.campaign import get_campaign_statistics, get_campaigns_count, get_campaigns_list
 from app.database.crud.server_squad import get_server_statistics
 from app.database.crud.subscription import get_subscriptions_statistics
-from app.database.crud.transaction import get_revenue_by_period, get_transactions_statistics
+from app.database.crud.transaction import REAL_PAYMENT_METHODS, get_revenue_by_period, get_transactions_statistics
 from app.database.models import (
     ReferralEarning,
     Subscription,
@@ -931,6 +931,7 @@ async def get_recent_payments(
                     Transaction.type == TransactionType.DEPOSIT.value,
                     Transaction.is_completed == True,
                     Transaction.created_at >= today_start,
+                    Transaction.payment_method.in_(REAL_PAYMENT_METHODS),
                 )
             )
         )
@@ -942,6 +943,7 @@ async def get_recent_payments(
                     Transaction.type == TransactionType.DEPOSIT.value,
                     Transaction.is_completed == True,
                     Transaction.created_at >= week_ago,
+                    Transaction.payment_method.in_(REAL_PAYMENT_METHODS),
                 )
             )
         )
