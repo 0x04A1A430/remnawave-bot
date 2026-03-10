@@ -58,6 +58,7 @@ from app.services.notification_settings_service import NotificationSettingsServi
 from app.services.promo_offer_service import promo_offer_service
 from app.services.subscription_service import SubscriptionService
 from app.utils.cache import cache
+from app.utils.message_patch import caption_exceeds_telegram_limit
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button
 from app.utils.promo_offer import get_user_active_promo_discount_percent
 from app.utils.subscription_utils import (
@@ -110,7 +111,7 @@ class MonitoringService:
             logger.debug('Пропуск уведомления: пользователь недоступен', user_id=user.id, status=user.status)
             return None
 
-        if settings.ENABLE_LOGO_MODE and LOGO_PATH.exists() and (text is None or len(text) <= 1000):
+        if settings.ENABLE_LOGO_MODE and LOGO_PATH.exists() and not caption_exceeds_telegram_limit(text):
             try:
                 from app.utils.message_patch import _cache_logo_file_id, get_logo_media
 
@@ -225,6 +226,7 @@ class MonitoringService:
                 await self._check_trial_expiring_soon(db)
                 await self._check_trial_channel_subscriptions(db)
                 await self._check_expired_subscription_followups(db)
+                await self._retry_stuck_guest_purchases(db)
                 await self._cleanup_inactive_users(db)
                 await self._sync_with_remnawave(db)
 
@@ -1677,6 +1679,16 @@ class MonitoringService:
             logger.error(
                 'Ошибка отправки уведомления о неудачном автоплатеже пользователю', telegram_id=user.telegram_id, e=e
             )
+
+    async def _retry_stuck_guest_purchases(self, db: AsyncSession):
+        try:
+            from app.services.guest_purchase_service import retry_stuck_paid_purchases
+
+            retried = await retry_stuck_paid_purchases(db, stale_minutes=5, limit=10)
+            if retried:
+                logger.info('Retried stuck guest purchases', retried=retried)
+        except Exception:
+            logger.error('Error retrying stuck guest purchases', exc_info=True)
 
     async def _cleanup_inactive_users(self, db: AsyncSession):
         try:

@@ -74,6 +74,7 @@ class WataPaymentMixin:
         *,
         language: str | None = None,
         return_url: str | None = None,
+        failed_url: str | None = None,
     ) -> dict[str, Any] | None:
         if not getattr(self, 'wata_service', None):
             logger.error('WATA service is not initialised')
@@ -120,6 +121,7 @@ class WataPaymentMixin:
                 description=description,
                 order_id=order_id,
                 success_url=return_url,
+                fail_url=failed_url,
             )
         except WataAPIError as error:
             logger.error('Ошибка создания WATA платежа', error=error)
@@ -194,7 +196,7 @@ class WataPaymentMixin:
             return False
 
         order_id_raw = payload.get('orderId')
-        payment_link_raw = payload.get('paymentLinkId') or payload.get('id')
+        payment_link_raw = payload.get('paymentLinkId') or payload.get('id') or payload.get('transactionId')
         transaction_status_raw = payload.get('transactionStatus')
 
         order_id = str(order_id_raw) if order_id_raw else None

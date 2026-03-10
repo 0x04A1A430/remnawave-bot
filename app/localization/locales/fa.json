@@ -1726,6 +1726,7 @@
     "DAILY_SWITCH_WARNING": "⚠️ <b>توجه!</b> {days} روز اشتراک باقی مانده.\nبا تغییر به تعرفه روزانه از دست می‌روند!",
     "DAILY_SUBSCRIPTION_PAUSED": "⏸️ اشتراک متوقف شد",
     "DAILY_SUBSCRIPTION_RESUMED": "▶️ اشتراک از سر گرفته شد!",
+    "DAILY_SUBSCRIPTION_RESUMED_AFTER_TOPUP": "✅ <b>اشتراک از سر گرفته شد!</b>\n\nتعرفه روزانه «{tariff_name}» پس از شارژ موجودی از سر گرفته شد.\n\n💳 کسر شده: {amount}\n💰 باقی‌مانده: {balance}",
     "WEBHOOK_SUB_EXPIRED": "❌ <b>اشتراک منقضی شد</b>\n\nاشتراک شما به پایان رسیده است. برای بازیابی دسترسی VPN تمدید کنید.",
     "WEBHOOK_SUB_DISABLED": "🚫 <b>اشتراک غیرفعال شد</b>\n\nاشتراک شما توسط مدیر غیرفعال شده است.",
     "WEBHOOK_SUB_ENABLED": "✅ <b>اشتراک فعال شد</b>\n\nاشتراک شما دوباره فعال است. از استفاده لذت ببرید!",

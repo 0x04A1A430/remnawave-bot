@@ -180,7 +180,9 @@ class WataService:
             'orderId': order_id,
         }
 
-        payload['type'] = link_type or settings.WATA_PAYMENT_TYPE or 'OneTime'
+        payment_type = link_type or settings.WATA_PAYMENT_TYPE
+        if payment_type:
+            payload['type'] = payment_type
 
         if success_url or settings.WATA_SUCCESS_REDIRECT_URL:
             payload['successRedirectUrl'] = success_url or settings.WATA_SUCCESS_REDIRECT_URL
