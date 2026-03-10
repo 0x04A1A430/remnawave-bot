@@ -95,13 +95,14 @@ volumes:
 networks:
   bot_network:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16
-          gateway: 172.20.0.1
+#    ipam:
+#      config:
+#        - subnet: 172.20.0.0/16
+#          gateway: 172.20.0.1
     driver_opts:
       com.docker.network.driver.mtu: 1350
 
   remnawave-network:
     name: remnawave-network
-    external: true # Используем существующую сеть панели
+    driver: bridge
+#    external: true # Используем существующую сеть панели

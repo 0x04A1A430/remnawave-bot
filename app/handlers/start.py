@@ -565,7 +565,7 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
     if referral_code:
         await state.update_data(referral_code=referral_code)
 
-    user = db_user if db_user else await get_user_by_telegram_id(db, message.from_user.id)
+    user = db_user or await get_user_by_telegram_id(db, message.from_user.id)
 
     if campaign and not campaign_notification_sent:
         try:

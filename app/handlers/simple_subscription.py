@@ -970,7 +970,7 @@ async def handle_simple_subscription_payment_method(
                     from aiogram.types import BufferedInputFile
 
                     # Используем qr_confirmation_data если доступно, иначе confirmation_url
-                    qr_data = qr_confirmation_data if qr_confirmation_data else confirmation_url
+                    qr_data = qr_confirmation_data or confirmation_url
 
                     # Создаем QR-код из полученных данных
                     qr = qrcode.QRCode(version=1, box_size=10, border=5)

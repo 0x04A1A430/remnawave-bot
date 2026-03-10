@@ -210,7 +210,7 @@ def _is_checkable(record: PendingPayment) -> bool:
     if record.method == PaymentMethod.YOOKASSA:
         return status_str in {'pending', 'waiting_for_capture'}
     if record.method == PaymentMethod.CRYPTOBOT:
-        return status_str in {'active'}
+        return status_str == 'active'
     if record.method == PaymentMethod.CLOUDPAYMENTS:
         return status_str in {'pending', 'authorized'}
     if record.method == PaymentMethod.FREEKASSA:

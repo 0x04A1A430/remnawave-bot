@@ -128,6 +128,13 @@ def _get_method_defaults() -> dict:
             'default_max': settings.KASSA_AI_MAX_AMOUNT_KOPEKS,
             'available_sub_options': None,
         },
+        'riopay': {
+            'default_display_name': settings.get_riopay_display_name(),
+            'is_configured': settings.is_riopay_enabled(),
+            'default_min': settings.RIOPAY_MIN_AMOUNT_KOPEKS,
+            'default_max': settings.RIOPAY_MAX_AMOUNT_KOPEKS,
+            'available_sub_options': None,
+        },
     }
 
 
@@ -147,7 +154,7 @@ def _get_platega_sub_options() -> list[dict] | None:
                     'name': info.get('title') or info.get('name') or f'Platega {method_code}',
                 }
             )
-        return options if options else None
+        return options or None
     except Exception:
         return None
 
@@ -168,6 +175,7 @@ DEFAULT_METHOD_ORDER = [
     'freekassa_card',
     'cloudpayments',
     'kassa_ai',
+    'riopay',
 ]
 
 

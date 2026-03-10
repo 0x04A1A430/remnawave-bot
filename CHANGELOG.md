@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.28.1](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.28.0...v3.28.1) (2026-03-10)
+
+
+### Bug Fixes
+
+* migrate pricing to days-based proration, fix promo revenue leaks, fix admin panel bugs ([fcdeff1](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/fcdeff1ee5155c88c634e12a703159c221d66af5))
+
 ## [3.28.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.27.0...v3.28.0) (2026-03-09)
 
 

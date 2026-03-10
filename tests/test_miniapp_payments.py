@@ -1032,7 +1032,7 @@ async def test_create_payment_link_stars_normalizes_amount(monkeypatch):
     async def fake_resolve_user(db, init_data):
         return types.SimpleNamespace(id=7, language='ru'), {}
 
-    monkeypatch.setattr(miniapp, 'PaymentService', lambda bot: DummyPaymentService(bot))
+    monkeypatch.setattr(miniapp, 'PaymentService', DummyPaymentService)
     monkeypatch.setattr(miniapp, 'Bot', DummyBot)
     monkeypatch.setattr(miniapp, '_resolve_user_from_init_data', fake_resolve_user)
 
