@@ -28,7 +28,7 @@ def upgrade() -> None:
         sa.Column('currency', sa.String(10), nullable=False, server_default='RUB'),
         sa.Column('description', sa.Text(), nullable=True),
         sa.Column('status', sa.String(32), nullable=False, server_default='pending'),
-        sa.Column('is_paid', sa.Boolean(), server_default=sa.text('0')),
+        sa.Column('is_paid', sa.Boolean(), server_default=sa.text('false')),
         sa.Column('payment_url', sa.Text(), nullable=True),
         sa.Column('payment_method', sa.String(32), nullable=True),
         sa.Column('metadata_json', sa.JSON(), nullable=True),
