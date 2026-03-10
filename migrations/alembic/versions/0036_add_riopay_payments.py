@@ -1,7 +1,7 @@
 """add riopay_payments table
 
-Revision ID: 0032
-Revises: 0031
+Revision ID: 0036
+Revises: 0035
 Create Date: 2026-03-08
 
 """
@@ -11,8 +11,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = '0032'
-down_revision: Union[str, None] = '0031'
+revision: str = '0036'
+down_revision: Union[str, None] = '0035'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

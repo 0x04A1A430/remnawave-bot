@@ -313,7 +313,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
             devices_used_str = str(devices_used)
 
     servers_names = await get_servers_display_names(subscription.connected_squads)
-    servers_display = servers_names if servers_names else texts.t('SUBSCRIPTION_NO_SERVERS', 'Нет серверов')
+    servers_display = servers_names or texts.t('SUBSCRIPTION_NO_SERVERS', 'Нет серверов')
 
     # Получаем информацию о тарифе для режима тарифов
     tariff_info_block = ''

@@ -8,7 +8,7 @@ def _aware(dt: datetime | None) -> datetime | None:
     return dt
 
 
-from enum import Enum
+from enum import Enum, StrEnum
 
 from sqlalchemy import (
     JSON,
@@ -3124,7 +3124,7 @@ class LandingPage(Base):
         return f"<LandingPage slug='{self.slug}' active={self.is_active}>"
 
 
-class GuestPurchaseStatus(str, Enum):
+class GuestPurchaseStatus(StrEnum):
     PENDING = 'pending'
     PAID = 'paid'
     DELIVERED = 'delivered'

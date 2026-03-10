@@ -527,7 +527,7 @@ class MiniAppSubscriptionPurchaseService:
             value = int(package.get('gb') or 0)
             price_per_month = int(package.get('price') or 0)
             discounted_per_month, discount_value = _apply_percentage_discount(price_per_month, discount_percent)
-            label = texts.format_traffic(value if value else 0)
+            label = texts.format_traffic(value or 0)
             options.append(
                 PurchaseTrafficOption(
                     value=value,
@@ -587,7 +587,7 @@ class MiniAppSubscriptionPurchaseService:
             options=options,
             min_selectable=1 if options else 0,
             max_selectable=len(options),
-            default_selection=default_selection if default_selection else [opt.uuid for opt in options[:1]],
+            default_selection=default_selection or [opt.uuid for opt in options[:1]],
             hint=None,
         )
 

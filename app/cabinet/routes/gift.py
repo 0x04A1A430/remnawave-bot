@@ -260,13 +260,17 @@ async def create_gift_purchase(
                 detail='payment_method is required for gateway mode',
             )
 
-        purchase_kwargs: dict = {
-            'gift_recipient_type': body.recipient_type,
-            'gift_recipient_value': body.recipient_value,
-            'gift_message': body.gift_message,
-        } if has_recipient else {
-            'gift_message': body.gift_message,
-        }
+        purchase_kwargs: dict = (
+            {
+                'gift_recipient_type': body.recipient_type,
+                'gift_recipient_value': body.recipient_value,
+                'gift_message': body.gift_message,
+            }
+            if has_recipient
+            else {
+                'gift_message': body.gift_message,
+            }
+        )
 
         try:
             purchase = await create_purchase(
@@ -345,13 +349,17 @@ async def create_gift_purchase(
         )
 
     # Create purchase record
-    balance_purchase_kwargs: dict = {
-        'gift_recipient_type': body.recipient_type,
-        'gift_recipient_value': body.recipient_value,
-        'gift_message': body.gift_message,
-    } if has_recipient else {
-        'gift_message': body.gift_message,
-    }
+    balance_purchase_kwargs: dict = (
+        {
+            'gift_recipient_type': body.recipient_type,
+            'gift_recipient_value': body.recipient_value,
+            'gift_message': body.gift_message,
+        }
+        if has_recipient
+        else {
+            'gift_message': body.gift_message,
+        }
+    )
 
     try:
         purchase = await create_purchase(
@@ -497,11 +505,7 @@ async def get_gift_purchase_status(
     else:
         token_filter = GuestPurchase.token.startswith(token)
 
-    result = await db.execute(
-        select(GuestPurchase)
-        .options(selectinload(GuestPurchase.tariff))
-        .where(token_filter)
-    )
+    result = await db.execute(select(GuestPurchase).options(selectinload(GuestPurchase.tariff)).where(token_filter))
     purchase = result.scalars().first()
     if purchase is None:
         raise HTTPException(
