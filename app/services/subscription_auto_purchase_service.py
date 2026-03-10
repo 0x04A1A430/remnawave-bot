@@ -825,7 +825,12 @@ async def _auto_purchase_tariff(
 
         await with_admin_notification_service(
             lambda svc: svc.send_subscription_purchase_notification(
-                db, user, subscription, transaction, period_days, was_trial_conversion,
+                db,
+                user,
+                subscription,
+                transaction,
+                period_days,
+                was_trial_conversion,
                 purchase_type='renewal',
             )
         )
@@ -1101,7 +1106,12 @@ async def _auto_purchase_daily_tariff(
 
         await with_admin_notification_service(
             lambda svc: svc.send_subscription_purchase_notification(
-                db, user, subscription, transaction, 1, was_trial_conversion,
+                db,
+                user,
+                subscription,
+                transaction,
+                1,
+                was_trial_conversion,
                 purchase_type='renewal',
             )
         )

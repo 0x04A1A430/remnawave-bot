@@ -36,7 +36,12 @@ async def send_purchase_notification(
         if transaction:
             notification_service = AdminNotificationService(callback.bot)
             await notification_service.send_subscription_purchase_notification(
-                db, db_user, subscription, transaction, period_days, was_trial_conversion,
+                db,
+                db_user,
+                subscription,
+                transaction,
+                period_days,
+                was_trial_conversion,
                 purchase_type=purchase_type,
             )
     except Exception as e:

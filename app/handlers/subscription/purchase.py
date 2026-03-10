@@ -2821,7 +2821,12 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
         try:
             notification_service = AdminNotificationService(callback.bot)
             await notification_service.send_subscription_purchase_notification(
-                db, db_user, subscription, transaction, period_days, was_trial_conversion,
+                db,
+                db_user,
+                subscription,
+                transaction,
+                period_days,
+                was_trial_conversion,
                 purchase_type='renewal' if existing_subscription else 'first_purchase',
             )
         except Exception as e:
