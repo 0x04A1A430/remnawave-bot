@@ -1051,6 +1051,7 @@ async def update_user_subscription(
                 detail='Days must be a positive integer',
             )
 
+        # Сокращение через отрицательный аргумент: extend_subscription(-N) уменьшает end_date
         await extend_subscription(db, subscription, -request.days)
         await db.refresh(subscription)
 

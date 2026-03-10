@@ -45,9 +45,9 @@ async def create_saved_payment_method(
         )
         .returning(SavedPaymentMethod)
     )
-    await db.commit()
     reactivated = result.scalar_one_or_none()
     if reactivated:
+        await db.commit()
         logger.info(
             'Реактивирован сохранённый метод оплаты',
             saved_method_id=reactivated.id,

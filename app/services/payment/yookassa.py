@@ -1131,8 +1131,10 @@ class YooKassaPaymentMixin:
             card_first6 = card.get('first6')
             card_last4 = card.get('last4')
             card_type = card.get('card_type')
-            expiry_month = card.get('expiry_month')
-            expiry_year = card.get('expiry_year')
+            raw_month = card.get('expiry_month')
+            raw_year = card.get('expiry_year')
+            expiry_month = str(raw_month).zfill(2) if raw_month is not None else None
+            expiry_year = str(raw_year) if raw_year is not None else None
             method_type = pm.get('type', 'bank_card')
 
             # Формируем название

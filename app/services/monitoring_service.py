@@ -230,7 +230,7 @@ class MonitoringService:
                         try:
                             from app.services.recurrent_payment_service import process_recurrent_payments
 
-                            await process_recurrent_payments(bot=self.bot)
+                            await process_recurrent_payments(db=db, bot=self.bot)
                         except Exception as recurrent_error:
                             logger.error(
                                 'Ошибка рекуррентных автоплатежей',

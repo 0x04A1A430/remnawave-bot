@@ -7,6 +7,7 @@ monitoring_service затем спишет баланс и продлит под
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
 import structlog
@@ -17,7 +18,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import settings
-from app.database.database import AsyncSessionLocal
 from app.database.models import (
     Subscription,
     SubscriptionStatus,
@@ -28,23 +28,52 @@ from app.database.models import (
 
 logger = structlog.get_logger(__name__)
 
-# Redis-like in-memory защита от дублей (сбрасывается при рестарте)
-_processed_today: set[str] = set()
-_processed_date: str = ''
+
+@dataclass
+class _DailyGuard:
+    """Защита от повторной обработки подписок в рамках одного дня."""
+
+    date: str = ''
+    processed: set[str] = field(default_factory=set)
+
+    def reset_if_new_day(self) -> None:
+        today = datetime.now(UTC).strftime('%Y-%m-%d')
+        if today != self.date:
+            self.processed = set()
+            self.date = today
+
+    def is_processed(self, key: str) -> bool:
+        return key in self.processed
+
+    def mark_processed(self, key: str) -> None:
+        self.processed.add(key)
 
 
-def _reset_daily_guard() -> None:
-    global _processed_today, _processed_date
-    today = datetime.now(UTC).strftime('%Y-%m-%d')
-    if today != _processed_date:
-        _processed_today = set()
-        _processed_date = today
+_daily_guard = _DailyGuard()
 
 
-async def process_recurrent_payments(bot: Bot | None = None) -> dict:
+def _build_extend_keyboard(texts) -> InlineKeyboardMarkup:
+    """Клавиатура с кнопкой продления подписки для уведомлений."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=texts.t('SUBSCRIPTION_EXTEND', '💎 Продлить подписку'),
+                    callback_data='subscription_extend',
+                )
+            ],
+        ]
+    )
+
+
+async def process_recurrent_payments(db: AsyncSession, bot: Bot | None = None) -> dict:
     """
     Основная функция: находит подписки, которым скоро нужно продление,
     у которых недостаточно баланса, и пополняет баланс с сохранённой карты.
+
+    Args:
+        db: Сессия БД из вызывающего кода (_monitoring_cycle)
+        bot: Экземпляр бота для уведомлений
 
     Returns:
         dict: Статистика обработки
@@ -58,7 +87,7 @@ async def process_recurrent_payments(bot: Bot | None = None) -> dict:
     if not settings.ENABLE_AUTOPAY:
         return {'skipped': True, 'reason': 'autopay_disabled'}
 
-    _reset_daily_guard()
+    _daily_guard.reset_if_new_day()
 
     stats = {
         'checked': 0,
@@ -69,48 +98,58 @@ async def process_recurrent_payments(bot: Bot | None = None) -> dict:
         'errors': 0,
     }
 
+    # Создаём сервисы один раз для всех подписок
+    from app.services.payment_service import PaymentService
+    from app.services.subscription_service import SubscriptionService
+
+    payment_service = PaymentService()
+    subscription_service = SubscriptionService()
+
     try:
-        async with AsyncSessionLocal() as db:
+        subscriptions = await _find_subscriptions_needing_topup(db)
+        stats['checked'] = len(subscriptions)
+
+        for subscription in subscriptions:
+            user = subscription.user
+            if not user:
+                continue
+
+            guard_key = f'{user.id}_{subscription.id}'
+            if _daily_guard.is_processed(guard_key):
+                stats['already_processed'] += 1
+                continue
+
             try:
-                subscriptions = await _find_subscriptions_needing_topup(db)
-                stats['checked'] = len(subscriptions)
-
-                for subscription in subscriptions:
-                    user = subscription.user
-                    if not user:
-                        continue
-
-                    guard_key = f'{user.id}_{subscription.id}'
-                    if guard_key in _processed_today:
-                        stats['already_processed'] += 1
-                        continue
-
-                    try:
-                        result = await _process_single_subscription(db, subscription, user, bot)
-                        if result == 'created':
-                            stats['payments_created'] += 1
-                            _processed_today.add(guard_key)
-                        elif result == 'no_card':
-                            stats['insufficient_no_card'] += 1
-                        elif result == 'all_cards_failed':
-                            stats['all_cards_failed'] += 1
-                        elif result == 'skipped':
-                            stats['already_processed'] += 1
-                    except Exception as e:
-                        stats['errors'] += 1
-                        logger.error(
-                            'Ошибка обработки рекуррентного платежа',
-                            subscription_id=subscription.id,
-                            user_id=user.id,
-                            error=e,
-                            exc_info=True,
-                        )
+                result = await _process_single_subscription(
+                    db,
+                    subscription,
+                    user,
+                    bot,
+                    payment_service,
+                    subscription_service,
+                )
+                if result == 'created':
+                    stats['payments_created'] += 1
+                    _daily_guard.mark_processed(guard_key)
+                elif result == 'no_card':
+                    stats['insufficient_no_card'] += 1
+                    _daily_guard.mark_processed(guard_key)
+                elif result == 'all_cards_failed':
+                    stats['all_cards_failed'] += 1
+                    _daily_guard.mark_processed(guard_key)
+                elif result == 'skipped':
+                    stats['already_processed'] += 1
             except Exception as e:
-                logger.error('Ошибка получения подписок для рекуррентных платежей', error=e, exc_info=True)
                 stats['errors'] += 1
-
+                logger.error(
+                    'Ошибка обработки рекуррентного платежа',
+                    subscription_id=subscription.id,
+                    user_id=user.id,
+                    error=e,
+                    exc_info=True,
+                )
     except Exception as e:
-        logger.error('Критическая ошибка рекуррентных платежей', error=e, exc_info=True)
+        logger.error('Ошибка получения подписок для рекуррентных платежей', error=e, exc_info=True)
         stats['errors'] += 1
 
     if stats['payments_created'] > 0 or stats['errors'] > 0:
@@ -163,6 +202,8 @@ async def _process_single_subscription(
     subscription: Subscription,
     user: User,
     bot: Bot | None,
+    payment_service,
+    subscription_service,
 ) -> str:
     """
     Обрабатывает одну подписку: проверяет баланс, находит карту, создаёт автоплатёж.
@@ -170,11 +211,10 @@ async def _process_single_subscription(
     Returns:
         'created' — автоплатёж создан
         'no_card' — нет сохранённой карты
+        'all_cards_failed' — все карты не сработали
         'skipped' — баланс достаточен или другая причина пропуска
     """
     from app.database.crud.saved_payment_method import get_active_payment_methods_by_user
-    from app.services.payment_service import PaymentService
-    from app.services.subscription_service import SubscriptionService
 
     # Рассчитываем стоимость продления
     tariff = getattr(subscription, 'tariff', None)
@@ -182,8 +222,6 @@ async def _process_single_subscription(
         autopay_period = tariff.get_shortest_period() or 30
     else:
         autopay_period = 30
-
-    subscription_service = SubscriptionService()
 
     try:
         renewal_cost = await subscription_service.calculate_renewal_price(
@@ -210,6 +248,12 @@ async def _process_single_subscription(
         # Баланса достаточно, обычный autopay справится
         return 'skipped'
 
+    # Используем autopay_days_before конкретной подписки, если задан
+    days_before = getattr(subscription, 'autopay_days_before', None) or settings.DEFAULT_AUTOPAY_DAYS_BEFORE
+    days_until_expiry = (subscription.end_date - datetime.now(UTC)).total_seconds() / 86400
+    if days_until_expiry > days_before and subscription.status != SubscriptionStatus.EXPIRED.value:
+        return 'skipped'
+
     # Нужно пополнить баланс — ищем сохранённую карту
     saved_methods = await get_active_payment_methods_by_user(db, user.id)
     if not saved_methods:
@@ -221,7 +265,6 @@ async def _process_single_subscription(
     topup_amount_rubles = topup_amount_kopeks / 100
 
     # Создаём автоплатёж
-    payment_service = PaymentService()
     yookassa_service = payment_service.yookassa_service
     if not yookassa_service or not yookassa_service.configured:
         logger.warning('YooKassa сервис не сконфигурирован для рекуррентных платежей')
@@ -301,18 +344,9 @@ async def _process_single_subscription(
                 from app.localization.texts import get_texts
 
                 texts = get_texts(user.language)
-                status = result.get('status', '')
+                payment_status = result.get('status', '')
                 if result.get('paid'):
-                    keyboard = InlineKeyboardMarkup(
-                        inline_keyboard=[
-                            [
-                                InlineKeyboardButton(
-                                    text=texts.t('SUBSCRIPTION_EXTEND', '💎 Продлить подписку'),
-                                    callback_data='subscription_extend',
-                                )
-                            ],
-                        ]
-                    )
+                    keyboard = _build_extend_keyboard(texts)
                     msg = texts.t(
                         'RECURRENT_TOPUP_SUCCESS',
                         '✅ <b>Автоплатёж выполнен</b>\n\nБаланс пополнен на {amount} для продления подписки.',
@@ -323,7 +357,7 @@ async def _process_single_subscription(
                         parse_mode='HTML',
                         reply_markup=keyboard,
                     )
-                elif status == 'pending':
+                elif payment_status == 'pending':
                     logger.info(
                         'Рекуррентный платёж в обработке',
                         user_id=user.id,
@@ -340,16 +374,7 @@ async def _process_single_subscription(
             from app.localization.texts import get_texts
 
             texts = get_texts(user.language)
-            keyboard = InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text=texts.t('SUBSCRIPTION_EXTEND', '💎 Продлить подписку'),
-                            callback_data='subscription_extend',
-                        )
-                    ],
-                ]
-            )
+            keyboard = _build_extend_keyboard(texts)
             msg = texts.t(
                 'RECURRENT_TOPUP_FAILED',
                 '❌ <b>Автоплатёж не удался</b>\n\nНе удалось списать {amount} ни с одной сохранённой карты для продления подписки.\n\nПополните баланс вручную, чтобы подписка не прервалась.',
