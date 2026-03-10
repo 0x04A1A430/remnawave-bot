@@ -209,7 +209,6 @@ class RioPayPaymentMixin:
             status_info = RIOPAY_STATUS_MAP.get(riopay_status, ('pending', False))
             internal_status, is_paid = status_info
 
-            # Обновляем статус платежа
             callback_payload = {
                 'riopay_order_id': riopay_order_id,
                 'external_id': external_id,
@@ -219,17 +218,7 @@ class RioPayPaymentMixin:
                 'included_fee': payload.get('includedFee'),
             }
 
-            payment = await update_riopay_payment_status(
-                db=db,
-                payment=payment,
-                status=internal_status,
-                is_paid=is_paid,
-                riopay_order_id=riopay_order_id,
-                payment_method=payload.get('paymentType'),
-                callback_payload=callback_payload,
-            )
-
-            # Проверка суммы: payload.amount должен совпадать с суммой в базе
+            # Проверка суммы ДО обновления статуса
             if is_paid and amount is not None:
                 expected = payment.amount_kopeks / 100
                 if abs(float(amount) - expected) > 0.01:
@@ -239,7 +228,27 @@ class RioPayPaymentMixin:
                         received=amount,
                         order_id=payment.order_id,
                     )
+                    await update_riopay_payment_status(
+                        db=db,
+                        payment=payment,
+                        status='amount_mismatch',
+                        is_paid=False,
+                        riopay_order_id=riopay_order_id,
+                        payment_method=payload.get('paymentType'),
+                        callback_payload=callback_payload,
+                    )
                     return False
+
+            # Обновляем статус платежа только после проверки суммы
+            payment = await update_riopay_payment_status(
+                db=db,
+                payment=payment,
+                status=internal_status,
+                is_paid=is_paid,
+                riopay_order_id=riopay_order_id,
+                payment_method=payload.get('paymentType'),
+                callback_payload=callback_payload,
+            )
 
             # Финализируем платеж если оплачен
             if is_paid:
@@ -425,6 +434,34 @@ class RioPayPaymentMixin:
                         internal_status, is_paid = status_info
 
                         if is_paid:
+                            # Проверка суммы ДО обновления статуса
+                            api_amount = order_data.get('amount')
+                            if api_amount is not None:
+                                expected = payment.amount_kopeks / 100
+                                if abs(float(api_amount) - expected) > 0.01:
+                                    logger.error(
+                                        'RioPay amount mismatch (API check)',
+                                        expected=expected,
+                                        received=api_amount,
+                                        order_id=payment.order_id,
+                                    )
+                                    await update_riopay_payment_status(
+                                        db=db,
+                                        payment=payment,
+                                        status='amount_mismatch',
+                                        is_paid=False,
+                                        riopay_order_id=payment.riopay_order_id,
+                                        callback_payload={
+                                            'check_source': 'api',
+                                            'riopay_order_data': order_data,
+                                        },
+                                    )
+                                    return {
+                                        'payment': payment,
+                                        'status': 'amount_mismatch',
+                                        'is_paid': False,
+                                    }
+
                             logger.info('RioPay payment confirmed via API', order_id=payment.order_id)
 
                             callback_payload = {
