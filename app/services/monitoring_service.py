@@ -1682,11 +1682,15 @@ class MonitoringService:
 
     async def _retry_stuck_guest_purchases(self, db: AsyncSession):
         try:
-            from app.services.guest_purchase_service import retry_stuck_paid_purchases
+            from app.services.guest_purchase_service import retry_stuck_paid_purchases, retry_stuck_pending_activation
 
             retried = await retry_stuck_paid_purchases(db, stale_minutes=5, limit=10)
             if retried:
                 logger.info('Retried stuck guest purchases', retried=retried)
+
+            retried_pa = await retry_stuck_pending_activation(db, stale_minutes=10, limit=10)
+            if retried_pa:
+                logger.info('Retried stuck pending_activation purchases', retried=retried_pa)
         except Exception:
             logger.error('Error retrying stuck guest purchases', exc_info=True)
 
