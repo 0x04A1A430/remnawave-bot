@@ -26,7 +26,6 @@ from app.states import SubscriptionStates
 from app.utils.pricing_utils import (
     apply_percentage_discount,
     calculate_prorated_price,
-    get_remaining_months,
 )
 
 from .common import (
@@ -482,7 +481,7 @@ async def add_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSes
 
     discounted_per_month = discount_result['discounted']
     discount_per_month = discount_result['discount']
-    charged_months = 1
+    charged_days = 30
 
     # На тарифах пакеты трафика покупаются на 1 месяц (30 дней),
     # цена в тарифе уже месячная — не умножаем на оставшиеся месяцы подписки.
@@ -492,14 +491,14 @@ async def add_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSes
     if is_tariff_mode:
         price = discounted_per_month
     elif subscription:
-        price, charged_months = calculate_prorated_price(
+        price, charged_days = calculate_prorated_price(
             discounted_per_month,
             subscription.end_date,
         )
     else:
         price = discounted_per_month
 
-    total_discount_value = discount_per_month * charged_months
+    total_discount_value = int(discount_per_month * charged_days / 30)
 
     if db_user.balance_kopeks < price:
         missing_kopeks = price - db_user.balance_kopeks
@@ -716,8 +715,9 @@ async def confirm_switch_traffic(callback: types.CallbackQuery, db_user: User, d
     old_price_per_month = settings.get_traffic_price(base_traffic)
     new_price_per_month = settings.get_traffic_price(new_traffic_gb)
 
-    months_remaining = get_remaining_months(subscription.end_date)
-    period_hint_days = months_remaining * 30 if months_remaining > 0 else None
+    now = datetime.now(UTC)
+    days_remaining = max(1, (subscription.end_date - now).days)
+    period_hint_days = days_remaining if days_remaining > 0 else None
     traffic_discount_percent = _get_addon_discount_percent_for_user(
         db_user,
         'traffic',
@@ -736,7 +736,8 @@ async def confirm_switch_traffic(callback: types.CallbackQuery, db_user: User, d
     discount_savings_per_month = (new_price_per_month - old_price_per_month) - price_difference_per_month
 
     if price_difference_per_month > 0:
-        total_price_difference = price_difference_per_month * months_remaining
+        total_price_difference = int(price_difference_per_month * days_remaining / 30)
+        total_price_difference = max(100, total_price_difference)
 
         if db_user.balance_kopeks < total_price_difference:
             missing_kopeks = total_price_difference - db_user.balance_kopeks
@@ -750,7 +751,7 @@ async def confirm_switch_traffic(callback: types.CallbackQuery, db_user: User, d
                     'Выберите способ пополнения. Сумма подставится автоматически.'
                 ),
             ).format(
-                required=f'{texts.format_price(total_price_difference)} (за {months_remaining} мес)',
+                required=f'{texts.format_price(total_price_difference)} (за {days_remaining} дн.)',
                 balance=texts.format_price(db_user.balance_kopeks),
                 missing=texts.format_price(missing_kopeks),
             )
@@ -767,9 +768,9 @@ async def confirm_switch_traffic(callback: types.CallbackQuery, db_user: User, d
             return
 
         action_text = f'увеличить до {texts.format_traffic(new_traffic_gb)}'
-        cost_text = f'Доплата: {texts.format_price(total_price_difference)} (за {months_remaining} мес)'
+        cost_text = f'Доплата: {texts.format_price(total_price_difference)} (за {days_remaining} дн.)'
         if discount_savings_per_month > 0:
-            total_discount_savings = discount_savings_per_month * months_remaining
+            total_discount_savings = int(discount_savings_per_month * days_remaining / 30)
             cost_text += f' (скидка {traffic_discount_percent}%: -{texts.format_price(total_discount_savings)})'
     else:
         total_price_difference = 0
@@ -811,13 +812,13 @@ async def execute_switch_traffic(callback: types.CallbackQuery, db_user: User, d
                 await callback.answer('⚠️ Ошибка списания средств', show_alert=True)
                 return
 
-            months_remaining = get_remaining_months(subscription.end_date)
+            days_remaining = max(1, (subscription.end_date - datetime.now(UTC)).days)
             await create_transaction(
                 db=db,
                 user_id=db_user.id,
                 type=TransactionType.SUBSCRIPTION_PAYMENT,
                 amount_kopeks=price_difference,
-                description=f'Переключение трафика с {current_traffic}GB на {new_traffic_gb}GB на {months_remaining} мес',
+                description=f'Переключение трафика с {current_traffic}GB на {new_traffic_gb}GB за {days_remaining} дн.',
             )
 
         subscription.traffic_limit_gb = new_traffic_gb

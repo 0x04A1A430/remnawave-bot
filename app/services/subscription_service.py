@@ -14,7 +14,6 @@ from app.database.models import PromoGroup, Subscription, SubscriptionStatus, Us
 from app.external.remnawave_api import RemnaWaveAPI, RemnaWaveAPIError, RemnaWaveUser, TrafficLimitStrategy, UserStatus
 from app.utils.pricing_utils import (
     calculate_months_from_days,
-    get_remaining_months,
 )
 from app.utils.subscription_utils import (
     resolve_hwid_device_limit_for_payload,
@@ -1406,8 +1405,9 @@ class SubscriptionService:
         if additional_server_ids is None:
             additional_server_ids = []
 
-        months_to_pay = get_remaining_months(subscription.end_date)
-        period_hint_days = months_to_pay * 30 if months_to_pay > 0 else None
+        now = datetime.now(UTC)
+        days_to_pay = max(1, (subscription.end_date - now).days)
+        period_hint_days = days_to_pay
 
         user = getattr(subscription, 'user', None)
         promo_group = user.promo_group if user else None
@@ -1424,15 +1424,15 @@ class SubscriptionService:
             )
             traffic_discount_per_month = traffic_price_per_month * traffic_discount_percent // 100
             discounted_traffic_per_month = traffic_price_per_month - traffic_discount_per_month
-            traffic_total_price = discounted_traffic_per_month * months_to_pay
+            traffic_total_price = int(discounted_traffic_per_month * days_to_pay / 30)
             total_price += traffic_total_price
             message = (
-                f'Трафик +{additional_traffic_gb}ГБ: {traffic_price_per_month / 100}₽/мес x {months_to_pay}'
+                f'Трафик +{additional_traffic_gb}ГБ: {traffic_price_per_month / 100}₽/мес x {days_to_pay} дн.'
                 f' = {traffic_total_price / 100}₽'
             )
             if traffic_discount_per_month > 0:
                 message += (
-                    f' (скидка {traffic_discount_percent}%: -{traffic_discount_per_month * months_to_pay / 100}₽)'
+                    f' (скидка {traffic_discount_percent}%: -{int(traffic_discount_per_month * days_to_pay / 30) / 100}₽)'
                 )
             logger.info(message)
 
@@ -1446,15 +1446,15 @@ class SubscriptionService:
             )
             devices_discount_per_month = devices_price_per_month * devices_discount_percent // 100
             discounted_devices_per_month = devices_price_per_month - devices_discount_per_month
-            devices_total_price = discounted_devices_per_month * months_to_pay
+            devices_total_price = int(discounted_devices_per_month * days_to_pay / 30)
             total_price += devices_total_price
             message = (
-                f'Устройства +{additional_devices}: {devices_price_per_month / 100}₽/мес x {months_to_pay}'
+                f'Устройства +{additional_devices}: {devices_price_per_month / 100}₽/мес x {days_to_pay} дн.'
                 f' = {devices_total_price / 100}₽'
             )
             if devices_discount_per_month > 0:
                 message += (
-                    f' (скидка {devices_discount_percent}%: -{devices_discount_per_month * months_to_pay / 100}₽)'
+                    f' (скидка {devices_discount_percent}%: -{int(devices_discount_per_month * days_to_pay / 30) / 100}₽)'
                 )
             logger.info(message)
 
@@ -1473,20 +1473,20 @@ class SubscriptionService:
                     )
                     server_discount_per_month = server_price_per_month * servers_discount_percent // 100
                     discounted_server_per_month = server_price_per_month - server_discount_per_month
-                    server_total_price = discounted_server_per_month * months_to_pay
+                    server_total_price = int(discounted_server_per_month * days_to_pay / 30)
                     total_price += server_total_price
                     message = (
-                        f'Сервер {server.display_name}: {server_price_per_month / 100}₽/мес x {months_to_pay}'
+                        f'Сервер {server.display_name}: {server_price_per_month / 100}₽/мес x {days_to_pay} дн.'
                         f' = {server_total_price / 100}₽'
                     )
                     if server_discount_per_month > 0:
                         message += (
                             f' (скидка {servers_discount_percent}%:'
-                            f' -{server_discount_per_month * months_to_pay / 100}₽)'
+                            f' -{int(server_discount_per_month * days_to_pay / 30) / 100}₽)'
                         )
                     logger.info(message)
 
-        logger.info('Итого доплата за мес: ₽', months_to_pay=months_to_pay, total_price=total_price / 100)
+        logger.info('Итого доплата за дн.: ₽', days_to_pay=days_to_pay, total_price=total_price / 100)
         return total_price
 
     def _gb_to_bytes(self, gb: int | None) -> int:

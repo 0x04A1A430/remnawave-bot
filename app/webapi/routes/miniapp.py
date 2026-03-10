@@ -94,7 +94,6 @@ from app.utils.pricing_utils import (
     apply_percentage_discount,
     calculate_prorated_price,
     format_period_description,
-    get_remaining_months,
 )
 from app.utils.promo_offer import get_user_active_promo_discount_percent
 from app.utils.subscription_utils import get_happ_cryptolink_redirect_link
@@ -4699,14 +4698,15 @@ def _get_addon_discount_percent_for_user(
 def _get_period_hint_from_subscription(
     subscription: Subscription | None,
 ) -> int | None:
-    if not subscription:
+    if not subscription or not subscription.end_date:
         return None
 
-    months_remaining = get_remaining_months(subscription.end_date)
-    if months_remaining <= 0:
+    now = datetime.now(UTC)
+    days_remaining = (subscription.end_date - now).days
+    if days_remaining <= 0:
         return None
 
-    return months_remaining * 30
+    return days_remaining
 
 
 def _validate_subscription_id(
@@ -4966,7 +4966,7 @@ async def _build_subscription_settings(
     subscription: Subscription,
 ) -> MiniAppSubscriptionSettings:
     period_hint_days = _get_period_hint_from_subscription(subscription)
-    months_remaining = get_remaining_months(subscription.end_date)
+    months_remaining = max(1, math.ceil((period_hint_days or 0) / 30))
     servers_discount = _get_addon_discount_percent_for_user(
         user,
         'servers',
@@ -5807,18 +5807,18 @@ async def update_subscription_servers_endpoint(
 
     cost_per_month = sum(int(catalog[uuid].get('discounted_per_month', 0)) for uuid in added)
     total_cost = 0
-    charged_months = 0
+    charged_days = 0
     if cost_per_month > 0:
-        total_cost, charged_months = calculate_prorated_price(
+        total_cost, charged_days = calculate_prorated_price(
             cost_per_month,
             subscription.end_date,
         )
     else:
-        charged_months = get_remaining_months(subscription.end_date)
+        charged_days = max(1, (subscription.end_date - datetime.now(UTC)).days)
 
     added_server_ids = [catalog[uuid].get('server_id') for uuid in added if catalog[uuid].get('server_id') is not None]
     added_server_prices = [
-        int(catalog[uuid].get('discounted_per_month', 0)) * charged_months
+        int(int(catalog[uuid].get('discounted_per_month', 0)) * charged_days / 30)
         for uuid in added
         if catalog[uuid].get('server_id') is not None
     ]
@@ -5836,7 +5836,7 @@ async def update_subscription_servers_endpoint(
     if total_cost > 0:
         added_names = [catalog[uuid].get('name', uuid) for uuid in added]
         description = (
-            f'Добавление серверов: {", ".join(added_names)} на {charged_months} мес'
+            f'Добавление серверов: {", ".join(added_names)} за {charged_days} дн.'
             if added_names
             else 'Изменение списка серверов'
         )
@@ -5991,8 +5991,8 @@ async def update_subscription_traffic_endpoint(
             },
         )
 
-    months_remaining = get_remaining_months(subscription.end_date)
-    period_hint_days = months_remaining * 30 if months_remaining > 0 else None
+    days_remaining = max(1, (subscription.end_date - datetime.now(UTC)).days)
+    period_hint_days = days_remaining
     traffic_discount = _get_addon_discount_percent_for_user(
         user,
         'traffic',
@@ -6015,7 +6015,7 @@ async def update_subscription_traffic_endpoint(
     total_price_difference = 0
 
     if price_difference_per_month > 0:
-        total_price_difference = price_difference_per_month * months_remaining
+        total_price_difference = max(100, int(price_difference_per_month * days_remaining / 30))
         if getattr(user, 'balance_kopeks', 0) < total_price_difference:
             missing = total_price_difference - getattr(user, 'balance_kopeks', 0)
             raise HTTPException(
@@ -6048,7 +6048,7 @@ async def update_subscription_traffic_endpoint(
             user_id=user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
             amount_kopeks=total_price_difference,
-            description=f'{description} на {months_remaining} мес',
+            description=f'{description} за {days_remaining} дн.',
         )
 
     subscription.traffic_limit_gb = new_traffic
@@ -6165,7 +6165,7 @@ async def update_subscription_devices_endpoint(
 
     devices_difference = new_devices - current_devices
     price_to_charge = 0
-    charged_months = 0
+    charged_days = 0
 
     if devices_difference > 0:
         current_chargeable = max(0, current_devices - settings.DEFAULT_DEVICE_LIMIT)
@@ -6173,8 +6173,8 @@ async def update_subscription_devices_endpoint(
         chargeable_diff = new_chargeable - current_chargeable
 
         price_per_month = chargeable_diff * tariff_device_price
-        months_remaining = get_remaining_months(subscription.end_date)
-        period_hint_days = months_remaining * 30 if months_remaining > 0 else None
+        days_remaining = max(1, (subscription.end_date - datetime.now(UTC)).days)
+        period_hint_days = days_remaining
         devices_discount = _get_addon_discount_percent_for_user(
             user,
             'devices',
@@ -6185,7 +6185,7 @@ async def update_subscription_devices_endpoint(
             price_per_month,
             devices_discount,
         )
-        price_to_charge, charged_months = calculate_prorated_price(
+        price_to_charge, charged_days = calculate_prorated_price(
             discounted_per_month,
             subscription.end_date,
         )
@@ -6222,7 +6222,7 @@ async def update_subscription_devices_endpoint(
             user_id=user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
             amount_kopeks=price_to_charge,
-            description=f'{description} на {charged_months or get_remaining_months(subscription.end_date)} мес',
+            description=f'{description} за {charged_days or max(1, (subscription.end_date - datetime.now(UTC)).days)} дн.',
         )
 
     if price_to_charge > 0:
@@ -7267,7 +7267,7 @@ async def purchase_traffic_topup_endpoint(
         base_price_kopeks = int(base_price_kopeks * (100 - traffic_discount_percent) / 100)
 
     # Пропорциональный расчет цены с учетом оставшегося времени подписки
-    final_price, months_charged = calculate_prorated_price(
+    final_price, days_charged = calculate_prorated_price(
         base_price_kopeks,
         subscription.end_date,
     )

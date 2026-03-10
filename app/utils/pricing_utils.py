@@ -18,14 +18,6 @@ def calculate_months_from_days(days: int) -> int:
     return max(1, round(days / 30))
 
 
-def get_remaining_months(end_date: datetime) -> int:
-    current_time = datetime.now(UTC)
-    if end_date <= current_time:
-        return 1
-
-    remaining_days = (end_date - current_time).days
-    return max(1, round(remaining_days / 30))
-
 
 def calculate_period_multiplier(period_days: int) -> tuple[int, float]:
     exact_months = period_days / 30
@@ -41,20 +33,28 @@ def calculate_period_multiplier(period_days: int) -> tuple[int, float]:
     return months_count, exact_months
 
 
-def calculate_prorated_price(monthly_price: int, end_date: datetime, min_charge_months: int = 1) -> tuple[int, int]:
-    months_remaining = get_remaining_months(end_date)
-    months_to_charge = max(min_charge_months, months_remaining)
+def calculate_prorated_price(monthly_price: int, end_date: datetime, min_charge_days: int = 30) -> tuple[int, int]:
+    """Calculate prorated price based on remaining days.
 
-    total_price = monthly_price * months_to_charge
+    Returns:
+        tuple of (total_price_kopeks, days_charged)
+    """
+    now = datetime.now(UTC)
+    days_remaining = max(1, (end_date - now).days)
+    days_to_charge = max(min_charge_days, days_remaining)
+
+    total_price = int(monthly_price * days_to_charge / 30)
+    if monthly_price > 0:
+        total_price = max(100, total_price)  # Минимум 1 рубль
 
     logger.debug(
-        'Расчет пропорциональной цены: ₽/мес × мес ₽',
+        'Расчет пропорциональной цены: ₽/мес × дн./30 = ₽',
         monthly_price=monthly_price / 100,
-        months_to_charge=months_to_charge,
+        days_to_charge=days_to_charge,
         total_price=total_price / 100,
     )
 
-    return total_price, months_to_charge
+    return total_price, days_to_charge
 
 
 def apply_percentage_discount(amount: int, percent: int) -> tuple[int, int]:
@@ -156,7 +156,6 @@ async def compute_simple_subscription_price(
         period_days=period_days,
     )
     base_discount = base_price_original * period_discount_percent // 100
-    base_price_original - base_discount
 
     traffic_discount_percent = resolve_discount_percent(
         user,
@@ -165,7 +164,6 @@ async def compute_simple_subscription_price(
         period_days=period_days,
     )
     traffic_discount = traffic_price_original * traffic_discount_percent // 100
-    traffic_price_original - traffic_discount
 
     devices_discount_percent = resolve_discount_percent(
         user,
@@ -174,7 +172,6 @@ async def compute_simple_subscription_price(
         period_days=period_days,
     )
     devices_discount = devices_price_original * devices_discount_percent // 100
-    devices_price_original - devices_discount
 
     servers_discount_percent = resolve_discount_percent(
         user,

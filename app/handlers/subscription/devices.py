@@ -27,7 +27,6 @@ from app.services.user_cart_service import user_cart_service
 from app.utils.pagination import paginate_list
 from app.utils.pricing_utils import (
     apply_percentage_discount,
-    get_remaining_months,
 )
 from app.utils.subscription_utils import (
     get_display_subscription_link,
@@ -551,13 +550,13 @@ async def execute_change_devices(callback: types.CallbackQuery, db_user: User, d
                 )
                 return
 
-            charged_months = get_remaining_months(subscription.end_date)
+            charged_days = max(1, (subscription.end_date - datetime.now(UTC)).days)
             await create_transaction(
                 db=db,
                 user_id=db_user.id,
                 type=TransactionType.SUBSCRIPTION_PAYMENT,
                 amount_kopeks=price,
-                description=f'Изменение устройств с {current_devices} до {new_devices_count} на {charged_months} мес',
+                description=f'Изменение устройств с {current_devices} до {new_devices_count} за {charged_days} дн.',
             )
 
         # Re-lock subscription after subtract_user_balance committed (released all locks)

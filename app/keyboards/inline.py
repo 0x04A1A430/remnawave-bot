@@ -1957,18 +1957,19 @@ def get_add_traffic_keyboard(
     discount_percent: int = 0,
 ) -> InlineKeyboardMarkup:
     from app.config import settings
-    from app.utils.pricing_utils import get_remaining_months
-
     texts = get_texts(language)
     language_code = (language or DEFAULT_LANGUAGE).split('-')[0].lower()
     use_russian_fallback = language_code in {'ru', 'fa'}
 
-    months_multiplier = 1
-    period_text = ''
+    # Считаем по дням (как в кабинете и подтверждении)
     if subscription_end_date:
-        months_multiplier = get_remaining_months(subscription_end_date)
-        if months_multiplier > 1:
-            period_text = f' (за {months_multiplier} мес)'
+        now = datetime.now(UTC)
+        days_left = max(1, (subscription_end_date - now).days)
+        price_multiplier = days_left / 30
+        period_text = f' (за {days_left} дн.)' if days_left > 1 else ' (за 1 день)'
+    else:
+        price_multiplier = 1
+        period_text = ''
 
     packages = settings.get_traffic_topup_packages()
     enabled_packages = [pkg for pkg in packages if pkg['enabled'] and pkg['price'] > 0]
@@ -1995,8 +1996,9 @@ def get_add_traffic_keyboard(
             price_per_month,
             discount_percent,
         )
-        total_price = discounted_per_month * months_multiplier
-        total_discount = discount_per_month * months_multiplier
+        total_price = int(discounted_per_month * price_multiplier)
+        total_price = max(100, total_price) if total_price > 0 else 0
+        total_discount = int(discount_per_month * price_multiplier)
 
         if gb == 0:
             if use_russian_fallback:
@@ -2094,30 +2096,18 @@ def get_change_devices_keyboard(
     tariff=None,  # Тариф для цены за устройство
 ) -> InlineKeyboardMarkup:
     from app.config import settings
-    from app.utils.pricing_utils import get_remaining_months
 
     texts = get_texts(language)
 
-    # Проверяем является ли тариф суточным
-    is_daily_tariff = tariff and getattr(tariff, 'is_daily', False)
-
-    # Для суточных тарифов считаем по дням, для обычных - по месяцам
-    if is_daily_tariff and subscription_end_date:
-        # Суточный тариф: цена за оставшиеся дни (обычно 1 день)
+    # Считаем по дням (как в кабинете и подтверждении)
+    if subscription_end_date:
         now = datetime.now(UTC)
         days_left = max(1, (subscription_end_date - now).days)
-        # Множитель = days_left / 30 (как в кабинете)
         price_multiplier = days_left / 30
         period_text = f' (за {days_left} дн.)' if days_left > 1 else ' (за 1 день)'
     else:
-        # Обычный тариф: цена за оставшиеся месяцы
-        months_multiplier = 1
+        price_multiplier = 1
         period_text = ''
-        if subscription_end_date:
-            months_multiplier = get_remaining_months(subscription_end_date)
-            if months_multiplier > 1:
-                period_text = f' (за {months_multiplier} мес)'
-        price_multiplier = months_multiplier
 
     # Используем цену из тарифа если есть, иначе глобальную настройку
     tariff_device_price = getattr(tariff, 'device_price_kopeks', None) if tariff else None
@@ -2266,18 +2256,21 @@ def get_manage_countries_keyboard(
     subscription_end_date: datetime = None,
     discount_percent: int = 0,
 ) -> InlineKeyboardMarkup:
-    from app.utils.pricing_utils import get_remaining_months
-
     texts = get_texts(language)
 
-    months_multiplier = 1
+    # Считаем по дням (как в кабинете и подтверждении)
     if subscription_end_date:
-        months_multiplier = get_remaining_months(subscription_end_date)
+        now = datetime.now(UTC)
+        days_left = max(1, (subscription_end_date - now).days)
+        price_multiplier = days_left / 30
         logger.info(
-            '🔍 Расчет для управления странами: осталось месяцев до',
-            months_multiplier=months_multiplier,
+            '🔍 Расчет для управления странами: осталось дней до',
+            days_left=days_left,
             subscription_end_date=subscription_end_date,
         )
+    else:
+        price_multiplier = 1
+        days_left = 30
 
     buttons = []
     total_cost = 0
@@ -2302,26 +2295,28 @@ def get_manage_countries_keyboard(
                 icon = '➖'
         elif uuid in selected:
             icon = '➕'
-            total_cost += discounted_per_month * months_multiplier
+            total_cost += int(discounted_per_month * price_multiplier)
         else:
             icon = '⚪'
 
         if uuid not in current_subscription_countries and uuid in selected:
-            total_price = discounted_per_month * months_multiplier
-            if months_multiplier > 1:
-                price_text = f' ({discounted_per_month // 100}₽/мес × {months_multiplier} = {total_price // 100}₽)'
+            total_price = int(discounted_per_month * price_multiplier)
+            total_price = max(100, total_price) if total_price > 0 else 0
+            if days_left > 30:
+                price_text = f' ({discounted_per_month // 100}₽/мес × {days_left} дн. = {total_price // 100}₽)'
                 logger.info(
-                    '🔍 Сервер : ₽/мес × мес = ₽ (скидка ₽)',
+                    '🔍 Сервер : ₽/мес × дн./30 = ₽ (скидка ₽)',
                     name=name,
                     discounted_per_month=discounted_per_month / 100,
-                    months_multiplier=months_multiplier,
+                    days_left=days_left,
                     total_price=total_price / 100,
-                    discount_per_month=(discount_per_month * months_multiplier) / 100,
+                    discount_per_month=int(discount_per_month * price_multiplier) / 100,
                 )
             else:
                 price_text = f' ({total_price // 100}₽)'
-            if discount_percent > 0 and discount_per_month * months_multiplier > 0:
-                price_text += f' (скидка {discount_percent}%: -{(discount_per_month * months_multiplier) // 100}₽)'
+            total_discount_for_server = int(discount_per_month * price_multiplier)
+            if discount_percent > 0 and total_discount_for_server > 0:
+                price_text += f' (скидка {discount_percent}%: -{total_discount_for_server // 100}₽)'
             display_name = f'{icon} {name}{price_text}'
         else:
             display_name = f'{icon} {name}'
