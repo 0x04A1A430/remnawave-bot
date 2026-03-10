@@ -293,7 +293,7 @@ async def create_gift_purchase(
 
         # Build return URL for after payment
         cabinet_base = (settings.CABINET_URL or '').rstrip('/')
-        return_url = f'{cabinet_base}/gift/result?token={purchase.token}'
+        return_url = f'{cabinet_base}/gift/result?token={purchase.token[:12]}'
 
         from app.services.payment_service import PaymentService
 
@@ -332,7 +332,7 @@ async def create_gift_purchase(
 
         return GiftPurchaseResponse(
             status='created',
-            purchase_token=purchase.token,
+            purchase_token=purchase.token[:12],
             payment_url=payment_url,
             warning=recipient_warning,
         )
@@ -473,7 +473,7 @@ async def get_pending_gifts(
 
         pending.append(
             PendingGiftResponse(
-                token=p.token,
+                token=p.token[:12],
                 tariff_name=p.tariff.name if p.tariff else None,
                 period_days=p.period_days,
                 gift_message=p.gift_message,
@@ -492,10 +492,15 @@ async def get_gift_purchase_status(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get the status of a cabinet gift purchase."""
+    if len(token) >= 64:
+        token_filter = GuestPurchase.token == token
+    else:
+        token_filter = GuestPurchase.token.startswith(token)
+
     result = await db.execute(
         select(GuestPurchase)
         .options(selectinload(GuestPurchase.tariff))
-        .where(GuestPurchase.token == token)
+        .where(token_filter)
     )
     purchase = result.scalars().first()
     if purchase is None:
@@ -523,7 +528,7 @@ async def get_gift_purchase_status(
         status=purchase.status,
         is_gift=True,
         is_code_only=is_code_only,
-        purchase_token=purchase.token if is_code_only else None,
+        purchase_token=purchase.token[:12] if is_code_only else None,
         recipient_contact_value=recipient_contact_value,
         gift_message=purchase.gift_message,
         tariff_name=tariff_name,
@@ -558,7 +563,7 @@ async def get_sent_gifts(
 
         sent.append(
             SentGiftResponse(
-                token=p.token,
+                token=p.token[:12],
                 tariff_name=p.tariff.name if p.tariff else None,
                 period_days=p.period_days,
                 device_limit=p.tariff.device_limit if p.tariff else 1,
@@ -601,7 +606,7 @@ async def get_received_gifts(
 
         received.append(
             ReceivedGiftResponse(
-                token=p.token,
+                token=p.token[:12],
                 tariff_name=p.tariff.name if p.tariff else None,
                 period_days=p.period_days,
                 device_limit=p.tariff.device_limit if p.tariff else 1,

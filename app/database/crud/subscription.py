@@ -190,6 +190,7 @@ async def create_paid_subscription(
     update_server_counters: bool = False,
     is_trial: bool = False,
     tariff_id: int | None = None,
+    commit: bool = True,
 ) -> Subscription:
     end_date = datetime.now(UTC) + timedelta(days=duration_days)
 
@@ -211,8 +212,11 @@ async def create_paid_subscription(
     )
 
     db.add(subscription)
-    await db.commit()
-    await db.refresh(subscription)
+    if commit:
+        await db.commit()
+        await db.refresh(subscription)
+    else:
+        await db.flush()
 
     logger.info(
         '💎 Создана платная подписка для пользователя ID: статус',
@@ -265,6 +269,7 @@ async def replace_subscription(
     autopay_enabled: bool | None = None,
     autopay_days_before: int | None = None,
     update_server_counters: bool = False,
+    commit: bool = True,
 ) -> Subscription:
     """Перезаписывает параметры существующей подписки пользователя."""
 
@@ -297,8 +302,11 @@ async def replace_subscription(
     subscription.autopay_days_before = new_autopay_days_before
     subscription.updated_at = current_time
 
-    await db.commit()
-    await db.refresh(subscription)
+    if commit:
+        await db.commit()
+        await db.refresh(subscription)
+    else:
+        await db.flush()
 
     # Очищаем старые записи об отправленных уведомлениях при замене подписки
     # (аналогично extend_subscription), чтобы новые уведомления отправлялись корректно

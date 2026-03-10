@@ -831,10 +831,9 @@ async def activate_purchase(db: AsyncSession, purchase_token: str, *, skip_notif
                 connected_squads=tariff.allowed_squads or [],
                 is_trial=False,
                 update_server_counters=True,
+                commit=False,
             )
             subscription.tariff_id = tariff.id
-            await db.commit()
-            await db.refresh(subscription, ['tariff'])
         else:
             subscription = await create_paid_subscription(
                 db=db,
@@ -845,6 +844,7 @@ async def activate_purchase(db: AsyncSession, purchase_token: str, *, skip_notif
                 connected_squads=tariff.allowed_squads or [],
                 tariff_id=tariff.id,
                 update_server_counters=True,
+                commit=False,
             )
 
         await subscription_service.create_remnawave_user(db, subscription)
@@ -856,6 +856,8 @@ async def activate_purchase(db: AsyncSession, purchase_token: str, *, skip_notif
         purchase.delivered_at = datetime.now(UTC)
         if user.auth_type == 'email' and not purchase.is_gift:
             purchase.auto_login_token = create_auto_login_token(user.id)
+
+        # Single atomic commit: subscription + purchase status + user changes
         await db.commit()
         await db.refresh(purchase, attribute_names=['landing', 'user'])
 
@@ -943,5 +945,51 @@ async def retry_stuck_paid_purchases(
                 logger.info('Retried stuck purchase successfully', token_prefix=token[:5])
         except Exception:
             logger.exception('Failed to retry stuck purchase', token_prefix=token[:5])
+
+    return retried
+
+
+async def retry_stuck_pending_activation(
+    db: AsyncSession,
+    stale_minutes: int = 10,
+    limit: int = 10,
+    max_age_hours: int = 24,
+) -> int:
+    """Retry activation for purchases stuck in PENDING_ACTIVATION status.
+
+    This handles the case where activate_purchase() failed after the status
+    was already transitioned to PENDING_ACTIVATION (e.g., Remnawave panel was
+    temporarily down). Each retry runs in an isolated session.
+    """
+    from app.database.database import AsyncSessionLocal
+
+    cutoff = datetime.now(UTC) - timedelta(minutes=stale_minutes)
+    max_age = datetime.now(UTC) - timedelta(hours=max_age_hours)
+
+    result = await db.execute(
+        select(GuestPurchase.token)
+        .where(
+            GuestPurchase.status == GuestPurchaseStatus.PENDING_ACTIVATION.value,
+            or_(GuestPurchase.updated_at < cutoff, GuestPurchase.updated_at.is_(None)),
+            or_(GuestPurchase.updated_at > max_age, GuestPurchase.updated_at.is_(None)),
+            GuestPurchase.user_id.isnot(None),
+        )
+        .order_by(GuestPurchase.updated_at.asc().nulls_first())
+        .limit(limit)
+    )
+    tokens = result.scalars().all()
+
+    if not tokens:
+        return 0
+
+    retried = 0
+    for token in tokens:
+        try:
+            async with AsyncSessionLocal() as retry_db:
+                await activate_purchase(retry_db, token)
+                retried += 1
+                logger.info('Retried stuck pending_activation successfully', token_prefix=token[:5])
+        except Exception:
+            logger.exception('Failed to retry stuck pending_activation', token_prefix=token[:5])
 
     return retried

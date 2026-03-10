@@ -114,7 +114,7 @@ async def _activate_pending_gift_after_registration(
             # Transition PAID → PENDING_ACTIVATION so activate_purchase() accepts it
             if gift_purchase.status == GuestPurchaseStatus.PAID.value:
                 gift_purchase.status = GuestPurchaseStatus.PENDING_ACTIVATION.value
-            await db.commit()
+            await db.flush()
             await svc_activate(db, gift_purchase.token, skip_notification=True)
             tariff_name = gift_purchase.tariff.name if gift_purchase.tariff else ''
             await answer_func(
