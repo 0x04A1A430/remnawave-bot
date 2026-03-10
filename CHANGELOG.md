@@ -1,5 +1,28 @@
 # Changelog
 
+## [3.28.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.27.0...v3.28.0) (2026-03-09)
+
+
+### New Features
+
+* add cabinet gift subscription API routes and schemas ([6a61b09](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/6a61b095755885ff8973eb9ac4422740d07e0306))
+* add cabinet menu layout editor with row arrangement, custom URL buttons, and drag-and-drop reordering ([dd8d7f6](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/dd8d7f69203490553d15dcdad6dda28fab02d593))
+* add CABINET_GIFT_ENABLED branding toggle ([759bfe1](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/759bfe1bdb3a3d3f917334fd32d0ea2f5be5d1f0))
+* add open_in setting for custom buttons (external browser / webapp) ([497a8ee](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/497a8ee5b528cf80d7042a7eec62369b6a327339))
+* add source and buyer_user_id fields to GuestPurchase model ([0936d4a](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/0936d4a7f651a1fcef8c2f86818320af3764b423))
+* implement gateway payment for gifts, persist recipient warning ([cd04f3b](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/cd04f3b622444f45e2edf4a92da581f3d1f79b67))
+
+
+### Bug Fixes
+
+* enforce HTTPS for webapp mode, deduplicate keyboard builder, fix long line ([69dbd6a](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/69dbd6a2df4cf5e0dd7156ca0f3beb53c4a061af))
+* harden gift subscription feature after multi-agent review ([6a4140e](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/6a4140e3e203beb20cc56aa9c65dfed70f0a12d7))
+* loyalty tiers current status based on spending, not assigned group ([b815abf](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/b815abf2b11e32eb658f9a8a63ae902bc0db46f4))
+* negate GIFT_PAYMENT amounts and remove dead code ([f80b058](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/f80b0583804f27c322a4eb27f0613163ca1f97e9))
+* normalize threshold 0→NULL in create_promo_group for consistency ([b9089e6](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/b9089e693f823e3b8618d08329ccba559592dfa3))
+* payment gateway issues — YooKassa polling, PAL24 card 500 ([95a32e8](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/95a32e8574320eeba9276e44551a2f1207ae1e8b))
+* support Telegram OIDC id_token in account linking endpoint ([680c22c](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/680c22c0179253d24f7f89e115a283dac92f9a49))
+
 ## [3.27.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.26.0...v3.27.0) (2026-03-09)
 
 
