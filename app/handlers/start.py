@@ -107,6 +107,7 @@ async def _activate_pending_gift_after_registration(
                 GuestPurchaseStatus.PAID.value,
             )
             and (gift_purchase.user_id is None or gift_purchase.user_id == user.id)
+            and gift_purchase.buyer_user_id != user.id  # prevent self-activation
         ):
             if gift_purchase.user_id is None:
                 gift_purchase.user_id = user.id

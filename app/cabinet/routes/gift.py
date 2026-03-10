@@ -665,6 +665,13 @@ async def activate_gift_by_code(
             detail='Gift not found',
         )
 
+    # Prevent self-activation: buyer cannot activate their own gift
+    if purchase.buyer_user_id is not None and purchase.buyer_user_id == user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Cannot activate your own gift',
+        )
+
     if purchase.status == GuestPurchaseStatus.DELIVERED.value:
         return ActivateGiftResponse(
             status='activated',
