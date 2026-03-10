@@ -633,54 +633,9 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
                 logger.error('Ошибка отправки уведомления о рекламной кампании', error=e)
 
         # Auto-activate pending gift if deep link contained GIFTCODE_
-        current_state_data = await state.get_data()
-        pending_gift_token = current_state_data.get('pending_gift_token')
-        if pending_gift_token and user:
-            try:
-                from sqlalchemy import select
-                from sqlalchemy.orm import selectinload
-
-                from app.services.guest_purchase_service import activate_purchase as svc_activate
-
-                gift_result = await db.execute(
-                    select(GuestPurchase)
-                    .options(selectinload(GuestPurchase.tariff))
-                    .where(GuestPurchase.token == pending_gift_token)
-                    .with_for_update()
-                )
-                gift_purchase = gift_result.scalars().first()
-                if (
-                    gift_purchase
-                    and gift_purchase.is_gift
-                    and gift_purchase.status
-                    in (
-                        GuestPurchaseStatus.PENDING_ACTIVATION.value,
-                        GuestPurchaseStatus.PAID.value,
-                    )
-                    and (gift_purchase.user_id is None or gift_purchase.user_id == user.id)
-                ):
-                    # Use savepoint so activation failure does not corrupt the parent session
-                    async with db.begin_nested():
-                        if gift_purchase.user_id is None:
-                            gift_purchase.user_id = user.id
-                        if gift_purchase.status == GuestPurchaseStatus.PAID.value:
-                            gift_purchase.status = GuestPurchaseStatus.PENDING_ACTIVATION.value
-                        await db.flush()
-                        await svc_activate(db, pending_gift_token, skip_notification=True)
-                    tariff_name = gift_purchase.tariff.name if gift_purchase.tariff else ''
-                    await message.answer(
-                        f'🎁 <b>Подарок активирован!</b>\n'
-                        f'{tariff_name} — {gift_purchase.period_days} дн.\n\n'
-                        f'Ваша подписка обновлена.',
-                        parse_mode=ParseMode.HTML,
-                    )
-            except Exception:
-                logger.exception(
-                    'Failed to auto-activate gift from deep link',
-                    token_prefix=pending_gift_token[:5],
-                )
-            finally:
-                await state.update_data(pending_gift_token=None)
+        if user:
+            await _activate_pending_gift_after_registration(db, state, user, message.answer)
+            await state.update_data(pending_gift_token=None)
 
         has_active_subscription, subscription_is_active = _calculate_subscription_flags(user.subscription)
 
