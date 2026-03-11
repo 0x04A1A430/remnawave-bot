@@ -6,6 +6,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import Integer, and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database.crud.campaign import get_campaign_registration_by_user
 from app.database.crud.subscription import (
@@ -25,6 +26,7 @@ from app.database.crud.user import (
     subtract_user_balance,
 )
 from app.database.models import (
+    GuestPurchase,
     PromoGroup,
     ReferralEarning,
     Subscription,
@@ -40,6 +42,8 @@ from app.utils.timezone import panel_datetime_to_utc
 
 from ..dependencies import get_cabinet_db, require_permission
 from ..schemas.users import (
+    AdminUserGiftItem,
+    AdminUserGiftsResponse,
     DeleteDeviceResponse,
     DeleteUserRequest,
     DeleteUserResponse,
@@ -2803,3 +2807,118 @@ async def sync_user_to_panel(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f'Sync error: {e!s}',
         )
+
+
+# === User Gifts ===
+
+
+@router.get('/{user_id}/gifts', response_model=AdminUserGiftsResponse)
+async def get_user_gifts(
+    user_id: int,
+    admin: User = Depends(require_permission('users:read')),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> AdminUserGiftsResponse:
+    """Get all gift subscriptions sent and received by user."""
+    from sqlalchemy.orm import noload
+
+    # Lightweight existence check (avoids eager-loading all User relationships)
+    user_exists = await db.execute(select(User.id).where(User.id == user_id))
+    if not user_exists.scalar_one_or_none():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
+
+    # True totals via COUNT queries
+    sent_total = (
+        await db.execute(
+            select(func.count(GuestPurchase.id)).where(
+                GuestPurchase.buyer_user_id == user_id,
+                GuestPurchase.is_gift.is_(True),
+            )
+        )
+    ).scalar() or 0
+
+    received_total = (
+        await db.execute(
+            select(func.count(GuestPurchase.id)).where(
+                GuestPurchase.user_id == user_id,
+                GuestPurchase.is_gift.is_(True),
+            )
+        )
+    ).scalar() or 0
+
+    # Sent gifts (user is buyer) — suppress unneeded relationships
+    sent_result = await db.execute(
+        select(GuestPurchase)
+        .options(
+            selectinload(GuestPurchase.tariff),
+            selectinload(GuestPurchase.user),
+            noload(GuestPurchase.buyer),
+            noload(GuestPurchase.landing),
+        )
+        .where(
+            GuestPurchase.buyer_user_id == user_id,
+            GuestPurchase.is_gift.is_(True),
+        )
+        .order_by(GuestPurchase.created_at.desc())
+        .limit(200)
+    )
+    sent_purchases = sent_result.scalars().all()
+
+    # Received gifts (user is recipient) — suppress unneeded relationships
+    received_result = await db.execute(
+        select(GuestPurchase)
+        .options(
+            selectinload(GuestPurchase.tariff),
+            selectinload(GuestPurchase.buyer),
+            noload(GuestPurchase.user),
+            noload(GuestPurchase.landing),
+        )
+        .where(
+            GuestPurchase.user_id == user_id,
+            GuestPurchase.is_gift.is_(True),
+        )
+        .order_by(GuestPurchase.created_at.desc())
+        .limit(200)
+    )
+    received_purchases = received_result.scalars().all()
+
+    sent_items = [_build_gift_item(p, receiver=p.user) for p in sent_purchases]
+    received_items = [_build_gift_item(p, buyer=p.buyer) for p in received_purchases]
+
+    return AdminUserGiftsResponse(
+        sent=sent_items,
+        received=received_items,
+        sent_total=sent_total,
+        received_total=received_total,
+    )
+
+
+def _build_gift_item(
+    p: GuestPurchase,
+    receiver: User | None = None,
+    buyer: User | None = None,
+) -> AdminUserGiftItem:
+    """Build an admin gift item from a GuestPurchase."""
+    tariff_name = p.tariff.name if p.tariff else None
+    device_limit = p.tariff.device_limit if p.tariff else 1
+    return AdminUserGiftItem(
+        id=p.id,
+        token=p.token[:12],
+        status=p.status,
+        tariff_name=tariff_name,
+        period_days=p.period_days,
+        device_limit=device_limit,
+        amount_kopeks=p.amount_kopeks,
+        payment_method=p.payment_method,
+        gift_recipient_type=p.gift_recipient_type,
+        gift_recipient_value=p.gift_recipient_value,
+        gift_message=p.gift_message,
+        buyer_user_id=p.buyer_user_id,
+        buyer_username=buyer.username if buyer else None,
+        buyer_full_name=buyer.full_name if buyer else None,
+        receiver_user_id=p.user_id,
+        receiver_username=receiver.username if receiver else None,
+        receiver_full_name=receiver.full_name if receiver else None,
+        created_at=p.created_at,
+        paid_at=p.paid_at,
+        delivered_at=p.delivered_at,
+    )
