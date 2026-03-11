@@ -1,5 +1,20 @@
 # Changelog
 
+## [3.30.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.29.0...v3.30.0) (2026-03-11)
+
+
+### New Features
+
+* add gifts section to admin user detail API ([bca8bab](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/bca8bab4336b2583da9be8c642985e6a0151e33d))
+* add promo group and promo offer discounts to gift subscriptions ([2fd0f6a](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/2fd0f6aa4eb62f704208c1e56a6542d3967e7867))
+
+
+### Bug Fixes
+
+* record transactions for free tariff switches and admin tariff changes ([864a4ed](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/864a4ed7005195ff3be3a8bb2e7666bc5a7f3e4e))
+* reset subscription for paid users, trial-to-paid tariff conversion, gift purchase MissingGreenlet ([e67b8e4](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/e67b8e448e5396ee6daa8c6278bb5a0b313dda74))
+* use keyword args for Path.mkdir in asyncio.to_thread ([2879996](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/287999645506a49b6693a184757598e1cdceb4d8))
+
 ## [3.29.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.28.1...v3.29.0) (2026-03-10)
 
 
