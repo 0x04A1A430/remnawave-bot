@@ -1219,10 +1219,10 @@ class User(Base):
 
     def get_primary_promo_group(self):
         """Возвращает промогруппу с максимальным приоритетом."""
-        if not self.user_promo_groups:
-            return getattr(self, 'promo_group', None)
-
         try:
+            if not self.user_promo_groups:
+                return getattr(self, 'promo_group', None)
+
             # Сортируем по приоритету группы (убывание), затем по ID группы
             # Используем getattr для защиты от ленивой загрузки
             sorted_groups = sorted(
@@ -1234,7 +1234,7 @@ class User(Base):
             if sorted_groups and sorted_groups[0].promo_group:
                 return sorted_groups[0].promo_group
         except Exception:
-            # Если возникла ошибка (например, ленивая загрузка), fallback на старую связь
+            # Если возникла ошибка (например, ленивая загрузка в async), fallback на старую связь
             pass
 
         # Fallback на старую связь если новая пустая или возникла ошибка

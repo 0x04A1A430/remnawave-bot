@@ -4350,6 +4350,16 @@ async def switch_tariff(
             description=description,
             payment_method=PaymentMethod.BALANCE,
         )
+    else:
+        # Free switch (downgrade) — record in history
+        description = f"Переход на тариф '{new_tariff.name}'"
+        await create_transaction(
+            db=db,
+            user_id=user.id,
+            type=TransactionType.SUBSCRIPTION_PAYMENT,
+            amount_kopeks=0,
+            description=description,
+        )
 
     # Update subscription
     old_tariff_name = current_tariff.name if current_tariff else 'Unknown'

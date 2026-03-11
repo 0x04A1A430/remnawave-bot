@@ -696,3 +696,40 @@ class DisableUserResponse(BaseModel):
     panel_deactivated: bool = False
     user_blocked: bool = False
     panel_error: str | None = None
+
+
+# === Gifts ===
+
+
+class AdminUserGiftItem(BaseModel):
+    """Gift item for admin user detail view."""
+
+    id: int
+    token: str
+    status: str
+    tariff_name: str | None = None
+    period_days: int
+    device_limit: int = 1
+    amount_kopeks: int
+    payment_method: str | None = None
+    gift_recipient_type: str | None = None
+    gift_recipient_value: str | None = None
+    gift_message: str | None = None
+    buyer_user_id: int | None = None
+    buyer_username: str | None = None
+    buyer_full_name: str | None = None
+    receiver_user_id: int | None = None
+    receiver_username: str | None = None
+    receiver_full_name: str | None = None
+    created_at: datetime | None = None
+    paid_at: datetime | None = None
+    delivered_at: datetime | None = None
+
+
+class AdminUserGiftsResponse(BaseModel):
+    """Response with sent and received gifts for admin user detail."""
+
+    sent: list[AdminUserGiftItem] = []
+    received: list[AdminUserGiftItem] = []
+    sent_total: int = 0
+    received_total: int = 0

@@ -45,6 +45,9 @@ class GiftConfigResponse(BaseModel):
     payment_methods: list[GiftConfigPaymentMethod] = []
     balance_kopeks: int = 0
     currency_symbol: str = '\u20bd'
+    promo_group_name: str | None = None
+    active_discount_percent: int | None = None
+    active_discount_expires_at: datetime | None = None
 
 
 class GiftPurchaseRequest(BaseModel):

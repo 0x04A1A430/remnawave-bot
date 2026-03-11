@@ -78,8 +78,8 @@ class LogRotationService:
 
     async def initialize(self) -> None:
         """Создать необходимые директории."""
-        await asyncio.to_thread(self.current_dir.mkdir, True, True)
-        await asyncio.to_thread(self.archive_dir.mkdir, True, True)
+        await asyncio.to_thread(lambda: self.current_dir.mkdir(parents=True, exist_ok=True))
+        await asyncio.to_thread(lambda: self.archive_dir.mkdir(parents=True, exist_ok=True))
 
     async def start(self) -> None:
         """Запустить сервис ротации."""
