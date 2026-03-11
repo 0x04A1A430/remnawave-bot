@@ -15,7 +15,15 @@ from app.database.crud.system_setting import get_setting_value
 from app.database.crud.tariff import get_tariff_by_id
 from app.database.crud.transaction import create_transaction, emit_transaction_side_effects
 from app.database.crud.user import subtract_user_balance
-from app.database.models import GuestPurchase, GuestPurchaseStatus, PaymentMethod, Tariff, TransactionType, User
+from app.database.models import (
+    GuestPurchase,
+    GuestPurchaseStatus,
+    PaymentMethod,
+    Tariff,
+    TransactionType,
+    User,
+    UserPromoGroup,
+)
 from app.services.guest_purchase_service import (
     GuestPurchaseError,
     create_purchase,
@@ -169,9 +177,7 @@ async def get_gift_config(
         promo_group_name=promo_group_name,
         active_discount_percent=promo_offer_discount_percent if promo_offer_discount_percent > 0 else None,
         active_discount_expires_at=(
-            getattr(user, 'promo_offer_discount_expires_at', None)
-            if promo_offer_discount_percent > 0
-            else None
+            getattr(user, 'promo_offer_discount_expires_at', None) if promo_offer_discount_percent > 0 else None
         ),
     )
 
@@ -250,7 +256,14 @@ async def create_gift_purchase(
 
     # Lock user row to prevent concurrent promo offer double-spend
     locked_result = await db.execute(
-        select(User).where(User.id == user.id).with_for_update().execution_options(populate_existing=True)
+        select(User)
+        .options(
+            selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
+            selectinload(User.promo_group),
+        )
+        .where(User.id == user.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
     )
     user = locked_result.scalar_one()
 

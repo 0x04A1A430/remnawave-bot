@@ -1126,6 +1126,13 @@ async def update_user_subscription(
         if tariff.allowed_squads:
             subscription.connected_squads = tariff.allowed_squads
 
+        # Convert trial subscription to paid when switching to a non-trial tariff
+        if subscription.is_trial and not tariff.is_trial_available:
+            subscription.is_trial = False
+            if subscription.end_date and subscription.end_date > datetime.now(UTC):
+                subscription.status = SubscriptionStatus.ACTIVE.value
+            logger.info('Converted trial subscription to paid', user_id=user_id, tariff_name=tariff.name)
+
         # Сбрасываем докупленный трафик при смене тарифа
         from sqlalchemy import delete as sql_delete
 
@@ -2010,21 +2017,6 @@ async def reset_user_subscription(
         return ResetSubscriptionResponse(
             success=True,
             message='User has no subscription to reset',
-            subscription_deleted=False,
-            panel_deactivated=False,
-        )
-
-    from app.database.crud.subscription import is_active_paid_subscription
-
-    if is_active_paid_subscription(user.subscription):
-        logger.info(
-            '⏭️ Пропуск сброса подписки: у пользователя активная оплаченная подписка',
-            user_id=user_id,
-            remnawave_uuid=user.remnawave_uuid,
-        )
-        return ResetSubscriptionResponse(
-            success=False,
-            message='Cannot reset active paid subscription. Subscription is still active and paid.',
             subscription_deleted=False,
             panel_deactivated=False,
         )
