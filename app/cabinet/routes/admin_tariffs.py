@@ -445,7 +445,9 @@ async def update_existing_tariff(
     # Auto-sync squads to active subscriptions in Remnawave when squads changed
     new_squads = tariff.allowed_squads or []
     squads_changed = request.allowed_squads is not None and sorted(old_squads) != sorted(new_squads)
-    ext_squad_changed = 'external_squad_uuid' in request.model_fields_set and tariff.external_squad_uuid != old_external_squad
+    ext_squad_changed = (
+        'external_squad_uuid' in request.model_fields_set and tariff.external_squad_uuid != old_external_squad
+    )
     if squads_changed or ext_squad_changed:
         asyncio.create_task(
             _background_sync_squads(tariff_id, admin.id),
@@ -798,9 +800,7 @@ async def sync_tariff_squads(
                     )
                     if consecutive_failures >= _SYNC_SQUADS_MAX_CONSECUTIVE_FAILURES:
                         aborted = True
-                        errors.append(
-                            f'Aborted after {_SYNC_SQUADS_MAX_CONSECUTIVE_FAILURES} consecutive failures'
-                        )
+                        errors.append(f'Aborted after {_SYNC_SQUADS_MAX_CONSECUTIVE_FAILURES} consecutive failures')
                     return 'error'
 
         await asyncio.gather(*[_sync_one(sub) for sub in subscriptions])

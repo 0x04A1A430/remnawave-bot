@@ -1136,7 +1136,9 @@ async def update_user_subscription(
         new_base = tariff.device_limit or 1
         new_total = new_base + extra_devices
         # Cap at new tariff's max_device_limit, falling back to global MAX_DEVICES_LIMIT
-        effective_max = tariff.max_device_limit or (settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else None)
+        effective_max = tariff.max_device_limit or (
+            settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else None
+        )
         if effective_max and new_total > effective_max:
             new_total = effective_max
         subscription.device_limit = new_total
@@ -1658,11 +1660,13 @@ async def update_user_promo_group(
     await db.execute(sa_delete(UserPromoGroup).where(UserPromoGroup.user_id == user_id))
 
     if new_promo_group_id is not None:
-        db.add(UserPromoGroup(
-            user_id=user_id,
-            promo_group_id=new_promo_group_id,
-            assigned_by='admin',
-        ))
+        db.add(
+            UserPromoGroup(
+                user_id=user_id,
+                promo_group_id=new_promo_group_id,
+                assigned_by='admin',
+            )
+        )
 
     await db.flush()
     await sync_user_primary_promo_group(db, user_id)
