@@ -385,11 +385,24 @@ async def renew_subscription(
             detail='No subscription found',
         )
 
+    # Validate period_days against available periods (prevent arbitrary periods)
+    subscription = user.subscription
+    if subscription.tariff_id and subscription.tariff and subscription.tariff.period_prices:
+        available_periods = [int(p) for p in subscription.tariff.period_prices.keys()]
+    else:
+        available_periods = settings.get_available_renewal_periods()
+
+    if request.period_days not in available_periods:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Selected renewal period is not available',
+        )
+
     # Unified pricing via PricingEngine
     pricing_engine = PricingEngine()
     pricing = await pricing_engine.calculate_renewal_price(
         db,
-        user.subscription,
+        subscription,
         request.period_days,
         user=user,
     )
