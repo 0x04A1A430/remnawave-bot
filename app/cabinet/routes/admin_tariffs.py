@@ -1,9 +1,12 @@
 """Admin routes for managing tariffs in cabinet."""
 
+import asyncio
+
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 from app.database.crud.server_squad import get_all_server_squads
 from app.database.crud.tariff import (
@@ -17,7 +20,7 @@ from app.database.crud.tariff import (
     set_tariff_promo_groups,
     update_tariff,
 )
-from app.database.models import PromoGroup, Subscription, Tariff, Transaction, TransactionType, User
+from app.database.models import PromoGroup, Subscription, SubscriptionStatus, Tariff, Transaction, TransactionType, User
 
 from ..dependencies import get_cabinet_db, require_permission
 from ..schemas.tariffs import (
@@ -26,6 +29,7 @@ from ..schemas.tariffs import (
     PromoGroupInfo,
     ServerInfo,
     ServerTrafficLimit,
+    SyncSquadsResponse,
     TariffCreateRequest,
     TariffDetailResponse,
     TariffListItem,
@@ -593,4 +597,141 @@ async def get_tariff_stats(
         trial_subscriptions=trial_count,
         revenue_kopeks=revenue_kopeks,
         revenue_rubles=revenue_kopeks / 100,
+    )
+
+
+_SYNC_SQUADS_CONCURRENCY = 5
+_SYNC_SQUADS_MAX_CONSECUTIVE_FAILURES = 10
+
+
+@router.post('/{tariff_id}/sync-squads', response_model=SyncSquadsResponse)
+async def sync_tariff_squads(
+    tariff_id: int,
+    admin: User = Depends(require_permission('tariffs:edit')),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Sync squads from tariff to all active/trial subscriptions in Remnawave panel.
+
+    Updates connected_squads and external_squad_uuid for every active or trial
+    subscription linked to this tariff.  Only users that have a remnawave_uuid
+    (i.e. already exist in the panel) are touched.
+    """
+    tariff = await get_tariff_by_id(db, tariff_id)
+    if not tariff:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='Tariff not found',
+        )
+
+    # Fetch active + trial subscriptions for this tariff whose users exist in Remnawave
+    result = await db.execute(
+        select(Subscription)
+        .join(User, Subscription.user_id == User.id)
+        .options(joinedload(Subscription.user))
+        .where(
+            and_(
+                Subscription.tariff_id == tariff_id,
+                Subscription.status.in_([SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value]),
+                User.remnawave_uuid.isnot(None),
+            )
+        )
+    )
+    subscriptions = list(result.unique().scalars().all())
+
+    if not subscriptions:
+        return SyncSquadsResponse(
+            tariff_id=tariff_id,
+            tariff_name=tariff.name,
+            total_subscriptions=0,
+            updated_count=0,
+            failed_count=0,
+            skipped_count=0,
+        )
+
+    new_squads = tariff.allowed_squads or []
+    # None means "clear external squad" — intentional when tariff has none
+    ext_squad_uuid = tariff.external_squad_uuid
+
+    # Sync to Remnawave panel with concurrency limit and circuit breaker
+    from app.services.remnawave_service import RemnaWaveService
+
+    service = RemnaWaveService()
+    updated_count = 0
+    failed_count = 0
+    skipped_count = 0
+    consecutive_failures = 0
+    errors: list[str] = []
+    aborted = False
+
+    async with service.get_api_client() as api:
+        semaphore = asyncio.Semaphore(_SYNC_SQUADS_CONCURRENCY)
+
+        async def _sync_one(sub: Subscription) -> str:
+            nonlocal updated_count, failed_count, skipped_count, consecutive_failures, aborted
+
+            if aborted:
+                return 'skipped'
+
+            remnawave_uuid = sub.user.remnawave_uuid if sub.user else None
+            if not remnawave_uuid:
+                skipped_count += 1
+                return 'skipped'
+
+            async with semaphore:
+                if aborted:
+                    skipped_count += 1
+                    return 'skipped'
+
+                try:
+                    await api.update_user(
+                        uuid=remnawave_uuid,
+                        active_internal_squads=new_squads if new_squads else [],
+                        external_squad_uuid=ext_squad_uuid,
+                    )
+                    # Update local DB only on successful API call
+                    sub.connected_squads = new_squads
+                    updated_count += 1
+                    consecutive_failures = 0
+                    return 'ok'
+                except Exception as e:
+                    failed_count += 1
+                    consecutive_failures += 1
+                    errors.append(f'user_id={sub.user_id}: sync failed')
+                    logger.warning(
+                        'Failed to sync squads for user in Remnawave',
+                        user_id=sub.user_id,
+                        remnawave_uuid=remnawave_uuid,
+                        error=str(e),
+                    )
+                    if consecutive_failures >= _SYNC_SQUADS_MAX_CONSECUTIVE_FAILURES:
+                        aborted = True
+                        errors.append(
+                            f'Aborted after {_SYNC_SQUADS_MAX_CONSECUTIVE_FAILURES} consecutive failures'
+                        )
+                    return 'error'
+
+        await asyncio.gather(*[_sync_one(sub) for sub in subscriptions])
+
+    # Commit local DB changes only for successfully synced subscriptions
+    await db.commit()
+
+    logger.info(
+        'Admin synced squads for tariff',
+        admin_id=admin.id,
+        tariff_id=tariff_id,
+        tariff_name=tariff.name,
+        total=len(subscriptions),
+        updated=updated_count,
+        failed=failed_count,
+        skipped=skipped_count,
+    )
+
+    return SyncSquadsResponse(
+        tariff_id=tariff_id,
+        tariff_name=tariff.name,
+        total_subscriptions=len(subscriptions),
+        updated_count=updated_count,
+        failed_count=failed_count,
+        skipped_count=skipped_count,
+        errors=errors[:20],
     )
