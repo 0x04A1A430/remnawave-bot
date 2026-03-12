@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import PERIOD_PRICES, settings
+from app.services.pricing_engine import PricingEngine
 from app.database.crud.server_squad import get_server_squad_by_uuid
 from app.database.crud.subscription import (
     create_paid_subscription,
@@ -326,77 +327,37 @@ async def get_renewal_options(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get available subscription renewal options with prices."""
-    options = []
+    subscription = await get_subscription_by_user_id(db, user.id)
+    if not subscription:
+        return []
 
-    # В режиме тарифов берём цены из тарифа пользователя
-    tariff_prices = None
-    tariff_periods = None
-    extra_devices = 0
-    tariff_device_price = 0
-    if settings.is_tariffs_mode():
-        subscription = await get_subscription_by_user_id(db, user.id)
-        if subscription and subscription.tariff_id:
-            tariff = await get_tariff_by_id(db, subscription.tariff_id)
-            if tariff and tariff.period_prices:
-                tariff_prices = {int(k): v for k, v in tariff.period_prices.items()}
-                tariff_periods = sorted(tariff_prices.keys())
-                # Учитываем докупленные устройства сверх тарифа
-                extra_devices = max(0, (subscription.device_limit or 0) - (tariff.device_limit or 0))
-                if extra_devices > 0:
-                    tariff_device_price = (
-                        tariff.device_price_kopeks
-                        if tariff.device_price_kopeks is not None
-                        else settings.PRICE_PER_DEVICE
-                    )
-
-    # Используем периоды тарифа или стандартные
-    if tariff_periods:
-        periods = tariff_periods
+    # Determine available periods
+    if subscription.tariff_id and subscription.tariff and subscription.tariff.period_prices:
+        periods = sorted(int(k) for k in subscription.tariff.period_prices.keys())
     else:
         periods = settings.get_available_renewal_periods()
 
-    for period in periods:
-        # Получаем цену из тарифа или из PERIOD_PRICES
-        if tariff_prices and period in tariff_prices:
-            price_kopeks = tariff_prices[period]
-        else:
-            price_kopeks = PERIOD_PRICES.get(period, 0)
+    pricing_engine = PricingEngine()
+    options = []
 
-        if price_kopeks <= 0:
+    for period in periods:
+        pricing = await pricing_engine.calculate_renewal_price(db, subscription, period, user=user)
+
+        if pricing.final_total <= 0 and pricing.base_price <= 0:
             continue
 
-        # Добавляем стоимость докупленных устройств за период продления
-        if extra_devices > 0 and tariff_device_price > 0:
-            from app.utils.pricing_utils import calculate_months_from_days
-
-            months = calculate_months_from_days(period)
-            price_kopeks += extra_devices * tariff_device_price * months
-
-        # Apply user's discount if any
-        original_price = price_kopeks
-        discount_percent = 0
-        if hasattr(user, 'get_promo_discount'):
-            discount_percent = user.get_promo_discount('period', period)
-
-        if discount_percent > 0:
-            price_kopeks = int(price_kopeks * (100 - discount_percent) / 100)
-
-        # Apply promo_offer discount (временная скидка, как в /renew)
-        promo_offer_discount_percent = get_user_active_promo_discount_percent(user)
-        if promo_offer_discount_percent > 0:
-            price_kopeks = price_kopeks - price_kopeks * promo_offer_discount_percent // 100
-
-        # Комбинированный процент скидки для отображения
-        combined_discount = discount_percent
-        if original_price > 0 and original_price != price_kopeks:
-            total_discount = original_price - price_kopeks
-            combined_discount = int(total_discount * 100 / original_price)
+        original_price = (
+            pricing.base_price + pricing.servers_price + pricing.traffic_price + pricing.devices_price
+        )
+        combined_discount = 0
+        if original_price > 0 and original_price != pricing.final_total:
+            combined_discount = int((original_price - pricing.final_total) * 100 / original_price)
 
         options.append(
             RenewalOptionResponse(
                 period_days=period,
-                price_kopeks=price_kopeks,
-                price_rubles=price_kopeks / 100,
+                price_kopeks=pricing.final_total,
+                price_rubles=pricing.final_total / 100,
                 discount_percent=combined_discount,
                 original_price_kopeks=original_price if combined_discount > 0 else None,
             )
@@ -426,57 +387,29 @@ async def renew_subscription(
             detail='No subscription found',
         )
 
-    # В режиме тарифов берём цену из тарифа пользователя
-    price_kopeks = 0
-    tariff = None
-    if settings.is_tariffs_mode() and user.subscription.tariff_id:
-        tariff = await get_tariff_by_id(db, user.subscription.tariff_id)
-        if tariff and tariff.period_prices:
-            price_kopeks = tariff.period_prices.get(str(request.period_days), 0)
+    # Unified pricing via PricingEngine
+    pricing_engine = PricingEngine()
+    pricing = await pricing_engine.calculate_renewal_price(
+        db, user.subscription, request.period_days, user=user,
+    )
+    price_kopeks = pricing.final_total
+    promo_offer_discount_value = pricing.promo_offer_discount
 
-    # Fallback на PERIOD_PRICES
-    if price_kopeks <= 0:
-        price_kopeks = PERIOD_PRICES.get(request.period_days, 0)
-
-    if price_kopeks <= 0:
+    if price_kopeks <= 0 and pricing.base_price <= 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Invalid renewal period',
         )
 
-    # Добавляем стоимость докупленных устройств сверх тарифа
-    if tariff:
-        extra_devices = max(0, (user.subscription.device_limit or 0) - (tariff.device_limit or 0))
-        if extra_devices > 0:
-            from app.utils.pricing_utils import calculate_months_from_days
-
-            device_price = (
-                tariff.device_price_kopeks if tariff.device_price_kopeks is not None else settings.PRICE_PER_DEVICE
-            )
-            months = calculate_months_from_days(request.period_days)
-            price_kopeks += extra_devices * device_price * months
-
-    # Apply promo group discount
-    original_price_kopeks = price_kopeks
-    promo_group_discount_percent = 0
-    if hasattr(user, 'get_promo_discount'):
-        promo_group_discount_percent = user.get_promo_discount('period', request.period_days)
-
-    if promo_group_discount_percent > 0:
-        price_kopeks = int(price_kopeks * (100 - promo_group_discount_percent) / 100)
-
-    # Apply promo offer discount (temporary discount from promo offers)
-    promo_offer_discount_percent = get_user_active_promo_discount_percent(user)
-    promo_offer_discount_value = 0
-    if promo_offer_discount_percent > 0:
-        promo_offer_discount_value = price_kopeks * promo_offer_discount_percent // 100
-        price_kopeks = price_kopeks - promo_offer_discount_value
-
     # Combined discount percent for display
-    discount_percent = promo_group_discount_percent
-    if promo_offer_discount_percent > 0 and original_price_kopeks > 0:
-        total_discount = original_price_kopeks - price_kopeks
-        discount_percent = int(total_discount * 100 / original_price_kopeks)
+    original_price_kopeks = (
+        pricing.base_price + pricing.servers_price + pricing.traffic_price + pricing.devices_price
+    )
+    discount_percent = 0
+    if original_price_kopeks > 0 and original_price_kopeks != price_kopeks:
+        discount_percent = int((original_price_kopeks - price_kopeks) * 100 / original_price_kopeks)
+
+    tariff = user.subscription.tariff if user.subscription.tariff_id else None
 
     # Check balance
     if user.balance_kopeks < price_kopeks:
