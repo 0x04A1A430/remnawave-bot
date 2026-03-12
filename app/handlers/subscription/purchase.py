@@ -97,7 +97,7 @@ from app.handlers.simple_subscription import (
     _get_simple_subscription_payment_keyboard,
 )
 from app.states import SubscriptionStates
-from app.utils.price_display import PriceInfo, calculate_user_price, format_price_text
+from app.utils.price_display import PriceInfo, format_price_text
 from app.utils.pricing_utils import (
     apply_percentage_discount,
     calculate_months_from_days,
@@ -1595,7 +1595,9 @@ async def handle_extend_subscription(callback: types.CallbackQuery, db_user: Use
         await callback.answer()
         return
 
-    subscription_service = SubscriptionService()
+    from app.services.pricing_engine import PricingEngine
+
+    pricing_engine = PricingEngine()
 
     available_periods = settings.get_available_renewal_periods()
     renewal_prices = {}
@@ -1603,72 +1605,18 @@ async def handle_extend_subscription(callback: types.CallbackQuery, db_user: Use
 
     for days in available_periods:
         try:
-            months_in_period = calculate_months_from_days(days)
-
-            from app.config import PERIOD_PRICES
-
-            # 1. Calculate period price with promo group discount using unified system
-            base_price_original = PERIOD_PRICES.get(days, 0)
-            period_price_info = calculate_user_price(db_user, base_price_original, days, 'period')
-
-            # 2. Calculate servers price with promo group discount
-            servers_price_per_month, _ = await subscription_service.get_countries_price_by_uuids(
-                subscription.connected_squads,
-                db,
-                promo_group_id=db_user.promo_group_id,
+            pricing = await pricing_engine.calculate_renewal_price(
+                db, subscription, days, user=db_user,
             )
-            servers_total_base = servers_price_per_month * months_in_period
-            servers_price_info = calculate_user_price(db_user, servers_total_base, days, 'servers')
 
-            # 3. Calculate devices price with promo group discount
-            device_limit = subscription.device_limit
-            if device_limit is None:
-                if settings.is_devices_selection_enabled():
-                    device_limit = settings.DEFAULT_DEVICE_LIMIT
-                else:
-                    forced_limit = settings.get_disabled_mode_device_limit()
-                    if forced_limit is None:
-                        device_limit = settings.DEFAULT_DEVICE_LIMIT
-                    else:
-                        device_limit = forced_limit
-
-            additional_devices = max(0, (device_limit or 0) - settings.DEFAULT_DEVICE_LIMIT)
-            devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
-            devices_total_base = devices_price_per_month * months_in_period
-            devices_price_info = calculate_user_price(db_user, devices_total_base, days, 'devices')
-
-            # 4. Calculate traffic price with promo group discount
-            # В режиме fixed_with_topup при продлении трафик сбрасывается до фиксированного лимита
-            if settings.is_traffic_fixed():
-                renewal_traffic_gb = settings.get_fixed_traffic_limit()
-            else:
-                renewal_traffic_gb = subscription.traffic_limit_gb
-            traffic_price_per_month = settings.get_traffic_price(renewal_traffic_gb)
-            traffic_total_base = traffic_price_per_month * months_in_period
-            traffic_price_info = calculate_user_price(db_user, traffic_total_base, days, 'traffic')
-
-            # 5. Calculate ORIGINAL price (before ALL discounts)
+            # original = price before ALL discounts, final = price with all discounts
             total_original_price = (
-                period_price_info.base_price
-                + servers_price_info.base_price
-                + devices_price_info.base_price
-                + traffic_price_info.base_price
+                pricing.base_price + pricing.servers_price
+                + pricing.traffic_price + pricing.devices_price
             )
 
-            # 6. Sum prices with promo group discounts applied
-            total_price = (
-                period_price_info.final_price
-                + servers_price_info.final_price
-                + devices_price_info.final_price
-                + traffic_price_info.final_price
-            )
-
-            # 7. Apply promo offer discount on top of promo group discounts
-            promo_component = _apply_promo_offer_discount(db_user, total_price)
-
-            # Store: original = price before discounts, final = price with all discounts
             renewal_prices[days] = {
-                'final': promo_component['discounted'],
+                'final': pricing.final_total,
                 'original': total_original_price,
             }
 
