@@ -1375,6 +1375,24 @@ class YooKassaPaymentMixin:
 
             if user_id <= _INT32_MAX:
                 user = await get_user_by_id(db, user_id)
+                # Cross-validate: if metadata also has telegram_id, verify it matches
+                if user:
+                    meta_tg = metadata.get('user_telegram_id') or metadata.get('userTelegramId')
+                    if meta_tg is not None:
+                        try:
+                            expected_tg = int(meta_tg)
+                        except (TypeError, ValueError):
+                            expected_tg = None
+                        if expected_tg and user.telegram_id != expected_tg:
+                            logger.warning(
+                                'Webhook YooKassa: user_id совпал, но telegram_id не совпадает — '
+                                'вероятно legacy metadata, ищем по telegram_id',
+                                yookassa_payment_id=yookassa_payment_id,
+                                user_id=user_id,
+                                user_telegram_id=user.telegram_id,
+                                expected_telegram_id=expected_tg,
+                            )
+                            user = await get_user_by_telegram_id(db, expected_tg)
             else:
                 # user_id exceeds int32 — это telegram_id из legacy-платежа
                 logger.warning(

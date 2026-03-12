@@ -401,7 +401,7 @@ class RemnaWaveAPI:
                     if response.status >= 400:
                         error_message = response_data.get('message', f'HTTP {response.status}')
                         # Downgrade known-harmless 400s to warning (caller handles them as success)
-                        error_lower = error_message.lower()
+                        error_lower = str(error_message).lower()
                         is_harmless = response.status == 400 and (
                             'already enabled' in error_lower or 'already disabled' in error_lower
                         )
