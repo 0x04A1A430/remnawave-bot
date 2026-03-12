@@ -754,6 +754,13 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
 
             await db.execute(delete(Transaction).where(Transaction.user_id == user.id))
 
+            if user.balance_kopeks > 0:
+                logger.warning(
+                    '⚠️ DELETED-восстановление: обнуляем ненулевой баланс',
+                    telegram_id=user.telegram_id,
+                    balance_kopeks=user.balance_kopeks,
+                )
+
             user.status = UserStatus.ACTIVE.value
             user.balance_kopeks = 0
             user.remnawave_uuid = None
@@ -1344,6 +1351,13 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
         # Prevent self-referral when partner re-registers via own campaign link
         safe_referrer_id = referrer_id if referrer_id != existing_user.id else None
 
+        if existing_user.balance_kopeks > 0:
+            logger.warning(
+                '⚠️ DELETED-восстановление: обнуляем ненулевой баланс',
+                telegram_id=existing_user.telegram_id,
+                balance_kopeks=existing_user.balance_kopeks,
+            )
+
         existing_user.username = callback.from_user.username
         existing_user.first_name = callback.from_user.first_name
         existing_user.last_name = callback.from_user.last_name
@@ -1639,6 +1653,13 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
         # Prevent self-referral when partner re-registers via own campaign link
         safe_referrer_id = referrer_id if referrer_id != existing_user.id else None
 
+        if existing_user.balance_kopeks > 0:
+            logger.warning(
+                '⚠️ DELETED-восстановление: обнуляем ненулевой баланс',
+                telegram_id=existing_user.telegram_id,
+                balance_kopeks=existing_user.balance_kopeks,
+            )
+
         existing_user.username = message.from_user.username
         existing_user.first_name = message.from_user.first_name
         existing_user.last_name = message.from_user.last_name
@@ -1896,6 +1917,9 @@ def _get_subscription_status(user, texts):
 
     if actual_status == 'disabled':
         return texts.t('SUB_STATUS_DISABLED', '⚫ Отключена')
+
+    if actual_status == 'limited':
+        return texts.t('SUB_STATUS_LIMITED', '⚠️ Трафик исчерпан')
 
     if actual_status == 'pending':
         return texts.t('SUB_STATUS_PENDING', '⏳ Ожидает активации')

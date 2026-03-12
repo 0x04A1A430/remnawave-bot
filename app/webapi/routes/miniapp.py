@@ -4815,6 +4815,11 @@ def _ensure_paid_subscription(
                 'code': 'subscription_disabled',
                 'message': 'Subscription is disabled',
             }
+        elif actual_status == 'limited':
+            detail = {
+                'code': 'traffic_exhausted',
+                'message': 'Traffic limit reached. Please purchase additional traffic.',
+            }
         else:
             detail = {
                 'code': 'subscription_inactive',
@@ -7082,9 +7087,16 @@ async def switch_tariff_endpoint(
         squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
 
     # Обновляем подписку - меняем тариф без изменения даты
+    from app.database.crud.subscription import calc_device_limit_on_tariff_switch
+
     subscription.tariff_id = new_tariff.id
     subscription.traffic_limit_gb = new_tariff.traffic_limit_gb
-    subscription.device_limit = new_tariff.device_limit
+    subscription.device_limit = calc_device_limit_on_tariff_switch(
+        current_device_limit=subscription.device_limit,
+        old_tariff_device_limit=current_tariff.device_limit if current_tariff else None,
+        new_tariff_device_limit=new_tariff.device_limit,
+        max_device_limit=new_tariff.max_device_limit,
+    )
     subscription.connected_squads = squads
     # Сбрасываем докупленный трафик при смене тарифа
     from sqlalchemy import delete as sql_delete
@@ -7389,6 +7401,7 @@ async def toggle_daily_subscription_pause_endpoint(
     was_disabled = subscription.status in (
         SubscriptionStatus.DISABLED.value,
         SubscriptionStatus.EXPIRED.value,
+        SubscriptionStatus.LIMITED.value,
     )
 
     # System-DISABLED subs (is_daily_paused=False) должны идти по пути resume

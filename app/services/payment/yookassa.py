@@ -20,7 +20,9 @@ from app.utils.user_utils import format_referrer_info
 
 
 if TYPE_CHECKING:
-    from app.database.models import Transaction, YooKassaPayment
+    from app.database.models import Transaction, User, YooKassaPayment
+
+_INT32_MAX = 2_147_483_647
 
 
 class YooKassaPaymentMixin:
@@ -1341,7 +1343,9 @@ class YooKassaPaymentMixin:
             return None
 
         metadata = self._normalise_yookassa_metadata(event_object.get('metadata'))
-        user_id_raw = metadata.get('user_id') or metadata.get('userId')
+        user_id_raw = metadata.get('user_id')
+        if user_id_raw is None:
+            user_id_raw = metadata.get('userId')
 
         if user_id_raw is None:
             logger.error(
@@ -1360,21 +1364,79 @@ class YooKassaPaymentMixin:
             )
             return None
 
-        # Verify user exists before creating FK-linked record
-        try:
-            from app.database.crud.user import get_user_by_id
+        if user_id <= 0:
+            logger.error(
+                'Webhook YooKassa содержит неположительный user_id',
+                yookassa_payment_id=yookassa_payment_id,
+                user_id=user_id,
+            )
+            return None
 
-            user = await get_user_by_id(db, user_id)
+        # Verify user exists before creating FK-linked record.
+        # Legacy payments may have telegram_id stored in metadata['user_id']
+        # instead of the internal User.id. Detect by checking int32 range.
+        user: User | None = None
+
+        try:
+            from app.database.crud.user import get_user_by_id, get_user_by_telegram_id
+
+            if user_id <= _INT32_MAX:
+                user = await get_user_by_id(db, user_id)
+                # Cross-validate: if metadata also has telegram_id, verify it matches
+                if user:
+                    meta_tg = metadata.get('user_telegram_id') or metadata.get('userTelegramId')
+                    if meta_tg is not None:
+                        try:
+                            expected_tg = int(meta_tg)
+                        except (TypeError, ValueError):
+                            expected_tg = None
+                        if expected_tg and user.telegram_id != expected_tg:
+                            logger.warning(
+                                'Webhook YooKassa: user_id совпал, но telegram_id не совпадает — '
+                                'вероятно legacy metadata, ищем по telegram_id',
+                                yookassa_payment_id=yookassa_payment_id,
+                                user_id=user_id,
+                                user_telegram_id=user.telegram_id,
+                                expected_telegram_id=expected_tg,
+                            )
+                            user = await get_user_by_telegram_id(db, expected_tg)
+            else:
+                # user_id exceeds int32 — это telegram_id из legacy-платежа
+                logger.warning(
+                    'Webhook YooKassa: metadata[user_id] превышает int32, ищем как telegram_id',
+                    yookassa_payment_id=yookassa_payment_id,
+                    suspected_telegram_id=user_id,
+                )
+                user = await get_user_by_telegram_id(db, user_id)
+
+            # Fallback: try user_telegram_id from metadata if primary lookup failed
+            if not user:
+                tg_id_raw = metadata.get('user_telegram_id')
+                if tg_id_raw is None:
+                    tg_id_raw = metadata.get('userTelegramId')
+                if tg_id_raw is not None:
+                    try:
+                        tg_id = int(tg_id_raw)
+                    except (TypeError, ValueError):
+                        tg_id = None
+                    if tg_id and tg_id > 0:
+                        user = await get_user_by_telegram_id(db, tg_id)
+
             if not user:
                 logger.warning(
-                    'Webhook YooKassa : user_id= не найден в БД, пропускаем восстановление платежа',
+                    'Webhook YooKassa: пользователь не найден, пропускаем восстановление платежа',
                     yookassa_payment_id=yookassa_payment_id,
                     user_id=user_id,
+                    user_telegram_id=metadata.get('user_telegram_id'),
                 )
                 return None
+
+            # Use the resolved internal ID for the FK column
+            user_id = user.id
+
         except Exception as e:
             logger.warning(
-                'Webhook YooKassa : не удалось проверить user_id',
+                'Webhook YooKassa: не удалось проверить user_id',
                 yookassa_payment_id=yookassa_payment_id,
                 user_id=user_id,
                 e=e,

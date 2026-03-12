@@ -356,6 +356,10 @@ async def update_existing_tariff(
             detail='Tariff not found',
         )
 
+    # Capture old values for change detection
+    old_squads = list(tariff.allowed_squads) if tariff.allowed_squads else []
+    old_external_squad = tariff.external_squad_uuid
+
     # Build updates dict
     updates = {}
     if request.name is not None:
@@ -437,6 +441,18 @@ async def update_existing_tariff(
 
     # Перезагружаем периоды из БД для синхронизации с ботом
     await load_period_prices_from_db(db)
+
+    # Auto-sync squads to active subscriptions in Remnawave when squads changed
+    new_squads = tariff.allowed_squads or []
+    squads_changed = request.allowed_squads is not None and sorted(old_squads) != sorted(new_squads)
+    ext_squad_changed = (
+        'external_squad_uuid' in request.model_fields_set and tariff.external_squad_uuid != old_external_squad
+    )
+    if squads_changed or ext_squad_changed:
+        asyncio.create_task(
+            _background_sync_squads(tariff_id, admin.id),
+            name=f'sync-squads-tariff-{tariff_id}',
+        )
 
     return await get_tariff(tariff_id, admin, db)
 
@@ -598,6 +614,82 @@ async def get_tariff_stats(
         revenue_kopeks=revenue_kopeks,
         revenue_rubles=revenue_kopeks / 100,
     )
+
+
+async def _background_sync_squads(tariff_id: int, admin_id: int) -> None:
+    """Run squad sync in background with its own DB session (fire-and-forget)."""
+    from app.database.database import AsyncSessionLocal
+    from app.services.remnawave_service import RemnaWaveService
+
+    try:
+        async with AsyncSessionLocal() as db:
+            tariff = await get_tariff_by_id(db, tariff_id)
+            if not tariff:
+                return
+
+            result = await db.execute(
+                select(Subscription)
+                .join(User, Subscription.user_id == User.id)
+                .options(joinedload(Subscription.user))
+                .where(
+                    and_(
+                        Subscription.tariff_id == tariff_id,
+                        Subscription.status.in_([SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value]),
+                        User.remnawave_uuid.isnot(None),
+                    )
+                )
+            )
+            subscriptions = list(result.unique().scalars().all())
+
+            if not subscriptions:
+                return
+
+            new_squads = tariff.allowed_squads or []
+            ext_squad_uuid = tariff.external_squad_uuid
+
+            service = RemnaWaveService()
+            updated = 0
+            failed = 0
+
+            async with service.get_api_client() as api:
+                semaphore = asyncio.Semaphore(5)
+
+                async def _sync_one(sub: Subscription) -> None:
+                    nonlocal updated, failed
+                    remnawave_uuid = sub.user.remnawave_uuid if sub.user else None
+                    if not remnawave_uuid:
+                        return
+                    async with semaphore:
+                        try:
+                            await api.update_user(
+                                uuid=remnawave_uuid,
+                                active_internal_squads=new_squads,
+                                external_squad_uuid=ext_squad_uuid,
+                            )
+                            sub.connected_squads = new_squads
+                            updated += 1
+                        except Exception as e:
+                            failed += 1
+                            logger.warning(
+                                'Background sync: failed to sync squads for user',
+                                user_id=sub.user_id,
+                                error=str(e),
+                            )
+
+                await asyncio.gather(*[_sync_one(sub) for sub in subscriptions])
+
+            await db.commit()
+            logger.info(
+                'Background squad sync completed after tariff update',
+                admin_id=admin_id,
+                tariff_id=tariff_id,
+                tariff_name=tariff.name,
+                total=len(subscriptions),
+                updated=updated,
+                failed=failed,
+            )
+    except Exception:
+        logger.exception('Background squad sync failed', tariff_id=tariff_id)
 
 
 _SYNC_SQUADS_CONCURRENCY = 5

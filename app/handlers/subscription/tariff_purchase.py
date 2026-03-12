@@ -1326,14 +1326,20 @@ async def confirm_daily_tariff_purchase(
 
         if existing_subscription:
             # Обновляем существующую подписку на суточный тариф
-            # Сохраняем докупленные устройства при продлении того же тарифа
-            if existing_subscription.tariff_id == tariff.id:
-                effective_device_limit = max(tariff.device_limit or 0, existing_subscription.device_limit or 0)
-            else:
-                effective_device_limit = tariff.device_limit
+            # Сохраняем докупленные устройства при смене тарифа
+            from app.database.crud.subscription import calc_device_limit_on_tariff_switch
+
+            old_tariff = (
+                await get_tariff_by_id(db, existing_subscription.tariff_id) if existing_subscription.tariff_id else None
+            )
             existing_subscription.tariff_id = tariff.id
             existing_subscription.traffic_limit_gb = tariff.traffic_limit_gb
-            existing_subscription.device_limit = effective_device_limit
+            existing_subscription.device_limit = calc_device_limit_on_tariff_switch(
+                current_device_limit=existing_subscription.device_limit,
+                old_tariff_device_limit=old_tariff.device_limit if old_tariff else None,
+                new_tariff_device_limit=tariff.device_limit,
+                max_device_limit=getattr(tariff, 'max_device_limit', None),
+            )
             existing_subscription.connected_squads = squads
             existing_subscription.status = 'active'
             existing_subscription.is_trial = False  # Сбрасываем триальный статус
@@ -2450,14 +2456,18 @@ async def confirm_daily_tariff_switch(
             squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
 
         # Обновляем подписку на суточный тариф
-        # Сохраняем докупленные устройства при продлении того же тарифа
-        if subscription.tariff_id == tariff.id:
-            effective_device_limit = max(tariff.device_limit or 0, subscription.device_limit or 0)
-        else:
-            effective_device_limit = tariff.device_limit
+        # Сохраняем докупленные устройства при смене тарифа
+        from app.database.crud.subscription import calc_device_limit_on_tariff_switch
+
+        old_tariff = await get_tariff_by_id(db, subscription.tariff_id) if subscription.tariff_id else None
         subscription.tariff_id = tariff.id
         subscription.traffic_limit_gb = tariff.traffic_limit_gb
-        subscription.device_limit = effective_device_limit
+        subscription.device_limit = calc_device_limit_on_tariff_switch(
+            current_device_limit=subscription.device_limit,
+            old_tariff_device_limit=old_tariff.device_limit if old_tariff else None,
+            new_tariff_device_limit=tariff.device_limit,
+            max_device_limit=getattr(tariff, 'max_device_limit', None),
+        )
         subscription.connected_squads = squads
         subscription.status = 'active'
         subscription.is_trial = False  # Сбрасываем триальный статус
@@ -3020,14 +3030,18 @@ async def confirm_instant_switch(
         is_new_daily = getattr(new_tariff, 'is_daily', False)
 
         # Обновляем подписку с новыми параметрами тарифа
-        # Сохраняем докупленные устройства при продлении того же тарифа
-        if subscription.tariff_id == new_tariff.id:
-            effective_device_limit = max(new_tariff.device_limit or 0, subscription.device_limit or 0)
-        else:
-            effective_device_limit = new_tariff.device_limit
+        # Сохраняем докупленные устройства при смене тарифа
+        from app.database.crud.subscription import calc_device_limit_on_tariff_switch
+
+        old_tariff = await get_tariff_by_id(db, subscription.tariff_id) if subscription.tariff_id else None
         subscription.tariff_id = new_tariff.id
         subscription.traffic_limit_gb = new_tariff.traffic_limit_gb
-        subscription.device_limit = effective_device_limit
+        subscription.device_limit = calc_device_limit_on_tariff_switch(
+            current_device_limit=subscription.device_limit,
+            old_tariff_device_limit=old_tariff.device_limit if old_tariff else None,
+            new_tariff_device_limit=new_tariff.device_limit,
+            max_device_limit=getattr(new_tariff, 'max_device_limit', None),
+        )
         subscription.connected_squads = squads
 
         # Сбрасываем докупленный трафик при смене тарифа
