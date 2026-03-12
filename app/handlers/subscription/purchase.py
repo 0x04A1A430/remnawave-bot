@@ -102,7 +102,6 @@ from app.utils.pricing_utils import (
     apply_percentage_discount,
     calculate_months_from_days,
     format_period_description,
-    validate_pricing_calculation,
 )
 from app.utils.subscription_utils import (
     get_display_subscription_link,
@@ -118,7 +117,7 @@ from .autopay import (
     show_autopay_days,
     toggle_autopay,
 )
-from .common import _apply_promo_offer_discount, _get_promo_offer_discount_percent, update_traffic_prices
+from .common import _get_promo_offer_discount_percent, update_traffic_prices
 from .countries import (
     _build_countries_selection_text,
     _get_available_countries,
@@ -1735,143 +1734,50 @@ async def confirm_extend_subscription(callback: types.CallbackQuery, db_user: Us
         await callback.answer('⚠ У вас нет активной подписки', show_alert=True)
         return
 
+    from app.services.pricing_engine import PricingEngine
+
     months_in_period = calculate_months_from_days(days)
     old_end_date = subscription.end_date
-    server_uuid_prices: dict[str, int] = {}
 
     try:
-        from app.config import PERIOD_PRICES
-
-        base_price_original = PERIOD_PRICES.get(days, 0)
-        period_discount_percent = db_user.get_promo_discount('period', days)
-        base_price, base_discount_total = apply_percentage_discount(
-            base_price_original,
-            period_discount_percent,
+        pricing_engine = PricingEngine()
+        pricing = await pricing_engine.calculate_renewal_price(
+            db, subscription, days, user=db_user,
         )
+        price = pricing.final_total
 
-        subscription_service = SubscriptionService()
-        servers_price_per_month, per_server_monthly_prices = await subscription_service.get_countries_price_by_uuids(
-            subscription.connected_squads,
-            db,
-            promo_group_id=db_user.promo_group_id,
-        )
-        servers_discount_percent = db_user.get_promo_discount(
-            'servers',
-            days,
-        )
-        total_servers_price = 0
-        total_servers_discount = 0
+        # Build server_uuid_prices from breakdown for add_subscription_servers
+        server_uuid_prices: dict[str, int] = {}
+        total_servers_price = pricing.servers_price
+        if not pricing.is_tariff_mode:
+            for detail in pricing.breakdown.get('servers', []):
+                server_uuid_prices[detail['uuid']] = detail['price']
 
-        for squad_uuid, server_monthly_price in zip(
-            subscription.connected_squads, per_server_monthly_prices, strict=False
-        ):
-            discount_per_month = server_monthly_price * servers_discount_percent // 100
-            discounted_per_month = server_monthly_price - discount_per_month
-            total_servers_price += discounted_per_month * months_in_period
-            total_servers_discount += discount_per_month * months_in_period
-            server_uuid_prices[squad_uuid] = discounted_per_month * months_in_period
-
-        discounted_servers_price_per_month = servers_price_per_month - (
-            servers_price_per_month * servers_discount_percent // 100
-        )
-
+        # Derive device_limit from subscription (same logic as engine)
         device_limit = subscription.device_limit
         if device_limit is None:
-            if settings.is_devices_selection_enabled():
-                device_limit = settings.DEFAULT_DEVICE_LIMIT
-            else:
-                forced_limit = settings.get_disabled_mode_device_limit()
-                if forced_limit is None:
-                    device_limit = settings.DEFAULT_DEVICE_LIMIT
-                else:
-                    device_limit = forced_limit
+            device_limit = settings.DEFAULT_DEVICE_LIMIT
 
-        additional_devices = max(0, (device_limit or 0) - settings.DEFAULT_DEVICE_LIMIT)
-        devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
-        devices_discount_percent = db_user.get_promo_discount(
-            'devices',
-            days,
-        )
-        devices_discount_per_month = devices_price_per_month * devices_discount_percent // 100
-        discounted_devices_price_per_month = devices_price_per_month - devices_discount_per_month
-        total_devices_price = discounted_devices_price_per_month * months_in_period
+        # Derive renewal_traffic_gb for cart data
+        renewal_traffic_gb = subscription.traffic_limit_gb
 
-        # В режиме fixed_with_topup при продлении трафик сбрасывается до фиксированного лимита
-        if settings.is_traffic_fixed():
-            renewal_traffic_gb = settings.get_fixed_traffic_limit()
-        else:
-            renewal_traffic_gb = subscription.traffic_limit_gb
-        traffic_price_per_month = settings.get_traffic_price(renewal_traffic_gb)
-        traffic_discount_percent = db_user.get_promo_discount(
-            'traffic',
-            days,
-        )
-        traffic_discount_per_month = traffic_price_per_month * traffic_discount_percent // 100
-        discounted_traffic_price_per_month = traffic_price_per_month - traffic_discount_per_month
-        total_traffic_price = discounted_traffic_price_per_month * months_in_period
-
-        price = base_price + total_servers_price + total_devices_price + total_traffic_price
-        original_price = price
-        promo_component = _apply_promo_offer_discount(db_user, price)
-        if promo_component['discount'] > 0:
-            price = promo_component['discounted']
-
-        monthly_additions = (
-            discounted_servers_price_per_month + discounted_devices_price_per_month + discounted_traffic_price_per_month
-        )
-        is_valid = validate_pricing_calculation(base_price, monthly_additions, months_in_period, original_price)
-
-        if not is_valid:
-            logger.error('Ошибка в расчете цены продления для пользователя', telegram_id=db_user.telegram_id)
-            await callback.answer('Ошибка расчета цены. Обратитесь в поддержку.', show_alert=True)
-            return
+        # Promo offer discount info for downstream consume_promo_offer flag
+        promo_offer_discount = pricing.promo_offer_discount
+        offer_pct = pricing.breakdown.get('offer_discount_pct', 0)
 
         logger.info(
-            '💰 Расчет продления подписки на дней ( мес)',
+            '💰 Расчет продления подписки (PricingEngine)',
             subscription_id=subscription.id,
             days=days,
             months_in_period=months_in_period,
+            base_price=pricing.base_price,
+            servers_price=pricing.servers_price,
+            traffic_price=pricing.traffic_price,
+            devices_price=pricing.devices_price,
+            group_discount=pricing.promo_group_discount,
+            offer_discount=pricing.promo_offer_discount,
+            final_total=pricing.final_total,
         )
-        base_log = f'   📅 Период {days} дней: {base_price_original / 100}₽'
-        if base_discount_total > 0:
-            base_log += f' → {base_price / 100}₽ (скидка {period_discount_percent}%: -{base_discount_total / 100}₽)'
-        logger.info(base_log)
-        if total_servers_price > 0:
-            logger.info(
-                f'   🌐 Серверы: {servers_price_per_month / 100}₽/мес × {months_in_period}'
-                f' = {total_servers_price / 100}₽'
-                + (
-                    f' (скидка {servers_discount_percent}%: -{total_servers_discount / 100}₽)'
-                    if total_servers_discount > 0
-                    else ''
-                )
-            )
-        if total_devices_price > 0:
-            logger.info(
-                f'   📱 Устройства: {devices_price_per_month / 100}₽/мес × {months_in_period}'
-                f' = {total_devices_price / 100}₽'
-                + (
-                    f' (скидка {devices_discount_percent}%: -{devices_discount_per_month * months_in_period / 100}₽)'
-                    if devices_discount_percent > 0 and devices_discount_per_month > 0
-                    else ''
-                )
-            )
-        if total_traffic_price > 0:
-            logger.info(
-                f'   📊 Трафик: {traffic_price_per_month / 100}₽/мес × {months_in_period}'
-                f' = {total_traffic_price / 100}₽'
-                + (
-                    f' (скидка {traffic_discount_percent}%: -{traffic_discount_per_month * months_in_period / 100}₽)'
-                    if traffic_discount_percent > 0 and traffic_discount_per_month > 0
-                    else ''
-                )
-            )
-        if promo_component['discount'] > 0:
-            logger.info(
-                '🎯 Промо-предложение: -₽ (%)',
-                promo_component=promo_component['discount'] / 100,
-                promo_component_2=promo_component['percent'],
-            )
         logger.info('💎 ИТОГО: ₽', price=price / 100)
 
     except Exception as e:
@@ -1908,7 +1814,7 @@ async def confirm_extend_subscription(callback: types.CallbackQuery, db_user: Us
             'missing_amount': missing_kopeks,
             'return_to_cart': True,
             'description': f'Продление подписки на {days} дней',
-            'consume_promo_offer': bool(promo_component['discount'] > 0),
+            'consume_promo_offer': bool(promo_offer_discount > 0),
             'device_limit': device_limit,
             'traffic_limit_gb': renewal_traffic_gb,
         }
@@ -1933,7 +1839,7 @@ async def confirm_extend_subscription(callback: types.CallbackQuery, db_user: Us
             db_user,
             price,
             f'Продление подписки на {days} дней',
-            consume_promo_offer=promo_component['discount'] > 0,
+            consume_promo_offer=promo_offer_discount > 0,
             mark_as_paid_subscription=True,
         )
 
@@ -2031,6 +1937,7 @@ async def confirm_extend_subscription(callback: types.CallbackQuery, db_user: Us
             await add_subscription_servers(db, subscription, server_ids, server_prices_for_period)
 
         try:
+            subscription_service = SubscriptionService()
             remnawave_result = await subscription_service.update_remnawave_user(
                 db,
                 subscription,
@@ -2079,10 +1986,10 @@ async def confirm_extend_subscription(callback: types.CallbackQuery, db_user: Us
             fixed_limit = settings.get_fixed_traffic_limit()
             success_message += f'\n\n📊 Трафик сброшен до {fixed_limit} ГБ'
 
-        if promo_component['discount'] > 0:
+        if promo_offer_discount > 0:
             success_message += (
-                f' (включая доп. скидку {promo_component["percent"]}%:'
-                f' -{texts.format_price(promo_component["discount"])})'
+                f' (включая доп. скидку {offer_pct}%:'
+                f' -{texts.format_price(promo_offer_discount)})'
             )
 
         await callback.message.edit_text(success_message, reply_markup=get_back_keyboard(db_user.language))
