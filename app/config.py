@@ -1415,6 +1415,26 @@ class Settings(BaseSettings):
                 return value
         return None
 
+    _CABINET_URL_DEFAULT = 'https://example.com/cabinet'
+
+    def get_referral_link(self, referral_code: str, bot_username: str | None = None) -> str:
+        """Build a referral link pointing to the web cabinet.
+
+        Falls back to a Telegram bot deep link when CABINET_URL is not configured.
+        """
+        from urllib.parse import quote
+
+        if not referral_code:
+            raise ValueError('referral_code must not be empty or None')
+
+        safe_code = quote(referral_code, safe='')
+        cabinet_url = (self.CABINET_URL or '').strip().rstrip('/')
+        if cabinet_url and cabinet_url != self._CABINET_URL_DEFAULT:
+            sep = '&' if '?' in cabinet_url else '?'
+            return f'{cabinet_url}{sep}ref={safe_code}'
+        username = bot_username or self.get_bot_username() or 'bot'
+        return f'https://t.me/{username}?start={safe_code}'
+
     def is_deep_links_enabled(self) -> bool:
         return self.ENABLE_DEEP_LINKS
 

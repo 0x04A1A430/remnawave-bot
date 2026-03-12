@@ -1121,9 +1121,25 @@ async def update_user_subscription(
                 detail='Tariff not found',
             )
 
+        # Preserve extra purchased devices above the old tariff's base limit
+        extra_devices = 0
+        if subscription.tariff_id:
+            old_tariff = await get_tariff_by_id(db, subscription.tariff_id)
+            if old_tariff and old_tariff.device_limit:
+                extra_devices = max(0, (subscription.device_limit or old_tariff.device_limit) - old_tariff.device_limit)
+
+        from app.config import settings
+
         subscription.tariff_id = request.tariff_id
         subscription.traffic_limit_gb = tariff.traffic_limit_gb
-        subscription.device_limit = tariff.device_limit
+
+        new_base = tariff.device_limit or 1
+        new_total = new_base + extra_devices
+        # Cap at new tariff's max_device_limit, falling back to global MAX_DEVICES_LIMIT
+        effective_max = tariff.max_device_limit or (settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else None)
+        if effective_max and new_total > effective_max:
+            new_total = effective_max
+        subscription.device_limit = new_total
         # Set squads from tariff
         if tariff.allowed_squads:
             subscription.connected_squads = tariff.allowed_squads
@@ -1141,8 +1157,6 @@ async def update_user_subscription(
         await db.execute(sql_delete(TrafficPurchase).where(TrafficPurchase.subscription_id == subscription.id))
         subscription.purchased_traffic_gb = 0
         subscription.traffic_reset_at = None
-
-        from app.config import settings
 
         if settings.RESET_TRAFFIC_ON_TARIFF_SWITCH:
             subscription.traffic_used_gb = 0.0

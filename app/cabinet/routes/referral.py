@@ -92,8 +92,7 @@ async def get_referral_info(
     available_balance = min(user.balance_kopeks, referral_entitlement)
 
     # Build referral link
-    bot_username = settings.get_bot_username() or 'bot'
-    referral_link = f'https://t.me/{bot_username}?start={user.referral_code}'
+    referral_link = settings.get_referral_link(user.referral_code) if user.referral_code else ''
 
     return ReferralInfoResponse(
         referral_code=user.referral_code or '',
