@@ -1,3 +1,4 @@
+import html
 from datetime import UTC, datetime
 from typing import Any
 
@@ -74,7 +75,7 @@ async def _prepare_subscription_summary(
         if country['uuid'] in selected_country_ids:
             server_price_per_month = country['price_kopeks']
             countries_price_per_month += server_price_per_month
-            selected_countries_names.append(country['name'])
+            selected_countries_names.append(html.escape(country['name']))
             server_monthly_prices.append(server_price_per_month)
 
     servers_discount_percent = db_user.get_promo_discount(

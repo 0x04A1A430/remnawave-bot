@@ -1,3 +1,4 @@
+import html
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -623,7 +624,7 @@ async def show_trial_offer(callback: types.CallbackQuery, db_user: User, db: Asy
             tariff_squads = await get_server_squads_by_uuids(db, trial_tariff.allowed_squads)
             if tariff_squads:
                 if len(tariff_squads) == 1:
-                    trial_server_name = tariff_squads[0].display_name
+                    trial_server_name = html.escape(tariff_squads[0].display_name)
                 else:
                     trial_server_name = texts.t(
                         'TRIAL_SERVER_RANDOM_POOL',
@@ -633,7 +634,7 @@ async def show_trial_offer(callback: types.CallbackQuery, db_user: User, db: Asy
             trial_squads = await get_trial_eligible_server_squads(db, include_unavailable=True)
             if trial_squads:
                 if len(trial_squads) == 1:
-                    trial_server_name = trial_squads[0].display_name
+                    trial_server_name = html.escape(trial_squads[0].display_name)
                 else:
                     trial_server_name = texts.t(
                         'TRIAL_SERVER_RANDOM_POOL',

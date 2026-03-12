@@ -82,7 +82,7 @@ async def get_servers_display_names(squad_uuids: list[str]) -> str:
             for uuid in squad_uuids:
                 server = await get_server_squad_by_uuid(db, uuid)
                 if server:
-                    server_names.append(server.display_name)
+                    server_names.append(html_mod.escape(server.display_name))
                     logger.debug('Найден сервер в БД', uuid=uuid, display_name=server.display_name)
                 else:
                     logger.warning('Сервер с UUID не найден в БД', uuid=uuid)
@@ -92,7 +92,7 @@ async def get_servers_display_names(squad_uuids: list[str]) -> str:
             for uuid in squad_uuids:
                 for country in countries:
                     if country['uuid'] == uuid:
-                        server_names.append(country['name'])
+                        server_names.append(html_mod.escape(country['name']))
                         logger.debug('Найден сервер в кэше', uuid=uuid, country=country['name'])
                         break
 
@@ -606,13 +606,17 @@ async def execute_change_devices(callback: types.CallbackQuery, db_user: User, d
 
         await db.commit()
 
-        # Реактивируем подписку если она была DISABLED (например, после LIMITED в RemnaWave)
+        # Реактивируем подписку если она была DISABLED/EXPIRED (например, после LIMITED/EXPIRED в RemnaWave)
         from app.database.crud.subscription import reactivate_subscription
 
         await reactivate_subscription(db, subscription)
 
         subscription_service = SubscriptionService()
         await subscription_service.update_remnawave_user(db, subscription)
+
+        # Явно включаем пользователя на панели (PATCH может не снять LIMITED-статус)
+        if db_user.remnawave_uuid and subscription.status == 'active':
+            await subscription_service.enable_remnawave_user(db_user.remnawave_uuid)
 
         # При уменьшении лимита - удалить лишние устройства (последние подключённые)
         devices_reset_count = 0
@@ -1285,13 +1289,17 @@ async def confirm_add_devices(callback: types.CallbackQuery, db_user: User, db: 
         subscription.updated_at = datetime.now(UTC)
         await db.commit()
 
-        # Реактивируем подписку если она была DISABLED (например, после LIMITED в RemnaWave)
+        # Реактивируем подписку если она была DISABLED/EXPIRED (например, после LIMITED/EXPIRED в RemnaWave)
         from app.database.crud.subscription import reactivate_subscription
 
         await reactivate_subscription(db, subscription)
 
         subscription_service = SubscriptionService()
         await subscription_service.update_remnawave_user(db, subscription)
+
+        # Явно включаем пользователя на панели (PATCH может не снять LIMITED-статус)
+        if db_user.remnawave_uuid and subscription.status == 'active':
+            await subscription_service.enable_remnawave_user(db_user.remnawave_uuid)
 
         await create_transaction(
             db=db,

@@ -404,10 +404,7 @@ async def handle_balance_history_pagination(callback: types.CallbackQuery, db_us
 @error_handler
 async def show_payment_methods(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
     from app.config import settings
-    from app.database.crud.subscription import get_subscription_by_user_id
-    from app.services.subscription_service import SubscriptionService
     from app.utils.payment_utils import get_payment_methods_text
-    from app.utils.pricing_utils import apply_percentage_discount, calculate_months_from_days
 
     texts = get_texts(db_user.language)
 
@@ -430,139 +427,7 @@ async def show_payment_methods(callback: types.CallbackQuery, db_user: User, db:
 
     payment_text = get_payment_methods_text(db_user.language)
 
-    # Добавляем информацию о текущем тарифе пользователя
-    subscription = await get_subscription_by_user_id(db, db_user.id)
-    tariff_info = ''
-    if subscription and not subscription.is_trial:
-        # Рассчитываем приблизительную стоимость продления на 30 дней
-        duration_days = 30  # Берем для примера 30 дней
-        current_traffic = subscription.traffic_limit_gb
-        current_connected_squads = subscription.connected_squads or []
-        current_device_limit = subscription.device_limit or settings.DEFAULT_DEVICE_LIMIT
-
-        try:
-            # Получаем цены для текущих параметров
-            from app.config import PERIOD_PRICES
-            from app.database.crud.tariff import get_tariff_by_id
-
-            # В режиме тарифов берём цену из тарифа пользователя
-            tariff = None
-            tariff_price_found = False
-            base_price_original = 0
-            if settings.is_tariffs_mode() and subscription.tariff_id:
-                tariff = await get_tariff_by_id(db, subscription.tariff_id)
-                if tariff and tariff.period_prices:
-                    base_price_original = tariff.period_prices.get(str(duration_days), 0)
-                    if base_price_original > 0:
-                        tariff_price_found = True
-
-            # Если не нашли в тарифе - используем PERIOD_PRICES
-            if base_price_original <= 0:
-                base_price_original = PERIOD_PRICES.get(duration_days, 0)
-
-            if tariff_price_found:
-                # Тарифный режим: серверы и трафик включены в цену тарифа.
-                # Порядок: база + устройства → скидка на полную сумму (как в calculate_renewal_price).
-                from app.utils.promo_offer import get_user_active_promo_discount_percent
-
-                original_price = base_price_original
-
-                tariff_device_limit = tariff.device_limit if tariff.device_limit is not None else 0
-                device_limit = (
-                    subscription.device_limit if subscription.device_limit is not None else tariff_device_limit
-                )
-                extra_devices = max(0, device_limit - tariff_device_limit)
-                device_price_per_unit = (
-                    tariff.device_price_kopeks
-                    if tariff and tariff.device_price_kopeks is not None
-                    else settings.PRICE_PER_DEVICE
-                )
-                months_in_period = calculate_months_from_days(duration_days)
-                devices_price = extra_devices * device_price_per_unit * months_in_period
-                original_price += devices_price
-
-                # Скидка промогруппы на полную сумму (база + устройства)
-                period_discount_percent = db_user.get_promo_discount('period', duration_days)
-                discount_total = original_price * period_discount_percent // 100
-                total_price = original_price - discount_total
-
-                # Promo-offer скидка (временная)
-                promo_offer_percent = get_user_active_promo_discount_percent(db_user)
-                if promo_offer_percent > 0:
-                    promo_offer_discount = total_price * promo_offer_percent // 100
-                    total_price = total_price - promo_offer_discount
-            else:
-                # Классический режим: серверы + трафик + устройства считаются отдельно
-                period_discount_percent = db_user.get_promo_discount('period', duration_days)
-                base_price, base_discount_total = apply_percentage_discount(
-                    base_price_original,
-                    period_discount_percent,
-                )
-                from app.services.subscription_service import SubscriptionService
-
-                subscription_service = SubscriptionService()
-                (
-                    servers_price_per_month,
-                    per_server_monthly_prices,
-                ) = await subscription_service.get_countries_price_by_uuids(
-                    current_connected_squads,
-                    db,
-                    promo_group_id=db_user.promo_group_id,
-                )
-                servers_discount_percent = db_user.get_promo_discount('servers', duration_days)
-                total_servers_price = 0
-                for server_price in per_server_monthly_prices:
-                    discounted_per_month, discount_per_month = apply_percentage_discount(
-                        server_price,
-                        servers_discount_percent,
-                    )
-                    total_servers_price += discounted_per_month
-
-                traffic_price_per_month = settings.get_traffic_price(current_traffic)
-                traffic_discount_percent = db_user.get_promo_discount('traffic', duration_days)
-                traffic_discounted_per_month, traffic_discount_per_month = apply_percentage_discount(
-                    traffic_price_per_month,
-                    traffic_discount_percent,
-                )
-
-                additional_devices = max(0, (current_device_limit or 0) - settings.DEFAULT_DEVICE_LIMIT)
-                devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
-                devices_discount_percent = db_user.get_promo_discount('devices', duration_days)
-                devices_discounted_per_month, devices_discount_per_month = apply_percentage_discount(
-                    devices_price_per_month,
-                    devices_discount_percent,
-                )
-
-                months_in_period = calculate_months_from_days(duration_days)
-                total_price = (
-                    base_price
-                    + total_servers_price * months_in_period
-                    + traffic_discounted_per_month * months_in_period
-                    + devices_discounted_per_month * months_in_period
-                )
-
-            traffic_value = current_traffic or 0
-            if traffic_value <= 0:
-                traffic_display = texts.t('TRAFFIC_UNLIMITED_SHORT', 'Безлимит')
-            else:
-                traffic_display = texts.format_traffic(traffic_value)
-
-            current_tariff_desc = (
-                f'📱 Подписка: {len(current_connected_squads)} серверов, '
-                f'{traffic_display}, {current_device_limit} устр.'
-            )
-            estimated_price_info = (
-                f'💰 Стоимость продления (примерно): {texts.format_price(total_price)} за {duration_days} дней'
-            )
-
-            tariff_info = f'\n\n📋 <b>Ваш текущий тариф:</b>\n{current_tariff_desc}\n{estimated_price_info}'
-        except Exception as e:
-            logger.warning(
-                'Не удалось рассчитать стоимость текущей подписки для пользователя', db_user_id=db_user.id, error=e
-            )
-            tariff_info = ''
-
-    full_text = payment_text + tariff_info
+    full_text = payment_text
 
     keyboard = get_payment_methods_keyboard(0, db_user.language)
 

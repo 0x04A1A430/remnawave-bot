@@ -1,3 +1,4 @@
+import html
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -868,7 +869,7 @@ async def _render_user_subscription_overview(callback: types.CallbackQuery, db: 
                 try:
                     server = await get_server_squad_by_uuid(db, squad_uuid)
                     if server:
-                        text += f'• {server.display_name}\n'
+                        text += f'• {html.escape(server.display_name)}\n'
                     else:
                         text += f'• {squad_uuid[:8]}... (неизвестный)\n'
                 except Exception as e:
@@ -4002,11 +4003,19 @@ async def _add_subscription_traffic(db: AsyncSession, user_id: int, gb: int, adm
         else:
             await add_subscription_traffic(db, subscription, gb)
 
-        # Реактивируем подписку если она была DISABLED (например, после LIMITED в RemnaWave)
+        # Реактивируем подписку если она была DISABLED/EXPIRED (например, после LIMITED/EXPIRED в RemnaWave)
         await reactivate_subscription(db, subscription)
 
         subscription_service = SubscriptionService()
         await subscription_service.update_remnawave_user(db, subscription)
+
+        # Явно включаем пользователя на панели (PATCH может не снять LIMITED-статус)
+        if subscription.status == 'active':
+            from app.database.crud.user import get_user_by_id
+
+            user = await get_user_by_id(db, user_id)
+            if user and user.remnawave_uuid:
+                await subscription_service.enable_remnawave_user(user.remnawave_uuid)
 
         traffic_text = 'безлимитный' if gb == 0 else f'{gb} ГБ'
         logger.info('Админ добавил трафик пользователю', admin_id=admin_id, traffic_text=traffic_text, user_id=user_id)
@@ -5309,9 +5318,24 @@ async def confirm_admin_tariff_change(callback: types.CallbackQuery, db_user: Us
     try:
         old_tariff_id = subscription.tariff_id
 
-        # Обновляем параметры подписки в соответствии с тарифом
+        # Preserve extra purchased devices above the old tariff's base limit
+        extra_devices = 0
+        if subscription.tariff_id:
+            old_tariff = await get_tariff_by_id(db, subscription.tariff_id)
+            if old_tariff and old_tariff.device_limit:
+                extra_devices = max(0, (subscription.device_limit or old_tariff.device_limit) - old_tariff.device_limit)
+
         subscription.tariff_id = tariff.id
-        subscription.device_limit = tariff.device_limit
+
+        new_base = tariff.device_limit or 1
+        new_total = new_base + extra_devices
+        effective_max = tariff.max_device_limit or (
+            settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else None
+        )
+        if effective_max and new_total > effective_max:
+            new_total = effective_max
+        subscription.device_limit = new_total
+
         subscription.traffic_limit_gb = tariff.traffic_limit_gb
         subscription.connected_squads = tariff.allowed_squads or []
         subscription.updated_at = datetime.now(UTC)
@@ -5364,7 +5388,7 @@ async def confirm_admin_tariff_change(callback: types.CallbackQuery, db_user: Us
         await callback.message.edit_text(
             f'✅ <b>Тариф успешно изменен</b>\n\n'
             f'Новый тариф: <b>{tariff.name}</b>\n'
-            f'• Устройства: {tariff.device_limit}\n'
+            f'• Устройства: {subscription.device_limit}\n'
             f'• Трафик: {"♾️" if tariff.traffic_limit_gb == 0 else f"{tariff.traffic_limit_gb} ГБ"}\n'
             f'• Серверы: {len(tariff.allowed_squads) if tariff.allowed_squads else 0}',
             reply_markup=types.InlineKeyboardMarkup(

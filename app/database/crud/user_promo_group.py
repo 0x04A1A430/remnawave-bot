@@ -40,6 +40,7 @@ async def _sync_user_primary_promo_group(
 
     except Exception as error:
         logger.error('Ошибка синхронизации primary промогруппы пользователя', user_id=user_id, error=error)
+        raise
 
 
 async def sync_user_primary_promo_group(

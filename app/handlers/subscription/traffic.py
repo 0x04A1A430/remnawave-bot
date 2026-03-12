@@ -577,11 +577,15 @@ async def add_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSes
             # add_subscription_traffic уже создаёт TrafficPurchase и обновляет все необходимые поля
             await add_subscription_traffic(db, subscription, traffic_gb)
 
-        # Реактивируем подписку если она была DISABLED (например, после LIMITED в RemnaWave)
+        # Реактивируем подписку если она была DISABLED/EXPIRED (например, после LIMITED/EXPIRED в RemnaWave)
         await reactivate_subscription(db, subscription)
 
         subscription_service = SubscriptionService()
         await subscription_service.update_remnawave_user(db, subscription)
+
+        # Явно включаем пользователя на панели (PATCH может не снять LIMITED-статус)
+        if db_user.remnawave_uuid and subscription.status == 'active':
+            await subscription_service.enable_remnawave_user(db_user.remnawave_uuid)
 
         await create_transaction(
             db=db,
@@ -834,11 +838,15 @@ async def execute_switch_traffic(callback: types.CallbackQuery, db_user: User, d
 
         await db.commit()
 
-        # Реактивируем подписку если она была DISABLED (например, после LIMITED в RemnaWave)
+        # Реактивируем подписку если она была DISABLED/EXPIRED (например, после LIMITED/EXPIRED в RemnaWave)
         await reactivate_subscription(db, subscription)
 
         subscription_service = SubscriptionService()
         await subscription_service.update_remnawave_user(db, subscription)
+
+        # Явно включаем пользователя на панели (PATCH может не снять LIMITED-статус)
+        if db_user.remnawave_uuid and subscription.status == 'active':
+            await subscription_service.enable_remnawave_user(db_user.remnawave_uuid)
 
         await db.refresh(db_user)
         await db.refresh(subscription)

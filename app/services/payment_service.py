@@ -686,6 +686,53 @@ class PaymentService(
                 }
             return None
 
+        # --- Telegram Stars ---------------------------------------------------
+        if payment_method == 'telegram_stars':
+            if not settings.TELEGRAM_STARS_ENABLED:
+                logger.warning('Telegram Stars is not enabled, cannot create guest payment')
+                return None
+
+            if self.bot is None:
+                logger.warning('Bot instance required for Stars guest payment')
+                return None
+
+            from aiogram.types import LabeledPrice
+
+            rate = settings.get_stars_rate()
+            if rate <= 0:
+                logger.error('TELEGRAM_STARS_RATE_RUB is not positive, cannot create Stars invoice')
+                return None
+
+            amount_rubles = amount_kopeks / 100
+            stars_amount = max(1, round(amount_rubles / rate))
+
+            payload = f'guest_purchase_{purchase_token}'
+
+            try:
+                invoice_url = await self.bot.create_invoice_link(
+                    title='Подарочная подписка VPN',
+                    description=f'{description} ({stars_amount} ⭐)',
+                    payload=payload,
+                    provider_token='',
+                    currency='XTR',
+                    prices=[LabeledPrice(label='Подарочная подписка', amount=stars_amount)],
+                )
+
+                logger.info(
+                    'Created Stars invoice for guest purchase',
+                    stars_amount=stars_amount,
+                    purchase_token_prefix=purchase_token[:5],
+                )
+                return {
+                    'payment_url': invoice_url,
+                    'payment_id': f'stars_{purchase_token[:12]}',
+                    'provider': 'telegram_stars',
+                }
+
+            except Exception as stars_error:
+                logger.error('Error creating Stars invoice for guest payment', error=stars_error)
+                return None
+
         # --- Unsupported provider ---------------------------------------------
         logger.warning(
             'Guest payment requested for unsupported provider',

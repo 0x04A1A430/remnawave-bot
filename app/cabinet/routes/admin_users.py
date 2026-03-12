@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import Integer, and_, func, or_, select
+from sqlalchemy import Integer, and_, delete as sa_delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -25,6 +25,7 @@ from app.database.crud.user import (
     get_users_statistics,
     subtract_user_balance,
 )
+from app.database.crud.user_promo_group import sync_user_primary_promo_group
 from app.database.models import (
     GuestPurchase,
     PromoGroup,
@@ -36,6 +37,7 @@ from app.database.models import (
     Transaction,
     TransactionType,
     User,
+    UserPromoGroup,
     UserStatus,
 )
 from app.utils.timezone import panel_datetime_to_utc
@@ -1119,9 +1121,27 @@ async def update_user_subscription(
                 detail='Tariff not found',
             )
 
+        # Preserve extra purchased devices above the old tariff's base limit
+        extra_devices = 0
+        if subscription.tariff_id:
+            old_tariff = await get_tariff_by_id(db, subscription.tariff_id)
+            if old_tariff and old_tariff.device_limit:
+                extra_devices = max(0, (subscription.device_limit or old_tariff.device_limit) - old_tariff.device_limit)
+
+        from app.config import settings
+
         subscription.tariff_id = request.tariff_id
         subscription.traffic_limit_gb = tariff.traffic_limit_gb
-        subscription.device_limit = tariff.device_limit
+
+        new_base = tariff.device_limit or 1
+        new_total = new_base + extra_devices
+        # Cap at new tariff's max_device_limit, falling back to global MAX_DEVICES_LIMIT
+        effective_max = tariff.max_device_limit or (
+            settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else None
+        )
+        if effective_max and new_total > effective_max:
+            new_total = effective_max
+        subscription.device_limit = new_total
         # Set squads from tariff
         if tariff.allowed_squads:
             subscription.connected_squads = tariff.allowed_squads
@@ -1139,8 +1159,6 @@ async def update_user_subscription(
         await db.execute(sql_delete(TrafficPurchase).where(TrafficPurchase.subscription_id == subscription.id))
         subscription.purchased_traffic_gb = 0
         subscription.traffic_reset_at = None
-
-        from app.config import settings
 
         if settings.RESET_TRAFFIC_ON_TARIFF_SWITCH:
             subscription.traffic_used_gb = 0.0
@@ -1268,13 +1286,20 @@ async def update_user_subscription(
 
         await add_subscription_traffic(db, subscription, request.traffic_gb)
 
-        # Реактивируем подписку если она была DISABLED (например, после LIMITED в RemnaWave)
+        # Реактивируем подписку если она была DISABLED/EXPIRED (например, после LIMITED/EXPIRED в RemnaWave)
         await reactivate_subscription(db, subscription)
 
         await db.refresh(subscription)
 
         # Sync to Remnawave panel
         await _sync_subscription_to_panel(db, user, subscription)
+
+        # Явно включаем пользователя на панели (PATCH может не снять LIMITED-статус)
+        if getattr(user, 'remnawave_uuid', None) and subscription.status == 'active':
+            from app.services.subscription_service import SubscriptionService
+
+            subscription_service = SubscriptionService()
+            await subscription_service.enable_remnawave_user(user.remnawave_uuid)
 
         logger.info('Admin added traffic for user', admin_id=admin.id, traffic_gb=request.traffic_gb, user_id=user_id)
 
@@ -1629,8 +1654,22 @@ async def update_user_promo_group(
             )
         promo_group_name = promo_group.name
 
-    user.promo_group_id = new_promo_group_id
-    user.updated_at = datetime.now(UTC)
+    # Update M2M table (authoritative source) — not just the legacy FK column.
+    # Without this, sync_user_primary_promo_group overwrites the admin change
+    # on the next transaction.
+    await db.execute(sa_delete(UserPromoGroup).where(UserPromoGroup.user_id == user_id))
+
+    if new_promo_group_id is not None:
+        db.add(
+            UserPromoGroup(
+                user_id=user_id,
+                promo_group_id=new_promo_group_id,
+                assigned_by='admin',
+            )
+        )
+
+    await db.flush()
+    await sync_user_primary_promo_group(db, user_id)
     await db.commit()
     await db.refresh(user)
 
