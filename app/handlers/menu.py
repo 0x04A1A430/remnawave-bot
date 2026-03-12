@@ -1298,15 +1298,17 @@ async def handle_activate_button(callback: types.CallbackQuery, db_user: User, d
     best_period = None
     best_price = 0
 
-    # Для продления используем тот же сервис, что и при реальном списании,
-    # чтобы сумма проверки совпадала с суммой списания.
+    # Для продления используем PricingEngine (единый расчёт для всех поверхностей).
+    from app.services.pricing_engine import PricingEngine
+
+    pricing_engine = PricingEngine()
     renewal_service = SubscriptionRenewalService() if subscription else None
 
     try:
         for period in available_periods:
-            if subscription and renewal_service:
-                pricing = await renewal_service.calculate_pricing(db, db_user, subscription, period)
-                price = pricing.final_total
+            if subscription:
+                pricing_result = await pricing_engine.calculate_renewal_price(db, subscription, period, user=db_user)
+                price = pricing_result.final_total
             else:
                 price, _ = await subscription_service.calculate_subscription_price_with_months(
                     period, traffic_limit_gb, server_ids, device_limit, db, user=db_user
@@ -1319,9 +1321,9 @@ async def handle_activate_button(callback: types.CallbackQuery, db_user: User, d
         if not best_period:
             # Показать сколько не хватает для минимального периода
             min_period = min(available_periods) if available_periods else 30
-            if subscription and renewal_service:
-                pricing = await renewal_service.calculate_pricing(db, db_user, subscription, min_period)
-                min_price = pricing.final_total
+            if subscription:
+                min_pricing = await pricing_engine.calculate_renewal_price(db, subscription, min_period, user=db_user)
+                min_price = min_pricing.final_total
             else:
                 min_price, _ = await subscription_service.calculate_subscription_price_with_months(
                     min_period, traffic_limit_gb, server_ids, device_limit, db, user=db_user
@@ -1340,7 +1342,7 @@ async def handle_activate_button(callback: types.CallbackQuery, db_user: User, d
     try:
         if subscription:
             # Продление существующей подписки
-            pricing = await renewal_service.calculate_pricing(db, db_user, subscription, best_period)
+            pricing = await pricing_engine.calculate_renewal_price(db, subscription, best_period, user=db_user)
 
             await renewal_service.finalize(
                 db,
