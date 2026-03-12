@@ -5318,9 +5318,22 @@ async def confirm_admin_tariff_change(callback: types.CallbackQuery, db_user: Us
     try:
         old_tariff_id = subscription.tariff_id
 
-        # Обновляем параметры подписки в соответствии с тарифом
+        # Preserve extra purchased devices above the old tariff's base limit
+        extra_devices = 0
+        if subscription.tariff_id:
+            old_tariff = await get_tariff_by_id(db, subscription.tariff_id)
+            if old_tariff and old_tariff.device_limit:
+                extra_devices = max(0, (subscription.device_limit or old_tariff.device_limit) - old_tariff.device_limit)
+
         subscription.tariff_id = tariff.id
-        subscription.device_limit = tariff.device_limit
+
+        new_base = tariff.device_limit or 1
+        new_total = new_base + extra_devices
+        effective_max = tariff.max_device_limit or (settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else None)
+        if effective_max and new_total > effective_max:
+            new_total = effective_max
+        subscription.device_limit = new_total
+
         subscription.traffic_limit_gb = tariff.traffic_limit_gb
         subscription.connected_squads = tariff.allowed_squads or []
         subscription.updated_at = datetime.now(UTC)
@@ -5373,7 +5386,7 @@ async def confirm_admin_tariff_change(callback: types.CallbackQuery, db_user: Us
         await callback.message.edit_text(
             f'✅ <b>Тариф успешно изменен</b>\n\n'
             f'Новый тариф: <b>{tariff.name}</b>\n'
-            f'• Устройства: {tariff.device_limit}\n'
+            f'• Устройства: {subscription.device_limit}\n'
             f'• Трафик: {"♾️" if tariff.traffic_limit_gb == 0 else f"{tariff.traffic_limit_gb} ГБ"}\n'
             f'• Серверы: {len(tariff.allowed_squads) if tariff.allowed_squads else 0}',
             reply_markup=types.InlineKeyboardMarkup(
