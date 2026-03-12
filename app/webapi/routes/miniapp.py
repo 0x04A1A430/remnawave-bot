@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import math
 import re
 from collections.abc import Collection
@@ -4497,20 +4498,6 @@ def _parse_period_identifier(identifier: str | None) -> int | None:
         return None
 
 
-async def _calculate_subscription_renewal_pricing(
-    db: AsyncSession,
-    user: User,
-    subscription: Subscription,
-    period_days: int,
-):
-    return await renewal_service.calculate_pricing(
-        db,
-        user,
-        subscription,
-        period_days,
-    )
-
-
 async def _prepare_subscription_renewal_options(
     db: AsyncSession,
     user: User,
@@ -5302,32 +5289,13 @@ async def submit_subscription_renewal_endpoint(
                     detail={'code': 'renewal_failed', 'message': 'Failed to renew subscription'},
                 ) from error
         else:
-            # Классический режим: finalize() ожидает старую модель pricing (будет обновлено в Task 17)
-            try:
-                pricing_model = await _calculate_subscription_renewal_pricing(
-                    db,
-                    user,
-                    subscription,
-                    period_days,
-                )
-            except Exception as error:
-                logger.error(
-                    'Failed to calculate legacy pricing for finalize',
-                    subscription_id=subscription.id,
-                    period_days=period_days,
-                    error=error,
-                )
-                raise HTTPException(
-                    status.HTTP_502_BAD_GATEWAY,
-                    detail={'code': 'pricing_failed', 'message': 'Failed to calculate renewal pricing'},
-                ) from error
-
+            # Классический режим: finalize() принимает RenewalPricing (duck-typed)
             try:
                 result = await renewal_service.finalize(
                     db,
                     user,
                     subscription,
-                    pricing_model,
+                    pricing_result,
                     description=description,
                 )
             except SubscriptionRenewalChargeError as error:
@@ -5344,7 +5312,7 @@ async def submit_subscription_renewal_endpoint(
                 user,
                 updated_subscription,
                 result.total_amount_kopeks,
-                pricing_model.promo_discount_value,
+                promo_offer_discount_value,
             )
 
             return MiniAppSubscriptionRenewalResponse(
@@ -5423,7 +5391,7 @@ async def submit_subscription_renewal_endpoint(
             period_days,
             final_total,
             missing_amount,
-            pricing_snapshot=pricing,
+            pricing_snapshot=dataclasses.asdict(pricing_result),
         )
         payload_value = encode_payment_payload(descriptor)
 
