@@ -879,3 +879,9 @@ def register_balance_handlers(dp: Dispatcher):
     dp.callback_query.register(handle_quick_amount_selection, F.data.startswith('quick_amount_'))
 
     dp.callback_query.register(handle_topup_amount_callback, F.data.startswith('topup_amount|'))
+
+    from app.handlers.subscription.autopay import handle_confirm_unlink, handle_saved_cards_list, handle_unlink_card
+
+    dp.callback_query.register(handle_saved_cards_list, F.data == 'saved_cards_list')
+    dp.callback_query.register(handle_unlink_card, F.data.startswith('unlink_card_'))
+    dp.callback_query.register(handle_confirm_unlink, F.data.startswith('confirm_unlink_'))

@@ -1140,11 +1140,18 @@ class YooKassaPaymentMixin:
             expiry_year = str(raw_year) if raw_year is not None else None
             method_type = pm.get('type', 'bank_card')
 
-            # Формируем название
+            # Формируем title — только реквизиты без названия метода
+            # (локализованное название подставляется в UI через _get_payment_method_display_name)
             title = None
             if card_last4:
                 type_label = card_type or 'Card'
                 title = f'{type_label} *{card_last4}'
+            elif method_type != 'bank_card':
+                # Для не-карточных методов: yoo_money (account_number), sbp/sberbank (phone) и т.д.
+                account = pm.get('account_number') or pm.get('phone')
+                if account:
+                    masked = account[-4:] if len(account) >= 4 else account
+                    title = f'*{masked}'
 
             saved = await create_saved_payment_method(
                 db=db,
