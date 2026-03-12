@@ -1147,7 +1147,7 @@ class User(Base):
     discord_id = Column(String(255), unique=True, nullable=True, index=True)
     vk_id = Column(BigInteger, unique=True, nullable=True, index=True)
     broadcasts = relationship('BroadcastHistory', back_populates='admin')
-    referrals = relationship('User', backref='referrer', remote_side=[id], foreign_keys='User.referred_by_id')
+    referrals = relationship('User', backref='referrer', remote_side=[id], foreign_keys='User.referred_by_id', post_update=True)
     subscription = relationship('Subscription', back_populates='user', uselist=False)
     transactions = relationship('Transaction', back_populates='user')
     referral_earnings = relationship('ReferralEarning', foreign_keys='ReferralEarning.user_id', back_populates='user')
