@@ -464,8 +464,7 @@ class SubscriptionRenewalService:
 
         # Support both SubscriptionRenewalPricing and RenewalPricing
         consume_promo_offer = bool(
-            getattr(pricing, 'promo_discount_value', None)
-            or getattr(pricing, 'promo_offer_discount', None)
+            getattr(pricing, 'promo_discount_value', None) or getattr(pricing, 'promo_offer_discount', None)
         )
 
         description_text = description or f'Продление подписки на {period_days} дней'

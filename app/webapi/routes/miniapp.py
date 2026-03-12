@@ -4516,131 +4516,97 @@ async def _prepare_subscription_renewal_options(
     user: User,
     subscription: Subscription,
 ) -> tuple[list[MiniAppSubscriptionRenewalPeriod], dict[str | int, dict[str, Any]], str | None]:
+    from app.services.pricing_engine import PricingEngine
+
     option_payloads: list[tuple[MiniAppSubscriptionRenewalPeriod, dict[str, Any]]] = []
 
-    # Проверяем, есть ли у подписки тариф (режим тарифов)
+    # Определяем доступные периоды: из тарифа или из настроек
     tariff_id = getattr(subscription, 'tariff_id', None)
     tariff = None
     if tariff_id:
-        from app.database.crud.tariff import get_tariff_by_id
-
         tariff = await get_tariff_by_id(db, tariff_id)
 
     if tariff and tariff.period_prices:
-        # Режим тарифов: используем периоды и цены из тарифа
-        promo_group = (
-            user.get_primary_promo_group()
-            if hasattr(user, 'get_primary_promo_group')
-            else getattr(user, 'promo_group', None)
+        available_periods = sorted(int(k) for k in tariff.period_prices.keys())
+    else:
+        available_periods = [p for p in settings.get_available_renewal_periods() if p > 0]
+
+    pricing_engine = PricingEngine()
+    for period_days in available_periods:
+        try:
+            pricing_result = await pricing_engine.calculate_renewal_price(
+                db,
+                subscription,
+                period_days,
+                user=user,
+            )
+        except Exception as error:  # pragma: no cover - defensive logging
+            logger.warning(
+                'Failed to calculate renewal pricing for subscription (period)',
+                subscription_id=subscription.id,
+                period_days=period_days,
+                error=error,
+            )
+            continue
+
+        # Вычисляем оригинальную цену (до скидок) для отображения зачёркнутой цены
+        original_price = (
+            pricing_result.base_price
+            + pricing_result.servers_price
+            + pricing_result.traffic_price
+            + pricing_result.devices_price
+            + pricing_result.promo_group_discount
+            + pricing_result.promo_offer_discount
+        )
+        has_discount = original_price > pricing_result.final_total and original_price > 0
+        discount_percent = (
+            int((original_price - pricing_result.final_total) * 100 / original_price) if has_discount else 0
         )
 
-        # Получаем скидки промогруппы по периодам
-        period_discounts = {}
-        if promo_group:
-            raw_discounts = getattr(promo_group, 'period_discounts', None) or {}
-            for k, v in raw_discounts.items():
-                try:
-                    period_discounts[int(k)] = max(0, min(100, int(v)))
-                except (TypeError, ValueError):
-                    pass
+        months = max(1, period_days // 30)
+        per_month = pricing_result.final_total // months if months > 0 else pricing_result.final_total
 
-        for period_str, original_price_kopeks in sorted(tariff.period_prices.items(), key=lambda x: int(x[0])):
-            period_days = int(period_str)
+        label = format_period_description(
+            period_days,
+            getattr(user, 'language', settings.DEFAULT_LANGUAGE),
+        )
 
-            # Применяем скидку промогруппы
-            discount_percent = period_discounts.get(period_days, 0)
-            if discount_percent > 0:
-                price_kopeks = int(original_price_kopeks * (100 - discount_percent) / 100)
-            else:
-                price_kopeks = original_price_kopeks
+        price_label = settings.format_price(pricing_result.final_total)
+        original_label = settings.format_price(original_price) if has_discount else None
+        per_month_label = settings.format_price(per_month)
 
-            months = max(1, period_days // 30)
-            per_month = price_kopeks // months if months > 0 else price_kopeks
+        period_id = (
+            f'tariff_{tariff.id}_{period_days}' if pricing_result.is_tariff_mode and tariff else f'days:{period_days}'
+        )
 
-            label = format_period_description(
-                period_days,
-                getattr(user, 'language', settings.DEFAULT_LANGUAGE),
-            )
+        option_model = MiniAppSubscriptionRenewalPeriod(
+            id=period_id,
+            days=period_days,
+            months=months,
+            price_kopeks=pricing_result.final_total,
+            price_label=price_label,
+            original_price_kopeks=original_price if has_discount else None,
+            original_price_label=original_label,
+            discount_percent=discount_percent,
+            price_per_month_kopeks=per_month,
+            price_per_month_label=per_month_label,
+            title=label,
+        )
 
-            price_label = settings.format_price(price_kopeks)
-            original_label = settings.format_price(original_price_kopeks) if discount_percent > 0 else None
-            per_month_label = settings.format_price(per_month)
+        pricing = {
+            'period_id': period_id,
+            'period_days': period_days,
+            'months': months,
+            'final_total': pricing_result.final_total,
+            'base_original_total': original_price if has_discount else pricing_result.final_total,
+            'overall_discount_percent': discount_percent,
+            'per_month': per_month,
+            'promo_offer_discount': pricing_result.promo_offer_discount,
+        }
+        if pricing_result.is_tariff_mode and tariff:
+            pricing['tariff_id'] = tariff.id
 
-            option_model = MiniAppSubscriptionRenewalPeriod(
-                id=f'tariff_{tariff.id}_{period_days}',
-                days=period_days,
-                months=months,
-                price_kopeks=price_kopeks,
-                price_label=price_label,
-                original_price_kopeks=original_price_kopeks if discount_percent > 0 else None,
-                original_price_label=original_label,
-                discount_percent=discount_percent,
-                price_per_month_kopeks=per_month,
-                price_per_month_label=per_month_label,
-                title=label,
-            )
-
-            pricing = {
-                'period_id': option_model.id,
-                'period_days': period_days,
-                'months': months,
-                'final_total': price_kopeks,
-                'base_original_total': original_price_kopeks if discount_percent > 0 else price_kopeks,
-                'overall_discount_percent': discount_percent,
-                'per_month': per_month,
-                'tariff_id': tariff.id,
-            }
-
-            option_payloads.append((option_model, pricing))
-    else:
-        # Классический режим: используем периоды из настроек
-        available_periods = [period for period in settings.get_available_renewal_periods() if period > 0]
-
-        for period_days in available_periods:
-            try:
-                pricing_model = await _calculate_subscription_renewal_pricing(
-                    db,
-                    user,
-                    subscription,
-                    period_days,
-                )
-                pricing = pricing_model.to_payload()
-            except Exception as error:  # pragma: no cover - defensive logging
-                logger.warning(
-                    'Failed to calculate renewal pricing for subscription (period)',
-                    subscription_id=subscription.id,
-                    period_days=period_days,
-                    error=error,
-                )
-                continue
-
-            label = format_period_description(
-                period_days,
-                getattr(user, 'language', settings.DEFAULT_LANGUAGE),
-            )
-
-            price_label = settings.format_price(pricing['final_total'])
-            original_label = None
-            if pricing['base_original_total'] and pricing['base_original_total'] != pricing['final_total']:
-                original_label = settings.format_price(pricing['base_original_total'])
-
-            per_month_label = settings.format_price(pricing['per_month'])
-
-            option_model = MiniAppSubscriptionRenewalPeriod(
-                id=pricing['period_id'],
-                days=period_days,
-                months=pricing['months'],
-                price_kopeks=pricing['final_total'],
-                price_label=price_label,
-                original_price_kopeks=pricing['base_original_total'],
-                original_price_label=original_label,
-                discount_percent=pricing['overall_discount_percent'],
-                price_per_month_kopeks=pricing['per_month'],
-                price_per_month_label=per_month_label,
-                title=label,
-            )
-
-            option_payloads.append((option_model, pricing))
+        option_payloads.append((option_model, pricing))
 
     if not option_payloads:
         return [], {}, None

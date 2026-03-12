@@ -1057,7 +1057,10 @@ class MonitoringService:
 
                     pricing_engine = PricingEngine()
                     pricing = await pricing_engine.calculate_renewal_price(
-                        db, subscription, autopay_period, user=user,
+                        db,
+                        subscription,
+                        autopay_period,
+                        user=user,
                     )
                     renewal_cost = pricing.final_total
                 except Exception as e:

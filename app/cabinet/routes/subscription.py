@@ -10,8 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import PERIOD_PRICES, settings
-from app.services.pricing_engine import PricingEngine
+from app.config import settings
 from app.database.crud.server_squad import get_server_squad_by_uuid
 from app.database.crud.subscription import (
     create_paid_subscription,
@@ -27,6 +26,7 @@ from app.services.notification_delivery_service import (
     NotificationType,
     notification_delivery_service,
 )
+from app.services.pricing_engine import PricingEngine
 from app.services.remnawave_service import RemnaWaveService
 from app.services.subscription_purchase_service import (
     MiniAppSubscriptionPurchaseService,
@@ -346,9 +346,7 @@ async def get_renewal_options(
         if pricing.final_total <= 0 and pricing.base_price <= 0:
             continue
 
-        original_price = (
-            pricing.base_price + pricing.servers_price + pricing.traffic_price + pricing.devices_price
-        )
+        original_price = pricing.base_price + pricing.servers_price + pricing.traffic_price + pricing.devices_price
         combined_discount = 0
         if original_price > 0 and original_price != pricing.final_total:
             combined_discount = int((original_price - pricing.final_total) * 100 / original_price)
@@ -390,7 +388,10 @@ async def renew_subscription(
     # Unified pricing via PricingEngine
     pricing_engine = PricingEngine()
     pricing = await pricing_engine.calculate_renewal_price(
-        db, user.subscription, request.period_days, user=user,
+        db,
+        user.subscription,
+        request.period_days,
+        user=user,
     )
     price_kopeks = pricing.final_total
     promo_offer_discount_value = pricing.promo_offer_discount
@@ -402,9 +403,7 @@ async def renew_subscription(
         )
 
     # Combined discount percent for display
-    original_price_kopeks = (
-        pricing.base_price + pricing.servers_price + pricing.traffic_price + pricing.devices_price
-    )
+    original_price_kopeks = pricing.base_price + pricing.servers_price + pricing.traffic_price + pricing.devices_price
     discount_percent = 0
     if original_price_kopeks > 0 and original_price_kopeks != price_kopeks:
         discount_percent = int((original_price_kopeks - price_kopeks) * 100 / original_price_kopeks)

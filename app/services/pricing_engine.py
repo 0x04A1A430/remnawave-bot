@@ -6,8 +6,8 @@ import structlog
 
 from app.config import CLASSIC_PERIOD_PRICES, PERIOD_PRICES, settings
 from app.database.crud.server_squad import get_server_squad_by_uuid
-from app.utils.promo_offer import get_user_active_promo_discount_percent
 from app.utils.pricing_utils import calculate_months_from_days
+from app.utils.promo_offer import get_user_active_promo_discount_percent
 
 
 logger = structlog.get_logger()

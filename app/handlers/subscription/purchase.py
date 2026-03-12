@@ -1605,13 +1605,15 @@ async def handle_extend_subscription(callback: types.CallbackQuery, db_user: Use
     for days in available_periods:
         try:
             pricing = await pricing_engine.calculate_renewal_price(
-                db, subscription, days, user=db_user,
+                db,
+                subscription,
+                days,
+                user=db_user,
             )
 
             # original = price before ALL discounts, final = price with all discounts
             total_original_price = (
-                pricing.base_price + pricing.servers_price
-                + pricing.traffic_price + pricing.devices_price
+                pricing.base_price + pricing.servers_price + pricing.traffic_price + pricing.devices_price
             )
 
             renewal_prices[days] = {
@@ -1742,7 +1744,10 @@ async def confirm_extend_subscription(callback: types.CallbackQuery, db_user: Us
     try:
         pricing_engine = PricingEngine()
         pricing = await pricing_engine.calculate_renewal_price(
-            db, subscription, days, user=db_user,
+            db,
+            subscription,
+            days,
+            user=db_user,
         )
         price = pricing.final_total
 
@@ -1987,10 +1992,7 @@ async def confirm_extend_subscription(callback: types.CallbackQuery, db_user: Us
             success_message += f'\n\n📊 Трафик сброшен до {fixed_limit} ГБ'
 
         if promo_offer_discount > 0:
-            success_message += (
-                f' (включая доп. скидку {offer_pct}%:'
-                f' -{texts.format_price(promo_offer_discount)})'
-            )
+            success_message += f' (включая доп. скидку {offer_pct}%: -{texts.format_price(promo_offer_discount)})'
 
         await callback.message.edit_text(success_message, reply_markup=get_back_keyboard(db_user.language))
 

@@ -240,7 +240,10 @@ async def _prepare_auto_extend_context(
     pricing_engine = PricingEngine()
     try:
         pricing = await pricing_engine.calculate_renewal_price(
-            db, subscription, period_days, user=user,
+            db,
+            subscription,
+            period_days,
+            user=user,
         )
         price_kopeks = pricing.final_total
     except Exception as e:
@@ -1730,7 +1733,10 @@ async def try_auto_extend_expired_after_topup(
     pricing_engine = PricingEngine()
     try:
         pricing = await pricing_engine.calculate_renewal_price(
-            db, subscription, period_days, user=user,
+            db,
+            subscription,
+            period_days,
+            user=user,
         )
         renewal_cost = pricing.final_total
     except Exception as error:
