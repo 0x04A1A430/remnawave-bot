@@ -1146,7 +1146,11 @@ def get_subscription_keyboard(
 
                 sub_status = getattr(subscription, 'status', None)
                 is_paused = getattr(subscription, 'is_daily_paused', False)
-                is_inactive = sub_status in (SubscriptionStatus.DISABLED.value, SubscriptionStatus.EXPIRED.value)
+                is_inactive = sub_status in (
+                    SubscriptionStatus.DISABLED.value,
+                    SubscriptionStatus.EXPIRED.value,
+                    SubscriptionStatus.LIMITED.value,
+                )
 
                 if is_inactive or is_paused:
                     # Подписка остановлена (системой или пользователем) — показываем «Возобновить»

@@ -1023,9 +1023,20 @@ async def _auto_purchase_daily_tariff(
             # Обновляем существующую подписку на суточный тариф
             # Суточность определяется через tariff.is_daily, поэтому достаточно установить tariff_id
             was_trial_conversion = existing_subscription.is_trial  # Сохраняем до изменения
+            from app.database.crud.subscription import calc_device_limit_on_tariff_switch
+            from app.database.crud.tariff import get_tariff_by_id as _get_old_tariff
+
+            old_tariff = (
+                await _get_old_tariff(db, existing_subscription.tariff_id) if existing_subscription.tariff_id else None
+            )
             existing_subscription.tariff_id = tariff.id
             existing_subscription.traffic_limit_gb = tariff.traffic_limit_gb
-            existing_subscription.device_limit = tariff.device_limit
+            existing_subscription.device_limit = calc_device_limit_on_tariff_switch(
+                current_device_limit=existing_subscription.device_limit,
+                old_tariff_device_limit=old_tariff.device_limit if old_tariff else None,
+                new_tariff_device_limit=tariff.device_limit,
+                max_device_limit=getattr(tariff, 'max_device_limit', None),
+            )
             existing_subscription.connected_squads = squads
             existing_subscription.status = 'active'
             existing_subscription.is_trial = False
@@ -1244,7 +1255,7 @@ async def _auto_add_devices(
         await user_cart_service.delete_user_cart(user.id)
         return False
 
-    if subscription.status not in ('active', 'trial', 'disabled', 'ACTIVE', 'TRIAL', 'DISABLED'):
+    if subscription.status not in ('active', 'trial', 'disabled', 'limited', 'ACTIVE', 'TRIAL', 'DISABLED', 'LIMITED'):
         logger.warning(
             '🔁 Автопокупка устройств: подписка пользователя не активна (status=)',
             format_user_id=_format_user_id(user),
@@ -1513,7 +1524,7 @@ async def _auto_add_traffic(
         await user_cart_service.delete_user_cart(user.id)
         return False
 
-    if subscription.status not in ('active', 'trial', 'disabled', 'ACTIVE', 'TRIAL', 'DISABLED'):
+    if subscription.status not in ('active', 'trial', 'disabled', 'limited', 'ACTIVE', 'TRIAL', 'DISABLED', 'LIMITED'):
         logger.warning(
             '🔁 Автопокупка трафика: подписка пользователя не активна (status=)',
             format_user_id=_format_user_id(user),
@@ -2016,8 +2027,12 @@ async def try_resume_disabled_daily_after_topup(
     if subscription is None:
         return False
 
-    # Only handle DISABLED (or EXPIRED) daily tariff subscriptions
-    if subscription.status not in (SubscriptionStatus.DISABLED.value, SubscriptionStatus.EXPIRED.value):
+    # Only handle DISABLED/LIMITED (or EXPIRED) daily tariff subscriptions
+    if subscription.status not in (
+        SubscriptionStatus.DISABLED.value,
+        SubscriptionStatus.EXPIRED.value,
+        SubscriptionStatus.LIMITED.value,
+    ):
         return False
     if not getattr(subscription, 'is_daily_tariff', False):
         return False

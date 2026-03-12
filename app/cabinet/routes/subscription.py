@@ -141,6 +141,7 @@ def _subscription_to_response(
     actual_status = subscription.actual_status
     is_expired = actual_status == 'expired'
     is_active = actual_status in ('active', 'trial')
+    is_limited = actual_status == 'limited'
 
     # Calculate time remaining
     days_left = 0
@@ -235,6 +236,7 @@ def _subscription_to_response(
         hide_subscription_link=hide_link,
         is_active=is_active,
         is_expired=is_expired,
+        is_limited=is_limited,
         traffic_purchases=traffic_purchases or [],
         is_daily=is_daily,
         is_daily_paused=is_daily_paused,
@@ -574,7 +576,7 @@ async def renew_subscription(
 
     # Extend from end_date or now if expired
     now = datetime.now(UTC)
-    was_expired = user.subscription.status in ('expired', 'disabled') or (
+    was_expired = user.subscription.status in ('expired', 'disabled', 'limited') or (
         user.subscription.end_date is not None and user.subscription.end_date <= now
     )
 
@@ -4366,9 +4368,18 @@ async def switch_tariff(
 
     # Update subscription
     old_tariff_name = current_tariff.name if current_tariff else 'Unknown'
+
+    # Preserve extra purchased devices above the old tariff's base limit
+    from app.database.crud.subscription import calc_device_limit_on_tariff_switch
+
     user.subscription.tariff_id = new_tariff.id
     user.subscription.traffic_limit_gb = new_tariff.traffic_limit_gb
-    user.subscription.device_limit = new_tariff.device_limit
+    user.subscription.device_limit = calc_device_limit_on_tariff_switch(
+        current_device_limit=user.subscription.device_limit,
+        old_tariff_device_limit=current_tariff.device_limit if current_tariff else None,
+        new_tariff_device_limit=new_tariff.device_limit,
+        max_device_limit=new_tariff.max_device_limit,
+    )
     user.subscription.connected_squads = new_tariff.allowed_squads or []
 
     # Reset purchased traffic and delete TrafficPurchase records on tariff switch
@@ -4516,6 +4527,7 @@ async def toggle_subscription_pause(
     was_disabled = user.subscription.status in (
         SubscriptionStatus.DISABLED.value,
         SubscriptionStatus.EXPIRED.value,
+        SubscriptionStatus.LIMITED.value,
     )
 
     # System-DISABLED subs (insufficient balance) should always be treated as needing resume,

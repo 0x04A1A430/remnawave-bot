@@ -1089,6 +1089,9 @@ def _get_subscription_status(user: User, texts, is_daily_tariff: bool = False) -
     if actual_status == 'disabled':
         return texts.t('SUB_STATUS_DISABLED', '⚫ Отключена')
 
+    if actual_status == 'limited':
+        return texts.t('SUB_STATUS_LIMITED', '⚠️ Трафик исчерпан')
+
     if actual_status == 'expired':
         return texts.t(
             'SUB_STATUS_EXPIRED',

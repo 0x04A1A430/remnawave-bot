@@ -38,6 +38,31 @@ def is_recently_updated_by_webhook(subscription: Subscription) -> bool:
     return elapsed < _WEBHOOK_GUARD_SECONDS
 
 
+def calc_device_limit_on_tariff_switch(
+    current_device_limit: int | None,
+    old_tariff_device_limit: int | None,
+    new_tariff_device_limit: int | None,
+    max_device_limit: int | None = None,
+) -> int:
+    """Calculate device_limit preserving extra purchased devices when switching tariffs.
+
+    Extra devices = current_device_limit - old_tariff_device_limit (clamped to 0).
+    Result = new_tariff_device_limit + extra_devices, capped at max_device_limit.
+    """
+    old_base = old_tariff_device_limit if old_tariff_device_limit is not None else 0
+    current = current_device_limit if current_device_limit is not None else old_base
+    extra = max(0, current - old_base)
+
+    new_base = new_tariff_device_limit if new_tariff_device_limit is not None else 1
+    total = new_base + extra
+
+    effective_max = max_device_limit or (settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else None)
+    if effective_max and total > effective_max:
+        total = effective_max
+
+    return total
+
+
 def is_active_paid_subscription(subscription: Subscription | None) -> bool:
     """Return True if subscription is active, paid (non-trial), and not expired."""
     if not subscription:
@@ -389,6 +414,7 @@ async def extend_subscription(
     was_expired = subscription.status in (
         SubscriptionStatus.EXPIRED.value,
         SubscriptionStatus.DISABLED.value,
+        SubscriptionStatus.LIMITED.value,
     ) or (subscription.end_date is not None and subscription.end_date <= current_time)
 
     if is_tariff_change:
@@ -445,6 +471,7 @@ async def extend_subscription(
     if days > 0 and subscription.status in (
         SubscriptionStatus.EXPIRED.value,
         SubscriptionStatus.DISABLED.value,
+        SubscriptionStatus.LIMITED.value,
     ):
         previous_status = subscription.status
         subscription.status = SubscriptionStatus.ACTIVE.value
@@ -780,7 +807,11 @@ async def reactivate_subscription(db: AsyncSession, subscription: Subscription) 
     now = datetime.now(UTC)
 
     # Тихо выходим если реактивация не нужна (уже активна или другой статус)
-    reactivatable_statuses = {SubscriptionStatus.DISABLED.value, SubscriptionStatus.EXPIRED.value}
+    reactivatable_statuses = {
+        SubscriptionStatus.DISABLED.value,
+        SubscriptionStatus.EXPIRED.value,
+        SubscriptionStatus.LIMITED.value,
+    }
     if subscription.status not in reactivatable_statuses:
         return subscription
 
@@ -2215,8 +2246,12 @@ async def resume_daily_subscription(
 
     subscription.is_daily_paused = False
 
-    # Восстанавливаем статус ACTIVE если подписка была DISABLED/EXPIRED
-    if subscription.status in (SubscriptionStatus.DISABLED.value, SubscriptionStatus.EXPIRED.value):
+    # Восстанавливаем статус ACTIVE если подписка была DISABLED/EXPIRED/LIMITED
+    if subscription.status in (
+        SubscriptionStatus.DISABLED.value,
+        SubscriptionStatus.EXPIRED.value,
+        SubscriptionStatus.LIMITED.value,
+    ):
         previous_status = subscription.status
         subscription.status = SubscriptionStatus.ACTIVE.value
         # Обновляем время последнего списания для корректного расчёта следующего

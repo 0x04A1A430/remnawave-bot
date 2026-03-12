@@ -1796,6 +1796,8 @@ class RemnaWaveService:
 
             if panel_status == 'ACTIVE' and end_date_utc > current_time:
                 new_status = SubscriptionStatus.ACTIVE.value
+            elif panel_status == 'LIMITED':
+                new_status = SubscriptionStatus.LIMITED.value
             elif panel_status == 'DISABLED':
                 new_status = SubscriptionStatus.DISABLED.value
             elif end_date_utc <= current_time:
@@ -2524,7 +2526,10 @@ class RemnaWaveService:
                         stats['checked'] += 1
                         user = subscription.user
 
-                        if subscription.status == SubscriptionStatus.DISABLED.value:
+                        if subscription.status in (
+                            SubscriptionStatus.DISABLED.value,
+                            SubscriptionStatus.LIMITED.value,
+                        ):
                             continue
 
                         if user.telegram_id not in panel_telegram_ids:

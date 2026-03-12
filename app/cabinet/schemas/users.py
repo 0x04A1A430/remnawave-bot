@@ -22,6 +22,7 @@ class SubscriptionStatusEnum(StrEnum):
     ACTIVE = 'active'
     EXPIRED = 'expired'
     DISABLED = 'disabled'
+    LIMITED = 'limited'
     PENDING = 'pending'
 
 

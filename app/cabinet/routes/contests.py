@@ -86,6 +86,7 @@ def _user_allowed(subscription) -> bool:
     return subscription.status in {
         SubscriptionStatus.ACTIVE.value,
         SubscriptionStatus.TRIAL.value,
+        SubscriptionStatus.LIMITED.value,
     }
 
 

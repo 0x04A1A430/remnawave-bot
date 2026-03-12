@@ -1122,26 +1122,18 @@ async def update_user_subscription(
             )
 
         # Preserve extra purchased devices above the old tariff's base limit
-        extra_devices = 0
-        if subscription.tariff_id:
-            old_tariff = await get_tariff_by_id(db, subscription.tariff_id)
-            if old_tariff and old_tariff.device_limit:
-                extra_devices = max(0, (subscription.device_limit or old_tariff.device_limit) - old_tariff.device_limit)
+        from app.database.crud.subscription import calc_device_limit_on_tariff_switch
 
-        from app.config import settings
+        old_tariff = await get_tariff_by_id(db, subscription.tariff_id) if subscription.tariff_id else None
 
         subscription.tariff_id = request.tariff_id
         subscription.traffic_limit_gb = tariff.traffic_limit_gb
-
-        new_base = tariff.device_limit or 1
-        new_total = new_base + extra_devices
-        # Cap at new tariff's max_device_limit, falling back to global MAX_DEVICES_LIMIT
-        effective_max = tariff.max_device_limit or (
-            settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else None
+        subscription.device_limit = calc_device_limit_on_tariff_switch(
+            current_device_limit=subscription.device_limit,
+            old_tariff_device_limit=old_tariff.device_limit if old_tariff else None,
+            new_tariff_device_limit=tariff.device_limit,
+            max_device_limit=tariff.max_device_limit,
         )
-        if effective_max and new_total > effective_max:
-            new_total = effective_max
-        subscription.device_limit = new_total
         # Set squads from tariff
         if tariff.allowed_squads:
             subscription.connected_squads = tariff.allowed_squads

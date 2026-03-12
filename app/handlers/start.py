@@ -1897,6 +1897,9 @@ def _get_subscription_status(user, texts):
     if actual_status == 'disabled':
         return texts.t('SUB_STATUS_DISABLED', '⚫ Отключена')
 
+    if actual_status == 'limited':
+        return texts.t('SUB_STATUS_LIMITED', '⚠️ Трафик исчерпан')
+
     if actual_status == 'pending':
         return texts.t('SUB_STATUS_PENDING', '⏳ Ожидает активации')
 
