@@ -2867,10 +2867,9 @@ async def _build_referral_info(
     referral_code = getattr(user, 'referral_code', None)
     referral_settings = settings.get_referral_settings() or {}
 
-    bot_username = settings.get_bot_username()
     referral_link = None
-    if referral_code and bot_username:
-        referral_link = f'https://t.me/{bot_username}?start={referral_code}'
+    if referral_code:
+        referral_link = settings.get_referral_link(referral_code)
 
     minimum_topup_kopeks = int(referral_settings.get('minimum_topup_kopeks') or 0)
     first_topup_bonus_kopeks = int(referral_settings.get('first_topup_bonus_kopeks') or 0)
