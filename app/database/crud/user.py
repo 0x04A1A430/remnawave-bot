@@ -621,8 +621,10 @@ async def subtract_user_balance(
 
     except Exception as e:
         logger.error('❌ ОШИБКА СПИСАНИЯ', error=e)
-        await db.rollback()
-        return False
+        if commit:
+            await db.rollback()
+            return False
+        raise
 
 
 async def cleanup_expired_promo_offer_discounts(db: AsyncSession) -> int:
