@@ -447,7 +447,7 @@ class SubscriptionRenewalService:
         db: AsyncSession,
         user: User,
         subscription: Subscription,
-        pricing: SubscriptionRenewalPricing,
+        pricing: SubscriptionRenewalPricing | Any,
         *,
         charge_balance_amount: int | None = None,
         description: str | None = None,
@@ -462,7 +462,11 @@ class SubscriptionRenewalService:
             charge_from_balance = final_total
         charge_from_balance = max(0, min(charge_from_balance, final_total))
 
-        consume_promo_offer = bool(pricing.promo_discount_value)
+        # Support both SubscriptionRenewalPricing and RenewalPricing
+        consume_promo_offer = bool(
+            getattr(pricing, 'promo_discount_value', None)
+            or getattr(pricing, 'promo_offer_discount', None)
+        )
 
         description_text = description or f'Продление подписки на {period_days} дней'
 
@@ -507,8 +511,14 @@ class SubscriptionRenewalService:
                     )
             raise
 
-        server_ids = pricing.server_ids or []
-        server_prices_for_period = pricing.details.get('servers_individual_prices', [])
+        # Support both SubscriptionRenewalPricing (server_ids, details) and RenewalPricing (breakdown)
+        if hasattr(pricing, 'server_ids'):
+            server_ids = pricing.server_ids or []
+            server_prices_for_period = (pricing.details or {}).get('servers_individual_prices', [])
+        else:
+            breakdown = getattr(pricing, 'breakdown', {}) or {}
+            server_ids = breakdown.get('server_ids', [])
+            server_prices_for_period = breakdown.get('servers_individual_prices', [])
         if server_ids:
             try:
                 await add_subscription_servers(
