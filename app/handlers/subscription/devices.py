@@ -82,7 +82,7 @@ async def get_servers_display_names(squad_uuids: list[str]) -> str:
             for uuid in squad_uuids:
                 server = await get_server_squad_by_uuid(db, uuid)
                 if server:
-                    server_names.append(server.display_name)
+                    server_names.append(html_mod.escape(server.display_name))
                     logger.debug('Найден сервер в БД', uuid=uuid, display_name=server.display_name)
                 else:
                     logger.warning('Сервер с UUID не найден в БД', uuid=uuid)
@@ -92,7 +92,7 @@ async def get_servers_display_names(squad_uuids: list[str]) -> str:
             for uuid in squad_uuids:
                 for country in countries:
                     if country['uuid'] == uuid:
-                        server_names.append(country['name'])
+                        server_names.append(html_mod.escape(country['name']))
                         logger.debug('Найден сервер в кэше', uuid=uuid, country=country['name'])
                         break
 

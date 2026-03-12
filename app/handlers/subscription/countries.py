@@ -1,3 +1,4 @@
+import html
 from datetime import UTC, datetime
 
 from aiogram import types
@@ -66,7 +67,7 @@ async def handle_add_countries(callback: types.CallbackQuery, db_user: User, db:
     current_countries_names = []
     for country in countries:
         if country['uuid'] in current_countries:
-            current_countries_names.append(country['name'])
+            current_countries_names.append(html.escape(country['name']))
 
     current_list = (
         '\n'.join(f'• {name}' for name in current_countries_names)
@@ -659,8 +660,8 @@ def _build_countries_selection_text(countries: list[dict], base_text: str) -> st
             continue
         desc = country.get('description', '').strip()
         if desc:
-            name = country.get('name', '')
-            descriptions.append(f'<b>{name}</b>\n{desc}')
+            name = html.escape(country.get('name', ''))
+            descriptions.append(f'<b>{name}</b>\n{html.escape(desc)}')
 
     if not descriptions:
         return base_text
@@ -841,9 +842,9 @@ async def confirm_add_countries_to_subscription(
 
             total_price += charged_price
             total_discount_value += int(discount_per_month * charged_days / 30)
-            new_countries_names.append(country['name'])
+            new_countries_names.append(html.escape(country['name']))
         if country['uuid'] in removed_countries:
-            removed_countries_names.append(country['name'])
+            removed_countries_names.append(html.escape(country['name']))
 
     if new_countries and db_user.balance_kopeks < total_price:
         missing_kopeks = total_price - db_user.balance_kopeks

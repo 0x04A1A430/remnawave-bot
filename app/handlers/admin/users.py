@@ -1,3 +1,4 @@
+import html
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -868,7 +869,7 @@ async def _render_user_subscription_overview(callback: types.CallbackQuery, db: 
                 try:
                     server = await get_server_squad_by_uuid(db, squad_uuid)
                     if server:
-                        text += f'• {server.display_name}\n'
+                        text += f'• {html.escape(server.display_name)}\n'
                     else:
                         text += f'• {squad_uuid[:8]}... (неизвестный)\n'
                 except Exception as e:

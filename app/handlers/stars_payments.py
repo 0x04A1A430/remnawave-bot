@@ -301,7 +301,7 @@ async def _handle_guest_purchase_payment(
     from app.services.payment.common import try_fulfill_guest_purchase
 
     try:
-        purchase_token = payload[len('guest_purchase_'):]
+        purchase_token = payload[len('guest_purchase_') :]
         if not purchase_token or not _PURCHASE_TOKEN_RE.match(purchase_token):
             logger.error('Invalid purchase_token format in guest_purchase payload', payload=payload)
             await message.answer('❌ Ошибка: неверный формат платежа.')
@@ -356,8 +356,7 @@ async def _handle_guest_purchase_payment(
             )
         elif result is False:
             await message.answer(
-                '❌ Произошла ошибка при обработке подарочной подписки. '
-                'Обратитесь в поддержку.',
+                '❌ Произошла ошибка при обработке подарочной подписки. Обратитесь в поддержку.',
             )
         else:
             logger.error('try_fulfill_guest_purchase returned None for Stars gift', payload=payload)
