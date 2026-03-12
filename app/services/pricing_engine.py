@@ -7,6 +7,7 @@ import structlog
 from app.config import CLASSIC_PERIOD_PRICES, PERIOD_PRICES, settings
 from app.database.crud.server_squad import get_server_squad_by_uuid
 from app.utils.promo_offer import get_user_active_promo_discount_percent
+from app.utils.pricing_utils import calculate_months_from_days
 
 
 logger = structlog.get_logger()
@@ -226,55 +227,92 @@ class PricingEngine:
 
         Uses CLASSIC_PERIOD_PRICES from settings, falling back to the
         global PERIOD_PRICES dict during migration.
-        """
-        # Try CLASSIC_PERIOD_PRICES first, fall back to PERIOD_PRICES
-        base_price = CLASSIC_PERIOD_PRICES.get(period_days)
-        if base_price is None:
-            base_price = PERIOD_PRICES.get(period_days, 0)
 
-        # Servers
+        Per-category discounts (period, servers, traffic, devices) are
+        applied separately to each component. Servers, traffic, and
+        devices are monthly prices multiplied by months_in_period.
+        """
+        months = calculate_months_from_days(period_days)
+
+        # --- Base period price (already includes full period) ---
+        base_price_original = CLASSIC_PERIOD_PRICES.get(period_days)
+        if base_price_original is None:
+            base_price_original = PERIOD_PRICES.get(period_days, 0)
+
+        # --- Per-category discount percents ---
+        period_pct = 0
+        servers_pct = 0
+        traffic_pct = 0
+        devices_pct = 0
+        promo_group = None
+        if user and getattr(user, 'promo_group', None) is not None:
+            promo_group = user.promo_group
+            period_pct = promo_group.get_discount_percent('period', period_days)
+            servers_pct = promo_group.get_discount_percent('servers', period_days)
+            traffic_pct = promo_group.get_discount_percent('traffic', period_days)
+            devices_pct = promo_group.get_discount_percent('devices', period_days)
+
+        offer_pct = get_user_active_promo_discount_percent(user) if user else 0
+
+        # --- Base price with period discount ---
+        base_price = self.apply_discount(base_price_original, period_pct)
+
+        # --- Servers (monthly × months, with servers discount) ---
         connected_squads: list[str] = subscription.connected_squads or []
         promo_group_id = getattr(user, 'promo_group_id', None) if user else None
-        servers_price, server_details = await self._calculate_servers_price(
+        servers_price_per_month, server_details = await self._calculate_servers_price(
             connected_squads,
             db,
             promo_group_id=promo_group_id,
         )
+        discounted_servers_per_month = self.apply_discount(servers_price_per_month, servers_pct)
+        servers_price = discounted_servers_per_month * months
 
-        # Traffic
+        # --- Traffic (monthly × months, with traffic discount) ---
         traffic_limit_gb = subscription.traffic_limit_gb or 0
         purchased_traffic_gb = subscription.purchased_traffic_gb or 0
-        traffic_price = self._calculate_traffic_price(traffic_limit_gb, purchased_traffic_gb)
+        traffic_price_per_month = self._calculate_traffic_price(traffic_limit_gb, purchased_traffic_gb)
+        discounted_traffic_per_month = self.apply_discount(traffic_price_per_month, traffic_pct)
+        traffic_price = discounted_traffic_per_month * months
 
-        # Devices
+        # --- Devices (monthly × months, with devices discount) ---
         default_device_limit = settings.DEFAULT_DEVICE_LIMIT
         device_price_per_unit = settings.PRICE_PER_DEVICE
         extra_devices = max(0, (subscription.device_limit or 0) - default_device_limit)
-        devices_price = extra_devices * device_price_per_unit
+        devices_price_per_month = extra_devices * device_price_per_unit
+        discounted_devices_per_month = self.apply_discount(devices_price_per_month, devices_pct)
+        devices_price = discounted_devices_per_month * months
 
+        # --- Subtotal (category discounts already applied) ---
         subtotal = base_price + servers_price + traffic_price + devices_price
 
-        # Resolve discounts
-        group_pct = 0
-        if user and getattr(user, 'promo_group', None) is not None:
-            group_pct = user.promo_group.get_discount_percent('period', period_days)
+        # --- Promo offer discount on entire subtotal ---
+        promo_offer_discount = subtotal * offer_pct // 100 if offer_pct > 0 else 0
+        final_total = subtotal - promo_offer_discount
 
-        offer_pct = get_user_active_promo_discount_percent(user) if user else 0
-
-        final_total, group_discount, offer_discount = self.apply_stacked_discounts(
-            subtotal,
-            group_pct,
-            offer_pct,
+        # Total group discount = sum of per-category discounts
+        base_group_discount = base_price_original - base_price
+        servers_group_discount = (servers_price_per_month - discounted_servers_per_month) * months
+        traffic_group_discount = (traffic_price_per_month - discounted_traffic_per_month) * months
+        devices_group_discount = (devices_price_per_month - discounted_devices_per_month) * months
+        total_group_discount = (
+            base_group_discount + servers_group_discount + traffic_group_discount + devices_group_discount
         )
 
         breakdown = {
+            'months_in_period': months,
             'servers': server_details,
-            'servers_individual_prices': [d['price'] for d in server_details],
+            'servers_individual_prices': [d['price'] * months for d in server_details],
             'server_ids': connected_squads,
             'base_traffic_gb': max(0, traffic_limit_gb - purchased_traffic_gb),
             'purchased_traffic_gb': purchased_traffic_gb,
             'extra_devices': extra_devices,
-            'group_discount_pct': group_pct,
+            'group_discount_pct': {
+                'period': period_pct,
+                'servers': servers_pct,
+                'traffic': traffic_pct,
+                'devices': devices_pct,
+            },
             'offer_discount_pct': offer_pct,
         }
 
@@ -283,8 +321,8 @@ class PricingEngine:
             servers_price=servers_price,
             traffic_price=traffic_price,
             devices_price=devices_price,
-            promo_group_discount=group_discount,
-            promo_offer_discount=offer_discount,
+            promo_group_discount=total_group_discount,
+            promo_offer_discount=promo_offer_discount,
             final_total=final_total,
             period_days=period_days,
             is_tariff_mode=False,
