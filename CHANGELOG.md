@@ -1,5 +1,31 @@
 # Changelog
 
+## [3.31.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.30.0...v3.31.0) (2026-03-12)
+
+
+### New Features
+
+* add show_in_gift toggle for tariffs in admin panel ([cb5126a](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/cb5126aff8c15938a59ea9c4f8e605b250b05dbc))
+* add sync-squads endpoint for bulk updating subscription squads in Remnawave ([b1e2146](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/b1e2146254255586b5be9bd894ac4d113a0a8cf5))
+* auto-sync squads to Remnawave when admin updates tariff ([076290e](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/076290e0c1d81b610a7653d6b64ed218e0f124b4))
+* referral links now point to web cabinet instead of bot ([12ae871](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/12ae871653399bc4ccd23b6394878e814ce9cd75))
+
+
+### Bug Fixes
+
+* add post_update=True to User.referrals self-referential relationship ([9957259](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/995725988150f31d193631120a4692e88fa4dd57))
+* add Telegram Stars payment support for gift subscriptions ([5424d8c](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/5424d8c31484873b0adc0bc980abdc51ee81325b))
+* correct skipped_count in sync-squads circuit breaker and simplify ternary ([8a362db](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/8a362db7833b5b7793b5b52345d227cb84cbc39e))
+* preserve purchased devices when admin changes user tariff ([bf72f24](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/bf72f241d81e4432f50a61ec3bb829d18c92955d))
+* prevent account takeover via auto_login_token, ensure promo group on all purchase paths ([b3f3eba](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/b3f3eba5756404df9ed0f12d8048244ca536f7d3))
+* reactivate subscription after traffic top-up when status is EXPIRED ([8b35428](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/8b354280558a5f28d1b99eae55ccd21a4af6a07b))
+* update promo group via M2M table so admin changes persist ([68bc8eb](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/68bc8eb57c792059d2be8a8fff6bba3254d3773d))
+
+
+### Refactoring
+
+* remove estimated price from balance, simplify server sync, fix HTML injection ([a798f11](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/a798f1143eebf52e18254bddd610f7f14a0c4056))
+
 ## [3.30.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.29.0...v3.30.0) (2026-03-11)
 
 
