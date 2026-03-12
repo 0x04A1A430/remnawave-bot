@@ -8,6 +8,7 @@ from sqlalchemy import Integer, and_, delete as sa_delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.config import settings
 from app.database.crud.campaign import get_campaign_registration_by_user
 from app.database.crud.subscription import (
     extend_subscription,
